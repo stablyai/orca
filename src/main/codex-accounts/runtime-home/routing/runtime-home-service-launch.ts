@@ -125,7 +125,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
         if (!accountHome || `${accountHome}\0${shared}` === prepared) {
           break
         }
-        await this.prepareAccountHistory(accountHome)
+        await this.prepareAccountHistory(accountHome, { forLaunch: true })
         prepared = `${accountHome}\0${shared}`
       }
       this.prepareAllAccountHistoryInBackground()

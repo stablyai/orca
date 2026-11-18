@@ -43,6 +43,16 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
   rowTitleDisabled: {
     color: colors.textMuted
   },
+  // Desktop sets ignored names in italics as well as dimming them.
+  rowTitleIgnored: {
+    fontStyle: 'italic'
+  },
+  // Same letter badge as the Source Control rows.
+  statusLetter: {
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize,
+    fontWeight: '700'
+  },
   rowMeta: {
     marginTop: 1,
     color: colors.textMuted,

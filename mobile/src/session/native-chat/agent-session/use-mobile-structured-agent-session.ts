@@ -1,4 +1,5 @@
 import { useMobileStructuredAsyncQuestions } from './use-mobile-structured-async-questions'
+import { useMobileUnresolvedFailureRows } from '../status/use-mobile-unresolved-failure-rows'
 import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -217,6 +218,7 @@ export function useMobileStructuredAgentSession(
     send: sendWithOutcomeUngated
   })
   useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
+  const unresolvedFailureRows = useMobileUnresolvedFailureRows(state.items)
   const usageLimit = useMobileNativeChatUsageLimit(args, state, {
     busy: isWorking || queueSendsNext || sendsOut.sending(),
     send: sendWithOutcome
@@ -300,6 +302,7 @@ export function useMobileStructuredAgentSession(
     threadGoal: goal.threadGoal,
     mcpPanel: mcp.mcpPanel,
     rewind,
-    usageLimit
+    usageLimit,
+    unresolvedFailureRows
   }
 }

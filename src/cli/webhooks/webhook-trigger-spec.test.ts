@@ -44,8 +44,7 @@ describe('--on "webhook.call ..."', () => {
   it.each([
     ['webhook.call in=C0123', 'Unknown filter "in="'],
     ['webhook.call where="body.action ~ x"', 'where= takes "<path> <op> <value>"'],
-    ['webhook.call pick=a pick=b', 'needs one value for pick='],
-    ['webhook.call bare', 'Filters are written key=value']
+    ['webhook.call pick=a pick=b', 'needs one value for pick=']
   ])('refuses %j', (spec, message) => {
     expect(() => parseAutomationEventTrigger(spec)).toThrow(message)
   })

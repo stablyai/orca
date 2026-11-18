@@ -18,8 +18,10 @@ import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provi
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { antigravityUserHome, linkAntigravityUserSkills } from './antigravity-chat-user-skills'
 
-type SignInOwner = Pick<AcpAgentConnection, 'close' | 'onExit' | 'exited'>
-const retained = new ProviderAcquisitionStarts<SignInOwner>()
+type SignInOwner = Pick<AcpAgentConnection, 'close' | 'exited'> & {
+  onExit(listener: () => void): void
+}
+const retained = new ProviderAcquisitionStarts<Pick<SignInOwner, 'close' | 'onExit'>>()
 const folder = hostFolderAccountBinding('GEMINI_HOME', ANTIGRAVITY_CHAT_HOME_FOLDER, [
   ANTIGRAVITY_ACP_HOME
 ])
@@ -57,9 +59,18 @@ export async function closeAntigravitySignInOwner(
   home: string,
   connection: SignInOwner
 ): Promise<void> {
-  if (!(await connection.close().catch(() => false)) && !connection.exited) {
-    retained.retainFailed(home, connection)
-    ANTIGRAVITY_LAUNCH_GATE.retain(connection)
+  await connection.close().catch(() => false)
+  if (!connection.exited) {
+    // A delivered kill is not an observed exit; retries must keep the same owner.
+    const owner = {
+      close: async () => {
+        await connection.close().catch(() => false)
+        return connection.exited
+      },
+      onExit: (listener: () => void) => connection.onExit(listener)
+    }
+    retained.retainFailed(home, owner)
+    ANTIGRAVITY_LAUNCH_GATE.retain(owner)
     throw new AntigravitySignInCloseUnprovenError()
   }
 }

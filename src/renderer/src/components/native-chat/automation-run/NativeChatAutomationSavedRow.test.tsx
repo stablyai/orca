@@ -20,14 +20,6 @@ import { nativeChatTurnFoldRow } from '../../../../../shared/native-chat/transcr
 import { isNoiseMessage } from '../../../../../shared/native-chat/transcript/messages/native-chat-noise'
 import { nativeChatRowSpeaksOrActs } from '../../../../../shared/native-chat/transcript/folding/native-chat-trailing-run'
 
-// The app's root provides tooltips (the timestamp's); a card alone needs its own.
-const renderCard = (saved: Saved) =>
-  render(
-    <TooltipProvider>
-      <NativeChatAutomationSavedRow saved={saved} timestamp={1_000} />
-    </TooltipProvider>
-  )
-
 const { openBotAutomation, callWebhookHost, copyWebhookSecret } = vi.hoisted(() => ({
   openBotAutomation: vi.fn(),
   callWebhookHost: vi.fn(),
@@ -98,9 +90,9 @@ const HOOKED: Saved = {
 
 describe('NativeChatAutomationSavedRow', () => {
   // The URL carries the hook's key, so it's read on click and never kept in the transcript.
-  it("copies a webhook automation's full URL, read from its host on click", async () => {
+  it("copies a saved edit's webhook URL, read from its host on click", async () => {
     hookState = 'live'
-    renderInChat(HOOKED)
+    renderInChat({ ...HOOKED, change: 'updated' })
     expect(callWebhookHost).not.toHaveBeenCalledWith(
       expect.anything(),
       'webhooks.reveal',
@@ -128,21 +120,6 @@ describe('NativeChatAutomationSavedRow', () => {
     notifyWebhooksChanged()
     expect(await screen.findByRole('button', { name: 'Copy URL' })).toBeEnabled()
   })
-
-  it('offers Copy URL on an edit that made a hook, and never without one', async () => {
-    renderInChat({ ...HOOKED, change: 'updated' })
-    expect(await screen.findByRole('button', { name: 'Copy URL' })).toBeVisible()
-    cleanup()
-    renderInChat(DAILY)
-    expect(screen.queryByRole('button', { name: 'Copy URL' })).toBeNull()
-  })
-
-  it('opens the automation on the Automations page', () => {
-    renderCard(DAILY)
-    fireEvent.click(screen.getByRole('button', { name: /Morning digest/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open automation' }))
-    expect(openBotAutomation).toHaveBeenCalledWith('auto-1', null)
-  })
 })
 
 describe('an automation-saved journal item', () => {
@@ -164,7 +141,7 @@ describe('an automation-saved journal item', () => {
       throw new Error('automation-saved item did not project')
     }
     expect(message).toMatchObject({ role: 'system', automationSaved: DAILY, timestamp: 1_000 })
-    expect(nativeChatTurnFoldRow(message, 'turn', false)).toMatchObject({
+    expect(nativeChatTurnFoldRow(message, 'turn', undefined)).toMatchObject({
       draws: true,
       outlivesTurn: true
     })
@@ -192,9 +169,12 @@ describe('an automation-saved journal item', () => {
 
     render(
       <TooltipProvider>
-        <MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />
+        <NativeChatVisualOwnerContext.Provider value={OWNER}>
+          <MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />
+        </NativeChatVisualOwnerContext.Provider>
       </TooltipProvider>
     )
+    expect(screen.queryByRole('button', { name: 'Copy URL' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Morning digest/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Open automation' }))
     expect(openBotAutomation).toHaveBeenCalledWith('auto-1', null)

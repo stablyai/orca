@@ -34,6 +34,7 @@ import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-no
 import { cancelHistoryGc } from '../../pty/history/terminal-history-gc'
 import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
 import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
+import { ConnectorTurnEvents } from '../../connector-cloud/connector-turn-events'
 import { mainProcessState as state } from '../main-process-state'
 import { isDevParentShutdownRequested } from '../configure-process'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
@@ -181,6 +182,9 @@ function installWillQuitHandler(): void {
     // A closed WSL-host channel still in its EOF grace must not outlive the app.
     killWslChannelsInCloseGrace()
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
+    // The connector was fenced at before-quit; its last turn ends and memory history rows land now.
+    const connectorTurnEndsFlush = ConnectorTurnEvents.settled()
+    const botMemoryHistoryFlush = state.runtime?.bots.memory.historySettled() ?? Promise.resolve()
     const browserSessionCookieFlush = flushBrowserSessionCookiesOnQuit()
     // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
     const browserShutdown = (async (): Promise<void> => {
@@ -283,6 +287,8 @@ function installWillQuitHandler(): void {
       { name: 'usage-cache', promise: usageCacheFlush },
       { name: 'notification-dismissals', promise: notificationDismissalClose },
       { name: 'stats', promise: statsFlush },
+      { name: 'connector-turn-ends', promise: connectorTurnEndsFlush },
+      { name: 'bot-memory-history', promise: botMemoryHistoryFlush },
       { name: 'state', promise: storeFlush }
     ]
     const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
