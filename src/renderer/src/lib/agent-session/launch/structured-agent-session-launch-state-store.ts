@@ -9,7 +9,8 @@ import type {
 import {
   deleteStructuredAgentLaunchRecord,
   updateStructuredAgentLaunchRecords,
-  writeStructuredAgentLaunchRecord
+  writeStructuredAgentLaunchRecord,
+  writeStructuredAgentLaunchRecordSoon
 } from './structured-agent-session-launch-persistence'
 import {
   type StructuredAgentLaunchPersistedRecord,
@@ -83,9 +84,14 @@ export function setStructuredLaunchState(state: StructuredLaunchState): void {
   persistStructuredLaunchState(state)
 }
 
-/** Persist and announce one launch's change without rewriting every other launch's record. */
+/** Persist and announce one launch's change; changes made together share one write of the set. */
 export function publishStructuredLaunchStateChange(state: StructuredLaunchState): void {
-  persistStructuredLaunchState(state)
+  const record = structuredLaunchRecord(state)
+  if (record) {
+    writeStructuredAgentLaunchRecordSoon(record)
+  } else {
+    deleteStructuredAgentLaunchRecord(state.intent.sessionId)
+  }
   publishStructuredLaunchChange(state.intent.sessionId)
 }
 

@@ -178,6 +178,30 @@ export function writeStructuredAgentLaunchRecord(
   writeRecords()
 }
 
+let flushTimer: ReturnType<typeof setTimeout> | undefined
+
+function flushRecordsNow(): void {
+  clearTimeout(flushTimer)
+  flushTimer = undefined
+  writeRecords()
+}
+
+/** Batches records changed together (deadlines that expire at once) into one write of the set. */
+export function writeStructuredAgentLaunchRecordSoon(
+  record: StructuredAgentLaunchPersistedRecord
+): void {
+  load()
+  records.set(record.sessionId, record)
+  if (flushTimer !== undefined) {
+    return
+  }
+  flushTimer = setTimeout(flushRecordsNow, 0)
+  // A reload before the batch flushes still finds this record.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flushRecordsNow, { once: true })
+  }
+}
+
 export function updateStructuredAgentLaunchRecords(
   changes: Iterable<readonly [string, StructuredAgentLaunchPersistedRecord | null]>
 ): void {
@@ -267,6 +291,8 @@ export function retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted
 }
 
 export function resetStructuredAgentLaunchPersistenceForTests(): void {
+  clearTimeout(flushTimer)
+  flushTimer = undefined
   records.clear()
   tombstones.clear()
   remoteTombstoneCancelledAt.clear()

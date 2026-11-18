@@ -279,4 +279,26 @@ describe('a blank chat whose first start never answers', () => {
     )
     vi.useRealTimers()
   })
+
+  // Deadlines that expire together must not each rewrite every saved launch.
+  it.each([10, 100])('saves %i starts that time out together in one write', async (count) => {
+    for (let i = 0; i < count; i += 1) {
+      mocks.createIntent.mockReturnValueOnce(launchIntent(`session-stalled-${i}`))
+      mocks.launch.mockReturnValueOnce(new Promise<Receipt>(() => {}))
+      startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: `request-stalled-${i}` })
+    }
+    await flushLaunchSettlement()
+    const setItem = vi.spyOn(localStorage, 'setItem')
+
+    await vi.advanceTimersByTimeAsync(30_001)
+
+    const launchWrites = setItem.mock.calls.filter(
+      ([key]) => key === 'orca:structuredAgentLaunches:v1'
+    )
+    expect(launchWrites).toHaveLength(1)
+    const saved = JSON.parse(launchWrites[0][1]) as { lifecycle: string }[]
+    expect(saved.filter((record) => record.lifecycle === 'visibility-unknown')).toHaveLength(count)
+    setItem.mockRestore()
+    vi.useRealTimers()
+  })
 })
