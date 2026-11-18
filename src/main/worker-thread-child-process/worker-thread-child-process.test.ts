@@ -217,6 +217,27 @@ describe('WorkerThreadChildProcessHost availability', () => {
     expect(created).toBe(1)
   })
 
+  it('still counts a ready message that arrives after the worker error that killed it', async () => {
+    const host = new WorkerThreadChildProcessHost(() => {
+      const transport = new EventEmitter()
+      return Object.assign(transport, {
+        postMessage: () =>
+          setImmediate(() => {
+            transport.emit('error', new Error('boom'))
+            transport.emit('message', { type: 'ready' })
+            transport.emit('exit', 1)
+          }),
+        unref: () => {},
+        terminate: async () => 0
+      })
+    })
+    expect(host.available()).toBe(true)
+    const child = host.spawn({ program: 'git', args: ['status'] })
+    const failure = new Promise<Error>((resolve) => child.once('error', resolve))
+    await expect(failure).resolves.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
+    expect(child.closed).toBe(false)
+  })
+
   it('keeps a child unproven when a worker that was ready dies before acknowledging it', async () => {
     const host = new WorkerThreadChildProcessHost(() => {
       const transport = new EventEmitter()
