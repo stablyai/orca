@@ -1,9 +1,9 @@
-import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { MobileProjectSectionCatalog } from '../../../../shared/sidebar-list/catalog/mobile-project-sections-contract'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import {
   buildSidebarProjectCatalog,
   type PairedServerCatalog
-} from '../../../../shared/sidebar-list/sidebar-project-catalog'
+} from '../../../../shared/sidebar-list/catalog/sidebar-project-catalog'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   runtimeVisibleProjectGroups,

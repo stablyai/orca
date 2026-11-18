@@ -8,7 +8,7 @@ import { isPwshAvailableAsync } from '../../main/pty/shell-startup/pwsh'
 import { isWslAvailableAsync } from '../../main/wsl/discovery/wsl-availability'
 import { listWslDistrosAsync } from '../../main/wsl/discovery/distro-catalog'
 import { isGitBashAvailable } from '../../main/pty/shell-startup/git-bash'
-import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { buildPosixCommandPathLookupScript } from '../../shared/shell/command-resolution/posix-command-path-lookup'
 import { runProcess } from '@orca/process-host'
 
 const execFileAsync = promisify(execFile)

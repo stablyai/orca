@@ -1,7 +1,6 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 
 import {
-  type AiVaultAgent,
   type AiVaultListResult,
   isAiVaultSessionResumableContent
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -10,24 +9,23 @@ import {
   type AiVaultPrepareSessionResumeRequest,
   type AiVaultPrepareSessionResumeResult
 } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { prepareAiVaultSessionForFork } from '../history/ai-vault-session-resume-preparation'
 import { aiVaultSessionListArgs } from '@/components/right-sidebar/ai-vault/scanning/ai-vault-session-list-request'
 import {
   findTabSessionHistoryRow,
   type TabSessionHistorySubject
-} from '@/components/tab-bar/tab-session-history-switch'
+} from '@/components/tab-bar/session-actions/tab-session-history-switch'
 import type { AiVaultResumeCommandSession } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
-import { waitForPromiseWithSignal } from '../../../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../../../shared/concurrency/abort-signal-reason'
 import { translate } from '@/i18n/i18n'
 
 export type NativeChatCliForkSubject = Extract<TabSessionHistorySubject, { kind: 'chat' }>
 export type NativeChatCliForkPreparation = {
   session: AiVaultResumeCommandSession
   copied: boolean
-  sourceAgent?: AiVaultAgent
 }
 
 function sourceChatChangedError(): Error {
@@ -143,5 +141,5 @@ export async function prepareNativeChatCliFork(
       )
     )
   }
-  return { ...(await prepareAiVaultSessionForFork(row, request)), sourceAgent: row.agent }
+  return prepareAiVaultSessionForFork(row, request)
 }

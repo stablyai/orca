@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { track } from '@/diagnostics/telemetry/telemetry'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
   createNestedRepoTelemetryAttemptId
-} from '../../../../../../shared/nested-repo-telemetry'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
+} from '../../../../../../shared/telemetry/nested-repo-telemetry'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import type { RepoSlice } from '@/store/repos/repo-state'
 import type { AppState } from '@/store/types'
@@ -14,13 +14,16 @@ import type { ShowNestedRepoReviewArgs } from '../nested-import/useAddRepoNested
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
 import {
   addLocalPathsForGeneration,
+  heldByWslHostOffer,
+  useDroppedLocalPathAutoAdd,
   usePickedLocalPathsAutoAdd,
   type LocalPathAddMode,
-  type LocalPathAddResult
+  type LocalPathAddResult,
+  type OfferWslHost
 } from './add-repo-local-path-batch'
 
 export function useAddRepoLocalFolderFlow({
@@ -64,7 +67,7 @@ export function useAddRepoLocalFolderFlow({
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
   /** True when it held this single local path to offer running its WSL distro as a host. */
-  offerWslHost?: (path: string, source: AddRepoExistingWorkspaceSource) => boolean
+  offerWslHost?: OfferWslHost
 }): {
   handleBrowse: () => Promise<void>
   resetLocalFolderFlow: () => void
@@ -250,18 +253,14 @@ export function useAddRepoLocalFolderFlow({
     [activeRuntimeEnvironmentId, addLocalPathForGeneration, onGitRepoReady]
   )
 
-  useEffect(() => {
-    if (!isOpen || !droppedLocalPath) {
-      return
-    }
-    if (droppedLocalPathHandledRef.current === droppedLocalPath) {
-      return
-    }
-    droppedLocalPathHandledRef.current = droppedLocalPath
-    if (!offerWslHost?.(droppedLocalPath, 'local_folder_picker')) {
-      void handleAddLocalPath(droppedLocalPath, 'local_folder_picker')
-    }
-  }, [droppedLocalPath, handleAddLocalPath, isOpen, offerWslHost])
+  useDroppedLocalPathAutoAdd({
+    isOpen,
+    droppedLocalPath,
+    droppedLocalPathHandledRef,
+    localAddGenRef,
+    offerWslHost,
+    addPath: handleAddLocalPath
+  })
 
   const finishAddAttempt = useCallback((): void => {
     clearNestedScanState()
@@ -290,7 +289,12 @@ export function useAddRepoLocalFolderFlow({
       if (paths.length === 0 || gen !== localAddGenRef.current) {
         return
       }
-      if (paths.length === 1 && offerWslHost?.(paths[0], 'local_folder_picker')) {
+      const isCurrent = (): boolean => gen === localAddGenRef.current
+      if (
+        paths.length === 1
+          ? await heldByWslHostOffer(offerWslHost, paths[0], isCurrent)
+          : !isCurrent()
+      ) {
         return
       }
       await handleAddLocalPaths(paths, 'local_folder_picker', gen)

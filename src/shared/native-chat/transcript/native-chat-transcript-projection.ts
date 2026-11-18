@@ -4,10 +4,13 @@
 import { nativeChatSemanticRowId, type NativeChatMessage } from '../native-chat-types'
 import { compareAgentJournalPositions } from '../../agent-session/journal/agent-session-journal-position'
 import { agentJournalItemSubagentId } from '../../agent-session/journal/agent-session-journal-producer'
-import { stripNoiseMessages } from '../native-chat-noise'
+import { stripNoiseMessages } from './messages/native-chat-noise'
 import { foldToolMessages } from '../tools/native-chat-tool-fold'
-import { foldSubagentItems } from './native-chat-subagent-items'
-import { nativeChatTurnMembership, type NativeChatTurnJournal } from './native-chat-turn-membership'
+import { foldSubagentItems } from './subagents/native-chat-subagent-items'
+import {
+  nativeChatTurnMembership,
+  type NativeChatTurnJournal
+} from './turns/native-chat-turn-membership'
 
 /** Timestamp, then id. A null timestamp sorts first so a source that cannot supply
  *  one stays in place rather than jumping to the end. */

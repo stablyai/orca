@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { aiVaultScanErrorText } from './ai-vault-scan-issue-copy'
-import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../../../shared/execution-host/execution-host'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
 import { EMPTY_AI_VAULT_SESSIONS } from '../session-list/ai-vault-session-identity'
@@ -22,7 +22,7 @@ import { resetAgentSessionIdsRefreshKeys } from './ai-vault-agent-session-refres
 import { useAiVaultNewSessionRescan } from './ai-vault-new-session-rescan'
 import { saveAiVaultSessionList } from './ai-vault-saved-session-lists'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   claimAiVaultForcedRescan,
   resetAiVaultForcedRescanBudgetForTest

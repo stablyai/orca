@@ -5,8 +5,8 @@ import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { KIRO_ACP_DIALECT } from '../acp/acp-dialects/kiro-dialect'
 import { KIRO_MODEL_LISTING_ARGS, parseKiroModelListing } from './kiro-model-listing'
 import type { StructuredAgentSessionHistory } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
-import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 
 // Chats cannot adopt Kiro's terminal conversations yet.
 const KIRO_SESSION_HISTORY: StructuredAgentSessionHistory = {

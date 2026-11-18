@@ -13,6 +13,11 @@ export const NOTICE_SECONDARY_TOKEN = '--notice-secondary'
 export const NOTICE_MUTED_FOREGROUND_TOKEN = '--notice-muted-foreground'
 export const NOTICE_SECONDARY_EDGE_TOKEN = '--notice-secondary-edge'
 export const NOTICE_MUTED_TOKEN = '--notice-muted'
+export const NOTICE_ACCENT_TOKEN = '--notice-accent'
+export const NOTICE_ACCENT_FOREGROUND_TOKEN = '--notice-accent-foreground'
+export const NOTICE_INPUT_TOKEN = '--notice-input'
+export const NOTICE_EDGE_TOKEN = '--notice-edge'
+export const NOTICE_OUTLINE_EDGE_TOKEN = '--notice-outline-edge'
 // Keep in sync with the built-in notice mixes in main.css.
 const NOTICE_LIFT = { light: 0, dark: 7 } as const
 const NOTICE_SECONDARY_MIX = { light: 6, dark: 10 } as const
@@ -102,7 +107,17 @@ export function noticeSurfaceTokensFor(
     // Why: built-in palettes set --muted equal to --secondary; keeping that here keeps muted panels
     // on the notice surface's polarity when a theme's popover and app polarity differ.
     [NOTICE_MUTED_TOKEN]: secondaryHex,
-    [NOTICE_MUTED_FOREGROUND_TOKEN]: rgbaToHex(muted)
+    [NOTICE_MUTED_FOREGROUND_TOKEN]: rgbaToHex(muted),
+    // Why: hover (bg-accent, bg-accent/50) and outline fills (dark:bg-input/30, /50) paint under
+    // popover text in the notice scope; the secondary fill is the deepest one it stays readable on.
+    [NOTICE_ACCENT_TOKEN]: secondaryHex,
+    [NOTICE_ACCENT_FOREGROUND_TOKEN]: rgbaToHex(text),
+    [NOTICE_INPUT_TOKEN]: secondaryHex,
+    // Why: edges never sit under text, so they follow the popover text like the card border does;
+    // the theme's own --border/--input can be on the app's polarity, not the popover's.
+    [NOTICE_EDGE_TOKEN]: 'var(--notice-border)',
+    // Why: --input now only fills, so dark outline buttons (border-input) need the edge drawn.
+    [NOTICE_OUTLINE_EDGE_TOKEN]: 'var(--notice-border)'
   }
 }
 

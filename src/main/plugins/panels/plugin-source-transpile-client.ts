@@ -35,7 +35,7 @@ function defaultWorkerFactory(): PluginSourceTranspileWorker {
   if (!existsSync(path)) {
     throw new Error(`plugin source transpile worker entry not found: ${path}`)
   }
-  return spawnWorkerThread(path)
+  return spawnWorkerThread(path, { name: 'orca-plugin-transpile' })
 }
 
 /**

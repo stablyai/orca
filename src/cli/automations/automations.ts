@@ -9,7 +9,7 @@ import {
   type WorkspaceRunContext
 } from '../../shared/work-items/task-source-context'
 import type { AutomationDestination } from '../../shared/automations/ownership/automation-owner-precondition'
-import type { ProjectHostSetup } from '../../shared/project-types'
+import type { ProjectHostSetup } from '../../shared/project/project-types'
 import type { CommandHandler } from '../dispatch/dispatch'
 import {
   formatAutomationList,
@@ -33,7 +33,7 @@ import {
   readAllAutomationRuns,
   readAutomationRunsPage
 } from './automation-runs-paging'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   getOptionalWorktreeSelector,
   resolveCurrentWorktreeSelector

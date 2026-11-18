@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type ActiveView = AppState['activeView']

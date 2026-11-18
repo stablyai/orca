@@ -6,7 +6,7 @@ import type {
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 /** `wakeWslDistro`: a user act (a click, a runtime choice) that may start a stopped WSL distro. */
-export type LocalAgentRefreshOptions = { wakeWslDistro?: boolean }
+export type LocalAgentRefreshOptions = { wakeWslDistro?: boolean; userInitiated?: boolean }
 
 export type LocalDetectedAgentState = {
   readLocalAgentInventory: (worktreeId?: string | null) => {

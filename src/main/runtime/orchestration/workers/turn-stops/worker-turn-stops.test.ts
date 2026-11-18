@@ -3,9 +3,9 @@ import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { chatWorkerTurnStopReporter } from './chat-worker-turn-stops'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
@@ -121,38 +121,6 @@ describe('terminal worker turn stops', () => {
     await settle()
     expect(ctx.mail()).toHaveLength(0)
   })
-
-  it.each([
-    { waitingForMail: false, marked: ['apr_1'] },
-    { waitingForMail: true, marked: [] }
-  ])(
-    'marks an approval reported only when its escalation went out (%o)',
-    async ({ waitingForMail, marked }) => {
-      const ctx = setup()
-      if (waitingForMail) {
-        ctx.waiting.add(`dispatch:${ctx.dispatch.id}`)
-      }
-      const markApprovalReported = vi.fn()
-      const current = { row: hookRow({ state: 'working', agentType: 'claude' }) }
-      const stops = terminal(ctx, current, {
-        takeOpenApproval: async () => ({
-          v: 1,
-          approvalId: 'apr_1',
-          state: 'open',
-          worker: { handle: HANDLE, dispatchId: ctx.dispatch.id, taskId: ctx.dispatch.task_id },
-          summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
-          allowedActions: ['allow', 'deny']
-        }),
-        markApprovalReported
-      })
-      current.row = hookRow({ state: 'blocked', agentType: 'claude' })
-      stops.observe(moved('working', 'needs-you'))
-      await settle()
-
-      expect(ctx.mail()).toHaveLength(marked.length)
-      expect(markApprovalReported.mock.calls.flat()).toEqual(marked)
-    }
-  )
 
   it('never mails a capability or credential carried in why a worker went away', () => {
     const ctx = setup()

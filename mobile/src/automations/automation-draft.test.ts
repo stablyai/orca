@@ -1,10 +1,8 @@
 import { loadAutomationTargets, workspaceMatchesSetup } from './automation-target-inventory'
 import { describe, expect, it } from 'vitest'
+import { automationDraftPatch, newAutomationDraft } from './automation-draft'
 
-import { AutomationUpdate } from '../../../src/shared/rpc-contract/automation-params'
-
-import { automationUpdateParams, newAutomationDraft } from './automation-draft'
-import { automationClient, automationTargets, savedAutomation } from './automation-test-fixtures'
+import { automationClient, automationTargets } from './automation-test-fixtures'
 
 describe('mobile automation host contracts', () => {
   it('resolves legacy inventory only from a unique repo host and never assumes local', async () => {
@@ -52,26 +50,27 @@ describe('mobile automation host contracts', () => {
     repos = []
     expect((await loadAutomationTargets(port.client)).workspaces).toEqual([])
   })
-  it('edits only changed fields, preserving paused/custom/advanced and future host values', () => {
-    const saved = savedAutomation()
-    const original = newAutomationDraft(saved)
-    const params = automationUpdateParams(
-      saved.id,
-      { ...original, name: 'Renamed' },
-      original,
-      automationTargets()
-    )
-    expect(AutomationUpdate.parse(params)).toMatchObject({
-      id: saved.id,
-      updates: { name: 'Renamed' }
+})
+
+describe('automation setup pin writes', () => {
+  const original = { ...newAutomationDraft(), name: 'Nightly', setupDecision: 'run' as const }
+
+  it('keeps the saved pin on an ordinary edit', () => {
+    expect(automationDraftPatch({ ...original, name: 'Renamed' }, original)).toEqual({
+      name: 'Renamed'
     })
-    expect(params.updates).toEqual({ name: 'Renamed' })
-    expect(params.destination).toBeUndefined()
-    expect(original).toMatchObject({
-      agentId: 'codex',
-      rrule: saved.rrule,
-      grace: '0',
-      reuseSession: true
+  })
+
+  it('names the decision when setup was re-approved without a pin', () => {
+    expect(automationDraftPatch({ ...original, setupDecisionEdited: true }, original)).toEqual({
+      setupDecision: 'run'
+    })
+  })
+
+  it("re-decides setup when only the base changes, since runs use the new base's setup", () => {
+    expect(automationDraftPatch({ ...original, baseBranch: 'release' }, original)).toEqual({
+      baseBranch: 'release',
+      setupDecision: 'run'
     })
   })
 })

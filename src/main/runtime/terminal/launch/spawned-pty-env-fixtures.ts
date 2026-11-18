@@ -1,8 +1,8 @@
-import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../../../ipc/pty/spawn-pane-env'
+import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../../../ipc/pty/host-env/spawn-pane-env'
 import {
   buildJcodeRuntimeDirEnv,
   JCODE_RUNTIME_DIR_ENV_KEY
-} from '../../../../shared/jcode-runtime-dir'
+} from '../../../../shared/agent-launch/startup/jcode-runtime-dir'
 
 /** Reconstructs identity formulas from fake spawn args; wiring and directory readiness need real-path tests. */
 export function spawnedPtyEnv(call: unknown): Record<string, string> {

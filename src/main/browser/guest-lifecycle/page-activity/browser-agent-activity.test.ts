@@ -26,7 +26,7 @@ import {
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
   BROWSER_AGENT_CURSOR_CHANNEL,
   type BrowserAgentCursorEvent
-} from '../../../../shared/browser-agent-activity-contract'
+} from '../../../../shared/browser/automation/browser-agent-activity-contract'
 
 const PAGE = 'page-1'
 

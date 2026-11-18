@@ -11,7 +11,7 @@ import {
   getWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeDragGroup } from '../../worktree-list/drag/worktree-manual-order'
 import type { useRepoMap } from '@/store/repos/use-repository-catalog'
 

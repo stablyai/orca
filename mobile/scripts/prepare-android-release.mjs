@@ -6,7 +6,7 @@ import process from 'node:process'
 
 const mobileRoot = path.resolve(import.meta.dirname, '..')
 const appConfigPath = process.env.MOBILE_APP_CONFIG_PATH || path.join(mobileRoot, 'app.json')
-const androidTagRefPrefix = 'refs/tags/mobile-android-v'
+const androidTagRefPrefix = 'refs/tags/android-v'
 const semverPattern = /^\d+\.\d+\.\d+$/
 
 function input(name) {
@@ -83,7 +83,7 @@ if (requestedVersionCode || bumpVersionCode) {
   fail('Android versionCode changes must be committed in mobile/app.json before release')
 }
 
-const tag = `mobile-android-v${currentVersion}`
+const tag = `android-v${currentVersion}`
 const publishRelease =
   githubRef.startsWith(androidTagRefPrefix) || truthy(input('MOBILE_ANDROID_PUBLISH_RELEASE'))
 

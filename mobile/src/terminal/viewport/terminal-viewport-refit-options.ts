@@ -4,7 +4,7 @@ import type { ConnectionState } from '../../transport/connection/connection-stat
 import type { TerminalWebViewHandle } from '../webview/terminal-webview-contract'
 import type { TerminalFrame } from '../webview/terminal-webview-messages'
 import type { TerminalViewportDims } from './terminal-viewport-refit'
-import type { TerminalPaneViewport } from '../session/mobile-terminal-pane-layout'
+import type { TerminalPaneViewport } from '../session/pane-layout/mobile-terminal-pane-layout'
 
 export type TerminalViewportRefitOptions = {
   activeHandleRef: RefObject<string | null>
@@ -21,8 +21,8 @@ export type TerminalViewportRefitOptions = {
   deviceTokenRef: RefObject<string | null>
   connState: ConnectionState
   tabStripVisible: boolean
-  // Why: text size (font scale); changing it changes cell size, so the PTY must be re-fitted to a new column count.
-  textScale: number
+  // Why: text size, font, spacing and weight; changing any changes cell size, so the PTY must be re-fitted.
+  fontMetricsKey: string
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }

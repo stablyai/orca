@@ -7,11 +7,11 @@ import {
   toPublicDictationMeterState,
   type DictationMeterAnalyzerState,
   type DictationMeterState
-} from '../../../src/shared/dictation-audio-meter'
+} from '../../../src/shared/speech/dictation/dictation-audio-meter'
 import {
   DICTATION_SAMPLE_RATE,
   PCM_BYTES_PER_SAMPLE
-} from '../../../src/shared/rpc-contract/speech-params'
+} from '../../../src/shared/rpc-contract/speech/speech-params'
 import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
 
 const WINDOW_MS = 50

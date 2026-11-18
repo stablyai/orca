@@ -6,7 +6,7 @@ import {
   toWindowsWslDrivePath,
   toWindowsWslUncPath,
   wslDistroForCommand
-} from '../../../../shared/wsl-paths'
+} from '../../../../shared/file-access/wsl-paths'
 import type { GitExecOptions } from '../../command-runner/git-exec-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { pendingWslDriveCheckoutGitRouting } from '../../command-runner/host-routing/wsl-drive-checkout-git-routing'

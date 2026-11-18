@@ -1,10 +1,10 @@
-import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
-import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { hasFeatureInteraction } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
-} from '../../../../../shared/feature-wall-setup-steps'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+} from '../../../../../shared/feature-education/explore/feature-wall-setup-steps'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { selectWorktreesByRepo } from '../../../store/workspaces/catalog/workspace-record-fields'
 

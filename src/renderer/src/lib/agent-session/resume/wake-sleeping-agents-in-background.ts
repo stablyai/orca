@@ -1,19 +1,19 @@
 import { WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT } from '@/constants/terminal'
 import type { WakeHibernatedAgentsWorktreeDetail } from '@/constants/terminal'
-import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 import { useAppStore } from '@/store/index'
-import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
+import { isWorkspaceSleepRecord } from '../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'
 import { resolveActivationPtyListScope } from '../../workspace/activation/worktree-activation-pty-inventory'
 import { gateWorktreeAgentActivation } from '../../workspace/activation/worktree-agent-activation-gate'
-import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
+import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import {
   activationTreatsNoteAsFinished,
   isStrandedWorkspaceSleepRecord,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 type BackgroundSleepingAgentWakeDispatcherOptions = {

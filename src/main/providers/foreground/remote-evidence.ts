@@ -1,12 +1,15 @@
-import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
+import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import type {
   PosixFence,
   RemoteForegroundEvidence,
   WindowsFence
-} from '../../../shared/foreground-process-evidence'
-import { buildProcessTableIndex, type ProcessTableIndex } from '../../../shared/process-table-index'
-import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
+} from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
+import {
+  buildProcessTableIndex,
+  type ProcessTableIndex
+} from '../../../shared/process-observation/tables/process-table-index'
+import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import type {
   BatchedForegroundProcessRequest,
   BatchedForegroundProcessResult,

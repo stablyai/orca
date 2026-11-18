@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import {
   retireTerminalSurfaceFromPersistence,
   sanitizeWorkspaceSessionTerminalRetirements

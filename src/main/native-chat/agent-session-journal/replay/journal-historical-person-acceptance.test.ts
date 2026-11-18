@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { memoryJournalMap } from '../journal-memory-collections'
 import Database from '../../../sqlite/sync-database'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { ensureJournalOutcomeTables } from '../outcomes/journal-outcome-format'
@@ -104,8 +105,8 @@ it('retired linked acceptance is bounded by original admission, not the first la
   })
   expect(journalInputOrder(state).latestPersonAcceptedSequence()).toBe(800)
   expect(claim(state)?.messageId).toBe('W')
-  expect([...state.submissions.keys()]).toEqual([])
-  expect([...state.queue.cards.keys()]).toEqual(['W'])
+  expect([...memoryJournalMap(state.submissions).keys()]).toEqual([])
+  expect([...memoryJournalMap(state.queue.cards).keys()]).toEqual(['W'])
 })
 
 it('late pre-Stop acceptance and explicit unattended handoffs cannot fabricate a personal lift', () => {

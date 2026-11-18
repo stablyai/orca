@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
-import { labelFromModelId } from '../../shared/model-id-label'
+import type { AgentSessionModelOption } from '../../shared/agent-session/options/model-catalog/agent-session-model-option'
+import { labelFromModelId } from '../../shared/agent-session/options/model-catalog/model-id-label'
 
 // Lists the account's models without opening a session; V3's `acp` rejects `--model`/`--effort`.
 export const KIRO_MODEL_LISTING_ARGS = ['chat', '--list-models', '--format', 'json'] as const

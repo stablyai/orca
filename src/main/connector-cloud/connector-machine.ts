@@ -1,4 +1,4 @@
-import type { ConnectorProject } from '../../shared/connector-cloud-contract'
+import type { ConnectorProject } from '../../shared/connectors/connector-cloud-contract'
 import type {
   ExternalConversationHost,
   ExternalConversationSeam

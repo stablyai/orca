@@ -1,4 +1,4 @@
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'

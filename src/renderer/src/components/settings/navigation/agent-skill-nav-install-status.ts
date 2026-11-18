@@ -1,5 +1,5 @@
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 import type { SettingsNavInstallStatus } from './settings-navigation-types'
 import { getLinearAgentSkillUpdateTarget } from '../../../lib/skills/installation/linear-agent-skill-update-target'
 import { getSkillFreshnessDisplayStatus } from '../../../lib/skills/presentation/skill-freshness-display-status'

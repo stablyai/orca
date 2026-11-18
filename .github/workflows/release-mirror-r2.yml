@@ -9,7 +9,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: Published release tag to mirror (e.g. v1.4.254 or mobile-android-v0.0.64)
+        description: Published release tag to mirror (e.g. v1.4.254 or android-v0.0.65)
         required: true
         type: string
       assets:
@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Published release tag to mirror (e.g. v1.4.254 or mobile-android-v0.0.64)
+        description: Published release tag to mirror (e.g. v1.4.254 or android-v0.0.65)
         required: true
         type: string
       assets:

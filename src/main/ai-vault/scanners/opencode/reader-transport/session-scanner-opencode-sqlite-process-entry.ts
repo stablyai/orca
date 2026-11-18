@@ -17,7 +17,10 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
     !('id' in value) ||
     !Number.isSafeInteger(value.id) ||
     !('kind' in value) ||
-    ('agent' in value && value.agent !== 'opencode2' && value.agent !== 'zcode') ||
+    ('agent' in value &&
+      value.agent !== 'opencode2' &&
+      value.agent !== 'zcode' &&
+      value.agent !== 'hermes') ||
     ('timeoutMs' in value &&
       (typeof value.timeoutMs !== 'number' ||
         !Number.isFinite(value.timeoutMs) ||
@@ -25,7 +28,12 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
   ) {
     return false
   }
-  if (value.kind === 'native-page' || value.kind === 'native-signal') {
+  if (
+    value.kind === 'native-page' ||
+    value.kind === 'native-signal' ||
+    value.kind === 'hermes-history' ||
+    value.kind === 'hermes-exists'
+  ) {
     return (
       'dbPath' in value &&
       typeof value.dbPath === 'string' &&
@@ -99,7 +107,7 @@ if (!isMainThread) {
   })
 } else {
   // Keep stdin and the hard deadline responsive while SQLite blocks its worker.
-  const worker = spawnWorkerThread(__filename)
+  const worker = spawnWorkerThread(__filename, { name: 'orca-opencode-sqlite-reader' })
   let activeId: number | null = null
   let deadline: ReturnType<typeof setTimeout> | undefined
   const stop = (code: number): never => process.exit(code)

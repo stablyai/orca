@@ -5,7 +5,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { Plus, LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
-import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
+import LinearIssueAttributeFilterDropdowns from '@/components/task-page/linear/filters/linear-issue-attribute-filter-dropdowns'
 import { Input } from '@/components/ui/input'
 import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'

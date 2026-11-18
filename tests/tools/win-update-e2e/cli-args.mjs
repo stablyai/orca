@@ -20,10 +20,10 @@ Installer source (version N, then N+1) — path or release tag on each side:
 
 Required:
   --expect <profile>       Assertion profile: "cold-restore" or "survival"
-                           cold-restore = today's behavior (daemon killed by the
-                             installer sweep, app cold-restores scrollback, no
-                             flashing). survival = Phase 1 target (daemon PID
-                             unchanged, sessions still interactive).
+                           cold-restore = daemon killed by the installer sweep,
+                             app cold-restores scrollback, no flashing.
+                           survival = daemon PID unchanged, sessions still
+                             interactive.
 
 Options:
   --install-dir <path>     Isolated-install mode: install the test build into

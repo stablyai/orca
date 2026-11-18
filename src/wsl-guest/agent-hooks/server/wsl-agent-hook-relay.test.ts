@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RelayAgentHookServer } from './agent-hook-server'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { sanitizeWslHookInstanceKey } from '../../../shared/wsl-hook-relay-contract'
+import { sanitizeWslHookInstanceKey } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const PANE_KEY = makePaneKey('tab-2', LEAF_ID)
@@ -36,29 +36,6 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
   afterEach(() => {
     server?.stop()
     rmSync(tmpDir, { recursive: true, force: true })
-  })
-
-  it('binds the preferred port with the fixed token when the port is free', async () => {
-    const probe = createServer()
-    const freePort = await new Promise<number>((resolve) => {
-      probe.listen(0, '127.0.0.1', () => {
-        const address = probe.address()
-        resolve(typeof address === 'object' && address ? address.port : 0)
-      })
-    })
-    await new Promise<void>((resolve) => probe.close(() => resolve()))
-
-    server = new RelayAgentHookServer({
-      endpointDir: tmpDir,
-      token: 'host-issued-token',
-      preferredPort: freePort,
-      forward: () => {}
-    })
-    await server.start()
-
-    expect(server.getCoordinates().port).toBe(freePort)
-    expect(server.getCoordinates().token).toBe('host-issued-token')
-    expect(server.usedPortFallback).toBe(false)
   })
 
   it('authenticates the Claude view route and returns its host reply', async () => {

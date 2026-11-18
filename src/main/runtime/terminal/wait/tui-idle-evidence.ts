@@ -4,7 +4,7 @@ import {
   isFreshNonDoneAgentStatus
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { getSyntheticAgentTerminalTitle } from '../../../../shared/agent-status/title/synthetic-agent-title'
 import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'

@@ -1,4 +1,3 @@
-import type { JournalInputKeys } from '../../../native-chat/agent-session-journal/input-order/journal-input-observations'
 import {
   nativeCopyIds,
   usableJournalHistoryOrigin
@@ -12,15 +11,21 @@ import {
   agentJournalItemPosition,
   compareAgentJournalPositions
 } from '../../../../shared/agent-session/journal/agent-session-journal-position'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import {
+  captureHistoryCatchUpView,
+  type HistoryCatchUpJournalView
+} from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 
 const TURN_LIFECYCLE_RECORD_PREFIX = 'turn-lifecycle:'
 
 export type CodexHistoryJournalView = {
   epoch: string
-  nativePromptKeys: ReadonlySet<string> | JournalInputKeys
+  nativePromptKeys: ReadonlySet<string>
+  physicalCursor?: AgentJournalCursor
   unresolvedIds?: ReadonlySet<string>
   /** Provider turns represented by saved rows or native receipts. */
   known: ReadonlySet<string>
@@ -37,105 +42,126 @@ export type CodexHistoryJournalView = {
   unresolvedOrigin: boolean
 }
 
-export function readCodexHistoryJournalView(
+export async function readCodexHistoryJournalView(
   journal: StructuredAgentSessionHistoryJournal,
   threadId: string,
-  signal: AbortSignal
-): CodexHistoryJournalView {
-  const known = new Set<string>()
-  const nativePromptKeys = new Set<string>()
-  const lifecycles = new Set<string>()
-  const assistants = new Set<string>()
-  let latest: string | null = null
-  let latestPosition: AgentJournalPosition | null = null
-  let hasRows = false
-  let hasLegacy = false
-  const note = (turnId: string, position: AgentJournalPosition): void => {
-    known.add(turnId)
-    if (latestPosition === null || compareAgentJournalPositions(position, latestPosition) > 0) {
-      latest = turnId
-      latestPosition = position
+  _signal: AbortSignal
+): Promise<CodexHistoryJournalView & HistoryCatchUpJournalView> {
+  return captureHistoryCatchUpView(journal, async (physicalCursor) => {
+    const known = new Set<string>()
+    const nativePromptKeys = new Set<string>()
+    const lifecycles = new Set<string>()
+    const assistants = new Set<string>()
+    let latest: string | null = null
+    let latestPosition: AgentJournalPosition | null = null
+    const positions = new Map<string, AgentJournalPosition>()
+    let hasLegacy = false
+    const note = (turnId: string, position: AgentJournalPosition): void => {
+      known.add(turnId)
+      if (latestPosition === null || compareAgentJournalPositions(position, latestPosition) > 0) {
+        latest = turnId
+        latestPosition = position
+      }
     }
-  }
-  journal.visitItemsWithLinkage((itemId, sequence, body, attribution) => {
-    hasRows = true
-    if (!isRootAgentJournalItem(attribution)) {
-      return
-    }
-    const identity = parseAgentJournalItemKey(itemId)
+    const [hasRows, rawOrigin, inputs] = await Promise.all([
+      journal.reads.hasItems(),
+      journal.reads.historyOrigin(),
+      journal.reads.input({
+        kind: 'batch',
+        reads: [
+          { kind: 'accepted-submissions' },
+          { kind: 'unsettled-submissions' },
+          { kind: 'capture-keys', present: [] }
+        ]
+      }),
+      journal.reads.visitItems(
+        { kinds: ['message', 'tool-call', 'diff', 'approval', 'question', 'status', 'turn'] },
+        (itemId, _sequence, body, attribution, item) => {
+          const identity = parseAgentJournalItemKey(itemId)
+          if (identity?.provider === 'orca' && body.kind === 'message') {
+            positions.set(itemId, agentJournalItemPosition(item))
+          }
+          if (!isRootAgentJournalItem(attribution)) {
+            return
+          }
+          if (
+            identity?.provider === 'legacy' &&
+            identity.agent === 'codex' &&
+            identity.sessionId === threadId &&
+            (body.kind === 'message' || body.kind === 'tool-call')
+          ) {
+            hasLegacy = true
+          }
+          if (identity?.provider === 'orca' && body.kind === 'message' && body.role === 'user') {
+            nativePromptKeys.add(itemId)
+          }
+          const turnId = codexTurnIdOfRow(itemId, body, threadId)
+          if (turnId) {
+            if (body.kind === 'message' && body.role === 'assistant') {
+              assistants.add(turnId)
+            }
+            const turn = readAgentJournalTurn(body)
+            if (turn && turn.state !== 'running' && turn.state !== 'unverifiable') {
+              lifecycles.add(turnId)
+            }
+            note(turnId, agentJournalItemPosition(item))
+          }
+        }
+      )
+    ])
+    const [accepted, unsettled, captured] = inputs.results
     if (
-      identity?.provider === 'legacy' &&
-      identity.agent === 'codex' &&
-      identity.sessionId === threadId &&
-      (body.kind === 'message' || body.kind === 'tool-call')
+      accepted?.kind !== 'accepted-submissions' ||
+      unsettled?.kind !== 'unsettled-submissions' ||
+      captured?.kind !== 'capture-keys'
     ) {
-      hasLegacy = true
+      throw new Error('invalid-history-inputs')
     }
-    if (identity?.provider === 'orca' && body.kind === 'message' && body.role === 'user') {
-      nativePromptKeys.add(itemId)
+    // Accepted submissions can identify turns whose rows have not landed yet.
+    for (const submission of accepted.submissions) {
+      const promptKey = agentJournalSubmissionKey(submission.clientMessageId)
+      nativePromptKeys.add(promptKey)
+      const identity = submission.providerItemId
+        ? parseAgentJournalItemKey(submission.providerItemId)
+        : null
+      if (identity?.provider === 'codex' && identity.threadId === threadId) {
+        const prompt = positions.get(promptKey)
+        if (prompt) {
+          note(identity.turnId, prompt)
+        }
+      }
     }
-    const turnId = codexTurnIdOfRow(itemId, body, threadId)
-    if (turnId) {
-      if (body.kind === 'message' && body.role === 'assistant') {
-        assistants.add(turnId)
-      }
-      const turn = readAgentJournalTurn(body)
-      if (turn && turn.state !== 'running' && turn.state !== 'unverifiable') {
-        lifecycles.add(turnId)
-      }
-      note(turnId, agentJournalItemPosition(journal.item(itemId) ?? { sequence }))
+    const origin = usableJournalHistoryOrigin(rawOrigin)
+    const importedAt =
+      origin?.kind === 'legacy_import' &&
+      origin.providerHandle.kind === 'codex' &&
+      origin.providerHandle.threadId === threadId
+        ? origin.importedAt
+        : null
+    const copy =
+      origin?.kind === 'native_copy' &&
+      origin.unit === 'codex-turn' &&
+      origin.agent === 'codex' &&
+      origin.providerHandle.kind === 'codex' &&
+      origin.providerHandle.threadId === threadId
+        ? origin
+        : null
+    return {
+      ...(copy ? { covered: nativeCopyIds(copy) } : {}),
+      origin: rawOrigin,
+      epoch: physicalCursor.epoch,
+      nativePromptKeys: new Set([...nativePromptKeys, ...captured.keys]),
+      unresolvedIds: new Set(unsettled.submissions.map((send) => send.clientMessageId)),
+      known,
+      terminal: lifecycles,
+      assistants,
+      latest,
+      latestPosition,
+      hasRows,
+      importedAt,
+      unresolvedOrigin: (hasLegacy || rawOrigin !== null) && importedAt === null && !copy
     }
   })
-  // Accepted submissions can identify turns whose rows have not landed yet.
-  for (const submission of journal.currentRead().submissions) {
-    const promptKey = agentJournalSubmissionKey(submission.clientMessageId)
-    nativePromptKeys.add(promptKey)
-    const identity = submission.providerItemId
-      ? parseAgentJournalItemKey(submission.providerItemId)
-      : null
-    if (identity?.provider === 'codex' && identity.threadId === threadId) {
-      const prompt = journal.item(promptKey)
-      if (prompt) {
-        note(identity.turnId, agentJournalItemPosition(prompt))
-      }
-    }
-  }
-  const rawOrigin = journal.historyOrigin()
-  const origin = usableJournalHistoryOrigin(rawOrigin)
-  const importedAt =
-    origin?.kind === 'legacy_import' &&
-    origin.providerHandle.kind === 'codex' &&
-    origin.providerHandle.threadId === threadId
-      ? origin.importedAt
-      : null
-  const copy =
-    origin?.kind === 'native_copy' &&
-    origin.unit === 'codex-turn' &&
-    origin.agent === 'codex' &&
-    origin.providerHandle.kind === 'codex' &&
-    origin.providerHandle.threadId === threadId
-      ? origin
-      : null
-  return {
-    ...(copy ? { covered: nativeCopyIds(copy) } : {}),
-    origin: rawOrigin,
-    epoch: journal.epoch,
-    nativePromptKeys: journal.inputOrder.captureKeys(nativePromptKeys, signal),
-    unresolvedIds: new Set(
-      journal.inputOrder
-        .unsettledSubmissions()
-        .filter((send) => send.dispatchState === 'unknown' || send.dispatchState === 'pending')
-        .map((send) => send.clientMessageId)
-    ),
-    known,
-    terminal: lifecycles,
-    assistants,
-    latest,
-    latestPosition,
-    hasRows,
-    importedAt,
-    unresolvedOrigin: (hasLegacy || rawOrigin !== null) && importedAt === null && !copy
-  }
 }
 
 function codexTurnIdOfRow(
@@ -169,7 +195,8 @@ export function sameCodexHistoryJournalView(
 ): boolean {
   return (
     a.epoch === b.epoch &&
-    a.origin === b.origin &&
+    a.physicalCursor?.epoch === b.physicalCursor?.epoch &&
+    a.physicalCursor?.sequence === b.physicalCursor?.sequence &&
     JSON.stringify([...(a.unresolvedIds ?? [])]) === JSON.stringify([...(b.unresolvedIds ?? [])]) &&
     a.unresolvedOrigin === b.unresolvedOrigin &&
     a.importedAt === b.importedAt &&
@@ -188,11 +215,5 @@ function sameNativePromptKeys(
   a: CodexHistoryJournalView['nativePromptKeys'],
   b: CodexHistoryJournalView['nativePromptKeys']
 ): boolean {
-  if ('same' in a && 'same' in b) {
-    return a.same(b)
-  }
-  if ('size' in a && 'size' in b) {
-    return a.size === b.size && [...a].every((key) => b.has(key))
-  }
-  return false
+  return a.size === b.size && [...a].every((key) => b.has(key))
 }

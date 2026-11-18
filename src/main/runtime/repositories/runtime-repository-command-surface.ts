@@ -48,6 +48,7 @@ export type RuntimeRepositoryCommandSurface = {
   listFolderWorkspaces: RuntimeProjectGroupController['listFolderWorkspaces']
   listVisibleProjectGroups: RuntimeProjectGroupController['listVisibleGroups']
   listVisibleFolderWorkspaces: RuntimeProjectGroupController['listVisibleFolderWorkspaces']
+  checkProjectGroupHooks: RuntimeProjectGroupController['checkGroupHooks']
   createProjectGroup: RuntimeProjectGroupController['createGroup']
   updateProjectGroup: RuntimeProjectGroupController['updateGroup']
   updateProjectGroups: RuntimeProjectGroupController['updateGroups']
@@ -65,6 +66,7 @@ export type RuntimeRepositoryCommandSurface = {
   saveSparsePreset: RuntimeRepositorySparsePresets['save']
   addRepo: RuntimeRepositoryRegistrationController['add']
   createRepo: RuntimeRepositoryRegistrationController['create']
+  getDefaultCreateProjectParent: RuntimeRepositoryRegistrationController['defaultCreateParent']
   cloneRepo: RuntimeRepositoryCloneController['clone']
   checkCloneTarget: RuntimeRepositoryCloneController['checkTarget']
   showRepo: RuntimeRepositorySettingsController['show']
@@ -131,6 +133,7 @@ export function installRuntimeRepositoryCommandSurface(
     listFolderWorkspaces: groups.listFolderWorkspaces.bind(groups),
     listVisibleProjectGroups: groups.listVisibleGroups.bind(groups),
     listVisibleFolderWorkspaces: groups.listVisibleFolderWorkspaces.bind(groups),
+    checkProjectGroupHooks: groups.checkGroupHooks.bind(groups),
     createProjectGroup: groups.createGroup.bind(groups),
     updateProjectGroup: groups.updateGroup.bind(groups),
     updateProjectGroups: groups.updateGroups.bind(groups),
@@ -158,6 +161,7 @@ export function installRuntimeRepositoryCommandSurface(
       }
       return result
     },
+    getDefaultCreateProjectParent: registrations.defaultCreateParent.bind(registrations),
     cloneRepo: async (...args: Parameters<typeof clones.clone>) => {
       const repo = await clones.clone(...args)
       void target.repositoryForkBackfill.enqueue([repo])

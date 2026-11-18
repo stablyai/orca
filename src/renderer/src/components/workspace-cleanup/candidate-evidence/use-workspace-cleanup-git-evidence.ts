@@ -7,7 +7,7 @@ import {
   type WorkspaceCleanupCandidate,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT as WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '@/store'
 import {
   cancelWorkspaceCleanupHostScan,

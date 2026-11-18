@@ -5,7 +5,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'

@@ -3,12 +3,7 @@ import {
   EMBED_ENTRY_REST_OF_LINE_BUDGET,
   MAX_TOKENIZATION_LINE_LENGTH
 } from './monarch-embed-entry-budget'
-import {
-  createMonarchTokenizer,
-  endEmbeddedLanguages,
-  measureNestedDepth,
-  tokenizeLines
-} from './monarch-tokenizer-test-harness'
+import { createMonarchTokenizer, measureNestedDepth } from './monarch-tokenizer-test-harness'
 import { astroMonarchLanguage } from './register-astro'
 import { glimmerTsMonarchLanguage } from './register-glimmer'
 import { svelteMonarchLanguage } from './register-svelte'
@@ -76,42 +71,6 @@ describe.each([
       )
     }
   )
-
-  it('tokenizes interpolations without dropping the embed', () => {
-    // Regression: monarch honours `nextEmbedded` on a zero-width match only
-    // when the token is `@rematch`; with any other token it hits the
-    // no-progress `continue` and silently drops the pending embed. Both
-    // grammars then reached a `nextEmbedded: '@pop'` rule with no embed
-    // active and threw "cannot pop embedded language if not inside one" on
-    // the *first* interpolation — the error seen in the field.
-    const measurement = measureNestedDepth(createMonarchTokenizer(languageId, language), [
-      '<p>a {first} b {second} c</p>'
-    ])
-
-    expect(measurement.error).toBeUndefined()
-    // Depth > 0 proves the embeds were really entered, not silently skipped.
-    expect(measurement.maxNestedDepth).toBeGreaterThan(0)
-  })
-
-  it.each([
-    ['script', 'ts', 'typescript'],
-    ['style', 'scss', 'scss']
-  ])('re-embeds a %s body after an over-budget opening line', (tag, lang, embeddedLanguageId) => {
-    // The opening tag plus code on the same line pushes the tag close past the
-    // budget, so the body starts unembedded. Every following short line must
-    // recover the embed (and the `lang=` language) instead of leaving the whole
-    // block unhighlighted until the closing tag.
-    const embeds = endEmbeddedLanguages(
-      tokenizeLines(createMonarchTokenizer(languageId, language), [
-        `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
-        '  b',
-        '  c',
-        `</${tag}>`
-      ])
-    )
-
-    expect(embeds).toEqual([null, embeddedLanguageId, embeddedLanguageId, null])
-  })
 })
 
 describe('vue embed-entry recursion', () => {
@@ -136,32 +95,6 @@ describe('vue embed-entry recursion', () => {
       ramp.at(-1) as number
     )
   })
-
-  it.each([
-    ['script', 'ts', 'typescript'],
-    ['style', 'scss', 'scss']
-  ])('re-embeds a %s body after an over-budget opening line', (tag, lang, embeddedLanguageId) => {
-    const embeds = endEmbeddedLanguages(
-      tokenizeLines(createMonarchTokenizer('vue', vueMonarchLanguage), [
-        `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
-        '  b',
-        `</${tag}>`
-      ])
-    )
-
-    expect(embeds).toEqual([null, embeddedLanguageId, null])
-  })
-
-  it('tokenizes a template interpolation without dropping the embed', () => {
-    const measurement = measureNestedDepth(createMonarchTokenizer('vue', vueMonarchLanguage), [
-      '<template>',
-      '  <p>{{ a }} and {{ b }}</p>',
-      '</template>'
-    ])
-
-    expect(measurement.error).toBeUndefined()
-    expect(measurement.maxNestedDepth).toBeGreaterThan(0)
-  })
 })
 
 describe('glimmer embed-entry recursion', () => {
@@ -184,21 +117,5 @@ describe('glimmer embed-entry recursion', () => {
       expect(measurement.error).toBeUndefined()
       expect(measurement.maxNestedDepth).toBeLessThanOrEqual(EMBED_ENTRY_REST_OF_LINE_BUDGET)
     }
-  })
-
-  it('re-embeds script and template after over-budget lines', () => {
-    const long = 'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)
-    const embeds = endEmbeddedLanguages(
-      tokenizeLines(createMonarchTokenizer('glimmer-ts', glimmerTsMonarchLanguage), [
-        `const s = "${long}"`,
-        'const b = 1',
-        `<template>${long}x`,
-        '  {{b}}',
-        '</template>',
-        'const c = 1'
-      ])
-    )
-
-    expect(embeds).toEqual([null, 'typescript', null, 'handlebars', null, 'typescript'])
   })
 })

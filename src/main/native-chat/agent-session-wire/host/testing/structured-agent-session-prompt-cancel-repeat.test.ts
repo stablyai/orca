@@ -8,8 +8,8 @@ import {
   envelope,
   hostTestState,
   seedApproval
-} from './structured-agent-session-host-test-harness'
-import { HOST_TEST_THREAD as THREAD } from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host.test-fixture'
+import { HOST_TEST_THREAD as THREAD } from './structured-agent-session-host-test-data.test-fixture'
 
 let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>

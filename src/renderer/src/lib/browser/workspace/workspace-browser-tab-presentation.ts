@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { SEARCH_ENGINE_LABELS } from '../../../../../shared/browser-url'
+import { SEARCH_ENGINE_LABELS } from '../../../../../shared/browser/navigation/browser-url'
 import type { WorkspaceBrowserTabIntent } from './workspace-browser-tab-open'
 
 // Differentiate concurrent URL tabs before titles load; omit queries so persisted labels cannot retain credentials/tokens.

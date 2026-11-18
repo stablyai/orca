@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { z } from 'zod'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'

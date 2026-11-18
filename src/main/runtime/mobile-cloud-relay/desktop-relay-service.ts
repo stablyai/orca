@@ -7,7 +7,7 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
-import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../shared/remote-runtime/relay/relay-host-close-reason'
 import { readRelayAuthContext } from './authentication/relay-auth-context'
 import { relayIdentityKey } from './authentication/relay-auth-identity'
 import { RelayAuthCoordinator } from './authentication/relay-auth-coordinator'
@@ -75,6 +75,8 @@ export class DesktopRelayService {
           mobileSocketWiring,
           isCurrent,
           refreshAccessToken,
+          // A self-closed broker is neither live nor recovering, so this rebuilds it now.
+          onSelfClose: () => this.ensureLive(),
           resolvePreferredRegion: regionPreference.resolvePreferredRegion,
           measureRegionDecision: regionPreference.measureRegionDecision,
           onAssignedCellActive: regionPreference.noteAssignedCell,

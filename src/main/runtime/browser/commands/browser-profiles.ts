@@ -1,5 +1,5 @@
 import { clearGoogleCookiesForRuntimeProfile } from '../../../browser/cookies/browser-google-cookie-clear'
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { createBrowserTabInRenderer } from '../tabs/browser-tab-renderer-create'
 import type {
   BrowserDetectProfilesResult,
@@ -29,7 +29,7 @@ import type {
 } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export class RuntimeBrowserProfiles {
   constructor(

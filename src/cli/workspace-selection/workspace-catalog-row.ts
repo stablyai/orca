@@ -1,6 +1,6 @@
-import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import { RuntimeClientError } from '../runtime/types'
+import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 /** One workspace the cwd rule can pick: a repo-backed row or a group-level folder keyed `folder:<id>`. */
 export type CatalogRow = Pick<RuntimeWorktreeRecord, 'id' | 'path' | 'hostId'> & {

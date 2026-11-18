@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getSecretStore, setSecretStore } from '../../shared/secret-store'
+import { getSecretStore, setSecretStore } from '../../shared/secure-storage/secret-store'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier

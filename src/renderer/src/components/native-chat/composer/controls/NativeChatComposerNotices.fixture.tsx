@@ -99,3 +99,27 @@ export const antigravitySignIn = defineFixture({
     </div>
   )
 })
+
+export const conversationInOtherFolder = defineFixture({
+  width: 720,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <NativeChatComposerNotices
+        notices={structuredSessionNotices({
+          launch: {
+            lifecycle: 'failed',
+            failure: {
+              kind: 'refused',
+              code: 'agent_session_identity_required',
+              details: { reason: 'transcriptUnreadable', otherFolder: true }
+            },
+            retry: () => {}
+          },
+          agentLabel: 'Claude',
+          sessionError: null,
+          composerError: null
+        })}
+      />
+    </div>
+  )
+})

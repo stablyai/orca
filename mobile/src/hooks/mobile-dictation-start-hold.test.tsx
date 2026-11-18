@@ -2,7 +2,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createFakeRpcClient, type SentRequest } from '../mobile-web-shell/bridge-host-test-fakes'
+import {
+  createFakeRpcClient,
+  type SentRequest
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 
 const mic = vi.hoisted(() => ({ emit: (_data: Uint8Array) => {} }))
 

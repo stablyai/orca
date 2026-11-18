@@ -1,4 +1,4 @@
-import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 /** The active group's active tab in a worktree. */
 export function selectActiveTabForWorktree(
