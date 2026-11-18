@@ -100,9 +100,9 @@ export function createCompactCommentMarkdownComponents(
         {children}
       </pre>
     ),
-    ul: ({ children }) => <ul className="my-0.5 ml-3 list-disc space-y-0">{children}</ul>,
+    ul: ({ children }) => <ul className="my-0.5 ms-3 list-disc space-y-0">{children}</ul>,
     ol: ({ children, start }) => (
-      <ol start={start} className="my-0.5 ml-3 list-decimal space-y-0">
+      <ol start={start} className="my-0.5 ms-3 list-decimal space-y-0">
         {children}
       </ol>
     ),
@@ -145,11 +145,11 @@ export function createCompactCommentMarkdownComponents(
     blockquote: ({ node, children }) => {
       const calloutKind = readGitHubCalloutKind(node?.properties.dataCallout)
       return calloutKind ? (
-        <MarkdownGitHubCallout kind={calloutKind} className="my-0.5 border-l-2 pl-2">
+        <MarkdownGitHubCallout kind={calloutKind} className="my-0.5 border-s-2 ps-2">
           {children}
         </MarkdownGitHubCallout>
       ) : (
-        <blockquote className="my-0.5 border-l-2 border-border/60 pl-2 text-muted-foreground/80">
+        <blockquote className="my-0.5 border-s-2 border-border/60 ps-2 text-muted-foreground/80">
           {children}
         </blockquote>
       )
@@ -299,9 +299,9 @@ export function createDocumentCommentMarkdownComponents(
         {children}
       </CommentMarkdownDocumentPre>
     ),
-    ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1">{children}</ul>,
+    ul: ({ children }) => <ul className="my-2 ms-5 list-disc space-y-1">{children}</ul>,
     ol: ({ children, start }) => (
-      <ol start={start} className="my-2 ml-5 list-decimal space-y-1">
+      <ol start={start} className="my-2 ms-5 list-decimal space-y-1">
         {children}
       </ol>
     ),
@@ -324,11 +324,11 @@ export function createDocumentCommentMarkdownComponents(
     blockquote: ({ node, children }) => {
       const calloutKind = readGitHubCalloutKind(node?.properties.dataCallout)
       return calloutKind ? (
-        <MarkdownGitHubCallout kind={calloutKind} className="my-3 border-l-2 pl-3">
+        <MarkdownGitHubCallout kind={calloutKind} className="my-3 border-s-2 ps-3">
           {children}
         </MarkdownGitHubCallout>
       ) : (
-        <blockquote className="my-3 border-l-2 border-border/70 pl-3 text-muted-foreground">
+        <blockquote className="my-3 border-s-2 border-border/70 ps-3 text-muted-foreground">
           {children}
         </blockquote>
       )

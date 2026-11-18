@@ -25,6 +25,15 @@ import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-de
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import { NativeChatLinkPeekContext } from '../links/previews/native-chat-link-peek-context'
 import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-context'
+import type { Element as HastElement } from 'hast'
+import {
+  blockTextDirection,
+  hasRightToLeftText,
+  markdownProseText,
+  NativeChatTextDirectionContext,
+  textDirectionOf,
+  type NativeChatTextDirection
+} from './native-chat-text-direction'
 import './native-chat-markdown.css'
 
 /** Existing words stay opaque when a reply first starts growing. */
@@ -78,16 +87,50 @@ function containsImage(children: ReactNode): boolean {
   )
 }
 
+type TextBlockProps = { node?: HastElement; children?: ReactNode }
+
+function useBlockDirection(node: HastElement | undefined): NativeChatTextDirection | undefined {
+  return blockTextDirection(node, useContext(NativeChatTextDirectionContext))
+}
+
+function NativeChatParagraph({ node, children }: TextBlockProps): React.JSX.Element {
+  return (
+    <p dir={useBlockDirection(node)} className="my-2.5 first:mt-0 last:mb-0">
+      {children}
+    </p>
+  )
+}
+
+function NativeChatBulletList({ node, children }: TextBlockProps): React.JSX.Element {
+  return (
+    <ul dir={useBlockDirection(node)} className="my-2.5 ms-5 list-disc space-y-0.75">
+      {children}
+    </ul>
+  )
+}
+
+function NativeChatNumberedList({
+  node,
+  children,
+  start
+}: TextBlockProps & { start?: number }): React.JSX.Element {
+  return (
+    <ol
+      start={start}
+      dir={useBlockDirection(node)}
+      className="my-2.5 ms-5 list-decimal space-y-0.75"
+    >
+      {children}
+    </ol>
+  )
+}
+
 // The chat's own text blocks: list items take the paragraphs' line height (the shared comment
 // renderer gives them leading-relaxed), 10px between blocks and 3px between items at 13px.
 const NATIVE_CHAT_TEXT_BLOCK_COMPONENTS: CommentMarkdownExtension['components'] = {
-  p: ({ children }) => <p className="my-2.5 first:mt-0 last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="my-2.5 ml-5 list-disc space-y-0.75">{children}</ul>,
-  ol: ({ children, start }) => (
-    <ol start={start} className="my-2.5 ml-5 list-decimal space-y-0.75">
-      {children}
-    </ol>
-  ),
+  p: NativeChatParagraph,
+  ul: NativeChatBulletList,
+  ol: NativeChatNumberedList,
   li: ({ children }) => <li className="[&>input]:pointer-events-none">{children}</li>
 }
 
@@ -161,32 +204,45 @@ export function NativeChatMarkdown({
     streaming
   )
   const { githubRepo } = useContext(NativeChatLinkPeekContext)
+  const prose = markdownProseText(content)
+  const bidi = hasRightToLeftText(prose)
+  const messageDirection: NativeChatTextDirection | undefined =
+    bidi && textDirectionOf(prose) === 'rtl' ? 'rtl' : undefined
+  // Keyed on the outcome, not the text, so streamed tokens don't re-render every memoized block.
+  const textDirection = useMemo(
+    () => ({ message: messageDirection, bidi }),
+    [messageDirection, bidi]
+  )
   return (
-    <NativeChatMarkdownRowKeyContext.Provider value={rowKey}>
-      <CommentMarkdown
-        {...props}
-        variant={variant}
-        growing={growing || streaming}
-        // Only the document variant's links can peek; bare #123 links follow it.
-        githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
-        onLinkClick={onLinkClick}
-        allowFileUriLinks={onLinkClick !== undefined}
-        content={
-          visualExtension && streaming
-            ? withoutPendingNativeChatVisualDirectiveTail(content)
-            : content
-        }
-        math
-        extension={extension}
-        fileLinkExists={fileLinkExists}
-        fadeWords={fadeWords}
-        renderMermaid={!streaming}
-        keepMermaidSourceWhilePending
-        unknownHtmlAsText
-        data-word-fade={wordFadeArmed ? '' : undefined}
-        data-block-fade={wordFadeArmed && streaming ? '' : undefined}
-        className={cn('native-chat-markdown', className)}
-      />
-    </NativeChatMarkdownRowKeyContext.Provider>
+    <NativeChatTextDirectionContext.Provider value={textDirection}>
+      <NativeChatMarkdownRowKeyContext.Provider value={rowKey}>
+        <CommentMarkdown
+          {...props}
+          variant={variant}
+          growing={growing || streaming}
+          // Only the document variant's links can peek; bare #123 links follow it.
+          githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={onLinkClick !== undefined}
+          content={
+            visualExtension && streaming
+              ? withoutPendingNativeChatVisualDirectiveTail(content)
+              : content
+          }
+          math
+          extension={extension}
+          fileLinkExists={fileLinkExists}
+          fadeWords={fadeWords}
+          renderMermaid={!streaming}
+          keepMermaidSourceWhilePending
+          unknownHtmlAsText
+          data-word-fade={wordFadeArmed ? '' : undefined}
+          data-block-fade={wordFadeArmed && streaming ? '' : undefined}
+          dir={textDirection.message}
+          data-native-chat-bidi={textDirection.bidi ? '' : undefined}
+          className={cn('native-chat-markdown', className)}
+        />
+      </NativeChatMarkdownRowKeyContext.Provider>
+    </NativeChatTextDirectionContext.Provider>
   )
 }

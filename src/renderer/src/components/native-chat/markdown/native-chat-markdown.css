@@ -72,6 +72,31 @@
   font-size: inherit;
 }
 
+/* Mixed right-to-left text: each list item orders its words by its own first letter but stays
+   aligned with its list, and code always reads left to right. */
+.native-chat-markdown[data-native-chat-bidi] li {
+  unicode-bidi: plaintext;
+}
+
+/* plaintext would align an English item in a right-to-left list to the left, away from its bullet. */
+.native-chat-markdown[data-native-chat-bidi] li:dir(rtl) {
+  text-align: right;
+}
+
+.native-chat-markdown[data-native-chat-bidi] li:dir(ltr) {
+  text-align: left;
+}
+
+.native-chat-markdown[data-native-chat-bidi] pre {
+  direction: ltr;
+  text-align: left;
+}
+
+.native-chat-markdown[data-native-chat-bidi] :not(pre) > code {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 [data-native-chat-message-tone='faint']
   .native-chat-markdown
   :is(h1, h2, h3, h4, h5, h6, [role='heading'], strong, a, code, pre) {
@@ -89,18 +114,4 @@
       opacity: 0;
     }
   }
-}
-
-/* Right-to-left text (Arabic, Hebrew, Persian, Urdu). Every block takes its direction from its own
-   first strong character, so an Arabic reply that mentions English names (a product, a file, an
-   event) keeps its word order and aligns to the right, while English blocks are unchanged.
-   `start` follows each block's resolved direction under plaintext. */
-.native-chat-markdown :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, dd, dt, summary) {
-  unicode-bidi: plaintext;
-  text-align: start;
-}
-
-/* Inline code inside right-to-left text stays one left-to-right unit (event names, paths, flags). */
-.native-chat-markdown code {
-  unicode-bidi: isolate;
 }
