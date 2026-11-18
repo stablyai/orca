@@ -18,7 +18,7 @@ import {
   terminalSessionExitCode
 } from './terminal-host-returned-process'
 import { shellPathSupportsPtyStartupBarrier } from '../shell-readiness/shell-ready'
-import { takeShellWrapperStartupClaim } from '../pty-subprocess/shell-wrapper-startup-claim'
+import { createStartupCommandFallback } from '../pty-subprocess/shell-wrapper-startup-claim'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import { resolveDaemonSessionScrollbackRows } from '../sessions/daemon-session-scrollback-window'
@@ -117,13 +117,10 @@ export async function spawnAndPublishSession(
   // A profile that execs another shell never reaches the wrapper; type the line only if the wrapper never claimed it.
   const startupCommandFallback =
     wrapperStartup && wrapperCommand
-      ? {
-          claim: () => takeShellWrapperStartupClaim(wrapperStartup.claimPath),
-          build: () => {
-            discardStagedStartupCommand(wrapperStartup.staging)
-            return buildSubmission(wrapperCommand)
-          }
-        }
+      ? createStartupCommandFallback(wrapperStartup.claimPath, () => {
+          discardStagedStartupCommand(wrapperStartup.staging)
+          return buildSubmission(wrapperCommand)
+        })
       : undefined
   const session = new Session({
     sessionId: opts.sessionId,

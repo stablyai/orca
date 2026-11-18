@@ -37,6 +37,8 @@ export type SessionShellReadyBarrierDeps = {
 export type StartupCommandFallback = {
   claim(): Promise<boolean>
   build(): string
+  /** Drops the launch builder so a settled fallback no longer pins the create request. */
+  release(): void
 }
 
 /** Strip startup markers and hold startup commands until shell readiness resolves. */
@@ -147,6 +149,7 @@ export class SessionShellReadyBarrier {
     }
     // Claiming also removes the claim file once no shell can take it.
     void this.startupCommandFallback?.claim()
+    this.startupCommandFallback?.release()
     this.startupCommandFallback = null
     this.postReadyFlushGate.clear()
   }
@@ -214,6 +217,7 @@ export class SessionShellReadyBarrier {
       if (won && !this.writesClosed) {
         this.deps.subprocess.write(fallback.build())
       }
+      fallback.release()
     })
   }
 

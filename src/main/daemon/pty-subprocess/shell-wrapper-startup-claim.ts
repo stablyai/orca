@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { StartupCommandFallback } from '../sessions/session-shell-ready-barrier'
 import {
   STAGED_STARTUP_COMMAND_PREFIX,
   type StartupCommandStaging
@@ -33,5 +34,20 @@ export async function takeShellWrapperStartupClaim(claimPath: string): Promise<b
     return true
   } catch {
     return false
+  }
+}
+
+// Built outside the create scope so releasing the builder frees the request it captured.
+export function createStartupCommandFallback(
+  claimPath: string,
+  typeLaunch: () => string
+): StartupCommandFallback {
+  let pendingLaunch: (() => string) | null = typeLaunch
+  return {
+    claim: () => takeShellWrapperStartupClaim(claimPath),
+    build: () => pendingLaunch?.() ?? '',
+    release: () => {
+      pendingLaunch = null
+    }
   }
 }
