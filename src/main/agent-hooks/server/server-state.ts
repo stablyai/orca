@@ -114,12 +114,14 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     this.retirePaneResume(paneKeys, status, exitedAt)
   }
 
-  /** A shared server's client left the pane; its conversation lives on there, never resumed here. */
+  /** A shared server's client left the pane; its conversation lives on there, never resumed here.
+   *  `releasedAt` bounds which saved record retires; one saved later is a newer conversation. */
   protected releaseSharedPaneConversation(
     paneKey: string,
-    status: PaneAgentIdentity['status']
+    status: PaneAgentIdentity['status'],
+    releasedAt = Date.now()
   ): void {
-    this.retirePaneResume(this.paneKeysWithAliases(paneKey), status, Date.now())
+    this.retirePaneResume(this.paneKeysWithAliases(paneKey), status, releasedAt)
   }
 
   private paneKeysWithAliases(paneKey: string): Set<string> {

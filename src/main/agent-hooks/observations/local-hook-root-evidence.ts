@@ -4,8 +4,12 @@ import {
   createLocalPtyInventoryReader,
   type LocalPtyInventoryReader
 } from './local-tmux-managed-pty'
-import { createLocalHookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
-import { readPaneTmuxHost } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import {
+  createHookProcessReadSlots,
+  createLocalHookRootEvidenceReader,
+  hookProcessReadGate
+} from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
+import { readPaneTmuxHost } from '../../../shared/agent-hook-listener/presence/pane-tmux-host-proof'
 import {
   readSelectedRows,
   readTerminalRows
@@ -22,15 +26,20 @@ export function installLocalHookRootEvidence(server: AgentHookServer): LocalPtyI
   })
   if (process.platform !== 'win32') {
     const resolveRoot = createLocalHookPaneRootResolver(readInventory)
-    server.setHookRootEvidenceReader(createLocalHookRootEvidenceReader(resolveRoot), (request) =>
-      readPaneTmuxHost(
-        {
-          resolveRoot,
-          readProcesses: (pids) => readSelectedRows(pids).catch(() => []),
-          readTerminal: (tty) => readTerminalRows(tty).catch(() => [])
-        },
-        request
-      )
+    // Root evidence and tmux host probes share one process-read budget.
+    const slots = createHookProcessReadSlots()
+    const gate = hookProcessReadGate(slots)
+    server.setHookRootEvidenceReader(
+      createLocalHookRootEvidenceReader(resolveRoot, slots),
+      (request) =>
+        readPaneTmuxHost(
+          {
+            resolveRoot,
+            readProcesses: (pids) => readSelectedRows(pids, gate).catch(() => []),
+            readTerminal: (tty) => readTerminalRows(tty, gate).catch(() => [])
+          },
+          request
+        )
     )
   }
   return readInventory

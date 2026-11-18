@@ -114,6 +114,7 @@ export function dispatchTerminalNotification(
     event.source === 'agent-task-complete' &&
     storedAgentStatus?.state === 'done' &&
     storedAgentStatus.observation?.origin === 'launch' &&
+    agentSnapshotMatchesExplicitTitle(storedAgentStatus, explicitTitleAgentType) &&
     (!eventAgentStatusSnapshot ||
       eventAgentStatusSnapshot.stateStartedAt === storedAgentStatus.stateStartedAt)
   ) {

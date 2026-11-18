@@ -47,7 +47,8 @@ export function paneAgentIdentity(args: {
     if (row.paneSleep) {
       return { status, ended: false }
     }
-    return { status, ended: endedSince(args, row.receivedAt) }
+    // A replayed report restamps receipt but not evidence; only newer evidence outlives an exit.
+    return { status, ended: endedSince(args, row.evidenceObservedAt ?? row.receivedAt) }
   }
   const saved = args.savedRecord
   if (!saved || !args.worktreeId || saved.paneKey !== args.paneKey) {

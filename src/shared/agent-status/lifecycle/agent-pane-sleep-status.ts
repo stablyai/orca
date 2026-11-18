@@ -11,7 +11,7 @@ export function agentPaneSleepStatus<
         ...status,
         state: 'done',
         interrupted: true,
-        ...(status.mainAgent
+        ...(status.mainAgent && status.mainAgent.state !== 'done'
           ? { mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: at } }
           : {})
       }

@@ -238,9 +238,12 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
 
   /** A layout-owner build's quit capture of the agents of the panes one partition holds. */
   quitResumeRecordsFor(session: WorkspaceSessionState): SleepingAgentSessionRecord[] {
+    // A saved-only pane quits only while its terminal runs; an asleep pane keeps its sleep record.
     const paneKeys = new Set([
       ...(this.getAgentProviderSessionSnapshotFn?.() ?? []).map((row) => row.paneKey),
-      ...Object.keys(session.sleepingAgentSessionsByPaneKey ?? {})
+      ...Object.keys(session.sleepingAgentSessionsByPaneKey ?? {}).filter((paneKey) =>
+        this.hasLiveTerminalForPaneKey(paneKey)
+      )
     ])
     const statuses = [...paneKeys].flatMap((paneKey) => {
       const identity = this.readPaneAgentIdentity(

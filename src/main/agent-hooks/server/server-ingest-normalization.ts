@@ -11,10 +11,8 @@ import {
   checkHookOwnerPresence,
   restateHookRoot
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
-import type {
-  HookRootEvidenceReader,
-  PaneTmuxHostReader
-} from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import type { PaneTmuxHostReader } from '../../../shared/agent-hook-listener/presence/pane-tmux-host-proof'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   isAgentHookSource,
@@ -56,7 +54,8 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     ) {
       return
     }
-    this.releaseSharedPaneConversation(paneKey, identity.status)
+    // The identity is the saved record as probed; a record saved during the probe stays.
+    this.releaseSharedPaneConversation(paneKey, identity.status, identity.status.receivedAt)
   }
 
   /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the

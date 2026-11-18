@@ -43,6 +43,10 @@ export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalD
       if (row.structuredHost) {
         return [row]
       }
+      // A live pane's resume-only row (a dismissed agent) carries identity, never status.
+      if (row.providerSessionOnly) {
+        return []
+      }
       const identity = this.readPaneAgentIdentity(row.paneKey, undefined, row)
       return identity && !identity.ended ? [identity.status] : []
     })

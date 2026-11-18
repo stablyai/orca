@@ -140,6 +140,8 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
           if (scenario === 'working' || scenario === 'interrupted') {
             expect(record?.interrupted).toBe(true)
           }
+          // Quitting while asleep keeps the sleep record rather than rewriting it as a quit.
+          expect(runtime.quitResumeRecordsFor(fixture.getSession())).toEqual([])
         }
       } finally {
         server.stop()

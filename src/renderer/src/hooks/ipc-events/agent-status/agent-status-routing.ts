@@ -36,7 +36,7 @@ export function isAgentStatusForRecentlyClosedTab(
 export function isSeenHostReplay(
   data: Pick<
     AgentStatusIpcPayload,
-    'isReplay' | 'paneSleep' | 'stateStartedAt' | 'turnCompletedAt' | 'turnEndedAt'
+    'isReplay' | 'paneSleep' | 'interrupted' | 'stateStartedAt' | 'turnCompletedAt' | 'turnEndedAt'
   >,
   state: string,
   existing:
@@ -49,7 +49,8 @@ export function isSeenHostReplay(
   if (data.isReplay !== true) {
     return false
   }
-  if (data.paneSleep) {
+  // Sleep's own interruption is no new turn end; a clean completion it carries still counts.
+  if (data.paneSleep && data.interrupted === true) {
     return true
   }
   // Why: with no row there is no proof the turn was unseen, so keep seeding (no reload re-fires).

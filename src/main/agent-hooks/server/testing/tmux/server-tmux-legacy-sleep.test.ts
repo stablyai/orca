@@ -17,10 +17,8 @@ import {
   AgentStatusObservedPaneIdentities,
   AgentStatusObservedPaneIdentityCapture
 } from '../../../../runtime/terminal/identity/agent-status-observed-pane-identity'
-import {
-  readHookRootEvidence,
-  readPaneTmuxHost
-} from '../../../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { readHookRootEvidence } from '../../../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { readPaneTmuxHost } from '../../../../../shared/agent-hook-listener/presence/pane-tmux-host-proof'
 import { captureWorktreeSleepResumeRecords } from '../../../../runtime/terminal/stop/worktree-sleep-resume-records'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
@@ -213,4 +211,58 @@ it('does not resume a checkpoint the pane reaches through its tmux client after 
   })
   expect(saved).toBeUndefined()
   expect(capture.get('pty')?.records).toEqual([])
+})
+
+it('proves a tmux-hosted pane only from a complete process picture', async () => {
+  const pane = { paneKey: PANE, worktreeId: 'wt-1' }
+  const agent = { ...pane, process: { pid: 4043, platform: 'darwin', startTime: 'start' } as const }
+  runningPane(4050, CLIENT, ...TMUX)
+  await expect(readPaneTmuxHost(io, pane)).resolves.toBe(true)
+  await expect(readPaneTmuxHost(io, agent)).resolves.toBe(true)
+  // The pane's own suspended agent stays behind an unrelated tmux client.
+  runningPane(4050, CLIENT, [4060, 101, 4060, 'claude', 'T'], ...TMUX)
+  await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
+  // An agent whose ancestry cannot be read is not proven to live outside the pane.
+  runningPane(4050, CLIENT, [4043, 4042, 4043, 'claude', 'S+', 'ttys011'])
+  await expect(readPaneTmuxHost(io, agent)).resolves.toBe(false)
+})
+
+it('keeps a checkpoint saved while its tmux release was probing', async () => {
+  const server = await createServer()
+  const record = (id: string, updatedAt: number): SleepingAgentSessionRecord => ({
+    paneKey: PANE,
+    worktreeId: 'wt-1',
+    agent: 'claude',
+    providerSession: { key: 'session_id', id },
+    prompt: 'In tmux',
+    state: 'done',
+    capturedAt: updatedAt,
+    updatedAt,
+    origin: 'live'
+  })
+  const replacement = record('replacement', NOW + 500)
+  let saved: SleepingAgentSessionRecord | undefined = record('released', NOW)
+  server.setHookRootEvidenceReader(
+    (request) => readHookRootEvidence(request, io),
+    (request) => {
+      saved = replacement
+      return readPaneTmuxHost(io, request)
+    }
+  )
+  runningPane(4050, CLIENT, ...TMUX)
+  server.setTerminalPaneLifecycle({
+    ownsProcess: () => true,
+    isStopping: () => false,
+    isReversibleStop: () => true,
+    isPlaced: () => true,
+    readSavedRecord: () => saved,
+    retireSavedRecord: (_paneKey, before) => {
+      if (saved && saved.updatedAt <= before) {
+        saved = undefined
+      }
+    }
+  })
+  vi.setSystemTime(NOW + 1_000)
+  await server.checkAgentPresenceSince(PANE, 0, { sleepCapture: true })
+  expect(saved).toBe(replacement)
 })

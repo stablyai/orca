@@ -22,6 +22,10 @@ export function agentHookRuntimeDeps(
         if (row.structuredHost) {
           return [row]
         }
+        // Resume-only rows carry identity for recovery, never status.
+        if (row.providerSessionOnly) {
+          return []
+        }
         const identity = server.paneAgentIdentity(row.paneKey)
         return identity && !identity.ended ? [identity.status] : []
       }),

@@ -78,7 +78,7 @@ export type HookPaneProcessIo = {
 }
 
 // Matches the bounded ancestry walk of the common pattern; a pane's agent sits a few levels below its root.
-const MAX_ANCESTRY_DEPTH = 32
+export const MAX_ANCESTRY_DEPTH = 32
 const MAX_TERMINAL_ROWS = 256
 
 type Role = 'agent' | 'launcher' | 'other' | 'unknown'
@@ -133,7 +133,7 @@ type Walk = 'reached' | 'outside' | 'nested' | 'unknown'
  *  when the sender runs under a tmux server and the pane does not show an agent. */
 type OtherTerminal = 'foreign' | 'bridged' | 'tmux'
 
-function isTmuxServer(row: ProcessTableRow): boolean {
+export function isTmuxServer(row: ProcessTableRow): boolean {
   const token = firstToken(row.command)
   return /^tmux:?$/.test(token.slice(token.lastIndexOf('/') + 1))
 }
@@ -231,7 +231,7 @@ export function classifyPaneHookProcess(input: {
   return role === 'shell' ? 'foreign' : 'bridged'
 }
 
-async function collectRows(
+export async function collectRows(
   io: Pick<HookPaneProcessIo, 'readProcesses' | 'readTerminal'>,
   rootPid: number,
   senderPid: number
@@ -293,43 +293,6 @@ export async function readHookRootEvidence(
       ? 'unattached'
       : 'unknown'
   return verdict === 'root' && root ? { verdict, binding: root.incarnation } : { verdict }
-}
-
-/** Whether a tmux server, not the pane, keeps the pane's agent alive: a tmux client holds the
- *  pane's foreground and the agent's known process runs outside the pane. */
-export type PaneTmuxHostReader = (request: {
-  paneKey: string
-  worktreeId: string | undefined
-  process?: AgentProcessIdentity
-}) => Promise<boolean>
-
-export async function readPaneTmuxHost(
-  io: Pick<HookPaneProcessIo, 'resolveRoot' | 'readProcesses' | 'readTerminal'>,
-  request: Parameters<PaneTmuxHostReader>[0]
-): Promise<boolean> {
-  const root = await io.resolveRoot(request.paneKey, request.worktreeId)
-  if (!root || root === 'legacy') {
-    return false
-  }
-  const rows = await collectRows(io, root.pid, request.process?.pid ?? root.pid)
-  if (!rows) {
-    return false
-  }
-  const rootRow = rows.find((row) => row.pid === root.pid)
-  if (!rootRow?.tpgid || rootRow.tpgid <= 0) {
-    return false
-  }
-  const shown = rows.some(
-    (row) => row.tty === rootRow.tty && row.pgid === rootRow.tpgid && isTmuxServer(row)
-  )
-  let agent = request.process ? rows.find((row) => row.pid === request.process?.pid) : undefined
-  for (let depth = 0; shown && agent && depth < MAX_ANCESTRY_DEPTH; depth++) {
-    if (agent.pid === root.pid) {
-      return false
-    }
-    agent = agent.ppid > 1 ? rows.find((row) => row.pid === agent?.ppid) : undefined
-  }
-  return shown
 }
 
 async function readAgainstRoot(

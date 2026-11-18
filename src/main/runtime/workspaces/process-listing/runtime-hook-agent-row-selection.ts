@@ -36,8 +36,12 @@ function isLiveObservation(row: AgentStatusIpcPayload): boolean {
   if (row.structuredHost) {
     return row.restoredUnconfirmed !== true
   }
+  // Restored rows cannot prove current liveness; resume-identity rows carry no status.
+  if (row.restoredUnconfirmed === true || row.providerSessionOnly === true) {
+    return false
+  }
   const identity = paneAgentIdentity({ paneKey: row.paneKey, row })
-  return row.restoredUnconfirmed !== true && identity !== null && !identity.ended
+  return identity !== null && !identity.ended
 }
 
 type HookRowJoin = {
@@ -56,6 +60,7 @@ function isPermissionState(state: AgentStatusEntry['state']): boolean {
 function isHeldRestoredPermission(row: AgentStatusIpcPayload, join: HookRowJoin): boolean {
   return (
     row.restoredUnconfirmed === true &&
+    row.providerSessionOnly !== true &&
     isPermissionState(row.state) &&
     join.screenMayHoldDialog?.() === true
   )
