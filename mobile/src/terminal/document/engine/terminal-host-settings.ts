@@ -19,11 +19,15 @@ export function applyTerminalHostSettings(
   }
   const previous = scope.scrollbackRows
   scope.scrollbackRows = scrollbackRows
-  // A buffer that may already have dropped rows keeps its size until the next init: resizing it would
-  // move rows under the selection and OSC-link bookkeeping, which count only line feeds.
-  const rows = scope.term?.rows || 0
-  if (scope.term && scope.linesEverWritten >= Math.min(previous, scrollbackRows) + rows) {
-    return
+  // A buffer that may already have dropped rows (by line feeds or a narrowing reflow) keeps its size
+  // until the next init: resizing it would move rows under the selection and OSC-link bookkeeping.
+  const term = scope.term
+  if (term) {
+    const limit = Math.min(previous, scrollbackRows) + (term.rows || 0)
+    const heldRows = term.buffer.normal?.length ?? term.buffer.active.length
+    if (scope.linesEverWritten >= limit || heldRows >= limit) {
+      return
+    }
   }
   for (const term of [scope.term, scope.committedTerm, scope.provisionalTerm]) {
     if (term) {

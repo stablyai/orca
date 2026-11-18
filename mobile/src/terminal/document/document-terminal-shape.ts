@@ -66,7 +66,7 @@ export type TerminalDocumentTerminalOptions = {
 export type TerminalDocumentTerminal = {
   readonly cols: number
   readonly rows: number
-  readonly buffer: { readonly active: TerminalDocumentBuffer }
+  readonly buffer: { readonly active: TerminalDocumentBuffer; readonly normal?: { length: number } }
   options: TerminalDocumentTerminalOptions
   write: (data: string, callback?: () => void) => void
   open: (element: HTMLElement) => void
