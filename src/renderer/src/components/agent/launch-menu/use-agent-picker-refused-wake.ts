@@ -1,7 +1,7 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 
 /**
  * A local agent list refused while its WSL distro was stopped stays failed. The user opening a

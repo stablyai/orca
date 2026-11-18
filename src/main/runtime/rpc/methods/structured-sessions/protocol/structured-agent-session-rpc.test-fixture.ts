@@ -6,7 +6,7 @@ import {
   OPERATION,
   request
 } from './structured-agent-session-rpc-client.test-fixture'
-import { availableRevealWorkspace } from '../../../../session-tabs/structured-workspace-authority.test-fixture'
+import { availableRevealWorkspace } from '../../../../session-tabs/chat/structured-workspace-authority.test-fixture'
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'

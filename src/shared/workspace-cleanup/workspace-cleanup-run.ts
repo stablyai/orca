@@ -17,7 +17,7 @@ export const WORKSPACE_CLEANUP_REPORT_RUN_LIMIT = 20
 // Matches T3 Code's report cap; a run over hundreds of workspaces must not bloat the sidecar.
 export const WORKSPACE_CLEANUP_REPORT_ROW_LIMIT = 200
 
-/** Who started a run. 'run-now' is an app's Clean up now; 'cli' is `orca` on the command line. */
+/** Who started a run. 'run-now' is an app's Run rules now; 'cli' is `orca` on the command line. */
 export type WorkspaceCleanupRunTrigger = 'startup' | 'hourly' | 'settings' | 'run-now' | 'cli'
 
 export type WorkspaceCleanupRunOutcome = 'removed' | 'archived' | 'kept' | 'failed'

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronRight, ChevronsUpDown, LoaderCircle, Plus } from 'lucide-react'
-import { FolderIcon } from '@/components/FileTypeIcon'
+import { FolderIcon } from '@/components/icons/FileTypeIcon'
 import { Button } from '@/components/ui/button'
 import {
   Command,

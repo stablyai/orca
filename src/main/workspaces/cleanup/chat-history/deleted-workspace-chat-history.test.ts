@@ -13,6 +13,8 @@ import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import {
   sweepDeletedWorkspaceChatHistory,
   type ChatHistoryTarget
@@ -57,6 +59,21 @@ function session(
     modifiedAt: DAY_AGO,
     ...overrides
   } as AiVaultSession
+}
+
+/** An Orca chat at rest since yesterday in the git worktree at `path`. */
+function nativeChat(
+  sessionId: string,
+  path: string,
+  overrides: Partial<Omit<AgentSessionRecord, 'location'>> = {},
+  location: Partial<AgentSessionRecord['location']> = {}
+): AgentSessionRecord {
+  return agentSessionRecordFixture({
+    sessionId,
+    createdAt: Date.parse(DAY_AGO),
+    ...overrides,
+    location: { workspaceId: `app::${path}`, workspaceKind: 'git-worktree', ...location }
+  })
 }
 
 describe('sweepDeletedWorkspaceChatHistory', () => {
@@ -178,7 +195,6 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         session('archived.jsonl', join(appWorkspaces, 'archived')),
         session('recent.jsonl', gone, { modifiedAt: TEN_MINUTES_AGO }),
         session('outside.jsonl', join(root, 'elsewhere', 'gone')),
-        session('codex.jsonl', gone, { agent: 'codex' }),
         session('server.jsonl', gone, { executionHostId: 'runtime:env-1' }),
         session('unmounted.jsonl', join(root, 'unmounted', 'other', 'feature')),
         session('renamed.jsonl', join(appWorkspaces, 'old-name')),
@@ -207,9 +223,37 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         )
       ]
 
+      const live = nativeChat('live-lease', gone).lease
+      const nativeChats = [
+        nativeChat('native-gone', gone),
+        nativeChat('native-live', join(appWorkspaces, 'live')),
+        nativeChat('native-archived', join(appWorkspaces, 'archived')),
+        nativeChat('native-renamed', join(appWorkspaces, 'old-name')),
+        // Archived while transcripts of its folder were being deleted.
+        nativeChat('native-archived-between', join(appWorkspaces, 'gone-six')),
+        nativeChat('native-recent', gone, {
+          lastTurn: { state: 'settled', at: Date.parse(TEN_MINUTES_AGO) }
+        }),
+        nativeChat('native-owned', gone, { lease: { ...live, claimStatus: 'reserved' } }),
+        nativeChat('native-folder', gone, {}, { workspaceKind: 'folder' }),
+        nativeChat('native-wsl', gone, {}, { wslDistro: 'Ubuntu' }),
+        nativeChat('native-server', gone, {}, { executionHostId: 'runtime:env-1' }),
+        nativeChat('native-unmounted', join(root, 'unmounted', 'other', 'feature'))
+      ]
+      const forgotten: string[] = []
+
       const result = await sweepDeletedWorkspaceChatHistory({
         store,
         now: NOW,
+        listNativeChats: () => nativeChats,
+        forgetNativeChats: async (chats, shouldForget) => {
+          for (const chat of chats) {
+            if (await shouldForget(chat)) {
+              forgotten.push(chat.sessionId)
+            }
+          }
+          return { deleted: forgotten.length, failed: 0, freedBytes: 0 }
+        },
         listSessions: async () => {
           archivedDuringScan[`app::${join(appWorkspaces, 'archived-mid-scan')}`] = {}
           return sessionsToList
@@ -241,7 +285,8 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         'retargeted-1.jsonl',
         'archived-between-1.jsonl'
       ])
-      expect(result).toEqual({ deleted: 5, failed: 0, freedBytes: 105 })
+      expect(forgotten).toEqual(['native-gone'])
+      expect(result).toEqual({ deleted: 6, failed: 0, freedBytes: 105 })
     }
   )
 

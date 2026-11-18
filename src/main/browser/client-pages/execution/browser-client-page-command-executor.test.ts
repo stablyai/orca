@@ -83,3 +83,23 @@ it('keeps an unsuccessful one-shot route release unresolved through retry and te
   await expect(h.executor.close()).rejects.toThrow('Browser client page executor cleanup failed')
   expect(h.route.release).toHaveBeenCalledTimes(1)
 })
+
+it.each([
+  ['browser.exec', { command: 'upload @e1 /tmp/secret.txt' }, 'browser_client_exec_unsupported'],
+  ['browser.goto', { url: 'file:///tmp/secret.txt' }, 'browser_client_page_navigation_invalid'],
+  ['browser.goto', { url: '/tmp/secret.txt' }, 'browser_client_page_navigation_invalid']
+] as const)(
+  'refuses %s %j before it can reach desktop files',
+  async (method, params, errorCode) => {
+    const h = createHarness()
+    const signal = new AbortController().signal
+    await h.executor.handle(createCommand('createPage'), signal)
+    const result = await h.executor.handle(
+      createCommand('navigate', { command: { type: 'automation', method, params } }),
+      signal
+    )
+    expect(result).toMatchObject({ status: 'failed', errorCode })
+    expect(h.dependencies.executeAutomation).not.toHaveBeenCalled()
+    await h.executor.close()
+  }
+)

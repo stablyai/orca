@@ -5,7 +5,7 @@ import {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
 import { placedPanesEqual, titleRelevant } from './ai-vault-tab-title-placement-inputs'
 import type { AiVaultTitleRequestInputs } from './ai-vault-tab-title-request-inputs'

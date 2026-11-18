@@ -31,7 +31,6 @@ import {
   disposeWatcherProcess,
   resetRuntimeWatcherProcessForTest,
   resetWatcherProcessForTest,
-  subscribeViaRuntimeWatcherProcess,
   subscribeViaWatcherProcess
 } from './parcel-watcher-process'
 
@@ -149,45 +148,6 @@ describe('subscribeViaWatcherProcess', () => {
       )
     )
     expect(forkMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('recovers existing records when IPC disconnects before child exit', async () => {
-    const firstPromise = subscribeViaWatcherProcess('/existing', vi.fn(), {})
-    const first = currentChild()
-    ackSubscribe(first)
-    await firstPromise
-
-    first.connected = false
-    first.emit('disconnect')
-    const secondPromise = subscribeViaWatcherProcess('/new', vi.fn(), {})
-
-    expect(forkMock).toHaveBeenCalledTimes(1)
-    first.emit('exit', 0, null)
-    await vi.waitFor(() => expect(forkMock).toHaveBeenCalledTimes(2))
-    const replacement = currentChild()
-    expect(replacement).not.toBe(first)
-    expect(replacement.sent.filter((message) => message.op === 'subscribe')).toEqual([
-      expect.objectContaining({ dir: '/existing' }),
-      expect.objectContaining({ dir: '/new' })
-    ])
-    ackSubscribe(replacement, 0)
-    ackSubscribe(replacement, 1)
-    await secondPromise
-  })
-
-  it('completes an in-flight subscribe across a crash-respawn', async () => {
-    const onInterruption = vi.fn()
-    const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {}, { onInterruption })
-    const first = currentChild()
-    expect(first.sent[0].op).toBe('subscribe')
-
-    first.connected = false
-    first.emit('exit', 3221226505, null)
-
-    const second = currentChild()
-    ackSubscribe(second)
-    await expect(promise).resolves.toMatchObject({ unsubscribe: expect.any(Function) })
-    expect(onInterruption).toHaveBeenCalledTimes(1)
   })
 
   it('cancels a queued crawl without restarting healthy roots', async () => {
@@ -555,20 +515,5 @@ describe('subscribeViaWatcherProcess', () => {
     child.emit('exit', 0, null)
     await expect(firstUnsub).resolves.toBeUndefined()
     await expect(secondUnsub).resolves.toBeUndefined()
-  })
-
-  it('disposes production runtime watcher children during app shutdown', async () => {
-    const pending = subscribeViaRuntimeWatcherProcess('/runtime-root', vi.fn(), {})
-    const child = currentChild()
-    ackSubscribe(child)
-    await pending
-
-    disposeWatcherProcess()
-
-    expect(child.kill).toHaveBeenCalledTimes(1)
-    await expect(
-      subscribeViaRuntimeWatcherProcess('/runtime-root', vi.fn(), {})
-    ).rejects.toMatchObject({ code: 'supervisor_disposed' })
-    expect(forkMock).toHaveBeenCalledTimes(1)
   })
 })

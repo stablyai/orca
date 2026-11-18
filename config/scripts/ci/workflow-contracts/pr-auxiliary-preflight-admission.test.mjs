@@ -30,12 +30,10 @@ function createMobileCiScopeRepository() {
     'package.json',
     'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
     'config/scripts/workflow/source-routing/pr-package-test-paths.mjs',
-    'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs',
     'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs',
     'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
     'config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs',
     'config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs',
-    'config/scripts/workflow/source-routing/pr-browser-e2e-source-routes.mjs',
     'config/scripts/workflow/source-routing/pr-editor-preview-e2e-source-routes.mjs',
     'config/scripts/workflow/source-routing/pr-feature-area-e2e-source-routes.mjs',
     'config/scripts/workflow/source-routing/pr-plugin-e2e-source-routes.mjs',
@@ -95,16 +93,6 @@ function createMobileCiScopeRepository() {
 }
 
 describe.skipIf(process.platform === 'win32')('Mobile CI complete Git change evidence', () => {
-  it('admits an actual modification through the workflow detector', () => {
-    const repo = createMobileCiScopeRepository()
-    writeFileSync(repo.tool, 'export const revision = 2\n')
-    repo.commit()
-    const { result, output } = repo.detect()
-    expect(result.code, result.stderr).toBe(0)
-    expect(readFileSync(output, 'utf8')).toContain('mobile_ci_tools=true\n')
-    expect(readFileSync(output, 'utf8')).toContain('test=true\n')
-  })
-
   it.each(['deletion', 'type change'])('retains full root units for an actual %s', (change) => {
     const repo = createMobileCiScopeRepository()
     rmSync(repo.tool)

@@ -3,7 +3,7 @@ import { FilePlus, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   ensureClientCreationActionAllowed,
