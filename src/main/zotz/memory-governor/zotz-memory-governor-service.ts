@@ -8,7 +8,11 @@ import {
   zotzMemoryPressure,
   type ZotzMemoryPressure
 } from '../../../shared/zotz/agent-queue/zotz-memory-pressure'
-import type { ZotzAgentMemorySampler, ZotzAgentMemoryUsage } from './zotz-agent-memory-sampler'
+import type {
+  ZotzAgentMemorySampler,
+  ZotzAgentMemoryUsage,
+  ZotzFinishedAgentRun
+} from './zotz-agent-memory-sampler'
 
 /** What the governor knows about the machine right now; the board and the scheduler read this. */
 export type ZotzMemoryGovernorState = {
@@ -17,6 +21,8 @@ export type ZotzMemoryGovernorState = {
   pressure: ZotzMemoryPressure
   limits: ZotzMemoryGovernorLimits
   agents: ZotzAgentMemoryUsage[]
+  /** The latest finished runs, newest first; the board's Done column. */
+  finished: ZotzFinishedAgentRun[]
   sampledAt: number
 }
 
@@ -31,6 +37,7 @@ type ZotzMemoryGovernorDeps = {
 
 // Agent trees on Windows are measured through PowerShell, so a tighter cadence costs real CPU.
 const SAMPLE_INTERVAL_MS = 15_000
+const FINISHED_RUNS_KEPT = 20
 
 /**
  * Samples only while agents run and stops when none are left; agent activity wakes it again,
@@ -39,6 +46,7 @@ const SAMPLE_INTERVAL_MS = 15_000
 export class ZotzMemoryGovernorService {
   private ledger: ZotzAgentMemoryLedger = {}
   private state: ZotzMemoryGovernorState | null = null
+  private finished: ZotzFinishedAgentRun[] = []
   private timer: ReturnType<typeof setTimeout> | null = null
   private sampling = false
   private disposed = false
@@ -98,6 +106,10 @@ export class ZotzMemoryGovernorService {
         for (const run of sample.finished) {
           this.ledger = recordZotzAgentPeak(this.ledger, run.agent, run.peakBytes)
         }
+        this.finished = [...sample.finished.toReversed(), ...this.finished].slice(
+          0,
+          FINISHED_RUNS_KEPT
+        )
         void this.deps.saveLedger(this.ledger).catch((error) => {
           console.warn('[zotz-memory] could not save the agent memory ledger', error)
         })
@@ -112,6 +124,7 @@ export class ZotzMemoryGovernorService {
         }),
         limits: this.deps.limits,
         agents: sample.agents,
+        finished: this.finished,
         sampledAt: this.deps.now()
       }
       for (const listener of this.listeners) {

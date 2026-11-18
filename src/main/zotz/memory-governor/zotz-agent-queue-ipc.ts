@@ -23,13 +23,16 @@ export function buildZotzAgentQueueSnapshot(
         }
       : null,
     running:
-      state?.agents.map(({ paneKey, agent, bytes, peakBytes, startedAt }) => ({
+      state?.agents.map(({ paneKey, agent, state, worktreeId, bytes, peakBytes, startedAt }) => ({
         paneKey,
         agent,
+        state,
+        worktreeId,
         bytes,
         peakBytes,
         startedAt
       })) ?? [],
+    done: state?.finished ?? [],
     queued: queue.list().map((task) => ({
       id: task.id,
       agent: task.agent,

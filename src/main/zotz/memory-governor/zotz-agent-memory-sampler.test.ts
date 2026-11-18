@@ -4,8 +4,8 @@ import { ZotzAgentMemorySampler, type ZotzLiveAgentPane } from './zotz-agent-mem
 describe('ZotzAgentMemorySampler', () => {
   it('keeps each run’s peak and reports it once the agent terminal is gone', async () => {
     let panes: ZotzLiveAgentPane[] = [
-      { paneKey: 'p1', agent: 'claude' },
-      { paneKey: 'p2', agent: 'codex' }
+      { paneKey: 'p1', agent: 'claude', state: 'working', worktreeId: 'w1' },
+      { paneKey: 'p2', agent: 'codex', state: 'working', worktreeId: 'w2' }
     ]
     let measured = new Map([
       ['p1', 1_000],
@@ -27,9 +27,18 @@ describe('ZotzAgentMemorySampler', () => {
     expect(second.finished).toEqual([])
 
     measured = new Map([['p2', 450]])
-    panes = [{ paneKey: 'p2', agent: 'codex' }]
+    panes = [{ paneKey: 'p2', agent: 'codex', state: 'done', worktreeId: 'w2' }]
     const third = await sampler.sample()
-    expect(third.finished).toEqual([{ agent: 'claude', peakBytes: 3_000 }])
+    expect(third.finished).toEqual([
+      {
+        paneKey: 'p1',
+        agent: 'claude',
+        worktreeId: 'w1',
+        peakBytes: 3_000,
+        startedAt: 0,
+        endedAt: 0
+      }
+    ])
     expect(third.agents.map((agent) => [agent.paneKey, agent.peakBytes])).toEqual([['p2', 500]])
   })
 })

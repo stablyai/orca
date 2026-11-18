@@ -16,9 +16,26 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
     sampledAt: 0
   },
   running: [
-    { paneKey: 'a', agent: 'claude', bytes: 2.4 * GB, peakBytes: 2.6 * GB, startedAt: 0 },
-    { paneKey: 'b', agent: 'codex', bytes: 2.8 * GB, peakBytes: 2.8 * GB, startedAt: 0 }
+    {
+      paneKey: 'a',
+      agent: 'claude',
+      state: 'working',
+      worktreeId: null,
+      bytes: 2.4 * GB,
+      peakBytes: 2.6 * GB,
+      startedAt: 0
+    },
+    {
+      paneKey: 'b',
+      agent: 'codex',
+      state: 'working',
+      worktreeId: null,
+      bytes: 2.8 * GB,
+      peakBytes: 2.8 * GB,
+      startedAt: 0
+    }
   ],
+  done: [],
   queued: []
 }
 

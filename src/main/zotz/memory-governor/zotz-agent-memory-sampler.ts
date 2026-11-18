@@ -1,6 +1,13 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
 
-export type ZotzLiveAgentPane = { paneKey: string; agent: TuiAgent }
+export type ZotzLiveAgentPane = {
+  paneKey: string
+  agent: TuiAgent
+  /** Hook-reported state: working, or waiting on the user (blocked/waiting/done). */
+  state: AgentStatusState
+  worktreeId: string | null
+}
 
 /** One agent terminal: its whole process tree now and the highest seen this run. */
 export type ZotzAgentMemoryUsage = ZotzLiveAgentPane & {
@@ -9,10 +16,15 @@ export type ZotzAgentMemoryUsage = ZotzLiveAgentPane & {
   startedAt: number
 }
 
+/** A run whose terminal went away since the last sample. */
+export type ZotzFinishedAgentRun = Pick<
+  ZotzAgentMemoryUsage,
+  'paneKey' | 'agent' | 'worktreeId' | 'peakBytes' | 'startedAt'
+> & { endedAt: number }
+
 export type ZotzAgentMemorySample = {
   agents: ZotzAgentMemoryUsage[]
-  /** Agents whose terminal went away since the last sample, with the peak they reached. */
-  finished: { agent: TuiAgent; peakBytes: number }[]
+  finished: ZotzFinishedAgentRun[]
 }
 
 type ZotzAgentMemorySamplerDeps = {
@@ -47,7 +59,7 @@ export class ZotzAgentMemorySampler {
       // A pane reused by a different agent is a new run; the old one ends here.
       const sameRun = previous !== undefined && previous.agent === pane.agent
       if (previous && !sameRun && previous.peakBytes > 0) {
-        finished.push({ agent: previous.agent, peakBytes: previous.peakBytes })
+        finished.push(this.finish(previous))
       }
       this.tracked.set(pane.paneKey, {
         ...pane,
@@ -60,10 +72,15 @@ export class ZotzAgentMemorySampler {
       if (!live.has(paneKey)) {
         this.tracked.delete(paneKey)
         if (usage.peakBytes > 0) {
-          finished.push({ agent: usage.agent, peakBytes: usage.peakBytes })
+          finished.push(this.finish(usage))
         }
       }
     }
     return { agents: [...this.tracked.values()], finished }
+  }
+
+  private finish(usage: ZotzAgentMemoryUsage): ZotzFinishedAgentRun {
+    const { paneKey, agent, worktreeId, peakBytes, startedAt } = usage
+    return { paneKey, agent, worktreeId, peakBytes, startedAt, endedAt: this.deps.now() }
   }
 }

@@ -31,10 +31,13 @@ function fakeGovernor() {
         agents: Array.from({ length: runningAgents }, (_, index) => ({
           paneKey: `running-${index}`,
           agent: 'claude' as const,
+          state: 'working' as const,
+          worktreeId: null,
           bytes: 1 * GB,
           peakBytes: 1 * GB,
           startedAt: 0
         })),
+        finished: [],
         sampledAt: NOW
       }
       for (const listener of listeners) {

@@ -28,7 +28,12 @@ function listLocalAgentPanes(server: typeof AgentHookServerInstance): ZotzLiveAg
     if (row.providerSessionOnly || !localPanes.has(row.paneKey) || !isTuiAgent(row.agentType)) {
       continue
     }
-    panes.set(row.paneKey, { paneKey: row.paneKey, agent: row.agentType })
+    panes.set(row.paneKey, {
+      paneKey: row.paneKey,
+      agent: row.agentType,
+      state: row.state,
+      worktreeId: row.worktreeId ?? null
+    })
   }
   return [...panes.values()]
 }
