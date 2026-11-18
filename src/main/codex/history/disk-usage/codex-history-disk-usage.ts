@@ -14,6 +14,7 @@ import type {
   CodexHistoryDiskUsageWorkerResponse
 } from './codex-history-disk-usage-worker-protocol'
 import { createCodexHistoryDiskUsageReader } from './codex-history-disk-usage-reader'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 const WORKER_FILENAME = 'codex-history-disk-usage-worker-entry.js'
 // A walk past these reports a lower bound rather than holding a disk busy.
@@ -22,6 +23,8 @@ const MAX_ENTRIES = 4_000_000
 const WALK_BUDGET_MS = 60_000
 const WORKER_TIMEOUT_MS = WALK_BUDGET_MS + 30_000
 const IDLE_TEARDOWN_MS = 30_000
+// A stopped worker stuck in a blocking call on a hung mount never exits; give up rather than wait.
+const RETIREMENT_WAIT_MS = 10_000
 // Each walk stats every rollout name; reopening the page within this window reuses the last one.
 const REUSE_MS = 5 * 60_000
 
@@ -59,7 +62,16 @@ async function measure(
 ): Promise<CodexHistoryDiskUsage> {
   const { homes, accounts } = await listHostCodexRolloutHomeSources(settings)
   // A walk stopped by a release or deletion ends its worker; wait for it so this one can start.
-  await getQueue().retired()
+  const stopped = new Promise<void>((resolve) =>
+    signal.addEventListener('abort', () => resolve(), { once: true })
+  )
+  const retired = await withTimeoutResult(
+    Promise.race([getQueue().retired(), stopped]),
+    RETIREMENT_WAIT_MS
+  )
+  if (!retired.ok) {
+    throw new Error('the previous Codex history walk has not stopped')
+  }
   const response = await getQueue().dispatch(
     (id) => ({
       id,
