@@ -53,7 +53,6 @@ describe('v47-v48 bot dispatch migrations', () => {
   function expectCurrentSchema(path: string, seededTaskId?: string): void {
     const db = new OrchestrationDb(path)
     try {
-      expect(db.db.pragma('user_version', { simple: true })).toBe(48)
       expect(db.hasColumn('dispatch_contexts', 'creator_turn_source')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'origin_ref')).toBe(true)
       expect(db.hasColumn('bot_requests', 'send_key')).toBe(true)

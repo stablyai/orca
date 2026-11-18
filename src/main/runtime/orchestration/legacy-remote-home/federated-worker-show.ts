@@ -103,6 +103,11 @@ export async function showFederatedWorker(args: {
     liveFederatedHomeAutoReleaseAt(db.getFederatedDispatch(dispatchId))
   return {
     dispatch: exposeDispatchContext(db.getDispatchContextById(dispatchId) ?? args.dispatch),
+    // This home-side projection has no replicated native session evidence.
+    nativeUsageIdentity: {
+      status: 'unavailable' as const,
+      reason: 'session_not_reported' as const
+    },
     worker: exposeWorker(worker),
     projection: projectFederatedFleetWorker({
       runtime,

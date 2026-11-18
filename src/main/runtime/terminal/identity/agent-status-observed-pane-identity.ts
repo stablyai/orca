@@ -5,9 +5,17 @@ import {
 } from '../../../ipc/agent-hooks/agent-status-ipc-boundary'
 import type { EnrichedAgentHookEventPayload } from '../../../agent-hooks/server/server-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { captureDispatchNativeUsageIdentity } from '../../orchestration/workers/transcripts/dispatch-native-usage-capture'
 
 type ObservedStatusRuntime = AgentStatusRuntimeEnrichment &
-  Partial<Pick<OrcaRuntimeService, 'clearSavedTerminalLaunchOnAgentHook'>>
+  Partial<
+    Pick<
+      OrcaRuntimeService,
+      | 'clearSavedTerminalLaunchOnAgentHook'
+      | 'getExistingOrchestrationDb'
+      | 'getExactWorkerProviderSession'
+    >
+  >
 
 /** Bounded like the hook server's own per-pane maps; eviction only degrades a row to `unobserved`. */
 const MAX_OBSERVED_PANES = 1024
@@ -57,7 +65,7 @@ export class AgentStatusObservedPaneIdentityCapture {
   attach(runtime: ObservedStatusRuntime): void {
     this.runtime = runtime
     for (const enriched of this.pending.values()) {
-      recordObservedAgentStatusPaneIdentity(this.identities, enriched, runtime)
+      recordObservedAgentStatusPaneIdentity(this.identities, enriched, runtime, false)
     }
     this.pending.clear()
   }
@@ -66,7 +74,8 @@ export class AgentStatusObservedPaneIdentityCapture {
 export function recordObservedAgentStatusPaneIdentity(
   identities: AgentStatusObservedPaneIdentities,
   event: EnrichedAgentHookEventPayload,
-  runtime: ObservedStatusRuntime | undefined
+  runtime: ObservedStatusRuntime | undefined,
+  captureNativeIdentity = true
 ): void {
   runtime?.clearSavedTerminalLaunchOnAgentHook?.(event)
   const binding = resolveAgentStatusBinding(event.paneKey, runtime)
@@ -81,4 +90,24 @@ export function recordObservedAgentStatusPaneIdentity(
           dispatchId: binding.kind === 'worker' ? binding.dispatchId : null
         }
   )
+  if (
+    captureNativeIdentity &&
+    binding.kind === 'worker' &&
+    runtime?.getExistingOrchestrationDb &&
+    runtime.getExactWorkerProviderSession
+  ) {
+    try {
+      captureDispatchNativeUsageIdentity(
+        {
+          getExistingOrchestrationDb: () => runtime.getExistingOrchestrationDb!(),
+          getExactWorkerProviderSession: (handle, observedAfter) =>
+            runtime.getExactWorkerProviderSession!(handle, observedAfter)
+        },
+        event,
+        binding
+      )
+    } catch (error) {
+      console.warn('[orchestration] worker native identity was not saved', error)
+    }
+  }
 }

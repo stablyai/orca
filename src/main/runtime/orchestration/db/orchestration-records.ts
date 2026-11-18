@@ -1,5 +1,6 @@
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
+import type { DispatchNativeIdentityFields } from './dispatch-context/dispatch-native-identity-fields'
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
@@ -306,7 +307,6 @@ export type DispatchContextRow = {
   creator_pane_key: string | null
   /** Bare creator session id; cleared chats use their lineage root. */
   creator_orca_session_id: OrcaSessionId | null
-  host_scope: string | null
   status: DispatchStatus
   failure_count: number
   last_failure: string | null
@@ -328,7 +328,7 @@ export type DispatchContextRow = {
   creator_turn_source: 'connector' | null
   /** What its creator started it for, opaque here (bot items: `bot-item:<uid>`); retries inherit it. */
   origin_ref: string | null
-}
+} & DispatchNativeIdentityFields
 
 export type DecisionGateRow = {
   id: string

@@ -29,6 +29,8 @@ export type OrchestrationWorkerReadFallbackReason =
 export type ExactWorkerProviderSession = {
   paneKey: string
   processIncarnation: string
+  /** Present only when a hook matched the current PTY's launch token. */
+  launchTokenHash?: string
   /** Accepted transport authority for the PTY; null is the local runtime. */
   connectionId?: string | null
   /** Attested distro for a local PTY whose hook session arrived over WSL. */

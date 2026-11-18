@@ -203,6 +203,7 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   -- What its creator started it for, opaque here (bot items: bot-item:<uid>); retries inherit it.
   origin_ref          TEXT,
   host_scope          TEXT,
+  native_usage_identity TEXT,
   status              TEXT NOT NULL DEFAULT 'pending'
     CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),
   failure_count       INTEGER NOT NULL DEFAULT 0,

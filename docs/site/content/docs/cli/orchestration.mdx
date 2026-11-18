@@ -86,6 +86,25 @@ orca orchestration worker-keep-open --dispatch <dispatchId>
 orca orchestration worker-start --task <taskId> --retry-of <dispatchId> --worktree current --agent codex
 ```
 
+`orca orchestration worker-show --dispatch <id> --json` returns this field at
+`result.nativeUsageIdentity` when the runtime supports it. An `observed` receipt
+identifies a reported native agent session and its pane, process
+incarnation, host scope, launch-token hash, and observation time. An `unavailable`
+receipt gives `session_not_reported` or `session_changed_or_shared`; malformed or
+missing evidence is treated as `session_not_reported`. Older runtimes may omit the
+field, and a remote-owned show without replicated evidence reports it unavailable.
+`hostScope` is a JSON-encoded host-scope object; `agent` and `sessionId` name the
+provider session on that host. The provider profile is not verified by this
+receipt, so these values are not a globally unique accounting key.
+
+An `observed` receipt includes `profile: {status: "unavailable", reason:
+"profile_not_verified"}` and `usageAttribution: {status: "unavailable", reason:
+"segment_ownership_unproven"}`. It is **not proof of usage ownership**: a resumed
+or shared session cannot be charged as a whole without exact segment proof.
+Never substitute working-directory or timing correlation for that proof.
+Deploying the runtime changes to the worker host is required before it can report
+this evidence; the CLI alone cannot produce it.
+
 When a worker stops at a permission prompt, the escalation names the prompt. Only a person can allow it, so carry on with other work until its closing message arrives; if it is holding up the task, deny it with a reason and the worker carries on another way:
 
 ```bash

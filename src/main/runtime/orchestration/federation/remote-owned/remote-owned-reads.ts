@@ -82,6 +82,10 @@ export async function remoteWorkerShow(runtime: ReadsRuntime, record: RemoteDisp
       lastFailure: record.last_failure,
       followUpOf: null
     },
+    nativeUsageIdentity: {
+      status: 'unavailable' as const,
+      reason: 'session_not_reported' as const
+    },
     worker: {
       dispatchId: record.dispatch_id,
       state: record.worker_state ?? record.status,

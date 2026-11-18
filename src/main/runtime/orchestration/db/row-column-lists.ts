@@ -65,6 +65,7 @@ export const DISPATCH_CONTEXT_COLUMNS = [
   'creator_pane_key',
   'creator_orca_session_id',
   'host_scope',
+  'native_usage_identity',
   'status',
   'failure_count',
   'last_failure',

@@ -16,6 +16,22 @@ export type WorkerProjection = {
   autoReleaseAt?: string
 }
 
+/** Session observation only; it does not establish ownership of usage. */
+export type NativeUsageIdentity =
+  | {
+      status: 'observed'
+      agent: string
+      sessionId: string
+      paneKey: string
+      processIncarnation: string
+      hostScope: string
+      launchTokenHash: string
+      observedAt: number
+      profile: { status: 'unavailable'; reason: 'profile_not_verified' }
+      usageAttribution: { status: 'unavailable'; reason: 'segment_ownership_unproven' }
+    }
+  | { status: 'unavailable'; reason: 'session_not_reported' | 'session_changed_or_shared' }
+
 export type WorkerShowResult = {
   dispatch: {
     id: string
@@ -24,6 +40,8 @@ export type WorkerShowResult = {
     status: string
     followUpOf?: string | null
   } | null
+  /** Absent on older runtimes. */
+  nativeUsageIdentity?: NativeUsageIdentity
   worker: {
     dispatchId?: string
     state: string

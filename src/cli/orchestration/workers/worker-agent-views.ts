@@ -31,6 +31,7 @@ type WorkerShowFields = {
   lastError?: string
   autoReleaseAt?: string
   coordinatedFrom?: string
+  nativeUsageIdentity?: WorkerShowResult['nativeUsageIdentity']
   next?: string
 }
 
@@ -76,6 +77,7 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
           ? `never started: ${value.worker.lastError ?? 'its start failed'}`
           : (value.worker.lastError ?? undefined),
       autoReleaseAt: value.autoReleaseAt ?? undefined,
+      nativeUsageIdentity: value.nativeUsageIdentity,
       coordinatedFrom: value.coordinatedFrom ?? undefined,
       next: value.projection ? renderOrchestrationArgv(value.projection.nextAction.argv) : undefined
     }

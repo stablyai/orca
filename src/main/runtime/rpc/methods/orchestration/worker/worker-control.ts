@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrchestrationWorkerReadResult } from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
-import { exposeDispatchContext } from './observation/dispatch-context-exposure'
+import * as dispatchView from './observation/dispatch-context-exposure'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/workers/lifecycle/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
@@ -76,7 +76,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
       const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
       return {
-        dispatch: exposeDispatchContext(dispatch),
+        dispatch: dispatchView.exposeDispatchContext(dispatch),
+        nativeUsageIdentity: dispatchView.exposeNativeUsageIdentity(dispatch),
         worker: exposeWorker(worker),
         // Why: the fleet verdict, so worker-show and worker-list cannot disagree.
         projection: projectFleetWorker(runtime, db, params.dispatch),

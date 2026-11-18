@@ -4,6 +4,7 @@ import {
   isWslHookRelayConnectionId,
   wslHookRelayConnectionId
 } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import { launchTokenHash } from '../../../../../shared/agent-hook-listener/transport/agent-hook-spool'
 
 export function selectExactWorkerProviderSession(args: {
   paneKey: string
@@ -33,6 +34,11 @@ export function selectExactWorkerProviderSession(args: {
   const selected: ExactWorkerProviderSession = {
     paneKey: args.paneKey,
     processIncarnation: args.processIncarnation,
+    ...(args.connectionId !== undefined &&
+    args.launchToken &&
+    status.launchToken === args.launchToken
+      ? { launchTokenHash: launchTokenHash(args.launchToken) ?? undefined }
+      : {}),
     connectionId: status.connectionId,
     ...(wslDistro ? { wslDistro } : {}),
     agent: status.agentType,

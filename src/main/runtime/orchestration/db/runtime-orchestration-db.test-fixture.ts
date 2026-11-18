@@ -28,6 +28,7 @@ export function dispatchContextRow(fields: Partial<DispatchContextRow>): Dispatc
     task_id: 'fixture-task',
     contract_version: 0,
     launch_token_hash: null,
+    native_usage_identity: null,
     assignee_handle: null,
     assignee_pane_key: null,
     assignee_orca_session_id: null,

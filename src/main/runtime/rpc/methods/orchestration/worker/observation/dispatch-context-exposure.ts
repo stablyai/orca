@@ -29,3 +29,48 @@ export function exposeDispatchContext(dispatch: DispatchContextRow) {
     lastHeartbeatAt: dispatch.last_heartbeat_at
   }
 }
+
+/** An identity observation is not proof that any usage belongs to this Dispatch. */
+export function exposeNativeUsageIdentity(dispatch: DispatchContextRow) {
+  const unavailable = { status: 'unavailable', reason: 'session_not_reported' } as const
+  const raw = dispatch.native_usage_identity
+  if (typeof raw !== 'string') {
+    return unavailable
+  }
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return unavailable
+    }
+    const receipt = new Map<string, unknown>(Object.entries(value))
+    const status = receipt.get('status')
+    const reason = receipt.get('reason')
+    const observedAt = receipt.get('observedAt')
+    if (
+      status === 'unavailable' &&
+      (reason === 'session_not_reported' || reason === 'session_changed_or_shared')
+    ) {
+      return { status: 'unavailable' as const, reason }
+    }
+    if (
+      status === 'observed' &&
+      ['agent', 'sessionId', 'paneKey', 'processIncarnation', 'hostScope', 'launchTokenHash'].every(
+        (key) => {
+          const field = receipt.get(key)
+          return typeof field === 'string' && field.length > 0
+        }
+      ) &&
+      typeof observedAt === 'number' &&
+      Number.isFinite(observedAt)
+    ) {
+      return {
+        ...Object.fromEntries(receipt),
+        profile: { status: 'unavailable', reason: 'profile_not_verified' },
+        usageAttribution: { status: 'unavailable', reason: 'segment_ownership_unproven' }
+      }
+    }
+  } catch {
+    // Malformed evidence is unavailable, never a reason for worker-show to fail.
+  }
+  return unavailable
+}

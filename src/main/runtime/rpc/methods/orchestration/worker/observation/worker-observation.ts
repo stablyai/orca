@@ -12,7 +12,7 @@ import type {
   WorkerDispatchRow
 } from '../../../../../orchestration/db/orchestration-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../../shared/workspace-layout/layout-owner-switch'
-import { exposeDispatchContext } from './dispatch-context-exposure'
+import { exposeDispatchContext, exposeNativeUsageIdentity } from './dispatch-context-exposure'
 import { resolvePinnedFederatedServer } from '../../../../../orchestration/legacy-remote-home/pinned-federated-server'
 
 /** Recover live handles by recorded process incarnation so stale durable handles cannot hide and leak running workers. */
@@ -176,6 +176,7 @@ export async function showContextOnlyWorker(
   const observation = await inspectWorkerTerminal(runtime, db, dispatch.id)
   return {
     dispatch: exposeDispatchContext(dispatch),
+    nativeUsageIdentity: exposeNativeUsageIdentity(dispatch),
     worker: exposeContextOnlyWorker(dispatch),
     projection: projectFleetWorker(runtime, db, dispatch.id),
     terminal: observation.exact ? observation.terminal : null,
