@@ -16,7 +16,10 @@ import { DaemonServerLifecycle } from './daemon-server-lifecycle'
 import type { DaemonServerOptions } from './daemon-server-options'
 import { DaemonSessionAttachments } from './daemon-session-attachments'
 import { DaemonSessionBackgroundRouting } from './daemon-session-background-routing'
-import { startDaemonClientBacklogProbe } from '../transport/stream/daemon-stream-backlog-probe'
+import {
+  daemonClientBacklogSampler,
+  startDaemonStreamBacklogProbe
+} from '../transport/stream/daemon-stream-backlog-probe'
 import { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
 import { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { checkPtySpawnHealth } from '../pty-subprocess/pty-subprocess'
@@ -231,10 +234,8 @@ export class DaemonServer {
       ptySpawnHealthCheck: options.ptySpawnHealthCheck ?? checkPtySpawnHealth,
       log: this.log
     })
-    this.stopStreamBacklogProbe = startDaemonClientBacklogProbe(
-      this.connections,
-      this.streamDataBatcher,
-      this.transientFactRelay
+    this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(
+      daemonClientBacklogSampler(this.connections, this.streamDataBatcher, this.transientFactRelay)
     )
   }
 

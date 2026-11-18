@@ -418,7 +418,6 @@
 6 src/main/daemon/launch/daemon-spawner.ts
 8 src/main/daemon/launch/daemon-stale-kill.ts
 4 src/main/daemon/launch/local-terminal-daemon-stop.ts
-5 src/main/daemon/observability/daemon-adoption-telemetry-event.ts
 1 src/main/daemon/observability/daemon-file-log.ts
 2 src/main/daemon/permissions/daemon-tcc-attribution.ts
 11 src/main/daemon/process-scopes/daemon-cgroup-scope.ts
@@ -428,8 +427,8 @@
 3 src/main/daemon/providers/adapter/daemon-pty-daemon-recovery.ts
 1 src/main/daemon/providers/adapter/daemon-pty-runtime-state.ts
 1 src/main/daemon/providers/adapter/daemon-pty-session-control.ts
-6 src/main/daemon/providers/adapter/daemon-pty-session-spawn.ts
-18 src/main/daemon/providers/lifecycle/daemon-provider-init.ts
+5 src/main/daemon/providers/adapter/daemon-pty-session-spawn.ts
+17 src/main/daemon/providers/lifecycle/daemon-provider-init.ts
 7 src/main/daemon/providers/lifecycle/daemon-provider-restart.ts
 5 src/main/daemon/providers/lifecycle/daemon-provider-state.ts
 4 src/main/daemon/providers/lifecycle/daemon-severed-restart.ts

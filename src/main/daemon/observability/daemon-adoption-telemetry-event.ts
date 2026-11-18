@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -12,7 +12,7 @@ import {
 import { bucketDaemonLiveSessionCount } from '../../../shared/telemetry/daemon-lifecycle-telemetry'
 import type { EventProps } from '../../../shared/telemetry/telemetry-event-classification'
 import { track } from '../../telemetry/client'
-import { readDaemonPidRecord } from '../endpoint/identity/daemon-endpoint-incarnation'
+import { readDaemonPidRecordAsync } from '../endpoint/identity/daemon-endpoint-incarnation'
 import { getDaemonMacCodeIdentity } from '../executable-host/macos/daemon-mac-code-identity'
 import {
   getMacDaemonBundleRoot,
@@ -56,9 +56,16 @@ export async function classifyDaemonAdoptionOrigin(
     pidRecord?.appVersion,
     getAppEnvironment().getVersion()
   )
+  const spawnerExecPath = pidRecord?.spawnerExecPath ?? null
+  const spawnerExists =
+    spawnerExecPath !== null &&
+    (await access(spawnerExecPath).then(
+      () => true,
+      () => false
+    ))
   const spawnerPathClass: DaemonSpawnerPathClass = classifyDaemonSpawnerPath(
-    pidRecord?.spawnerExecPath ?? null,
-    existsSync,
+    spawnerExecPath,
+    () => spawnerExists,
     stableCopyPrefix()
   )
   return {
@@ -109,7 +116,7 @@ export async function trackDaemonPtyCwdVerdict(
     // Re-read identity because a long-lived adapter may now use a respawned daemon.
     track(event, {
       cwd_class: classifyDaemonPtyCwd(cwd, homedir()),
-      ...(await classifyDaemonAdoptionOrigin(readDaemonPidRecord(pidPath)))
+      ...(await classifyDaemonAdoptionOrigin(await readDaemonPidRecordAsync(pidPath)))
     })
   } catch {
     // Telemetry is best-effort; a dropped event must not reach the caller.

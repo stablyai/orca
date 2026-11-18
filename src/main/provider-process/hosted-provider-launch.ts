@@ -171,11 +171,18 @@ export async function launchProviderOwner(
 ): Promise<void> {
   const deadline = performance.now() + HOSTED_START_BUDGET_MS
   const remainingMs = (): number => Math.max(0, deadline - performance.now())
-  const client = await connectedHost(route)
-  const identity =
-    client && !owner.canceled
-      ? await inspectHostedIdentity(client, spec.cwd, () => owner.canceled, route.reportCwd)
-      : null
+  // Connecting, signature and folder checks share the budget, so a slow host can't spend it all.
+  const { client, identity } = await withProviderStartDeadline(
+    (async () => {
+      const client = await connectedHost(route)
+      const identity =
+        client && !owner.canceled
+          ? await inspectHostedIdentity(client, spec.cwd, () => owner.canceled, route.reportCwd)
+          : null
+      return { client, identity }
+    })(),
+    remainingMs()
+  ).catch(() => ({ client: null, identity: null }))
   if (owner.canceled) {
     owner.fail(new Error('Provider launch canceled'))
     return

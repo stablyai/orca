@@ -49,17 +49,17 @@ export function startDaemonStreamBacklogProbe(sample: () => StreamBacklogSample)
   return () => clearInterval(timer)
 }
 
-export function startDaemonClientBacklogProbe(
+export function daemonClientBacklogSampler(
   connections: DaemonClientConnections,
   batcher: DaemonStreamDataBatcher,
   relay: BackgroundTransientFactRelay
-): () => void {
-  return startDaemonStreamBacklogProbe(() => ({
+): () => StreamBacklogSample {
+  return () => ({
     clients: Array.from(connections.values(), (client) => ({
       clientId: client.clientId,
       socketBufferedBytes: client.streamSocket?.writableLength ?? 0,
       batcherQueuedChars: batcher.queuedCharsForClient(client.clientId)
     })),
     backgroundedSessionIdSuffixes: relay.backgroundedSessionIdSuffixes()
-  }))
+  })
 }
