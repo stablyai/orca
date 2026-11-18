@@ -81,18 +81,22 @@ function walkFolder(
     return false
   }
   // Queued paths are real paths: one that no longer resolves to itself (it or a parent became a
-  // link since it was listed) is not walked through.
+  // link since it was listed) is not walked through, and the total says "at least".
   if (!lstatSync(dir).isDirectory() || realpathSync(dir) !== dir) {
+    walk.usage.complete = false
     return true
   }
   // Counted only if the folder still resolves to itself afterwards: a parent swapped for a link
   // mid-listing would otherwise send the stats below outside history.
   const found: { key: string; bytes: number }[] = []
+  let withinBudget = true
   const handle = opendirSync(dir)
   try {
     for (let child = handle.readSync(); child; child = handle.readSync()) {
+      // Out of budget mid-folder: stop listing, but keep what this folder already counted.
       if (overBudget(walk)) {
-        return false
+        withinBudget = false
+        break
       }
       const path = join(dir, child.name)
       if (child.isDirectory()) {
@@ -123,7 +127,8 @@ function walkFolder(
     handle.closeSync()
   }
   if (realpathSync(dir) !== dir) {
-    return true
+    walk.usage.complete = false
+    return withinBudget
   }
   for (const { key, bytes } of found) {
     if (!seenFiles.has(key)) {
@@ -132,7 +137,7 @@ function walkFolder(
       walk.usage.bytes += bytes
     }
   }
-  return true
+  return withinBudget
 }
 
 /**

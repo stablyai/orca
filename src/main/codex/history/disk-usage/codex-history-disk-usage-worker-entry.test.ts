@@ -71,8 +71,13 @@ describe.skipIf(process.platform === 'win32')('measureCodexHistoryDiskUsage', ()
     for (const name of ['a', 'b', 'c']) {
       write(join(root, 'sessions', `rollout-${name}.jsonl`), 10)
     }
-    const cut = measureCodexHistoryDiskUsage([root], { ...open, maxEntries: 2 }, 'win32')
-    expect(cut.complete).toBe(false)
+    // Listing the home, its three history folders and opening sessions take 5 steps; the budget
+    // runs out after the first rollout, which still counts.
+    expect(measureCodexHistoryDiskUsage([root], { ...open, maxEntries: 6 }, 'win32')).toEqual({
+      bytes: 10,
+      rollouts: 1,
+      complete: false
+    })
 
     // Root reads through permission bits.
     if (process.getuid?.() === 0) {
