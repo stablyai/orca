@@ -30,7 +30,10 @@ vi.mock('@/store/index', async () => {
   return {
     useAppStore: Object.assign(
       (selector: (state: AppState) => unknown) => useStore(store, selector),
-      { getState: () => store.getState(), subscribe: store.subscribe }
+      {
+        getState: () => store.getState(),
+        subscribe: (listener: () => void) => store.subscribe(listener)
+      }
     )
   }
 })
