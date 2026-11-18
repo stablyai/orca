@@ -3,9 +3,6 @@ import type { AppState } from '../types'
 type Listener = (state: AppState, previousState: AppState) => void
 type Subscription = { listener: Listener }
 
-// Off until every channel reader is migrated and soaked; on, channel-only writes skip root selectors.
-const SKIP_ROOT_SELECTORS_ON_CHANNEL_ONLY_WRITES = false
-
 let counts: (() => { rootSelectors: number; all: number }) | null = null
 
 /** Live listener counts: React root selectors, and every listener including them. */
@@ -20,7 +17,8 @@ export function readAppStoreListenerCounts(): { rootSelectors: number; all: numb
  */
 export function createAppStoreNotificationRouter(
   innerSubscribe: (listener: Listener) => () => void,
-  getState: () => AppState
+  getState: () => AppState,
+  options: { skipRootSelectorsOnChannelOnlyWrites: boolean; afterSkippedDispatch?: () => void }
 ) {
   const all = new Set<Subscription>()
   const rootSelectors = new Set<Subscription>()
@@ -31,7 +29,7 @@ export function createAppStoreNotificationRouter(
   // Live sets and a fresh state per listener, as the store's own Set.forEach dispatch does:
   // listeners added mid-dispatch still hear this write, and a nested write's state reaches later ones.
   innerSubscribe((_state, previousState) => {
-    const skipRootSelectors = nextWriteChannelOnly && SKIP_ROOT_SELECTORS_ON_CHANNEL_ONLY_WRITES
+    const skipRootSelectors = nextWriteChannelOnly && options.skipRootSelectorsOnChannelOnlyWrites
     nextWriteChannelOnly = false
     ;(skipRootSelectors ? others : all).forEach((subscription) => {
       try {
@@ -40,6 +38,9 @@ export function createAppStoreNotificationRouter(
         console.error('Store observer failed', error)
       }
     })
+    if (skipRootSelectors) {
+      options.afterSkippedDispatch?.()
+    }
   })
 
   function add(listener: Listener, rootSelector: boolean): () => void {

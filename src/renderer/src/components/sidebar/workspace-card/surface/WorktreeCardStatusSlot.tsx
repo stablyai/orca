@@ -15,12 +15,11 @@ import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
 import { laneStatusWithLineage } from './worktree-card-lineage-lane-status'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import {
   selectEphemeralVmWorkspaceRuntime,
   selectEphemeralVmWorkspaceWaking
 } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
-import { selectIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
+import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 import { getEphemeralVmHostState } from '../../../../../../shared/execution-host/execution-host-health'
 import { getVmStateLabel, VmStateIcon, WorktreeCardVmStateBadge } from './WorktreeCardVmStateBadge'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
@@ -30,6 +29,7 @@ import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
 } from '../../workspace-status/presentation/WorkspaceReviewChecksIndicator'
+import { useAppStore } from '@/store/index'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
@@ -153,9 +153,9 @@ export function WorktreeCardStatusSlot({
   const liveStatus = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
   const status = statusOverride ?? liveStatus
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
-  const { isSleeping, vmRuntime, vmWaking } = useAppStore(
+  const isSleeping = useIsSleepingWorktree(worktreeId)
+  const { vmRuntime, vmWaking } = useAppStore(
     useShallow((state) => ({
-      isSleeping: selectIsSleepingWorktree(state, worktreeId),
       vmRuntime: selectEphemeralVmWorkspaceRuntime(state, worktreeId),
       vmWaking: selectEphemeralVmWorkspaceWaking(state, worktreeId)
     }))

@@ -8,6 +8,7 @@ import { useCallback, useSyncExternalStore } from 'react'
 import { createStore, type StateCreator } from 'zustand'
 import type { AppState } from './types'
 import { channelApi, type AppStore, type RootSelectorState } from './channels/app-store-channels'
+import { useRecordedRootSelection } from './channels/root-selector-oracle'
 import { createRepoSlice } from './repos/create-repo-slice'
 import { createSparsePresetsSlice } from './slices/worktrees/create/sparse-presets'
 import { createWorktreeSlice } from './slices/worktrees/create-worktree-slice'
@@ -182,7 +183,19 @@ function useAppStoreSelector<U>(selector: (state: RootSelectorState) => U): U {
   return useSyncExternalStore(subscribeRootSelector, read, readInitial)
 }
 
-export const useAppStore: AppStore = Object.assign(useAppStoreSelector, appStoreApi)
+// Development checks that a skipped root selector would not have changed.
+function useCheckedAppStoreSelector<U>(selector: (state: RootSelectorState) => U): U {
+  const read = useCallback(() => selector(appStoreApi.getState()), [selector])
+  const readInitial = useCallback(() => selector(appStoreApi.getInitialState()), [selector])
+  const selection = useSyncExternalStore(subscribeRootSelector, read, readInitial)
+  useRecordedRootSelection(read)
+  return selection
+}
+
+export const useAppStore: AppStore = Object.assign(
+  import.meta.env.DEV ? useCheckedAppStoreSelector : useAppStoreSelector,
+  appStoreApi
+)
 
 registerTerminalNoticeShutdownReader(
   (ptyId) => (useAppStore.getState().pendingPtyShutdownIds[ptyId] ?? 0) > 0
