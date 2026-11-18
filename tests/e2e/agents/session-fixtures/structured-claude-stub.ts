@@ -35,7 +35,12 @@ const STUB_SCRIPT = path.join(
 
 const SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
 
-export type ClaudeStub = { command: string; launchLog: string }
+export type ClaudeStub = {
+  command: string
+  launchLog: string
+  /** Each user message the stub was sent, one JSON line per turn. */
+  inputLog: string
+}
 
 /** Dirs a login shell puts ahead of the launch PATH on macOS (path_helper). */
 function macLoginShellPathDirs(): string[] {
@@ -51,37 +56,50 @@ function macLoginShellPathDirs(): string[] {
   return files.flatMap((file) => readFileSync(file, 'utf8').split('\n').filter(Boolean))
 }
 
+/** Writes the stub `claude` into `dir`; null when a system-wide claude would shadow it on PATH. */
+export function writeClaudeStub(dir: string): ClaudeStub | null {
+  const command = path.join(dir, 'claude')
+  const launchLog = path.join(dir, 'launches.jsonl')
+  const inputLog = path.join(dir, 'launches-inputs.jsonl')
+  const emptyHome = path.join(dir, 'empty-home')
+  mkdirSync(emptyHome)
+  // Refuse launch if login-shell PATH or fallback install dirs could select real Claude before the stub.
+  const shadowing = resolveCliCommand('claude', {
+    pathEnv: [...SYSTEM_DIRS, ...macLoginShellPathDirs()].join(path.delimiter),
+    homePath: emptyHome
+  })
+  if (path.isAbsolute(shadowing)) {
+    return null
+  }
+  const quote = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`
+  writeFileSync(
+    command,
+    `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(STUB_SCRIPT)} ${quote(launchLog)} "$@"\n`
+  )
+  chmodSync(command, 0o755)
+  return { command, launchLog, inputLog }
+}
+
+/** Only the stub's directory and the system tool dirs: no user bin, Homebrew or npm prefix. */
+export function claudeStubPath(stub: ClaudeStub): string {
+  return [path.dirname(stub.command), ...SYSTEM_DIRS].join(path.delimiter)
+}
+
 export const test = base.extend<{ claudeStub: ClaudeStub }>({
   // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
   claudeStub: async ({}, provideFixture, testInfo) => {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-structured-claude-'))
-    const command = path.join(dir, 'claude')
-    const launchLog = path.join(dir, 'launches.jsonl')
-    const emptyHome = path.join(dir, 'empty-home')
-    mkdirSync(emptyHome)
-    // Refuse launch if login-shell PATH or fallback install dirs could select real Claude before the stub.
-    const shadowing = resolveCliCommand('claude', {
-      pathEnv: [...SYSTEM_DIRS, ...macLoginShellPathDirs()].join(path.delimiter),
-      homePath: emptyHome
-    })
-    if (path.isAbsolute(shadowing)) {
+    const stub = writeClaudeStub(dir)
+    if (!stub) {
       rmSync(dir, { recursive: true, force: true })
       testInfo.skip(true, 'a system-wide claude would shadow the stub')
+      return
     }
-    const quote = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`
-    writeFileSync(
-      command,
-      `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(STUB_SCRIPT)} ${quote(launchLog)} "$@"\n`
-    )
-    chmodSync(command, 0o755)
-    await provideFixture({ command, launchLog })
+    await provideFixture(stub)
     rmSync(dir, { recursive: true, force: true })
   },
   launchEnv: async ({ claudeStub }, provideFixture) => {
-    // Only the stub's directory and the system tool dirs: no user bin, Homebrew or npm prefix.
-    await provideFixture({
-      PATH: [path.dirname(claudeStub.command), ...SYSTEM_DIRS].join(path.delimiter)
-    })
+    await provideFixture({ PATH: claudeStubPath(claudeStub) })
   }
 })
 

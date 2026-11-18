@@ -278,7 +278,8 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
                 registerDeviceKey: (params) =>
                   registerSocketDeviceKey(this.deviceRegistry!, authenticatedSocket, params),
                 exchangePairingTicket: (params) =>
-                  exchangeSocketPairingTicket(this.deviceRegistry!, authenticatedSocket, params)
+                  exchangeSocketPairingTicket(this.deviceRegistry!, authenticatedSocket, params),
+                ...this.desktopAccountSelf(device, authenticatedSocket.connectionId)
               }
             : undefined,
         mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,
@@ -301,7 +302,10 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
             : undefined,
         delegatedMobileDevices:
           device.scope === 'runtime'
-            ? { sync: (phones) => this.syncDelegatedMobileDevices(device.deviceId, phones) }
+            ? {
+                sync: (phones) =>
+                  this.syncDelegatedMobileDevices(device.deviceId, phones, connectionId)
+              }
             : undefined,
         signal: abortRegistration?.signal,
         sendBinary,

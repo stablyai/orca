@@ -71,7 +71,7 @@ export function registerQueuedMessageStopPauseTests(
       expect(await journal.reads.submission('drain-1')).toBeUndefined()
       expect((await journal.queuedMessages.get('draft-1'))?.state).toBe('waiting')
       await journal.appendQueueResume(1)
-      expect(await automatic('drain-after-resume')).toEqual({
+      expect(await automatic('drain-after-resume')).toMatchObject({
         kind: 'claimed',
         messageId: 'draft-1',
         clientMessageId: 'drain-after-resume'

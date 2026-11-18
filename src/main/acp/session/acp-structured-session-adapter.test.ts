@@ -6,6 +6,7 @@ import {
   SESSION
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
+  GROK,
   openAcpAdapterRig,
   PROVIDER_SESSION,
   waitFor,
@@ -83,6 +84,55 @@ describe('ACP structured session adapter: turns', () => {
       const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
       expect(turns.at(-1)).toMatchObject({ state: 'completed', outcome: 'success' })
     })
+  })
+
+  it("switches OpenCode's agent to the message's Build/Plan mode before its prompt", async () => {
+    const steps: string[] = []
+    const mode = (currentValue: string) => ({
+      id: 'mode',
+      name: 'Session Mode',
+      category: 'mode',
+      type: 'select',
+      currentValue,
+      options: ['build', 'plan'].map((value) => ({ value, name: value }))
+    })
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('opencode')!,
+      script: (agent) => {
+        let current = 'build'
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions: [mode(current)] })
+        )
+        agent.on('session/set_config_option', (frame) => {
+          const { configId, value } = z
+            .object({ configId: z.string(), value: z.string() })
+            .parse(frame.params)
+          current = value
+          steps.push(`${configId}=${value}`)
+          agent.reply(frame, { configOptions: [mode(current)] })
+        })
+        agent.on('session/prompt', (frame) => {
+          steps.push('prompt')
+          agent.reply(frame, { stopReason: 'end_turn' })
+        })
+      }
+    })
+    await rig.acquire()
+    for (const [clientMessageId, interactionMode] of [
+      ['send-1', 'plan'],
+      ['send-2', 'plan'],
+      ['send-3', 'default']
+    ] as const) {
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        clientMessageId,
+        fence: 1,
+        body: hello,
+        executionOptions: { interactionMode }
+      })
+      await rig.settle()
+    }
+    expect(steps).toEqual(['mode=plan', 'prompt', 'prompt', 'mode=build', 'prompt'])
   })
 
   it('stops a running turn: open permissions answer cancelled, session/cancel goes out', async () => {
@@ -308,5 +358,27 @@ describe('ACP structured session adapter: close and exit', () => {
     )
     const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
     expect(turns.at(-1)).toMatchObject({ state: 'interrupted' })
+  })
+})
+
+describe('Grok launch spec', () => {
+  it('runs `grok agent stdio`, asking for always-approve only with full access', () => {
+    expect(GROK.args({ fullAccess: false, pluginDirs: [] })).toEqual(['agent', 'stdio'])
+    expect(GROK.args({ fullAccess: true, pluginDirs: [] })).toEqual([
+      'agent',
+      '--always-approve',
+      'stdio'
+    ])
+    expect(GROK.args({ fullAccess: true, pluginDirs: ['/orca/visuals', '/repo/.agents'] })).toEqual(
+      [
+        'agent',
+        '--always-approve',
+        '--plugin-dir',
+        '/orca/visuals',
+        '--plugin-dir',
+        '/repo/.agents',
+        'stdio'
+      ]
+    )
   })
 })

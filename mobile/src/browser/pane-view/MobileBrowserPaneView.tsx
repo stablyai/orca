@@ -19,6 +19,7 @@ import {
   MobileBrowserDrawingButtons,
   type MobileBrowserStreamedDrawing
 } from '../MobileBrowserDrawingButtons'
+import { MobileBrowserJavaScriptDialog } from './MobileBrowserJavaScriptDialog'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
 import {
@@ -39,6 +40,7 @@ import type { MobileBrowserViewMode } from '../screencast/browser-screencast-req
 import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
 import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
 import { FieldTextInput } from '../../components/composer-input/FieldTextInput'
+import type { MobileCertificateProceedFailure } from '../certificate/mobile-browser-certificate-proceed'
 
 // Why: seeds layer 0 as the visible one; the pacer owns opacity after mount, so a render must not.
 const FRAME_LAYER_STYLES: [StyleProp<ViewStyle>, StyleProp<ViewStyle>] = [
@@ -52,6 +54,7 @@ type MobileBrowserPaneViewProps = {
   bottomInset: number
   browserViewMode: MobileBrowserViewMode
   busy: boolean
+  certificateTrustSupported: boolean
   controlsDisabled: boolean
   dialog: BrowserDialogState | null
   error: string | null
@@ -65,11 +68,16 @@ type MobileBrowserPaneViewProps = {
   navigateToAddress: () => Promise<void>
   drawing?: MobileBrowserStreamedDrawing
   panResponder: PanResponderInstance
+  proceedCertificate: (challengeId: string) => Promise<MobileCertificateProceedFailure | null>
   pointerModifiers: BrowserPointerModifier[]
   reloadPage: () => void
+  retryFailedLoad: () => void
   renderedFrameSource: { uri: string } | null
   selectBrowserViewMode: (mode: MobileBrowserViewMode) => void
-  sendDialogCommand: (method: 'browser.dialogDismiss' | 'browser.dialogAccept') => Promise<void>
+  sendDialogCommand: (
+    method: 'browser.dialogDismiss' | 'browser.dialogAccept',
+    promptText?: string
+  ) => Promise<void>
   sendKeyboardText: () => Promise<void>
   sendKeypress: (key: string) => Promise<void>
   setAddressFocused: Dispatch<SetStateAction<boolean>>
@@ -93,6 +101,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     bottomInset,
     browserViewMode,
     busy,
+    certificateTrustSupported,
     controlsDisabled,
     dialog,
     error,
@@ -107,7 +116,9 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     drawing,
     panResponder,
     pointerModifiers,
+    proceedCertificate,
     reloadPage,
+    retryFailedLoad,
     renderedFrameSource,
     selectBrowserViewMode,
     sendDialogCommand,
@@ -259,7 +270,17 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             )}
           </View>
         ) : null}
-        {tab.loadError ? <MobileBrowserLoadFailure loadError={tab.loadError} /> : null}
+        {tab.loadError ? (
+          <MobileBrowserLoadFailure
+            loadError={tab.loadError}
+            certificateFailure={tab.certificateFailure}
+            browserPageId={tab.browserPageId}
+            certificateTrustSupported={certificateTrustSupported}
+            retryDisabled={controlsDisabled}
+            onRetry={retryFailedLoad}
+            onProceedCertificate={proceedCertificate}
+          />
+        ) : null}
         {!renderedFrameSource || busy || error ? (
           <View pointerEvents="none" style={styles.overlay}>
             {/* Key busy indicator on received pixels, not ready status: ready streams may send no frames. */}
@@ -270,45 +291,12 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           </View>
         ) : null}
         {dialog ? (
-          <View style={styles.dialogOverlay}>
-            <View style={styles.dialogCard}>
-              <Text style={styles.dialogTitle}>
-                {t('browser.paneView.dialogTitle', 'Browser Dialog')}
-              </Text>
-              <Text style={styles.dialogMessage}>{dialog.message}</Text>
-              {/* The page is still blocked, so the buttons stay live and the card says why. */}
-              {dialog.error ? <Text style={styles.dialogError}>{dialog.error}</Text> : null}
-              <View style={styles.dialogActions}>
-                {dialog.dialogType !== 'alert' ? (
-                  <Pressable
-                    disabled={dialog.pending !== undefined}
-                    style={({ pressed }) => [
-                      styles.dialogButton,
-                      pressed && styles.dialogButtonPressed,
-                      dialog.pending !== undefined && styles.dialogButtonDisabled
-                    ]}
-                    onPress={() => void sendDialogCommand('browser.dialogDismiss')}
-                  >
-                    <Text style={styles.dialogButtonText}>{t('common.cancel', 'Cancel')}</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  disabled={dialog.pending !== undefined}
-                  style={({ pressed }) => [
-                    styles.dialogButton,
-                    styles.dialogButtonPrimary,
-                    pressed && styles.dialogButtonPressed,
-                    dialog.pending !== undefined && styles.dialogButtonDisabled
-                  ]}
-                  onPress={() => void sendDialogCommand('browser.dialogAccept')}
-                >
-                  <Text style={[styles.dialogButtonText, styles.dialogButtonPrimaryText]}>
-                    {t('common.ok', 'OK')}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
+          <MobileBrowserJavaScriptDialog
+            key={dialog.occurrence}
+            dialog={dialog}
+            keyboardLift={keyboardLift}
+            sendDialogCommand={sendDialogCommand}
+          />
         ) : null}
       </View>
 

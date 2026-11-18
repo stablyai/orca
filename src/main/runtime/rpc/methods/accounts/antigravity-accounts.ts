@@ -5,7 +5,8 @@ import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
   AntigravityChatSignInCompleteParams,
-  AntigravityChatSignInFlowParams
+  AntigravityChatSignInFlowParams,
+  AntigravityChatSignInStartParams
 } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
@@ -69,9 +70,9 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityChatSignInStart',
     permission: 'accounts-admin',
-    params: null,
-    handler: async (_, ctx) =>
-      startAntigravityChatSignIn(chatSignInHost(ctx.runtime), signInOwner(ctx))
+    params: AntigravityChatSignInStartParams,
+    handler: async ({ intent }, ctx) =>
+      startAntigravityChatSignIn(chatSignInHost(ctx.runtime), signInOwner(ctx), intent)
   }),
   defineStreamingMethod({
     name: 'accounts.antigravityChatSignInSubscribe',

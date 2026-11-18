@@ -9,6 +9,8 @@ export type MobileSessionTerminalCreateOptions = MobileQuickCommandLaunch['optio
   sourceChatFork?: { sessionId: string; agent: string }
   /** Show the tab as a terminal even when the agent it runs would open as a chat. */
   terminalView?: boolean
+  /** One of desktop's Windows shell entries; only sent to hosts that take a shell pick. */
+  shell?: string
 }
 
 export function requestMobileSessionTerminalCreate(args: {
@@ -18,9 +20,19 @@ export function requestMobileSessionTerminalCreate(args: {
   clientMutationId: string
   agent?: MobileNewTabAgentOption['agent']
   options?: MobileQuickCommandLaunch['options']
+  shell?: string
   sourceChatFork?: { sessionId: string }
 }) {
-  const { client, worktreeId, afterTabId, clientMutationId, agent, options, sourceChatFork } = args
+  const {
+    client,
+    worktreeId,
+    afterTabId,
+    clientMutationId,
+    agent,
+    options,
+    shell,
+    sourceChatFork
+  } = args
   const params = {
     worktree: `id:${worktreeId}`,
     afterTabId,
@@ -31,6 +43,7 @@ export function requestMobileSessionTerminalCreate(args: {
       : {}),
     ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
     ...(agent ? { agent } : {}),
+    ...(shell ? { shell } : {}),
     ...(sourceChatFork ? { sourceChatFork } : {}),
     activate: false,
     select: true,

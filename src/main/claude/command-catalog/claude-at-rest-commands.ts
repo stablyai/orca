@@ -13,6 +13,7 @@ import { discoverSkills } from '../../skills/discovery/skill-native-discovery'
 import { scanClaudeCommandFolders } from './claude-command-folder-scan'
 import { supportsClaudeStructuredLocation } from '../structured/launch/claude-structured-location-support'
 import type { ClaudeCommandCatalogProbe } from './claude-command-catalog-probe'
+import type { ClaudeCliLaunch } from '../cli-capabilities/claude-cli-flag-support'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
@@ -27,6 +28,8 @@ export type ClaudeAtRestCommandsDeps = {
   /** A resting chat's next start follows the selected account, not the one it was created on. */
   resolveAccountHome?: () => Promise<AgentSessionAccountHome>
   probe?: ClaudeCommandCatalogProbe
+  /** The chat's discovery flags (`claudeDiscoveryArgs`) for the CLI the probe runs. */
+  discovery?: (record: AgentSessionRecord, launch: ClaudeCliLaunch) => Promise<readonly string[]>
   now?: () => number
   discover?: typeof discoverSkills
 }
@@ -61,6 +64,7 @@ async function scanClaudeAtRest(
   demand: AtRestCommandDemand
 ): Promise<AtRestCommandScan> {
   const account = requireLegacyAgentSessionAccountHome(record.accountHome).path
+  const { discovery } = deps
   if (deps.probe) {
     const release = await demand.acquire(probes, signal)
     try {
@@ -69,7 +73,15 @@ async function scanClaudeAtRest(
       }
       admitted()
       return {
-        commands: await deps.probe({ cwd, accountHomePath: account, isCurrent, signal }),
+        commands: await deps.probe({
+          cwd,
+          accountHomePath: account,
+          isCurrent,
+          signal,
+          ...(discovery
+            ? { discovery: (launch: ClaudeCliLaunch) => discovery(record, launch) }
+            : {})
+        }),
         fromAgent: true
       }
     } catch (error) {

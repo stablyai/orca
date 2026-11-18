@@ -1,25 +1,10 @@
-import {
-  selectSidebarLineageParentIdentities,
-  selectCrossStoreFolderChildrenById
-} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
-import WorktreeCard from '@/components/sidebar/workspace-card/surface/WorktreeCard'
-import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
-import {
-  getLineageChildrenInlineStyle,
-  LINEAGE_CHILDREN_INLINE_OFFSET
-} from '@/components/sidebar/worktree-list/rows/indentation'
-import { useAppStore } from '@/store/index'
+import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
+import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import { getWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
-import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
-import { useState } from 'react'
-import {
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { FolderWorkspaceEmptyState } from './folder-workspace-empty-state'
-import type { Worktree } from '../../../../../shared/worktree/types'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const t = useTranslate()
@@ -27,98 +12,16 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
-  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
-  const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
-  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
-  const crossStoreChildrenByFolderId = useAppStore(selectCrossStoreFolderChildrenById)
-  const repos = useAppStore((s) => s.repos)
-  const [collapsedLineageWorktreeIds, setCollapsedLineageWorktreeIds] = useState<
-    ReadonlySet<string>
-  >(() => new Set())
+  const childrenByParentIdentity = useAppStore(selectSidebarChildrenByParentIdentity)
 
-  const { folderWorkspace, childWorktrees, lineageChildrenByParentId, rootChildWorktrees } =
+  const { folderWorkspace, childWorktrees, lineageChildrenByParentIdentity } =
     getAttachedWorktreesForFolderWorkspace({
       executionHostId,
       activeWorkspaceKey,
       activeWorktreeId,
       folderWorkspaces,
-      workspaceLineageByChildKey,
-      lineageParentIdentities,
-      worktreeLineageById,
-      worktreesByRepo,
-      crossStoreChildrenByFolderId
+      childrenByParentIdentity
     })
-
-  const toggleLineage = (worktreeId: string): void => {
-    setCollapsedLineageWorktreeIds((current) => {
-      const next = new Set(current)
-      if (next.has(worktreeId)) {
-        next.delete(worktreeId)
-      } else {
-        next.add(worktreeId)
-      }
-      return next
-    })
-  }
-
-  const renderChildWorktree = (
-    worktree: Worktree,
-    ancestorIds: ReadonlySet<string> = new Set()
-  ): React.JSX.Element => {
-    const identity = getWorktreeHostIdentity(worktree)
-    const lineageChildren = lineageChildrenByParentId.get(identity) ?? []
-    const lineageCollapsed = collapsedLineageWorktreeIds.has(identity)
-    const nextAncestorIds = new Set([...ancestorIds, identity])
-    const safeLineageChildren = lineageChildren.filter(
-      (child) => !nextAncestorIds.has(getWorktreeHostIdentity(child))
-    )
-    const hasSafeLineageChildren = safeLineageChildren.length > 0
-    return (
-      <WorktreeCard
-        key={identity}
-        worktree={worktree}
-        repo={resolveReviewRepository(repos, worktree) ?? undefined}
-        isActive={activeWorktreeId === worktree.id}
-        isActiveSurface={false}
-        hideRepoBadge={false}
-        nativeDragEnabled={false}
-        flushSurface
-        contentIndent={0}
-        affiliateListMode
-        lineageChildCount={safeLineageChildren.length}
-        lineageCollapsed={lineageCollapsed}
-        lineageChildren={
-          !lineageCollapsed && hasSafeLineageChildren
-            ? safeLineageChildren.map((child) => (
-                <div
-                  key={getWorktreeHostIdentity(child)}
-                  onClick={stopNestedWorktreeCardBubble}
-                  onDoubleClick={stopNestedWorktreeCardBubble}
-                  onDragStart={stopNestedWorktreeCardBubble}
-                >
-                  {renderChildWorktree(child, nextAncestorIds)}
-                </div>
-              ))
-            : undefined
-        }
-        lineageChildrenStyle={
-          hasSafeLineageChildren
-            ? getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)
-            : undefined
-        }
-        onLineageToggle={
-          hasSafeLineageChildren
-            ? (event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                toggleLineage(identity)
-              }
-            : undefined
-        }
-      />
-    )
-  }
 
   if (!folderWorkspace) {
     return (
@@ -159,7 +62,11 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       ) : (
         <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto py-2 pl-1 pr-2">
           <div className="space-y-1">
-            {rootChildWorktrees.map((worktree) => renderChildWorktree(worktree))}
+            <AttachedWorktreeCards
+              roots={childWorktrees}
+              lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
+              affiliateListMode
+            />
           </div>
         </div>
       )}

@@ -1,10 +1,9 @@
-import { ignoreProviderTransportError } from './provider-child'
+import { ignoreProviderTransportError, type ProviderOwnerProcess } from './provider-child'
 import { PassThrough, type Readable } from 'node:stream'
-import type { ChildProcess } from 'node:child_process'
 import { PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS } from './provider-process-supervisor'
 
 export function pipeDirectProviderOutput(
-  raw: ChildProcess,
+  raw: ProviderOwnerProcess,
   stdout: PassThrough,
   stderr: PassThrough
 ): () => void {

@@ -23,6 +23,7 @@ import {
   type PinchGesture
 } from './screencast/mobile-browser-frame-state'
 import { displayBrowserUrl, normalizeBrowserUrl } from './pane-view/browser-url'
+import { useMobileBrowserCertificateProceed } from './certificate/mobile-browser-certificate-proceed'
 import type { BrowserDialogState } from './screencast/mobile-browser-stream-events'
 import {
   browserGoBack,
@@ -42,6 +43,7 @@ type MobileBrowserPaneProps = {
   worktreeId: string
   tab: MobileBrowserTab
   screencastSupported: boolean | null
+  certificateTrustSupported: boolean
   keyboardLift: number
   bottomInset: number
   onToast: (message: string, durationMs?: number) => void
@@ -63,6 +65,7 @@ export function MobileBrowserPane({
   worktreeId,
   tab,
   screencastSupported,
+  certificateTrustSupported,
   keyboardLift,
   bottomInset,
   onToast,
@@ -212,23 +215,30 @@ export function MobileBrowserPane({
       zoomRef
     })
 
+  const navigateTo = useCallback(
+    async (url: string) => {
+      const settled = await sendBrowserRequest(
+        async (rpc, page, options) =>
+          browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
+        { showBusy: true, timeoutMs: 30_000 }
+      )
+      if (settled?.url !== undefined) {
+        setAddressValue(displayBrowserUrl(settled.url))
+        lastZoomResetUrlRef.current = settled.url
+        resetBrowserZoomState()
+      }
+    },
+    [resetBrowserZoomState, sendBrowserRequest]
+  )
+
   const navigateToAddress = useCallback(async () => {
     const url = normalizeBrowserUrl(addressValue)
     if (!url) {
       setError(translate('browser.pane.invalidUrl', 'Enter a valid URL.'))
       return
     }
-    const settled = await sendBrowserRequest(
-      async (rpc, page, options) =>
-        browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
-      { showBusy: true, timeoutMs: 30_000 }
-    )
-    if (settled?.url !== undefined) {
-      setAddressValue(displayBrowserUrl(settled.url))
-      lastZoomResetUrlRef.current = settled.url
-      resetBrowserZoomState()
-    }
-  }, [addressValue, resetBrowserZoomState, sendBrowserRequest])
+    await navigateTo(url)
+  }, [addressValue, navigateTo])
 
   const { panResponder, sendDialogCommand, sendKeyboardText, sendKeypress, togglePointerModifier } =
     useMobileBrowserInteractions({
@@ -288,6 +298,20 @@ export function MobileBrowserPane({
     )
   }, [controlsDisabled, sendBrowserRequest])
 
+  // As on desktop's streamed pane: reloading the host's error page only refreshes it, so re-attempt the URL that failed.
+  const retryFailedLoad = useCallback(() => {
+    if (controlsDisabled) {
+      return
+    }
+    void navigateTo(tab.loadError?.validatedUrl || tab.url)
+  }, [controlsDisabled, navigateTo, tab.loadError?.validatedUrl, tab.url])
+
+  const proceedCertificate = useMobileBrowserCertificateProceed(
+    client,
+    worktreeId,
+    tab.browserPageId
+  )
+
   const selectBrowserViewMode = useCallback(
     (mode: MobileBrowserViewMode) => {
       if (browserViewMode === mode) {
@@ -308,6 +332,7 @@ export function MobileBrowserPane({
       bottomInset={bottomInset}
       browserViewMode={browserViewMode}
       busy={busy}
+      certificateTrustSupported={certificateTrustSupported}
       controlsDisabled={controlsDisabled}
       dialog={dialog}
       error={error}
@@ -322,7 +347,9 @@ export function MobileBrowserPane({
       drawing={drawing}
       panResponder={panResponder}
       pointerModifiers={pointerModifiers}
+      proceedCertificate={proceedCertificate}
       reloadPage={reloadPage}
+      retryFailedLoad={retryFailedLoad}
       renderedFrameSource={renderedFrameSource}
       selectBrowserViewMode={selectBrowserViewMode}
       sendDialogCommand={sendDialogCommand}

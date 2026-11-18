@@ -33,6 +33,8 @@ import {
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
+  /** Replaces the live activity status, for rows that fold it (bots). */
+  status?: WorktreeStatus
   showStatus: boolean
   showUnreadAction: boolean
   isUnread: boolean
@@ -68,6 +70,12 @@ const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
 // Blue, not amber: the lane already spends yellow and orange on working, pending checks and needs-you.
 const newCardUnreadAlertClassName =
   'pointer-events-none absolute right-0 bottom-0 size-[6px] rounded-full bg-unread ring-2 ring-worktree-sidebar'
+
+export function getUnreadToggleTooltip(isUnread: boolean): string {
+  return isUnread
+    ? translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
+    : translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
+}
 
 export function overlayNewCardUnreadStatus(
   status: React.JSX.Element,
@@ -123,6 +131,7 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay, t: Translate = tran
 
 export function WorktreeCardStatusSlot({
   worktreeId,
+  status: statusOverride,
   showStatus,
   showUnreadAction,
   isUnread,
@@ -141,7 +150,8 @@ export function WorktreeCardStatusSlot({
   const t = useTranslate()
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
-  const status = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
+  const liveStatus = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
+  const status = statusOverride ?? liveStatus
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
   const { isSleeping, vmRuntime, vmWaking } = useAppStore(
     useShallow((state) => ({

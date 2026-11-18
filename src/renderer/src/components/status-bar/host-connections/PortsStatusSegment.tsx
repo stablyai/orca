@@ -3,7 +3,7 @@ import { Plug, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
-import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-ports/workspace-port-scan-refresh'
+import { useQuietPortScan } from '@/lib/workspace-ports/use-quiet-port-scan'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import {
   getUnavailableWorkspacePortHosts,
@@ -29,12 +29,12 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const scan = useAppStore((s) => s.workspacePortScan?.result ?? null)
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const scansByKey = useAppStore((s) => s.workspacePortScansByKey)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [open, setOpen] = useState(false)
   const [externalOpen, setExternalOpen] = useState(false)
+  const { pending: openScanPending, scan: scanOnOpen } = useQuietPortScan()
   const runtimeTarget = useWorktreeRuntimeTarget(activeWorktreeId)
 
   const workspaceGroups = useMemo(() => getWorkspacePortGroups(scan), [scan])
@@ -84,13 +84,9 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
         return
       }
       // Refresh on open to close the quiet 30-second poll window without flashing icons.
-      void refreshWorkspacePortScanForTarget({
-        runtimeTarget,
-        replaceWorkspacePortScans,
-        getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey
-      })
+      scanOnOpen(runtimeTarget)
     },
-    [recordFeatureInteraction, runtimeTarget, replaceWorkspacePortScans]
+    [recordFeatureInteraction, runtimeTarget, scanOnOpen]
   )
 
   return (
@@ -194,7 +190,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
                 ))
               ) : (
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                  {refreshing
+                  {refreshing || openScanPending
                     ? t(
                         'auto.components.status.bar.PortsStatusSegment.c174bbbfed',
                         'Scanning for workspace ports...'
