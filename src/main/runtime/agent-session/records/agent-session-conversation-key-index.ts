@@ -1,7 +1,8 @@
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   agentSessionExecutionLocationsEqual,
-  agentSessionScopeKey
+  agentSessionScopeKey,
+  type AgentSessionExecutionLocation
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getAgentSessionConversation,
@@ -21,12 +22,10 @@ export type AgentSessionConversationKeys = (
   inputs: AgentSessionConversationKeyInputs
 ) => readonly string[]
 
-export const nativeIdKeys: AgentSessionConversationKeys = (view) =>
+const nativeIdKeys: AgentSessionConversationKeys = (view) =>
   view.providerHandleChain.map(({ handle }) => handle.nativeId)
 
-export const scopeKeys: AgentSessionConversationKeys = (view) => [
-  agentSessionScopeKey(view.location)
-]
+const scopeKeys: AgentSessionConversationKeys = (view) => [agentSessionScopeKey(view.location)]
 
 type MovedChat = {
   before: AgentSessionConversationView | null
@@ -69,6 +68,16 @@ export class AgentSessionConversationKeyIndexes {
     return this.get(state, keys)
       .sessionIds(key)
       .flatMap((sessionId) => getAgentSessionConversation(state, sessionId) ?? [])
+  }
+
+  /** The chats of exactly this workspace's scope (host, distro, workspace id), in listing order. */
+  inScope(state: AgentSessionStoreState, location: AgentSessionExecutionLocation) {
+    return this.conversations(state, scopeKeys, agentSessionScopeKey(location))
+  }
+
+  /** The chat whose handle chain names `nativeId`; with several, the first in listing order. */
+  providerAliasOwner(state: AgentSessionStoreState, nativeId: string): string | null {
+    return this.get(state, nativeIdKeys).first(nativeId)
   }
 
   applyCommitted(

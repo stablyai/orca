@@ -79,24 +79,39 @@ function dotStatus(dot: NonNullable<AgentMessageSenderView['dot']>): WorktreeSta
   }
 }
 
-/** The sidebar's status for a Crew row: live sender state first, then the Crew snapshot. */
-function crewRowLook(row: OrchestrationCrewRow, view: AgentMessageSenderView): CrewRowLook {
-  const agentType = view.agentType ?? row.agentKind
-  const { partyKey } = row
-  if (row.pendingQuestion) {
-    return { partyKey, status: 'permission', agentType }
+export type CrewPartyState = {
+  pendingQuestion: boolean
+  dot: AgentMessageSenderView['dot']
+  /** The party's recorded agent state. */
+  status: string
+  taskFailed: boolean
+}
+
+/** The sidebar's status for a party: an open question, then live sender state, then its record. */
+export function crewPartyStatus(party: CrewPartyState): WorktreeStatus {
+  if (party.pendingQuestion) {
+    return 'permission'
   }
-  if (view.dot) {
-    return { partyKey, status: dotStatus(view.dot), agentType }
+  if (party.dot) {
+    return dotStatus(party.dot)
   }
-  const status = isAgentStatusState(row.status)
-    ? mapAgentStatusStateToVisualStatus(row.status)
+  const status = isAgentStatusState(party.status)
+    ? mapAgentStatusStateToVisualStatus(party.status)
     : 'inactive'
   // A settled assignment whose task failed is a failure, not a quiet finish.
+  return status === 'done' && party.taskFailed ? 'failed' : status
+}
+
+function crewRowLook(row: OrchestrationCrewRow, view: AgentMessageSenderView): CrewRowLook {
   return {
-    partyKey,
-    status: status === 'done' && row.task?.state === 'failed' ? 'failed' : status,
-    agentType
+    partyKey: row.partyKey,
+    status: crewPartyStatus({
+      pendingQuestion: Boolean(row.pendingQuestion),
+      dot: view.dot,
+      status: row.status,
+      taskFailed: row.task?.state === 'failed'
+    }),
+    agentType: view.agentType ?? row.agentKind
   }
 }
 
