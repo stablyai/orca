@@ -74,6 +74,7 @@ describe('RowCacheWalCheckpoints', () => {
     writeFileSync(path, 'not a database')
 
     const second = new KeyedJsonRowCache(path, { schemaVersion: 1, walCheckpoints })
+    expect(second.load(() => null)).toMatchObject({ kind: 'unavailable' })
     expect(() => second.write([{ key: 'b', json: '"2"' }])).toThrow(/SQLITE_BUSY/)
     expect(readFileSync(path, 'utf8')).toBe('not a database')
 

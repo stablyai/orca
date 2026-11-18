@@ -260,6 +260,7 @@ export class KeyedJsonRowCache {
       db?.close()
       db = null
       try {
+        this.walCheckpoints.assertRemovable(this.path)
         removeVersionedCacheDatabase(this.path, 'fail-fast')
       } catch (removeError) {
         return { kind: 'unavailable' as const, error: removeError }
@@ -317,10 +318,9 @@ export class KeyedJsonRowCache {
     this.db = db
     const autoCheckpoint = Number(db.pragma('wal_autocheckpoint', { simple: true }))
     this.walRegistration = this.walCheckpoints.attach(this.path, () => {
+      // Only a live registration is restored, and closeDatabase detaches before it drops `db`.
       try {
-        if (this.db === db) {
-          db.pragma(`wal_autocheckpoint = ${autoCheckpoint}`)
-        }
+        db.pragma(`wal_autocheckpoint = ${autoCheckpoint}`)
       } catch {
         // A failing handle is rebuilt or closed by its next operation.
       }
