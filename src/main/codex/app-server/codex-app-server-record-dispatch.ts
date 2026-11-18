@@ -1,6 +1,9 @@
 import type { NdjsonRejectedRecord } from '../../../shared/json-stream/main-process-ndjson-framer'
 import type { CodexAppServerConnectionHandlers } from './codex-app-server-connection-types'
-import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
+import {
+  CodexAppServerFrameSizeError,
+  oversizedLineError
+} from './codex-app-server-frame-size-error'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import {
@@ -57,18 +60,6 @@ export function createCodexAppServerRecordDispatcher(input: {
     for (const waiter of pending.values()) {
       clearTimeout(waiter.timer)
       waiter.reject(error)
-    }
-    pending.clear()
-  }
-
-  const failPendingForOversizedUnknown = (
-    record: NdjsonRejectedRecord & { kind: 'line-too-long' }
-  ): void => {
-    for (const waiter of pending.values()) {
-      clearTimeout(waiter.timer)
-      waiter.reject(
-        new CodexAppServerFrameSizeError(waiter.method, record.observedBytes, record.maxLineBytes)
-      )
     }
     pending.clear()
   }
@@ -155,14 +146,13 @@ export function createCodexAppServerRecordDispatcher(input: {
             rejected.maxLineBytes
           )
         )
+      } else if (timedOutMethods.has(classification.id)) {
+        // A late reply to a request that already timed out is dropped like any late reply.
+        timedOutMethods.delete(classification.id)
       } else {
+        // No request ever had this id, so nothing can take the blame alone.
         input.handlers.onUnhandledFrame?.('frame:oversized-response', payload)
-        failPendingForOversizedUnknown(rejected)
-        input.onProtocolFailure(
-          new Error(
-            `codex app-server oversized response ${classification.id} had no pending request`
-          )
-        )
+        input.onProtocolFailure(oversizedLineError(rejected))
         return
       }
       input.handlers.onUnhandledFrame?.('frame:oversized-response', payload)

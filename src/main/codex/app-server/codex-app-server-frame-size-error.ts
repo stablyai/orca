@@ -12,7 +12,7 @@ function size(bytes: number): string {
 
 /** A Codex line over the size limit: a reply fails its request, anything else ends the session. */
 export class CodexAppServerFrameSizeError extends Error {
-  /** Shown in the chat's failure notice, so the person learns why Codex stopped. */
+  /** Shown behind the chat failure notice's Details, so the reason isn't lost. */
   readonly providerDiagnostic?: ProviderDiagnostic
 
   constructor(
@@ -25,7 +25,7 @@ export class CodexAppServerFrameSizeError extends Error {
       `A Codex ${method ? `${method} ` : ''}${kind} was over the ${size(maxBytes)} limit for one message`
     )
     this.name = 'CodexAppServerFrameSizeError'
-    this.providerDiagnostic = providerDiagnostic(this.message, 'person')
+    this.providerDiagnostic = providerDiagnostic(this.message, 'log')
   }
 }
 
