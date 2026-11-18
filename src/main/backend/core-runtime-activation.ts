@@ -31,6 +31,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-
 import { restoreOrcadTerminalAuthority } from '../orcad/host-runtime/orcad-restored-terminal-authority'
 import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { installOrcadConnectorHost, installOrcadRelayAndAccount } from '../orcad/orcad-orca-account'
 
 export async function activateBackendRuntime(
   host: BackendCoreHost,
@@ -68,7 +69,7 @@ export async function activateBackendRuntime(
   const { agentHookRuntimeDeps } = await import('../agent-hooks/runtime/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/runtime/hook-status-session-tabs-republish')
-  const { startOrcadAgentHookServer, startOrcadManagedAgentHooks } =
+  const { startOrcadAgentHookServer, startOrcadManagedAgentHooks, stopOrcadAgentListeners } =
     await import('../orcad/host-runtime/orcad-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/terminal/identity/agent-status-observed-pane-identity')
@@ -80,7 +81,7 @@ export async function activateBackendRuntime(
   let uninstallObservedStatusIdentity = (): void => {}
   // Cleanups run in reverse: RPC, then recovery and watchers, then the final flush; the daemon
   // disconnect, registered above, runs last.
-  registerCleanup(() => agentHookServer.stop())
+  registerCleanup(() => stopOrcadAgentListeners(agentHookServer))
   registerCleanup(() => uninstallHookStatusRepublish())
   registerCleanup(() => uninstallObservedStatusIdentity())
   registerCleanup(profileShutdown.finalize)
@@ -210,6 +211,7 @@ export async function activateBackendRuntime(
   registerCleanup(wireGitHubIssueLinkTitleFill(profileStore, runtime))
   const { installOrcadEmulatorBridge } = await import('../orcad/host-runtime/orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
+  const relay = await installOrcadRelayAndAccount(runtime, registerCleanup)
 
   // Restore prior desktop-pushed account selection before automations or CLI launches.
   const { restoreOrcadHostAccountLaunchEnv } =
@@ -290,6 +292,8 @@ export async function activateBackendRuntime(
     console.error('[orcad-migration] installing pending shell history failed:', error)
   })
 
+  const connector = await installOrcadConnectorHost(runtime, profileStore, registerCleanup)
+
   const bindHost = resolveOrcadBindHost(options.bind)
   bindOrcadStopTerminalAdmission(runtime.terminalUpdateAdmission)
   const rpc = createOrcadRuntimeRpcServer(runtime, runtimeUserDataPath, options, bindHost)
@@ -300,6 +304,8 @@ export async function activateBackendRuntime(
   await timed('rpc', () => rpc.start())
   worktreeRemovalLifetime.resume(() => runtime.finishInterruptedWorktreeRemovals())
   startOrcadSchedulers(runtime, profileStore, usageClients, registerCleanup)
+  connector.connect()
+  relay.start(rpc)
   startOrcadDesktopPushService(runtime, rpc)
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 

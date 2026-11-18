@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { compareAppVersions } from '../../../src/shared/app-lifecycle/identity/app-version'
 import type { AppUpdateCheckResult, AppUpdateSource } from './app-update-source'
 import { isNewerReleaseVersion } from './app-update-source'

@@ -80,6 +80,8 @@
   --color-chat-diff-removed: var(--chat-diff-removed);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-brand-mark: var(--brand-mark);
+  --color-brand-mark-foreground: var(--brand-mark-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
@@ -118,6 +120,13 @@
   --color-worktree-sidebar-accent: var(--worktree-sidebar-accent);
   --color-worktree-sidebar-accent-foreground: var(--worktree-sidebar-accent-foreground);
   --color-worktree-sidebar-border: var(--worktree-sidebar-border);
+  /* Section dividers must read at a glance as a 1px line, so they mix foreground into
+     --worktree-sidebar-border; derived so light, dark, tinted and plugin themes follow. */
+  --color-worktree-sidebar-divider: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 15%,
+    var(--worktree-sidebar-border)
+  );
   --color-worktree-sidebar-ring: var(--worktree-sidebar-ring);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
@@ -154,6 +163,7 @@
   --color-jira-priority-low: var(--jira-priority-low);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
+  --color-status-warning-foreground: var(--status-warning-foreground);
   --color-callout-note: var(--callout-note);
   --color-callout-important: var(--callout-important);
   --color-workspace-status-done: var(--workspace-status-done);
@@ -182,6 +192,7 @@
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
+  --color-search-match: var(--markdown-search-match);
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
   --shadow-notice: var(--notice-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -246,6 +257,9 @@
   --chat-content-max-width: 46rem;
   --card: #fff;
   --card-foreground: #0a0a0a;
+  /* Why: another product's logo is drawn for a white backdrop in both themes. */
+  --brand-mark: #fff;
+  --brand-mark-foreground: #0a0a0a;
   --popover: #fff;
   --popover-foreground: #0a0a0a;
   /* Glass tints for menus and dialogs; a plugin theme replaces both with its --popover. */
@@ -375,6 +389,8 @@
   --chat-content-max-width: 46rem;
   --card: #171717;
   --card-foreground: #f0f0f0;
+  --brand-mark: #fff;
+  --brand-mark-foreground: #0a0a0a;
   --popover: #171717;
   --popover-foreground: #f0f0f0;
   --floating-surface: rgba(0, 0, 0, 0.72);
@@ -473,6 +489,8 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* Warning text on a plain surface; the bare hue is ~3:1 on light backgrounds. */
+  --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   /* GitHub's own hues for the two callout kinds no status token covers. */
   --callout-note: #0969da;
   --callout-important: #8250df;
@@ -509,6 +527,8 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* Warning text on a plain surface; the bare hue is ~3:1 on light backgrounds. */
+  --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   --callout-note: #4493f8;
   --callout-important: #ab7df8;
   --git-decoration-added: #81b88b;
@@ -972,6 +992,50 @@ body[data-modal-overlay-open]
 .scrollbar-sleek-parent:hover .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb:active,
 .worktree-sidebar-scrollbar:hover::-webkit-scrollbar-thumb:active {
   background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
+}
+
+/* The Bots list's own always-visible 6px bar: macOS overlay bars hid that more bots sit below the fold. */
+.bot-sidebar-scrollbar {
+  scrollbar-gutter: stable;
+  /* Chromium ignores ::-webkit-scrollbar while either standard property is set. */
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+[data-bot-search-field-only] [data-bot-sidebar-list],
+[data-bot-search-field-only] [data-bot-sidebar-search] > .bot-sidebar-scrollbar {
+  overscroll-behavior-y: auto;
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  min-height: 28px;
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 36%, transparent);
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
+}
+
+/* The field owns its separator so scrolling cards and scrollbar gutters cannot cover pieces of it. */
+[data-bot-sidebar-search] > [data-bot-search-scrolled]::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: var(--border);
 }
 
 /* A horizontal rail's 2px thumb in a 4px hit area, clear until hovered, so an overflowing rail reads as scrollable.
@@ -2324,6 +2388,28 @@ html.native-shell .app-layout {
   }
 }
 
+/* Text handed to a chat composer for the user to finish, or a bot's Up next its row's count points to: one bright ring and halo that hold for 1s, then fade into its own shadow.
+   On the box itself, not a pseudo-element, because its paint containment would clip an outer halo.
+   2s matches NATIVE_CHAT_COMPOSER_GLOW_MS. */
+.native-chat-composer-glow {
+  animation: native-chat-composer-glow 2s ease-out;
+}
+
+@keyframes native-chat-composer-glow {
+  0%,
+  50% {
+    box-shadow:
+      0 0 0 1px var(--ring),
+      0 0 16px color-mix(in srgb, var(--chat-foreground) 35%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-chat-composer-glow {
+    animation: none;
+  }
+}
+
 /* Duration matches EDITOR_REVEAL_FLASH_MS; a fade only, so it stays under reduced motion. */
 .editor-reveal-flash {
   position: absolute;
@@ -2670,6 +2756,10 @@ html.native-shell .app-layout {
 
 [data-worktree-sidebar-drag-preview='true'] * {
   cursor: grabbing !important;
+}
+
+[data-worktree-sidebar-drag-preview='true'] > [data-bot-sidebar-entry] {
+  opacity: 1;
 }
 
 [data-worktree-sidebar-drag-count='true'] {
@@ -4084,7 +4174,12 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   letter-spacing: -0.02em;
 }
 
-.workspace-reference-title {
+/* HoverScrollText: the outer span clips; the middle shifts right by the clip width, the inner back by
+   its own width, which is at least the clip width, so the net offset is min(0, clip - text): text that
+   fits never moves. Both transforms, no layout or timers. */
+.hover-scroll-text {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -4094,18 +4189,31 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   pointer-events: none;
 }
 
-.workspace-reference-title > span {
+.hover-scroll-text > span {
+  display: block;
+}
+
+.hover-scroll-text > span > span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .workspace-reference-title[data-overflow='true']:is(:hover, :focus-visible) > span {
+  :is(:is(a, button):is(:hover, :focus-visible) .hover-scroll-text, .hover-scroll-text:hover)
+    > span {
+    transform: translateX(100%);
+    transition: transform var(--hover-scroll-duration) linear;
+  }
+
+  :is(:is(a, button):is(:hover, :focus-visible) .hover-scroll-text, .hover-scroll-text:hover)
+    > span
+    > span {
     width: max-content;
+    min-width: 100%;
     overflow: visible;
-    transform: translateX(var(--reference-title-offset));
-    transition: transform var(--reference-title-duration) linear 400ms;
+    transform: translateX(-100%);
+    transition: transform var(--hover-scroll-duration) linear;
   }
 }
 

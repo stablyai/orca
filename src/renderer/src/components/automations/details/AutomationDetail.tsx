@@ -1,3 +1,6 @@
+import { botAgentLabel } from '@/components/bots/bot-presentation'
+import { botAutomationWhen } from '../../bots/bot-automation-when'
+import { AutomationWontFireNote } from './AutomationWontFireNote'
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,7 +14,7 @@ import {
   AUTOMATION_EDITOR_SECTION_LABEL_CLASS,
   AutomationRunErrorNotice
 } from '../automation-page-parts'
-import { indexLatestAutomationRuns } from '../listing/automation-list-last-run'
+import { indexLatestAutomationRuns } from '../../../../../shared/automation-last-run'
 import type { AutomationTargetAvailability } from '../hosts/automation-target-availability-types'
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import { getAutomationHostDetailDisplay } from '../hosts/automation-host-detail-display'
@@ -143,8 +146,10 @@ export function AutomationDetail({
       </div>
     )
   }
-  const agentLabel =
-    getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
+  const agentLabel = automation.bot
+    ? botAgentLabel(automation.agentId)
+    : (getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ??
+      automation.agentId)
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
       ? (automation.baseBranch ??
@@ -171,7 +176,7 @@ export function AutomationDetail({
       ? t('auto.components.automations.AutomationDetail.needsMigration', 'Needs migration')
       : t('auto.components.automations.AutomationDetail.active', 'Active')
   const metaParts = [
-    { key: 'schedule', value: scheduleLabel },
+    { key: 'schedule', value: automation.bot ? botAutomationWhen(automation) : scheduleLabel },
     { key: 'project', value: projectName },
     { key: 'host', value: hostDisplay.label }
   ].filter((part) => Boolean(part.value))
@@ -180,7 +185,7 @@ export function AutomationDetail({
     {
       key: 'schedule',
       label: t('auto.components.automations.AutomationDetail.repeats', 'Repeats'),
-      value: scheduleLabel
+      value: automation.bot ? botAutomationWhen(automation) : scheduleLabel
     },
     {
       key: 'grace',
@@ -316,6 +321,7 @@ export function AutomationDetail({
         </p>
       </header>
 
+      {automation.bot ? <AutomationWontFireNote automation={automation} /> : null}
       {needsMigration ? (
         <DetailNotice>
           <span className="min-w-0">

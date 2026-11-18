@@ -23,6 +23,11 @@ import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from '../repo/toolchain/LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from '../maintenance/terminal-daemon/SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/StalledTerminalDaemonBanner'
+import { SidebarBotsSection } from '@/components/bots/SidebarBotsSection'
+import { SidebarBotsSplit, SidebarProjectsListSlot } from './SidebarBotsSplit'
+import { SidebarContentViewport } from './SidebarContentViewport'
+import { PROJECTS_SECTION_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
+import { useBotsEnabled } from '@/lib/bot-catalog'
 import { StartupWorktreeRefreshStatus } from './worktree-list/listing/StartupWorktreeRefreshStatus'
 import { WorktreeCardsIntroNotice } from './workspace-card/template/WorktreeCardsIntroNotice'
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
@@ -75,6 +80,7 @@ function Sidebar({
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
+  const botsEnabled = useBotsEnabled()
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
@@ -169,6 +175,11 @@ function Sidebar({
 
   useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
   // A collapsed sidebar takes no drops.
+  const botsShown = sidebarBody !== 'agents' && botsEnabled
+  // Projects folds only under Bots, so turning bots off always brings the list back.
+  const projectsCollapsed = useAppStore(
+    (s) => botsShown && s.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)
+  )
   const sidebarRef = React.useCallback(
     (node: HTMLDivElement | null) => {
       containerRef.current = node
@@ -189,55 +200,71 @@ function Sidebar({
         >
           {sidebarOpen && (
             <>
-              <SidebarNav />
-              <SidebarHeader
-                activityBadgeTarget={setAgentBadgeTarget}
-                onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
-                activityOptionsTarget={setAgentOptionsTarget}
-                projectsCollapseTarget={setProjectsCollapseTarget}
-              />
-              <SeveredTerminalDaemonBanner />
-              <StalledTerminalDaemonBanner />
-              <React.Suspense
-                fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}
-              >
-                <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
-                  <SidebarAgentsList
-                    active={sidebarBody === 'agents'}
-                    readFilter={agentReadFilter}
-                    setReadFilter={setAgentReadFilter}
-                    groupBy={agentGroupBy}
-                    setGroupBy={setAgentGroupBy}
-                    query={agentQuery}
-                    setQuery={setAgentQuery}
-                    optionsTarget={agentOptionsTarget}
-                    badgeTarget={agentBadgeTarget}
-                    scrollTopRef={agentsScrollTopRef}
-                  />
-                </ActivityThreadCollapseContext.Provider>
-              </React.Suspense>
-              {sidebarBody !== 'agents' && (
-                <>
-                  <LocalGitToolchainScanBanner />
-                  <StartupWorktreeRefreshStatus />
-                  <WorktreeCardsUpdateNotice />
-                  <WorktreeCardsIntroNotice />
-                  <WorktreeList
-                    scrollOffsetRef={worktreeScrollOffsetRef}
-                    scrollAnchorRef={worktreeScrollAnchorRef}
-                    workspaceBoardOpen={workspaceBoardOpen}
-                    onWorktreeCardClick={closeWorkspaceBoard}
-                    onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-                    onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-                    onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
-                    projectsCollapseTarget={projectsCollapseTarget}
-                  />
-                  <WslMovedProjectsSection />
-                  <HiddenProjectsSection />
-                </>
-              )}
+              <SidebarContentViewport>
+                <SidebarNav />
+                {/* This computer's bots and each paired server's; a web window lists its server's. */}
+                {!botsShown ? null : (
+                  <SidebarBotsSplit projectsCollapsed={projectsCollapsed}>
+                    <SidebarBotsSection onOpenBot={closeWorkspaceBoard} />
+                  </SidebarBotsSplit>
+                )}
+                <SidebarHeader
+                  activityBadgeTarget={setAgentBadgeTarget}
+                  onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
+                  activityOptionsTarget={setAgentOptionsTarget}
+                  collapsible={botsShown}
+                  projectsCollapseTarget={setProjectsCollapseTarget}
+                />
+                <SeveredTerminalDaemonBanner />
+                <StalledTerminalDaemonBanner />
+                <React.Suspense
+                  fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}
+                >
+                  <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
+                    <SidebarAgentsList
+                      active={sidebarBody === 'agents'}
+                      readFilter={agentReadFilter}
+                      setReadFilter={setAgentReadFilter}
+                      groupBy={agentGroupBy}
+                      setGroupBy={setAgentGroupBy}
+                      query={agentQuery}
+                      setQuery={setAgentQuery}
+                      optionsTarget={agentOptionsTarget}
+                      badgeTarget={agentBadgeTarget}
+                      scrollTopRef={agentsScrollTopRef}
+                    />
+                  </ActivityThreadCollapseContext.Provider>
+                </React.Suspense>
+                {sidebarBody !== 'agents' && (
+                  <>
+                    {projectsCollapsed ? null : (
+                      <>
+                        <LocalGitToolchainScanBanner />
+                        <StartupWorktreeRefreshStatus />
+                        <WorktreeCardsUpdateNotice />
+                        <WorktreeCardsIntroNotice />
+                      </>
+                    )}
+                    <SidebarProjectsListSlot botsShown={botsShown} collapsed={projectsCollapsed}>
+                      <WorktreeList
+                        scrollOffsetRef={worktreeScrollOffsetRef}
+                        scrollAnchorRef={worktreeScrollAnchorRef}
+                        workspaceBoardOpen={workspaceBoardOpen}
+                        onWorktreeCardClick={closeWorkspaceBoard}
+                        onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                        onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                        onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+                        projectsCollapseTarget={projectsCollapseTarget}
+                      />
+                    </SidebarProjectsListSlot>
+                    {projectsCollapsed ? null : <WslMovedProjectsSection />}
+                    {projectsCollapsed ? null : <HiddenProjectsSection />}
+                  </>
+                )}
+              </SidebarContentViewport>
 
-              <div className="relative shrink-0">
+              {/* mt-auto keeps the toolbar at the bottom when both sections are folded and nothing grows. */}
+              <div className="relative mt-auto shrink-0">
                 <SetupScriptPromptCard />
 
                 <SidebarToolbar
