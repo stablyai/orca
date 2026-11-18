@@ -42,12 +42,16 @@ function submittedEnters(steps: Step[]): number {
     } else if (step.type === 'compositionend') {
       result.current.setComposing(false)
     } else {
-      const event = {
-        key: step.key,
-        keyCode: step.keyCode,
-        code: 'Enter',
-        nativeEvent: { isComposing: step.isComposing } as KeyboardEvent
-      } as Pick<ReactKeyboardEvent, 'key' | 'keyCode' | 'nativeEvent'> & { code: string }
+      const event: Pick<ReactKeyboardEvent, 'key' | 'keyCode' | 'nativeEvent'> & { code: string } =
+        {
+          key: step.key,
+          keyCode: step.keyCode,
+          code: 'Enter',
+          nativeEvent: new KeyboardEvent('keydown', {
+            key: step.key,
+            isComposing: step.isComposing
+          })
+        }
       if (!result.current.ownsKeyDown(event) && step.key === 'Enter') {
         submitted += 1
       }
