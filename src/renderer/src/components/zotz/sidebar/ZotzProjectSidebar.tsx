@@ -67,13 +67,13 @@ function ConversationRow({
       aria-current={active ? 'page' : undefined}
       onClick={() => activateAndRevealWorkspace(row.id)}
       className={cn(
-        'flex w-full min-w-0 items-start gap-2 rounded-md py-1.5 pr-8 pl-8 text-left transition-colors',
+        'flex w-full min-w-0 items-start gap-2 rounded-md py-1.5 pr-8 pl-6 text-left transition-colors',
         active
           ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
           : 'text-worktree-sidebar-foreground/80 hover:bg-worktree-sidebar-foreground/8'
       )}
     >
-      <span className="mt-1 flex size-3 shrink-0 items-center justify-center">
+      <span className="mt-1 flex h-3 w-5 shrink-0 items-center justify-center">
         {status && (status.state === 'working' || status.state === 'monitoring') ? (
           <ZotzWorkingRipple />
         ) : status ? (

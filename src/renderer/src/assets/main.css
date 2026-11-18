@@ -105,6 +105,7 @@
   --color-question-option-border: var(--question-option-border);
   --color-chat-focus-ring: var(--chat-focus-ring);
   --color-unread: var(--unread);
+  --color-zotz-working-wave: var(--zotz-working-wave);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -274,6 +275,8 @@
   --question-option-border-mix: 16%;
   /* A finished agent result the user hasn't seen; blue so it never reads as a state color. */
   --unread: var(--color-blue-500);
+  /* Zotz: the working-agent wave in the simple sidebar; sky, so it never reads as unread blue. */
+  --zotz-working-wave: var(--color-sky-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -394,6 +397,7 @@
   --question-card-border-mix: 16%;
   --question-option-border-mix: 12%;
   --unread: var(--color-blue-400);
+  --zotz-working-wave: var(--color-sky-400);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
