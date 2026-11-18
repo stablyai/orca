@@ -45,7 +45,7 @@ export function nativeChatImageItemBody(
     const status = readString(item, 'status')
     if (item.failure || status === 'failed') {
       text = 'Image generation failed'
-    } else if (status !== 'completed') {
+    } else if (status !== 'completed' && (status || !imagePath(item, 'savedPath'))) {
       // Codex passes the Responses API status through, not the app-server's camelCase enum.
       text =
         status === 'in_progress' || status === 'inProgress' || status === 'generating'

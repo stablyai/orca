@@ -19,14 +19,16 @@ export class TraexWindowsSandbox {
     private readonly logger?: StructuredAgentSessionLogger
   ) {}
 
-  async prepare(cwd: string, permissionMode: AgentChatPermissionChoice): Promise<void> {
+  async prepare(cwd: string, permissionMode: AgentChatPermissionChoice): Promise<boolean> {
     if (
       process.platform !== 'win32' ||
       permissionMode === 'own' ||
-      permissionMode === 'full-access' ||
-      this.connection.closed
+      permissionMode === 'full-access'
     ) {
-      return
+      return true
+    }
+    if (this.connection.closed) {
+      return false
     }
     let requestId: number | null = null
     const ready = Promise.withResolvers<boolean>()
@@ -48,7 +50,14 @@ export class TraexWindowsSandbox {
       if (started !== true && requestId !== null) {
         this.settle(requestId, false)
       }
-      await ready.promise
+      const prepared = await ready.promise
+      if (!prepared) {
+        this.logger?.warn('TRAE CLI Windows sandbox was not established', {
+          scope: 'traex-sandbox',
+          sessionId: this.sessionId
+        })
+      }
+      return prepared
     } catch (error) {
       if (requestId !== null) {
         this.settle(requestId, false)
@@ -58,6 +67,7 @@ export class TraexWindowsSandbox {
         sessionId: this.sessionId,
         error
       })
+      return false
     }
   }
 

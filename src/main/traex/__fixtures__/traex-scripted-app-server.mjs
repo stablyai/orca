@@ -1,4 +1,5 @@
 import { createInterface } from 'node:readline'
+import { models } from './traex-scripted-model-catalog.mjs'
 
 const threadId = 'thread-trae-contract'
 let turnId
@@ -6,42 +7,8 @@ let serial = 0
 let backgroundCommand = false
 let delayedStartReply = null
 let modelBackendVariant = 'max'
-const models = [
-  {
-    id: 'contract-id',
-    model: 'contract-model',
-    displayName: 'Contract model',
-    isDefault: true,
-    hidden: false,
-    defaultReasoningEffort: 'medium',
-    supportedReasoningEfforts: [
-      { reasoningEffort: 'medium', description: 'Medium' },
-      { reasoningEffort: 'high', description: 'High' }
-    ],
-    businessMetadata: { variants: { max_key: 'contract-large' } }
-  },
-  {
-    id: 'small-id',
-    model: 'small-model',
-    displayName: 'Standard-only model',
-    isDefault: false,
-    hidden: false,
-    defaultReasoningEffort: 'medium',
-    supportedReasoningEfforts: [],
-    businessMetadata: { variants: { max_key: null } }
-  },
-  {
-    id: 'custom-id',
-    model: 'custom-model',
-    displayName: 'Custom model',
-    modelProviderId: 'custom-provider',
-    isDefault: false,
-    hidden: false,
-    defaultReasoningEffort: 'medium',
-    supportedReasoningEfforts: [],
-    businessMetadata: { variants: { max_key: null } }
-  }
-]
+let modeReplyFailed = false
+let replaceTurnOnGoalRead = false
 const send = (frame) => process.stdout.write(`${JSON.stringify(frame)}\n`)
 const reply = (id, result) => send({ id, result })
 const notify = (method, params) => send({ method, params: { threadId, ...params } })
@@ -107,6 +74,12 @@ createInterface({ input: process.stdin })
     } else if (method === 'skills/list') {
       reply(id, { data: [{ cwd: params.cwds[0], skills: [] }] })
     } else if (method === 'thread/goal/get') {
+      if (replaceTurnOnGoalRead) {
+        replaceTurnOnGoalRead = false
+        complete('Previous turn finished')
+        turnId = `turn-${++serial}`
+        notify('turn/started', { turn: { id: turnId, status: 'inProgress', items: [] } })
+      }
       reply(id, { goal: null })
     } else if (method === 'thread/contextUsage') {
       reply(id, { snapshot: null, contextWindowUsage: null })
@@ -187,6 +160,18 @@ createInterface({ input: process.stdin })
         notify('thread/settings/updated', { threadSettings: { modelBackendVariant } })
       } else if (text === 'model-switch') {
         complete('Model switch accepted')
+      } else if (text === 'effort-switch') {
+        complete(JSON.stringify({ effort: params.effort ?? null }))
+      } else if (text === 'cancel-next-turn-race') {
+        replaceTurnOnGoalRead = true
+      } else if (text === 'mode-retry') {
+        modeReplyFailed = false
+        notify('mode/changeRequested', {
+          turnId,
+          requestId: 'mode-retry',
+          targetMode: 'plan',
+          reason: 'Plan the task'
+        })
       } else if (text === 'permissions') {
         send({
           id: 'permissions',
@@ -456,6 +441,22 @@ createInterface({ input: process.stdin })
     } else if (id === 'unknown') {
       complete(request.error?.code === -32000 ? 'unrecognized request rejected' : 'unsafe reply')
     } else if (method === 'mode/change/respond') {
+      if (params.requestId === 'mode-retry') {
+        if (!modeReplyFailed) {
+          modeReplyFailed = true
+          send({ id, error: { code: -32602, message: 'Mode response was rejected' } })
+          return
+        }
+        reply(id, {})
+        notify('mode/changeResolved', {
+          turnId,
+          requestId: params.requestId,
+          targetMode: 'plan',
+          decision: params.decision
+        })
+        complete('Mode decision accepted')
+        return
+      }
       reply(id, {})
       notify('mode/changeResolved', {
         turnId,

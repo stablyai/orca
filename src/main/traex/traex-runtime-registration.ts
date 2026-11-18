@@ -93,6 +93,17 @@ export const TRAEX_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = Ob
                 }
                 lastTurnId = decodeURIComponent(part)
               }
+              const turns = await readTraexTurns(connection, input.providerSessionId, () =>
+                input.signal?.throwIfAborted()
+              )
+              const cutoff = lastTurnId ? turns.findIndex((turn) => turn.id === lastTurnId) : -1
+              if (lastTurnId && cutoff === -1) {
+                throw new Error('TRAE CLI fork checkpoint was not found in its history')
+              }
+              const coverage = {
+                unit: 'traex-turn' as const,
+                ids: (lastTurnId ? turns.slice(0, cutoff + 1) : turns).map((turn) => turn.id)
+              }
               const response = traexThreadResponseSchema.parse(
                 await connection.request('thread/fork', {
                   threadId: input.providerSessionId,
@@ -102,13 +113,10 @@ export const TRAEX_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = Ob
                   ...(input.title ? { name: input.title } : {})
                 })
               )
-              const turns = await readTraexTurns(connection, response.thread.id, () =>
-                input.signal?.throwIfAborted()
-              )
               return {
                 sessionId: response.thread.id,
                 ...(response.thread.path ? { filePath: response.thread.path } : {}),
-                coverage: { unit: 'traex-turn' as const, ids: turns.map((turn) => turn.id) }
+                coverage
               }
             },
             { label: 'trae', signal: input.signal, timeoutMs: 30_000 }

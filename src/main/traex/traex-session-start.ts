@@ -30,7 +30,13 @@ export async function openTraexSession(
   check()
   await run(session.connection.initialize())
   check()
-  await run(session.extras.prepareWindowsSandbox(session.launch.cwd, session.launch.permissionMode))
+  if (
+    !(await run(
+      session.extras.prepareWindowsSandbox(session.launch.cwd, session.launch.permissionMode)
+    ))
+  ) {
+    throw new AgentSessionAcquisitionRefusal('TRAE CLI Windows sandbox setup failed')
+  }
   check()
   const catalog = await run(readTraexModelCatalog(session.connection).catch(() => null))
   check()

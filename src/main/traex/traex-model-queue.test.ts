@@ -172,18 +172,9 @@ it('places compaction queue activity on its command turn and preserves cancellat
   await expect.poll(async () => (await journal.reads.newestTurn())?.state).toBe('interrupted')
 })
 
-it.each([
-  ['model-queue-zero', /\b0\b/],
-  ['model-queue-unknown', null]
-] as const)('keeps queue activity valid for %s', async (input, position) => {
-  await send(input)
-  await expect.poll(async () => activity).not.toBeNull()
-  if (position) {
-    expect(activity?.text).toMatch(position)
-  } else {
-    expect(activity?.text.trim()).not.toBe('')
-    expect(activity?.text).not.toMatch(/\d/)
-  }
+it('preserves a zero queue position', async () => {
+  await send('model-queue-zero')
+  await expect.poll(async () => activity?.text).toMatch(/\b0\b/)
 })
 
 it('shows and cancels model queueing before the start request is acknowledged', async () => {

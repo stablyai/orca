@@ -14,7 +14,7 @@ import type {
 } from '../operations/structured-agent-session-turns'
 import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import {
-  type savedAgentSessionCatalogModels,
+  savedAgentSessionCatalogModels,
   structuredAgentSessionPickReply
 } from './structured-agent-session-pick-reply'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
@@ -86,7 +86,11 @@ export async function recordStructuredAgentSessionOptionIntent(
     // Preserve the wire’s permission mode within options.
     options = { ...record.options, [input.key]: input.value }
   } else {
-    const picked = { sessionId, fence, ...input, models: undefined, now: ctx.now() }
+    const models =
+      record.provider === 'trae' && input.key === 'model'
+        ? await savedAgentSessionCatalogModels(deps, record.provider, sessionId)
+        : undefined
+    const picked = { sessionId, fence, ...input, models, now: ctx.now() }
     options =
       (await deps.store.updateRecord(picked.sessionId, { kind: 'pick-option', args: picked }))
         .options ?? {}

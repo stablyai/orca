@@ -108,4 +108,13 @@ export async function selectTraexSessionOption(
   signal?.throwIfAborted()
   // Model/effort are per-turn inputs; picking while a turn runs must not mutate that turn.
   session.options[key] = value
+  if (
+    key === 'model' &&
+    session.options.effort !== undefined &&
+    !model.supportedReasoningEfforts.some(
+      (effort) => effort.reasoningEffort === session.options.effort
+    )
+  ) {
+    delete session.options.effort
+  }
 }

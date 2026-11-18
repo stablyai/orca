@@ -37,6 +37,66 @@ export const TRAEX_APPROVAL_LABELS: Readonly<Record<string, string>> = {
   cancel: 'Stop'
 }
 
+export function traexPermissionsReply(permissions: unknown, decision: unknown) {
+  const requested = traexRecord(permissions)
+  const accepted =
+    decision === 'accept' || decision === 'acceptStrict' || decision === 'acceptForSession'
+  return {
+    permissions: accepted
+      ? {
+          ...(requested.network != null ? { network: requested.network } : {}),
+          ...(requested.fileSystem != null ? { fileSystem: requested.fileSystem } : {})
+        }
+      : {},
+    scope: decision === 'acceptForSession' ? 'session' : 'turn',
+    ...(decision === 'acceptStrict' ? { strictAutoReview: true } : {})
+  }
+}
+
+export function traexMcpApprovalBody(
+  params: Record<string, unknown>
+): Extract<ProviderTimelineRequestBody, { kind: 'approval' }> | null {
+  const meta = traexRecord(params._meta)
+  const schema = traexRecord(params.requestedSchema)
+  const properties = schema.properties
+  const empty =
+    params.requestedSchema == null ||
+    (schema.type === 'object' &&
+      properties !== null &&
+      typeof properties === 'object' &&
+      !Array.isArray(properties) &&
+      Object.keys(properties).length === 0)
+  if (
+    meta.codex_approval_kind !== 'mcp_tool_call' ||
+    params.mode !== 'form' ||
+    !empty ||
+    typeof params.turnId !== 'string'
+  ) {
+    return null
+  }
+  const persist = meta.persist
+  const session = persist === 'session' || (Array.isArray(persist) && persist.includes('session'))
+  return {
+    kind: 'approval',
+    title: 'Run MCP tool',
+    description: traexText(params.message),
+    detail: boundJournalPromptText(
+      [
+        traexText(params.serverName),
+        meta.tool_params === undefined ? null : JSON.stringify(meta.tool_params)
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+    ),
+    options: [
+      { id: 'accept', label: 'Allow once' },
+      ...(session ? [{ id: 'acceptForSession', label: 'Allow for this session' }] : []),
+      { id: 'cancel', label: 'Cancel' }
+    ],
+    resolution: pendingTraexPromptResolution
+  }
+}
+
 export function traexQuestionBody(
   value: unknown
 ): Extract<ProviderTimelineRequestBody, { kind: 'question' }> {

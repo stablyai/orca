@@ -11,16 +11,14 @@ import {
   AgentSessionPreSpawnError,
   launchPreparationFailure
 } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
-import {
-  agentSessionStartFailure,
-  AgentSessionStartEndings
-} from '../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
+import { AgentSessionStartEndings } from '../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
 import type { TraexAppServerConnection } from './traex-app-server-connection'
 import { TraexSession } from './traex-session'
 import type { TraexSessionAdapterDeps } from './traex-session-contract'
 export type { TraexSessionAdapterDeps } from './traex-session-contract'
 import { dispatchTraexMessage } from './traex-message-dispatch'
+import { traexStartFailure } from './traex-start-failure'
 import { TraexRequestError } from './traex-protocol'
 import { prepareTraexRewind, recoverTraexRewind, rewindTraexSession } from './traex-rewind'
 import { changeTraexThreadGoal } from './traex-thread-goal'
@@ -35,6 +33,7 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly starts = new ProviderAcquisitionStarts<TraexAppServerConnection>()
   private readonly endings = new AgentSessionStartEndings()
   private readonly retiring = new Set<Promise<void>>()
+  private closing = false
   readonly copyConversation: TraexSessionAdapterDeps['copyConversation']
   readonly readConversationHistory: TraexSessionAdapterDeps['readConversationHistory']
   readonly atRestCommands: TraexSessionAdapterDeps['atRestCommands']
@@ -54,6 +53,9 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
 
   acquire: StructuredAgentSessionAdapter['acquire'] = async (input) => {
     const id = input.identity.sessionId
+    if (this.closing) {
+      throw new AgentSessionPreSpawnError('TRAE CLI adapter is closing')
+    }
     if (this.acquiring.has(id)) {
       throw new AgentSessionPreSpawnError('TRAE CLI session already has an acquisition')
     }
@@ -81,8 +83,13 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
         throw launchPreparationFailure(error)
       })
       attempt.signal.throwIfAborted()
+      if (this.closing) {
+        throw new AgentSessionPreSpawnError('TRAE CLI adapter is closing')
+      }
       session = new TraexSession(input, launch, {
         ...this.deps,
+        onUnexpectedExit: (generation, error) =>
+          this.endings.record(id, generation, traexStartFailure(error, true)),
         onSettled: (clientId, identity) => this.deps.onSettled(id, clientId, identity)
       })
       this.sessions.set(id, session)
@@ -113,11 +120,7 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
         this.starts.retainFailed(id, session.connection)
         throw new AgentSessionAcquisitionExitUnprovenError(error)
       }
-      throw agentSessionStartFailure(
-        error,
-        (cause) => (cause instanceof TraexRequestError ? 'final' : undefined),
-        session.connection.exited
-      )
+      throw traexStartFailure(error, session.connection.exited)
     } finally {
       this.starts.end(attempt)
       this.acquiring.delete(id)
@@ -132,11 +135,9 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
     try {
       return await session.open(input.signal)
     } catch (error) {
-      throw agentSessionStartFailure(
-        error,
-        (cause) => (cause instanceof TraexRequestError ? 'final' : undefined),
-        session.connection.exited && !session.requestedClose
-      )
+      const failure = traexStartFailure(error, session.connection.exited && !session.requestedClose)
+      this.endings.record(input.sessionId, session.generation, failure)
+      throw failure
     }
   }
 
@@ -277,6 +278,7 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
     }
   }
   async closeAll(): Promise<void> {
+    this.closing = true
     this.deps.stopNaming?.()
     await Promise.all(
       [...this.sessions.keys()].map((id) =>

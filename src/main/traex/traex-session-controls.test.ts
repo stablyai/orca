@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { openTestAgentSessionDatabase } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
@@ -11,14 +11,19 @@ import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-sess
 import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { dispatchTraexMessage } from './traex-message-dispatch'
 import { TraexSession } from './traex-session'
+import { cancelTraexTurn } from './traex-turn-cancel'
+import { observeTraexModelQueue } from './traex-model-queue'
+import type { AgentSessionTurnActivity } from '../../shared/agent-session/agent-session-wire'
 
 let directory: string
 let journal: AgentSessionJournal
 let session: TraexSession
 let drained: () => Promise<void>
 let createSession: (options?: Record<string, string>, previousThreadId?: string) => TraexSession
+let activity: AgentSessionTurnActivity | null
 
 beforeEach(async () => {
+  activity = null
   directory = await mkdtemp(join(tmpdir(), 'orca-trae-controls-'))
   const identity = {
     sessionId: 'trae-controls',
@@ -36,7 +41,15 @@ beforeEach(async () => {
     sessionId: identity.sessionId,
     logger
   })
-  sink.bind({ journal, fence: 1, publish: () => {} })
+  sink.bind({
+    journal,
+    fence: 1,
+    publish: (next) => {
+      if (next !== undefined) {
+        activity = next
+      }
+    }
+  })
   drained = async () => {
     await sink.drained()
   }
@@ -57,6 +70,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await session.close()
   await session.retire()
   await journal.close()
@@ -155,8 +169,8 @@ it('handles numeric sandbox completions before startup history is released', asy
       Object.defineProperty(process, 'platform', platform)
     }
   }
-  await prepare(directory)
-  await prepare('sandbox-failure')
+  expect(await prepare(directory)).toBe(true)
+  expect(await prepare('sandbox-failure')).toBe(false)
   await session.open(new AbortController().signal)
   expect(session.readOptions().current.reportedPermissionMode).toBe('ask')
 })
@@ -166,6 +180,7 @@ it('sends with standard-only and custom models despite inherited Max configurati
   await session.open(new AbortController().signal)
   for (const model of ['small-id', 'custom-id']) {
     await session.setOption('model', model)
+    const previous = (await journal.reads.newestTurn())?.turnId
     const result = await dispatchTraexMessage(session, {
       sessionId: 'trae-controls',
       fence: 1,
@@ -173,7 +188,155 @@ it('sends with standard-only and custom models despite inherited Max configurati
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'model-switch' }] }
     })
     expect(result.state).toBe('accepted')
-    await expect.poll(async () => (await journal.reads.newestTurn())?.state).toBe('completed')
+    await expect
+      .poll(async () => {
+        const turn = await journal.reads.newestTurn()
+        return turn?.state === 'completed' && turn.turnId !== previous
+      })
+      .toBe(true)
+  }
+})
+
+it('stops startup when required sandbox preparation fails', async () => {
+  session = createSession()
+  vi.spyOn(session.extras.windowsSandbox, 'prepare').mockResolvedValue(false)
+  await expect(session.open(new AbortController().signal)).rejects.toThrow(
+    'TRAE CLI Windows sandbox setup failed'
+  )
+})
+
+it('keeps compatible efforts and drops an effort after switching to a fixed model', async () => {
+  session = createSession({ effort: 'high' })
+  await session.open(new AbortController().signal)
+  const send = async (model: string) => {
+    await session.setOption('model', model)
+    const previous = (await journal.reads.newestTurn())?.turnId
+    await dispatchTraexMessage(session, {
+      sessionId: 'trae-controls',
+      fence: 1,
+      clientMessageId: model,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'effort-switch' }] }
+    })
+    await expect
+      .poll(async () => {
+        const turn = await journal.reads.newestTurn()
+        return turn?.state === 'completed' && turn.turnId !== previous
+      })
+      .toBe(true)
+    const messages = (await readTestJournalItems(journal)).filter(
+      (row) => row.body.kind === 'message' && row.body.role === 'assistant'
+    )
+    const body = messages.at(-1)!.body
+    return body.kind === 'message'
+      ? JSON.parse(
+          body.blocks.flatMap((block) => (block.type === 'text' ? block.text : [])).join('')
+        )
+      : null
+  }
+  expect(await send('contract-id')).toEqual({ effort: 'high' })
+  expect(await send('small-id')).toEqual({ effort: null })
+})
+
+it('keeps the replacement turn running while cancellation waits for goal state', async () => {
+  session = createSession()
+  await session.open(new AbortController().signal)
+  await dispatchTraexMessage(session, {
+    sessionId: 'trae-controls',
+    fence: 1,
+    clientMessageId: 'cancel-target',
+    body: {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'cancel-next-turn-race' }]
+    }
+  })
+  expect(
+    await cancelTraexTurn(session, {
+      sessionId: 'trae-controls',
+      fence: 1,
+      turnId: 'p:thread-trae-contract:turn-1'
+    })
+  ).toMatchObject({ cancelled: false })
+  await drained()
+  expect(await journal.reads.newestTurn()).toMatchObject({
+    turnId: 'p:thread-trae-contract:turn-2',
+    state: 'running'
+  })
+})
+
+it('offers a fresh mode approval after its response is rejected', async () => {
+  session = createSession()
+  await session.open(new AbortController().signal)
+  await dispatchTraexMessage(session, {
+    sessionId: 'trae-controls',
+    fence: 1,
+    clientMessageId: 'mode-retry',
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'mode-retry' }] }
+  })
+  const pending = async () => {
+    await drained()
+    return (await readTestJournalItems(journal)).find(
+      (row) => row.body.kind === 'approval' && row.body.resolution.state === 'pending'
+    )
+  }
+  await expect.poll(async () => (await pending())?.body.kind).toBe('approval')
+  const first = (await pending())!
+  await expect(
+    session.prompts!.answer(first.itemId, { kind: 'option', optionId: 'accept' }, async () => {})
+  ).rejects.toThrow('Mode response was rejected')
+  const retry = await pending()
+  expect(retry?.body.kind).toBe('approval')
+  expect(retry!.itemId).not.toBe(first.itemId)
+  await session.prompts!.answer(
+    retry!.itemId,
+    { kind: 'option', optionId: 'accept' },
+    async () => {}
+  )
+  await expect.poll(async () => (await journal.reads.newestTurn())?.state).toBe('completed')
+  expect(session.readOptions().current.interactionMode).toBe('plan')
+})
+
+it.each([
+  {
+    event: 'ready',
+    clear: (target: TraexSession) =>
+      observeTraexModelQueue(target, {
+        threadId: target.threadId,
+        turnId: 'queued-control-turn',
+        state: 'ready'
+      })
+  },
+  {
+    event: 'reverted',
+    clear: (target: TraexSession) =>
+      target.extras.observe('thread/reverted', { threadId: target.threadId })
+  }
+])('keeps a pending queue read from restoring activity after $event', async ({ clear }) => {
+  session = createSession()
+  await session.open(new AbortController().signal)
+  const waiting = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const read = journal.reads.itemBody.bind(journal.reads)
+  vi.spyOn(journal.reads, 'itemBody').mockImplementationOnce(async (itemId) => {
+    waiting.resolve()
+    await release.promise
+    return read(itemId)
+  })
+  const queued = observeTraexModelQueue(session, {
+    threadId: session.threadId,
+    turnId: 'queued-control-turn',
+    state: 'queued',
+    position: 12
+  })
+  try {
+    await waiting.promise
+    await clear(session)
+    release.resolve()
+    await queued
+    await drained()
+    expect(activity).toBeNull()
+  } finally {
+    release.resolve()
   }
 })
 

@@ -44,15 +44,16 @@ export class TraexSessionExtras {
       return true
     }
     if (method === 'thread/reverted' && params.threadId === this.session.threadId) {
-      clearTraexModelQueue(this.session, this.session.queuedModelTurn)
+      clearTraexModelQueue(this.session, null)
       this.session.activeTurn = null
       this.session.timeline?.flush()
       return true
     }
     if (method === 'thread/name/generated' && params.threadId === this.session.threadId) {
       const name = traexText(params.name)
-      if (name) {
-        this.naming?.resolve(name)
+      const requestId = traexText(params.turnId)
+      if (name && requestId) {
+        this.naming?.resolve(name, requestId)
       }
       return true
     }
@@ -189,7 +190,7 @@ export class TraexSessionExtras {
   prepareWindowsSandbox(
     cwd: string,
     mode: TraexSession['launch']['permissionMode']
-  ): Promise<void> {
+  ): Promise<boolean> {
     return this.windowsSandbox.prepare(cwd, mode)
   }
 
@@ -198,6 +199,7 @@ export class TraexSessionExtras {
   }
 
   dispose(): void {
+    clearTraexModelQueue(this.session, null)
     this.pendingRecap = null
     this.naming?.dispose()
     this.windowsSandbox.dispose()

@@ -8,6 +8,7 @@ export async function cancelTraexTurn(
   input: Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]
 ): ReturnType<StructuredAgentSessionAdapter['cancelTurn']> {
   const journalTurn = session.timeline?.openTurnId
+  const native = session.activeTurn
   if (input.turnId && input.turnId !== journalTurn) {
     return { cancelled: false }
   }
@@ -31,22 +32,22 @@ export async function cancelTraexTurn(
   await pause()
   let cancelled = paused
   let turnMayOpen = false
-  const native = session.activeTurn
-  if (native) {
+  const current = journalTurn === session.timeline?.openTurnId && native === session.activeTurn
+  if (native && current) {
     try {
       await session.connection.request(
         'turn/interrupt',
         { threadId: session.threadId, turnId: native },
         { timeoutMs: 5_000 }
       )
-      session.prompts?.withdraw()
+      session.prompts?.withdraw(undefined, native)
       cancelled = true
       facts.interrupt = 'accepted'
     } catch (error) {
       facts.interrupt = 'unconfirmed'
       facts.errors.push(error)
     }
-  } else if (session.pending.size > 0) {
+  } else if (!native && current && session.pending.size > 0) {
     // The provider turn may still open; closing the session would end unrelated work.
     facts.interrupt = 'unconfirmed'
     turnMayOpen = true

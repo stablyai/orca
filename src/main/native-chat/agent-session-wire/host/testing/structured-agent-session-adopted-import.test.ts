@@ -14,6 +14,9 @@ import {
   type AgentSessionAttachParams
 } from '../../acquisition/structured-agent-session-attach'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
+import { importAdoptedTranscript } from '../../acquisition/structured-agent-session-adopted-import'
+import { agentSessionRecordFixture } from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
@@ -196,4 +199,81 @@ describe('adopting a provider conversation on create', () => {
     expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
     await host.flushAllStreamedEvents()
   })
+})
+
+it('uses the native history reader when retrying an unimported Trae conversation', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-adopt-native-retry-'))
+  const transcriptPath = join(root, 'native-history.jsonl')
+  await writeFile(transcriptPath, '{}\n')
+  const params = attachParams(transcriptPath, {
+    provider: 'trae',
+    agent: 'trae',
+    accountHome: { variable: 'HOME', path: '/home/user' },
+    adopt: {
+      transcriptPath,
+      providerHandle: { transport: 'traex-app-server', agent: 'trae', nativeId: THREAD }
+    }
+  })
+  const journal = await AgentSessionJournal.open({
+    identity: {
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'trae',
+      providerHandle: params.adopt!.providerHandle
+    },
+    database: await openTestAgentSessionDatabase(root)
+  })
+  try {
+    const base = agentSessionRecordFixture()
+    const record = {
+      ...base,
+      sessionId: SESSION,
+      provider: 'trae',
+      location: params.location,
+      accountHome: params.accountHome,
+      lease: { ...base.lease, sessionId: SESSION },
+      providerHandleChain: base.providerHandleChain.map((link) => ({
+        ...link,
+        handle: params.adopt!.providerHandle
+      }))
+    }
+    await importAdoptedTranscript(
+      params,
+      { journal, unconfirmedClientMessageIds: [] },
+      record,
+      null,
+      {
+        adapter: {
+          readConversationHistory: async () => ({
+            sourceEmpty: false,
+            items: [
+              {
+                identity: {
+                  provider: 'legacy',
+                  agent: 'trae',
+                  sessionId: SESSION,
+                  recordId: 'restored-user'
+                },
+                body: {
+                  kind: 'message',
+                  role: 'user',
+                  blocks: [{ type: 'text', text: 'Restored native conversation' }]
+                },
+                ownerFence: 0
+              }
+            ]
+          })
+        }
+      }
+    )
+    expect(
+      (await readTestJournalItems(journal)).find((row) => row.body.kind === 'message')?.body
+    ).toMatchObject({
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Restored native conversation' }]
+    })
+  } finally {
+    await journal.close()
+  }
 })

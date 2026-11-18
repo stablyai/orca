@@ -30,6 +30,7 @@ export async function renameTraexSession(
 /** Ask the CLI to name its own thread, then persist the name for TUI clients. */
 export class TraexThreadNaming {
   private pending: {
+    requestId: string
     resolve: (name: string | null) => void
     timer: ReturnType<typeof setTimeout>
   } | null = null
@@ -44,23 +45,29 @@ export class TraexThreadNaming {
       return Promise.resolve(null)
     }
     return new Promise((resolve) => {
+      const requestId = randomUUID()
       const timer = setTimeout(() => {
         this.settle(null)
       }, NAME_TIMEOUT_MS)
       timer.unref()
-      this.pending = { resolve, timer }
+      const pending = { requestId, resolve, timer }
+      this.pending = pending
       this.connection
         .request('thread/name/generate', {
           threadId: this.threadId,
-          requestId: randomUUID()
+          requestId
         })
-        .catch(() => this.settle(null))
+        .catch(() => {
+          if (this.pending === pending) {
+            this.settle(null)
+          }
+        })
     })
   }
 
-  resolve(name: string): void {
+  resolve(name: string, requestId: string): void {
     // A late name after the host fell back to its own naming must not rename the thread.
-    if (!this.settle(name)) {
+    if (this.pending?.requestId !== requestId || !this.settle(name)) {
       return
     }
     void this.connection

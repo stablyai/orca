@@ -138,3 +138,29 @@ it('restores the provider-reported duration with a saved turn', () => {
     durationMs: 1500
   })
 })
+
+it('keeps restored running commands inside their child agent', () => {
+  const rows = projectTraexHistoryTurn({
+    threadId: 'child-thread',
+    primaryThreadId: 'parent-thread',
+    sessionId: 'trae-history',
+    epoch: 'history-epoch',
+    producer: { agentId: 'child-thread', producerKind: 'agent' },
+    turn: {
+      id: 'child-turn',
+      status: 'inProgress',
+      items: [
+        {
+          id: 'child-command',
+          type: 'commandExecution',
+          status: 'inProgress',
+          command: 'pwd'
+        }
+      ]
+    }
+  })
+  expect(rows.find((row) => row.body.kind === 'tool-call')).toMatchObject({
+    linkage: { agentId: 'child-thread', producerKind: 'agent' },
+    body: { state: 'running' }
+  })
+})

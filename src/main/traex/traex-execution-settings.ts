@@ -22,16 +22,22 @@ export function traexNativeExecutionSettings(
   session: TraexSession,
   options: { model?: string; effort?: string; interactionMode?: string; contextMode?: string }
 ) {
-  const selected = session.nativeModels.find(
-    (model) => model.id === options.model || model.model === options.model
+  const requestedModel = options.model ?? session.options.model
+  const selected = session.nativeModels.find((model) =>
+    requestedModel
+      ? model.id === requestedModel || model.model === requestedModel
+      : options.interactionMode && model.isDefault
   )
-  if (options.model && session.nativeModels.length && !selected) {
+  if (requestedModel && session.nativeModels.length && !selected) {
     throw new AgentSessionOptionRejectedError('TRAE CLI did not offer this model')
   }
   if (options.interactionMode && !session.interactionModeSupported) {
     throw new AgentSessionOptionRejectedError('TRAE CLI modes have not been negotiated')
   }
-  const model = selected?.model ?? options.model
+  const model = selected?.model ?? requestedModel
+  if (options.interactionMode && !model) {
+    throw new AgentSessionOptionRejectedError('TRAE CLI did not resolve a model for this mode')
+  }
   const contextMode = traexContextMode(session, options)
   return {
     ...(model ? { model } : {}),

@@ -16,6 +16,7 @@ import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-wor
 export type TraexSessionDeps = {
   logger?: StructuredAgentSessionLogger
   onLifecycle: (event: StructuredAgentSessionLifecycleEvent) => void
+  onUnexpectedExit?: (generation: string, error: Error) => void
   onSettled: (clientMessageId: string, identity: AgentJournalItemIdentity) => void
   connect?: (launch: TraexLaunch, handlers: TraexConnectionHandlers) => TraexAppServerConnection
   onChildWorkEvidence?: (

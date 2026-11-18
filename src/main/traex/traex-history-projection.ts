@@ -61,7 +61,10 @@ export function projectTraexHistoryTurn(input: {
         )
       )) {
         assembler.apply(
-          input.producer && (event.type === 'item.open' || event.type === 'item.close')
+          input.producer &&
+            (event.type === 'item.open' ||
+              event.type === 'item.update' ||
+              event.type === 'item.close')
             ? { ...event, producer: input.producer }
             : event
         )

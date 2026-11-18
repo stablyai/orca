@@ -22,11 +22,21 @@ export async function observeTraexModelQueue(
     return
   }
   const revision = ++session.modelQueueRevision
+  session.pendingQueuedModelTurn = turnId
   const identity = session.timeline?.turnIdentity(turnId)
-  const body =
-    identity &&
-    (await session.input.events?.journalHistory?.()?.reads.itemBody(agentJournalItemKey(identity)))
-  const known = readAgentJournalTurn(body ?? undefined)
+  let known: ReturnType<typeof readAgentJournalTurn>
+  try {
+    const body =
+      identity &&
+      (await session.input.events
+        ?.journalHistory?.()
+        ?.reads.itemBody(agentJournalItemKey(identity)))
+    known = readAgentJournalTurn(body ?? undefined)
+  } finally {
+    if (revision === session.modelQueueRevision) {
+      session.pendingQueuedModelTurn = null
+    }
+  }
   if (
     revision !== session.modelQueueRevision ||
     session.ended ||
@@ -52,14 +62,23 @@ export async function observeTraexModelQueue(
 }
 
 export function clearTraexModelQueue(session: TraexSession, turnId: string | null): void {
-  if (turnId && (session.queuedModelTurn === turnId || session.activeTurn === turnId)) {
+  if (
+    !turnId ||
+    session.pendingQueuedModelTurn === turnId ||
+    session.queuedModelTurn === turnId ||
+    session.activeTurn === turnId
+  ) {
     session.modelQueueRevision++
+    if (!turnId || session.pendingQueuedModelTurn === turnId) {
+      session.pendingQueuedModelTurn = null
+    }
   }
-  if (!turnId || session.queuedModelTurn !== turnId) {
+  if (turnId && session.queuedModelTurn !== turnId) {
     return
   }
+  const queued = session.queuedModelTurn
   session.queuedModelTurn = null
-  if (session.activeTurn === turnId) {
+  if (queued && session.activeTurn === queued) {
     session.timeline?.apply({ type: 'activity', text: null })
   }
 }

@@ -10,6 +10,8 @@ import {
   pendingTraexPromptResolution,
   TRAEX_APPROVAL_LABELS,
   traexPermissionsApprovalBody,
+  traexPermissionsReply,
+  traexMcpApprovalBody,
   traexQuestionBody,
   traexPromptReply
 } from './traex-prompt-content'
@@ -22,6 +24,8 @@ type OpenPrompt = {
   body: ProviderTimelineRequestBody
   claimed: boolean
   withdrawn: boolean
+  turn: string | null
+  delivered?: boolean
   respond?: (reply: Record<string, unknown>) => Promise<void>
 }
 
@@ -104,47 +108,12 @@ export class TraexPromptRegistry {
         resolution: pendingTraexPromptResolution
       }
     } else if (request.method === 'mcpServer/elicitation/request') {
-      const meta = traexRecord(params._meta),
-        schema = traexRecord(params.requestedSchema)
-      const properties = schema.properties
-      const empty =
-        params.requestedSchema == null ||
-        (schema.type === 'object' &&
-          properties !== null &&
-          typeof properties === 'object' &&
-          !Array.isArray(properties) &&
-          Object.keys(properties).length === 0)
-      if (
-        meta.codex_approval_kind !== 'mcp_tool_call' ||
-        params.mode !== 'form' ||
-        !empty ||
-        typeof params.turnId !== 'string'
-      ) {
+      const approval = traexMcpApprovalBody(params)
+      if (!approval) {
         this.connection.respond(request.id, { action: 'cancel', content: null, _meta: null })
         return
       }
-      const persist = meta.persist
-      const session =
-        persist === 'session' || (Array.isArray(persist) && persist.includes('session'))
-      body = {
-        kind: 'approval',
-        title: 'Run MCP tool',
-        description: traexText(params.message),
-        detail: boundJournalPromptText(
-          [
-            traexText(params.serverName),
-            meta.tool_params === undefined ? null : JSON.stringify(meta.tool_params)
-          ]
-            .filter(Boolean)
-            .join('\n\n')
-        ),
-        options: [
-          { id: 'accept', label: 'Allow once' },
-          ...(session ? [{ id: 'acceptForSession', label: 'Allow for this session' }] : []),
-          { id: 'cancel', label: 'Cancel' }
-        ],
-        resolution: pendingTraexPromptResolution
-      }
+      body = approval
     } else if (request.method === 'item/permissions/requestApproval') {
       body = traexPermissionsApprovalBody(params)
     } else if (
@@ -194,7 +163,14 @@ export class TraexPromptRegistry {
       return
     }
     const key = `${request.method}:${JSON.stringify(request.id)}:${++this.sequence}`
-    const prompt: OpenPrompt = { request, key, body, claimed: false, withdrawn: false }
+    const prompt: OpenPrompt = {
+      request,
+      key,
+      body,
+      claimed: false,
+      withdrawn: false,
+      turn: traexText(params.turnId) ?? turn
+    }
     if (request.method === 'mode/changeRequested') {
       const target = params.targetMode
       prompt.respond = async (reply) => {
@@ -204,6 +180,7 @@ export class TraexPromptRegistry {
           requestId: request.id,
           decision
         })
+        prompt.delivered = true
         if (decision === 'approved' && (target === 'plan' || target === 'default')) {
           await this.onModeApproved?.(target)
         }
@@ -218,31 +195,14 @@ export class TraexPromptRegistry {
         })
       }
     } else if (request.method === 'item/permissions/requestApproval') {
-      const requested = traexRecord(params.permissions)
-      const granted = {
-        ...(requested.network != null ? { network: requested.network } : {}),
-        ...(requested.fileSystem != null ? { fileSystem: requested.fileSystem } : {})
-      }
       prompt.respond = async (reply) => {
-        const accepted =
-          reply.decision === 'accept' ||
-          reply.decision === 'acceptStrict' ||
-          reply.decision === 'acceptForSession'
-        this.connection.respond(request.id, {
-          permissions: accepted ? granted : {},
-          scope: reply.decision === 'acceptForSession' ? 'session' : 'turn',
-          ...(reply.decision === 'acceptStrict' ? { strictAutoReview: true } : {})
-        })
+        this.connection.respond(
+          request.id,
+          traexPermissionsReply(params.permissions, reply.decision)
+        )
       }
     }
-    this.open.set(agentJournalItemKey(this.timeline.requestItemId(key)), prompt)
-    this.timeline.apply({
-      type: 'request.open',
-      request: key,
-      body,
-      outlivesTurn: true,
-      join: { thread: this.threadId, ...(turn ? { turn } : {}) }
-    })
+    this.publish(prompt)
   }
 
   async answer(
@@ -265,25 +225,55 @@ export class TraexPromptRegistry {
       }
       throw error
     }
-    this.open.delete(itemId)
     this.timeline.apply({ type: 'request.withdrawn', request: prompt.key })
     if (prompt.withdrawn || this.connection.closed) {
+      this.open.delete(itemId)
       throw new AgentSessionPromptUnavailableError(itemId)
     }
-    if (prompt.respond) {
-      await prompt.respond(reply)
-    } else {
-      this.connection.respond(prompt.request.id, reply)
+    try {
+      if (prompt.respond) {
+        await prompt.respond(reply)
+      } else {
+        this.connection.respond(prompt.request.id, reply)
+      }
+    } catch (error) {
+      this.open.delete(itemId)
+      if (
+        prompt.request.method === 'mode/changeRequested' &&
+        !prompt.delivered &&
+        !prompt.withdrawn &&
+        !this.connection.closed
+      ) {
+        prompt.claimed = false
+        prompt.key = `${prompt.request.method}:${JSON.stringify(prompt.request.id)}:${++this.sequence}`
+        this.publish(prompt)
+      }
+      throw error
     }
+    this.open.delete(itemId)
+  }
+
+  private publish(prompt: OpenPrompt): void {
+    this.open.set(agentJournalItemKey(this.timeline.requestItemId(prompt.key)), prompt)
+    this.timeline.apply({
+      type: 'request.open',
+      request: prompt.key,
+      body: prompt.body,
+      outlivesTurn: true,
+      join: { thread: this.threadId, ...(prompt.turn ? { turn: prompt.turn } : {}) }
+    })
   }
 
   has(itemId: string): boolean {
     return this.open.has(itemId)
   }
 
-  withdraw(requestId?: unknown): void {
+  withdraw(requestId?: unknown, turn?: string): void {
     for (const [id, prompt] of this.open) {
-      if (requestId !== undefined && requestId !== prompt.request.id) {
+      if (
+        (requestId !== undefined && requestId !== prompt.request.id) ||
+        (turn !== undefined && turn !== prompt.turn)
+      ) {
         continue
       }
       prompt.withdrawn = true

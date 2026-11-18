@@ -41,6 +41,7 @@ export class TraexSession {
   commandsRead: Promise<void> | null = null
   activeTurn: string | null = null
   queuedModelTurn: string | null = null
+  pendingQueuedModelTurn: string | null = null
   modelQueueRevision = 0
   compacting = false
   ranOptions: Record<string, string> = {}
@@ -262,9 +263,9 @@ export class TraexSession {
   private exited(error: Error): void {
     this.ended = true
     this.extras.dispose()
-    this.queuedModelTurn = null
     this.failure ??= error
     if (!this.requestedClose) {
+      this.deps.onUnexpectedExit?.(this.generation, this.failure)
       this.input.events?.observeRootExit?.()
     }
     this.timeline?.flush()

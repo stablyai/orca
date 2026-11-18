@@ -107,7 +107,11 @@ export async function importAdoptedTranscript(
   attached: AttachedJournal,
   record: AgentSessionRecord,
   prepared: JournalReplacementItem[] | null,
-  options: { uncommittedCreate?: true; store?: AgentSessionRecordStore } = {}
+  options: {
+    uncommittedCreate?: true
+    store?: AgentSessionRecordStore
+    adapter?: Pick<StructuredAgentSessionAdapter, 'readConversationHistory'>
+  } = {}
 ): Promise<JournalForkInstall | undefined> {
   if (params.fork) {
     const installation = await attached.journal.stageFork(params.fork.prepared, {
@@ -156,7 +160,7 @@ export async function importAdoptedTranscript(
     return
   }
   // Failed import must not close the conversation-owned journal.
-  await applyAdoptedTranscript(params, attached, record, prepared, options.store)
+  await applyAdoptedTranscript(params, attached, record, prepared, options.store, options.adapter)
   return undefined
 }
 
@@ -165,7 +169,8 @@ async function applyAdoptedTranscript(
   attached: AttachedJournal,
   record: AgentSessionRecord,
   prepared: JournalReplacementItem[] | null,
-  store?: AgentSessionRecordStore
+  store?: AgentSessionRecordStore,
+  adapter?: Pick<StructuredAgentSessionAdapter, 'readConversationHistory'>
 ): Promise<void> {
   const adopt = params.adopt
   // Preserve durable writes after the initial epoch row.
@@ -189,11 +194,11 @@ async function applyAdoptedTranscript(
       reason: 'transcriptNotFound'
     })
   }
-  const read = await readAdoptedTranscript(params)
+  const read = await readAdoptedTranscript(params, undefined, adapter)
   if (!read?.length) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptUnreadable'
     })
   }
-  await applyAdoptedTranscript(params, attached, record, read, store)
+  await applyAdoptedTranscript(params, attached, record, read, store, adapter)
 }

@@ -266,7 +266,10 @@ export async function performAttach(
         record: acquired,
         openConversation: input.openConversation
       })
-      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items, { store })
+      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items, {
+        store,
+        adapter: input.adapter
+      })
       await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
       return journal
     })
