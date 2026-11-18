@@ -269,10 +269,8 @@ async function drain(): Promise<void> {
 /** Time parked for WAL room while this request queued counts as gate time, not queue wait. */
 function queuedTiming(request: WriteRequest, startedAt: number) {
   const queued = received.get(request.id)
-  const parked = queued
-    ? (parking?.parkedMs[request.urgent ? 'urgent' : 'bulk'] ?? 0) -
-      queued.parked[request.urgent ? 'urgent' : 'bulk']
-    : 0
+  const lane = request.urgent ? 'urgent' : 'bulk'
+  const parked = queued ? (parking?.mark()[lane] ?? 0) - queued.parked[lane] : 0
   return {
     waitMs: startedAt - (queued?.at ?? startedAt) - parked,
     gateMs: gate.ms + parked
