@@ -146,13 +146,9 @@ function MobileNativeChatMessageImpl({
   )
   // Task rows replace their plain-text twins, which the host writes for readers without task blocks.
   const { backgroundTasks } = deriveNativeChatRowContent(message.blocks)
-  const drawnProse =
-    isReasoning || (message.role === 'system' && workRun)
-      ? []
-      : withoutSubagentGroupTwins(
-          backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
-        )
   const isSystem = message.role === 'system'
+  const ownProse = backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
+  const drawnProse = isReasoning || (isSystem && workRun) ? [] : withoutSubagentGroupTwins(ownProse)
   const pullRequestEvent = isSystem
     ? drawnProse.find(
         (block): block is Chat.NativeChatTextBlock =>
