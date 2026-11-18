@@ -8,7 +8,9 @@ import {
 describe('persisted UI hydration', () => {
   it('keeps unchanged fields and restores an old activity cutoff on sync', () => {
     vi.useFakeTimers()
-    onTestFinished(() => vi.useRealTimers())
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const now = Date.UTC(2026, 10, 18)
     vi.setSystemTime(now)
     const clearedAt = now - 22 * 24 * 60 * 60 * 1000
