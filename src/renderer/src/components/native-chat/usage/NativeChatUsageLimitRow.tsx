@@ -3,6 +3,7 @@ import { Check, Clock, Gauge, Loader2, MessageSquarePlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store'
 import { validResetAt } from '@/components/status-bar/usage/usage-reset-caption'
 import type { NativeChatTextBlock } from '../../../../../shared/native-chat/native-chat-types'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
@@ -15,6 +16,7 @@ import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedCont
 import { useNativeChatUsageLimitActions } from './NativeChatUsageLimitActions'
 import {
   openUsageLimitContinueSetting,
+  turnOnUsageLimitAutoContinue,
   type NativeChatUsageLimitAutoContinueState
 } from './native-chat-usage-limit-auto-continue-setting'
 import { useUsageLimitContinueClock } from './use-usage-limit-continue-clock'
@@ -99,6 +101,9 @@ function AutoContinueTool({
   autoTime: string | null
 }): React.JSX.Element {
   const t = useTranslate()
+  const settingOn = useAppStore(
+    (state) => state.settings?.nativeChatAutoContinueAfterUsageLimit === true
+  )
   if (auto.kind === 'scheduled') {
     return (
       <UsageLimitToolButton
@@ -110,6 +115,22 @@ function AutoContinueTool({
         pressed
         disabled={auto.cancelDisabled}
         onClick={auto.cancel}
+      >
+        <Clock className="size-3.5" />
+      </UsageLimitToolButton>
+    )
+  }
+  // Off with the setting off: the clock turns it on here, and the host schedules this chat. The
+  // host also says off for a chat it can't continue while the setting is on; that opens Settings.
+  if (auto.kind === 'off' && !settingOn) {
+    return (
+      <UsageLimitToolButton
+        label={t(
+          'components.native-chat.usageLimitActions.turnOnAutoContinue',
+          'Continue automatically when limits reset'
+        )}
+        pressed={false}
+        onClick={turnOnUsageLimitAutoContinue}
       >
         <Clock className="size-3.5" />
       </UsageLimitToolButton>

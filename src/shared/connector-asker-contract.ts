@@ -96,6 +96,9 @@ export const ConnectorAsker = z.object({
   messageRef: z.string().min(1).max(2048).optional().catch(undefined),
   // A bare mention's request; one this build can't read is dropped alone, and the bot then greets.
   earlierOwn: ConnectorEarlierOwn.optional().catch(undefined),
-  via: ConnectorAskerVia
+  via: ConnectorAskerVia,
+  // Orca's own lines on where it was asked (GitHub: the branch, how to post there): the agent reads
+  // them after the message, and the chat doesn't show them.
+  note: z.string().min(1).max(4000).optional().catch(undefined)
 })
 export type ConnectorAsker = z.infer<typeof ConnectorAsker>

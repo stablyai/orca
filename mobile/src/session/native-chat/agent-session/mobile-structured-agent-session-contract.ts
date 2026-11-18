@@ -86,6 +86,8 @@ export type StructuredMobileSession = Omit<
     visualSource: MobileNativeChatVisualSource | null
     imagePreviewsByMessageId: Record<string, string[]>
     usageLimit: MobileNativeChatUsageLimit | null
+    /** Rows whose failure no later successful turn resolved. */
+    unresolvedFailureRows: ReadonlySet<string>
   }
 
 export type MobileStructuredAgentSessionArgs = {

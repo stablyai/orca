@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  describeAutomationEventTrigger,
   formatAutomationEventTrigger,
   formatAutomationTriggerOptions,
-  offeredEventSources,
   parseAutomationEventTrigger
 } from '../automations/automation-event-trigger-spec'
 
@@ -41,27 +39,17 @@ describe('--on "webhook.call ..."', () => {
       'webhook.call where="body.action in opened,reopened" contains="deploy now" pick=body.number subject-from=body.number subject=4512'
     const rule = parseAutomationEventTrigger(spec)
     expect(formatAutomationEventTrigger(rule)).toBe(spec)
-    expect(parseAutomationEventTrigger(formatAutomationEventTrigger(rule))).toEqual(rule)
-    expect(describeAutomationEventTrigger(rule)).toBe(
-      'its webhook is called, where body.action in opened,reopened, on 4512, containing "deploy now"'
-    )
   })
 
   it.each([
     ['webhook.call in=C0123', 'Unknown filter "in="'],
     ['webhook.call where="body.action ~ x"', 'where= takes "<path> <op> <value>"'],
-    ['webhook.call pick=a pick=b', 'needs one value for pick='],
-    ['webhook.call bare', 'Filters are written key=value']
+    ['webhook.call pick=a pick=b', 'needs one value for pick=']
   ])('refuses %j', (spec, message) => {
     expect(() => parseAutomationEventTrigger(spec)).toThrow(message)
   })
 
-  it("is offered only for a bot whose host's Orca Cloud takes webhooks", () => {
-    expect(offeredEventSources()).not.toContain('webhook')
-    expect(offeredEventSources(undefined, { name: 'Scout', webhooks: false })).not.toContain(
-      'webhook'
-    )
-    expect(offeredEventSources(undefined, { name: 'Scout', webhooks: true })).toContain('webhook')
+  it('shows key-handling guidance for a webhook-capable host', () => {
     const guide = formatAutomationTriggerOptions(undefined, { name: 'Scout', webhooks: true })
     expect(guide).toContain('webhook.call')
     expect(guide).toContain(

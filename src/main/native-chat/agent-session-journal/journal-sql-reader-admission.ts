@@ -146,6 +146,7 @@ export function journalReaderOperationAdmitted(operation: JournalSqlReaderOperat
     case 'fork-next':
     case 'fork-prepare':
     case 'import-state':
+    case 'legacy-compare':
     case 'point':
       return true
   }

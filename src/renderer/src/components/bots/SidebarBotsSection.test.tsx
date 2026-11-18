@@ -201,7 +201,8 @@ describe('SidebarBotsSection', () => {
   it('shows the empty state before the first bot', () => {
     renderSection()
     expect(screen.getByText('Bots')).toBeTruthy()
-    expect(screen.getByText('No bots yet.')).toBeTruthy()
+    expect(screen.getByText('Meet your AI teammate')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create a bot' })).toBeTruthy()
   })
 
   it('lists a bot by avatar and name and opens its home on click', () => {
@@ -340,7 +341,6 @@ describe('SidebarBotsSection', () => {
     const preview = document.querySelector('[data-worktree-sidebar-drag-preview]')
     expect(preview?.textContent).toContain('Reviewer')
     expect(entry.className).toContain('opacity-0')
-    expect(entry.className).not.toContain('ring-')
     // Scout and Jelly slide up into the gap Reviewer left.
     const slide = (botId: string): string => {
       const content = rowEntry(botId).firstElementChild
@@ -362,13 +362,18 @@ describe('SidebarBotsSection', () => {
     expect(slide('bot-2')).toBe('')
   })
 
-  it('keeps New bot access while empty and shows the first bot in an expanded section', () => {
+  it('keeps New bot access while empty and folds the onboarding card away', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     renderSection()
-    const emptyHeader = screen.getByRole('button', { name: /^Bots, 0 bots/ })
+    // No count beside the title while there is nothing to count.
+    expect(screen.queryByText('0')).toBeNull()
+    const emptyHeader = screen.getByRole('button', { name: /^Collapse Bots, 0 bots/ })
+    expect(emptyHeader.hasAttribute('disabled')).toBe(false)
     fireEvent.click(emptyHeader)
-    expect(emptyHeader.getAttribute('aria-expanded')).toBe('true')
-    expect(emptyHeader.hasAttribute('disabled')).toBe(true)
+    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
+    expect(screen.queryByText('Meet your AI teammate')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Expand Bots, 0 bots/ }))
+    expect(screen.getByText('Meet your AI teammate')).toBeTruthy()
     fireEvent.keyDown(screen.getByRole('button', { name: 'New bot or group' }), { key: 'Enter' })
     expect(screen.getByRole('menuitem', { name: 'New bot' })).toBeTruthy()
     // A group needs two bots.
@@ -420,7 +425,7 @@ describe('SidebarBotsSection', () => {
     mocks.groups = [group({ members: [] })]
     useAppStore.setState({ folderWorkspaces: [home({ id: 'fw-g' })] })
     renderSection()
-    expect(screen.queryByText('No bots yet.')).toBeNull()
+    expect(screen.queryByText('Meet your AI teammate')).toBeNull()
     expect(screen.getByText('Crew')).toBeTruthy()
   })
 

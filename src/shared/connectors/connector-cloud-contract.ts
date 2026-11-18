@@ -35,7 +35,8 @@ export const CONNECTOR_FEATURES = [
   'prEvents',
   'threadCatchUp',
   'batchedSends',
-  'ownDmChats'
+  'ownDmChats',
+  'askerNote'
 ] as const
 
 export const CONNECTOR_CLIENT_LIMITS = {

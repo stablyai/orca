@@ -13,6 +13,8 @@ import type { BotActivity, BotSessionActivityRow } from '../../../../shared/bots
 import type { AgentDotState } from '../../../../shared/agent-dot-state'
 import { EVENT_ONLY_SCHEDULE } from '../../../../shared/automation-event-triggers'
 import type { BotUpNext } from '../../../../shared/bots/bot-look-around'
+import { stubUsageLimitFeed } from '../../component-fixtures/fixture-usage-limit-feed'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
 const now = Date.now()
 
@@ -211,3 +213,40 @@ export const closedWorking = defineFixture({
     </div>
   )
 })
+
+const LOOK_STOPPED: BotActivity = {
+  ...BUSY,
+  upNext: {
+    state: {
+      running: false,
+      lastLookedAt: now - 20 * 60_000,
+      lastSessionId: 'look-1',
+      error: 'The last look didn’t finish.',
+      seenAt: 1
+    },
+    items: []
+  }
+}
+
+function lookStoppedFixture(auto: boolean) {
+  return defineFixture({
+    width: 360,
+    store: botPanelPage(true, null),
+    setup: () => {
+      stubBotPanel(LOOK_STOPPED)()
+      stubUsageLimitFeed([
+        {
+          sessionId: 'look-1',
+          workspaceId: folderWorkspaceKey(cos.folderWorkspaceId),
+          name: 'Look around',
+          resetsAt: now + 2 * 3_600_000,
+          auto
+        }
+      ])
+    },
+    render: () => <BotPanelFrame />
+  })
+}
+
+export const lookStoppedWaiting = lookStoppedFixture(false)
+export const lookStoppedContinues = lookStoppedFixture(true)

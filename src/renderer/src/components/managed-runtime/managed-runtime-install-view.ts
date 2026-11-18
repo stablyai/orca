@@ -110,8 +110,21 @@ function settledView(
       t('components.managed-runtime.external', 'Uses the copy of {{agent}} found on this host.', {
         agent
       }),
-      state.available && state.installedVersion === null
+      // The user's own copy outranks one Orca keeps updated, so installing Orca's adds nothing.
+      state.available && state.installedVersion === null && !state.updatesAutomatically
         ? t('components.managed-runtime.installManaged', "Install Orca's copy")
+        : null
+    )
+  }
+  if (state.installedVersion !== null && state.updatesAutomatically) {
+    return view(
+      t('components.managed-runtime.installedByOrca', 'Installed by Orca · {{version}}', {
+        version: state.installedVersion
+      }),
+      null,
+      null,
+      state.available
+        ? t('components.managed-runtime.reinstall', 'Reinstall {{agent}}', { agent })
         : null
     )
   }

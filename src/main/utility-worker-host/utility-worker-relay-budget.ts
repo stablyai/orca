@@ -23,7 +23,7 @@ export class UtilityWorkerRelayBudget {
   private limit = Infinity
   private outstanding = 0
   private nextSeq = 0
-  private readonly charged = new Map<number, number>()
+  private readonly charged = new Map<number, { id: number; bytes: number }>()
   private readonly held: Held[] = []
   private readonly started = new Set<number>()
   /** Workers whose held reply expired: anything they post after the failure is dropped. */
@@ -73,20 +73,33 @@ export class UtilityWorkerRelayBudget {
     this.failed.delete(id)
   }
 
+  /** No one can read this worker's replies any more: its held and unacked ones stop counting. */
+  release(id: number): void {
+    this.failed.add(id)
+    for (const [seq, charge] of this.charged) {
+      if (charge.id === id) {
+        this.charged.delete(seq)
+        this.outstanding -= charge.bytes
+      }
+    }
+    this.dropHeld(id)
+    this.pump()
+  }
+
   /** Main consumed a delivered reply; a repeated or unknown ack changes nothing. */
   ack(seq: number): void {
-    const bytes = this.charged.get(seq)
-    if (bytes === undefined) {
+    const charge = this.charged.get(seq)
+    if (!charge) {
       return
     }
     this.charged.delete(seq)
-    this.outstanding -= bytes
+    this.outstanding -= charge.bytes
     this.pump()
   }
 
   private send(id: number, bytes: Uint8Array): void {
     const seq = ++this.nextSeq
-    this.charged.set(seq, bytes.byteLength)
+    this.charged.set(seq, { id, bytes: bytes.byteLength })
     this.outstanding += bytes.byteLength
     this.relay(id, bytes, seq)
   }
@@ -94,6 +107,12 @@ export class UtilityWorkerRelayBudget {
   /** A failed worker's held replies go with it; delivered ones stay charged until main acks. */
   private drop(id: number): void {
     this.failed.add(id)
+    this.dropHeld(id)
+    this.pump()
+  }
+
+  /** The worker's queued error or exit still runs, in order, after its replies are dropped. */
+  private dropHeld(id: number): void {
     const dropped = this.held.filter((entry) => entry.id === id)
     this.held.splice(0, this.held.length, ...this.held.filter((entry) => entry.id !== id))
     for (const entry of dropped) {
@@ -101,7 +120,6 @@ export class UtilityWorkerRelayBudget {
         send()
       }
     }
-    this.pump()
   }
 
   private pump(): void {

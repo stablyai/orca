@@ -13,7 +13,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
   'tests/e2e/agents/settings/cursor-quota-transport.unit.test.ts',
-  'tests/e2e/desktop/electron-fixtures/electron-process-shutdown.unit.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
   'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',

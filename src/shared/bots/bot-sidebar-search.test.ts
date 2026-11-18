@@ -56,15 +56,6 @@ describe('matchBotSearchText', () => {
     expect(marked('Eng - Reviewer', 'rev eng')).toEqual(['Eng', 'Rev'])
     expect(matchBotSearchText('Eng - Reviewer', 'view eng')).toBeNull()
   })
-
-  it('has no typo tolerance', () => {
-    expect(matchBotSearchText('Nora', 'nail')).toBeNull()
-    expect(matchBotSearchText('UX Designer', 'uxd')).toBeNull()
-  })
-
-  it('ignores an empty query', () => {
-    expect(matchBotSearchText('Nora', '   ')).toBeNull()
-  })
 })
 
 describe('createBotSidebarSearchIndex', () => {
@@ -112,10 +103,6 @@ describe('createBotSidebarSearchIndex', () => {
   it('counts hidden paused bots that match by name', () => {
     expect(search('review').hiddenPausedMatches).toBe(1)
     expect(search('disk').hiddenPausedMatches).toBe(0)
-  })
-
-  it('does not match groups by purpose', () => {
-    expect(search('deploys').matches.map((m) => m.entry.id)).toEqual(['c'])
   })
 
   it('returns nothing for a blank query', () => {

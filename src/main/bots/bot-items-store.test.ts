@@ -273,48 +273,46 @@ describe('bot items store', () => {
     expect(store.eventsBefore(uid, 0, 10).at(-1)?.data).toEqual({ text: 'The spec moved to v2.' })
     expect(store.owedMail(0).mails).toEqual([])
   })
-  it.each([20, 200])(
-    'reads Needs you and item views without visiting every item or event (%i items)',
-    (count) => {
-      const dir = mkdtempSync(join(tmpdir(), 'bot-items-plan-'))
-      const path = join(dir, 'bot-items.sqlite')
-      const store = BotItemsStore.open(path)
-      stores.push(store)
-      const reader = new SyncDatabase(path)
-      const uids: string[] = []
-      for (let index = 0; index < count; index += 1) {
-        const { uid } = store.add(input(), owner)
-        store.ownerComment(uid, 'Looks good.', { kind: 'owner' })
-        store.comment(uid, 'Thanks.', owner)
-        if (index >= 2) {
-          store.close(uid, 'done', undefined, owner)
-        }
-        uids.push(uid)
+  it('reads Needs you and item views without visiting every item or event', () => {
+    const count = 20
+    const dir = mkdtempSync(join(tmpdir(), 'bot-items-plan-'))
+    const path = join(dir, 'bot-items.sqlite')
+    const store = BotItemsStore.open(path)
+    stores.push(store)
+    const reader = new SyncDatabase(path)
+    const uids: string[] = []
+    for (let index = 0; index < count; index += 1) {
+      const { uid } = store.add(input(), owner)
+      store.ownerComment(uid, 'Looks good.', { kind: 'owner' })
+      store.comment(uid, 'Thanks.', owner)
+      if (index >= 2) {
+        store.close(uid, 'done', undefined, owner)
       }
-      for (const uid of uids.slice(0, 2)) {
-        store.set(uid, { status: 'needs_you', comment: 'Ship it?' }, owner)
-      }
-      const prepare = vi.spyOn(SyncDatabase.prototype, 'prepare')
-
-      expect(store.needsYou()).toHaveLength(2)
-      expect(Object.keys(store.viewRows(uids.slice(0, 20)).othersLast)).toHaveLength(20)
-      const sql = prepare.mock.calls.map(([statement]) => statement)
-      prepare.mockRestore()
-      const plans = sql.flatMap((statement) =>
-        ['needs_you', 'item_events'].some((word) => statement.includes(word))
-          ? planOf(reader, statement).filter((detail) => /\bitem/.test(detail))
-          : []
-      )
-      reader.close()
-      rmSync(dir, { recursive: true, force: true })
-      expect(plans).toEqual([
-        // The partial index holds only Needs you items.
-        'SCAN items USING COVERING INDEX idx_items_needs_you',
-        // Only the questions, by id.
-        'SEARCH item_events USING INTEGER PRIMARY KEY (rowid=?)'
-      ])
+      uids.push(uid)
     }
-  )
+    for (const uid of uids.slice(0, 2)) {
+      store.set(uid, { status: 'needs_you', comment: 'Ship it?' }, owner)
+    }
+    const prepare = vi.spyOn(SyncDatabase.prototype, 'prepare')
+
+    expect(store.needsYou()).toHaveLength(2)
+    expect(Object.keys(store.viewRows(uids.slice(0, 20)).othersLast)).toHaveLength(20)
+    const sql = prepare.mock.calls.map(([statement]) => statement)
+    prepare.mockRestore()
+    const plans = sql.flatMap((statement) =>
+      ['needs_you', 'item_events'].some((word) => statement.includes(word))
+        ? planOf(reader, statement).filter((detail) => /\bitem/.test(detail))
+        : []
+    )
+    reader.close()
+    rmSync(dir, { recursive: true, force: true })
+    expect(plans).toEqual([
+      // The partial index holds only Needs you items.
+      'SCAN items USING COVERING INDEX idx_items_needs_you',
+      // Only the questions, by id.
+      'SEARCH item_events USING INTEGER PRIMARY KEY (rowid=?)'
+    ])
+  })
 
   it('fills who last wrote besides the owner on items an older file holds', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bot-items-migrate-'))

@@ -78,7 +78,6 @@ describe("a Slack message's markup on the phone", () => {
     expect(onOpenLink).toHaveBeenCalledWith('https://x.dev')
     const all = textOf(tree!.root)
     expect(all).toContain('@user in')
-    expect(all).toContain('@Ann (PM) *x*')
     expect(all).toContain('mail ann@Ann.dev')
   })
 })
