@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { createReadStream } from 'node:fs'
+import { open, stat } from 'node:fs/promises'
 import { StringDecoder } from 'node:string_decoder'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
@@ -45,12 +47,12 @@ export class ContinuedTranscriptMarkers {
 
   /**
    * Formatted messages joined as the plain transcript is, each marked excerpt replaced by its
-   * whole text. A message's formatting trims trailing whitespace, so a whole text that ends its
-   * message is trimmed too.
+   * whole text. Formatting trims a message's trailing whitespace, so a whole text that ends its
+   * message comes trimmed, and a blank one trims the line before it too.
    */
   async *transcript(
     messages: readonly string[],
-    whole: (index: number) => AsyncIterable<string>
+    whole: (index: number, trimEnd: boolean) => Promise<ContinuedText>
   ): AsyncGenerator<string> {
     for (const [position, message] of messages.entries()) {
       if (position > 0) {
@@ -60,48 +62,57 @@ export class ContinuedTranscriptMarkers {
       for (const match of message.matchAll(this.pattern)) {
         const before = message.slice(end, match.index)
         end = match.index + match[0].length
-        const text = whole(Number(match[1]))
-        if (end === message.length) {
-          // Trims into the text before it, as the formatter's trimEnd does for a blank output.
-          yield* withoutTrailingWhitespace(prepend(before, text))
-        } else {
-          yield before
-          yield* text
-        }
+        const trimEnd = end === message.length
+        const text = await whole(Number(match[1]), trimEnd)
+        yield trimEnd && text.empty ? before.trimEnd() : before
+        yield* text.chunks
       }
       yield message.slice(end)
     }
   }
 }
 
-async function* prepend(first: string, rest: AsyncIterable<string>): AsyncGenerator<string> {
-  yield first
-  yield* rest
+export type ContinuedText = { chunks: AsyncIterable<string>; empty: boolean }
+
+const READ_BYTES = 1024 * 1024
+const TRIM_SCAN_BYTES = 64 * 1024
+
+/** A file of stored UTF-8 text, streamed one read at a time; `trimEnd` stops where trimEnd would. */
+export async function continuedFileText(path: string, trimEnd: boolean): Promise<ContinuedText> {
+  const end = trimEnd ? await trimmedEnd(path) : (await stat(path)).size
+  return {
+    empty: end === 0,
+    chunks:
+      end === 0
+        ? (async function* () {})()
+        : decodeStoredText(createReadStream(path, { end: end - 1, highWaterMark: READ_BYTES }))
+  }
 }
 
-// Past this, a whitespace run is written as is: main holds one chunk, not the run.
-const HELD_WHITESPACE_CHARS = 1024 * 1024
-
-async function* withoutTrailingWhitespace(text: AsyncIterable<string>): AsyncGenerator<string> {
-  let held: string[] = []
-  let heldChars = 0
-  for await (const chunk of text) {
-    const kept = chunk.trimEnd()
-    if (kept) {
-      yield held.join('') + kept
-      held = []
-      heldChars = 0
+/** The byte length of the text without trailing whitespace, scanning back one block at a time. */
+async function trimmedEnd(path: string): Promise<number> {
+  const handle = await open(path, 'r')
+  try {
+    let end = (await handle.stat()).size
+    while (end > 0) {
+      let start = Math.max(0, end - TRIM_SCAN_BYTES)
+      const block = Buffer.allocUnsafe(end - start)
+      await handle.read(block, 0, block.length, start)
+      // Start on a character: continuation bytes belong to the block before.
+      let skip = 0
+      while (start > 0 && skip < block.length && (block[skip] & 0xc0) === 0x80) {
+        skip++
+      }
+      start += skip
+      const kept = replaceLoneSurrogates(block.subarray(skip)).toString('utf8').trimEnd()
+      if (kept) {
+        return start + Buffer.byteLength(kept, 'utf8')
+      }
+      end = start
     }
-    const tail = chunk.slice(kept.length)
-    if (tail) {
-      held.push(tail)
-      heldChars += tail.length
-    }
-    if (heldChars > HELD_WHITESPACE_CHARS) {
-      yield held.join('')
-      held = []
-      heldChars = 0
-    }
+    return 0
+  } finally {
+    await handle.close()
   }
 }
 

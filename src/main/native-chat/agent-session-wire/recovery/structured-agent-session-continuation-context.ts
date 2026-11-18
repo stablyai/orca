@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { projectSavedChatContextItems } from '../../conversation-context/agent-session-saved-prompt-text'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../../shared/agent-session/agent-session-wire'
@@ -6,16 +9,16 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { formatWorkerTranscriptMessage } from '../../../../shared/native-chat/transcript/worker-transcript-text'
 import { toLinuxPath } from '../../../../shared/file-access/wsl-paths'
-import { writeAgentSessionContextSnapshot } from '../../conversation-context/agent-session-context-snapshots'
-import type {
-  AgentSessionJournalReads,
-  JournalContinuedPayload
-} from '../../agent-session-journal/journal-reads'
-import { JOURNAL_CONTINUED_CHUNK_BYTES } from '../../agent-session-journal/journal-sql-continuation-context'
+import {
+  agentSessionContextSnapshotRoot,
+  writeAgentSessionContextSnapshot
+} from '../../conversation-context/agent-session-context-snapshots'
+import type { JournalContinuedPayload } from '../../agent-session-journal/journal-reads'
 import {
   ContinuedTranscriptMarkers,
-  decodeStoredText
+  continuedFileText
 } from '../../conversation-context/agent-session-continued-transcript'
+import { ensureOwnedTempStagingRoot } from '../../../filesystem/owned-temp-staging-root'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -71,6 +74,22 @@ export function continuationContextReader(
     if (!continued && !text.trim()) {
       return { status: 'current', capturedText: '' }
     }
+    const spills: string[] = []
+    const spillRoot = agentSessionContextSnapshotRoot(deps.journalDatabase.stateDirectory)
+    // One extraction per text, written by the reader to a private file main then streams.
+    const spill = async (part: JournalContinuedPayload, trimEnd: boolean) => {
+      if (!(await ensureOwnedTempStagingRoot(spillRoot))) {
+        throw new Error('Chat context snapshot folder is not private')
+      }
+      const path = join(spillRoot, `${randomUUID()}.spill`)
+      spills.push(path)
+      const { itemId, revision, field } = part
+      const bytes = await session.journal.reads.continuationSpill({ itemId, revision, field, path })
+      if (bytes === null) {
+        throw new ContinuedPayloadSuperseded()
+      }
+      return continuedFileText(path, trimEnd)
+    }
     let path: string
     try {
       // Both outputs describe this stopping point, even if the conversation changes during the write.
@@ -78,8 +97,8 @@ export function continuationContextReader(
         deps.journalDatabase.stateDirectory,
         input.sessionId,
         continued
-          ? markers.transcript(formatted, (index) =>
-              decodeStoredText(storedChunks(session.journal.reads, context.continued[index]))
+          ? markers.transcript(formatted, (index, trimEnd) =>
+              spill(context.continued[index], trimEnd)
             )
           : text
       )
@@ -88,6 +107,8 @@ export function continuationContextReader(
         return { status: 'superseded' }
       }
       throw error
+    } finally {
+      await Promise.all(spills.map((spilled) => rm(spilled, { force: true })))
     }
     return {
       status: 'current',
@@ -98,17 +119,3 @@ export function continuationContextReader(
 }
 
 class ContinuedPayloadSuperseded extends Error {}
-
-/** One chunk at a time up to the recorded length; a revised or removed item supersedes the snapshot. */
-async function* storedChunks(
-  reads: Pick<AgentSessionJournalReads, 'continuationChunk'>,
-  { itemId, revision, field, bytes: length }: JournalContinuedPayload
-): AsyncGenerator<Uint8Array> {
-  for (let offset = 1; offset <= length; offset += JOURNAL_CONTINUED_CHUNK_BYTES) {
-    const bytes = await reads.continuationChunk({ itemId, revision, field, offset })
-    if (!bytes?.length) {
-      throw new ContinuedPayloadSuperseded()
-    }
-    yield bytes
-  }
-}

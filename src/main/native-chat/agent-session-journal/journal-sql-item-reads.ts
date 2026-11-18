@@ -136,7 +136,7 @@ export function readJournalDomainItems(
         )
       }
     case 'continuation-context':
-    case 'continuation-chunk':
+    case 'continuation-spill':
       return readJournalDomainContinuation(db, target, operation)
     case 'message-options': {
       const body = visibleItem(

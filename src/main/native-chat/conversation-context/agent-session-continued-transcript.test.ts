@@ -1,8 +1,14 @@
-import { expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { formatWorkerTranscriptMessage } from '../../../shared/native-chat/transcript/worker-transcript-text'
 import { projectSavedChatContextItems } from './agent-session-saved-prompt-text'
-import { ContinuedTranscriptMarkers, decodeStoredText } from './agent-session-continued-transcript'
+import { ContinuedTranscriptMarkers, continuedFileText } from './agent-session-continued-transcript'
+
+const dirs: string[] = []
+afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })))
 
 const tool = (head: string): AgentJournalRenderItem => ({
   itemId: 'tool',
@@ -18,48 +24,46 @@ const tool = (head: string): AgentJournalRenderItem => ({
   }
 })
 
-async function* chunks(...parts: Buffer[]): AsyncGenerator<Uint8Array> {
-  yield* parts
-}
-
-it('streams the whole stored text in place of its excerpt, as the plain transcript prints it', async () => {
-  const whole = 'run 😀 \uD800 done  \n\t'
-  // SQLite returns the lone surrogate as three bytes; split it and the emoji across chunks.
-  const stored = Buffer.concat([
-    Buffer.from('run 😀 ', 'utf8'),
-    Buffer.from([0xed, 0xa0, 0x80]),
-    Buffer.from(' done  \n\t', 'utf8')
-  ])
+/** The snapshot text when `stored` (SQLite's bytes) stands in for an excerpt, and the plain one for `whole`. */
+async function both(stored: Buffer, whole: string) {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-continued-'))
+  dirs.push(dir)
+  const path = join(dir, 'whole.spill')
+  writeFileSync(path, stored)
   const markers = new ContinuedTranscriptMarkers()
-  const marked = projectSavedChatContextItems([markers.mark(tool('run … done'), 0)])
+  const marked = projectSavedChatContextItems([markers.mark(tool('start … end'), 0)])
   const parts: string[] = []
-  for await (const part of markers.transcript(marked.map(formatWorkerTranscriptMessage), () =>
-    decodeStoredText(
-      chunks(
-        stored.subarray(0, 6),
-        stored.subarray(6, 10),
-        stored.subarray(10, 11),
-        stored.subarray(11)
-      )
-    )
+  for await (const part of markers.transcript(
+    marked.map(formatWorkerTranscriptMessage),
+    (_, trim) => continuedFileText(path, trim)
   )) {
     parts.push(part)
   }
-
   const plain = projectSavedChatContextItems([tool(whole)]).map(formatWorkerTranscriptMessage)
-  expect(Buffer.from(parts.join(''), 'utf8')).toEqual(Buffer.from(plain.join('\n\n'), 'utf8'))
-  expect(markers.excerpts(marked)[0].blocks.at(-1)).toMatchObject({ output: 'run … done' })
+  return {
+    streamed: Buffer.from(parts.join('')),
+    plain: Buffer.from(plain.join('\n\n')),
+    marked,
+    markers
+  }
+}
+
+it('streams the whole stored text in place of its excerpt, byte for byte as the plain transcript', async () => {
+  // SQLite returns a lone surrogate as three bytes; put them across the 1 MiB read boundary.
+  const lead = 'a'.repeat(1024 * 1024 - 1)
+  const tail = ` 😀 done${' '.repeat(2 * 1024 * 1024)}\n\t`
+  const stored = Buffer.concat([
+    Buffer.from(lead),
+    Buffer.from([0xed, 0xa0, 0x80]),
+    Buffer.from(tail)
+  ])
+  const { streamed, plain, marked, markers } = await both(stored, `${lead}\uD800${tail}`)
+  expect(streamed.equals(plain)).toBe(true)
+  expect(markers.excerpts(marked)[0].blocks.at(-1)).toMatchObject({ output: 'start … end' })
 })
 
 it('trims a blank whole text into the line before it, as the plain transcript does', async () => {
-  const markers = new ContinuedTranscriptMarkers()
-  const marked = projectSavedChatContextItems([markers.mark(tool(' \n'), 0)])
-  const parts: string[] = []
-  for await (const part of markers.transcript(marked.map(formatWorkerTranscriptMessage), () =>
-    decodeStoredText(chunks(Buffer.from(' \n'.repeat(40_000))))
-  )) {
-    parts.push(part)
-  }
-  const plain = projectSavedChatContextItems([tool(' \n'.repeat(40_000))])
-  expect(parts.join('')).toBe(plain.map(formatWorkerTranscriptMessage).join('\n\n'))
+  const blank = ' \n'.repeat(40_000)
+  const { streamed, plain } = await both(Buffer.from(blank), blank)
+  expect(streamed.equals(plain)).toBe(true)
 })

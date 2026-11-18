@@ -64,9 +64,9 @@ export type JournalContinuationContext = {
   continued: readonly JournalContinuedPayload[]
 }
 
-export type JournalContinuationChunkRead = Omit<JournalContinuedPayload, 'index' | 'bytes'> & {
-  /** 1-based byte offset into the stored UTF-8 text. */
-  offset: number
+export type JournalContinuationSpill = Omit<JournalContinuedPayload, 'index' | 'bytes'> & {
+  /** A new private file the reader writes the whole stored UTF-8 text to. */
+  path: string
 }
 
 /** Reads a chat answers from its database; scans are filtered so none decodes the whole chat. */
@@ -112,8 +112,8 @@ export type AgentSessionJournalReads = {
   namedTurn(turnId: string): Promise<JournalNamedTurn>
   messageOptions(clientMessageId: string): Promise<JournalMessageOptions>
   continuationContext(): Promise<JournalContinuationContext>
-  /** Null once the item is gone or revised; empty past the end. */
-  continuationChunk(read: JournalContinuationChunkRead): Promise<Uint8Array | null>
+  /** Bytes written, or null once the item is gone or revised (nothing written). */
+  continuationSpill(spill: JournalContinuationSpill): Promise<number | null>
   /** The newest presented root user prompt, excluding commands, as restart offers preview it. */
   latestPrompt(): Promise<string>
   restartProgress(cursor: AgentJournalCursor): Promise<JournalRestartProgress>

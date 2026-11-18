@@ -1,3 +1,4 @@
+import { closeSync, openSync, writeSync } from 'node:fs'
 import type Database from '../../sqlite/sync-database'
 import type {
   AgentJournalRenderItem,
@@ -5,7 +6,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
-  JournalContinuationChunkRead,
+  JournalContinuationSpill,
   JournalContinuationContext,
   JournalContinuedPayload
 } from './journal-reads'
@@ -19,8 +20,7 @@ const CONTINUED_ROW_BYTES = 64 * 1024
 const CONTINUED_TEXT_BYTES = 32 * 1024
 // Byte slices pass NUL; a character cut at either edge only blurs the summary's excerpt.
 const EXCERPT_BYTES = 8 * 1024
-// One extraction per chunk re-reads the stored row, so chunks stay large but well under a reply.
-export const JOURNAL_CONTINUED_CHUNK_BYTES = 32 * 1024 * 1024
+const SPILL_WRITE_BYTES = 8 * 1024 * 1024
 
 /**
  * Built in SQLite, so neither the reader nor main holds a large text: a continued field keeps only
@@ -68,11 +68,11 @@ type JournalContinuationPage = JournalContinuationContext & {
 
 export type JournalContinuationRead =
   | { kind: 'continuation-context' }
-  | { kind: 'continuation-chunk'; read: JournalContinuationChunkRead }
+  | { kind: 'continuation-spill'; spill: JournalContinuationSpill }
 
 export type JournalContinuationReadResult =
   | { kind: 'continuation-context'; context: JournalContinuationContext }
-  | { kind: 'continuation-chunk'; bytes: Uint8Array | null }
+  | { kind: 'continuation-spill'; bytes: number | null }
 
 export function readJournalDomainContinuation(
   db: Database.Database,
@@ -81,7 +81,7 @@ export function readJournalDomainContinuation(
 ): JournalContinuationReadResult {
   return operation.kind === 'continuation-context'
     ? { kind: 'continuation-context', context: readJournalDomainContinuationContext(db, target) }
-    : readJournalDomainContinuationChunk(db, target, operation.read)
+    : spillJournalDomainContinuation(db, target, operation.spill)
 }
 
 /**
@@ -183,30 +183,33 @@ function takeContinuedField(
   return { field: body.kind === 'diff' ? 'patch' : 'output', bytes }
 }
 
-/** Stored UTF-8 bytes of a continued text from `offset` (1-based); null once it is gone or revised. */
-export function readJournalDomainContinuationChunk(
+/**
+ * Writes one continued text's stored UTF-8 bytes to a new private file, extracting it once; the
+ * reply carries only the size, so the text never crosses to main. Null once it is gone or revised.
+ */
+function spillJournalDomainContinuation(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
-  read: JournalContinuationChunkRead
-): { kind: 'continuation-chunk'; bytes: Uint8Array | null } {
-  // Blob slicing counts bytes and passes NUL, which text slicing stops at.
+  spill: JournalContinuationSpill
+): { kind: 'continuation-spill'; bytes: number | null } {
+  // A blob passes NUL, which text functions stop at.
   const row = db
-    .prepare(`SELECT revision, substr(CAST(json_extract(payload_json,?) AS BLOB),?,?) AS bytes
+    .prepare(`SELECT revision, CAST(json_extract(payload_json,?) AS BLOB) AS bytes
       FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
-    .get(
-      `$.body.${read.field}.head`,
-      read.offset,
-      JOURNAL_CONTINUED_CHUNK_BYTES,
-      target.sessionId,
-      target.epoch,
-      read.itemId
-    )
+    .get(`$.body.${spill.field}.head`, target.sessionId, target.epoch, spill.itemId)
   const bytes = row?.bytes
-  return {
-    kind: 'continuation-chunk',
-    bytes:
-      row && Number(row.revision) === read.revision && bytes instanceof Uint8Array ? bytes : null
+  if (!row || Number(row.revision) !== spill.revision || !(bytes instanceof Uint8Array)) {
+    return { kind: 'continuation-spill', bytes: null }
   }
+  const fd = openSync(spill.path, 'wx', 0o600)
+  try {
+    for (let offset = 0; offset < bytes.length;) {
+      offset += writeSync(fd, bytes, offset, Math.min(SPILL_WRITE_BYTES, bytes.length - offset))
+    }
+  } finally {
+    closeSync(fd)
+  }
+  return { kind: 'continuation-spill', bytes: bytes.length }
 }
 
 /** The keyset after a full page; empty once a short page proves nothing follows. */
