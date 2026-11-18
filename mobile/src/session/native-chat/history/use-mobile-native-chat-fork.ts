@@ -3,17 +3,17 @@ import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
-} from '../../../../../src/shared/agent-session/agent-session-create-capabilities'
-import { latestAgentSessionContextClearSequence } from '../../../../../src/shared/agent-session/agent-session-context-clear'
+} from '../../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { latestAgentSessionContextClearSequence } from '../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
 import { isTuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
-import type { StructuredAgentSessionForkSource } from '../../../../../src/shared/agent-session/structured-agent-session-create'
-import type { StructuredAgentSessionHostCapabilityState } from '../../../../../src/shared/agent-session/structured-agent-session-host-capability'
+import type { StructuredAgentSessionForkSource } from '../../../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../src/shared/agent-session/capabilities/structured-agent-session-host-capability'
 import {
   nativeChatForkInventory,
   nativeChatForkSupport,
   nativeChatRowOffersFork
-} from '../../../../../src/shared/native-chat/native-chat-fork-offer'
+} from '../../../../../src/shared/native-chat/transcript/turns/native-chat-fork-offer'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { isRootAgentJournalItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import {

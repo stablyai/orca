@@ -172,6 +172,8 @@ patchedDependencies:
   deepmerge@4.3.1: 5371a4fe16a3e7446d4718575820cf706b1ccafa19d2f5eeea9225df692f07b5
   glob@13.0.6: 163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223
   minimatch@10.2.5: 4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6
+  picomatch@2.3.2: 1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254
+  picomatch@4.0.7: 7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c
   react-native-libsodium@1.7.0: e46ed1b8a9457ecdf094ecaaac179ecd2c1acb82d068e15687c1ba26902d8d3b
   react-native-webview@14.0.1: d6807755ae92e65868534baef3aa3a33a644cc95c7e913e2ea35139551c44e9f
   react-native@0.88.1: 421ceb99c80d69a601533b52fddf89690883eec999872e23e6d55ee25da30665
@@ -7888,7 +7890,7 @@ snapshots:
       node-forge: 1.4.3
       npm-package-arg: 11.0.3
       ora: 3.4.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       pretty-format: 29.7.0
       progress: 2.0.3
       prompts: 2.4.2
@@ -8078,7 +8080,7 @@ snapshots:
       jsc-safe-url: 0.2.4
       lightningcss: 1.33.0
       noxcturnal: 0.1.11
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       postcss: 8.5.30
       resolve-from: 5.0.0
     optionalDependencies:
@@ -9514,7 +9516,7 @@ snapshots:
   anymatch@3.1.3:
     dependencies:
       normalize-path: 3.0.0
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254)
 
   arg@5.0.2: {}
 
@@ -11215,9 +11217,9 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  fdir@6.5.0(picomatch@4.0.7):
+  fdir@6.5.0(picomatch@4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)):
     optionalDependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
 
   fetch-nodeshim@0.4.10: {}
 
@@ -12070,7 +12072,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254)
 
   jest-validate@29.7.0:
     dependencies:
@@ -12754,7 +12756,7 @@ snapshots:
   micromatch@4.0.8:
     dependencies:
       braces: 3.0.3(patch_hash=c07bb14cec04bc891e1fe529720444cc9729a25117f9aaf24253cfe3132a34fd)
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254)
 
   mime-db@1.52.0: {}
 
@@ -13066,9 +13068,9 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@2.3.2: {}
+  picomatch@2.3.2(patch_hash=1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254): {}
 
-  picomatch@4.0.7: {}
+  picomatch@4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c): {}
 
   pify@4.0.1: {}
 
@@ -13356,7 +13358,7 @@ snapshots:
 
   readdirp@3.6.0:
     dependencies:
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254)
     optional: true
 
   redent@3.0.0:
@@ -13853,8 +13855,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c))
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
 
   tinypool@2.2.0: {}
 
@@ -13887,7 +13889,7 @@ snapshots:
 
   ts-declaration-location@1.0.7(typescript@7.0.2):
     dependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       typescript: 7.0.2
 
   ts-dedent@2.3.0: {}
@@ -14071,7 +14073,7 @@ snapshots:
   vite@8.3.6(@types/node@26.6.2)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       postcss: 8.5.32
       rolldown: 1.2.16
       tinyglobby: 0.2.17
@@ -14092,7 +14094,7 @@ snapshots:
       expect-type: 1.4.0
       magic-string: 1.4.3
       obug: 3.0.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       std-env: 4.3.0
       tinybench: 6.2.2
       tinyexec: 1.3.1

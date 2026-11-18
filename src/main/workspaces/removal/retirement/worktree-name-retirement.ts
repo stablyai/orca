@@ -18,7 +18,7 @@ import {
   computeWorktreePathAsync,
   getWorktreePathSettings,
   hasRepoWorktreeBasePath
-} from '../../../ipc/worktree-logic'
+} from '../../../ipc/worktrees/paths/worktree-logic'
 import { worktreePathComparisonKey } from '../../catalog/worktree-path-comparison-key'
 import {
   retirementHostIdentity,

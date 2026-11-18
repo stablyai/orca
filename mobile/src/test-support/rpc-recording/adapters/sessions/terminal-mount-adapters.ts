@@ -104,7 +104,7 @@ export function terminalMountAdapters(
           deviceTokenRef: { current: DEVICE_TOKEN },
           connState,
           tabStripVisible: true,
-          textScale: 1,
+          fontMetricsKey: '1',
           unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
           subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle })
         } as unknown as Parameters<typeof useRefit>[0])

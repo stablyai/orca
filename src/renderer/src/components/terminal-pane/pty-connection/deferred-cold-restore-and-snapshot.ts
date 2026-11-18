@@ -23,7 +23,6 @@ import { bindStartFreshSpawn } from './spawn/fresh-spawn-start'
 import { bindFreshSpawnFollowReset } from './output/fresh-spawn-follow-reset'
 import { bindReplacedProcessInputModes } from './output/replaced-process-input-modes'
 import { deferHiddenAgentResume } from './spawn/hidden-agent-resume-deferral'
-import { holdInPlaceResumeUntilSettled } from './startup/in-place-resume-hold'
 import { attachToMainResumedSleepPane, mainResumedSleepPane } from './spawn/main-resumed-sleep-pane'
 import { startPaneThroughMainThenAttach } from './spawn/main-pane-start-request'
 
@@ -127,12 +126,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     }
     return startPaneThroughMainThenAttach(session, () => {
       session.applyColdRestoreAgentResumeStartup(startup)
-      const spawned = session.startFreshSpawn(startup, options)
-      // Switch point: main's layout shows this pane unbound while the start runs.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        holdInPlaceResumeUntilSettled(() => !session.disposed, startup, spawned)
-      }
-      return spawned
+      return session.startFreshSpawn(startup, options)
     })
   }
   session.startFreshColdRestoreAgentResume = (

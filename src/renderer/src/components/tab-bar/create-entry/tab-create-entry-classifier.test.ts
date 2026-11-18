@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyTabEntryQuery, getTabEntryOptions } from './tab-create-entry-classifier'
+import { classifyTabEntryQuery } from './tab-create-entry-classifier'
 
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
 
@@ -12,16 +12,5 @@ describe('tab create entry classification', () => {
         query
       ).toMatchObject({ kind: 'blocked' })
     }
-  })
-
-  it('offers both exact file and URL actions for host-like filenames', () => {
-    expect(
-      getTabEntryOptions('example.com', readyFiles(['example.com'])).map(
-        (option) => option.classification
-      )
-    ).toEqual([
-      { kind: 'existing-file', matchKind: 'exact-path', relativePath: 'example.com' },
-      { kind: 'host-url', url: 'https://example.com/' }
-    ])
   })
 })

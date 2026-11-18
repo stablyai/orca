@@ -1,4 +1,4 @@
-import { Activity, memo, useCallback, useMemo } from 'react'
+import { Activity, memo, useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store'
@@ -7,6 +7,7 @@ import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { ActivityPortalContainer } from '@/components/ui/activity-portal-container'
 import { RetainedPaneHost } from '../../../tab-group/retained-pane/RetainedPaneHost'
 import NativeChatView from '../../NativeChatView'
 import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat-composer-editor-owner'
@@ -21,6 +22,7 @@ type StructuredAgentSessionTab = Tab & {
 
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
+const NO_SHOWN_TAB_IDS: ReadonlySet<string> = new Set()
 
 const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOverlaySlot({
   tab,
@@ -59,18 +61,20 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
         <NativeChatHostOutageOwner target={target}>
           <NativeChatComposerEditorOwner>
-            <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
-              <NativeChatView
-                mode="structured"
-                tabId={tab.id}
-                groupId={groupId}
-                sessionId={tab.entityId}
-                agent={tab.agentSessionAgent}
-                isVisible={isActive}
-                isFocusedGroup={isFocusedGroup}
-                target={target}
-              />
-            </Activity>
+            <ActivityPortalContainer visible={isActive}>
+              <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
+                <NativeChatView
+                  mode="structured"
+                  tabId={tab.id}
+                  groupId={groupId}
+                  sessionId={tab.entityId}
+                  agent={tab.agentSessionAgent}
+                  isVisible={isActive}
+                  isFocusedGroup={isFocusedGroup}
+                  target={target}
+                />
+              </Activity>
+            </ActivityPortalContainer>
           </NativeChatComposerEditorOwner>
         </NativeChatHostOutageOwner>
       </NativeChatPaneLifetime>
@@ -113,10 +117,29 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
       [unifiedTabs]
     )
+    // Why: a chat holds no view state until it is first shown, and mounting every restored chat runs the renderer out of memory at thousands of tabs.
+    const [shownTabIds, setShownTabIds] = useState(NO_SHOWN_TAB_IDS)
+    const mountedTabs = useMemo(
+      () =>
+        structuredTabs.filter(
+          (tab) => shownTabIds.has(tab.id) || groupActiveTabById.get(tab.groupId) === tab.id
+        ),
+      [structuredTabs, shownTabIds, groupActiveTabById]
+    )
+    let newlyShownCount = 0
+    for (const tab of mountedTabs) {
+      if (!shownTabIds.has(tab.id)) {
+        newlyShownCount++
+      }
+    }
+    // Recording exactly the mounted chats also drops closed ones, so a reopened tab waits to be shown.
+    if (newlyShownCount > 0 || mountedTabs.length - newlyShownCount < shownTabIds.size) {
+      setShownTabIds(new Set(mountedTabs.map((tab) => tab.id)))
+    }
 
     return (
       <>
-        {structuredTabs.map((tab) => (
+        {mountedTabs.map((tab) => (
           <StructuredAgentSessionOverlaySlot
             key={tab.id}
             tab={tab}

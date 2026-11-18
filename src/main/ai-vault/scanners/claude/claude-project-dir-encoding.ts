@@ -27,6 +27,15 @@ export function claudeProjectBucketScopePrefixes(pathValue: string): string[] {
   )
 }
 
+/** Whether a bucket is an encoded path's own, under its full name or Claude Code's `<first 200>-<hash>` cut. */
+export function isClaudeProjectOwnBucketName(projectDirName: string, encodedPath: string): boolean {
+  return (
+    projectDirName === encodedPath ||
+    (encodedPath.length > CLAUDE_BUCKET_NAME_MAX_LENGTH &&
+      projectDirName.startsWith(`${encodedPath.slice(0, CLAUDE_BUCKET_NAME_MAX_LENGTH)}-`))
+  )
+}
+
 /** Whether a bucket is a scope's own or one below it; see claudeProjectBucketNameBelowScope. */
 export function isClaudeProjectBucketInScope(
   projectDirName: string,

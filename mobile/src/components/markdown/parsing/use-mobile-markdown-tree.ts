@@ -7,8 +7,8 @@ import {
 import {
   linkNativeChatFilePaths,
   type FileLinkExists
-} from '../../../../../src/shared/native-chat/native-chat-file-link-tree'
-import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
+} from '../../../../../src/shared/native-chat/file-access/native-chat-file-link-tree'
+import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import {
   parseGrowingMobileMarkdownTree,
   type MobileMarkdownTreeCache

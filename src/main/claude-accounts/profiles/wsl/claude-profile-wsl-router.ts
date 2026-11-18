@@ -58,6 +58,12 @@ export class ClaudeWslProfileRouter {
 
   /** Startup must not boot stopped distros, nor one a list still names while it stops (E9). */
   async runningDistros(): Promise<string[]> {
+    // No WSL account means nothing to publish: skip the `wsl.exe` list (#28000).
+    if (
+      !this.args.getSettings().claudeManagedAccounts.some((a) => a.managedAuthRuntime === 'wsl')
+    ) {
+      return []
+    }
     const running = await listRunningWslDistrosAsync({ requireConfirmed: true })
     const withAccounts = running.filter((distro) => this.accountIn(distro))
     const settled = await Promise.all(

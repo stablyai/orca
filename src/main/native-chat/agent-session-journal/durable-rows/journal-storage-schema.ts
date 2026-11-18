@@ -57,6 +57,7 @@ const refusalDetails = z.object({
     .object({ installedVersion: z.string().nullable(), minimumVersion: z.string() })
     .optional(),
   expiredAttachments: z.array(z.object({ uploadId: z.string(), name: z.string() })).optional(),
+  otherFolder: z.literal(true).optional(),
   currentFence: count,
   currentRevision: count,
   resolution: AgentJournalKnownSchemas.resolution.optional(),

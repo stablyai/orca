@@ -4,7 +4,7 @@ import {
   useMobileStructuredModelDefault
 } from '../../../use-mobile-structured-model-default'
 import { structuredOptionPickIsPending } from '../../../../../../src/shared/agent-session/options/selection/structured-agent-session-option-pick-book'
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { isAgentSessionHandleProvider } from '../../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'

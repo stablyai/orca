@@ -43,6 +43,25 @@ function agentListVerdict(
   )
 }
 
+/** A row's names as `worktree.ps` lists them. `parent`: the listed pane its orchestration names
+ *  as parent, if any. */
+export function runtimeWorktreeAgentRowNames<T extends Pick<RuntimeWorktreeAgentSource, 'tabId'>>(
+  source: T,
+  orchestration: OrchestrationDisplay | undefined,
+  parent: Pick<RuntimeWorktreeAgentSource, 'tabId'> | undefined,
+  conversationName: ((source: T) => string | null) | undefined
+): Pick<RuntimeWorktreeAgentRow, 'taskTitle' | 'displayName'> & {
+  conversationName: string | null
+} {
+  return {
+    taskTitle: orchestration?.taskTitle ?? null,
+    displayName: orchestration?.displayName ?? null,
+    // Like desktop lineage, a listed child running in its parent's tab does not own that tab's name.
+    conversationName:
+      parent && parent.tabId === source.tabId ? null : (conversationName?.(source) ?? null)
+  }
+}
+
 export function attachRuntimeWorktreeAgentRows(args: {
   summaries: Map<string, RuntimeWorktreePsSummary>
   rowSources: ReadonlyMap<string, RuntimeWorktreeAgentSource>
@@ -71,10 +90,12 @@ export function attachRuntimeWorktreeAgentRows(args: {
     }
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
     const parentPaneKey = orchestration?.parentPaneKey ?? null
-    // Like desktop lineage, a listed child running in its parent's tab does not own that tab's name.
-    const parent = parentPaneKey ? rowSources.get(parentPaneKey) : undefined
-    const conversationName =
-      parent && parent.tabId === source.tabId ? null : args.conversationName?.(source)
+    const { taskTitle, displayName, conversationName } = runtimeWorktreeAgentRowNames(
+      source,
+      orchestration,
+      parentPaneKey ? rowSources.get(parentPaneKey) : undefined,
+      args.conversationName
+    )
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
       ...(source.orcaSessionId ? { orcaSessionId: source.orcaSessionId } : {}),
@@ -83,8 +104,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
       ...(source.workingMode ? { workingMode: source.workingMode } : {}),
       agentType: source.agentType,
       prompt: source.prompt,
-      taskTitle: orchestration?.taskTitle ?? null,
-      displayName: orchestration?.displayName ?? null,
+      taskTitle,
+      displayName,
       ...(conversationName ? { conversationName } : {}),
       ...(conversationName && forked(source.tabId) ? { conversationForked: true as const } : {}),
       lastAssistantMessage: source.lastAssistantMessage,

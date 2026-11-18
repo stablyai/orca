@@ -1,4 +1,7 @@
-import { replaceRecordEntries, replaceTabBuckets } from '@/store/keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '@/store/record-transitions/keyed-record-transitions'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
@@ -10,7 +13,7 @@ import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shu
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import '../../slices/agent-status/agent-status'
-import { collectSleepingAgentSessionRecordsForWorktree } from '../../slices/agent-status/agent-status-recovery-collection'
+import { collectSleepingAgentSessionRecordsForWorktree } from '../../slices/agent-status/sleep-recovery/agent-status-recovery-collection'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from '../pty/terminal-pty-identities'
 import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'

@@ -1,6 +1,6 @@
 import { structuredAgentSessionRuntimeModel } from './structured-agent-session-ran-options'
 import { readAcpForkSupport } from '../../../acp/capabilities/acp-fork-support'
-import { supportsSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
+import { supportsSessionAccountUsage } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-usage'
 import { effectiveAgentSessionOptions } from '../../../../shared/agent-session-default-model'
 import { readStructuredAgentSessionDefaultModel } from '../structured-agent-session-model-default'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'

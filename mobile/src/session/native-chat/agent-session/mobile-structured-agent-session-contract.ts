@@ -11,7 +11,7 @@ import type { MobileChatPermission } from '../input/prompts/mobile-native-chat-p
 import type { MobileChatQuestion } from '../input/prompts/mobile-native-chat-question'
 import type { MobileNativeChatSession } from '../conversation/use-mobile-native-chat-session'
 import type { NativeChatLiveTurnIndicator } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion/use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from '../composer/delivery/use-mobile-structured-send-with-outcome'

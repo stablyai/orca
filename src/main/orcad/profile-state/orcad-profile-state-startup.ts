@@ -5,7 +5,7 @@ import { initOrcaProfilePaths } from '../../orca-profiles/profile-storage-paths'
 import { initSshHostKeyStoreFile } from '../../ssh/host-keys/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../../managed-server/activation/orcad-held-fence-tokens'
 import { emitOrcadProfileStateAuthoritySelected } from './orcad-profile-state-telemetry'
-import { isWslHostOrcadProcess } from '../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 
 /** WSL hosts are held to a per-distro memory budget; the idle writer thread costs ~13-15 MB. */
 export const WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS = 60_000

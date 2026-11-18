@@ -20,4 +20,15 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
       db.pragma(`user_version = ${JOURNAL_DOMAIN_SCHEMA_VERSION}`)
     })
   }
+  ensureJournalStoredOutputColumn(db)
+}
+
+/** Added without a user_version change: released builds name their columns and never read it. */
+function ensureJournalStoredOutputColumn(db: Database.Database): void {
+  const present = db
+    .prepare(`SELECT 1 FROM pragma_table_info('journal_items') WHERE name='output_blob'`)
+    .get()
+  if (!present) {
+    db.exec('ALTER TABLE journal_items ADD COLUMN output_blob BLOB')
+  }
 }

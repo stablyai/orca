@@ -212,7 +212,7 @@ export async function runNativeChatCliFork(args: {
     }
     assertAiVaultCopiedSessionLaunchAllowed(startupArgs)
     const startup = prepared.copied
-      ? buildAiVaultCopiedSessionStartupForWorktree(startupArgs, prepared.sourceAgent ?? args.agent)
+      ? buildAiVaultCopiedSessionStartupForWorktree(startupArgs)
       : buildAiVaultForkStartupForWorktree(startupArgs)
     if (!startup) {
       throw new Error(

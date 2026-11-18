@@ -98,6 +98,7 @@ export function useMobileStructuredOptionState(args: {
       reportedPermissionMode?: string | null
       reportedEffort?: string
       launchPermissionMode?: string
+      runningPermissionMode?: string
     }
   >(
     state: T
@@ -107,8 +108,11 @@ export function useMobileStructuredOptionState(args: {
       summary,
       fence
     ),
-    ...(agent === 'claude' && typeof summary?.launchPermissionMode === 'string'
+    ...(typeof summary?.launchPermissionMode === 'string'
       ? { launchPermissionMode: summary.launchPermissionMode }
+      : {}),
+    ...(typeof summary?.runningPermissionMode === 'string'
+      ? { runningPermissionMode: summary.runningPermissionMode }
       : {})
   })
   const { optionState, support } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
