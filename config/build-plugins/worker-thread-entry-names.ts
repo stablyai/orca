@@ -4,6 +4,7 @@ export const WORKER_THREAD_ENTRY_NAMES = [
   'warp-theme-parser-worker',
   'foreign-sqlite-reader-entry',
   'agent-identity-worker-entry',
+  'bots-db-worker-entry',
   'session-search-worker-entry',
   'journal-sql-worker-entry',
   'journal-sql-reader-entry',

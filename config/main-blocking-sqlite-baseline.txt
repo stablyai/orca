@@ -15,6 +15,8 @@
 6 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
 6 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
 10 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
+47 src/main/bots/bot-group-store.ts
+18 src/main/bots/bot-work-store.ts
 5 src/main/browser-passwords/browser-password-chromium-import.ts
 1 src/main/browser/cookies/chromium/prepare-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
@@ -28,7 +30,7 @@
 5 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 22 src/main/native-chat/agent-session-journal/database/journal-database.ts
 14 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-7 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+8 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # worker-only: +1 is the reply outbox table migration, run on the journal SQL worker
 22 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 32 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
@@ -90,6 +92,7 @@
 4 src/main/persistence/profile-state/legacy-json/profile-state-json-acceptance.ts
 2 src/main/persistence/profile-state/recovery/profile-state-section-repair.ts
 4 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
+4 src/main/runtime/agent-session/records/agent-session-background-meta.ts
 2 src/main/runtime/agent-session/records/agent-session-record-lineage.ts
 38 src/main/runtime/agent-session/records/agent-session-record-rows.ts
 23 src/main/runtime/orchestration/db/dispatch-context/presentation-completion-source.ts
@@ -105,6 +108,7 @@
 15 src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew.ts
 15 src/main/runtime/orchestration/db/schema/structured-worker-orca-session-backfill.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-settlement.ts
+1 src/main/runtime/orchestration/db/worker-status-notice.ts
 4 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
 24 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 5 src/main/sqlite/sync-database.ts

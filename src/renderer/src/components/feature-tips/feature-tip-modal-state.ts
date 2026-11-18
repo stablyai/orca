@@ -10,6 +10,7 @@ import { getPendingFeatureTips, type FeatureTipSettings } from './feature-tip-st
 
 export function getFeatureTipForModal(args: {
   cliInstalled: boolean
+  hasBot: boolean | null
   modalData: Record<string, unknown>
   seenTipIds: readonly FeatureTipSeenId[]
   featureInteractions: FeatureInteractionState

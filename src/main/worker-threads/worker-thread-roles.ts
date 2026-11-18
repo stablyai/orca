@@ -1,6 +1,7 @@
 /** Thread names: crash reports and native samples show these instead of "WorkerThread". */
 export type WorkerThreadRole =
   | 'orca-agent-identity'
+  | 'orca-bots-db'
   | 'orca-child-process-spawner'
   | 'orca-claude-profile-setup'
   | 'orca-claude-rewind-transcript'
@@ -8,6 +9,7 @@ export type WorkerThreadRole =
   | 'orca-command-path-directory'
   | 'orca-environment-store'
   | 'orca-foreign-sqlite-reader'
+  | 'orca-google-pdf-text'
   | 'orca-journal-checkpoint'
   | 'orca-journal-sql-reader'
   | 'orca-journal-sql-writer'

@@ -76,12 +76,17 @@ export function buildNativeChatRailItems(
     if (
       slot.kind !== 'message' ||
       slot.message.role !== 'user' ||
+      slot.message.orcaNotice !== undefined ||
       slot.message.from !== undefined ||
       slot.message.stoppedBeforeStart === true
     ) {
       continue
     }
-    const preview = nativeChatUserMessagePreview(slot.message)
+    const run = slot.message.automationRun
+    // A run's tick names its automation, never the prompt as if the owner wrote it.
+    const preview = run
+      ? { text: run.automation.name, imageCount: 0 }
+      : nativeChatUserMessagePreview(slot.message)
     const hasImages = preview.imageCount > 0
     const prior = previous[items.length]
     items.push(

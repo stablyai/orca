@@ -76,7 +76,9 @@ export function AutomationEditorPromptSection({
         </Tooltip>
       </div>
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {t('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')}
+        {draft.bot
+          ? t('automations.botTarget.prompt', 'What should it do?')
+          : t('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')}
       </div>
       <AutomationEditorPromptEditor
         value={draft.prompt}

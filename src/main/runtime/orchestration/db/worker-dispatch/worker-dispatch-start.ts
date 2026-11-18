@@ -53,6 +53,8 @@ export function createStartingWorkerDispatch(
     acceptedBy?: { callerFingerprint: string; requestId: string }
     /** The Dispatch whose unread mail this follow-up's Task tells it to check, moved to it in the claim. */
     takesMailOf?: string
+    /** What the creator started it for; a retry or follow-up without one keeps its earlier start's. */
+    originRef?: string
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -171,6 +173,12 @@ export function createStartingWorkerDispatch(
       priorFailures,
       creatorDispatchId,
       followUpOfDispatchId: params.followUpOf ?? null,
+      originRef:
+        params.originRef ??
+        [params.retryOf, params.followUpOf]
+          .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.origin_ref : null))
+          .find((ref) => ref) ??
+        null,
       ...recordedCreatorIdentity(params.creator)
     })
     if (params.takesMailOf) {

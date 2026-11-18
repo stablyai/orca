@@ -2,6 +2,7 @@ import type { MessagePriority, MessageType } from '../db/orchestration-records'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../orchestration-error'
+import { pairedServerSendRefusal } from '../paired-server-follow-up-refusal'
 import { encodeFederatedControlMessage } from '../legacy-remote/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { recordReceiptBeforeNudge } from '../../rpc/methods/orchestration/messaging/mutation-replay-nudge'
@@ -48,15 +49,12 @@ export function sendFederatedControlMail(args: {
     () => (state = db.getWorkerDispatch(dispatchId)?.state)
   )
   if (refusal) {
-    const server = federatedTarget.environment_name
-    // Paired servers cannot continue a finished worker yet; steering a running one still works.
-    const message =
+    throw new OrchestrationError(
+      refusal.code,
       refusal.code !== 'dispatch_inactive'
         ? refusal.message
-        : state && ['succeeded', 'failed', 'stopped', 'abandoned'].includes(state)
-          ? `Dispatch ${dispatchId} finished on ${server}, which cannot take follow-ups for finished workers yet. Start a new worker there with \`orca orchestration worker-start --on ${server}\`.`
-          : `Dispatch ${dispatchId} on ${server} is not confirmed running (${state ?? 'unknown'}), so this message was not sent. Check it with \`orca orchestration worker-show --dispatch ${dispatchId}\` before starting another worker.`
-    throw new OrchestrationError(refusal.code, message)
+        : pairedServerSendRefusal(dispatchId, federatedTarget.environment_name, state)
+    )
   }
   if (params.type === 'worker_done' || params.type === 'heartbeat') {
     throw new OrchestrationError(
