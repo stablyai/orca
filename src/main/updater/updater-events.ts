@@ -131,12 +131,13 @@ export function registerAutoUpdaterHandlers({
     void (async () => {
       try {
         const releaseCheck = !isLocalBuildCheck() && !isPinnedBuildCheck()
-        const [changelog, releaseHistory] = releaseCheck
-          ? await Promise.all([
-              fetchChangelog(info.version, app.getVersion()).catch(() => null),
-              fetchReleaseHistory(info.version, app.getVersion())
-            ])
-          : [null, null]
+        // Start the listing now; it attaches to the available status when it lands.
+        const releaseHistory = releaseCheck
+          ? fetchReleaseHistory(info.version, app.getVersion())
+          : null
+        const changelog = releaseCheck
+          ? await fetchChangelog(info.version, app.getVersion()).catch(() => null)
+          : null
 
         if (!isActiveUpdateCheckAttempt(attemptId)) {
           return
@@ -166,11 +167,22 @@ export function registerAutoUpdaterHandlers({
             state: 'available',
             version: info.version,
             changelog,
-            ...(releaseHistory ? { releaseHistory } : {}),
             // Tell clients this host cannot self-update before offering a download.
             ...(isExternallyManagedLinuxInstall() ? { externallyManaged: true } : {})
           }
         )
+        void releaseHistory?.then((history) => {
+          const status = getCurrentStatus()
+          // Attach only while this offer is still shown and no newer check could be cut short.
+          if (
+            history &&
+            status.state === 'available' &&
+            status.version === info.version &&
+            getActiveUpdateCheckEventAttemptId() === null
+          ) {
+            sendStatus({ ...status, releaseHistory: history })
+          }
+        })
       } finally {
         clearUpdateAvailableEventPending(attemptId)
       }

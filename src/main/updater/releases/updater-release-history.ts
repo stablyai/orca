@@ -14,8 +14,6 @@ const MAX_PAGES = 3
 // Bound the status payload, which also reaches paired clients.
 const MAX_RELEASES = 25
 const MAX_NOTES_LENGTH = 12_000
-// The available status waits on this, and the check's 45s stall timer must not fire first.
-const RESULT_DEADLINE_MS = 10_000
 
 type GitHubRelease = {
   tag_name?: unknown
@@ -60,20 +58,21 @@ async function loadReleaseHistory(
     if (!Array.isArray(payload)) {
       return null
     }
-    let reachedInstalled = false
+    // GitHub lists by creation date, not version, so read every bounded page.
     for (const entry of payload) {
       const release = parseStableRelease(entry)
       if (!release) {
         continue
       }
       // compareVersions ignores build metadata, so 1.4.258+custom.1 counts as 1.4.258.
-      if (compareVersions(release.version, installedVersion) <= 0) {
-        reachedInstalled = true
-      } else if (compareVersions(release.version, availableVersion) <= 0) {
+      if (
+        compareVersions(release.version, installedVersion) > 0 &&
+        compareVersions(release.version, availableVersion) <= 0
+      ) {
         newer.set(release.version, release)
       }
     }
-    if (reachedInstalled || payload.length < RELEASES_PER_PAGE) {
+    if (payload.length < RELEASES_PER_PAGE) {
       break
     }
   }
@@ -106,16 +105,6 @@ function startLoad(key: string, availableVersion: string, installedVersion: stri
   return entry
 }
 
-function withDeadline(
-  history: Promise<UpdateReleaseHistory | null>
-): Promise<UpdateReleaseHistory | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const deadline = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), RESULT_DEADLINE_MS)
-  })
-  return Promise.race([history, deadline]).finally(() => clearTimeout(timer))
-}
-
 /** Stable releases in (installed, available], newest first; null when they cannot be listed. */
 export function fetchReleaseHistory(
   availableVersion: string,
@@ -128,6 +117,5 @@ export function fetchReleaseHistory(
   if (cached?.key !== key) {
     cached = startLoad(key, availableVersion, installedVersion)
   }
-  // A slow listing falls back now and stays cached for the next check.
-  return withDeadline(cached.history)
+  return cached.history
 }

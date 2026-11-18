@@ -81,6 +81,21 @@ describe('fetchReleaseHistory', () => {
     expect(history?.releases[0].version).toBe('1.5.99')
   })
 
+  it('keeps reading pages past an older release listed before newer ones', async () => {
+    // A maintenance release cut after newer ones sorts first in GitHub's creation-date order.
+    const firstPage = [
+      release('v1.3.9'),
+      ...Array.from({ length: 99 }, (_, index) => release(`v1.0.${index}`))
+    ]
+    netFetchMock
+      .mockResolvedValueOnce(jsonResponse(firstPage))
+      .mockResolvedValueOnce(jsonResponse([release('v1.4.2'), release('v1.4.1')]))
+
+    const history = await fetchReleaseHistory('1.4.2', '1.4.0')
+
+    expect(history?.releases.map((entry) => entry.version)).toEqual(['1.4.2', '1.4.1'])
+  })
+
   it('falls back when the list cannot be fetched, and retries on the next check', async () => {
     netFetchMock
       .mockResolvedValueOnce(new Response('rate limited', { status: 403 }))

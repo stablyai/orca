@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { registerAutoUpdaterHandlers } from './updater-events'
+import type { UpdateReleaseHistory, UpdateStatus } from '../../shared/updater/update-status-types'
 
 const {
   appMock,
@@ -211,5 +212,54 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
 
     expect(getArtifact()).toBeNull()
     expect(context.sendStatus).not.toHaveBeenCalled()
+  })
+})
+
+describe('registerAutoUpdaterHandlers release history', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    appMock.getVersion.mockReset().mockReturnValue('1.0.51')
+    isExternallyManagedLinuxInstallMock.mockReset().mockReturnValue(false)
+  })
+
+  it('shows the update without waiting for release history, then attaches it', async () => {
+    const { fetchReleaseHistory } = await import('./releases/updater-release-history')
+    let resolveHistory: (history: UpdateReleaseHistory) => void = () => {}
+    vi.mocked(fetchReleaseHistory).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHistory = resolve
+      })
+    )
+    let current: UpdateStatus = { state: 'checking' }
+    let activeAttemptId: number | null = 1
+    const context = createContext({
+      getCurrentStatus: vi.fn(() => current),
+      getActiveUpdateCheckEventAttemptId: vi.fn(() => activeAttemptId),
+      sendStatus: vi.fn((status: UpdateStatus) => {
+        current = status
+        activeAttemptId = null
+      })
+    })
+    const { registerAutoUpdaterHandlers } = await import('./updater-events')
+    registerAutoUpdaterHandlers(context)
+
+    ;(context.autoUpdater as unknown as ReturnType<typeof createUpdaterStub>).emit(
+      'update-available',
+      { version: '1.0.61' }
+    )
+
+    const available = { state: 'available', version: '1.0.61', changelog: null }
+    await vi.waitFor(() => expect(context.sendStatus).toHaveBeenCalledWith(available))
+    const history: UpdateReleaseHistory = {
+      installedVersion: '1.0.51',
+      newerReleaseCount: 1,
+      releases: [
+        { version: '1.0.61', publishedAt: null, notes: 'Notes', releaseUrl: 'https://x/1.0.61' }
+      ]
+    }
+    resolveHistory(history)
+    await vi.waitFor(() =>
+      expect(context.sendStatus).toHaveBeenLastCalledWith({ ...available, releaseHistory: history })
+    )
   })
 })
