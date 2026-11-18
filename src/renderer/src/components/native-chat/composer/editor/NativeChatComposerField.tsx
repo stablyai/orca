@@ -203,7 +203,6 @@ export function NativeChatComposerField({
       onKeyDown(event)
     }
   })
-  const editorKeyUp = useLatestHandler(imeEnterGesture.onKeyUp)
   const editorBlur = useLatestHandler(() => {
     const compositionWasActive = imeEnterGesture.isComposing()
     imeEnterGesture.reset()
@@ -221,9 +220,9 @@ export function NativeChatComposerField({
     compositionBaseRef.current = textareaRef.current!.value
     imeEnterGesture.setComposing(true)
   })
-  const editorCompositionEnd = useLatestHandler((event: React.CompositionEvent<HTMLDivElement>) => {
+  const editorCompositionEnd = useLatestHandler(() => {
     const compositionWasActive = imeEnterGesture.isComposing()
-    imeEnterGesture.setComposing(false, event.data)
+    imeEnterGesture.setComposing(false)
     if (compositionWasActive) {
       settleImeValue(textareaRef.current!)
     }
@@ -339,7 +338,6 @@ export function NativeChatComposerField({
               disabled={disabled}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
-              onKeyUp={editorKeyUp}
               onBlur={editorBlur}
               onCompositionStart={editorCompositionStart}
               onCompositionEnd={editorCompositionEnd}
