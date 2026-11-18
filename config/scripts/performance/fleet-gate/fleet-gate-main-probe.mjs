@@ -178,8 +178,9 @@ function installMainProbe({ app, ipcMain, webContents }) {
   return invokeCounted ? 'installed' : 'installed-without-invoke'
 }
 
+// Playwright occasionally drops an evaluate promise in a freshly started main process; one retry clears it.
 export async function installMainProbeIn(electronApp) {
-  return electronApp.evaluate(installMainProbe)
+  return electronApp.evaluate(installMainProbe).catch(() => electronApp.evaluate(installMainProbe))
 }
 
 export async function resetMainProbe(electronApp) {

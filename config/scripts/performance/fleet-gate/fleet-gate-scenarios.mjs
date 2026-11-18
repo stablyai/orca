@@ -292,9 +292,15 @@ async function switchWorkspaces({ page, windowMs }) {
   let switches = 0
   let missed = 0
   let firstError = null
+  const spentMs = { clear: 0, click: 0, confirm: 0 }
+  const lap = (phase, since) => {
+    spentMs[phase] += Date.now() - since
+    return Date.now()
+  }
   while (Date.now() < deadline) {
     const id = pair[switches % 2]
     let landed = false
+    let mark = Date.now()
     // Tips and notices appear after a delay, so check before every click, not just the first.
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const path = await clearPathTo(page, id)
@@ -306,11 +312,13 @@ async function switchWorkspaces({ page, windowMs }) {
       }
       await sleep(100)
     }
+    mark = lap('clear', mark)
     try {
       await page
         .locator(`[data-worktree-id="${id}"] [data-worktree-card-surface]`)
         .first()
         .click({ timeout: 5_000 })
+      mark = lap('click', mark)
       landed = await page
         .waitForFunction((target) => window.__store.getState().activeWorktreeId === target, id, {
           polling: 100,
@@ -318,6 +326,7 @@ async function switchWorkspaces({ page, windowMs }) {
         })
         .then(() => true)
         .catch(() => false)
+      lap('confirm', mark)
       firstError ??= landed ? null : 'clicked, but the workspace did not become active'
     } catch (error) {
       const lines = String(error?.message ?? error).split('\n')
@@ -342,7 +351,7 @@ async function switchWorkspaces({ page, windowMs }) {
   const planned = Math.floor(windowMs / SWITCH_INTERVAL_MS)
   const landedCount = switches - missed
   return {
-    note: `${landedCount} switches between 2 cards${firstError ? ` (first miss: ${firstError})` : ''}`,
+    note: `${landedCount} switches between 2 cards (per switch: ${['clear', 'click', 'confirm'].map((phase) => `${phase} ${String(Math.round(spentMs[phase] / Math.max(1, switches)))} ms`).join(', ')})${firstError ? ` (first miss: ${firstError})` : ''}`,
     missed,
     undriven:
       landedCount < planned * (1 - MAX_MISSED_SHARE)
