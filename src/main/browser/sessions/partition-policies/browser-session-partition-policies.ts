@@ -20,6 +20,10 @@ import {
   installBrowserSessionPermissionHandlers,
   type BrowserSessionPermissionOptions
 } from '../../site-settings/permissions/browser-session-permission-handlers'
+import {
+  bindBrowserSessionToSiteListProfile,
+  unbindBrowserSessionFromSiteList
+} from '../site-list/browser-session-site-list'
 import { registerBrowserSessionSitePermissions } from '../../site-settings/permissions/browser-site-permission-memory'
 
 const configuredPartitions = new Set<string>()
@@ -81,6 +85,7 @@ export async function installBrowserSessionPartitionPolicies(
     return proxyReady
   }
 
+  bindBrowserSessionToSiteListProfile(sess, profile.id)
   browserManager.installCertificateRequestGuard(sess)
   if (options?.permissions === 'deny') {
     sess.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
@@ -116,6 +121,7 @@ export function clearBrowserSessionPartitionPolicies(partition: string, sess: Se
   retireBrowserSessionUserAgentPolicy(sess)
   configuredPartitions.delete(partition)
   browserManager.removeCertificateRequestGuard(sess)
+  unbindBrowserSessionFromSiteList(sess)
   sess.removeListener('will-download', handleWillDownload)
   sess.removeListener('will-download', handleDeniedWillDownload)
   sess.removeListener('file-system-access-restricted', denyRestrictedFileSystemAccess)

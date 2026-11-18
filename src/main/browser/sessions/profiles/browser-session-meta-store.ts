@@ -1,5 +1,9 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import {
+  MAX_BROWSER_SITE_LIST_ENTRIES,
+  normalizeBrowserSiteListEntry
+} from '../../../../shared/browser/profiles/browser-profile-site-list'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 export type PendingBrowserCookieImport =
@@ -20,6 +24,8 @@ export type BrowserSessionMeta = {
   enabledExtensionIdsByProfileId: Record<string, string[]>
   /** Browser-profile id → extension ids pinned to the browser toolbar, in pin order. */
   pinnedExtensionIdsByProfileId: Record<string, string[]>
+  /** Browser-profile id → hostname site list. Absent or empty means unrestricted. */
+  allowedHostsByProfileId: Record<string, string[]>
 }
 
 export const BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
@@ -32,6 +38,29 @@ function parseEnabledExtensionIds(value: unknown): Record<string, string[]> {
   for (const [profileId, ids] of Object.entries(value)) {
     if (Array.isArray(ids)) {
       result[profileId] = ids.filter((id): id is string => typeof id === 'string')
+    }
+  }
+  return result
+}
+
+function parseAllowedHosts(value: unknown): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return result
+  }
+  for (const [profileId, entries] of Object.entries(value)) {
+    if (!Array.isArray(entries)) {
+      continue
+    }
+    const valid = new Set<string>()
+    for (const entry of entries) {
+      const normalized = typeof entry === 'string' ? normalizeBrowserSiteListEntry(entry) : null
+      if (normalized?.ok) {
+        valid.add(normalized.entry)
+      }
+    }
+    if (valid.size > 0) {
+      result[profileId] = [...valid].slice(0, MAX_BROWSER_SITE_LIST_ENTRIES)
     }
   }
   return result
@@ -83,7 +112,8 @@ export function loadBrowserSessionMeta(
       enabledExtensionIdsByProfileId: parseEnabledExtensionIds(
         data?.enabledExtensionIdsByProfileId
       ),
-      pinnedExtensionIdsByProfileId: parseEnabledExtensionIds(data?.pinnedExtensionIdsByProfileId)
+      pinnedExtensionIdsByProfileId: parseEnabledExtensionIds(data?.pinnedExtensionIdsByProfileId),
+      allowedHostsByProfileId: parseAllowedHosts(data?.allowedHostsByProfileId)
     }
     // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
     enabledExtensionIdsByPath.set(path, copyIdLists(meta.enabledExtensionIdsByProfileId))
@@ -95,7 +125,8 @@ export function loadBrowserSessionMeta(
       pendingCookieImports: {},
       profiles: [],
       enabledExtensionIdsByProfileId: {},
-      pinnedExtensionIdsByProfileId: {}
+      pinnedExtensionIdsByProfileId: {},
+      allowedHostsByProfileId: {}
     }
   }
 }
@@ -142,10 +173,13 @@ export function forgetBrowserSessionProfileMeta(
   delete enabledExtensionIdsByProfileId[profile.id]
   const pinnedExtensionIdsByProfileId = { ...meta.pinnedExtensionIdsByProfileId }
   delete pinnedExtensionIdsByProfileId[profile.id]
+  const allowedHostsByProfileId = { ...meta.allowedHostsByProfileId }
+  delete allowedHostsByProfileId[profile.id]
   return {
     pendingCookieImports,
     pendingCookieDbPath: typeof defaultPendingImport === 'string' ? defaultPendingImport : null,
     enabledExtensionIdsByProfileId,
-    pinnedExtensionIdsByProfileId
+    pinnedExtensionIdsByProfileId,
+    allowedHostsByProfileId
   }
 }

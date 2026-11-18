@@ -334,6 +334,23 @@
     }
   },
   "browser": {
+    "siteList": {
+      "label": "Site list",
+      "description": "Only these sites load in this profile. One host per line, such as example.com or *.example.com (subdomains only). Leave empty to allow every site.",
+      "save": "Save",
+      "saved": "Site list saved.",
+      "saveFailed": "Could not save the site list.",
+      "errorInvalid": "Line {{line}}: not a valid host name.",
+      "errorIp": "Line {{line}}: IP addresses are not supported.",
+      "errorForm": "Line {{line}}: enter only a host name, without a scheme, port or path.",
+      "errorTooMany": "At most {{max}} sites are allowed.",
+      "confirmTitle": "Allow more sites in the browser profile \"{{profile}}\"?",
+      "confirmAddDetail": "This profile will also be able to open:",
+      "confirmClearDetail": "The site list will be removed, so this profile can open any site.",
+      "confirmMore": "and {{extra}} more",
+      "confirmAllow": "Allow",
+      "confirmCancel": "Cancel"
+    },
     "googleCookieClear": {
       "signInKeyword": "sign-in",
       "unavailable": "Unavailable for this profile on the selected host.",

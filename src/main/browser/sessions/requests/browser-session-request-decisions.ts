@@ -61,7 +61,7 @@ export function watchDecisionBlockedMainFrames(
   }
 }
 
-function noteBlockedMainFrame(
+export function noteBlockedMainFrame(
   details: Electron.OnBeforeRequestListenerDetails,
   response: Electron.CallbackResponse
 ): void {
