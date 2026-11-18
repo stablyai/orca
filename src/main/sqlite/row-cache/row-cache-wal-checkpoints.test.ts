@@ -78,12 +78,19 @@ describe('RowCacheWalCheckpoints', () => {
             resolve(result)
           }
         })
-        worker.postMessage({ id, path: target })
+        // Forced: a three-frame WAL is below the threshold an ordinary request waits for.
+        worker.postMessage({ id, path: target, force: true })
       })
     try {
-      expect(await ask(1, path)).toEqual({ id: 1, ok: true })
+      expect(await ask(1, path)).toMatchObject({ id: 1, ok: true })
+      const wal = db.pragma('wal_checkpoint(NOOP)') as {
+        log: number
+        checkpointed: number
+      }[]
+      expect(wal[0]!.log).toBeGreaterThan(0)
+      expect(wal[0]!.checkpointed).toBe(wal[0]!.log)
       const missing = join(path, '..', 'removed.db')
-      expect(await ask(2, missing)).toEqual({ id: 2, ok: false })
+      expect(await ask(2, missing)).toMatchObject({ id: 2, ok: false })
       expect(existsSync(missing)).toBe(false)
     } finally {
       await worker.terminate()

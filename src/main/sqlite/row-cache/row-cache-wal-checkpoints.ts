@@ -120,8 +120,16 @@ export class RowCacheWalCheckpoints {
     return id
   }
 
+  /** Rebuilds wait for this: a running checkpoint's closing handle can unlink a recreated file's WAL. */
+  isCheckpointing(id: number | null): boolean {
+    return id !== null && this.inFlight.has(id)
+  }
+
   /** Drops queued work; a checkpoint already running finishes on its own short-lived handle. */
-  detach(id: number): void {
+  detach(id: number | null): void {
+    if (id === null) {
+      return
+    }
     this.registrations.delete(id)
     this.again.delete(id)
     this.catchUpOwed.delete(id)

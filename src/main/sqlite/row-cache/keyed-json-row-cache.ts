@@ -27,7 +27,7 @@ export type KeyedJsonRowCacheOptions = {
   holdConnection?: boolean
   /** JSON file older builds wrote; see load(). */
   legacyPath?: string
-  walCheckpoints?: Pick<RowCacheWalCheckpoints, 'attach' | 'detach' | 'request'>
+  walCheckpoints?: Pick<RowCacheWalCheckpoints, 'attach' | 'detach' | 'request' | 'isCheckpointing'>
 }
 
 /**
@@ -288,7 +288,8 @@ export class KeyedJsonRowCache {
     try {
       return operation()
     } catch (error) {
-      if (classifyRowCacheFailure(error) !== 'corrupt') {
+      const checkpointing = this.walCheckpoints.isCheckpointing(this.walRegistration)
+      if (classifyRowCacheFailure(error) !== 'corrupt' || checkpointing) {
         throw error
       }
       this.closeDatabase()
@@ -334,10 +335,8 @@ export class KeyedJsonRowCache {
   }
 
   private closeDatabase(): void {
-    if (this.walRegistration !== null) {
-      this.walCheckpoints.detach(this.walRegistration)
-      this.walRegistration = null
-    }
+    this.walCheckpoints.detach(this.walRegistration)
+    this.walRegistration = null
     try {
       this.db?.close()
     } catch {
