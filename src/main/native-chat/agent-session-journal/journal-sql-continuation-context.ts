@@ -1,9 +1,6 @@
 import { closeSync, openSync, writeSync } from 'node:fs'
 import type Database from '../../sqlite/sync-database'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   JournalContinuationSpill,
@@ -92,11 +89,9 @@ function readJournalDomainContinuationContext(
   db: Database.Database,
   target: { sessionId: string; epoch: string }
 ): JournalContinuationContext {
-  const context = {
-    items: [] as AgentJournalRenderItem[],
-    submissions: [] as AgentJournalSubmission[],
-    continued: [] as JournalContinuedPayload[]
-  }
+  const items: AgentJournalRenderItem[] = []
+  const submissions: JournalContinuationContext['submissions'][number][] = []
+  const continued: JournalContinuedPayload[] = []
   // One snapshot: the head and clear boundary hold for every page.
   const cursor = journalDomainContextHead(db, target)
   const clear = Number(
@@ -110,12 +105,12 @@ function readJournalDomainContinuationContext(
   let page = read()
   for (;;) {
     for (const part of page.continued) {
-      context.continued.push({ ...part, index: part.index + context.items.length })
+      continued.push({ ...part, index: part.index + items.length })
     }
-    context.items.push(...page.items)
-    context.submissions.push(...page.submissions)
+    items.push(...page.items)
+    submissions.push(...page.submissions)
     if (!page.next) {
-      return { cursor, ...context }
+      return { cursor, items, submissions, continued }
     }
     page = read(page.next)
   }

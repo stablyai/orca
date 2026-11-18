@@ -302,7 +302,8 @@ it('exports a large tool output as an excerpt and spills its whole stored bytes 
   expect(context.continued).toEqual([
     { index: 0, itemId: 'tool', revision: 1, field: 'output', bytes: 34_100_020 }
   ])
-  const excerpt = (context.items[0].body as { output: { head: string } }).output.head
+  const { body } = context.items[0]
+  const excerpt = body.kind === 'tool-call' ? body.output!.head : ''
   expect(excerpt.startsWith('start 😀é-abc')).toBe(true)
   expect(excerpt.endsWith('after NUL end')).toBe(true)
   expect(excerpt.length).toBeLessThan(64 * 1024)
