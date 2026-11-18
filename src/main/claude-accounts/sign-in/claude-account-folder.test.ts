@@ -5,13 +5,21 @@ import {
   renameSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as Os from 'node:os'
+import type * as FsPromises from 'node:fs/promises'
+
+vi.mock('node:fs/promises', async (original) => {
+  const fs = await original<typeof FsPromises>()
+  return { ...fs, readFile: vi.fn(fs.readFile) }
+})
 
 const keychain = vi.hoisted(() => ({ items: new Map<string, number>(), userHome: '' }))
 vi.mock('node:os', async (original) => ({
@@ -40,6 +48,7 @@ import { claudeKeychainService } from '../runtime-auth/keychain'
 
 const roots: string[] = []
 afterEach(() => {
+  vi.mocked(readFile).mockClear()
   keychain.items.clear()
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
 })
@@ -114,3 +123,50 @@ it.each(['sync', 'async'] as const)(
     expect((await readClaudeFolderLoginAsync(state))?.email).toBe('b@example.test')
   }
 )
+
+it.each(['sync', 'async', 'removed'] as const)(
+  'keeps a newer %s observation after an older async read finishes',
+  async (mode) => {
+    const { root } = fixture()
+    const state = join(root, '.claude.json')
+    const staged = join(root, '.claude.next.json')
+    const oldState = JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } })
+    writeFileSync(state, oldState)
+    const delivery = Promise.withResolvers<string>()
+    const started = Promise.withResolvers<void>()
+    vi.mocked(readFile).mockImplementationOnce(() => {
+      started.resolve()
+      return delivery.promise
+    })
+    const older = readClaudeFolderLoginAsync(state)
+    await started.promise
+    if (mode === 'removed') {
+      unlinkSync(state)
+      expect(readClaudeFolderLogin(state)).toBeNull()
+    } else {
+      writeFileSync(staged, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test' } }))
+      renameSync(staged, state)
+      const newer =
+        mode === 'sync' ? readClaudeFolderLogin(state) : await readClaudeFolderLoginAsync(state)
+      expect(newer?.email).toBe('b@example.test')
+    }
+    delivery.resolve(oldState)
+    expect((await older)?.email).toBe('a@example.test')
+    if (mode === 'removed') {
+      writeFileSync(state, JSON.stringify({ oauthAccount: { emailAddress: 'c@example.test' } }))
+      expect(readClaudeFolderLogin(state, 5_000)?.email).toBe('c@example.test')
+    } else {
+      expect(readClaudeFolderLogin(state, 5_000)?.email).toBe('b@example.test')
+    }
+  }
+)
+
+it('replaces an older synchronous observation with a newer async login', async () => {
+  const { root } = fixture()
+  const state = join(root, '.claude.json')
+  writeFileSync(state, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
+  expect(readClaudeFolderLogin(state)?.email).toBe('a@example.test')
+  writeFileSync(state, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test' } }))
+  expect((await readClaudeFolderLoginAsync(state))?.email).toBe('b@example.test')
+  expect(readClaudeFolderLogin(state, 5_000)?.email).toBe('b@example.test')
+})

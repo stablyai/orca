@@ -63,6 +63,8 @@ const logins = new Map<
   string,
   { signature: string; readAt: number; login: ClaudeFolderLogin | null }
 >()
+const loginObservations = new Map<string, { generation: number; readers: number }>()
+let loginObservationSequence = 0
 
 /** Missing organization IDs permit an email-only match. */
 export function isSameClaudeLogin(
@@ -95,6 +97,11 @@ export function readClaudeFolderLogin(stateFile: string, maxAgeMs = 0): ClaudeFo
   if (recent && Date.now() - recent.readAt < maxAgeMs) {
     return recent.login
   }
+  const observation = loginObservations.get(stateFile)
+  if (observation) {
+    observation.generation = ++loginObservationSequence
+  }
+  pendingLogins.delete(stateFile)
   let signature: string
   try {
     signature = fileStatSignature(statSync(stateFile, { bigint: true }))
@@ -115,14 +122,36 @@ export function readClaudeFolderLogin(stateFile: string, maxAgeMs = 0): ClaudeFo
 // Concurrent chat reads of one state-file revision share a single read and parse.
 const pendingLogins = new Map<
   string,
-  { signature: string; login: Promise<ClaudeFolderLogin | null> }
+  { signature: string; generation: number; login: Promise<ClaudeFolderLogin | null> }
 >()
 
 /** Avoid blocking main on state files across WSL shares. */
 export async function readClaudeFolderLoginAsync(
   stateFile: string
 ): Promise<ClaudeFolderLogin | null> {
+  const observation = loginObservations.get(stateFile) ?? { generation: 0, readers: 0 }
+  loginObservations.set(stateFile, observation)
+  observation.readers += 1
+  try {
+    return await readObservedLogin(stateFile, observation, ++loginObservationSequence)
+  } finally {
+    observation.readers -= 1
+    if (observation.readers === 0) {
+      loginObservations.delete(stateFile)
+    }
+  }
+}
+
+async function readObservedLogin(
+  stateFile: string,
+  observation: { generation: number; readers: number },
+  generation: number
+): Promise<ClaudeFolderLogin | null> {
   const current = await stat(stateFile, { bigint: true }).catch(() => null)
+  if (observation.generation > generation) {
+    return pendingLogins.get(stateFile)?.login ?? logins.get(stateFile)?.login ?? null
+  }
+  observation.generation = generation
   if (!current) {
     logins.delete(stateFile)
     pendingLogins.delete(stateFile)
@@ -131,17 +160,19 @@ export async function readClaudeFolderLoginAsync(
   const signature = fileStatSignature(current)
   const recent = logins.get(stateFile)
   if (recent?.signature === signature) {
+    pendingLogins.delete(stateFile)
     return recent.login
   }
   const pending = pendingLogins.get(stateFile)
   if (pending?.signature === signature) {
+    pending.generation = generation
     return pending.login
   }
-  const read = { signature, login: readStateLogin(stateFile) }
+  const read = { signature, generation, login: readStateLogin(stateFile) }
   pendingLogins.set(stateFile, read)
   const login = await read.login
   // A read superseded by a newer revision (or a deleted file) must not repopulate the cache.
-  if (pendingLogins.get(stateFile) === read) {
+  if (observation.generation === read.generation && pendingLogins.get(stateFile) === read) {
     pendingLogins.delete(stateFile)
     logins.set(stateFile, { signature: read.signature, readAt: Date.now(), login })
   }
