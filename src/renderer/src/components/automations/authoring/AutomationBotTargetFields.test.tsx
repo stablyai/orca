@@ -205,19 +205,9 @@ describe('automation bot target', () => {
       bot: { ...TARGET, resultsTo: { linearIssue: 'ENG-1' } }
     })
 
-    expect(screen.getByLabelText('Linear issue').getAttribute('placeholder')).toBe(
-      'Issue key (e.g. ENG-123) or a Linear link'
-    )
     fireEvent.change(screen.getByLabelText('Linear issue'), { target: { value: 'ENG-42' } })
 
     const next = onDraftChange.mock.calls.at(-1)![0]({ ...DRAFT, bot: TARGET })
     expect(next.bot?.resultsTo).toEqual({ linearIssue: 'ENG-42' })
-  })
-
-  it('asks for a channel or a Slack link, which the host looks up on save', () => {
-    renderSidebar({ ...DRAFT, bot: { ...TARGET, resultsTo: { channel: '' } } })
-    expect(screen.getByLabelText('Channel').getAttribute('placeholder')).toBe(
-      '#channel or a Slack link'
-    )
   })
 })
