@@ -214,6 +214,9 @@ importers:
       '@linear/sdk':
         specifier: ^97.0.0
         version: 97.0.0(graphql@16.14.2)
+      '@mermaid-js/layout-elk':
+        specifier: 0.2.3
+        version: 0.2.3(@types/d3-selection@3.0.11)(mermaid@11.17.2)
       '@orca/process-host':
         specifier: workspace:*
         version: link:src/packages/process-host
@@ -1628,6 +1631,15 @@ packages:
   '@malept/flatpak-bundler@0.4.0':
     resolution: {integrity: sha512-9QOtNffcOF/c1seMCDnjckb3R9WHcG34tky+FHpNKKCW0wc/scYLwMtO+ptyGUfMW0/b/n4qRiALlaFHc9Oj7Q==}
     engines: {node: '>= 10.0.0'}
+
+  '@mermaid-js/layout-elk@0.2.3':
+    resolution: {integrity: sha512-m46RVGfvKK1PSMdAFGDz2nksI4jusEkFxvf0lb48bYWmqLQxZpjtpruiw29MbOy9rlWJtuMf9EzG9fAF8CVZbg==}
+    peerDependencies:
+      '@types/mermaid': '*'
+      mermaid: ^11.0.2
+    peerDependenciesMeta:
+      '@types/mermaid':
+        optional: true
 
   '@mermaid-js/parser@1.2.1':
     resolution: {integrity: sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw==}
@@ -5545,6 +5557,9 @@ packages:
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
+  elkjs@0.9.3:
+    resolution: {integrity: sha512-f/ZeWvW/BCXbhGEf1Ujp29EASo/lk1FDnETgNKwJrsVvGZhUWCZyg3xLJjAsxfOmt8KjswHmI5EwCQcPMpOYhQ==}
+
   emoji-picker-react@4.22.3:
     resolution: {integrity: sha512-jrAkkoN69l5lA2Xp6P5axqoK1YdHNS1+MKMlLxwltnnnaXrojUjZaolgI/U8vdx8vFWqG42yYqpLSR83f6pwiw==}
     engines: {node: '>=10'}
@@ -9210,6 +9225,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@mermaid-js/layout-elk@0.2.3(@types/d3-selection@3.0.11)(mermaid@11.17.2)':
+    dependencies:
+      d3: 7.9.0(@types/d3-selection@3.0.11)
+      elkjs: 0.9.3
+      mermaid: 11.17.2
+    transitivePeerDependencies:
+      - '@types/d3-selection'
+
   '@mermaid-js/parser@1.2.1':
     dependencies:
       '@chevrotain/types': 11.1.2
@@ -12454,6 +12477,8 @@ snapshots:
       '@types/node': 24.19.2
     transitivePeerDependencies:
       - supports-color
+
+  elkjs@0.9.3: {}
 
   emoji-picker-react@4.22.3(@types/react@19.2.18)(react@19.2.9):
     dependencies:
