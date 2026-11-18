@@ -103,12 +103,9 @@ describe('RowCacheWalCheckpoints', () => {
       })
     try {
       expect(await ask(1, path)).toMatchObject({ id: 1, ok: true })
-      const wal = db.pragma('wal_checkpoint(NOOP)') as {
-        log: number
-        checkpointed: number
-      }[]
-      expect(wal[0]!.log).toBeGreaterThan(0)
-      expect(wal[0]!.checkpointed).toBe(wal[0]!.log)
+      const wal = db.prepare('PRAGMA wal_checkpoint(NOOP)').get()
+      expect(Number(wal?.log)).toBeGreaterThan(0)
+      expect(wal?.checkpointed).toBe(wal?.log)
       const missing = join(path, '..', 'removed.db')
       expect(await ask(2, missing)).toMatchObject({ id: 2, ok: false })
       expect(existsSync(missing)).toBe(false)
