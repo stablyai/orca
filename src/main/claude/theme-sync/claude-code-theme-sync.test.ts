@@ -53,7 +53,7 @@ describe('Claude Code theme sync', () => {
     expect(readSettings()).toEqual({ theme: 'light', hooks: { Stop: [] } })
     // Running sessions keep reading the file, so it takes the restored look.
     expect(JSON.parse(readFileSync(join(configDir, 'themes', 'orca.json'), 'utf-8'))).toEqual({
-      name: 'Orca',
+      name: 'Zotz',
       base: 'light',
       overrides: {}
     })
