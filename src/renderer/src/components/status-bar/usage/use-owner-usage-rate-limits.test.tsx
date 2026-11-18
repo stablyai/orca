@@ -14,6 +14,8 @@ type Handlers = {
 
 type Watcher = { target: RuntimeClientTarget; handlers: Handlers; closed: boolean }
 
+const localOwner = { target: { kind: 'local' as const }, wslHostDistro: null }
+
 const mocks = vi.hoisted(() => {
   const state: { owner: RuntimeClientTarget; watchers: Watcher[]; callRuntimeRpc: Mock } = {
     owner: { kind: 'local' },
@@ -80,7 +82,9 @@ describe('useOwnerUsageRateLimits', () => {
   it('uses the explicit Settings owner and exposes its account roster with no focused-host substitution', () => {
     mocks.owner = { kind: 'environment', environmentId: 'focused-other-host' }
     const selected: RuntimeClientTarget = { kind: 'environment', environmentId: 'mini' }
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local, selected, true))
+    const owner = { target: selected, wslHostDistro: null }
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local, owner, true))
+    expect(result.current.owner).toEqual(owner)
     expect(mocks.watchers[0].target).toEqual(selected)
     const accounts = snapshot(createEmptyRateLimitState({ codex: provider('codex', 37) }))
     act(() => mocks.watchers[0].handlers.onSnapshot(accounts))
@@ -92,7 +96,7 @@ describe('useOwnerUsageRateLimits', () => {
   })
 
   it('reads local accounts and quotas from the same snapshot', () => {
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local, { kind: 'local' }, true))
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local, localOwner, true))
     expect(mocks.watchers[0].target).toEqual({ kind: 'local' })
     const accounts = snapshot(local)
     act(() => mocks.watchers[0].handlers.onSnapshot(accounts))
@@ -102,7 +106,7 @@ describe('useOwnerUsageRateLimits', () => {
   })
 
   it('marks retained local accounts unverifiable after a watcher failure and recovers on a fresh snapshot', () => {
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local, { kind: 'local' }, true))
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local, localOwner, true))
     const accounts = snapshot(local)
     act(() => mocks.watchers[0].handlers.onSnapshot(accounts))
     act(() => mocks.watchers[0].handlers.onError(new Error('account list unavailable')))
@@ -162,7 +166,7 @@ describe('useOwnerUsageRateLimits', () => {
 
   it('keeps local identities with their own quotas across separate store writes and account switches', () => {
     const { result, rerender } = renderHook(
-      ({ limits }) => useOwnerUsageRateLimits(limits, { kind: 'local' }, true),
+      ({ limits }) => useOwnerUsageRateLimits(limits, localOwner, true),
       { initialProps: { limits: local } }
     )
     const original = snapshot(local)

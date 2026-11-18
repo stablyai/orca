@@ -9,20 +9,32 @@ import { journalDomainSubmission, journalDomainInputForItem } from './journal-do
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
+import {
+  readJournalDomainFirstSubmittedPrompt,
+  type JournalFirstSubmittedPrompt
+} from './journal-domain-first-submitted-prompt'
 
 export type JournalConsumerRead =
   | { kind: 'naming-prompt'; hostStartedAt?: number }
   | { kind: 'automation-run'; messageId: string; inputIds: readonly string[] }
+  | { kind: 'first-submitted-prompt'; sinceMs: number }
 
 export type JournalConsumerReadResult =
   | { kind: 'naming-prompt'; prompt: string }
   | { kind: 'automation-run'; snapshot: AgentJournalSnapshot }
+  | { kind: 'first-submitted-prompt'; first: JournalFirstSubmittedPrompt }
 
 /** Consumer-specific populations never hydrate an unrelated conversation. */
 export function readJournalDomainConsumer(
   scope: JournalSqlScope,
   operation: JournalConsumerRead
 ): JournalConsumerReadResult {
+  if (operation.kind === 'first-submitted-prompt') {
+    return {
+      kind: operation.kind,
+      first: readJournalDomainFirstSubmittedPrompt(scope, operation.sinceMs)
+    }
+  }
   const floor = Number(
     scope.db
       .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items

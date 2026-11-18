@@ -7,6 +7,7 @@ import {
   type ProviderAccountsSnapshot
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '../../../store/index'
@@ -44,6 +45,8 @@ export function getUsageOwnerHostScope(remoteOwner: RemoteUsageOwner | null): Ru
 }
 
 export type OwnerUsageRateLimits = {
+  /** Whose accounts the shown usage belongs to; account switchers list this owner's accounts. */
+  owner: AccountOwner
   rateLimits: RateLimitState
   accounts: ProviderAccountsSnapshot | null
   accountsUnverifiable: boolean
@@ -56,14 +59,14 @@ export type OwnerUsageRateLimits = {
 /** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
 export function useOwnerUsageRateLimits(
   local: RateLimitState,
-  ownerTarget?: RuntimeClientTarget,
+  ownerOverride?: AccountOwner,
   includeAccounts = false
 ): OwnerUsageRateLimits {
   const t = useTranslate()
   // Why: route by the focused workspace's owner, never by the Active Server setting.
   const activeOwner = useActiveAccountOwner(LOCAL_TARGET)
-  const target = ownerTarget ?? activeOwner.target
-  const ownerId = runtimeTargetEnvironmentId(target)
+  const owner = ownerOverride ?? activeOwner
+  const ownerId = runtimeTargetEnvironmentId(owner.target)
   const ownerName = useAppStore(
     (s) => s.runtimeEnvironments.find((environment) => environment.id === ownerId)?.name ?? null
   )
@@ -218,6 +221,7 @@ export function useOwnerUsageRateLimits(
     [local, ownerState, t]
   )
   return {
+    owner,
     rateLimits,
     accounts: owned?.ownerId === ownerId ? owned.snapshot : null,
     accountsUnverifiable: owned?.ownerId === ownerId && owned.failure !== null,

@@ -5960,7 +5960,6 @@
           "cloneFolderNotEmpty": "このフォルダーには「{{value0}}」がすでに存在するため、このクローンには専用のフォルダーが必要です。"
         },
         "AutoRenameFailedDialog": {
-          "dismissError": "エラーを閉じる",
           "dismissing": "閉じています…",
           "aed1623b1e": "閉じる",
           "eab8b45238": "コピーエラー",
@@ -6118,6 +6117,7 @@
           "removeDescriptionSsh": "この操作は {{name}} を Orca から削除するだけです。ファイルは {{host}} に残っており、その SSH ホストを再追加すれば復元できます。",
           "removeDescriptionLocal": "この操作は {{name}} を Orca から削除するだけです。ファイルはディスクに残っています。",
           "removeDescriptionVmRecipe": "これにより、{{name}} が Orca から削除されます。その VM レシピによって、環境とそのファイルが完全に削除されるかどうかが決まります。",
+          "linkedWorkspaceWarning_other": "このプロジェクトの {{count}} 個のワークスペースも Orca から削除されます。",
           "openTerminalWarning_other": "このプロジェクトで開いている {{count}} 個のターミナルが閉じられます。"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {

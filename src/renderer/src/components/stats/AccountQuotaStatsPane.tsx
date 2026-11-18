@@ -38,11 +38,11 @@ function OwnedAccountQuotas({ hostScope }: { hostScope?: SettingsHostScope }): R
     hostScope?.target.kind === 'local' && isWebClientLocation() && environments?.length === 1
       ? { kind: 'environment' as const, environmentId: environments[0].id }
       : hostScope?.target
-  const accountTarget = selectedHost
-    ? resolveAccountOwner(selectedHost, environments ?? []).target
+  const accountOwner = selectedHost
+    ? resolveAccountOwner(selectedHost, environments ?? [])
     : undefined
   const { rateLimits, remoteOwner, refreshRemote, accounts, accountsUnverifiable } =
-    useOwnerUsageRateLimits(localRateLimits, accountTarget, true)
+    useOwnerUsageRateLimits(localRateLimits, accountOwner, true)
   return (
     <div className="@container space-y-5">
       <UsageAccountQuotas

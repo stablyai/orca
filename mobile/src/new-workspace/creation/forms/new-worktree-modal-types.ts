@@ -14,6 +14,7 @@ export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'
       | 'upstream'
       | 'repoIcon'
       | 'gitRemoteIdentity'
+      | 'hiddenAt'
     >
   >
 

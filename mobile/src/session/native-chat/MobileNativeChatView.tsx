@@ -323,8 +323,10 @@ export function MobileNativeChatView({
     offlineQueue.lockReason,
     turnIndicator?.afterStop
   )
+  // A collapsed structured question still holds the input: the agent waits on that answer alone.
+  const promptHeld = promptShown || collapsedPrompt?.holdsInput === true
   const promptOwnsInput = useMobileNativeChatPromptInputOwner(
-    { promptShown, ask, askRequiresTerminal, permission, micActive, micProcessing },
+    { promptShown: promptHeld, ask, askRequiresTerminal, permission, micActive, micProcessing },
     inputRef
   )
   const emptyStateView = emptyState ? <MobileNativeChatEmptyStateView copy={emptyState} /> : null

@@ -12660,7 +12660,6 @@
           "74fc00776f": "Detalhes do erro",
           "ca3b225195": "Falha na renomeação automática da branch",
           "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente.",
-          "dismissError": "Ignorar erro",
           "dismissing": "Descartando…"
         },
         "CreateProjectLocationField": {
@@ -12723,6 +12722,9 @@
           "removeDescriptionSsh": "Isso remove {{name}} apenas do Orca. Seus arquivos permanecem em {{host}} — adicione novamente esse host SSH para recuperá-lo.",
           "removeDescriptionLocal": "Isso remove {{name}} apenas do Orca. Ele ainda está no seu disco.",
           "removeDescriptionVmRecipe": "Isso remove {{name}} do Orca. A receita de VM determina se o ambiente e seus arquivos são excluídos permanentemente.",
+          "linkedWorkspaceWarning_one": "{{count}} espaço de trabalho deste projeto também será removido do Orca.",
+          "linkedWorkspaceWarning_other": "{{count}} espaços de trabalho deste projeto também serão removidos do Orca.",
+          "linkedWorkspaceWarning_many": "{{count}} espaços de trabalho deste projeto também serão removidos do Orca.",
           "openTerminalWarning_one": "{{count}} terminal aberto neste projeto será fechado.",
           "openTerminalWarning_other": "{{count}} terminais abertos neste projeto serão fechados.",
           "openTerminalWarning_many": "{{count}} terminais abertos neste projeto serão fechados."

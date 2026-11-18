@@ -6067,6 +6067,9 @@
           "removeDescriptionSsh": "Ceci retire uniquement {{name}} d'Orca. Ses fichiers restent sur {{host}} — rajoutez cet hôte SSH pour le récupérer.",
           "removeDescriptionLocal": "Ceci retire uniquement {{name}} d'Orca. Il est toujours sur votre disque.",
           "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés.",
+          "linkedWorkspaceWarning_one": "{{count}} espace de travail de ce projet sera aussi retiré d'Orca.",
+          "linkedWorkspaceWarning_other": "{{count}} espaces de travail de ce projet seront aussi retirés d'Orca.",
+          "linkedWorkspaceWarning_many": "{{count}} espaces de travail de ce projet seront aussi retirés d'Orca.",
           "openTerminalWarning_one": "{{count}} terminal ouvert dans ce projet sera fermé.",
           "openTerminalWarning_other": "{{count}} terminaux ouverts dans ce projet seront fermés.",
           "openTerminalWarning_many": "{{count}} terminaux ouverts dans ce projet seront fermés."
