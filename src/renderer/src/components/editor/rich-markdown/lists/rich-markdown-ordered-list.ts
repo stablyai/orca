@@ -1,7 +1,6 @@
 import type { MarkdownTokenizer } from '@tiptap/core'
 import { OrderedList, ORDERED_LIST_MARKER_PATTERN } from '@tiptap/extension-list'
 
-const orderedListStart = new RegExp(`^\\s*(?:${ORDERED_LIST_MARKER_PATTERN})[.)]\\s`)
 // Same as the base tokenizer's item and paragraph-interrupter patterns, which it does not export.
 const orderedListItem = new RegExp(`^(\\s*)(${ORDERED_LIST_MARKER_PATTERN})([.)])\\s+(.*)$`)
 const paragraphInterrupters = [
@@ -52,8 +51,10 @@ export const RichMarkdownOrderedList = OrderedList.extend({
   markdownTokenizer: {
     ...baseTokenizer,
     tokenize(src, tokens, lexer) {
-      // Why: the base tokenizer scans the full remaining source before rejecting a non-list.
-      if (!orderedListStart.test(src)) {
+      // Why: the base tokenizer scans the full remaining source before rejecting a non-list, and
+      // accepts exactly when its first line is an item.
+      const firstLineEnd = src.indexOf('\n')
+      if (!orderedListItem.test(firstLineEnd === -1 ? src : src.slice(0, firstLineEnd))) {
         return undefined
       }
       return baseTokenizer.tokenize(boundOrderedListSource(src), tokens, lexer)
