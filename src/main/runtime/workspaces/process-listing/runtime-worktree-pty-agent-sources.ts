@@ -20,6 +20,8 @@ export type ConnectedPtyEvidence = {
   paneKeys: ReadonlySet<string>
   /** Join status rows to connected PTYs by issued handle; this also rescues rows whose pane binding was cleared. */
   ptyIdByTerminalHandle: ReadonlyMap<string, string>
+  /** A pane's handle when exactly one connected PTY holds it; a restored hook row has none of its own. */
+  terminalHandleByPaneKey: ReadonlyMap<string, string>
 }
 
 /** Join only the host-owned summary of this exact chat, never a remote pane with a similar id. */
@@ -59,6 +61,11 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
     }
     const hookPayload = pickParsedAgentStatusPayload(entry)
     const children = publishedStructuredChildren(entry, args.readStructuredSummary)
+    const terminalHandle =
+      entry.terminalHandle ??
+      (entry.structuredHost
+        ? undefined
+        : args.connectedPtyEvidence.terminalHandleByPaneKey.get(entry.paneKey))
     const chatSessionId =
       entry.structuredHost && entry.connectionId === null && entry.tabId
         ? structuredAgentSessionIdFromTabId(entry.tabId)
@@ -70,10 +77,10 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
         : undefined)
     rowSources.set(entry.paneKey, {
       paneKey: entry.paneKey,
-      ptyId: entry.terminalHandle
-        ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(entry.terminalHandle)
+      ptyId: terminalHandle
+        ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(terminalHandle)
         : undefined,
-      terminalHandle: entry.terminalHandle,
+      terminalHandle,
       tabId: entry.tabId,
       worktreeId: entry.worktreeId,
       connectionId: entry.connectionId,

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
+  ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -403,10 +404,39 @@ describe('agent mail between paired Orca servers', () => {
     }
   )
 
-  it('refuses new types on an old enum peer while keeping its status mail working', async () => {
+  it('keeps question-capable peers working without five-type support', async () => {
     bCapabilities = (capabilities) =>
       capabilities.filter(
         (capability) => capability !== ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
+      )
+    expect(
+      await mutation(a, 'orchestration.send', {
+        from: 'term_a',
+        on: 'devB',
+        to: 'term_b',
+        subject: 'Question',
+        type: 'question'
+      })
+    ).toMatchObject({ ok: true })
+    expect(mailFor(b, 'term_b')).toMatchObject([{ type: 'question' }])
+    expect(
+      await mutation(a, 'orchestration.send', {
+        from: 'term_a',
+        on: 'devB',
+        to: 'term_b',
+        subject: 'Dispatch',
+        type: 'dispatch'
+      })
+    ).toMatchObject({ ok: false, error: { code: 'server_mail_unsupported' } })
+    expect(mailFor(b, 'term_b')).toHaveLength(1)
+  })
+
+  it('refuses new types on an old enum peer while keeping its status mail working', async () => {
+    bCapabilities = (capabilities) =>
+      capabilities.filter(
+        (capability) =>
+          capability !== ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY &&
+          capability !== ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY
       )
     const sent = await cli(
       a,

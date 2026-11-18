@@ -10,6 +10,7 @@ type SheetTextAction = { label: string; onPress: () => void; disabled?: boolean;
 
 type SheetHeaderProps = {
   title: string
+  titleAboveActions?: boolean
   subtitle?: string
   /** "Cancel" or "Reset"; omit for a plain list sheet. */
   leading?: SheetTextAction
@@ -20,33 +21,58 @@ type SheetHeaderProps = {
 }
 
 // The one sheet header: a centred title, with a text action or close button on either side.
-export function SheetHeader({ title, subtitle, leading, trailing, onClose }: SheetHeaderProps) {
+export function SheetHeader({
+  title,
+  subtitle,
+  leading,
+  trailing,
+  onClose,
+  titleAboveActions
+}: SheetHeaderProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   return (
-    <View style={styles.header}>
-      <View style={styles.side}>
-        {leading ? <TextAction action={leading} emphasis={false} /> : null}
-      </View>
-      <View style={styles.center}>
-        <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
-          {title}
-        </Text>
-        {subtitle !== undefined ? (
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {subtitle}
+    <View>
+      {titleAboveActions ? (
+        <View style={styles.heading}>
+          <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+            {title}
           </Text>
-        ) : null}
-      </View>
-      <View style={[styles.side, styles.trailing]}>
-        {trailing ? <TextAction action={trailing} emphasis /> : null}
-        {onClose && !trailing ? (
-          <NavBarButton
-            icon={X}
-            accessibilityLabel={t('components.sheetHeader.close', 'Close')}
-            onPress={onClose}
-          />
-        ) : null}
+          {subtitle !== undefined ? (
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+      <View style={styles.header}>
+        <View style={styles.side}>
+          {leading ? <TextAction action={leading} emphasis={false} /> : null}
+        </View>
+        {!titleAboveActions ? (
+          <View style={styles.center}>
+            <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+              {title}
+            </Text>
+            {subtitle !== undefined ? (
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.center} />
+        )}
+        <View style={[styles.side, styles.trailing]}>
+          {trailing ? <TextAction action={trailing} emphasis /> : null}
+          {onClose && !trailing ? (
+            <NavBarButton
+              icon={X}
+              accessibilityLabel={t('components.sheetHeader.close', 'Close')}
+              onPress={onClose}
+            />
+          ) : null}
+        </View>
       </View>
     </View>
   )
@@ -79,6 +105,7 @@ function TextAction({ action, emphasis }: { action: SheetTextAction; emphasis: b
 }
 
 const styles = themedStyleSheet(() => ({
+  heading: { alignItems: 'center', paddingTop: spacing.sm, paddingHorizontal: spacing.md },
   header: {
     height: 52,
     flexDirection: 'row',

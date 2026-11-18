@@ -1,4 +1,5 @@
-// Fill unsaved choices from execution evidence, never startup/config reports or host defaults.
+// Fill unsaved choices from execution evidence, never startup/config reports or host defaults; and
+// receipt the host instructions a taken turn carried.
 
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
@@ -97,6 +98,8 @@ export type StructuredAgentSessionRanRecorder = (
 ) => ((handed: StructuredAgentSessionHandedOptions) => Promise<void>) & {
   prepareInput?: () => void
   checkpoint?: () => void
+  /** The host instructions the taken turn vouched for, by this owner; resolves whether written. */
+  instructions?: (key: string, context: string) => Promise<boolean>
 }
 
 /** Capture report identity at input to preserve early reports and avoid stale fallbacks. */
@@ -119,7 +122,22 @@ export function createStructuredAgentSessionRanRecorder(
       checkpoint: () => {
         const child = currentChild(context, sessionId, fence)
         checkpoint = { reported: child ? childRuns.get(child)?.reported : undefined }
-      }
+      },
+      instructions: (key: string, instructionsContext: string) =>
+        context.deps.store
+          .updateRecord(sessionId, {
+            kind: 'instructions-key',
+            receipt: { sessionId, fence, key, context: instructionsContext }
+          })
+          .then((record) => record.instructionsKey === key)
+          .catch((error: unknown) => {
+            context.deps.logger.warn('recording the instructions a turn carried failed', {
+              scope: 'ran-options',
+              sessionId,
+              error
+            })
+            return false
+          })
     }
   )
 }
