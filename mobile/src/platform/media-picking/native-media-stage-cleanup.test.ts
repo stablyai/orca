@@ -33,6 +33,8 @@ vi.mock('expo-clipboard', () => ({
 vi.mock('expo-document-picker', () => ({}))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-image-picker', () => ({}))
+vi.mock('expo-image-manipulator', () => ({}))
+vi.mock('expo-media-library', () => ({}))
 vi.mock('expo-file-system', () => ({
   File: class {
     readonly uri: string

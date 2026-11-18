@@ -33,8 +33,9 @@
       "infoPlist": {
         "CFBundleAllowMixedLocalizations": true,
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your LAN.",
+        "NSCameraUsageDescription": "Allow Orca to use the camera for QR code scanning and taking photos to attach to a chat or terminal session on your paired desktop.",
         "NSMicrophoneUsageDescription": "Allow Orca to use your microphone for voice dictation, transcribed on this phone or on your paired computer.",
-        "NSPhotoLibraryUsageDescription": "Allow Orca to attach photos from your library to a terminal session on your paired desktop.",
+        "NSPhotoLibraryUsageDescription": "Allow Orca to show your recent photos and attach them to a chat or terminal session on your paired desktop.",
         "NSPhotoLibraryAddUsageDescription": "Allow Orca to save images from your sessions to Photos.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
@@ -92,7 +93,8 @@
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
       ],
       "package": "dev.orca.app",
       "versionCode": 31,
@@ -134,7 +136,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Orca to use the camera for QR code scanning.",
+          "cameraPermission": "Allow Orca to use the camera for QR code scanning and taking photos to attach to a chat or terminal session on your paired desktop.",
           "microphonePermission": "Allow Orca to use your microphone for voice dictation sent to your paired desktop for transcription.",
           "recordAudioAndroid": false
         }
@@ -142,7 +144,17 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Orca to attach photos from your library to a terminal session on your paired desktop."
+          "cameraPermission": "Allow Orca to take photos and attach them to a chat or terminal session on your paired desktop.",
+          "photosPermission": "Allow Orca to show your recent photos and attach them to a chat or terminal session on your paired desktop."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Orca to show your recent photos and attach them to a chat or terminal session on your paired desktop.",
+          "savePhotosPermission": "Allow Orca to save images from your sessions to Photos.",
+          "granularPermissions": [],
+          "preventAutomaticLimitedAccessAlert": true
         }
       ],
       [

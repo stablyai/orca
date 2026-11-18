@@ -344,9 +344,9 @@ function MobileNativeChatOverlayContent({
                       composerScopeKey={controller.chatComposerScopeKey}
                       draftKey={controller.chatDraftKey}
                       onComposerTextChange={controller.setChatComposerText}
-                      onAttachImage={
+                      onAttachImages={
                         controller.nativeChatAcceptsImages
-                          ? () => void images.attachImage('library')
+                          ? (pick) => void images.attachImage(pick)
                           : undefined
                       }
                       onPasteImages={

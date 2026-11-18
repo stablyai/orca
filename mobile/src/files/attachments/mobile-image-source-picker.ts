@@ -10,11 +10,15 @@ import {
 import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
 import { isPickedImageMime } from '../../platform/media-picking/mobile-picked-file-name'
 // Import permission errors from the Expo-free contract so page-side catches cannot pull native picker code into the bundle.
-import { ImageLibraryPermissionError } from '../../platform/media-picking/media-picker-contract'
+import {
+  CameraPermissionError,
+  ImageLibraryPermissionError
+} from '../../platform/media-picking/media-picker-contract'
 import type {
   MobileImageSource,
   PickedMobileImage
 } from '../../platform/media-picking/media-picker-contract'
+import type { RecentPhotoDevice } from '../../platform/media-picking/native-recent-photos'
 
 const MOBILE_IMAGE_READ_CHUNK_BYTES = 256 * 1024
 
@@ -86,6 +90,34 @@ export async function readUriAsBase64(
   }
 }
 
+async function* pickFromCamera(
+  requestPermission: typeof ImagePicker.requestCameraPermissionsAsync = ImagePicker.requestCameraPermissionsAsync,
+  launch: typeof ImagePicker.launchCameraAsync = ImagePicker.launchCameraAsync,
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+): AsyncGenerator<PickedMobileImage> {
+  const permission = await requestPermission()
+  if (!permission.granted) {
+    throw new CameraPermissionError()
+  }
+  const result = await launch({
+    mediaTypes: ['images'],
+    base64: false,
+    quality: 1
+  })
+  if (result.canceled) {
+    return
+  }
+  for (const asset of result.assets) {
+    if (!asset.uri) {
+      continue
+    }
+    const base64 = await readUriAsBase64(asset.uri, asset.fileSize, createFile)
+    if (base64) {
+      yield { base64, uri: asset.uri }
+    }
+  }
+}
+
 async function* pickFromLibrary(
   multiple: boolean,
   requestPermission: typeof ImagePicker.requestMediaLibraryPermissionsAsync = ImagePicker.requestMediaLibraryPermissionsAsync,
@@ -145,7 +177,29 @@ async function* pickFromFiles(
   }
 }
 
+// Rendered JPEG copies keep the same byte ceiling as library picks; the copy doubles as the chip preview.
+export async function* pickRecentPhotos(
+  ids: readonly string[],
+  device: Pick<RecentPhotoDevice, 'render' | 'discard'>,
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+): AsyncGenerator<PickedMobileImage> {
+  for (const id of ids) {
+    const photo = await device.render(id)
+    let base64: string
+    try {
+      base64 = await readUriAsBase64(photo.uri, null, createFile)
+    } catch (error) {
+      // A refused copy never becomes a chip preview, so nothing else would delete it.
+      device.discard(photo.uri)
+      throw error
+    }
+    yield { base64, uri: photo.uri }
+  }
+}
+
 type MobileImagePickerDeps = {
+  readonly requestCameraPermission?: typeof ImagePicker.requestCameraPermissionsAsync
+  readonly launchCamera?: typeof ImagePicker.launchCameraAsync
   readonly requestLibraryPermission?: typeof ImagePicker.requestMediaLibraryPermissionsAsync
   readonly launchLibrary?: typeof ImagePicker.launchImageLibraryAsync
   readonly launchFiles?: typeof DocumentPicker.getDocumentAsync
@@ -157,6 +211,9 @@ function pickMobileImagesWithMode(
   multiple: boolean,
   deps?: MobileImagePickerDeps
 ): AsyncIterable<PickedMobileImage> {
+  if (source === 'camera') {
+    return pickFromCamera(deps?.requestCameraPermission, deps?.launchCamera, deps?.createFile)
+  }
   if (source === 'library') {
     return pickFromLibrary(
       multiple,

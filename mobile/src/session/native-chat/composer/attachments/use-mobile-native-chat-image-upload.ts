@@ -10,8 +10,10 @@ import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../../../transport/connection/connection-state'
 import { useMediaPicker } from '../../../../platform/media-picking/media-picker'
 import {
+  CameraPermissionError,
   ImageLibraryPermissionError,
-  type MobileImageSource
+  type MobileImageSource,
+  type MobileRecentPhotoPick
 } from '../../../../platform/media-picking/media-picker-contract'
 import {
   uploadMobileNativeChatImages,
@@ -25,6 +27,10 @@ import { useClipboardReader } from '../../../../platform/clipboard/clipboard'
 import { fitMobileAgentImage } from '../../../../files/attachments/mobile-agent-image-fit'
 
 type CurrentRef<T> = { readonly current: T }
+export type MobileComposerImageSource =
+  | MobileImageSource
+  | MobilePastedImages
+  | MobileRecentPhotoPick
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
 type ShowToast = (message: string, durationMs?: number) => void
 
@@ -43,7 +49,7 @@ export function useMobileNativeChatImageUpload(args: {
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
-  attachImage: (source: MobileImageSource | MobilePastedImages) => Promise<void>
+  attachImage: (source: MobileComposerImageSource) => Promise<void>
   isAttaching: boolean
 } {
   const {
@@ -68,14 +74,17 @@ export function useMobileNativeChatImageUpload(args: {
   }, [connState])
 
   const attachImage = useCallback(
-    async (source: MobileImageSource | MobilePastedImages): Promise<void> => {
+    async (source: MobileComposerImageSource): Promise<void> => {
       const scope = scopeKey
+      // Staged recent photos are freed whether or not the upload reaches them.
+      const release = typeof source === 'object' && 'recentPhotos' in source ? source.release : null
       if (
         !client ||
         !scope ||
         connState !== 'connected' ||
         (!activeHandleRef.current && !structuredNativeChat)
       ) {
+        release?.()
         return
       }
       const destination = mobileNativeChatDraftDestination(scope)
@@ -91,10 +100,15 @@ export function useMobileNativeChatImageUpload(args: {
           canContinue: () => destination.active,
           client,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImages: (from) =>
-            typeof from === 'string'
-              ? picker.pickImages(from)
-              : readMobilePastedImages(from, clipboard),
+          pickImages: (from) => {
+            if (typeof from === 'string') {
+              return picker.pickImages(from)
+            }
+            if ('recentPhotos' in from) {
+              return from.recentPhotos
+            }
+            return readMobilePastedImages(from, clipboard)
+          },
           onImageUploaded: (image) => uploadedImages.push(image),
           onUploadStart: () => {
             started = true
@@ -106,6 +120,7 @@ export function useMobileNativeChatImageUpload(args: {
       } catch (error) {
         uploadError = error
       } finally {
+        release?.()
         if (started) {
           attachingCount.current -= 1
           if (attachingCount.current === 0) {
@@ -127,6 +142,13 @@ export function useMobileNativeChatImageUpload(args: {
         if (connStateRef.current !== 'connected') {
           showToast(
             translate('chat.useImageUpload.disconnected', 'Attach failed (disconnected)'),
+            1500
+          )
+          return
+        }
+        if (uploadError instanceof CameraPermissionError) {
+          showToast(
+            translate('chat.useImageUpload.cameraPermissionDenied', 'Camera permission denied'),
             1500
           )
           return

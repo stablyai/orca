@@ -218,3 +218,66 @@ describe('a provider uri the Android picker can answer', () => {
     expect(probe.discarded).toEqual([`${CACHE}/copy-0.bin`])
   })
 })
+
+describe('staging cleanup', () => {
+  it('deletes every owned item of a refused selection, including the ones after the refused one', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const probe = harness({
+      openFile: (uri) =>
+        uri.endsWith('big.jpg')
+          ? { size: 64 * 1024 * 1024, open: () => fakeFile(new Uint8Array()).open() }
+          : fakeFile(bytesOf(4)),
+      launchLibrary: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: [
+            { uri: `${CACHE}/big.jpg`, mimeType: 'image/jpeg' },
+            { uri: `${CACHE}/next.jpg`, mimeType: 'image/jpeg' }
+          ]
+        })
+    })
+    await expect(
+      probe.serve('native.media.pick', { source: 'library', multiple: true })
+    ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_too_large')
+    expect(probe.discarded.sort()).toEqual([`${CACHE}/big.jpg`, `${CACHE}/next.jpg`])
+    warn.mockRestore()
+  })
+})
+
+describe('Add context', () => {
+  const options = { images: true, files: true, structured: true, skillCount: 0 }
+
+  it('stages only the recent photos tapped in the shell sheet, as JPEG media handles', async () => {
+    const rendered: string[] = []
+    const answers: { choice: 'recent' | 'photos'; ids: string[] }[] = [
+      { choice: 'photos', ids: [] },
+      { choice: 'recent', ids: ['ph://tapped'] }
+    ]
+    const probe = harness({
+      recentPhotos: {
+        list: () => Promise.resolve({ access: 'all', ids: ['ph://tapped', 'ph://other'] }),
+        manage: () => Promise.resolve(false),
+        render: (id) => {
+          rendered.push(id)
+          return Promise.resolve({ uri: `${CACHE}/rendered.jpg`, width: 4, height: 3 })
+        },
+        discard: () => {}
+      },
+      presentAddContext: () => Promise.resolve(answers.shift() ?? { choice: 'photos', ids: [] })
+    })
+    probe.files.set(`${CACHE}/rendered.jpg`, bytesOf(6))
+
+    await expect(probe.serve('native.context.open', options)).resolves.toEqual({
+      choice: 'photos',
+      items: []
+    })
+    expect(rendered).toEqual([])
+
+    const answered = await probe.serve('native.context.open', options)
+    expect(rendered).toEqual(['ph://tapped'])
+    expect(answered).toEqual({
+      choice: 'recent',
+      items: [expect.objectContaining({ mime: 'image/jpeg', byteLength: 6, width: 4, height: 3 })]
+    })
+  })
+})

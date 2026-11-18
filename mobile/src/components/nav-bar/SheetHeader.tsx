@@ -16,7 +16,7 @@ type SheetHeaderProps = {
   leading?: SheetTextAction
   /** "Done" or the sheet's commit, in bold. */
   trailing?: SheetTextAction
-  /** A close button instead of a text action, for sheets that only show things. */
+  /** A close button instead of a text action, for sheets that only show things; it moves to the leading side beside a trailing action. */
   onClose?: () => void
 }
 
@@ -30,7 +30,6 @@ export function SheetHeader({
   titleAboveActions
 }: SheetHeaderProps) {
   useMobileColorScheme()
-  const t = useMobileTranslation()
   return (
     <View>
       {titleAboveActions ? (
@@ -48,6 +47,7 @@ export function SheetHeader({
       <View style={styles.header}>
         <View style={styles.side}>
           {leading ? <TextAction action={leading} emphasis={false} /> : null}
+          {onClose && trailing && !leading ? <CloseButton onClose={onClose} /> : null}
         </View>
         {!titleAboveActions ? (
           <View style={styles.center}>
@@ -65,16 +65,21 @@ export function SheetHeader({
         )}
         <View style={[styles.side, styles.trailing]}>
           {trailing ? <TextAction action={trailing} emphasis /> : null}
-          {onClose && !trailing ? (
-            <NavBarButton
-              icon={X}
-              accessibilityLabel={t('components.sheetHeader.close', 'Close')}
-              onPress={onClose}
-            />
-          ) : null}
+          {onClose && !trailing ? <CloseButton onClose={onClose} /> : null}
         </View>
       </View>
     </View>
+  )
+}
+
+function CloseButton({ onClose }: { onClose: () => void }) {
+  const t = useMobileTranslation()
+  return (
+    <NavBarButton
+      icon={X}
+      accessibilityLabel={t('components.sheetHeader.close', 'Close')}
+      onPress={onClose}
+    />
   )
 }
 

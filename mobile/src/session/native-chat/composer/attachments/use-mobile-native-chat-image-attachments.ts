@@ -10,9 +10,7 @@ import {
 import { useCallback, useMemo } from 'react'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../../../transport/connection/connection-state'
-import type { MobileImageSource } from '../../../../platform/media-picking/media-picker-contract'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import type { MobilePastedImages } from './mobile-native-chat-composer-paste'
 import {
   MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS,
   pasteMobileNativeChatImagePaths
@@ -90,7 +88,7 @@ export type MobileNativeChatImageAttachments = {
   /** Pending chips for the active scope (tab) only. */
   readonly attachments: PendingNativeChatImage[]
   readonly isAttaching: boolean
-  readonly attachImage: (source: MobileImageSource | MobilePastedImages) => Promise<void>
+  readonly attachImage: ReturnType<typeof useMobileNativeChatImageUpload>['attachImage']
   readonly removeAttachment: (id: string) => void
   /** Ride any pending images along with `text`, then submit; clears the sent
    *  chips (and only those) once the send is accepted. */

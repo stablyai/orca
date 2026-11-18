@@ -11,6 +11,7 @@ import {
   type NativeVerbs
 } from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import {
+  CameraPermissionError,
   MobileFileTooLargeError,
   type MediaPicker,
   type MobileImageSource,
@@ -69,14 +70,28 @@ async function* readPicked(
   }
 }
 
-async function pickFileItems(verbs: NativeVerbs): Promise<readonly BridgeMediaItem[]> {
+async function pickMediaItems(
+  verbs: NativeVerbs,
+  source: MobileImageSource,
+  multiple: boolean
+): Promise<readonly BridgeMediaItem[]> {
   try {
-    return await verbs.pickMedia('files', true)
+    return await verbs.pickMedia(source, multiple)
   } catch (error) {
-    throw error instanceof NativeVerbError && error.reason === 'native_media_too_large'
-      ? new MobileFileTooLargeError(null)
-      : error
+    if (error instanceof NativeVerbError) {
+      if (error.reason === 'native_media_permission_denied' && source === 'camera') {
+        throw new CameraPermissionError()
+      }
+      if (error.reason === 'native_media_too_large') {
+        throw new MobileFileTooLargeError(null)
+      }
+    }
+    throw error
   }
+}
+
+async function pickFileItems(verbs: NativeVerbs): Promise<readonly BridgeMediaItem[]> {
+  return pickMediaItems(verbs, 'files', true)
 }
 
 async function* readPickedFiles(
@@ -100,27 +115,54 @@ async function* readPickedFiles(
   }
 }
 
+function addContextOpener(verbs: NativeVerbs): MediaPicker['openAddContext'] {
+  if (!verbs.canPickMedia || !verbs.canOpenAddContext) {
+    return null
+  }
+  return async (options) => {
+    const { choice, items } = await verbs.openAddContext(options)
+    if (choice !== 'recent') {
+      await releaseAllStagedMedia(verbs, items)
+      return { choice }
+    }
+    return {
+      choice,
+      images: {
+        [Symbol.asyncIterator]: () => readPicked(verbs, items, 'library')
+      },
+      // Releasing a handle the reader already released is a normal false.
+      release: () => void releaseAllStagedMedia(verbs, items)
+    }
+  }
+}
+
 export function useMediaPicker(): MediaPicker {
   const verbs = useNativeVerbs()
 
   return useMemo<MediaPicker>(
     () => ({
       pickImage: async (source) => {
-        for await (const image of readPicked(verbs, await verbs.pickMedia(source, false), source)) {
+        for await (const image of readPicked(
+          verbs,
+          await pickMediaItems(verbs, source, false),
+          source
+        )) {
           return image
         }
         return null
       },
       pickImages: (source) => ({
         [Symbol.asyncIterator]: async function* () {
-          yield* readPicked(verbs, await verbs.pickMedia(source, true), source)
+          yield* readPicked(verbs, await pickMediaItems(verbs, source, true), source)
         }
       }),
       pickFiles: () => ({
         [Symbol.asyncIterator]: async function* () {
           yield* readPickedFiles(verbs, await pickFileItems(verbs))
         }
-      })
+      }),
+      recentPhotos: null,
+      openAddContext: addContextOpener(verbs)
     }),
     [verbs]
   )

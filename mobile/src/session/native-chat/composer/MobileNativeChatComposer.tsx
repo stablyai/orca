@@ -62,7 +62,7 @@ export function MobileNativeChatComposer({
   structured = null,
   sessionOptions,
   contextUsage = null,
-  onAttachImage,
+  onAttachImages,
   onPasteImages,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
@@ -291,7 +291,7 @@ export function MobileNativeChatComposer({
               {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
             >
               <MobileNativeChatComposerAttachButton
-                onAttachImage={onAttachImage}
+                onAttachImages={onAttachImages}
                 onAttachFiles={structured?.onAttachFiles}
                 structured={structured !== null}
                 isAttaching={isAttaching}

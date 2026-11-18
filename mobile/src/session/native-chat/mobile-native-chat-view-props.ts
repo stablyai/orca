@@ -1,3 +1,4 @@
+import type { MobileComposerImagePick } from '../../platform/media-picking/media-picker-contract'
 import type { MobileSessionItemNavigation } from '../mobile-session-item-target'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
@@ -64,7 +65,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     composerScopeKey?: string | null
     draftKey: string | null
     onComposerTextChange: (text: string) => void
-    onAttachImage?: () => void
+    /** Photos, Camera and recent photos from the Add context sheet. */
+    onAttachImages?: (pick: MobileComposerImagePick) => void
     onPasteImages?: (paste: MobilePastedImages) => void
     attachments?: PendingNativeChatImage[]
     onRemoveAttachment?: (id: string) => void

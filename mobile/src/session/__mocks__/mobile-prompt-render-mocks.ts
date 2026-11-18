@@ -100,6 +100,12 @@ vi.mock('../native-chat/composer/menus/MobileNativeChatComposerMenu', () => ({
 vi.mock('../../components/sheets/ActionSheetModal', () => ({
   ActionSheetModal: 'ActionSheetModal'
 }))
+vi.mock('../native-chat/composer/attachments/MobileNativeChatAddContextSheet', () => ({
+  MobileNativeChatAddContextSheet: 'AddContextSheet'
+}))
+vi.mock('../../platform/media-picking/media-picker', () => ({
+  useMediaPicker: () => ({ recentPhotos: null, openAddContext: null })
+}))
 vi.mock('../../components/reorder/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
