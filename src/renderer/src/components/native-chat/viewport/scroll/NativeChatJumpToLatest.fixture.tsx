@@ -1,4 +1,8 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
+import {
+  NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
+  nativeChatAppearanceStyle
+} from '../../appearance/native-chat-appearance-style'
 import { NativeChatJumpToLatest } from './NativeChatJumpToLatest'
 
 const PROSE = [
@@ -9,8 +13,12 @@ const PROSE = [
 ]
 
 function Transcript(): React.JSX.Element {
+  const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
   return (
-    <div className="native-chat-appearance relative h-56 overflow-hidden bg-chat-canvas px-4 pt-3 text-sm text-chat-foreground">
+    <div
+      className={`${NATIVE_CHAT_APPEARANCE_ROOT_CLASS} relative h-56 overflow-hidden px-4 pt-3 text-sm text-chat-foreground`}
+      style={nativeChatAppearanceStyle({ theme })}
+    >
       <div className="space-y-3">
         {PROSE.map((paragraph) => (
           <p key={paragraph}>{paragraph}</p>
