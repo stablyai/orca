@@ -43,6 +43,9 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.sendRecorded',
   // "Rewind to here"; phones offer it only where AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY says so.
   'agentSession.rewind',
+  // History's interrupted-chats banner and its Resume all; phones gate on agent-session.restart-resume.phone.v1.
+  'agentSession.restartResumable',
+  'agentSession.restartContinue',
   // "Don't continue" on a usage-limit row the host will continue at its reset.
   'agentSession.cancelUsageLimitContinue',
   // Skip on a Codex async question card; phones offer it where the host advertises it.

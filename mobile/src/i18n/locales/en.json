@@ -450,6 +450,22 @@
     },
     "resume": {
       "hostConnectionChanged": "Host connection changed. Retry resume."
+    },
+    "interrupted": {
+      "failed": "Couldn't resume the interrupted chats.",
+      "count_one": "{{count}} chat was interrupted",
+      "count_other": "{{count}} chats were interrupted",
+      "resumeAll": "Resume all"
+    },
+    "viewControls": {
+      "allAgents": "All agents",
+      "agentCount": "{{count}} agents",
+      "lastUpdated": "Last updated",
+      "created": "Created",
+      "agentsLabel": "Agents: {{agents}}",
+      "sortLabel": "Sort sessions: {{sort}}",
+      "agents": "Agents",
+      "sort": "Sort"
     }
   },
   "diagnostics": {
