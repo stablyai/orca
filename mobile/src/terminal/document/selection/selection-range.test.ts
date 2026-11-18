@@ -61,3 +61,12 @@ describe('word selection follows the Word Separator setting', () => {
     expect(f.selected()).toBe('fn(arg)')
   })
 })
+
+describe('word selection stops at unwritten cells', () => {
+  it('ends at the last written cell when the separators leave out space', async () => {
+    const f = await fixture('hello world')
+    f.scope.wordSeparator = ','
+    seedWordSelection(f.scope, 1, 0)
+    expect(f.selected()).toBe('hello world')
+  })
+})

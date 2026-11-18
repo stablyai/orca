@@ -4,11 +4,12 @@ import type { TerminalDocumentLine } from '../document-terminal-shape'
 import { isTerminalWordSeparator } from '../../../../../src/shared/terminal/input/terminal-word-separator'
 
 // Match xterm double-click: a space grows over spaces, anything else over non-separators.
-function joinsPressedWord(pressed: string, text: string, separators: string) {
-  return pressed === ' ' ? text === ' ' : !isTerminalWordSeparator(text, separators)
+// Unwritten cells always separate words in xterm, even when the setting leaves out space.
+function joinsPressedWord(pressed: string, text: string, separators: string, blank = false) {
+  return pressed === ' ' ? text === ' ' : !blank && !isTerminalWordSeparator(text, separators)
 }
 
-type SelectionUnit = { text: string; start: number; end: number }
+type SelectionUnit = { text: string; start: number; end: number; blank?: boolean }
 
 function selectionUnits(line: TerminalDocumentLine, cols: number): SelectionUnit[] | null {
   const cells: SelectionUnit[] = []
@@ -22,7 +23,8 @@ function selectionUnits(line: TerminalDocumentLine, cols: number): SelectionUnit
       col++
       continue
     }
-    cells.push({ text: cell.getChars() || ' ', start: col, end: col + width - 1 })
+    const chars = cell.getChars()
+    cells.push({ text: chars || ' ', start: col, end: col + width - 1, blank: !chars })
     col += width
   }
   if (typeof Intl.Segmenter !== 'function') {
@@ -36,7 +38,8 @@ function selectionUnits(line: TerminalDocumentLine, cols: number): SelectionUnit
     (part) => ({
       text: part.segment,
       start: columns[part.index].start,
-      end: columns[part.index + part.segment.length - 1].end
+      end: columns[part.index + part.segment.length - 1].end,
+      blank: columns[part.index].blank
     })
   )
 }
@@ -55,10 +58,12 @@ function wordCellRange(
   const pressed = units[index].text
   let start = index
   let end = index
-  while (start > 0 && joinsPressedWord(pressed, units[start - 1].text, separators)) {
+  const joins = (unit: SelectionUnit) =>
+    joinsPressedWord(pressed, unit.text, separators, unit.blank)
+  while (start > 0 && joins(units[start - 1])) {
     start--
   }
-  while (end + 1 < units.length && joinsPressedWord(pressed, units[end + 1].text, separators)) {
+  while (end + 1 < units.length && joins(units[end + 1])) {
     end++
   }
   return { start: units[start].start, end: units[end].end }

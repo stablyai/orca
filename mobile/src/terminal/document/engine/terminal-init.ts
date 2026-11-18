@@ -165,6 +165,7 @@ export function init(
     nextTerm = reused
     scope.term = reused
     reused.reset()
+    reused.options.scrollback = scope.scrollbackRows
     reused.options.fontSize = terminalFontPxForScale(scope.currentTextScale)
     reused.resize(cols || 80, rows || 24)
     // Seed the reported grid so its first box change can trigger one DOM-column refit.

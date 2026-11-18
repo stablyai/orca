@@ -18,7 +18,7 @@ export function isBufferFull(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return false
   }
-  return scope.linesEverWritten >= scope.scrollbackRows + (scope.term.rows || 0)
+  return scope.linesEverWritten >= scope.term.options.scrollback + (scope.term.rows || 0)
 }
 
 export function checkEviction(scope: TerminalDocumentScope) {
