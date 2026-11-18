@@ -40,7 +40,7 @@ export class StructuredAgentSessionStatusFeed {
   )
   private readonly subscriptions = new StructuredAgentSessionStatusSubscriptions()
   private readonly broadcast = this.subscriptions.broadcast
-  // Live chats and shown tabs only; every chat's name reaches readers from its record (naming snapshot).
+  // Live chats and shown tabs (all closed chats on stores that can't list tabs); names come from records.
   private readonly published = new Map<string, StatusPublication>()
   private readonly acceptedSends = new Map<string, string>()
   readonly journalProjection

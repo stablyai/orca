@@ -90,6 +90,7 @@ export function structuredAgentSessionNamingSnapshot(
   const conversationNames = records.map((entry) => ({
     sessionId: entry.sessionId,
     conversationName: entry.conversationName ?? null,
+    agent: entry.provider,
     ...structuredSummaryConversationNaming(entry, deps.namingFailure?.(entry.sessionId))
   }))
   return {

@@ -83,6 +83,7 @@ describe('structured status canonical owner re-entry', () => {
     sessions.delete(SESSION)
     feed.forget(SESSION)
     expect(server.getCanonicalStatusSnapshot().parents).toEqual([])
+    expect(feed.readPublished(SESSION)).toBeUndefined()
     const publishedBeforeReentry = vi.mocked(statusSink.publish).mock.calls.length
     sessions.set(SESSION, session)
 
