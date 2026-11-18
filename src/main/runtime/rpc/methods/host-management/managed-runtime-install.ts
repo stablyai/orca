@@ -19,12 +19,16 @@ import {
 import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { isAbsolute } from 'node:path'
-import { CLAUDE_MANAGED_RUNTIME } from '../../../../claude/managed-runtime/claude-managed-runtime'
+import {
+  CLAUDE_MANAGED_RUNTIME,
+  rememberManagedClaudeRelease
+} from '../../../../claude/managed-runtime/claude-managed-runtime'
+import { resolveCliCommandAsync } from '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import { hasExplicitTuiLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
-import { resolveGuestNativeProgram } from '../../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 
 const installations = new Map<string, ManagedRuntimeInstallation>()
+const WINDOWS_DRIVE_MOUNT = /^\/mnt\/[a-z]\//i
 
 function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRuntimeInstallation {
   const existing = installations.get(agent)
@@ -92,15 +96,17 @@ function claudeInstallation(runtime: OrcaRuntimeService): ManagedRuntimeInstalla
     }
     const env = await resolveHostStructuredAgentLaunchEnvironment('claude', settings)
     const homePath = env.HOME ?? env.USERPROFILE
-    const resolved = resolveGuestNativeProgram('claude', {
+    const resolved = await resolveCliCommandAsync('claude', {
       pathEnv: env.PATH ?? env.Path ?? null,
       ...(homePath ? { homePath } : {})
     })
-    return resolved !== null && isAbsolute(resolved)
+    // A WSL host can't run a Windows-drive copy, so it isn't the user's own install there.
+    return isAbsolute(resolved) && !WINDOWS_DRIVE_MOUNT.test(resolved)
   }
   return new ManagedRuntimeInstallation('claude', CLAUDE_MANAGED_RUNTIME, {
     dataDirectory: getProfileUserDataPath(),
     findExternal,
+    onRelease: rememberManagedClaudeRelease,
     // No launch gate tracks Claude processes; stopping its chats first is the closest fence.
     fence: (work) => stopStructuredAgentChats('claude', CLAUDE_MANAGED_RUNTIME.label).then(work)
   })

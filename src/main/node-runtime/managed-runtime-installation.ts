@@ -21,6 +21,8 @@ const DEADLINE_MS = 45 * 60_000
 export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
   findExternal: () => Promise<boolean>
+  /** Told the release launches resolve to each time this reads the disk; null when none is whole. */
+  onRelease?: (folder: string | null) => void
   /** Reject unless no host workload uses this runtime. */
   fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
@@ -82,6 +84,9 @@ export class ManagedRuntimeInstallation {
   private async readInstalledFacts(): Promise<InstalledFacts> {
     const pin = this.runtime.pin()
     const { release, broken, unreadable } = resolveInstalledRuntimeRelease(this.root, pin)
+    if (!unreadable) {
+      this.deps.onRelease?.(release?.folder ?? null)
+    }
     // Unreadable is not absent; preserve clients’ last known installation state.
     if (unreadable && !release?.current) {
       throw new Error(`Couldn't read the installed ${this.runtime.label} files on this host.`)
@@ -176,6 +181,8 @@ export class ManagedRuntimeInstallation {
     if (operation?.id === run.id && (settles || !run.controller.signal.aborted)) {
       this.state.set({ ...operation, ...patch })
       if (settles) {
+        // Reread the disk now so onRelease learns the outcome even when no client is watching.
+        void this.status(false).catch(() => {})
         releaseChangeListeners.forEach((listener) => listener())
       }
     }
@@ -235,6 +242,9 @@ export class ManagedRuntimeInstallation {
 
   private async reclaim(): Promise<void> {
     const { release, unreadable } = resolveInstalledRuntimeRelease(this.root, this.runtime.pin())
+    if (!unreadable) {
+      this.deps.onRelease?.(release?.folder ?? null)
+    }
     if (unreadable) {
       // Unknown active release means no release is provably stale.
       console.warn(`[managed-runtime] ${this.agent} releases unreadable; not reclaiming this run`)

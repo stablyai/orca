@@ -1,17 +1,15 @@
 // Orca's own Claude Code follows the user's Claude update channel; chats prefer the user's own install.
 
-import { execFile } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { runProcess } from '@orca/process-host'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { readInheritedPath } from '../../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 import { z } from 'zod'
 import { getMainHttpClient } from '../../network/http-client'
-import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import {
   ManagedRuntimeStartError,
-  resolveInstalledRuntimeRelease,
   type ManagedRuntime,
   type ManagedRuntimePin
 } from '../../node-runtime/managed-runtime-release'
@@ -52,9 +50,9 @@ function isMuslHost(): boolean {
     return false
   }
   // glibc builds report their runtime glibc version; musl builds have none.
-  const header = (process.report?.getReport() as { header?: { glibcVersionRuntime?: string } })
-    ?.header
-  return !header?.glibcVersionRuntime
+  const report: unknown = process.report?.getReport()
+  const header = report && typeof report === 'object' && 'header' in report ? report.header : null
+  return !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
 }
 
 const channelSettingsSchema = z.object({
@@ -62,10 +60,10 @@ const channelSettingsSchema = z.object({
 })
 
 /** Claude's own `autoUpdatesChannel`; managed settings win over the user's, and Claude defaults to latest. */
-export function claudeUpdateChannel(
+export async function claudeUpdateChannel(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
-): 'latest' | 'stable' {
+): Promise<'latest' | 'stable'> {
   const configDir = env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
   const managed =
     platform === 'darwin'
@@ -73,15 +71,15 @@ export function claudeUpdateChannel(
       : platform === 'win32'
         ? join(env.PROGRAMFILES || 'C:\\Program Files', 'ClaudeCode')
         : '/etc/claude-code'
-  const channels = [join(configDir, 'settings.json'), join(managed, 'managed-settings.json')].map(
-    (path) => {
+  const channels = await Promise.all(
+    [join(configDir, 'settings.json'), join(managed, 'managed-settings.json')].map(async (path) => {
       try {
-        return channelSettingsSchema.safeParse(JSON.parse(readFileSync(path, 'utf8'))).data
+        return channelSettingsSchema.safeParse(JSON.parse(await readFile(path, 'utf8'))).data
           ?.autoUpdatesChannel
       } catch {
         return undefined
       }
-    }
+    })
   )
   return channels.findLast((channel) => channel !== undefined) ?? 'latest'
 }
@@ -95,7 +93,7 @@ async function fetchLatestPin(signal?: AbortSignal): Promise<ManagedRuntimePin |
     return null
   }
   const { fetch } = getMainHttpClient()
-  const versionResponse = await fetch(`${RELEASES}/${claudeUpdateChannel()}`, { signal })
+  const versionResponse = await fetch(`${RELEASES}/${await claudeUpdateChannel()}`, { signal })
   if (!versionResponse.ok) {
     throw new Error(`Claude release lookup failed (${versionResponse.status})`)
   }
@@ -136,55 +134,50 @@ async function refreshLatestPin(signal?: AbortSignal): Promise<void> {
   await lookup
 }
 
-function validateClaudeRelease(
+async function validateClaudeRelease(
   folder: string,
   pin: ManagedRuntimePin,
   signal: AbortSignal
 ): Promise<void> {
   const [member] = pin.members
-  return new Promise((resolve, reject) => {
-    execFile(
-      join(folder, member?.path ?? 'claude'),
-      ['--version'],
-      { signal, timeout: VALIDATE_TIMEOUT_MS, windowsHide: true },
-      (error, stdout, stderr) => {
-        if (error) {
-          const timedOut = error.killed && !signal.aborted
-          reject(
-            new ManagedRuntimeStartError(
-              error.message,
-              timedOut
-                ? { kind: 'timeout', timeoutMs: VALIDATE_TIMEOUT_MS }
-                : {
-                    kind: 'exit',
-                    exit: {
-                      code: typeof error.code === 'number' ? error.code : null,
-                      signal: error.signal ?? null,
-                      // A string code (ENOENT, EACCES) means the process never started.
-                      processless: typeof error.code === 'string'
-                    },
-                    stderr: String(stderr)
-                  },
-              { cause: error }
-            )
-          )
-          return
-        }
-        const answered = String(stdout).trim()
-        if (!answered.startsWith(pin.version)) {
-          reject(
-            new ManagedRuntimeStartError('Claude answered with another version', {
-              kind: 'version',
-              answered,
-              expected: pin.version
-            })
-          )
-          return
-        }
-        resolve()
-      }
+  let result: Awaited<ReturnType<typeof runProcess>>
+  try {
+    result = await runProcess({
+      program: join(folder, member?.path ?? 'claude'),
+      args: ['--version'],
+      timeoutMs: VALIDATE_TIMEOUT_MS,
+      signal
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new ManagedRuntimeStartError(
+      message,
+      { kind: 'exit', exit: { code: null, signal: null, processless: true }, stderr: '' },
+      { cause: error }
     )
-  })
+  }
+  signal.throwIfAborted()
+  if (result.timedOut) {
+    throw new ManagedRuntimeStartError('Claude did not answer', {
+      kind: 'timeout',
+      timeoutMs: VALIDATE_TIMEOUT_MS
+    })
+  }
+  if (result.code !== 0) {
+    throw new ManagedRuntimeStartError('Claude exited', {
+      kind: 'exit',
+      exit: { code: result.code, signal: result.signal, processless: false },
+      stderr: result.stderr
+    })
+  }
+  const answered = result.stdout.trim()
+  if (!answered.startsWith(pin.version)) {
+    throw new ManagedRuntimeStartError('Claude answered with another version', {
+      kind: 'version',
+      answered,
+      expected: pin.version
+    })
+  }
 }
 
 export const CLAUDE_MANAGED_RUNTIME: ManagedRuntime = {
@@ -200,11 +193,16 @@ export function claudeManagedExecutable(folder: string): string {
   return join(folder, process.platform === 'win32' ? 'claude.exe' : 'claude')
 }
 
+let installedFolder: string | null = null
+
+/** The installation reports each release it reads from disk, so lookups here never touch the disk. */
+export function rememberManagedClaudeRelease(folder: string | null): void {
+  installedFolder = folder
+}
+
 /** Orca's installed Claude on this host, used only when the user has none of their own. */
-export function managedClaudeCommand(dataDirectory = getProfileUserDataPath()): string | null {
-  const root = CLAUDE_MANAGED_RUNTIME.root(dataDirectory)
-  const { release } = resolveInstalledRuntimeRelease(root, CLAUDE_MANAGED_RUNTIME.pin())
-  return release ? claudeManagedExecutable(release.folder) : null
+export function managedClaudeCommand(): string | null {
+  return installedFolder ? claudeManagedExecutable(installedFolder) : null
 }
 
 /** Last on PATH, so `claude auth login` and CLI tabs reach Orca's copy and never shadow the user's own. */
