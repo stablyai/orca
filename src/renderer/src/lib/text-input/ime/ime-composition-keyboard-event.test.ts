@@ -183,6 +183,20 @@ describe('useImeEnterGestureOwnership', () => {
       swallowed: true
     },
     {
+      name: 'lets the Enter that commits Vietnamese Telex submit, as Hangul does',
+      commitKey: { key: 'Enter', keyCode: 229, code: 'Enter' },
+      committed: 'chào',
+      frameRuns: false,
+      swallowed: false
+    },
+    {
+      name: 'swallows the Enter that commits raw Pinyin letters',
+      commitKey: { key: 'Enter', keyCode: 229, code: 'Enter' },
+      committed: 'nihao',
+      frameRuns: false,
+      swallowed: true
+    },
+    {
       name: 'swallows the IBus confirm Enter that follows compositionend',
       commitKey: null,
       committed: '日本語',
