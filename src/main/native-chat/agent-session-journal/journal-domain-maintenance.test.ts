@@ -216,7 +216,8 @@ it('visits only chats that can hold retired rows since their last completed pass
   expect(retiredPass(db)).toEqual(['session-03', 'session-99'])
 
   // An item written between the read and the prune keeps the chat for the next pass.
-  const item = db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,
+  const item =
+    db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,
     sequence_index,owner_fence,payload_json) VALUES(?,?,?,1,1,1,0,1,'{}')`)
   item.run('session-05', 'stale-1', 'a')
   const stale = readJournalSqlDatabase(db, { kind: 'retired-heads', after: null, through: null })
