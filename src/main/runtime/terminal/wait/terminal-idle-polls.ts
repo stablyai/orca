@@ -250,10 +250,12 @@ export class RuntimeTerminalIdlePolls {
     sample: IdlePollSample
   ): Promise<void> {
     const { ptyId } = sample
+    // Why paint first: before the command paints anything, no foreground answer can make it ready.
     if (
       entry.foregroundPollInFlight ||
       this.deps.getPaneAgent(ptyId) !== null ||
-      !sample.isQuiet('closed')
+      !sample.isQuiet('closed') ||
+      !this.deps.hasCommandPainted(ptyId)
     ) {
       return
     }

@@ -19,7 +19,7 @@ import {
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
 import { outputClockOf } from './tui-idle-evidence-source'
-import { hasTerminalAgentPainted } from '../input/terminal-command-paint'
+import { hasTerminalAgentPainted, isShellInFront } from '../input/terminal-command-paint'
 import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
@@ -71,8 +71,9 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         const snapshotText = projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
         // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse,
-        // nor on a frame no current program painted (a reattach still awaiting paint).
+        // nor on a frame no current program painted (a reattach awaiting paint, or the shell back in front).
         const ready =
+          !isShellInFront(pty) &&
           hasTerminalAgentPainted(pty, agent) &&
           (screenRule
             ? isKnownReadyPromptBody(
