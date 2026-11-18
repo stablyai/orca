@@ -72,7 +72,12 @@ export function writeJournalDomainCurrentItem(
     throw new Error('journal item persistence requires its writer transaction')
   }
   // A stored form handed back is written from its text, so every derived column stays exact.
-  const restored = restoreCutJournalOutput(db, [target.sessionId, target.epoch], write.item)
+  const restored = restoreCutJournalOutput(
+    db,
+    [target.sessionId, target.epoch],
+    write.item,
+    write.previous?.item
+  )
   const input = {
     ...write,
     item: hydrateJournalStoredItem(db, [target.sessionId, target.epoch], restored)

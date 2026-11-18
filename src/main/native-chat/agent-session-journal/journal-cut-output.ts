@@ -34,7 +34,8 @@ export function isCutJournalOutputOf(cut: AgentJournalBoundedPayload, text: unkn
 export function restoreCutJournalOutput(
   db: Database.Database,
   prefix: readonly [string, string],
-  item: AgentJournalRenderItem
+  item: AgentJournalRenderItem,
+  previous?: AgentJournalRenderItem
 ): AgentJournalRenderItem {
   const { body } = item
   const payload = savedPayload(body)
@@ -44,6 +45,16 @@ export function restoreCutJournalOutput(
     Buffer.byteLength(payload.head, 'utf8') >= payload.byteLength
   ) {
     return item
+  }
+  // A writer that already loaded the row whole restores from it, without reading it again.
+  const held = previous && savedPayload(previous.body)
+  if (
+    held &&
+    !held.truncated &&
+    held.digest === payload.digest &&
+    held.byteLength === payload.byteLength
+  ) {
+    return withWholeOutput(item, held)
   }
   // The row may hold it under the other field: a diff becomes a Diff call and back.
   const whole = (
@@ -67,13 +78,21 @@ export function restoreCutJournalOutput(
     return item
   }
   const saved: AgentJournalBoundedPayload = JSON.parse(row.whole)
+  return withWholeOutput(item, saved)
+}
+
+function withWholeOutput(
+  item: AgentJournalRenderItem,
+  whole: AgentJournalBoundedPayload
+): AgentJournalRenderItem {
+  const { body } = item
   const restored: AgentJournalRenderItem = {
     ...item,
     body:
       body.kind === 'diff'
-        ? { ...body, patch: saved }
+        ? { ...body, patch: whole }
         : body.kind === 'tool-call'
-          ? { ...body, output: saved }
+          ? { ...body, output: whole }
           : body
   }
   delete restored.shortened
