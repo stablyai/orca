@@ -40,6 +40,8 @@ export const UsageCallParams = z.object({
 })
 export type UsageCall = z.infer<typeof UsageCallParams>
 export const BACKEND_PUBLIC_USAGE_METHOD = 'usage.public'
+/** Names main's pid so a Linux backend can stop once main is gone. */
+export const BACKEND_DESKTOP_PID_ARG = '--desktop-pid='
 export type BackendResponse = RuntimeRpcResponse<unknown>
 
 export const BackendBootstrapSchema = z

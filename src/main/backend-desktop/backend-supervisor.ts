@@ -3,6 +3,7 @@ import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/dur
 import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
+  BACKEND_DESKTOP_PID_ARG,
   BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST,
   BACKEND_UTILITY_PROCESS_NAME,
@@ -173,7 +174,7 @@ export class BackendSupervisor {
       currentWorkerEntryLayout(__dirname),
       'backend-entry.js'
     )
-    const child = utilityProcess.fork(entry, [], {
+    const child = utilityProcess.fork(entry, [`${BACKEND_DESKTOP_PID_ARG}${process.pid}`], {
       serviceName: BACKEND_UTILITY_PROCESS_NAME,
       stdio: ['ignore', 'ignore', 'pipe']
     })

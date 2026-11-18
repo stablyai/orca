@@ -11,6 +11,7 @@ import { parseDaemonReadyIdentity } from '../endpoint/identity/daemon-ready-iden
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import { watchLaunchedDaemonExit } from './daemon-exit-record'
+import { resolveDaemonFdClosingExec } from './daemon-fd-closing-exec'
 
 /** Default readiness IPC budget; callers may allow longer. */
 export const DAEMON_CHILD_STARTUP_TIMEOUT_MS = 10_000
@@ -36,10 +37,11 @@ export type LaunchedDaemonChild = {
 }
 
 export async function launchDaemonChild(
-  options: DaemonChildSpawnOptions
+  requested: DaemonChildSpawnOptions
 ): Promise<LaunchedDaemonChild> {
   // Probe once: the synchronous systemd-run spawn need not repeat for AppImage fallbacks.
   const scopeSupported = isDurableDaemonScopeSupported()
+  const options = { ...requested, fdClosingExec: await resolveDaemonFdClosingExec() }
   const appImageRungs = [
     ...(options.extractedGeneration
       ? [{ from: 'the extracted AppImage copy', options: { ...options, appImage: undefined } }]

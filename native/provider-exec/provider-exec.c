@@ -7,8 +7,13 @@
 // Usage: orca-provider-exec --cli-input-fd7 <stdinEndGraceMs> <sigtermGraceMs> <session|one-shot>
 //          <stdin-end|stdin-end-and-sigterm> -- <command> [args...]
 // The fixed --cli-input-fd7 prefix identifies the private input protocol.
+// Linux also: orca-provider-exec --exec-without-inherited-fds -- <command> [args...] execs in place
+// keeping only fds 0-2 and NODE_CHANNEL_FD, so a durable child can't hold the launcher's sockets.
 #if !defined(__APPLE__)
 #define _POSIX_C_SOURCE 200809L
+#endif
+#if defined(__linux__)
+#define _DEFAULT_SOURCE
 #endif
 
 #include <errno.h>
@@ -23,7 +28,10 @@
 #include <time.h>
 #include <unistd.h>
 #if defined(__linux__)
+#include <dirent.h>
+#include <limits.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
 #endif
 #if defined(__APPLE__)
 #include <limits.h>
@@ -137,6 +145,56 @@ static int set_cloexec(int fd, int enabled) {
     flags = enabled ? flags | FD_CLOEXEC : flags & ~FD_CLOEXEC;
     return fcntl(fd, F_SETFD, flags);
 }
+
+#if defined(__linux__)
+#ifndef CLOSE_RANGE_CLOEXEC
+#define CLOSE_RANGE_CLOEXEC (1U << 2)
+#endif
+
+// Marks every fd above 2 close-on-exec; walks /proc where close_range is missing or filtered.
+static int cloexec_inherited_fds(void) {
+#if defined(SYS_close_range)
+    if (syscall(SYS_close_range, 3U, ~0U, CLOSE_RANGE_CLOEXEC) == 0) {
+        return 0;
+    }
+    if (errno != ENOSYS && errno != EINVAL && errno != EPERM) {
+        return -1;
+    }
+#endif
+    DIR *dir = opendir("/proc/self/fd");
+    if (dir == NULL) {
+        return -1;
+    }
+    int failed = 0;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        unsigned fd;
+        if (parse_ms(entry->d_name, INT_MAX, &fd) == 0 && fd > 2 && (int)fd != dirfd(dir) &&
+                set_cloexec((int)fd, 1) != 0 && errno != EBADF) {
+            failed = 1;
+        }
+    }
+    closedir(dir);
+    return failed ? -1 : 0;
+}
+
+// Fails closed: an unproven cleanup or a malformed NODE_CHANNEL_FD never execs.
+static int exec_without_inherited_fds(char *argv[]) {
+    const char *channel = getenv("NODE_CHANNEL_FD");
+    unsigned channel_fd = 0;
+    if (channel != NULL &&
+            (parse_ms(channel, INT_MAX, &channel_fd) != 0 || channel_fd < 3 ||
+                fcntl((int)channel_fd, F_GETFD) < 0)) {
+        return EXIT_USAGE;
+    }
+    if (cloexec_inherited_fds() != 0 ||
+            (channel != NULL && set_cloexec((int)channel_fd, 0) != 0)) {
+        return EXIT_BOOTSTRAP;
+    }
+    execvp(argv[0], argv);
+    return EXIT_EXEC_FAILED;
+}
+#endif
 
 static void reap_watcher(void) {
     if (watcher_pid <= 0) {
@@ -635,6 +693,13 @@ int main(int argc, char *argv[]) {
 #if defined(__APPLE__)
     if (argc == 3 && strcmp(argv[1], "--process-row") == 0) {
         return print_process_row(argv[2]);
+    }
+#endif
+#if defined(__linux__)
+    if (argc >= 4 && strcmp(argv[1], "--exec-without-inherited-fds") == 0) {
+        return strcmp(argv[2], "--") == 0 && argv[3][0] != '\0'
+                   ? exec_without_inherited_fds(&argv[3])
+                   : EXIT_USAGE;
     }
 #endif
     unsigned stdin_end_grace_ms;

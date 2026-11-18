@@ -22,6 +22,7 @@ import { ignoreInheritedWslHostsGateState } from '../../shared/remote-runtime/ws
 import type { createUsageService } from './usage-service'
 import type { UsageWorktreeCatalog } from '../usage/usage-store-host'
 import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
+import { DESKTOP_OWNER_POLL_MS, watchDesktopOwner } from './backend-desktop-owner-watch'
 
 // A fatal V8 trap must crash, never spin on a JS fault-signal listener.
 installFatalSignalListenerGuard()
@@ -51,6 +52,10 @@ let usage: ReturnType<typeof createUsageService> | undefined
 let stopping: Promise<void> | undefined
 let booting = false
 let startup: Promise<void> | undefined
+watchDesktopOwner(process.argv, () => {
+  console.error(`[backend ${incarnation}] Desktop process is gone; stopping.`)
+  void stop()
+})
 
 function stop(): Promise<void> {
   stopping ??= (async () => {
@@ -74,7 +79,8 @@ function stop(): Promise<void> {
 }
 
 async function acquireServiceLock(userDataPath: string) {
-  const deadline = Date.now() + ORCAD_SHUTDOWN_DEADLINE_MS
+  // Room for an orphaned holder to notice its desktop is gone and finish stopping.
+  const deadline = Date.now() + ORCAD_SHUTDOWN_DEADLINE_MS + 2 * DESKTOP_OWNER_POLL_MS
   while (!abort.signal.aborted) {
     try {
       return acquireOrcadInstanceLock(join(userDataPath, 'backend-service'), {
@@ -191,8 +197,10 @@ parent.on('message', (event) => {
   }
   if (message?.type === 'bootstrap' && port) {
     startup = bootstrap(message.config, port)
-    void startup.catch(() => {
-      console.error(`[backend ${incarnation}] Startup failed.`)
+    void startup.catch((error: unknown) => {
+      const code = error instanceof Error && 'code' in error ? ` (${String(error.code)})` : ''
+      const reason = error instanceof Error ? error.message : String(error)
+      console.error(`[backend ${incarnation}] Startup failed: ${reason}${code}`)
       parent!.postMessage({ type: 'failed', incarnation })
       void stop()
     })
