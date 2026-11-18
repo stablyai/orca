@@ -82,11 +82,12 @@ export class StateSerializationSecretHandlingOperations {
     return durable
   }
 
-  /** Pending encryption requires full serialization so secret retention stays complete. With
-   *  patchSessions, session domains the writer already holds travel as changed entries only. */
+  /** Pending encryption requires full serialization so secret retention stays complete. Session
+   *  domains the writer already holds travel as changed entries with 'patch'; with 'whole' they are
+   *  written whole but still recorded as the writer's new copy. */
   buildStateDomainsToSave(
     domains: ReadonlySet<string>,
-    patchSessions = false
+    sessionSaves?: 'patch' | 'whole'
   ):
     | {
         replacements: ProfileStateDomainReplacement[]
@@ -114,10 +115,10 @@ export class StateSerializationSecretHandlingOperations {
     const sessionCandidates: WorkspaceSessionSaveCandidate[] = []
     for (const domain of saved) {
       const value = this.projectDomainToSave(domain, encrypt)
-      if (patchSessions && isWorkspaceSessionSaveDomain(domain)) {
+      if (sessionSaves && isWorkspaceSessionSaveDomain(domain)) {
         const { patch, candidate } = this.sessionSaveBaseline.capture(domain, value)
         sessionCandidates.push(candidate)
-        if (patch) {
+        if (patch && sessionSaves === 'patch') {
           if (patch.operations.length > 0) {
             patches.push(patch)
           }

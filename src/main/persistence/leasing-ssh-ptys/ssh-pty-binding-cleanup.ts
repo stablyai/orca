@@ -79,16 +79,21 @@ export function clearSshRemotePtyBindingsForLeases(
     ].filter((session): session is WorkspaceSessionState => Boolean(session))
   )
   for (const session of sessions) {
+    // Replace, never edit, saved entries: incremental saves compare them by identity.
+    let rows: WorkspaceSessionState['tabsByWorktree'] | undefined
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-      for (const tab of tabs) {
-        if (
-          tab.ptyId &&
-          referencesBinding({ ptyId: tab.ptyId, worktreeId, targetId, tabId: tab.id })
-        ) {
-          tab.ptyId = null
-          changed = true
-        }
+      const nextTabs = tabs.map((tab) =>
+        tab.ptyId && referencesBinding({ ptyId: tab.ptyId, worktreeId, targetId, tabId: tab.id })
+          ? { ...tab, ptyId: null }
+          : tab
+      )
+      if (nextTabs.some((tab, index) => tab !== tabs[index])) {
+        rows = { ...(rows ?? session.tabsByWorktree), [worktreeId]: nextTabs }
+        changed = true
       }
+    }
+    if (rows) {
+      session.tabsByWorktree = rows
     }
     const worktreeIdByTabId = new Map<string, string>()
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
@@ -98,6 +103,7 @@ export function clearSshRemotePtyBindingsForLeases(
         }
       }
     }
+    let layouts: WorkspaceSessionState['terminalLayoutsByTabId'] | undefined
     for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
       const bindings = layout.ptyIdsByLeafId
       if (!bindings) {
@@ -110,9 +116,15 @@ export function clearSshRemotePtyBindingsForLeases(
         )
       )
       if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
-        layout.ptyIdsByLeafId = nextBindings
+        layouts = {
+          ...(layouts ?? session.terminalLayoutsByTabId),
+          [tabId]: { ...layout, ptyIdsByLeafId: nextBindings }
+        }
         changed = true
       }
+    }
+    if (layouts) {
+      session.terminalLayoutsByTabId = layouts
     }
   }
   if (changed) {

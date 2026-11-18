@@ -92,7 +92,7 @@ export function prepareSelectiveProfileStateWrite(
   // Run-row deltas travel in their own command, which carries no patches.
   const built = serialization.buildStateDomainsToSave(
     serializableDomains,
-    patchSessions && !useAutomationDelta
+    patchSessions ? (useAutomationDelta ? 'whole' : 'patch') : undefined
   )
   if (built === undefined) {
     return undefined
