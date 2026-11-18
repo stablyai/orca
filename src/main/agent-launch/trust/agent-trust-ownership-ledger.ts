@@ -1,8 +1,7 @@
 import { mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { readAgentStateJsonFileSync } from '../../codex/configuration/agent-state-file-reader'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
-import { getOrcaUserDataPath } from '../../codex/configuration/homes/codex-home-paths'
 
 /**
  * Ownership records for the workspace trust entries Orca's preflight created in
@@ -24,8 +23,12 @@ type CreatedTrustLedger = {
   created: Record<string, CreatedTrustEntry[]>
 }
 
+export type CreatedTrustRecord = { configPath: string; projectPath: string; written: string }
+
 export type AgentTrustOwnershipLedger = {
   record: (configPath: string, projectPath: string, written: string) => void
+  /** One read and at most one publication for every record of a grant. */
+  recordAll: (records: readonly CreatedTrustRecord[]) => void
   getWritten: (configPath: string, projectPath: string) => string | null
   listConfigFiles: (projectPath: string) => string[]
   forget: (configPath: string, projectPath: string) => void
@@ -52,11 +55,9 @@ function isCreatedTrustEntryMap(value: unknown): value is Record<string, Created
 }
 
 export function createAgentTrustOwnershipLedger(
-  fileName: string,
+  ledgerPath: () => string,
   normalizePath: (projectPath: string) => string
 ): AgentTrustOwnershipLedger {
-  const ledgerPath = (): string => join(getOrcaUserDataPath(), fileName)
-
   // Why: the ledger only decides what extra cleanup may happen, so any unreadable
   // state degrades to "nothing recorded", never to deleting an unrecorded entry.
   const read = (): CreatedTrustLedger => {
@@ -85,18 +86,30 @@ export function createAgentTrustOwnershipLedger(
   const find = (ledger: CreatedTrustLedger, configPath: string, projectPath: string) =>
     (ledger.created[configPath] ?? []).find((recorded) => matches(recorded, projectPath))
 
-  return {
-    record: (configPath, projectPath, written) => {
-      const ledger = read()
+  const recordAll = (records: readonly CreatedTrustRecord[]): void => {
+    if (records.length === 0) {
+      return
+    }
+    const ledger = read()
+    let changed = false
+    for (const { configPath, projectPath, written } of records) {
       if (find(ledger, configPath, projectPath)) {
-        return
+        continue
       }
       ledger.created[configPath] = [
         ...(ledger.created[configPath] ?? []),
         { path: projectPath, written }
       ]
+      changed = true
+    }
+    if (changed) {
       write(ledger)
-    },
+    }
+  }
+
+  return {
+    record: (configPath, projectPath, written) => recordAll([{ configPath, projectPath, written }]),
+    recordAll,
     getWritten: (configPath, projectPath) => find(read(), configPath, projectPath)?.written ?? null,
     listConfigFiles: (projectPath) =>
       Object.entries(read().created)

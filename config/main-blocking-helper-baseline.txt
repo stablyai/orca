@@ -24,11 +24,11 @@
 2 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
 3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 2 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
-12 src/main/agent-launch/trust/agent-trust-presets.ts
+10 src/main/agent-launch/trust/agent-trust-presets.ts
 2 src/main/agent-launch/trust/agent-workspace-trust-spawn.ts
 5 src/main/agent-launch/trust/agent-workspace-trust.ts
 3 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
-13 src/main/agent-launch/trust/execution-host-workspace-trust.ts
+12 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 3 src/main/ai-vault-search/session-search-child-service.ts
 4 src/main/ai-vault-search/session-search-enablement.ts
 2 src/main/ai-vault-search/storage/session-search-schema.ts
@@ -379,7 +379,7 @@
 15 src/main/codex/trust/hooks/hook-trust-promotion.ts
 1 src/main/codex/trust/identity/codex-trust-identity.ts
 1 src/main/codex/trust/toml/config-toml-project-trust.ts
-30 src/main/codex/trust/toml/config-toml-trust.ts
+23 src/main/codex/trust/toml/config-toml-trust.ts
 6 src/main/command-code/hook-service.ts
 7 src/main/composio/composio-bot-tool.ts
 5 src/main/composio/composio-bots.ts
@@ -1384,7 +1384,7 @@
 2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-removal.ts
-2 src/main/runtime/workspaces/removal/worktree-removal-agent-trust-cleanup.ts
+1 src/main/runtime/workspaces/removal/worktree-removal-agent-trust-cleanup.ts
 2 src/main/runtime/workspaces/workspace-removal-target.ts
 1 src/main/server/serve-pairing-readiness.ts
 2 src/main/skills/cloud/skill-cloud-auth.ts
