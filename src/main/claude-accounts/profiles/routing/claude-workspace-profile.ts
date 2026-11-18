@@ -32,7 +32,8 @@ export class ClaudeWorkspaceProfiles {
   async resolve(
     workspaceId: string | undefined,
     target: ClaudeAccountSelectionTarget,
-    prepare: boolean
+    prepare: boolean,
+    purpose?: 'identity'
   ): Promise<ClaudeRuntimeAuthPreparation | null> {
     const settings = this.settings()
     const id = workspaceAccountId(settings.claudeWorkspaceAccounts, workspaceId)
@@ -60,7 +61,8 @@ export class ClaudeWorkspaceProfiles {
         }
     if (
       !folder.configDir ||
-      !(await readClaudeFolderLoginAsync(await claudeStateFileAsync(folder.readPath)))
+      (purpose !== 'identity' &&
+        !(await readClaudeFolderLoginAsync(await claudeStateFileAsync(folder.readPath))))
     ) {
       throw new Error(
         'The workspace Claude account is not signed in to its own profile. Sign in again or choose another account.'
