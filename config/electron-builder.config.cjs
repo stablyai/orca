@@ -384,6 +384,7 @@ module.exports = {
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/agent-identity-worker-entry.js',
     'out/main/bots-db-worker-entry.js',
+    'out/main/orchestration-reader-entry.js',
     'out/main/session-search-worker-entry.js',
     'out/main/journal-sql-worker-entry.js',
     'out/main/journal-sql-reader-entry.js',

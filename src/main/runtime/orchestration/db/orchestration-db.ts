@@ -180,6 +180,9 @@ class OrchestrationDbCore {
 
 export type OrchestrationDb = OrchestrationDbCore & OrchestrationDbMethods
 
+/** Only the connection: what read queries need, so a reader thread's read-only one runs them too. */
+export type OrchestrationDbConnection = Pick<OrchestrationDb, 'db'>
+
 attachOrchestrationDbMethods(OrchestrationDbCore)
 
 // Prototype installation supplies the methods modeled by this construct type.

@@ -87,14 +87,45 @@ export async function readDispatchWorkers(
     return []
   }
   const now = Date.now()
+  const { fleet, chatStatusRows } = await projectDispatchFleet(
+    runtime,
+    rows,
+    db.getWorkerAttentionFactsForDispatches(
+      rows.map((row) => row.dispatchId),
+      now
+    ),
+    now
+  )
+  const workers: OrchestrationSessionWorker[] = []
+  for (const worker of fleet.workers) {
+    const durable = fleet.durable.get(worker.dispatchId)
+    if (durable) {
+      workers.push(
+        sessionWorker(
+          db,
+          await withStructuredLiveness(runtime, db, worker, durable),
+          durable,
+          chatStatusRows
+        )
+      )
+    }
+  }
+  return workers
+}
+
+/** The fleet projection of these rows: this machine's statuses, session records and paired hosts' verdicts. */
+export async function projectDispatchFleet(
+  runtime: SessionWorkersRuntime,
+  rows: ReturnType<OrchestrationDb['listWorkerTerminalResources']>,
+  attentionFacts: ReturnType<OrchestrationDb['getWorkerAttentionFactsForDispatches']>,
+  now: number
+) {
+  const db = runtime.getOrchestrationDb()
   const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
   await ensureSessionWorkerRecords(runtime, rows)
   const fleet = projectWorkerFleet({
     rows,
-    attentionFacts: db.getWorkerAttentionFactsForDispatches(
-      rows.map((row) => row.dispatchId),
-      now
-    ),
+    attentionFacts,
     statuses,
     limit: rows.length,
     now,
@@ -117,21 +148,14 @@ export async function readDispatchWorkers(
   const chatStatusRows = latestLiveAgentStatusRowsByPaneKey(
     runtime.getAgentStatusSnapshotFn?.() ?? []
   )
-  const workers: OrchestrationSessionWorker[] = []
-  for (const worker of fleet.workers) {
-    const durable = fleet.durable.get(worker.dispatchId)
-    if (durable) {
-      workers.push(
-        sessionWorker(
-          db,
-          await withStructuredLiveness(runtime, db, worker, durable),
-          durable,
-          chatStatusRows
-        )
-      )
-    }
-  }
-  return workers
+  return { fleet, chatStatusRows }
+}
+
+/** The worker asked its coordinator, or awaits its decision. */
+export function hasPendingQuestion(worker: OrchestrationFleetWorker): boolean {
+  return worker.attention.categories.some(
+    (category) => category === 'input' || category === 'approval'
+  )
 }
 
 function isOpenDispatch(status: string): boolean {
@@ -139,7 +163,7 @@ function isOpenDispatch(status: string): boolean {
 }
 
 /** A chat worker publishes no agent-status row; read its session records, as worker-show does. */
-async function withStructuredLiveness(
+export async function withStructuredLiveness(
   runtime: Parameters<typeof inspectSessionWorker>[0],
   db: OrchestrationDb,
   worker: OrchestrationFleetWorker,
@@ -210,9 +234,7 @@ function sessionWorker(
     agent: worker.provider?.id ?? provider ?? requestedAgent(db, worker.dispatchId),
     state,
     activity: sessionWorkerActivity(worker, chatSessionId, chatStatusRows),
-    pendingQuestion: worker.attention.categories.some(
-      (category) => category === 'input' || category === 'approval'
-    ),
+    pendingQuestion: hasPendingQuestion(worker),
     liveness: worker.liveness.verdict,
     host: worker.host.kind,
     ...(worker.host.kind === 'remote' ? { hostEnvironmentId: worker.host.id } : {}),
