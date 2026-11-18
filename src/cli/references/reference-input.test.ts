@@ -15,6 +15,15 @@ describe('reference provider hint', () => {
     ])
   })
 
+  it('uses the hint only for URLs whose host cannot name a provider', () => {
+    const references = parseReferenceUrls(
+      [SELF_HOSTED_ISSUE, 'https://github.com/acme/api/pull/5123'],
+      'gitea'
+    )
+
+    expect(references.map((reference) => reference.provider)).toEqual(['gitea', 'github'])
+  })
+
   it('carries the flag into worktree create references', () => {
     const inputs = getCreateReferenceInputs(
       new Map<string, string | boolean>([

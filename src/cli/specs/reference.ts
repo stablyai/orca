@@ -19,7 +19,7 @@ export const REFERENCE_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: ['url'],
     notes: [
       'Bare keys resolve Jira issues on the selected execution-host Jira site; use --reference-site to choose one explicitly. Other providers require full URLs.',
-      'Use --reference-provider github or gitea for an /issues/ URL on a self-hosted host whose forge Orca cannot infer from the URL.',
+      'Use --reference-provider github or gitea for an /issues/ URL on a self-hosted host whose forge Orca cannot infer from the URL. URLs whose host or path already names a provider keep it.',
       'Existing links are unchanged; all inputs are validated and Jira keys resolved before writing. Full URLs do not require Jira lookup.'
     ],
     examples: [
@@ -39,7 +39,7 @@ export const REFERENCE_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: ['url', 'key'],
     notes: [
       'Use full URLs, or opaque --key values from reference list for older links without URLs.',
-      'Use --reference-provider github or gitea to remove an /issues/ URL on a self-hosted host whose forge Orca cannot infer from the URL.',
+      'Use --reference-provider github or gitea to remove an /issues/ URL on a self-hosted host whose forge Orca cannot infer from the URL. URLs whose host or path already names a provider keep it.',
       'Removing an absent link succeeds without changing the workspace.'
     ]
   },

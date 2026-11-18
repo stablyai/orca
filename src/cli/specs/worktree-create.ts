@@ -39,7 +39,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'activate'
   ],
   notes: [
-    'Repeat --reference to attach full issue or review URLs, or Jira issue keys, before setup or agent startup. Use --reference-site to choose the Jira site for keys. Other providers require full URLs. Use --reference-provider github or gitea for an /issues/ URL on a self-hosted host whose forge Orca cannot infer from the URL. Cannot combine with legacy link flags.',
+    'Repeat --reference to attach full issue or review URLs, or Jira issue keys, before setup or agent startup. Use --reference-site to choose the Jira site for keys. Other providers require full URLs. Use --reference-provider github or gitea for an /issues/ URL on a self-hosted host whose forge Orca cannot infer from the URL; URLs whose host or path already names a provider keep it. Cannot combine with legacy link flags.',
     'This creates a new checkout. For a fresh agent in an existing worktree, use `orca agent launch` instead.',
     'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
     'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',

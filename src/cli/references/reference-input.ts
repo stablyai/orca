@@ -42,12 +42,27 @@ export function getReferenceProviderHint(
   return provider
 }
 
+function parseReferenceUrl(url: string, providerHint?: ReferenceProviderHint): WorkspaceAttachment {
+  try {
+    return parseWorkspaceReferenceUrl(url)
+  } catch (error) {
+    if (!providerHint) {
+      throw error
+    }
+    try {
+      return parseWorkspaceReferenceUrl(url, providerHint)
+    } catch {
+      throw error
+    }
+  }
+}
+
 export function parseReferenceUrls(
   urls: string[],
   providerHint?: ReferenceProviderHint
 ): WorkspaceAttachment[] {
   try {
-    const references = urls.map((url) => parseWorkspaceReferenceUrl(url, providerHint))
+    const references = urls.map((url) => parseReferenceUrl(url, providerHint))
     return [
       ...new Map(references.map((item) => [getWorkspaceReferenceIdentity(item), item])).values()
     ]
