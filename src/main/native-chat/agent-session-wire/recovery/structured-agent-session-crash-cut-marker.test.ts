@@ -51,11 +51,17 @@ function backgroundTask(state: 'unverifiable' | 'done' = 'unverifiable'): AgentJ
   }
 }
 
-function derive(items: AgentJournalRenderItem[]) {
+/** The chat's newest turn plus the rows in it; the read returns only those a settlement rewrote. */
+function derive(items: AgentJournalRenderItem[], movedOn = false) {
   return crashCutResumeMarker({
     sessionId: SESSION,
-    items,
-    cursor: { epoch: 'epoch-1', sequence: 9 },
+    cut: {
+      cursor: { epoch: 'epoch-1', sequence: 9 },
+      turn: items.find((item) => item.body.kind === 'turn') ?? null,
+      movedOn,
+      recovered: items.filter((item) => item.recovered),
+      promptItemIds: []
+    },
     record: record(),
     crashedRuntime: 'runtime-crashed',
     settledSince: STARTED
@@ -99,14 +105,7 @@ describe('crash cut resume marker', () => {
   })
 
   it('offers nothing when the chat moved on, the crash cut nothing, or an older start settled it', () => {
-    const later: AgentJournalRenderItem = {
-      itemId: 'user-2',
-      revision: 1,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'next' }] },
-      sequence: 5,
-      observedAt: NOW + 6
-    }
-    expect(derive([interrupted(), crashCut(), later])).toBeNull()
+    expect(derive([interrupted(), crashCut()], true)).toBeNull()
     expect(derive([turnItem('turn-1', 'completed')])).toBeNull()
     expect(derive([turnItem('turn-1', 'completed'), backgroundTask('done')])).toBeNull()
     const earlierTurnsCut = {

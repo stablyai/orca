@@ -1,19 +1,9 @@
-import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
-import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
-import { stringifyJsonWithinByteLimit } from '../../../../shared/json-stream/node-bounded-json-stringify'
-import {
-  durableWriteTempPath,
-  removeStaleDurableWriteTempFiles,
-  renameDurable,
-  writeTempFileDurable
-} from '../../../filesystem/durable-file-write'
 import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
 import {
   MAX_FAILURE_FIELD_LENGTH,
   normalizeState,
-  parseState,
   shouldReplaceMarker,
   splitDismissedAll,
   type AgentSessionResumeFailureInput,
@@ -22,12 +12,19 @@ import {
   type RecoveryCapsuleState,
   type RecoveryEntry
 } from './agent-session-recovery-capsule-entries'
+import {
+  automaticallyContinuable,
+  passOverAutomaticOffers,
+  readAutomaticRestartLedger,
+  recordAutomaticContinuations,
+  writeAutomaticRestartLedger
+} from './agent-session-recovery-automatic-ledger'
+import {
+  publishRecoveryCapsuleState,
+  readRecoveryCapsuleState
+} from './agent-session-recovery-capsule-file'
 
 export const AGENT_SESSION_RECOVERY_CAPSULE_FILE = 'agent-session-recovery.json'
-const MAX_CAPSULE_BYTES = 4 * 1024 * 1024
-
-/** Crash-leftover temp files only; offers themselves have no expiry. */
-const STALE_WRITE_TEMP_FILE_AGE_MS = 24 * 60 * 60 * 1000
 
 type StoredRecords = Pick<RecoveryCapsuleState, 'entries' | 'failed'>
 
@@ -93,15 +90,18 @@ export class AgentSessionRecoveryCapsule {
   }
 
   /** Reserve selected offers for one user action; failures retry only when named explicitly.
-   * Preserve failure guidance until the retry settles. */
+   * Preserve failure guidance until the retry settles. An automatic action reserves only what
+   * the ledger allows, and records it under the same lock. */
   beginResume(
     sessionIds: readonly string[] | undefined,
     operationId: string,
-    now: number
+    now: number,
+    automatic = false
   ): Promise<AgentSessionResumeMarker[]> {
     return withFileTransactionLock(this.filePath, async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
+      const ledger = automatic ? await readAutomaticRestartLedger(this.filePath) : null
       const requested = sessionIds === undefined ? null : new Set(sessionIds)
       const selected: AgentSessionResumeMarker[] = []
       const reserve = (marker: AgentSessionResumeMarker): RecoveryEntry => {
@@ -109,18 +109,45 @@ export class AgentSessionRecoveryCapsule {
         return { state: 'in-progress', operationId, startedAt: now, marker }
       }
       const next = entries.map((entry) =>
-        entry.state === 'pending' && (requested === null || requested.has(entry.marker.sessionId))
+        entry.state === 'pending' &&
+        (requested === null || requested.has(entry.marker.sessionId)) &&
+        (!ledger || automaticallyContinuable(ledger, entry.marker, now))
           ? reserve(entry.marker)
           : entry
       )
       const held = new Set(entries.map((entry) => entry.marker.sessionId))
       for (const failure of failed) {
-        if (requested?.has(failure.marker.sessionId) && !held.has(failure.marker.sessionId)) {
+        if (
+          !ledger &&
+          requested?.has(failure.marker.sessionId) &&
+          !held.has(failure.marker.sessionId)
+        ) {
           next.push(reserve(failure.marker))
         }
       }
       await this.publish({ entries: next, failed }, now, state.dismissedAt)
+      if (ledger && selected.length > 0) {
+        await writeAutomaticRestartLedger(
+          this.filePath,
+          recordAutomaticContinuations(ledger, selected, now)
+        )
+      }
       return selected
+    })
+  }
+
+  /** Ends a launch's automatic turn: what still waits is left to a person from now on. */
+  passOverAutomatic(now: number): Promise<void> {
+    return withFileTransactionLock(this.filePath, async () => {
+      const { entries } = normalizeState(await this.readState(), now)
+      const waiting = entries.filter((entry) => entry.state === 'pending')
+      await writeAutomaticRestartLedger(
+        this.filePath,
+        passOverAutomaticOffers(
+          await readAutomaticRestartLedger(this.filePath),
+          waiting.map((entry) => entry.marker)
+        )
+      )
     })
   }
 
@@ -287,45 +314,15 @@ export class AgentSessionRecoveryCapsule {
     return entry.state === 'in-progress' && entry.operationId === operationId
   }
 
-  private async readState(): Promise<RecoveryCapsuleState> {
-    let raw: string
-    try {
-      raw = (await readNodeFileWithinLimit(this.filePath, MAX_CAPSULE_BYTES)).buffer.toString(
-        'utf8'
-      )
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        return { entries: [], failed: [] }
-      }
-      throw error
-    }
-    return parseState(raw)
+  private readState(): Promise<RecoveryCapsuleState> {
+    return readRecoveryCapsuleState(this.filePath)
   }
 
-  private async publish(
+  private publish(
     records: StoredRecords,
     now: number,
     dismissedAt: number | undefined
   ): Promise<void> {
-    const { entries, failed } = normalizeState(records, now)
-    const { serialized } = stringifyJsonWithinByteLimit(
-      {
-        version: 2,
-        entries,
-        ...(dismissedAt === undefined ? {} : { dismissedAt }),
-        ...(failed.length === 0 ? {} : { failed })
-      },
-      MAX_CAPSULE_BYTES
-    )
-    await removeStaleDurableWriteTempFiles(this.filePath, {
-      minimumAgeMs: STALE_WRITE_TEMP_FILE_AGE_MS
-    })
-    const tempPath = durableWriteTempPath(this.filePath)
-    try {
-      await writeTempFileDurable(tempPath, serialized, 0o600)
-      await renameDurable(tempPath, this.filePath)
-    } finally {
-      await rm(tempPath, { force: true }).catch(() => {})
-    }
+    return publishRecoveryCapsuleState(this.filePath, records, now, dismissedAt)
   }
 }

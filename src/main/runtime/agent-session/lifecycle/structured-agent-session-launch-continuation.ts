@@ -4,11 +4,6 @@
 import type { StructuredAgentSessionRestartResume } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import {
-  readRecentAgentSessionRuntimes,
-  type RecordedAgentSessionRuntime
-} from '../records/agent-session-runtime-end-record'
-import { agentSessionRuntimeIncarnation } from '../records/agent-session-runtime-attribution'
 
 export const STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER =
   'trusted-local:launch-continuation'
@@ -21,11 +16,9 @@ export type StructuredAgentSessionLaunchContinuation = {
 export type StructuredAgentSessionLaunchContinuationDeps = {
   restartResume: Pick<
     StructuredAgentSessionRestartResume,
-    'adoptCrashCuts' | 'continueAfterRestart'
+    'adoptCrashCuts' | 'continueAfterRestart' | 'passOverAutomatic'
   >
   store: Pick<AgentSessionRecordStore, 'listHeldSessionIds' | 'replacedRuntime'>
-  /** Earlier runs, latest first: only the last one's crash is read back, older ones had their start. */
-  recentRuns: () => Promise<RecordedAgentSessionRuntime[]>
   /** When this process started: what settlement wrote since then is this start's reading of the crash. */
   startedAt: number
   resumeWorkOnRestart: () => boolean
@@ -34,32 +27,35 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
 export async function continueStructuredAgentSessionsAtLaunch(
   deps: StructuredAgentSessionLaunchContinuationDeps
 ): Promise<StructuredAgentSessionLaunchContinuation> {
-  const runs = await deps.recentRuns()
-  const previous = runs[0]
-  if (previous?.end === 'crash') {
-    const held = deps.store
-      .listHeldSessionIds()
-      .filter((sessionId) => deps.store.replacedRuntime(sessionId)?.runtime === previous.runtime)
-    // Recorded whatever the setting: with it off, the person still gets the offer.
-    if (held.length > 0) {
-      await deps.restartResume.adoptCrashCuts(held, previous.runtime, deps.startedAt)
-    }
+  // Each chat's own owner says whether its run crashed, so a crash that cut a start short is still read.
+  const cuts = deps.store.listHeldSessionIds().flatMap((sessionId) => {
+    const replaced = deps.store.replacedRuntime(sessionId)
+    return replaced?.runtimeEnd === 'crash' && replaced.runtime
+      ? [{ sessionId, crashedRuntime: replaced.runtime }]
+      : []
+  })
+  // Recorded whatever the setting: with it off, the person still gets the offer.
+  if (cuts.length > 0) {
+    await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
   }
-  if (!deps.resumeWorkOnRestart()) {
-    return { continued: new Set() }
-  }
-  const { continued } = await deps.restartResume.continueAfterRestart(
-    undefined,
-    STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
-    undefined,
-    {
-      automatic: { runs, thisRunStartedAt: deps.startedAt }
+  try {
+    if (!deps.resumeWorkOnRestart()) {
+      return { continued: new Set() }
     }
-  )
-  return {
-    continued: new Set(
-      continued.flatMap((outcome) => (outcome.outcome === 'continued' ? [outcome.sessionId] : []))
+    const { continued } = await deps.restartResume.continueAfterRestart(
+      undefined,
+      STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
+      undefined,
+      { automatic: true }
     )
+    return {
+      continued: new Set(
+        continued.flatMap((outcome) => (outcome.outcome === 'continued' ? [outcome.sessionId] : []))
+      )
+    }
+  } finally {
+    // Only this launch continues on its own what the last run cut; later launches leave it to a person.
+    await deps.restartResume.passOverAutomatic()
   }
 }
 
@@ -72,11 +68,6 @@ export function structuredAgentSessionLaunchContinuationDeps(
     ? {
         restartResume: host.restartResume,
         store: host.deps.store,
-        recentRuns: () =>
-          readRecentAgentSessionRuntimes(
-            host.deps.journalDatabase.stateDirectory,
-            agentSessionRuntimeIncarnation()
-          ),
         startedAt: Math.trunc(performance.timeOrigin),
         resumeWorkOnRestart
       }

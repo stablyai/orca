@@ -146,7 +146,8 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
         chats: host
           ? {
               open: (sessionId) => host.revealSession(sessionId).catch(() => null),
-              status: (sessionId) => host.readFreshStatusSummary(sessionId)
+              status: (sessionId) => host.readFreshStatusSummary(sessionId),
+              cutOf: (sessionId) => host.restartResume.cutOf(sessionId)
             }
           : null
       })

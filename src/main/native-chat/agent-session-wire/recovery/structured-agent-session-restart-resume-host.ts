@@ -26,13 +26,11 @@ import {
   resumeStructuredAgentSessionsFromRestart,
   StructuredAgentSessionResumeAdmission
 } from './structured-agent-session-restart-resume-runner'
-import type {
-  StructuredAgentSessionAutomaticRestart,
-  StructuredAgentSessionRestartResume
-} from './structured-agent-session-restart-resume-contract'
+import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-contract'
 import {
   continuationDeps,
   startStructuredAgentSessionContinuation,
+  type StructuredAgentSessionContinuationHost,
   type StructuredAgentSessionContinuationOutcome
 } from './structured-agent-session-restart-continuation'
 import { restartContinuationId } from './structured-agent-session-restart-continuation-envelope'
@@ -41,15 +39,13 @@ import {
   createStructuredAgentSessionRestartOfferWithdrawal,
   type StructuredAgentSessionRestartOfferSession
 } from './structured-agent-session-restart-offer-withdrawal'
-import {
-  restartContinuationHost,
-  type StructuredAgentSessionRestartResumeSurfaces
-} from './structured-agent-session-restart-resume-wiring'
+import type { StructuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
 import {
   remainingRestartRows,
   unstartedRestartRefusals
 } from './structured-agent-session-restart-action-result'
+import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 
 type LiveSession = StructuredAgentSessionRestartOfferSession
@@ -73,7 +69,8 @@ export function createStructuredAgentSessionRestartResume(
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
     teardownId: randomUUID(),
     now: surfaces.now,
-    enqueue: enqueueRecoveryOperation
+    enqueue: enqueueRecoveryOperation,
+    open: surfaces.revealSession
   })
   const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
     sessions,
@@ -83,7 +80,7 @@ export function createStructuredAgentSessionRestartResume(
     enqueue: enqueueRecoveryOperation
   })
   const newerOrca = createNewerOrcaChats(() => deps.journalDatabase.readOnly)
-  const { derive, deriveAtSend, deriveFor } = createStructuredAgentSessionRestartCandidateReaders({
+  const { derive, deriveAtSend } = createStructuredAgentSessionRestartCandidateReaders({
     sessions,
     getRecord: deps.store.getRecord,
     adapter: deps.adapter,
@@ -127,7 +124,17 @@ export function createStructuredAgentSessionRestartResume(
   const listFailures = async (audience?: StructuredAgentSessionRestartAudience) =>
     restartRowsFor(await failures.list(), audience)
 
-  const continuationHost = restartContinuationHost(deps, sessions, surfaces, deriveAtSend)
+  const continuationHost: StructuredAgentSessionContinuationHost = {
+    ...surfaces,
+    logger: deps.logger,
+    sessions,
+    conversationFence: (sessionId) =>
+      deps.store.getRecord(sessionId)
+        ? structuredAgentSessionConversationFence(deps.store, sessionId)
+        : null,
+    stillResumable: async (marker) =>
+      (await deriveAtSend([marker], 'may-be-held')).candidates.length === 1
+  }
 
   /** Reserve then continue under the shared host-wide startup limit. */
   const run = async (
@@ -136,15 +143,14 @@ export function createStructuredAgentSessionRestartResume(
     audience: StructuredAgentSessionRestartAudience | undefined,
     continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>,
     progress: ReturnType<typeof createRestartResumeProgress>,
-    automatic: StructuredAgentSessionAutomaticRestart | undefined
+    automatic = false
   ) => {
     // Supersede captured witnesses; the mutation lane drains any publication already in flight.
     witnesses.clear(audience)
     const markers = await readActionMarkers(sessionIds)
     await revealMarkers(markers)
     const requested = new Set(sessionIds ?? markers.map((marker) => marker.sessionId))
-    const deriveForRun = deriveFor(automatic)
-    const derived = await deriveForRun(markers, 'may-be-held')
+    const derived = await derive(markers, 'may-be-held')
     retireSuperseded(derived.superseded)
     const eligible = restartRowsFor(derived.candidates, audience).filter((candidate) =>
       requested.has(candidate.sessionId)
@@ -153,6 +159,7 @@ export function createStructuredAgentSessionRestartResume(
     if (eligible.length === 0) {
       return null
     }
+    const eligibleIds = eligible.map((candidate) => candidate.sessionId)
     const operationId = randomUUID()
     const actionAt = surfaces.now()
     // Keep offer identity beyond ledger expiry to distinguish rejected continuations.
@@ -161,18 +168,12 @@ export function createStructuredAgentSessionRestartResume(
     const reserved =
       (await enqueueRecoveryOperation(
         () =>
-          deps.recoveryCapsule?.beginResume(
-            eligible.map((candidate) => candidate.sessionId),
-            operationId,
-            actionAt
-          ) ?? Promise.resolve([])
+          deps.recoveryCapsule?.beginResume(eligibleIds, operationId, actionAt, automatic) ??
+          Promise.resolve([])
       )) ?? []
     const markersBySession = new Map(reserved.map((marker) => [marker.sessionId, marker]))
-    const candidates = (await deriveForRun(reserved, 'may-be-held')).candidates
-    progress.skipExcluded(
-      eligible.map((candidate) => candidate.sessionId),
-      candidates
-    )
+    const candidates = (await derive(reserved, 'may-be-held')).candidates
+    progress.skipExcluded(eligibleIds, candidates)
     try {
       const outcomes = await resumeStructuredAgentSessionsFromRestart(
         {
@@ -256,7 +257,7 @@ export function createStructuredAgentSessionRestartResume(
           )
         },
         progress,
-        options?.automatic
+        options?.automatic === true
       )
       await Promise.all(verdicts)
       const resumed = action?.outcomes ?? []
@@ -291,8 +292,9 @@ export function createStructuredAgentSessionRestartResume(
   }
 
   return {
-    adoptCrashCuts: (sessionIds, runtime, since) =>
-      witnesses.recordCrashCuts(sessionIds, { runtime, since }, surfaces.revealSession),
+    adoptCrashCuts: witnesses.recordCrashCuts,
+    passOverAutomatic: witnesses.passOverAutomatic,
+    cutOf: witnesses.cutOf,
     beginTeardown: witnesses.begin,
     captureBeforeStop: witnesses.beforeStop,
     confirmStopped: witnesses.stopped,

@@ -33,6 +33,7 @@ import {
   journalDomainContextHead,
   readJournalDomainContinuationContext
 } from './journal-sql-continuation-context'
+import { readJournalDomainRestartCut, type JournalRestartCut } from './journal-sql-restart-cut'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { ClaudeJournalSnapshot } from '../../claude/subagents/claude-subagent-journaled-identities'
 import { readJournalDomainClaudeIdentities } from './journal-sql-claude-identities'
@@ -60,6 +61,7 @@ export type JournalSqlItemRead =
   | { kind: 'named-turn'; turnId: string }
   | { kind: 'message-options'; clientMessageId: string }
   | { kind: 'continuation-context' }
+  | { kind: 'restart-cut' }
   | JournalSqlLifecycleRead
 
 export type JournalSqlItemReadResult =
@@ -75,6 +77,7 @@ export type JournalSqlItemReadResult =
   | { kind: 'named-turn'; turn: JournalNamedTurn }
   | { kind: 'message-options'; options: JournalMessageOptions }
   | { kind: 'continuation-context'; context: JournalContinuationContext }
+  | { kind: 'restart-cut'; cut: JournalRestartCut }
   | JournalSqlLifecycleReadResult
 
 export type JournalDomainItemRead = Exclude<JournalSqlItemRead, JournalSqlLifecycleRead>
@@ -137,6 +140,8 @@ export function readJournalDomainItems(
           operation.uuids
         )
       }
+    case 'restart-cut':
+      return { kind: 'restart-cut', cut: readJournalDomainRestartCut(db, target) }
     case 'continuation-context':
       return {
         kind: 'continuation-context',

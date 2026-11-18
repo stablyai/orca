@@ -6,83 +6,87 @@ import {
   type StructuredAgentSessionLaunchContinuationDeps
 } from './structured-agent-session-launch-continuation'
 
-function launch(resumeWorkOnRestart: boolean, end: 'crash' | 'quit' = 'crash') {
-  const adoptCrashCuts = vi.fn(async () => 1)
-  const continueAfterRestart = vi.fn(async () => ({
-    resumed: [],
-    continued: [
-      { sessionId: 'continued', outcome: 'continued' as const },
-      { sessionId: 'refused', outcome: 'refused' as const }
-    ]
-  }))
-  const result = continueStructuredAgentSessionsAtLaunch({
-    restartResume: { adoptCrashCuts, continueAfterRestart },
+const ENDS = {
+  'chat-crashed': { runtime: 'runtime-crashed', end: 'crash' },
+  // An older run's crash, whose own start died before it read the cut.
+  'chat-crashed-earlier': { runtime: 'runtime-earlier', end: 'crash' },
+  'chat-quit': { runtime: 'runtime-quit', end: 'quit' }
+} as const
+
+function launch(resumeWorkOnRestart: boolean) {
+  const calls: string[] = []
+  const restartResume = {
+    adoptCrashCuts: vi.fn(async () => {
+      calls.push('adopt')
+      return 2
+    }),
+    continueAfterRestart: vi.fn(async () => {
+      calls.push('continue')
+      return {
+        resumed: [],
+        continued: [
+          { sessionId: 'continued', outcome: 'continued' as const },
+          { sessionId: 'refused', outcome: 'refused' as const }
+        ]
+      }
+    }),
+    passOverAutomatic: vi.fn(async () => {
+      calls.push('pass over')
+    }),
+    cutOf: vi.fn(async () => null)
+  }
+  const deps: StructuredAgentSessionLaunchContinuationDeps = {
+    restartResume,
     store: {
-      listHeldSessionIds: () => ['chat-1', 'chat-older'],
-      replacedRuntime: (sessionId: string) => ({
-        fence: 1,
-        runtime: sessionId === 'chat-1' ? 'runtime-crashed' : 'runtime-older'
-      })
+      listHeldSessionIds: () => Object.keys(ENDS),
+      replacedRuntime: (sessionId) => {
+        const owner = Object.entries(ENDS).find(([id]) => id === sessionId)?.[1]
+        if (!owner) {
+          return undefined
+        }
+        return { fence: 1, runtime: owner.runtime, runtimeEnd: owner.end }
+      }
     },
-    recentRuns: async () => [
-      { runtime: 'runtime-crashed', startedAt: 4, end },
-      { runtime: 'runtime-older', startedAt: 2, end: 'crash' as const }
-    ],
     startedAt: 5,
     resumeWorkOnRestart: () => resumeWorkOnRestart
-  })
-  return { result, adoptCrashCuts, continueAfterRestart }
+  }
+  return { result: continueStructuredAgentSessionsAtLaunch(deps), restartResume, calls, deps }
 }
 
 describe('continuing interrupted chats at launch', () => {
-  it('offers what a crash cut and continues it on its own, skipping what a person must answer', async () => {
-    const { result, adoptCrashCuts, continueAfterRestart } = launch(true)
+  it("offers what each chat's crashed run cut, continues it, then leaves what remains to a person", async () => {
+    const { result, restartResume, calls } = launch(true)
     expect((await result).continued).toEqual(new Set(['continued']))
-    expect(adoptCrashCuts).toHaveBeenCalledWith(['chat-1'], 'runtime-crashed', 5)
-    expect(continueAfterRestart).toHaveBeenCalledWith(
+    expect(restartResume.adoptCrashCuts).toHaveBeenCalledWith(
+      [
+        { sessionId: 'chat-crashed', crashedRuntime: 'runtime-crashed' },
+        { sessionId: 'chat-crashed-earlier', crashedRuntime: 'runtime-earlier' }
+      ],
+      5
+    )
+    expect(restartResume.continueAfterRestart).toHaveBeenCalledWith(
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
       undefined,
-      {
-        automatic: {
-          runs: [
-            { runtime: 'runtime-crashed', startedAt: 4, end: 'crash' },
-            { runtime: 'runtime-older', startedAt: 2, end: 'crash' }
-          ],
-          thisRunStartedAt: 5
-        }
-      }
+      { automatic: true }
     )
+    expect(calls).toEqual(['adopt', 'continue', 'pass over'])
   })
 
-  it('with the setting off, still offers what a crash cut but continues nothing', async () => {
-    const { result, adoptCrashCuts, continueAfterRestart } = launch(false)
+  it('with the setting off, still offers what a crash cut and passes it over, continuing nothing', async () => {
+    const { result, restartResume, calls } = launch(false)
     expect((await result).continued).toEqual(new Set())
-    expect(adoptCrashCuts).toHaveBeenCalledOnce()
-    expect(continueAfterRestart).not.toHaveBeenCalled()
-  })
-
-  it('after a quit, offers only what the quit recorded', async () => {
-    const { result, adoptCrashCuts, continueAfterRestart } = launch(true, 'quit')
-    await result
-    expect(adoptCrashCuts).not.toHaveBeenCalled()
-    expect(continueAfterRestart).toHaveBeenCalledOnce()
+    expect(restartResume.continueAfterRestart).not.toHaveBeenCalled()
+    expect(calls).toEqual(['adopt', 'pass over'])
   })
 
   it('lets waiters go on without a host, and still runs once a retried restoration has one', async () => {
     const once = new StructuredAgentSessionLaunchContinuationOnce()
     once.start(undefined)
     expect((await once.done).continued).toEqual(new Set())
-    const continueAfterRestart = vi.fn(async () => ({ resumed: [], continued: [] }))
-    const deps: StructuredAgentSessionLaunchContinuationDeps = {
-      restartResume: { adoptCrashCuts: vi.fn(async () => 0), continueAfterRestart },
-      store: { listHeldSessionIds: () => [], replacedRuntime: () => undefined },
-      recentRuns: async () => [],
-      startedAt: 0,
-      resumeWorkOnRestart: () => true
-    }
+    const { deps, restartResume } = launch(true)
     once.start(deps)
     once.start(deps)
-    await vi.waitFor(() => expect(continueAfterRestart).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(restartResume.continueAfterRestart).toHaveBeenCalledTimes(2))
   })
 })

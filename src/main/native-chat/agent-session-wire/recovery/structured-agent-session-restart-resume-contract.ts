@@ -1,4 +1,4 @@
-import type { RestartRunHistory } from './structured-agent-session-restart-loop-cap'
+import type { AgentSessionOrcaStopCause } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-orca-stop'
 import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { createInterruptedContinuation } from './structured-agent-session-interrupted-continuation'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
@@ -9,7 +9,12 @@ import type {
   StructuredAgentSessionResumeFailure
 } from './structured-agent-session-restart-resume-set'
 
-export type StructuredAgentSessionAutomaticRestart = RestartRunHistory
+export type StructuredAgentSessionRestartCut = {
+  cause: AgentSessionOrcaStopCause
+  turnId: string
+  /** The turn was asking its person: the prompt's item when known. */
+  waitingOn?: { promptItemId: string | null }
+}
 
 export type StructuredAgentSessionRestartResume = {
   /** Snapshot before Stop, confirm proven exit, then persist confirmed offers together. */
@@ -23,21 +28,22 @@ export type StructuredAgentSessionRestartResume = {
   listFailures: (
     audience?: StructuredAgentSessionRestartAudience
   ) => Promise<StructuredAgentSessionResumeFailure[]>
-  /** Record the offers a crashed run left, read from its settled chats; returns how many. */
+  /** Record the offers a crash left in these chats, read from what this start's settlement wrote. */
   adoptCrashCuts: (
-    sessionIds: readonly string[],
-    crashedRuntime: string,
+    cuts: readonly { sessionId: string; crashedRuntime: string }[],
     settledSince: number
   ) => Promise<number>
+  /** Ends this launch's automatic turn: offers still waiting are left to a person from now on. */
+  passOverAutomatic: () => Promise<void>
+  /** The cut a restart left in this chat: its offer, else the journal's own stop row. */
+  cutOf: (sessionId: string) => Promise<StructuredAgentSessionRestartCut | null>
   /** Unnamed actions continue visible offers; named actions may also retry selected failures.
-   *  `automatic` skips chats waiting on a person and chats continued too often already; its
-   *  The run history lets a crashed run's send count without its note. The policy applies
-   *  again to what the action reserved, since a newer offer may have replaced one. */
+   *  `automatic` continues only what the capsule's ledger allows (see automaticallyContinuable). */
   continueAfterRestart: (
     sessionIds: readonly string[] | undefined,
     owner: string,
     audience?: StructuredAgentSessionRestartAudience,
-    options?: { automatic?: StructuredAgentSessionAutomaticRestart }
+    options?: { automatic?: boolean }
   ) => Promise<{
     resumed: StructuredAgentSessionResumeOutcome[]
     continued: StructuredAgentSessionContinuationOutcome[]

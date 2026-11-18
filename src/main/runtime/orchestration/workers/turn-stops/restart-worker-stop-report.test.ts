@@ -11,6 +11,9 @@ import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
 import { reportWorkerStopsAcrossRestart } from './restart-worker-stop-report'
+import { chatWorkerDispatches } from './chat-worker-error-escalation'
+import { reportWorkerTurnStop } from './worker-turn-stop-report'
+import type { StructuredAgentSessionRestartResume } from '../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -92,21 +95,63 @@ describe('worker stops across a restart', () => {
     expect(ctx.mail()).toEqual([])
   })
 
-  it('reports a chat worker left at rest, and not one Orca continued', async () => {
-    for (const [status, reports] of [
-      ['idle', ['Worker stopped without reporting']],
-      ['working', []]
-    ] as const) {
-      const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-      const open = vi.fn(async () => undefined)
-      await reportWorkerStopsAcrossRestart({
-        db: ctx.db,
-        reportDeps: ctx.reportDeps,
-        reportRestingPane: async () => {},
-        chats: { open, status: async () => ({ status, lastAssistantMessage: 'Waiting.' }) }
-      })
-      expect(open).toHaveBeenCalledWith(CHAT_SESSION)
-      expect(ctx.mail().map((report) => report.subject)).toEqual(reports)
-    }
+  const chatPass = (
+    ctx: ReturnType<typeof setup>,
+    status: 'idle' | 'working',
+    cut: Awaited<ReturnType<StructuredAgentSessionRestartResume['cutOf']>>
+  ) =>
+    reportWorkerStopsAcrossRestart({
+      db: ctx.db,
+      reportDeps: ctx.reportDeps,
+      reportRestingPane: async () => {},
+      chats: {
+        open: async () => undefined,
+        status: async () => ({ status, lastAssistantMessage: 'Running the migration.' }),
+        cutOf: async () => cut
+      }
+    })
+
+  it('reports a chat worker a restart cut as stopped by Orca, never one continued or not cut', async () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    await chatPass(ctx, 'working', { cause: 'crash', turnId: 'turn-1' })
+    await chatPass(ctx, 'idle', null)
+    expect(ctx.mail()).toEqual([])
+    await chatPass(ctx, 'idle', { cause: 'crash', turnId: 'turn-1' })
+    const reports = ctx.mail()
+    expect(reports.map((report) => report.subject)).toEqual(['Worker exited without reporting'])
+    expect(reports[0]?.body).toContain('Orca crashed during its turn')
+    expect(reports[0]?.body).not.toContain('idle on purpose')
+  })
+
+  it('reports a chat cut while asking its person as waiting, unless its live report already did', async () => {
+    const asking = {
+      cause: 'quit',
+      turnId: 'turn-1',
+      waitingOn: { promptItemId: 'ask-1' }
+    } as const
+    const fresh = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    await chatPass(fresh, 'idle', asking)
+    expect(fresh.mail().map((report) => report.subject)).toEqual(['Worker is waiting on a prompt'])
+
+    const reported = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const [worker] = chatWorkerDispatches(CHAT_SESSION, reported.db)
+    // What the live path sent before Orca stopped: the same prompt, by its item id.
+    reportWorkerTurnStop(
+      reported.db,
+      { kind: 'local', dispatch: worker!.dispatch },
+      { from: worker!.from, stopKey: 'prompt:ask-1', reason: 'needs-input', lastOutput: undefined },
+      reported.reportDeps
+    )
+    await chatPass(reported, 'idle', asking)
+    expect(reported.mail()).toHaveLength(1)
+  })
+
+  it('leaves a Dispatch whose brief has not reached its worker yet', async () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    ctx.db.getWorkerDispatch = () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass reads only the state.
+      ({ state: 'starting' }) as ReturnType<typeof ctx.db.getWorkerDispatch>
+    await chatPass(ctx, 'idle', { cause: 'crash', turnId: 'turn-1' })
+    expect(ctx.mail()).toEqual([])
   })
 })

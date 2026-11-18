@@ -3,11 +3,8 @@
 
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
-import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalRestartCut } from '../../agent-session-journal/journal-sql-restart-cut'
 import {
   AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LENGTH,
   AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS,
@@ -17,9 +14,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { isStructuredAgentSessionCommandTurn } from '../../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { orcaStopCauseOfRow } from '../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import {
   isBackgroundTaskBlock,
@@ -94,41 +89,20 @@ function lostTasks(
 /** The offer for a chat whose run crashed, or null when this start's settlement cut nothing to carry on. */
 export function crashCutResumeMarker(input: {
   sessionId: string
-  items: readonly AgentJournalRenderItem[]
-  cursor: AgentJournalCursor
+  cut: JournalRestartCut
   record: Pick<AgentSessionRecord, 'providerHandleChain' | 'providerContextBoundary'>
   crashedRuntime: string
   /** Only what settlement wrote since then counts: an older crash's rows were offered by its start. */
   settledSince: number
 }): AgentSessionResumeMarker | null {
-  const { items } = input
-  const settled = items.filter(
-    (item) => item.recovered === true && (item.recoveredAt ?? -1) >= input.settledSince
+  const { turn: turnItem, movedOn, cursor } = input.cut
+  const settled = input.cut.recovered.filter(
+    (item) => (item.recoveredAt ?? -1) >= input.settledSince
   )
-  const bodies = new Map<string, AgentJournalItemBody>(
-    items.map((item) => [item.itemId, item.body])
-  )
-  const turnIndex = items.findLastIndex((item) => {
-    const turn = readAgentJournalTurn(item.body)
-    return (
-      turn !== null &&
-      isRootAgentJournalItem(item) &&
-      !isStructuredAgentSessionCommandTurn(turn, (id) => bodies.get(id))
-    )
-  })
-  const turnItem = items[turnIndex]
   const turn = readAgentJournalTurn(turnItem?.body)
   const head = agentSessionProviderHandleChainHead(input.record.providerHandleChain)
   // A request after the newest turn means the chat moved on.
-  if (
-    !turnItem ||
-    !turn ||
-    !head ||
-    settled.length === 0 ||
-    items
-      .slice(turnIndex + 1)
-      .some((item) => item.body.kind === 'message' && item.body.role === 'user')
-  ) {
+  if (!turnItem || !turn || !head || movedOn || settled.length === 0) {
     return null
   }
   const prompts = cancelledPrompts(settled, turnItem.itemId)
@@ -148,7 +122,7 @@ export function crashCutResumeMarker(input: {
     recordedAt: Math.max(...settled.map((item) => item.recoveredAt ?? 0)),
     trigger: 'crash',
     teardownId: crashCutTeardownId(input.crashedRuntime),
-    journalCursor: input.cursor,
+    journalCursor: cursor,
     ...(input.record.providerContextBoundary
       ? { contextClearOperationId: input.record.providerContextBoundary.operationId }
       : {}),
