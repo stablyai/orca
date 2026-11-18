@@ -31,6 +31,12 @@ it('replays one side-chat action but opens a new snapshot for a distinct action 
   })
   void replay.launchResult.catch(() => undefined)
   expect(replay.sessionId).toBe('child-1')
+  const repeatedDuringRecovery = startStructuredAgentLaunch('workspace', 'codex', {
+    requestId: 'action-1',
+    forkFrom
+  })
+  void repeatedDuringRecovery.launchResult.catch(() => undefined)
+  expect(repeatedDuringRecovery.sessionId).toBe('child-1')
   const next = startStructuredAgentLaunch('workspace', 'codex', { requestId: 'action-2', forkFrom })
   void next.launchResult.catch(() => undefined)
   expect(next.sessionId).toBe('child-2')
