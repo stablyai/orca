@@ -12,8 +12,6 @@ import {
   checkHookOwnerPresence,
   restateHookRoot
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
-import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
-import type { PaneTmuxHostReader } from '../../../shared/agent-hook-listener/presence/pane-tmux-host-proof'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   isAgentHookSource,
@@ -40,14 +38,6 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   protected readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
 
   protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
-  /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
-  protected readHookRootEvidence: HookRootEvidenceReader | undefined
-
-  setHookRootEvidenceReader(reader: HookRootEvidenceReader, tmuxHost?: PaneTmuxHostReader): void {
-    this.readHookRootEvidence = reader
-    this.readPaneTmuxHost = tmuxHost
-  }
-
   /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
    *  owner's exit neither answers for the pane nor is forgotten. */
   protected readonly undecidedOwnerChallenges = new Map<string, number>()
@@ -180,11 +170,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
     if (!paneKey) {
-      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+      return { event: normalizeHookPayload(this.state, source, body, this.env, { isReplay }) }
     }
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const event = normalizeHookPayload(this.state, source, body, this.env, { isReplay })
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
@@ -218,6 +208,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
           hookEventName: normalized.event.hookEventName,
           isReplay: normalized.event.isReplay,
           hasExplicitPrompt: normalized.event.hasExplicitPrompt,
+          opensTurn: normalized.event.opensTurn,
           launchToken: normalized.event.launchToken
         })
       : 'suppress'

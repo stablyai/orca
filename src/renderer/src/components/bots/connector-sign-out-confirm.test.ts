@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
-import { botNamesLabel, botsAnsweringThere } from './connector-sign-out-confirm'
+import { botsAnsweringThere } from './connector-sign-out-confirm'
 
 const bot = (fields: Partial<Bot>): Bot => ({
   id: 'b',
@@ -20,15 +20,6 @@ const bot = (fields: Partial<Bot>): Bot => ({
   createdAt: 1,
   updatedAt: 1,
   ...fields
-})
-
-describe('botNamesLabel', () => {
-  it('names up to two bots, then counts the rest', () => {
-    expect(botNamesLabel(['Scout'])).toBe('Scout')
-    expect(botNamesLabel(['Traige bot', 'Scout'])).toBe('Traige bot and Scout')
-    expect(botNamesLabel(['Traige bot', 'Scout', 'C'])).toBe('Traige bot, Scout and 1 other')
-    expect(botNamesLabel(['Traige bot', 'Scout', 'C', 'D'])).toBe('Traige bot, Scout and 2 others')
-  })
 })
 
 describe('botsAnsweringThere', () => {

@@ -43,6 +43,8 @@ export async function callRuntimeEnvironment(
     signal?: AbortSignal
     expectedEnvironmentRuntimeId?: string
     preparation?: ManagedRuntimeCallPreparation
+    /** Support-routed reply budget once the host is reachable; timeoutMs still bounds connect and handshake. */
+    responseTimeoutMs?: number
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
@@ -135,6 +137,7 @@ export async function callRuntimeEnvironment(
             userDataPath,
             environment: currentEnvironment,
             ...call,
+            responseTimeoutMs: options?.responseTimeoutMs,
             expectedPairingRevision: expected.pairingRevision,
             expectedRuntimeId: expected.runtimeId,
             envelope: sharedControlEnvelope

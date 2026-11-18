@@ -84,9 +84,9 @@ function harness(
   const stored = new Map<string, string>()
   const history = createBotMemoryHistory(
     {
-      read: (id) => stored.get(id) ?? null,
-      write: (id, text) => void (text === null ? stored.delete(id) : stored.set(id, text)),
-      bots: () => [...stored.keys()]
+      read: async (id) => stored.get(id) ?? null,
+      write: async (id, text) => void (text === null ? stored.delete(id) : stored.set(id, text)),
+      bots: async () => [...stored.keys()]
     },
     () => now
   )
@@ -191,8 +191,8 @@ describe('Tidy-up', () => {
     await tick()
 
     expect(files.get(MEMORY)).toBe(`${INDEX}\n`)
-    expect(rows()).toHaveLength(1)
-    expect(rows()[0]).toMatchObject({ by: { kind: 'tidy-up' }, undoable: true })
+    expect(await rows()).toHaveLength(1)
+    expect((await rows())[0]).toMatchObject({ by: { kind: 'tidy-up' }, undoable: true })
     expect(files.get(ARCHIVE)).toBe(
       [
         '# Archive',
@@ -237,7 +237,7 @@ describe('Tidy-up', () => {
 
     expect(files.get(MEMORY)).toBe(BEFORE)
     expect(files.has(RELEASE)).toBe(false)
-    expect(rows()).toEqual([])
+    expect(await rows()).toEqual([])
     expect(runs()[0].error).toBe(
       "The last tidy-up filed a line MEMORY.md doesn't have; new facts go in MEMORY.md, so nothing changed."
     )
@@ -248,7 +248,7 @@ describe('Tidy-up', () => {
     await tick()
 
     expect(files.get(MEMORY)).toBe(BEFORE)
-    expect(rows()).toEqual([])
+    expect(await rows()).toEqual([])
     expect(runs()[0].error).toBe(
       "The last tidy-up's changes couldn't be saved, so nothing changed."
     )
@@ -323,7 +323,7 @@ describe('Tidy-up', () => {
 
     expect(last()).toMatchObject({
       chats: 1,
-      rowId: rows()[0].id,
+      rowId: (await rows())[0].id,
       learned: ['releases go out on Wednesdays'],
       replaced: ['releases go out on Tuesdays'],
       filed: [],
@@ -518,7 +518,7 @@ describe('Tidy-up on a sleeping host', () => {
     h.setNow(h.now() + ASLEEP_RETRY_AFTER_MS)
     await h.tick()
     expect(h.runs()[1].error).toBeUndefined()
-    expect(h.rows()).toHaveLength(1)
+    expect(await h.rows()).toHaveLength(1)
     expect(h.through()).toBeDefined()
   })
 

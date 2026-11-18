@@ -1,3 +1,4 @@
+import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import type { PaneTmuxHostReader } from '../../../shared/agent-hook-listener/presence/pane-tmux-host-proof'
 import { TmuxAgentHookOwner } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-owner'
 import type { TmuxManagedPty } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-contract'
@@ -16,6 +17,13 @@ import { agentSightingOf } from '../identity/pane-agent-identities'
 
 export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeBinder {
   protected readPaneTmuxHost: PaneTmuxHostReader | undefined
+  /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
+  protected readHookRootEvidence: HookRootEvidenceReader | undefined
+
+  setHookRootEvidenceReader(reader: HookRootEvidenceReader, tmuxHost?: PaneTmuxHostReader): void {
+    this.readHookRootEvidence = reader
+    this.readPaneTmuxHost = tmuxHost
+  }
 
   /** A restart forgets the tmux-selected row; a checkpoint shown through the pane's tmux client was
    *  never the pane's own process. */

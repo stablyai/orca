@@ -75,11 +75,11 @@ function refoldUnderLatchedMainAgent(
   }
 }
 
-/** Main-agent submissions open turns even when harness notifications reuse the cached prompt. */
+/** Main-agent submissions and new native turn ids open turns even when harness notifications reuse the cached prompt. */
 export function opensNewTurn(event: AgentHookEventPayload): boolean {
   return (
     event.hookEventName === 'SessionStart' ||
-    (event.hookEventName === 'UserPromptSubmit' &&
+    ((event.hookEventName === 'UserPromptSubmit' || event.opensTurn === true) &&
       event.toolAgentId === undefined &&
       event.isReplay !== true)
   )
