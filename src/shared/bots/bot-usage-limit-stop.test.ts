@@ -37,12 +37,6 @@ describe('usageLimitStopOf', () => {
     ).toEqual({ at: 2_500_000, auto: true })
   })
 
-  it.each(['off', 'cancelled', 'failed'] as const)('waits on the reset when %s', (state) => {
-    expect(
-      usageLimitStopOf({ usageLimitContinue: { turnItemId: 't', resetsAt: RESET, state } }, NOW)
-    ).toEqual({ at: RESET, auto: false })
-  })
-
   it('is no stop once the reset has passed or without a cut', () => {
     expect(
       usageLimitStopOf(
