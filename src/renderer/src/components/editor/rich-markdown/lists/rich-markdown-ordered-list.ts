@@ -15,20 +15,22 @@ const paragraphInterrupters = [
 const baseTokenizer = OrderedList.config.markdownTokenizer as MarkdownTokenizer
 
 /** The base tokenizer splits all remaining source into lines for every list, which is quadratic in
- *  large files. It always stops at an unindented, non-item line that follows a blank line or
- *  interrupts a paragraph, so cut there. */
+ *  large files. It always stops at an unindented, non-item line that interrupts a paragraph or comes
+ *  after a blank line in the same item, so cut there. */
 function boundOrderedListSource(src: string): string {
   let lineStart = src.indexOf('\n') + 1
-  let previousBlank = false
+  // Like the base, per item: a blank line anywhere in the item ends lazy continuation.
+  let sawBlankLine = false
   while (lineStart > 0 && lineStart < src.length) {
     const lineEnd = src.indexOf('\n', lineStart)
     const line = src.slice(lineStart, lineEnd === -1 ? undefined : lineEnd)
-    const blank = line.trim() === ''
-    if (
-      !blank &&
+    if (orderedListItem.test(line)) {
+      sawBlankLine = false
+    } else if (line.trim() === '') {
+      sawBlankLine = true
+    } else if (
       !/^\s/.test(line) &&
-      !orderedListItem.test(line) &&
-      (previousBlank || paragraphInterrupters.some((pattern) => pattern.test(line)))
+      (sawBlankLine || paragraphInterrupters.some((pattern) => pattern.test(line)))
     ) {
       // Exclude the newline too: a trailing empty line would join the list's raw source.
       return src.slice(0, lineStart - 1)
@@ -36,7 +38,6 @@ function boundOrderedListSource(src: string): string {
     if (lineEnd === -1) {
       break
     }
-    previousBlank = blank
     lineStart = lineEnd + 1
   }
   return src
