@@ -22046,8 +22046,9 @@
         "again": "{{name}} started setting up again"
       },
       "connectorOffer": {
+        "heading": "Connect a service",
+        "connectService": "Connect {{service}}",
         "connected": "Connected",
-        "connect": "Connect",
         "connectedIn": "Connected in {{places}}",
         "addOrg": "Add org",
         "addWorkspace": "Add workspace",
@@ -22160,7 +22161,6 @@
         "changed": "Comes over with changes",
         "already": "Already here",
         "stays": "Stays in {{app}}",
-        "heading": "Import plan",
         "fromAgain": "From {{app}}, again",
         "from": "From {{app}}",
         "selected": "{{chosen}} of {{total}} selected · keys and logins are never copied",
@@ -22178,11 +22178,17 @@
         "paused": "Automations are paused so nothing runs twice. Turn them on once the old bot is switched off in {{app}}."
       },
       "botCreateOffer": {
+        "heading": "New bot",
         "takesOverOne": "Takes over 1 workspace",
         "takesOverMany": "Takes over {{count}} workspaces",
         "created": "Created",
         "createdTookOverOne": "Created · took over 1 workspace",
         "createdTookOverMany": "Created · took over {{count}} workspaces",
+        "askedOne": "Asked to take over 1 workspace",
+        "askedMany": "Asked to take over {{count}} workspaces",
+        "tookOverSome": "Took over {{taken}} of {{count}} workspaces",
+        "tookOverOne": "Took over 1 workspace",
+        "tookOverMany": "Took over {{count}} workspaces",
         "watches": "Watches",
         "reports": "Reports",
         "takesOver": "Takes over",
@@ -22199,7 +22205,8 @@
         "createdTookOverSome": "Created · took over {{taken}} of {{count}} workspaces",
         "deleted": "Created, then deleted",
         "does": "Does",
-        "willPropose": "Will propose"
+        "willPropose": "Will propose",
+        "details": "Details of {{name}}"
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
@@ -22317,6 +22324,7 @@
         "finishedWith": "Sign-in finished · {{message}}"
       },
       "offerCard": {
+        "notNow": "Not now",
         "dismiss": "Dismiss",
         "notSent": "Couldn't send that to the bot. Try again."
       },
@@ -28232,7 +28240,6 @@
         "guideHereNote": "You click, in Orca",
         "guideBrowserNote": "You click, in your browser"
       },
-      "dismiss": "Dismiss",
       "account": {
         "title": "Which Google account should I use?",
         "note": "Every Google Cloud page opens as the account you pick.",
@@ -28306,7 +28313,9 @@
         "apiOff": "{{services}} is turned off in Google Cloud.",
         "adminBlocked": "Your company’s Google admin blocked {{services}}.",
         "checkFailed": "Orca couldn’t check {{services}}."
-      }
+      },
+      "notNow": "Not now",
+      "importSetupFile": "Import setup file"
     },
     "import": {
       "nudgeOne": "We found a bot in {{app}}.",
