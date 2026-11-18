@@ -114,11 +114,13 @@ function rescan(doc: ProseMirrorNode, set: DecorationSet, [from, to]: Range): De
   return unchanged ? set : set.remove(stale).add(doc, fresh)
 }
 
+// One key for every editor: a remounted view keeps its decorations instead of rescanning the draft.
+const key = new PluginKey<UnkernedState>('nativeChatUnkernedRunDecorations')
+
 /** Turns kerning off only on runs long enough to stall layout; the text is untouched. */
 export const NativeChatUnkernedRunDecorations = Extension.create({
   name: 'nativeChatUnkernedRunDecorations',
   addProseMirrorPlugins() {
-    const key = new PluginKey<UnkernedState>('nativeChatUnkernedRunDecorations')
     return [
       new Plugin<UnkernedState>({
         key,
