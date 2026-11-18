@@ -3082,6 +3082,11 @@
       "terminalTitle": "Terminal text",
       "pointsAndColumns": "{{points}} · {{count}} columns",
       "moreTerminal": "More terminal settings"
+    },
+    "currentSideChat": {
+      "open": "New side chat",
+      "readOnly": "New read-only side chat",
+      "mark": "btw"
     }
   },
   "chat": {

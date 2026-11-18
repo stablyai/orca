@@ -3318,6 +3318,11 @@
       "next": "下一个标签页",
       "previous": "上一个标签页",
       "hint": "显示所有标签页"
+    },
+    "currentSideChat": {
+      "open": "新建侧聊",
+      "readOnly": "新建只读侧聊",
+      "mark": "btw"
     }
   },
   "settings": {

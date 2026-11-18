@@ -2855,6 +2855,11 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "No se pudo encontrar ese mensaje."
+    },
+    "currentSideChat": {
+      "open": "Nuevo chat paralelo",
+      "readOnly": "Nuevo chat paralelo · Solo lectura",
+      "mark": "btw"
     }
   },
   "settings": {

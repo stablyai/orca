@@ -117,7 +117,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         host: getStructuredAgentSessionHost(),
         location: await this.resolveStructuredAgentSessionLocation(input.worktree)
       })
-      return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
+      return hostLaunchDirectory
+        ? { ...resolved, hostLaunchDirectory: resolved.hostLaunchDirectory ?? hostLaunchDirectory }
+        : resolved
     }
     const resolveAccountHome = this.structuredAgentAccountHomeResolver(
       input.agent,

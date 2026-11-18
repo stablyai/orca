@@ -143,6 +143,7 @@ export type AgentSessionRecord = {
   lastTurn?: AgentSessionLastTurn
   launchArgs?: AgentSessionLaunchArgs
   /** The chat this one was forked from; the marker after its inherited history derives from it. */
+  sideChat?: { sourceSessionId: string; sourceProviderSessionId: string }
   forkedFrom?: AgentSessionForkedFrom
   /** Key of the host-owned instructions this provider context was confirmed to hold; absent: unknown. */
   instructionsKey?: string

@@ -135,3 +135,23 @@ describe('a windowless host’s chat tab saves', () => {
     ])
   })
 })
+
+it('creates the reserved side-chat split with its first tab and reuses it at the front', () => {
+  const source = change(EMPTY, [open('source')])
+  const groupId = source.tabGroups![WT][0].id
+  const placement = {
+    groupId: 'side-pane',
+    split: { besideGroupId: groupId, direction: 'right' as const },
+    index: 0
+  }
+  const first = change(source, [
+    { open: { sessionId: 'side-1', tabId: 'side-1', agent: 'codex', placement } }
+  ])
+  const second = change(first, [
+    { open: { sessionId: 'side-2', tabId: 'side-2', agent: 'codex', placement } }
+  ])
+  expect(second.tabGroups?.[WT]?.map((group) => [group.id, group.tabOrder])).toEqual([
+    [groupId, ['structured-agent-session-source']],
+    ['side-pane', ['side-2', 'side-1']]
+  ])
+})

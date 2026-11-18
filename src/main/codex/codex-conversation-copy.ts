@@ -1,3 +1,5 @@
+import { copyCurrentCodexConversation } from './codex-current-conversation-copy'
+import { readCodexForkTurns } from './codex-fork-turns'
 import { TEXT_GENERATION_FAILURE_COPY } from '../../shared/text-generation/text-generation-failure-copy'
 import { codexForkHistory } from './codex-fork-history'
 import { codexForkModelOverrides } from './codex-fork-model-overrides'
@@ -13,10 +15,7 @@ import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/age
 import { asRecord } from '../ai-vault/parsing/session-record-fields'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import {
-  isCodexAppServerUnsupportedError,
-  type CodexAppServerRpc
-} from './app-server/codex-app-server-session'
+import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import {
   runCodexProviderAppServer,
   type CodexProviderInvocationDeps
@@ -28,55 +27,13 @@ function unavailable(): never {
   throw new AgentConversationCopyError('Codex could not verify the copied chat.')
 }
 
-async function turns(
-  rpc: CodexAppServerRpc,
-  threadId: string,
-  through: number | string
-): Promise<{ id: string; status?: unknown }[]> {
-  const all: { id: string; status?: unknown }[] = []
-  let cursor: string | null = null
-  const seen = new Set<string>()
-  do {
-    const page = asRecord(
-      await rpc.request('thread/turns/list', {
-        threadId,
-        cursor,
-        sortDirection: 'asc',
-        limit: 100,
-        itemsView: 'summary'
-      })
-    )
-    if (!Array.isArray(page?.data)) {
-      return unavailable()
-    }
-    for (const raw of page.data) {
-      const turn = asRecord(raw)
-      if (typeof turn?.id !== 'string') {
-        return unavailable()
-      }
-      all.push({ id: turn.id, status: turn.status })
-      if (turn.id === through) {
-        return all
-      }
-    }
-    if (page.nextCursor != null && (typeof page.nextCursor !== 'string' || !page.nextCursor)) {
-      return unavailable()
-    }
-    cursor = typeof page.nextCursor === 'string' ? page.nextCursor : null
-    if (cursor && seen.has(cursor)) {
-      return unavailable()
-    }
-    if (cursor) {
-      seen.add(cursor)
-    }
-  } while (cursor && (typeof through === 'string' || all.length < through))
-  return all
-}
-
 export async function copyCodexConversation(
   input: CopyInput,
   invocation: CodexProviderInvocationDeps | undefined
 ) {
+  if (input.current) {
+    return copyCurrentCodexConversation(input, invocation)
+  }
   let starting = false
   let dispatched = false
   try {
@@ -153,7 +110,7 @@ export async function copyCodexConversation(
         let native = metadata?.historyMode === 'paginated'
         let sourceTurns =
           native && checkpoint.turnId
-            ? await turns(rpc, input.providerSessionId, checkpoint.turnId)
+            ? await readCodexForkTurns(rpc, input.providerSessionId, checkpoint.turnId)
             : undefined
         if (!native || !sourceTurns || sourceTurns.at(-1)?.id !== checkpoint.turnId) {
           if (native && !legacy) {
@@ -161,7 +118,11 @@ export async function copyCodexConversation(
           }
           history ??= await physicalHistory(native && legacy ? undefined : checkpoint.turnId)
           if (native && history.selected.id) {
-            sourceTurns = await turns(rpc, input.providerSessionId, history.selected.id)
+            sourceTurns = await readCodexForkTurns(
+              rpc,
+              input.providerSessionId,
+              history.selected.id
+            )
             if (sourceTurns.at(-1)?.id !== history.selected.id) {
               return missing()
             }
@@ -186,7 +147,7 @@ export async function copyCodexConversation(
           ? sourceTurns!
           : prefix.every((root) => root.id)
             ? prefix.map((root) => ({ id: root.id! }))
-            : await turns(rpc, input.providerSessionId, history!.roots.length)
+            : await readCodexForkTurns(rpc, input.providerSessionId, history!.roots.length)
         if (
           sourceTurns.length < prefix.length ||
           prefix.some((root, index) => root.id && root.id !== sourceTurns![index]?.id)
@@ -215,7 +176,7 @@ export async function copyCodexConversation(
           return unavailable()
         }
         if (native) {
-          const captured = await turns(rpc, id, lastTurnId!)
+          const captured = await readCodexForkTurns(rpc, id, lastTurnId!)
           if (
             captured.length !== coverage.ids.length ||
             captured.some((turn, index) => turn.id !== coverage.ids[index])
@@ -251,7 +212,7 @@ export async function copyCodexConversation(
           if (thread?.historyMode !== 'paginated') {
             return unavailable()
           }
-          const childTurns = await turns(rpc, id, captured.roots.length + 1)
+          const childTurns = await readCodexForkTurns(rpc, id, captured.roots.length + 1)
           if (childTurns.length !== captured.roots.length) {
             return unavailable()
           }
@@ -263,7 +224,7 @@ export async function copyCodexConversation(
           const firstRemoved = childTurns[captured.index + 1]
           if (firstRemoved) {
             await rpc.request('thread/revert', { threadId: id, beforeTurnId: firstRemoved.id })
-            const kept = await turns(rpc, id, captured.index + 2)
+            const kept = await readCodexForkTurns(rpc, id, captured.index + 2)
             if (
               kept.length !== captured.index + 1 ||
               kept.at(-1)?.id !== childTurns[captured.index]?.id

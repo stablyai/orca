@@ -206,6 +206,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
         ...(args.afterTabId
           ? { afterTabId: args.afterTabId }
           : slotAnchor(address, args.worktreeId)),
+        ...(record?.forkFrom?.current && address?.precedingTabIds.length === 0 ? { index: 0 } : {}),
         activate: args.activate !== false,
         drawHere
       })

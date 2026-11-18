@@ -163,7 +163,10 @@ function MobileSessionTabsSheetContent({
                 <View style={styles.text}>
                   <Text style={styles.title} numberOfLines={1}>
                     {isForkedChatTab(row.tab) ? (
-                      <MobileForkMarkedName name={row.title} />
+                      <MobileForkMarkedName
+                        name={row.title}
+                        sideChat={row.tab.type === 'agent-session' && row.tab.sideChat}
+                      />
                     ) : (
                       row.title
                     )}

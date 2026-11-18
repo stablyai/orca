@@ -19496,7 +19496,9 @@
         "sessionAttachmentsFailed": "Le chat {{agent}} n'a pas pu s'ouvrir. Utilisez Réessayer dans le chat, puis joignez à nouveau les fichiers.",
         "sessionAttachmentsStarting": "Le chat de {{agent}} est encore en cours d’ouverture. Attendez qu’il soit ouvert, puis joignez à nouveau les fichiers.",
         "moreControls": "Plus de commandes de conversation",
-        "exitPlanMode": "Quitter le mode plan"
+        "exitPlanMode": "Quitter le mode plan",
+        "permissionReadOnly": "Lecture seule",
+        "permissionReadOnlyDescription": "Utilise le bac à sable en lecture seule sans élévation des autorisations"
       },
       "tool": {
         "result": "Résultat",
@@ -20270,7 +20272,14 @@
         "many_many": "{{count}} pull requests créées"
       },
       "splitRight": "Diviser à droite",
-      "splitDown": "Diviser vers le bas"
+      "splitDown": "Diviser vers le bas",
+      "currentSideChat": {
+        "open": "Nouveau chat parallèle",
+        "inherit": "Mêmes autorisations que ce chat",
+        "readOnly": "Lecture seule",
+        "pane": "Regrouper les chats parallèles dans un volet séparé",
+        "mark": "btw"
+      }
     },
     "tab": {
       "bar": {

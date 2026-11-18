@@ -35,7 +35,7 @@ export type MobileSessionTabRow = MobileSessionTabSummary & {
 
 /** A chat tab the host marked as a fork; its title is drawn after the fork mark. */
 export function isForkedChatTab(tab: MobileSessionTab): boolean {
-  return tab.type === 'agent-session' && tab.forked === true
+  return tab.type === 'agent-session' && (tab.forked === true || tab.sideChat === true)
 }
 
 export function mobileSessionTabDotState(

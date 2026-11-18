@@ -113,7 +113,7 @@ function copy(
   selected = `${SOURCE}:a1`,
   settled = true,
   turnId?: string,
-  options: { signal?: AbortSignal; selectedItemId?: string; model?: string } = {}
+  options: { signal?: AbortSignal; selectedItemId?: string; model?: string; current?: true } = {}
 ) {
   return copyCodexConversation(
     {
@@ -135,6 +135,7 @@ function copy(
       signal: options.signal,
       title: 'Source fork',
       accountHome: { variable: 'CODEX_HOME', path: root },
+      ...(options.current ? { current: true as const } : {}),
       checkpoint: {
         selectedItemId:
           options.selectedItemId ??
@@ -251,3 +252,30 @@ it.each([
     expect(fork?.modelProvider).toBe(provider)
   }
 )
+
+it('copies the current conversation while its latest turn is still running', async () => {
+  state.paths.set('current-child', join(root, 'sessions', 'current-child.jsonl'))
+  state.request.mockImplementation(async (method, params) => {
+    if (method === 'thread/read') {
+      return { thread: { id: SOURCE, historyMode: 'paginated', model: 'active-model' } }
+    }
+    if (method === 'thread/fork') {
+      expect(params).toEqual({
+        threadId: SOURCE,
+        excludeTurns: true,
+        cwd: root,
+        model: 'active-model'
+      })
+      return { thread: { id: 'current-child' } }
+    }
+    if (method === 'thread/goal/clear') {
+      expect(params).toEqual({ threadId: 'current-child', origin: 'user' })
+      return {}
+    }
+    throw new Error('A current-context fork must not choose a completed turn')
+  })
+  expect(await copy(undefined, false, 'running-turn', { current: true })).toEqual({
+    sessionId: 'current-child',
+    filePath: join(root, 'sessions', 'current-child.jsonl')
+  })
+})

@@ -19830,7 +19830,9 @@
         "sessionAttachmentsFailed": "{{agent}} 聊天无法打开，请在聊天中点击重试，然后重新附加文件",
         "sessionAttachmentsStarting": "{{agent}} 聊天仍在打开中，请等待其打开后再重新附加文件",
         "moreControls": "更多聊天控件",
-        "exitPlanMode": "退出计划模式"
+        "exitPlanMode": "退出计划模式",
+        "permissionReadOnly": "只读",
+        "permissionReadOnlyDescription": "使用智能体的只读沙盒，不允许提权"
       },
       "tool": {
         "result": "结果",
@@ -20694,6 +20696,13 @@
         "openAgain": "重新打开",
         "finished": "登录已完成",
         "finishedWith": "登录已完成 · {{message}}"
+      },
+      "currentSideChat": {
+        "open": "新建侧聊",
+        "inherit": "沿用此会话的权限",
+        "readOnly": "只读",
+        "pane": "将侧聊集中到独立分栏",
+        "mark": "btw"
       }
     },
     "tab": {

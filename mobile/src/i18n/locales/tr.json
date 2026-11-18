@@ -2785,6 +2785,11 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Bu mesaj bulunamadı."
+    },
+    "currentSideChat": {
+      "open": "New side chat",
+      "readOnly": "New side chat · Read-only",
+      "mark": "btw"
     }
   },
   "settings": {

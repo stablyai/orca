@@ -2785,6 +2785,11 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
+    },
+    "currentSideChat": {
+      "open": "New side chat",
+      "readOnly": "New side chat · Read-only",
+      "mark": "btw"
     }
   },
   "settings": {

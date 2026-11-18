@@ -9,7 +9,7 @@ const CLAUDE_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
 }
 
 const CODEX_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
-  modes: ['ask', 'auto', 'full-access']
+  modes: ['read-only', 'ask', 'auto', 'full-access']
 }
 
 // ACP chats: Orca answers the agent's permission requests yes under Full access, else the person does.

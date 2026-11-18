@@ -9,6 +9,14 @@ export const getChatBehaviorTitle = (t: Translate = translate): string =>
   t('components.settings.nativeChat.behaviorTitle', 'Behavior')
 
 export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
+  sideChatPane: {
+    targetSectionId: 'chat-side-chat-pane',
+    title: translate(
+      'components.native-chat.currentSideChat.pane',
+      'Group side chats in a separate pane'
+    ),
+    keywords: [translate('components.native-chat.currentSideChat.mark', 'btw')]
+  },
   resumeOnRestart: {
     targetSectionId: NATIVE_CHAT_RESUME_SETTING_SECTION_ID,
     title: translate(

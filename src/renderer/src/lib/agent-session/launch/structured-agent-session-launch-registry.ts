@@ -58,7 +58,7 @@ export function structuredLaunchIdentity(
 ): string {
   const { resumeFrom, forkFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
   if (forkFrom) {
-    return `${agent}:${worktreeId}:fork:${executionHostId}:${forkFrom.sessionId}:${forkFrom.throughItemId}`
+    return `${agent}:${worktreeId}:fork:${executionHostId}:${forkFrom.sessionId}:${forkFrom.current ? `current:${forkFrom.permission}` : forkFrom.throughItemId}`
   }
   // A conversation id names a transcript on one host; never join a resume running on another.
   return resumeFrom

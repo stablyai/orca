@@ -3,6 +3,7 @@ import type { AgentSessionJournalIdentity } from '../../../../shared/agent-sessi
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 
 export type StructuredAgentSessionConversationCopyInput = {
+  current?: true
   record?: AgentSessionRecord
   checkpoint?: {
     selectedItemId: string

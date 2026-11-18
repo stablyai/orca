@@ -21277,7 +21277,9 @@
         "retryChats": "Retry",
         "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
-        "modelAndEffort": "Model and effort"
+        "modelAndEffort": "Model and effort",
+        "permissionReadOnly": "Read-only",
+        "permissionReadOnlyDescription": "Uses the agent’s read-only sandbox without approval escalation"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -22473,6 +22475,13 @@
         "anotherComputer": "another computer",
         "fromVia": "From {{name}} via {{computer}}",
         "fromViaPhone": "From {{name}}, typed on {{phone}} via {{computer}}"
+      },
+      "currentSideChat": {
+        "open": "New side chat",
+        "inherit": "Same permissions as this chat",
+        "readOnly": "Read-only",
+        "pane": "Group side chats in a separate pane",
+        "mark": "btw"
       }
     },
     "tab": {

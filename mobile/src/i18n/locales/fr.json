@@ -2855,6 +2855,11 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Ce message est introuvable."
+    },
+    "currentSideChat": {
+      "open": "Nouveau chat parallèle",
+      "readOnly": "Nouveau chat parallèle · Lecture seule",
+      "mark": "btw"
     }
   },
   "settings": {
