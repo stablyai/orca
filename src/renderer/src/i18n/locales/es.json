@@ -24179,7 +24179,10 @@
       "versionWithBase": "Zotz {{version}} (Orca {{base}}, build {{build}})",
       "toggleLabel": "Buscar y descargar versiones nuevas de Zotz",
       "toggleDescription": "Desde los releases de Zotz en GitHub, cada 6 horas. Nunca reinicia sola; en un servidor instala cuando ningún agente está trabajando. Se aplica al reiniciar Zotz.",
-      "updatesOff": "Las actualizaciones de Zotz están apagadas."
+      "updatesOff": "Las actualizaciones de Zotz están apagadas.",
+      "macManualNote": "En macOS, Zotz todavía no puede instalar actualizaciones solo. Descarga la versión nueva, cierra Zotz y arrástrala a Aplicaciones para reemplazarla. La primera vez ábrela con clic derecho → Abrir.",
+      "macManualDownload": "Descargar la versión nueva",
+      "macManualStatus": "está disponible. En macOS, descárgala y reemplaza Zotz en Aplicaciones."
     },
     "machineMode": {
       "autostartRemoveFailed": "No se pudo quitar la tarea de inicio de sesión: {{detail}}",

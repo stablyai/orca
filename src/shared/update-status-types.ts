@@ -93,6 +93,8 @@ export type UpdateStatus = (
       /** Linux only: a package manager owns this install, so Orca cannot apply the update itself.
        *  Additive and optional — older clients simply keep offering their own download. */
       externallyManaged?: boolean
+      /** Zotz macOS: the release dmg to install by hand, since unsigned builds cannot self-update. */
+      zotzManualDownloadUrl?: string
     }
   | {
       state: 'not-available'

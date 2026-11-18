@@ -527,4 +527,5 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 
 - La automatización solo se activa cuando el arranque de la app la configura; así las suites del actualizador de upstream siguen probando su flujo de "clic para descargar".
 - Las builds locales conservan la versión de Orca (`1.4.214`): el actualizador les ofrece el siguiente release de Zotz.
+- macOS no tenía el bloqueo de §6: la tarjeta ofrecía "Update" y Squirrel.Mac iba a rechazar el zip. El `Zotz.app` publicado está firmado ad-hoc (`designated => cdhash H"…"`), y un build re-firmado da `code failed to satisfy specified code requirement(s)` con `codesign -v -R`, que es la misma prueba que hace Squirrel. Ahora `zotz-mac-manual-install.ts` marca la versión como `externallyManaged` con `zotzManualDownloadUrl` (el `zotz-macos-arm64.dmg` del release), main rechaza la descarga, y la tarjeta y Ajustes muestran "Descargar la versión nueva". Cuando haya Developer ID, `isZotzManualMacInstall()` debe devolver `false`.
 - Falta la prueba real: instalar a mano `v1.4.21401`, publicar un cambio y ver que llega, se instala al reiniciar y que en modo servidor no interrumpe a un agente.

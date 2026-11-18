@@ -6,6 +6,7 @@ import {
 } from '../mac-install/updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-package/linux-update-package-type'
+import { isZotzManualMacInstall } from '../zotz-mac-manual-install'
 import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
 import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
@@ -87,6 +88,10 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
         version,
         retryable: false
       })
+      return
+    }
+    // Older renderers and direct IPC callers could still ask for a download the Mac cannot install.
+    if (isZotzManualMacInstall()) {
       return
     }
     if (this.deferHeadlessServeInstall('download', version)) {

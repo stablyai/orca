@@ -23,7 +23,8 @@ export const UNIT_SETUP_FILES = [
   'config/scripts/test-runtime/environment/vitest-inherited-git-env-setup.ts',
   'config/scripts/test-runtime/environment/vitest-orcad-feature-readiness-reset.ts',
   'config/scripts/test-runtime/environment/zotz-vitest-upstream-network-policy.ts',
-  'config/scripts/test-runtime/environment/zotz-vitest-upstream-visible-agents.ts'
+  'config/scripts/test-runtime/environment/zotz-vitest-upstream-visible-agents.ts',
+  'config/scripts/test-runtime/environment/zotz-vitest-upstream-mac-self-update.ts'
 ]
 
 export const UNIT_EXCLUDE = [

@@ -16,6 +16,7 @@ import {
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
 import { ZotzUpdatesSetting, ZotzVersionLabel } from '../../zotz/ZotzUpdatesSetting'
+import { ZotzMacManualUpdateLink } from '../../zotz/ZotzMacManualUpdateNote'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/hooks/use-now'
 import { isDelayedUpdatePending } from '../../../../../shared/update-delay'
@@ -167,15 +168,19 @@ export function GeneralUpdateSettingsSection({
             <>
               {t('auto.components.settings.GeneralUpdateSettingsSection.a6b37929dc', 'Version')}{' '}
               {updateStatus.version}{' '}
-              {updateStatus.externallyManaged
-                ? t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.e3b9d21c07',
-                    'is available. Update Orca through your system package manager — Orca cannot install this release itself.'
-                  )
-                : t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.8311da27ba',
-                    'is available. Click "Download Update" to download it.'
-                  )}{' '}
+              {updateStatus.zotzManualDownloadUrl ? (
+                <ZotzMacManualUpdateLink url={updateStatus.zotzManualDownloadUrl} />
+              ) : updateStatus.externallyManaged ? (
+                t(
+                  'auto.components.settings.GeneralUpdateSettingsSection.e3b9d21c07',
+                  'is available. Update Orca through your system package manager — Orca cannot install this release itself.'
+                )
+              ) : (
+                t(
+                  'auto.components.settings.GeneralUpdateSettingsSection.8311da27ba',
+                  'is available. Click "Download Update" to download it.'
+                )
+              )}{' '}
               {updateStatus.source !== 'local' && (
                 <a
                   href={
