@@ -52,6 +52,7 @@ export type GitInspectionApi = {
     submodulePath: string
     connectionId?: string
     area?: GitStagingArea
+    workingTreeOnly?: boolean
   }) => Promise<GitStatusResult>
   checkIgnored: (args: {
     worktreePath: string

@@ -68,8 +68,7 @@ export function buildFolderStatusMap(
 
     const segments = splitPathSegments(entry.path)
     // A dirty submodule is a directory in the explorer, so it carries its own folder status.
-    const folderSegments =
-      entry.submodule && !entry.submoduleRoot ? segments : segments.slice(0, -1)
+    const folderSegments = entry.submodule ? segments : segments.slice(0, -1)
     if (folderSegments.length === 0) {
       continue
     }

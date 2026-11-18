@@ -59,13 +59,15 @@ export class RuntimeGitStatusCommands {
   async getRuntimeGitSubmoduleStatus(
     worktreeSelector: string,
     submodulePath: string,
-    area: GitStagingArea = 'unstaged'
+    area: GitStagingArea = 'unstaged',
+    options?: { workingTreeOnly?: boolean }
   ): Promise<GitStatusResult> {
     const target = await resolveGatedGitTarget(this.host, worktreeSelector)
     return requireRuntimeGitProvider(target).getSubmoduleStatus(
       target.worktree.path,
       submodulePath,
-      area
+      area,
+      options
     )
   }
 

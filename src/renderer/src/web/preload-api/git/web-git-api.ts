@@ -77,12 +77,13 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       webGitStatusAbortControllers.get(requestToken)?.abort()
     },
     setStatusUpstreamRefWatch: async () => {},
-    submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
+    submoduleStatus: async ({ worktreePath, submodulePath, area, workingTreeOnly }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.submoduleStatus', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         submodulePath,
-        area
+        area,
+        ...(workingTreeOnly ? { workingTreeOnly: true } : {})
       })
     },
     checkIgnored: async ({ worktreePath, paths }) => {

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { onGitStatusRead } from '@/store/slices/editor/git/git-status-read-signal'
-import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { getRuntimeGitSubmoduleStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { normalizeRelativePath } from '../../../../../../shared/file-access/cross-platform-path'
 import { useWorktreeGitOwnerTarget } from '../../source-control/sync/worktree-git-owner-target'
 import { buildSubmoduleChildEntry } from '../../source-control/listing/submodule-expansion'
+import { useSubmoduleWorkingStatusSupport } from './file-explorer-submodule-capability'
 import { SubmoduleStatusReadQueue } from './file-explorer-submodule-read-queue'
 import { areGitStatusEntriesEqual } from '@/store/slices/editor/git/git-status-reconciliation'
 import {
@@ -17,42 +18,72 @@ import {
 
 // Why: bounds parallel `git status` processes (and SSH round trips) across all refreshes.
 const SUBMODULE_STATUS_CONCURRENCY = 4
-// Why: keeps inner reads near one parent read's cost (16 x 2k-file submodules, 4-wide ~= 1.3x) so huge expansions cannot run Git nonstop.
-const FILE_EXPLORER_SUBMODULE_STATUS_LIMIT = 16
 
 const NO_ENTRIES: GitStatusEntry[] = []
+const EMPTY_ENTRIES_BY_PATH: ReadonlyMap<string, GitStatusEntry[]> = new Map()
 
-/** Dirty submodules the user has expanded; clean or collapsed ones never trigger inner Git work. */
+/** Discover expanded dirty submodules one level at a time through already-loaded parent submodule entries. */
 function selectExpandedDirtySubmodulePaths(
-  entries: readonly GitStatusEntry[],
+  rootEntries: readonly GitStatusEntry[],
+  entriesByPath: ReadonlyMap<string, GitStatusEntry[]>,
   expandedRelativePaths: ReadonlySet<string>,
-  limit: number = FILE_EXPLORER_SUBMODULE_STATUS_LIMIT
+  includeMovedSubmodules: boolean
 ): string[] {
-  const paths = new Set<string>()
-  for (const entry of entries) {
-    const submodule = entry.submodule
-    if (!submodule || entry.submoduleRoot || entry.area === 'staged') {
-      continue
+  const discovered: string[] = []
+  const seen = new Set<string>()
+  let frontier: readonly GitStatusEntry[] = rootEntries
+
+  while (frontier.length > 0) {
+    const levelPaths = new Set<string>()
+    for (const entry of frontier) {
+      const submodule = entry.submodule
+      if (!submodule || entry.area === 'staged') {
+        continue
+      }
+      if (!submodule.trackedChanges && !submodule.untrackedChanges) {
+        continue
+      }
+      if (!includeMovedSubmodules && submodule.commitChanged) {
+        continue
+      }
+      const path = normalizeRelativePath(entry.path)
+      if (expandedRelativePaths.has(path) && !seen.has(path)) {
+        levelPaths.add(path)
+      }
     }
-    if (!submodule.trackedChanges && !submodule.untrackedChanges) {
-      continue
+    if (levelPaths.size === 0) {
+      break
     }
-    const path = normalizeRelativePath(entry.path)
-    if (expandedRelativePaths.has(path)) {
-      paths.add(path)
+    // Path order roughly follows the explorer's top-to-bottom rows within each nesting level.
+    const sortedLevel = Array.from(levelPaths).sort()
+    const nextFrontier: GitStatusEntry[] = []
+    for (const path of sortedLevel) {
+      seen.add(path)
+      discovered.push(path)
+      const cachedChildren = entriesByPath.get(path)
+      if (cachedChildren) {
+        nextFrontier.push(...cachedChildren)
+      }
     }
+    frontier = nextFrontier
   }
-  // Path order roughly follows the explorer's top-to-bottom rows.
-  return Array.from(paths).sort().slice(0, limit)
+
+  return discovered
 }
 
 /** Parent-relative inner entries, or null on failure so callers keep the last good badges. */
 async function readSubmoduleChildEntries(
   context: Parameters<typeof getRuntimeGitSubmoduleStatus>[0],
-  submodulePath: string
+  submodulePath: string,
+  workingTreeOnly: boolean
 ): Promise<GitStatusEntry[] | null> {
   try {
-    const status = await getRuntimeGitSubmoduleStatus(context, submodulePath)
+    const status = await getRuntimeGitSubmoduleStatus(
+      context,
+      submodulePath,
+      'unstaged',
+      workingTreeOnly ? { workingTreeOnly: true } : undefined
+    )
     // A failed read resolves with empty entries, which must not look like a clean submodule.
     if (status.readError !== undefined) {
       return null
@@ -84,17 +115,28 @@ function useFileExplorerSubmoduleStatus({
   entries: readonly GitStatusEntry[]
   expanded: ReadonlySet<string>
 }): GitStatusEntry[] {
-  const scopeKey = `${activeWorktreeId ?? ''}\0${worktreePath ?? ''}`
+  // Reactive so a host or connection switch clears prior badges and re-arms reads.
+  const ownerTarget = useWorktreeGitOwnerTarget(activeWorktreeId)
+  const connectionId = useAppStore((s) => getConnectionIdFromState(s, activeWorktreeId))
+  const runtimeRouteKey = ownerTarget?.kind === 'environment' ? ownerTarget.environmentId : ''
+  const scopeKey = `${connectionId ?? ''}\0${runtimeRouteKey}\0${activeWorktreeId ?? ''}\0${worktreePath ?? ''}`
+
   const [result, setResult] = useState<SubmoduleStatusResult>(() => ({
     scopeKey,
     entriesByPath: new Map()
   }))
-  // Reset during render so a worktree switch cannot paint the previous one's badges.
+  // Reset during render so a host/connection/worktree switch cannot paint the previous route's badges.
   if (result.scopeKey !== scopeKey) {
     setResult({ scopeKey, entriesByPath: new Map() })
   }
   const [queue] = useState(() => new SubmoduleStatusReadQueue(SUBMODULE_STATUS_CONCURRENCY))
+  useEffect(() => () => queue.setWanted('', [], null), [queue])
 
+  const workingStatusSupport = useSubmoduleWorkingStatusSupport(readsEnabled ? ownerTarget : null)
+  const workingTreeOnly = workingStatusSupport === 'supported'
+
+  const scopedEntriesByPath =
+    result.scopeKey === scopeKey ? result.entriesByPath : EMPTY_ENTRIES_BY_PATH
   const submodulePathsKey = useMemo(() => {
     if (!worktreePath) {
       return ''
@@ -106,26 +148,29 @@ function useFileExplorerSubmoduleStatus({
         expandedRelativePaths.add(normalizeRelativePath(relativePath))
       }
     }
-    return selectExpandedDirtySubmodulePaths(entries, expandedRelativePaths).join('\0')
-  }, [entries, expanded, worktreePath])
-
-  // Reactive so a host that resolves later (e.g. SSH reconnect) re-arms reads and the parent-read listener.
-  const ownerTarget = useWorktreeGitOwnerTarget(activeWorktreeId)
+    return selectExpandedDirtySubmodulePaths(
+      entries,
+      scopedEntriesByPath,
+      expandedRelativePaths,
+      workingTreeOnly
+    ).join('\0')
+  }, [entries, expanded, scopedEntriesByPath, workingTreeOnly, worktreePath])
 
   useEffect(() => {
-    const target = readsEnabled && submodulePathsKey ? ownerTarget : null
-    if (!activeWorktreeId || !worktreePath || !target) {
-      queue.setWanted([], null)
+    const target =
+      readsEnabled && submodulePathsKey && workingStatusSupport !== 'pending' ? ownerTarget : null
+    if (!activeWorktreeId || !worktreePath || !target || connectionId === undefined) {
+      queue.setWanted(scopeKey, [], null)
       return
     }
     const context = {
       target,
       worktreeId: activeWorktreeId,
       worktreePath,
-      connectionId: getConnectionId(activeWorktreeId) ?? undefined
+      connectionId: connectionId ?? undefined
     }
-    queue.setWanted(submodulePathsKey.split('\0'), {
-      read: (submodulePath) => readSubmoduleChildEntries(context, submodulePath),
+    queue.setWanted(scopeKey, submodulePathsKey.split('\0'), {
+      read: (submodulePath) => readSubmoduleChildEntries(context, submodulePath, workingTreeOnly),
       apply: (submodulePath, childEntries) =>
         setResult((prev) => {
           const cached = prev.entriesByPath.get(submodulePath)
@@ -142,24 +187,23 @@ function useFileExplorerSubmoduleStatus({
           }
         })
     })
-    queue.requestAll()
     // A second edit inside an already-dirty submodule leaves parent status identical, so follow every parent read.
     const unsubscribe = onGitStatusRead((worktreeId) => {
       if (worktreeId === activeWorktreeId) {
         queue.requestAll()
       }
     })
-    return () => {
-      unsubscribe()
-      queue.setWanted([], null)
-    }
+    return unsubscribe
   }, [
     activeWorktreeId,
+    connectionId,
     ownerTarget,
     queue,
     readsEnabled,
     scopeKey,
     submodulePathsKey,
+    workingStatusSupport,
+    workingTreeOnly,
     worktreePath
   ])
 

@@ -132,21 +132,29 @@ async function callLocalGitStatus(
 export async function getRuntimeGitSubmoduleStatus(
   context: RuntimeGitContext,
   submodulePath: string,
-  area: GitStagingArea = 'unstaged'
+  area: GitStagingArea = 'unstaged',
+  options?: { workingTreeOnly?: boolean }
 ): Promise<GitStatusResult> {
   const target = context.target
+  const workingTreeArgs = options?.workingTreeOnly ? { workingTreeOnly: true } : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.submoduleStatus({
       worktreePath: resolveLocalWorktreePath(context),
       submodulePath,
       connectionId: context.connectionId,
-      area
+      area,
+      ...workingTreeArgs
     })
   }
   return callRuntimeRpc<GitStatusResult>(
     target,
     'git.submoduleStatus',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), submodulePath, area },
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      submodulePath,
+      area,
+      ...workingTreeArgs
+    },
     { timeoutMs: 15_000 }
   )
 }
