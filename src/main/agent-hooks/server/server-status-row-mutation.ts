@@ -20,9 +20,16 @@ export abstract class AgentHookServerStatusRowMutation extends AgentHookServerSt
     const row = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
-    if (row?.observation?.origin === 'launch') {
-      this.lastSubmittedAtByPaneKey.set(resolved, Date.now())
+    if (row?.observation?.origin !== 'launch') {
+      return
     }
+    // Panes whose rows are gone (closed tabs) leave with the next submission.
+    for (const key of this.lastSubmittedAtByPaneKey.keys()) {
+      if (!this.state.lastStatusByPaneKey.has(key)) {
+        this.lastSubmittedAtByPaneKey.delete(key)
+      }
+    }
+    this.lastSubmittedAtByPaneKey.set(resolved, Date.now())
   }
 
   protected preserveAcceptedTurn(

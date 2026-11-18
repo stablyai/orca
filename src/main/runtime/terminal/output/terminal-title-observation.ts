@@ -1,4 +1,4 @@
-import { isSubmittedTerminalInput } from './terminal-input-submission'
+import { TerminalInputSubmissions } from './terminal-input-submission'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-title-tracker'
@@ -46,9 +46,12 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   /** A title moved a terminal agent to another status; worktree.ps rows show it without a hook row. */
   protected abstract onTitleAgentStatusChanged(): void
 
+  private readonly inputSubmissions = new TerminalInputSubmissions()
+
   /** A submitted line ends a resumed agent's startup on every host, remote panes included. */
   notePtyInputSubmitted(ptyId: string, data: string): void {
-    if (!this.onPaneInputSubmitted || !isSubmittedTerminalInput(data)) {
+    const pty = this.ptysById.get(ptyId)
+    if (!this.onPaneInputSubmitted || !pty || !this.inputSubmissions.submitted(pty, data)) {
       return
     }
     for (const paneKey of this.collectPaneKeysForPty(ptyId)) {
