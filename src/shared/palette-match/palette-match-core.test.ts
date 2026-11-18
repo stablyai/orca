@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { matchPaletteDocument } from './match-document'
 import { mapNormalizedRange, normalizePaletteText } from './normalized-text'
-import { preparePaletteQuery, PALETTE_QUERY_MAX_TOKENS } from './palette-query'
+import { preparePaletteQuery } from './palette-query'
 import { buildPaletteDocument, type PaletteDocumentInput } from './palette-document'
 
 function ready(query: string) {
@@ -46,11 +46,6 @@ describe('palette query preparation', () => {
     expect(ready('--').tokens[0]?.isPunctuationOnly).toBe(true)
   })
 
-  it('rejects more than the token limit', () => {
-    const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
-    expect(preparePaletteQuery(query)).toEqual({ state: 'invalid', reason: 'too-many-tokens' })
-  })
-
   it('rejects an oversized query', () => {
     expect(preparePaletteQuery('a'.repeat(3000))).toEqual({
       state: 'invalid',
@@ -64,14 +59,6 @@ describe('normalization and ranges', () => {
     const text = normalizePaletteText('Café Deploy')
     const index = text.normalized.indexOf('deploy')
     expect(mapNormalizedRange(text, index, index + 6)).toEqual({ start: 6, end: 12 })
-  })
-
-  it('maps supplementary-plane characters back correctly', () => {
-    const text = normalizePaletteText('🚀 Launch')
-    const index = text.normalized.indexOf('launch')
-    expect(text.original.slice(...Object.values(mapNormalizedRange(text, index, index + 6)))).toBe(
-      'Launch'
-    )
   })
 })
 

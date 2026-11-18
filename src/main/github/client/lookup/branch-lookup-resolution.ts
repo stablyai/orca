@@ -5,7 +5,7 @@ import { mergedPRHeadMembership } from '../../pull-requests/refresh/merged-pr-he
 import type { MergedPRHeadRelationship } from '../../pull-requests/refresh/merged-pr-commit-membership'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../../../source-control/repo-default-branch'
 import { resolveGitHubApiRepositoryCandidates } from '../../repositories/github-api-repository'
-import { exactRepositoryCandidates } from '../pull-request-lookup-candidates'
+import { exactRepositoryCandidates, linkedPRUrlRepository } from '../pull-request-lookup-candidates'
 import { mapPRState } from '../../api/github-read-response'
 import {
   ownerRepoFromPullRequestUrl,
@@ -59,7 +59,17 @@ export async function resolvePRForBranchOutcome(input: {
     localGitOptions
   )
   const { headRepo } = resolved
-  const candidates = exactRepositoryCandidates(resolved.candidates, options.exactRepository)
+  const candidates = exactRepositoryCandidates(
+    resolved.candidates,
+    options.exactRepository ??
+      (await linkedPRUrlRepository(
+        repoPath,
+        options.linkedPRUrl,
+        linkedPRNumber,
+        connectionId,
+        localGitOptions
+      ))
+  )
   const reads = { checkPageLimit: options.checkPageLimit, userRefresh: options.userRefresh }
   // Without local cwd, unresolved connection-backed lookups could follow ambient GH_REPO/GH_HOST.
   if (connectionId && candidates.length === 0) {

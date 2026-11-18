@@ -1,5 +1,5 @@
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
-import { isIndexKey } from '@/store/keyed-record-index-keys'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import { isIndexKey } from '@/store/record-transitions/keyed-record-index-keys'
 import {
   collectLiveMetadata,
   collectSleepingMetadata,

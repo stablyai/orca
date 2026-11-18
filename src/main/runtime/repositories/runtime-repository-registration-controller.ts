@@ -36,6 +36,7 @@ import {
   repoCreateFailure,
   type RepoCreateFailure
 } from '../../../shared/repository/creation/repo-create-failure-copy'
+import { getDefaultCreateProjectParent } from './default-create-project-parent'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -289,6 +290,11 @@ export class RuntimeRepositoryRegistrationController {
         detail: message
       })
     }
+  }
+
+  /** Read on this host so a paired client suggests this host's Workspace Directory, not its own. */
+  defaultCreateParent(): string {
+    return getDefaultCreateProjectParent(this.requireStore().getSettings())
   }
 
   private requireStore(): RuntimeStore {

@@ -41,7 +41,7 @@ export type CodexModelCatalogProbeDeps = CodexStructuredInvocationDeps & {
   resolveLaunchArgs?: () => Promise<string[]> | string[]
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   /** Match launch-time home sync so probes use the same login. */
-  prepareHome?: (home: string) => void
+  prepareHome?: (home: string) => void | Promise<void>
   runSession?: typeof runCodexAppServerSession
 }
 
@@ -129,7 +129,9 @@ export function createCodexModelCatalogProbe(
       ): Promise<AgentModelCatalogSuccess> => {
         assertStructuredAgentResolutionCurrent(runOperation)
         signal?.throwIfAborted()
-        deps.prepareHome?.(accountHomePath)
+        await deps.prepareHome?.(accountHomePath)
+        assertStructuredAgentResolutionCurrent(runOperation)
+        signal?.throwIfAborted()
         const run = deps.runSession ?? runCodexAppServerSession
         const successFromListing = (
           listing: Awaited<ReturnType<typeof fetchCodexModelCatalogListing>>,

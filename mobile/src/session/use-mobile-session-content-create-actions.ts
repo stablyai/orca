@@ -110,8 +110,8 @@ export function useMobileSessionContentCreateActions(
     if (browserScreencastSupportedRef.current !== true) {
       showToast(
         translate(
-          'session.useContentCreateActions.browserUpdateRequired',
-          'Desktop update required for mobile browser streaming'
+          'session.useContentCreateActions.browserStreamingUnavailable',
+          "This host can't stream browser tabs"
         ),
         1600
       )

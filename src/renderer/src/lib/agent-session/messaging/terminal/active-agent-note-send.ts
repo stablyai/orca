@@ -4,6 +4,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { terminalPaneSendRefusal } from '../running-agent-targets'
 import { findActiveRuntimeTerminal, getActiveTerminalNoteTarget } from './active-agent-note-target'
 import type { ActiveTerminalNoteTarget } from './active-agent-note-target'
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
@@ -66,6 +67,16 @@ async function sendNotesToActiveAgentSessionInternal({
   const noteTarget = explicitNoteTarget ?? getActiveTerminalNoteTarget(state, worktreeId)
   if (!noteTarget) {
     return reportNoteSendFailure({ status: 'no-active-terminal', code: 'no-note-target' }, null)
+  }
+  // Checked before any write: an older host's guard can't see these agents' approval menus.
+  const refusal = terminalPaneSendRefusal(state, worktreeId, noteTarget.tabId, noteTarget.leafId)
+  if (refusal) {
+    return reportNoteSendFailure(
+      refusal === 'Agent may be waiting for approval'
+        ? { status: 'approval-unseen', code: 'terminal-send-approval-unseen' }
+        : { status: 'host-update-required', code: 'host-send-approval-guard-missing' },
+      noteTarget
+    )
   }
   const runtimeTarget = runtimeTargetForOwnerEnvironment(
     runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)

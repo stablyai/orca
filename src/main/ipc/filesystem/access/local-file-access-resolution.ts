@@ -8,19 +8,19 @@ import {
   type ResolveAuthorizedPathOptions
 } from './filesystem-auth'
 import { isDescendantOrEqual } from '../../../filesystem/local-file-io/filesystem-path-containment'
-import { getFloatingWorkspaceFileRoots } from '../../floating-workspace-directory'
+import { getFloatingWorkspaceFileRoots } from '../../worktrees/floating-workspace-directory'
 import {
   isDeviceNamespacePath,
   isNetworkSharePath,
   isWindowsReservedDeviceName
-} from '../../automatic-load-path-text'
+} from './automatic-load-path-text'
 import { NOT_A_REGULAR_FILE_MESSAGE } from '../../../filesystem/local-file-io/local-regular-file-read'
 import { isChatImageTarget } from './chat-image-target'
 import {
   realpathAcrossWslDriveMount,
   windowsFsPath
 } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
-import { resolveProjectFolderLinkPath } from '../../project-folder-link-path'
+import { resolveProjectFolderLinkPath } from '../../shell/project-folder-link-path'
 
 const USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE =
   'Access denied: a file opened by name needs an absolute path.'

@@ -79,6 +79,7 @@ function completeReadInputs(
     options.currentHeadOid ?? null,
     options.checkPageLimit ?? null,
     options.exactRepository ?? null,
+    options.linkedPRUrl ?? null,
     options.includeDerivedData !== false,
     options.sharedLinkPaths ?? null
   ]

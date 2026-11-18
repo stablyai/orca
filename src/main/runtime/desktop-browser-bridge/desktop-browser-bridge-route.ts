@@ -47,16 +47,20 @@ export async function routeDesktopBrowserBridgeRpc(options: {
       DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE
     )
   }
+  // Never fall back to this host's own browser: goto and click act on the desktop tab.
   if (!forwarded) {
-    if (options.localBrowserAvailable) {
-      return { handled: false }
-    }
     throw new BrowserError(
       DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
-      `${method} is not available from an SSH host. The desktop browser accepts navigation, page reading and input commands only.`
+      `${notForwardedReason(method)} Nothing ran in this host's own browser.`
     )
   }
   const params: Record<string, unknown> = isRecord(options.params) ? { ...options.params } : {}
+  if (forwardedMethod === 'browser.tabCreate' && params.profileId !== undefined) {
+    throw new BrowserError(
+      'invalid_argument',
+      'tab create --profile is not available from an SSH host; the desktop picks the profile for new tabs. Drop --profile, or open the tab on the desktop.'
+    )
+  }
   if (method === 'browser.openUrl') {
     assertClientOpenableUrl(String(params.url))
   }
@@ -75,13 +79,10 @@ export async function routeDesktopBrowserBridgeRpc(options: {
       'The Orca desktop sharing its browser cannot check --expect-url. Update Orca on that desktop or drop the flag.'
     )
   }
-  if (
-    forwardedMethod === 'browser.tabAnnotations' &&
-    !options.registry.newestAttachmentReadsTabAnnotations()
-  ) {
+  if (!options.registry.newestAttachmentServes(forwardedMethod)) {
     throw new BrowserError(
       DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
-      'The Orca desktop sharing its browser cannot read tab notes. Update Orca on that desktop.'
+      `The Orca desktop sharing its browser is too old to run ${method} for this host. Update Orca on that desktop.`
     )
   }
   const result = await options.registry.forward(
@@ -95,6 +96,43 @@ function forwardTimeoutMs(method: string, params: Record<string, unknown>): numb
   return method === 'browser.wait'
     ? Math.min(browserWaitRequestTimeoutMs(params.timeout), MAX_TIMEOUT_MS)
     : DEFAULT_TIMEOUT_MS
+}
+
+function notForwardedReason(method: string): string {
+  if (
+    method.startsWith('browser.cookie.') ||
+    method.startsWith('browser.intercept.') ||
+    method.startsWith('browser.capture.') ||
+    method === 'browser.setHeaders' ||
+    method === 'browser.setCredentials'
+  ) {
+    return "An SSH host can't read or change the desktop browser's cookies, request headers or credentials."
+  }
+  if (method === 'browser.upload' || method === 'browser.download') {
+    return "An SSH host can't move files between the desktop and its browser tabs."
+  }
+  if (method === 'browser.clipboardRead') {
+    return "An SSH host can't read the desktop clipboard."
+  }
+  if (method === 'browser.clipboardWrite') {
+    return "An SSH host can't use the desktop clipboard. Use orca type or orca fill instead."
+  }
+  if (method === 'browser.exec') {
+    return "An SSH host can't run raw agent-browser commands on the desktop. Use the named orca browser commands instead."
+  }
+  if (method === 'browser.certificate.proceed') {
+    return 'Only someone at the desktop can accept a certificate warning in its browser.'
+  }
+  if (method.startsWith('browser.identity.')) {
+    return 'Browser identity is a setting of the Orca desktop that shares its browser with this host. Change it there in Settings › Browser.'
+  }
+  if (/^browser\.(profile|tabProfile|tabSetProfile)/.test(method)) {
+    return 'Browser profiles belong to the Orca desktop that shares its browser with this host. Pick or change them there.'
+  }
+  if (method.startsWith('browser.extension')) {
+    return 'Browser extensions belong to the Orca desktop that shares its browser with this host. Manage them there.'
+  }
+  return `${method} is not available from an SSH host.`
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
