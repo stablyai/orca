@@ -20,8 +20,14 @@ function showPausedToast(api: BackgroundWorkerApi): void {
       duration: Number.POSITIVE_INFINITY,
       action: {
         label: translate('backgroundWorkerPaused.retry', 'Retry'),
-        // The click closes the toast; bring it back if the retry never reached main.
-        onClick: () => void api.retry().catch(() => showPausedToast(api))
+        onClick: (event) => {
+          // Keep it until the retry lands, so a failed request leaves Retry in place.
+          event.preventDefault()
+          void api
+            .retry()
+            .then(() => toast.dismiss(TOAST_ID))
+            .catch(() => undefined)
+        }
       }
     }
   )

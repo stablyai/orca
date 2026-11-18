@@ -158,7 +158,9 @@ export class HostedWorker extends EventEmitter {
     try {
       message = deserialize(bytes)
     } catch (error) {
-      this.emit('error', error)
+      if (!this.terminating) {
+        this.emit('error', error)
+      }
       return
     }
     this.lastReplyType =
