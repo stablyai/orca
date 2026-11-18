@@ -234,6 +234,19 @@ async function typeIntoComposer({ page, windowMs }) {
       return (element?.value ?? element?.textContent ?? '').length
     })
   await page.locator('[data-fleet-gate-input="1"]').first().focus()
+  // Caret at the end with nothing selected, so every key adds a character instead of replacing a selection.
+  await page.evaluate(() => {
+    const element = document.querySelector('[data-fleet-gate-input="1"]')
+    if (typeof element?.value === 'string') {
+      element.setSelectionRange(element.value.length, element.value.length)
+    } else if (element) {
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      range.collapse(false)
+      window.getSelection()?.removeAllRanges()
+      window.getSelection()?.addRange(range)
+    }
+  })
   const lengthBefore = await textLength()
   const deadline = Date.now() + windowMs
   let typed = 0

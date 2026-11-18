@@ -125,6 +125,16 @@ export function burstRows(bursts) {
   return metrics.map((metric) => {
     const oldBurst = byArm.old
     const newBurst = byArm.new
+    // A batch that couldn't be filled has no workload to judge: INCOMPLETE (via n/a), never FAIL.
+    if (newBurst?.undersized) {
+      return {
+        scenario: 'burst',
+        metric: { label: metric.label },
+        old: oldBurst ? (metric.read(oldBurst) ?? '—') : null,
+        new: metric.read(newBurst) ?? '—',
+        verdict: 'n/a'
+      }
+    }
     return {
       scenario: 'burst',
       metric: { label: metric.label },

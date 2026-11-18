@@ -6,7 +6,9 @@ import path from 'node:path'
 const KILL_WAIT_MS = 5_000
 
 /** Copies a profile without its daemon runtime dir: sockets can't be copied, and stale pid files would name other processes. */
-export function copyProfile(sourceDir, targetDir) {
+export function copyProfile(seedDir, targetDir) {
+  // The real path: the filter below drops symlinks, and cpSync applies it to the root too.
+  const sourceDir = fs.realpathSync(seedDir)
   const daemonDir = path.join(sourceDir, 'daemon')
   fs.cpSync(sourceDir, targetDir, {
     recursive: true,

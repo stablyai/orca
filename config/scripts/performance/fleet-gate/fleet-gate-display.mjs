@@ -36,10 +36,12 @@ export async function startVirtualDisplay() {
         resolve(text.trim())
       }
     })
-    child.once('exit', () => {
-      clearTimeout(timer)
-      resolve(null)
-    })
+    for (const event of ['exit', 'error']) {
+      child.once(event, () => {
+        clearTimeout(timer)
+        resolve(null)
+      })
+    }
   })
   if (!number || !/^\d+$/.test(number)) {
     child.kill('SIGKILL')

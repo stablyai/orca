@@ -47,8 +47,8 @@ async function waitForLaunches(launchLog, expected, timeoutMs = LAUNCH_WAIT_MS) 
 export function startCpuLoad(repoRoot) {
   const worker = path.join(repoRoot, 'tests', 'tools', 'benchmarks', 'cpu-pressure-worker.mjs')
   const children = Array.from({ length: os.availableParallelism() }, () =>
-    // No fixed lifetime: the load lasts until the burst stops it (the worker's own default caps an orphan).
-    spawn(process.execPath, [worker], { stdio: 'ignore' })
+    // An hour outlasts any burst (the burst stops it); the cap only bounds an orphan.
+    spawn(process.execPath, [worker, '3600000'], { stdio: 'ignore' })
   )
   return () => {
     for (const child of children) {

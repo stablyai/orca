@@ -245,6 +245,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     ['cold', result.cold]
   ]) {
     if (batch?.requested !== BURST_CHATS) {
+      result.undersized = true
       result.incomplete.push(
         `${phase} burst found ${String(batch?.requested)} of ${String(BURST_CHATS)} workspaces`
       )
