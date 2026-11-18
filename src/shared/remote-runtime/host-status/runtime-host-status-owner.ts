@@ -262,8 +262,10 @@ export class RuntimeHostStatusOwner {
     if (this.disposed || this.snapshot.verification === 'blocked') {
       return
     }
-    const delay = RETRY_DELAYS_MS[Math.min(this.attempt++, RETRY_DELAYS_MS.length - 1)]
-    this.failedUntil = Date.now() + delay
+    // Only a retry the owner will run escalates the schedule; passive failures hold the first step.
+    const willRetry = this.active && !(this.persistent && this.snapshot.transport !== 'ready')
+    const attempt = willRetry ? this.attempt++ : this.attempt
+    this.failedUntil = Date.now() + RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]
     this.armRetry()
   }
 
