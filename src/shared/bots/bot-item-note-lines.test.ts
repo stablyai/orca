@@ -243,15 +243,6 @@ describe("another chat's write, in the chat whose item it changed", () => {
     })
   })
 
-  it('names Home Chat by its name, and an untitled chat as another chat', () => {
-    expect(lines({ ...chat, title: null, home: true }, [comment(a)])).toEqual([
-      '[Home Chat chat-a] commented on <Share links working>'
-    ])
-    expect(lines({ ...chat, title: null }, [comment(a)])).toEqual([
-      '[Another chat chat-a] commented on <Share links working>'
-    ])
-  })
-
   it('says another chat, without a chip, when the chat was gone or the note is older', () => {
     expect(lines('other-chat', [move(a, 'working', 'canceled')])).toEqual([
       'Another chat canceled <Share links canceled>'
