@@ -113,6 +113,21 @@ describe('buffered Windows processes on the shared worker', () => {
     })
   })
 
+  it('rejects a run whose worker was lost before launching it, despite the close that follows', async () => {
+    const child = new WorkerThreadChildProcess(1, () => true)
+    worker.spawn.mockReturnValueOnce(child)
+    const pending = runProcess({ program: 'gh.exe', args: ['--version'] })
+    child.receive({
+      type: 'spawn-error',
+      id: 1,
+      error: {
+        message: 'Child process worker exited with code 1',
+        code: WORKER_CHILD_ABANDONED_CODE
+      }
+    })
+    await expect(pending).rejects.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
+  })
+
   it('ends the live tree of a run whose worker died before reporting it terminated', async () => {
     const child = new WorkerThreadChildProcess(1, () => true)
     const taskkill = new WorkerThreadChildProcess(2, () => true)
