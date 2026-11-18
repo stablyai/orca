@@ -1,12 +1,12 @@
 import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
-import type { BranchPrefixStrategy } from '../../../../shared/ui-chrome-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { BranchPrefixStrategy } from '../../../../shared/ui-chrome/ui-chrome-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getPRForBranch } from '../../../github/client/lookup/get-pr-for-branch'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { foldGitRefNameCase } from '../../../git/refs/resolution/repo-branch-conflict'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
-import { computeValidatedBranchName } from '../../../ipc/worktree-branch-name'
+import { computeValidatedBranchName } from '../../../ipc/worktrees/creation/worktree-branch-name'
 import { getHostedReviewForBranch } from '../../../source-control/hosted-review'
 import {
   getSelectedReviewBranch,

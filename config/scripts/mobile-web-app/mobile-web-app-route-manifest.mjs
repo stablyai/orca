@@ -110,7 +110,7 @@ export function renderMobileWebAppRouteManifest(routes) {
     return `  [${JSON.stringify(key)}]: bootRoute(() => ${resolved}, ${JSON.stringify(scope)})`
   })
   return `import { bootRoute } from "./web-entry/boot-route-preload"
-import { withRouteScreenPaintReport } from "./src/mobile-web-shell/bridge/page-first-paint"
+import { withRouteScreenPaintReport } from "./src/mobile-web-shell/bridge/page-lifecycle/page-first-paint"
 const modules = {
 ${entryLines.join(',\n')}
 }

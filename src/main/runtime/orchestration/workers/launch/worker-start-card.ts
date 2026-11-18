@@ -3,7 +3,7 @@ import type {
   AgentJournalAgentHandoffItem,
   AgentJournalAgentStartItem
 } from '../../../../../shared/agent-session/journal/agent-journal-creation-facts'
-import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationEntryCaller } from '../../addressing/orchestration-caller-identity'
@@ -21,11 +21,17 @@ export function prepareAgentCreationCard(
     if (!host || !destination) {
       return null
     }
+    const captured = Promise.resolve(destination).catch((error: unknown) => {
+      logStartCardFailure(error)
+      return null
+    })
     return (card) => {
       const observedAt = Date.now()
-      void Promise.resolve()
-        .then(async () => {
-          await host.appendAgentStart(destination, card(), observedAt)
+      void captured
+        .then(async (destination) => {
+          if (destination) {
+            await host.appendAgentStart(destination, card(), observedAt)
+          }
         })
         .catch(logStartCardFailure)
     }

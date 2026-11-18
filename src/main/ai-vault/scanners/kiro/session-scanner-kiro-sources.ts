@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { resolveKiroHomeDir } from '../../../../shared/kiro-home'
+import { resolveKiroHomeDir } from '../../../../shared/agent-launch/environment/kiro-home'
 import {
   kiroTranscriptPathForMetadata,
   kiroV3TranscriptPathForManifest

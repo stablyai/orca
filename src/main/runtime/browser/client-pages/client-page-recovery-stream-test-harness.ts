@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../../rpc/methods/session-tabs/session-tabs'
@@ -46,4 +46,23 @@ export function openRecoveryTabsStream(
     { connectionId: id, pairedDeviceId: deviceId, clientKind, signal: stopped.signal }
   )
   return { frames, errors, initial: initial.promise, completion, stop: () => stopped.abort() }
+}
+
+export async function publishRecoveryTabsGraph(runtime: OrcaRuntimeService): Promise<void> {
+  runtime.attachWindow(1)
+  await runtime.syncWindowGraph(1, {
+    tabs: [],
+    leaves: [],
+    mobileSessionTabs: [
+      {
+        worktree: 'repo-1::/tmp/worktree-a',
+        publicationEpoch: 'renderer',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }
+    ]
+  })
 }

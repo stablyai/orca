@@ -1,7 +1,7 @@
 import {
   COMPUTER_WAIT_DEFAULT_TIMEOUT_MS,
   COMPUTER_WAIT_MAX_TIMEOUT_MS
-} from '../../shared/computer-wait-timeout'
+} from '../../shared/computer/computer-wait-timeout'
 import {
   formatComputerWaitSnapshot,
   formatComputerWaitWindows,
@@ -16,7 +16,7 @@ import {
   getRequiredStringFlag
 } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getComputerCommandTarget } from './computer-command-target'
 import { getComputerWindowTargetFlags } from './computer-action-flags'
 

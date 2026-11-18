@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { setSourceControlActionDefault } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
@@ -12,7 +12,7 @@ import {
   dictationCorrectionWord,
   isDictationCleanupOn,
   resolveDictationCleanupAgent
-} from '../../../../../shared/dictation-cleanup'
+} from '../../../../../shared/speech/dictation/dictation-cleanup'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { Input } from '../../ui/input'

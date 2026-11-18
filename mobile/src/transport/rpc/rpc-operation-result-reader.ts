@@ -1,5 +1,5 @@
 import type * as z from 'zod'
-import { collectSalvageDrops } from '../../../../src/shared/zod-salvage'
+import { collectSalvageDrops } from '../../../../src/shared/validation/zod-salvage'
 import type { RpcCompatibleReader, RpcDecodeIssue } from './rpc-operation-contract'
 
 const MAX_REPORTED_DECODE_ISSUES = 20

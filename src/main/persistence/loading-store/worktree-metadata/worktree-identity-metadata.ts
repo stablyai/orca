@@ -1,15 +1,18 @@
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
-import type { DiffCommentBaseMutation } from '../../../../shared/diff-comment-mutation'
+import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import {
   composeWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { StoreRuntimeState } from '../store-runtime-state'
 
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
@@ -18,7 +21,7 @@ import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
 import {
   isLocalOnlyWorktreeMetaId,
   worktreeMetaHostFor
-} from '../../../../shared/worktree/local-only-worktree-meta-ids'
+} from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
 
 type MetadataRuntime = Pick<StoreRuntimeState, 'state'> &
   Partial<Pick<StoreRuntimeState, 'worktreeMetaWriteListeners'>>

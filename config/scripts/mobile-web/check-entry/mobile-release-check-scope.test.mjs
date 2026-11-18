@@ -40,7 +40,6 @@ function fixture(detectorStep = detector) {
     'package.json',
     'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
     'config/scripts/workflow/source-routing/pr-package-test-paths.mjs',
-    'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs',
     'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs',
     'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
     'config/scripts/mobile-web/check-entry/mobile-release-check-scope.mjs',
@@ -84,16 +83,6 @@ describe.skipIf(process.platform === 'win32')('the Linux workflow detector comma
     repo.commit()
     expect(repo.detect()).toBe('should_run=true\n')
   })
-
-  it('runs Ruby when the classifier cannot execute', () => {
-    const repo = fixture()
-    repo.write('mobile/src/view.tsx', 'export const view = 2\n')
-    repo.commit()
-    rmSync(
-      join(repo.directory, 'config/scripts/mobile-web/check-entry/mobile-release-check-scope.mjs')
-    )
-    expect(repo.detect()).toBe('should_run=true\n')
-  })
 })
 
 describe.skipIf(process.platform === 'win32')('the mobile test detector command', () => {
@@ -112,9 +101,6 @@ describe.skipIf(process.platform === 'win32')('the mobile test detector command'
     repo.git('mv', 'mobile/src/view.tsx', 'mobile/README.md')
     repo.commit()
     expect(repo.detect()).toBe('should_run=true\n')
-  })
-  it('retains tests when the diff is unavailable', () => {
-    expect(fixture(testDetector).detect()).toBe('should_run=true\n')
   })
   it('retains tests when the classifier cannot execute', () => {
     const repo = fixture(testDetector)

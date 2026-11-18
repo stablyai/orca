@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 import { PLUGIN_TEMPLATE_NAMES } from '../plugins/authoring/plugin-template-names'
 import { PLUGIN_DEV_HOOK_COMMAND_SPEC, PLUGIN_DEV_REQUEST_COMMAND_SPEC } from './plugin-dev-request'

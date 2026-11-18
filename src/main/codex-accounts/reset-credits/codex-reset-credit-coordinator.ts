@@ -3,16 +3,16 @@ import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState
-} from '../../../shared/managed-account-types'
+} from '../../../shared/agent-accounts/managed-account-types'
 import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
-} from '../../../shared/codex-reset-credit-scope'
+} from '../../../shared/agent-accounts/codex/codex-reset-credit-scope'
 import type {
   CodexRateLimitResetResult,
   RateLimitState,
   RateLimitRuntimeTarget
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { Store } from '../../persistence/loading-store/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexRuntimeHomeService } from '../runtime-home-service'

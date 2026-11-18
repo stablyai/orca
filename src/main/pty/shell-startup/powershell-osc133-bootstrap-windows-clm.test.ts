@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { encodePowerShellCommand } from '../../../shared/powershell-command-encoding'
+import { encodePowerShellCommand } from '../../../shared/shell/launch/powershell-command-encoding'
 import { resolveWindowsShellLaunchArgs } from '../../providers/shell-launch/windows/shell-args'
 
 const WINDOWS_POWERSHELLS = ['powershell.exe', 'pwsh.exe'] as const

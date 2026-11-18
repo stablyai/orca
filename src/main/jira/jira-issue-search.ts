@@ -1,4 +1,4 @@
-import { sortByUpdatedAtDescending } from '../../shared/updated-at-order'
+import { sortByUpdatedAtDescending } from '../../shared/collections/updated-at-order'
 import type {
   JiraIssue,
   JiraIssueFilter,

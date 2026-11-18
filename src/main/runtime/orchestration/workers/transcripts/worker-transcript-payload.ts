@@ -54,6 +54,28 @@ export function boundWorkerTranscriptMessages(
   return { messages: bounded, limited: state.clipped, warnings: [...state.warnings] }
 }
 
+/** Select the page, then bound it, so the byte budget trims only this page; resume at `end`. */
+export function pageWorkerTranscriptMessages(args: {
+  messages: readonly NativeChatMessage[]
+  start: number
+  limit: number | undefined
+  /** Archives were bounded when saved; bounding again would re-clip their markers. */
+  alreadyBounded?: boolean
+}): { messages: NativeChatMessage[]; end: number; limited: boolean; warnings: string[] } {
+  const start = Math.min(args.start, args.messages.length)
+  const selected = args.messages.slice(start, start + clampWorkerTranscriptLimit(args.limit))
+  const page = args.alreadyBounded
+    ? { messages: selected, limited: false, warnings: [] }
+    : boundWorkerTranscriptMessages(selected)
+  const end = start + page.messages.length
+  return {
+    messages: page.messages,
+    end,
+    limited: page.limited || end < args.messages.length,
+    warnings: page.warnings
+  }
+}
+
 /** Apply message bounds newest-first for archives; forward-page head bounds would lose the worker's final answer. */
 export function boundWorkerTranscriptTail(
   messages: readonly NativeChatMessage[],

@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
-import { resolveAbsoluteDirOverride } from '../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../shared/file-access/absolute-dir-override'
 
 // Accept Pi/OMP home, agent, or sessions paths.
 export function normalizeAgentSessionsDir(

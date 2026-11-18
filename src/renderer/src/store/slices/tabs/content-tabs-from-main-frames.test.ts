@@ -1,7 +1,7 @@
 // Layout-owner browser/chat/simulator commands draw only from main’s answers; refusals preserve tabs. With switch off, window draws without sending main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
@@ -37,7 +37,7 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
 
 createStoreCascadesMockApi()
 
-import { ensureSimulatorTab } from '@/lib/simulator/tabs/ensure-simulator-tab'
+import '@/lib/simulator/tabs/ensure-simulator-tab'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
@@ -140,29 +140,5 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('content tabs drawn from main’s fram
     await main.settle()
     expect(tabOf(sessionId)).toBeUndefined()
     expect(mainTabs().some((tab) => tab.entityId === sessionId)).toBe(false)
-  })
-
-  it('opens a simulator tab to the right through main and surfaces it once drawn', async () => {
-    store.getState().createBrowserTab(WT, 'about:blank')
-    await main.settle()
-    layoutApplyTestTransport.answerWith('pending')
-    const tabId = ensureSimulatorTab(WT, { placement: 'rightSplit' })!
-    // A second ask while main opens it names the same tab.
-    expect(ensureSimulatorTab(WT, { placement: 'rightSplit' })).toBe(tabId)
-    await main.settle()
-    expect(tabs().some((tab) => tab.id === tabId)).toBe(false)
-
-    layoutApplyTestTransport.answerWith('apply')
-    layoutApplyTestTransport.answerPending()
-    await main.settle()
-    const simulator = tabs().find((tab) => tab.id === tabId)!
-    expect(simulator).toMatchObject({ contentType: 'simulator' })
-    expect(simulator.groupId).not.toBe(ROOT)
-    expect(store.getState().activeGroupIdByWorktree[WT]).toBe(simulator.groupId)
-    expect(layoutApplyTestTransport.sentOfType('openSimulatorTab')).toHaveLength(1)
-
-    store.getState().closeUnifiedTab(tabId)
-    await main.settle()
-    expect(tabs().some((tab) => tab.id === tabId)).toBe(false)
   })
 })

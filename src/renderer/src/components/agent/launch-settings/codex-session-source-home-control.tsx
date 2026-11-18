@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/execution-host/project-runtime-preference'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'

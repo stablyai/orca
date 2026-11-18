@@ -1,17 +1,17 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pathSegments } from './session-file-discovery'
-import { resolveAbsoluteDirOverride } from '../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../shared/file-access/absolute-dir-override'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
-import { resolveGrokSessionsDir } from '../../../shared/grok-session-paths'
+import { resolveGrokSessionsDir } from '../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { uniqueCodexSessionsDirs } from '../scanners/codex/session-scanner-codex-paths'
 import { clineMessagesPathForMetadata } from '../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import { isClineSessionMetadataPath } from '../scanners/cline/session-scanner-cline-parser'
 import { cursorChatMetaPath } from '../scanners/cursor/session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from '../scanners/devin/session-scanner-devin-db'
 import { resolveKimiSessionsDir } from '../scanners/kimi/session-scanner-kimi-paths'
-import { resolveMuseSessionsDir } from '../../../shared/muse-session-log'
+import { resolveMuseSessionsDir } from '../../../shared/agent-hook-listener/providers/muse/muse-session-log'
 import { KIRO_AGENT_SOURCE } from '../scanners/kiro/session-scanner-kiro-sources'
 
 import { OPENCLAW_AGENT_SOURCE } from '../scanners/openclaw/openclaw-session-layout'
@@ -23,7 +23,6 @@ import {
   sessionRootDirs,
   wslHomeSessionDirs
 } from './session-scanner-roots'
-import { getHermesHome } from '../../hermes/hermes-default-home'
 import { isClaudeProjectBucketDirectory } from '../scanners/claude/claude-project-dir-encoding'
 import { SUBAGENT_DIR_NAME } from '../scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from '../session-scanner-types'
@@ -181,15 +180,6 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.json'],
     // Database-only title or visibility changes must refresh sessions without rereading transcripts.
     contentDependencyPath: devinSessionsDbDependencyPath
-  },
-  hermes: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.hermesSessionsDir ?? join(getHermesHome(), 'sessions'), wslHomeDirs, [
-        '.hermes',
-        'sessions'
-      ]),
-    extensions: ['.json'],
-    filePredicate: (filePath) => basename(filePath).startsWith('session_')
   },
   jcode: {
     rootDirs: (options, wslHomeDirs) =>

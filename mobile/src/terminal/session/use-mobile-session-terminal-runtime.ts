@@ -2,7 +2,7 @@ import {
   terminalPaneViewport,
   resolveTerminalPaneHandles,
   type TerminalPaneViewport
-} from './mobile-terminal-pane-layout'
+} from './pane-layout/mobile-terminal-pane-layout'
 import type { PendingSessionSelection } from '../../session/tabs/pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../webview/terminal-webview-messages'
@@ -18,10 +18,10 @@ import type { TerminalLiveInputSender } from '../live-input/terminal-live-input-
 import type { TerminalLiveInputFailure } from '../live-input/terminal-live-pending-flush-state'
 import { useTerminalLiveInputCommit } from '../live-input/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../input-delivery/terminal-input-connection-gate'
-import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
-import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
+import { createInitialSessionAutoCreateState } from './creation/use-initial-session-terminal-autocreate'
+import { TerminalViewportResubscribeBudget } from './streaming/mobile-terminal-viewport-resubscribe'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
-import { useMobileTerminalInventoryRecoveryBridge } from './use-mobile-terminal-inventory-recovery'
+import { useMobileTerminalInventoryRecoveryBridge } from './inventory/use-mobile-terminal-inventory-recovery'
 import type { MobileSessionTab, MobileSessionTabType } from '../../session/tabs/mobile-session-tabs'
 import type { TerminalGestureInputBucket, TerminalGestureInputQueue } from './mobile-terminal-model'
 import type { MobileSessionScreenStateModel } from '../../session/use-mobile-session-screen-state'

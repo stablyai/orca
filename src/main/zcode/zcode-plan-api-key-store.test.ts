@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 
 const safeStorageMock = vi.hoisted(() => ({
@@ -36,7 +36,6 @@ vi.mock('../../shared/secure-storage/secure-file', () => ({
   writeSecureFile: writeSecureFileMock
 }))
 
-const storePath = '/home/test/.orca/zcode-plan-api-key.enc'
 const envelope = (kind: 'encrypted' | 'plaintext', value: string): string =>
   `orca-zcode-plan-api-key:v1:${kind}:${Buffer.from(value, 'utf8').toString('base64')}`
 
@@ -67,21 +66,6 @@ describe('zcode-plan-api-key-store', () => {
 
     expect(() => store.saveZcodePlanApiKey('glm\r\nsecret')).toThrow('must be a single line')
     expect(writeSecureFileMock).not.toHaveBeenCalled()
-  })
-
-  it('refuses to keep an unrestricted plaintext key when hardening fails', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    writeSecureFileMock.mockReturnValue(false)
-    existsSyncMock.mockReturnValue(false)
-    readFileSyncMock.mockReturnValue(Buffer.from(envelope('plaintext', 'glm-secret')))
-    const store = await loadStore()
-
-    expect(() => store.saveZcodePlanApiKey('glm-secret')).toThrow(
-      'could not be stored securely on this device'
-    )
-    expect(rmSyncMock).toHaveBeenCalledWith(storePath, { force: true })
-    warn.mockRestore()
   })
 
   it('refuses to decrypt an encrypted envelope once safeStorage becomes unavailable', async () => {

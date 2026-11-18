@@ -1,12 +1,12 @@
 import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
-import type { RuntimeNativeChatFileContext } from '../../../../src/shared/native-chat/native-chat-file-context'
+import type { RuntimeNativeChatFileContext } from '../../../../src/shared/native-chat/file-access/native-chat-file-context'
 import type { RuntimeTerminalPathResolution } from '../../../../src/shared/terminal/runtime-terminal-file-path'
 import { filesystemPathToFileUri } from '../../../../src/shared/file-links/file-uri-path'
 import { createMobileFilePreviewHref } from '../preview/mobile-file-preview-route'
 import { classifyMobileArtifact } from '../preview/mobile-artifact-kind'
 import { fileTapOpenRun } from './mobile-file-tap-operations'
 import { terminalArtifactPathResolve as fileTapPathResolve } from '../preview/mobile-file-preview-operations'
-import { mapWithConcurrency } from '../../../../src/shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../src/shared/concurrency/map-with-concurrency'
 import {
   shouldActivateOpenedMobileSessionTab,
   type OpenedMobileSessionTabActivationState

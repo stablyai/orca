@@ -1,9 +1,10 @@
 import type net from 'node:net'
-import type { ComputerProviderCapabilities } from '../../../shared/computer-use-runtime-types'
+import type { ComputerProviderCapabilities } from '../../../shared/computer/computer-use-runtime-types'
 
 export type NativeMethod =
   | 'handshake'
   | 'listApps'
+  | 'launchApp'
   | 'listWindows'
   | 'getAppState'
   | 'click'
@@ -19,7 +20,7 @@ export type NativeMethod =
 
 export type NativeActionMethod = Exclude<
   NativeMethod,
-  'handshake' | 'listApps' | 'listWindows' | 'getAppState' | 'terminate'
+  'handshake' | 'listApps' | 'launchApp' | 'listWindows' | 'getAppState' | 'terminate'
 >
 
 export type NativeResponse =

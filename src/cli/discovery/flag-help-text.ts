@@ -1,6 +1,8 @@
 export const FLAG_HELP_TEXT: Record<string, string> = {
   'external-worktree-visibility':
     '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
+  'browser-profile':
+    '--browser-profile <id>|inherit  Browser profile for new tabs in this repo, or inherit the Browser setting',
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
   'agent-wait': "--agent-wait           Add each agent row's terminal wait verdict to JSON output",
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
@@ -60,6 +62,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   name: '--name <name>          Name for the new worktree or automation',
   'no-parent': '--no-parent            Force no parent lineage for unrelated work',
   'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
+  'screenshot-format': '--screenshot-format <png|jpeg> Screenshot image format (default png)',
+  'screenshot-scale':
+    '--screenshot-scale <n> At most n screenshot pixels per window point; 1 drops Retina detail',
+  'screenshot-max-edge': '--screenshot-max-edge <px> Shrink the screenshot so its longer side fits',
   pages: '--pages <n>           Number of scroll pages',
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
@@ -71,7 +77,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   query: '--query <text>        Search text for matching refs',
   ref: '--ref <ref>            Base ref to persist for the repo',
   repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
-  'restore-window': '--restore-window     Bring the target app/window forward before the operation',
+  'restore-window':
+    "--restore-window     Bring the target window forward and use foreground input; takes over the user's screen, so ask the user first",
   session: '--session <id>        Snapshot namespace for a related computer-use workflow',
   setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
   surface:
@@ -79,7 +86,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   shell: '--shell <shell>        Windows shell the terminal itself runs as',
   terminal: '--terminal <handle>  Runtime-issued terminal handle',
   text: '--text <text>          Text payload to send or type',
-  'text-stdin': '--text-stdin          Read text payload from stdin',
+  'text-stdin': '--text-stdin           Read text payload from stdin',
   'task-id': '--task-id <id>        Task id to include in orchestration payload JSON',
   'task-title': '--task-title <text>    Concise title for an orchestration task',
   'dispatch-id': '--dispatch-id <id>    Dispatch id to include in orchestration payload JSON',
@@ -123,7 +130,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--extra-agent-args=<args> Extra agent arguments for fresh runs; empty clears',
   'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
   'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
-  'value-stdin': '--value-stdin         Read set-value payload from stdin',
+  'value-stdin': '--value-stdin          Read value payload from stdin',
   'window-id': '--window-id <id>      Target a window id from list-windows',
   'window-index': '--window-index <n>   Target a window index from list-windows',
   element: '--element <ref>        Element ref from snapshot (e.g. e3)',

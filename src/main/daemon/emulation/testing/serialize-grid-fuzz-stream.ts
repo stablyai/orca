@@ -1,5 +1,5 @@
 // Shrinking alternate or pre-21376 ConPTY buffers exercises lines wider than the grid.
-import { mulberry32 } from '../../../../shared/agent-tui-ansi-fuzz-stream'
+import { mulberry32 } from '../../../../shared/terminal/testing/agent-tui-ansi-fuzz-stream'
 
 export type SerializeFuzzCategory = 'normal' | 'alt' | 'conpty'
 

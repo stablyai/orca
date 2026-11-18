@@ -11,9 +11,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import { presentGitHubPRMergeState } from '@/components/github/github-pr-merge-state'
 import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { resolveGitHubPRMergeMethods } from '../../../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
 import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'

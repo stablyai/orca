@@ -1,7 +1,7 @@
 import { parseGitHubIssueOrPRLink, type GitHubIssueOrPRLink } from '../github/repositories/links'
 import { githubRepoIdentityKey } from '../github/repositories/repository-identity-key'
 import type { GitHubWorkItem } from '../github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../gitlab-types'
+import type { GitLabWorkItem } from '../gitlab/gitlab-types'
 import type { LinearIssue } from '../linear/issue-types'
 import { parseGitLabIssueOrMRLink } from './gitlab-links'
 import {

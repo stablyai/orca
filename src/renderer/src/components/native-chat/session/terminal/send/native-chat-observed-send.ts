@@ -6,10 +6,18 @@ import {
   clearUnsubmittedAgentInput,
   type NativeChatSendOptions
 } from './native-chat-input-clear'
+import { afterNativeChatPasteLands, readNativeChatInputLine } from './native-chat-paste-landed'
+
+/** `afterPasteOf`: hold this write (Enter) until the input line shows that pasted message. */
+export type NativeChatObservedWrite = {
+  data: string
+  delayBeforeMs: number
+  afterPasteOf?: string
+}
 
 export function sendNativeChatObservedWrites(
   ptyId: string,
-  writes: readonly { data: string; delayBeforeMs: number }[],
+  writes: readonly NativeChatObservedWrite[],
   options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number }
 ) {
   // Dismiss answer cards only after provider acknowledgment.
@@ -24,6 +32,17 @@ export function sendNativeChatObservedWrites(
     ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
       let reportedUnconfirmed = false
       let acknowledged = true
+      let lineWasEmpty = false
+      const whenReady = (write: NativeChatObservedWrite, send: () => void): void =>
+        write.afterPasteOf !== undefined
+          ? afterNativeChatPasteLands({
+              readInputLine: options.readInputLine,
+              lineWasEmpty,
+              text: write.afterPasteOf,
+              delay,
+              submit: send
+            })
+          : send()
       const writeAt = (index: number): void => {
         if (isCancelled()) {
           return
@@ -78,12 +97,21 @@ export function sendNativeChatObservedWrites(
             })
         }
         if (write.delayBeforeMs > 0) {
-          delay(write.delayBeforeMs, send)
+          delay(write.delayBeforeMs, () => whenReady(write, send))
         } else {
-          send()
+          whenReady(write, send)
         }
       }
-      clearThenWrite(ptyId, options, delay, () => writeAt(0), markSubmitted)
+      clearThenWrite(
+        ptyId,
+        options,
+        delay,
+        () => {
+          lineWasEmpty = readNativeChatInputLine(options.readInputLine) === ''
+          writeAt(0)
+        },
+        () => markSubmitted('not-submitted')
+      )
     },
     { onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options) }
   )

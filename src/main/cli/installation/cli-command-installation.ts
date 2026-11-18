@@ -1,6 +1,6 @@
 import { link, readlink, rmdir, symlink, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import type { CliInstallStatus } from '../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../shared/cli/cli-install-types'
 import {
   ensureAppImageExtractedRoot,
   isAppImageExtractedLauncherPath,

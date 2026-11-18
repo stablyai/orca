@@ -1,6 +1,7 @@
+import { decodeSavedLocalPtyReference } from '../../restoring-sessions/saved-local-terminal-ids'
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
-import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-interactions'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../../workspaces/catalog/folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../../shared/folder-workspaces/folder-workspaces'
 import { normalizeOrcadMigrationEvictedReceipts } from '../../../../shared/orcad-migration/orcad-migration-evicted-receipts'
@@ -8,7 +9,7 @@ import { normalizeOrcadMigrationImportReceipts } from '../../../../shared/orcad-
 import { normalizeOrcadMigrationStagedCatalogs } from '../../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { normalizeWorkspaceLineageByChildKey } from '../../applying-settings/ui-interaction-merge'
 import { dropInferredParentsOverFolderParents } from '../workspace-lineage/folder-parent-lineage-persistence'
-import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/cross-store-lineage-records'
+import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/lineage/cross-store-lineage-records'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget
@@ -19,7 +20,7 @@ import {
   normalizeLegacyPaneKeyAliasEntries,
   normalizeMigrationUnsupportedPtyEntries
 } from '../../restoring-sessions/pane-alias-normalization'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedGlobalSettings } from './normalize-loaded-global-settings'
@@ -49,6 +50,25 @@ export function normalizeLoadedProfileState(
   )
   const worktreeLineageById = { ...parsed.worktreeLineageById }
   dropInferredParentsOverFolderParents(worktreeLineageById, workspaceLineageByChildKey)
+
+  const legacyPaneKeyAliasEntries = normalizeLegacyPaneKeyAliasEntries(
+    parsed.legacyPaneKeyAliasEntries
+  ).map((entry) => {
+    const decoded = decodeSavedLocalPtyReference(entry)
+    if (decoded !== entry) {
+      markNeedsSave()
+    }
+    return decoded
+  })
+  const migrationUnsupportedPtyEntries = normalizeMigrationUnsupportedPtyEntries(
+    parsed.migrationUnsupportedPtyEntries
+  ).map((entry) => {
+    const decoded = entry.source === 'local' ? decodeSavedLocalPtyReference(entry) : entry
+    if (decoded !== entry) {
+      markNeedsSave()
+    }
+    return decoded
+  })
 
   return {
     ...defaults,
@@ -113,10 +133,8 @@ export function normalizeLoadedProfileState(
       .map(normalizeSshRemotePtyLease)
       .filter((lease): lease is SshRemotePtyLease => lease !== null),
     sshPtyConsumerRecoveries: parsed.sshPtyConsumerRecoveries,
-    migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
-      parsed.migrationUnsupportedPtyEntries
-    ),
-    legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
+    migrationUnsupportedPtyEntries,
+    legacyPaneKeyAliasEntries,
     automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
     orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(

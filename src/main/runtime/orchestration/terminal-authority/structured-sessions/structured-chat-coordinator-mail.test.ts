@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { describe, expect, it, vi } from 'vitest'
 
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -33,7 +34,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
   /** The operation ids the coordinator's journal recorded for whole-mail turns. */
   async function mailSends(): Promise<string[]> {
-    const snapshot = await host.journalSnapshot(COORDINATOR)
+    const snapshot = await readTestHostJournal(host, COORDINATOR)
     return snapshot.submissions
       .filter((submission) =>
         snapshot.items.some(
@@ -61,9 +62,12 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(unread(`run:${runId}`)).toHaveLength(1)
 
     expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
-    await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
-    const revived = connectionFor(COORDINATOR)
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
+    const revived = await vi.waitFor(() => {
+      const connection = connectionFor(COORDINATOR)
+      expect(connection).not.toBe(chat)
+      expect(connection.turns).toHaveLength(1)
+      return connection
+    }, WAIT)
     expect(revived.turns[0]!.text).toContain('again')
     await settleTurn(COORDINATOR, 0)
     await edgesAnswered()
@@ -71,6 +75,30 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(await mailSends()).toHaveLength(1)
     const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
     expect(checked).toMatchObject({ runId, count: 1, messages: [{ type: 'worker_done' }] })
+  })
+})
+
+describe("another agent's message in a structured chat", () => {
+  it('is sent to the agent exactly as the chat shows it, with no check needed', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+
+    const sent = turnText(chat.turns[0]!)
+    expect(isWholeMail(sent)).toBe(true)
+    expect(sent).toContain('\nSubject: Done')
+    expect(sent).toContain('"outcome":"succeeded"')
+    expect(sent).not.toContain('orchestration check')
+    const snapshot = await readTestHostJournal(host, COORDINATOR)
+    const shown = snapshot.items.flatMap((item) =>
+      item.body?.kind === 'message' && item.body.from?.kind === 'agent'
+        ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+    expect(shown).toEqual([sent])
+    await settleTurn(COORDINATOR, 0)
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
   })
 })
 

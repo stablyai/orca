@@ -1,4 +1,4 @@
-import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
+import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/feed/sidebar-feed-domains'
 
 /** Combine main’s shared creations with window-only preflight/server work and exclude locally completed requests. */
 export function withWindowCreations(

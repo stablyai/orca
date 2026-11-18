@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { readNodeFileHandleWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
-import { isDescendantOrEqualExact } from '../ipc/filesystem/access/filesystem-path-containment'
+import { isDescendantOrEqualExact } from '../filesystem/local-file-io/filesystem-path-containment'
 import { antigravityUserHome } from './antigravity-chat-user-skills'
 
 const MAX_DIRECTORIES = 128

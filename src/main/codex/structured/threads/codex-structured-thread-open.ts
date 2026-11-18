@@ -4,13 +4,13 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   isCodexAppServerRequestError,
   type CodexAppServerRequestError
 } from '../../app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
-import type { CodexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import type { CodexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { readCodexThreadId } from '../../app-server/codex-structured-thread-facts'
 import {
   readCodexSandboxPolicy,
@@ -44,6 +44,19 @@ function isCodexNoRolloutError(
     error.method === 'thread/resume' &&
     error.code === -32600 &&
     error.message.endsWith(`no rollout found for thread id ${threadId}`)
+  )
+}
+
+/** Codex refuses to resume an archived thread until it is unarchived; it is the same conversation. */
+function isCodexArchivedThreadError(
+  error: unknown,
+  threadId: string
+): error is CodexAppServerRequestError {
+  return (
+    isCodexAppServerRequestError(error) &&
+    error.method === 'thread/resume' &&
+    error.code === -32600 &&
+    /\b(?:session|thread)\s+(\S+)\s+is archived\b/i.exec(error.message)?.[1] === threadId
   )
 }
 
@@ -97,13 +110,36 @@ export async function openCodexThread(
       threadId: resumeThreadId,
       ...threadSettings
     }
-    try {
+    const resume = (): Promise<unknown> => {
       throwIfSignalAborted(signal)
-      opened = await connection.request(
+      return connection.request(
         'thread/resume',
         { ...resumeParams, excludeTurns: true },
         { timeoutMs }
       )
+    }
+    // An archived thread was saved, so it is never replaced by a new one.
+    let archived = false
+    try {
+      opened = await resume().catch(async (error: unknown) => {
+        if (!isCodexArchivedThreadError(error, resumeThreadId)) {
+          throw error
+        }
+        archived = true
+        throwIfSignalAborted(signal)
+        await connection
+          .request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
+          .catch((unarchiveError: unknown) => {
+            // Something else already unarchived it; the retry below reopens it.
+            if (
+              !isCodexAppServerRequestError(unarchiveError) ||
+              !/\bno archived rollout found for thread id\b/i.test(unarchiveError.message)
+            ) {
+              throw Object.assign(error, { cause: unarchiveError })
+            }
+          })
+        return resume()
+      })
     } catch (error) {
       throwIfSignalAborted(signal)
       if (
@@ -124,7 +160,7 @@ export async function openCodexThread(
       if (!isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }
-      if (!launch.supersedeIfUnsaved) {
+      if (!launch.supersedeIfUnsaved || archived) {
         throw withProviderDiagnostic(
           Object.assign(
             new AgentSessionAcquisitionRefusal(error.message, 'savedConversationMissing'),

@@ -4,7 +4,7 @@ import {
   orchestrationMutationRecoveryError,
   renderCommand
 } from './orchestration-mutation-recovery'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 
 describe('orchestration mutation recovery', () => {
   it.runIf(process.platform !== 'win32')(

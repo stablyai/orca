@@ -1,11 +1,11 @@
 import { canonicalOrcaSessionFromEdges } from '../addressing/session-lineage/canonical-orca-session-id'
-import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId,
   type OrcaSessionId,
   parseOrcaSessionAddress
-} from '../../../../shared/orca-session-address'
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import {
   createCanonicalSessionPaneResolver,

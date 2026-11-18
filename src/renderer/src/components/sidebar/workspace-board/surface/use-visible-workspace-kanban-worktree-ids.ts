@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import '../../worktree-list/listing/visible-worktrees'
 import { computeVisibleWorktrees } from '../../worktree-list/listing/compute-visible-worktrees'
 import { createLiveAgentWorktreeIdsSelector } from '@/lib/workspace/activity/worktree-activity-state'
-import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AppState } from '@/store/types'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../../../shared/workspace-creator-visibility'
+} from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import { getStructuredChatWorktreeIds } from '../../worktree-list/listing/visible-worktree-activity-inputs'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]

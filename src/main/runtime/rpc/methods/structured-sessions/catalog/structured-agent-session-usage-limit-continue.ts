@@ -1,4 +1,4 @@
-import { CancelUsageLimitContinueParams } from '../../../../../../shared/rpc-contract/usage-limit-continue-params'
+import { CancelUsageLimitContinueParams } from '../../../../../../shared/rpc-contract/structured-agent-session/usage-limit-continue-params'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 

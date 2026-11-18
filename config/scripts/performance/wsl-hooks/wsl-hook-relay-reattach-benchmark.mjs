@@ -308,7 +308,7 @@ async function main() {
     ;({ registerPtyHandlers } = await jiti.import(
       '../../../../src/main/ipc/pty/register-handlers.ts'
     ))
-    ;({ killAllPty } = await jiti.import('../../../../src/main/ipc/pty/kill-all.ts'))
+    ;({ killAllPty } = await jiti.import('../../../../src/main/ipc/pty/provider/kill-all.ts'))
     const { WslHookRelayManager, wslHookRelayManager } = await jiti.import(
       '../../../../src/main/agent-hooks/wsl-relay/wsl-hook-relay-manager.ts'
     )
@@ -319,11 +319,13 @@ async function main() {
       '../../../../src/main/codex/hooks/installation/hook-service.ts'
     )
     const { MANAGED_AGENT_HOOK_TARGETS } = await jiti.import(
-      '../../../../src/shared/managed-agent-hook-targets.ts'
+      '../../../../src/shared/agent-hook-listener/configuration/managed-agent-hook-targets.ts'
     )
-    const { toWindowsWslPath } = await jiti.import('../../../../src/shared/wsl-paths.ts')
+    const { toWindowsWslPath } = await jiti.import(
+      '../../../../src/shared/file-access/wsl-paths.ts'
+    )
     const { FLOATING_TERMINAL_WORKTREE_ID } = await jiti.import(
-      '../../../../src/shared/constants.ts'
+      '../../../../src/shared/workspace/identity/floating-workspace-id.ts'
     )
 
     // Assert singleton identity so patched manager is the one ensureWslHookRelayForReattach actually closes over.

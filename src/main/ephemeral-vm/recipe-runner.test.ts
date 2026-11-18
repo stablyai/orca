@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -5,14 +6,14 @@ import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-suppo
 import { afterEach, describe, expect, it } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { getEphemeralVmRecipeResultProjectRoot } from '../../shared/ephemeral-vm-recipes'
+import { getEphemeralVmRecipeResultProjectRoot } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeResume,
   runEphemeralVmRecipeStart,
   runEphemeralVmRecipeSuspend
-} from '../../shared/ephemeral-vm-recipe-runner'
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-runner'
+import type { OrcaVmRecipe } from '../../shared/workspace-setup/orca-yaml-hook-types'
 
 const tmpRoots: string[] = []
 

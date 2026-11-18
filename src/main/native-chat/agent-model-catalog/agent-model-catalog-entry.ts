@@ -3,14 +3,14 @@ import {
   mergedAgentModelCatalogModels
 } from './agent-model-catalog-models'
 import { configuredCatalogChoice } from './agent-model-catalog-configured-row'
-import * as modelCatalogOwnership from '../../../shared/agent-session/options/agent-model-catalog-ownership'
-import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/agent-session-model-efforts'
-import type { AgentSessionUnavailable } from '../../../shared/agent-session/agent-session-availability'
+import * as modelCatalogOwnership from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
+import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/model-catalog/agent-session-model-efforts'
+import type { AgentSessionUnavailable } from '../../../shared/agent-session/failures/agent-session-availability'
 import type {
   AgentSessionFastModeSupport,
-  AgentSessionModelCatalogResult,
-  AgentSessionModelOption
+  AgentSessionModelCatalogResult
 } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 
 /** Discovery owns configured defaults/freshness; live listings supply membership and effort menus. */
 export type AgentModelCatalogSource = 'discovery' | 'live'

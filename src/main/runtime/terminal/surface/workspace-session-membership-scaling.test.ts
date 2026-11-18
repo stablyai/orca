@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { TabGroup } from '../../../../shared/tab-types'
+import type { TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { rebaseWorkspaceSessionTerminalMembership } from './workspace-session-terminal-membership-authority'
 

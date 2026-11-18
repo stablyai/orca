@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { codeHostReadExecutionScope as workItemSearchScope } from '../../../source-control/code-host-read-execution-scope'
 
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { createGhRateLimitBlockedError } from '../../../git/command-runner/hosted-cli/gh-rate-limit-breaker'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'

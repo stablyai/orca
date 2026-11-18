@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
-} from '@/hooks/requestVirtualizedScrollAnchorRecord'
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { getRenderRowSidebarKey, rowKeyMatchesRenderRow } from './render-row-lookup'
 import {
   getPreferredMountedWorktreeOptionId,

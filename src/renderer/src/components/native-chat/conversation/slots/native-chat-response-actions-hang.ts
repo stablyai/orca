@@ -15,7 +15,6 @@ import type {
 function slotOpensWithPersonBubble(slot: NativeChatTranscriptSlot): boolean {
   return (
     slot.kind === 'message' &&
-    slot.depth === 0 &&
     slot.drawsMessage &&
     slot.receipt === undefined &&
     slot.statusAbove !== true &&
@@ -75,13 +74,7 @@ export function markNativeChatResponseActionsHang(
     if (!slotDrawsAfterTranscript(slot)) {
       following = slot
     }
-    // A subagent's section keeps its controls inside its border, so they never hang there.
-    if (
-      slot.kind !== 'message' ||
-      slot.depth !== 0 ||
-      !slot.drawsMessage ||
-      slot.message.role !== 'assistant'
-    ) {
+    if (slot.kind !== 'message' || !slot.drawsMessage || slot.message.role !== 'assistant') {
       continue
     }
     if (

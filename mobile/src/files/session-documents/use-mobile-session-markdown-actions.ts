@@ -11,7 +11,7 @@ import { dropDocumentEditDraft, markdownTabDraftKey } from '../../drafts/documen
 import { triggerSuccess, triggerError } from '../../platform/haptics/haptics'
 import type { DirtyMarkdownDraft } from './session-document-state'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
-import type { MobileSessionDiffCommentsModel } from '../../source-control/review/use-mobile-session-diff-comments'
+import type { MobileSessionDiffCommentsModel } from '../../source-control/review/review-notes/use-mobile-session-diff-comments'
 
 // Depend on the action’s narrow scope so Back behavior can be tested without constructing the whole session model.
 export type MobileSessionMarkdownActionsScope = Pick<

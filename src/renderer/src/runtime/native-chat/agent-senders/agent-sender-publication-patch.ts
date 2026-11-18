@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import type {
   AgentSenderPublication,
   AgentSenderRevision
-} from '../../../../../shared/agent-sender-associations'
+} from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 
 export type AgentSenderPublications = Record<string, Record<string, AgentSenderPublication>>
 type State = Partial<Pick<AppState, 'agentSenderPublicationsByHost'>>
@@ -56,24 +56,4 @@ export function agentSenderPublicationPatch(
     return set({ ...Object.fromEntries(newer), '*': publication })
   }
   return newerOrEqual(scopes?.[scope]?.revision) ? {} : set({ ...scopes, [scope]: publication })
-}
-
-/** What a host publishes now: its whole-host baseline, with each newer scope in its worktree. */
-export function effectivePublications(
-  scopes: Record<string, AgentSenderPublication>
-): AgentSenderPublication[] {
-  const whole = scopes['*']
-  const parts = Object.entries(scopes).flatMap(([id, value]) => (id === '*' ? [] : [value]))
-  if (!whole || parts.length === 0) {
-    return whole ? [whole] : parts
-  }
-  const overridden = new Set(Object.keys(scopes))
-  return [
-    {
-      ...whole,
-      associations: whole.associations.filter((row) => !overridden.has(row.worktreeId)),
-      attachments: whole.attachments.filter((row) => !overridden.has(row.worktreeId))
-    },
-    ...parts
-  ]
 }

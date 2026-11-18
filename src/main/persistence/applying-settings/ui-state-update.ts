@@ -1,34 +1,32 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import {
-  getDefaultUIState,
-  normalizeAgentActivityDisplayMode,
-  normalizeWorktreeCardProperties
-} from '../../../shared/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { getDefaultUIState } from '../../../shared/orca-profiles/constants'
+import { normalizeAgentActivityDisplayMode } from '../../../shared/agent-status/presentation/agent-activity-display-mode'
+import { normalizeWorktreeCardProperties } from '../../../shared/worktree/row-display/card-properties'
 import {
   normalizeWorkspaceStatuses,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity
-} from '../../../shared/workspace-statuses'
-import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
-import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
-import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar-usage-format'
-import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
-import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
+} from '../../../shared/workspace/status/workspace-statuses'
+import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/display/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
+import { clampMarkdownTocPanelWidth } from '../../../shared/editor/markdown/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../shared/source-control/diff/combined-diff-file-tree-width'
 import {
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { workspaceHostScopeForVisibleHosts } from '../../../shared/workspace-view/workspace-host-visibility'
-import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
-import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom'
-import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
-import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
-import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
+import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
+import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
+import { normalizeFeatureTipIds } from '../../../shared/feature-education/feature-tips'
+import { normalizeContextualTourIds } from '../../../shared/feature-education/contextual-tours/contextual-tours'
+import { normalizeFeatureInteractions } from '../../../shared/feature-education/interactions/feature-interactions'
 import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
-import { persistedUIValuesEqual } from '../../../shared/persisted-ui-equality'
+import { persistedUIValuesEqual } from '../../../shared/collections/persisted-ui-equality'
 import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
@@ -36,6 +34,7 @@ import {
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
+  normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -203,6 +202,10 @@ export function updatePersistedUI(
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)
         : normalizeShowDotfilesByWorktree(operations.state.ui?.showDotfilesByWorktree),
+    notificationsMutedByWorktree:
+      sanitizedUpdates.notificationsMutedByWorktree !== undefined
+        ? normalizeNotificationsMutedByWorktree(sanitizedUpdates.notificationsMutedByWorktree)
+        : normalizeNotificationsMutedByWorktree(operations.state.ui?.notificationsMutedByWorktree),
     // Union dismissals so stale clients cannot revive one-time tips.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined
