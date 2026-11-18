@@ -18,6 +18,10 @@
       "title": "アカウント",
       "useReset": "リセット枠を使用",
       "weeklyWindow": "7日"
+    },
+    "claude": {
+      "usageSignInLabel": "もう一度サインイン",
+      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。"
     }
   },
   "agentHistory": {
@@ -4280,6 +4284,142 @@
       },
       "taskPageJiraLoadState": {
         "jqlFailed": "Jira がこの JQL クエリを実行できませんでした。構文を確認して再試行してください。"
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "{{server}} から使用状況なし",
+            "remoteOwnerNotConfigured": "{{server}} では未構成",
+            "claudeUnknownOnHost": "{{server}} から Claude の使用状況を取得できません。そこでサインインしていないか、API キー課金を使用している可能性があります。",
+            "remoteOwnerSignInSavedHere": "サインイン情報はこのコンピュータにのみ保存されています。",
+            "f8b8dbed85": "使用量を取得できません",
+            "e2c6a4f917": "Grok を実行して更新",
+            "f90b3d7a16": "Kimi を実行して更新",
+            "0d8d7cfe15": "Claude セッションを待機中",
+            "claude": {
+              "waiting": {
+                "label": "Claude の実行時に更新",
+                "message": "Claude の使用状況は、次に Claude を実行したときに更新されます。"
+              }
+            },
+            "1804cd8c3f": "サインインを更新中",
+            "bf2e739f18": "サインインを利用できません",
+            "f8f0f9d8cc": "ネットワークの問題",
+            "minimax": {
+              "expired": {
+                "label": "サインインの有効期限が切れました",
+                "apiKey": "MiniMax API キーの有効期限が切れました。設定で置き換えてください。",
+                "cookie": "MiniMax セッション Cookie の有効期限が切れました。設定で置き換えてください。"
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "サインインの有効期限切れ",
+                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況を再試行してください。"
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "サブスクリプションなし"
+              }
+            },
+            "7ad719c4bf": "制限中",
+            "e740f92596": "更新に失敗しました",
+            "2c35eca8d4": "使用状況を取得できません",
+            "d1b7f509ac": "Orca を実行しているコンピュータのターミナルで grok を実行し、起動するまで待ってください。サインインを求められた場合は完了してから、使用状況を再取得してください。チャットメッセージを送る必要はありません。",
+            "a37e8c15d4": "Orca を実行しているコンピュータのターミナルで kimi を実行し、起動するまで待ってから、使用状況を再取得してください。",
+            "3d3c9c0c1f": "ライブ Claude ターミナルが認証情報をローテーションした後、Claude 使用量が更新されます。",
+            "42fdd4da1d": "Claude サインインを更新中です。Agent セッションはまだサインイン済みの場合があります。",
+            "c06c1d215d": "ネットワークリクエストに失敗したため、Claude 使用量を更新できませんでした。",
+            "cabdc2a9e0": "Claude サインイン認証情報を読み取れませんでした。",
+            "a7517cccb6": "Claude 使用量は現在利用できません。",
+            "8418ec448d": "{{value0}} の使用状況を更新できませんでした。Agent セッションは引き続きサインイン済みの場合があります。"
+          }
+        }
+      }
+    },
+    "lib": {
+      "rateLimits": {
+        "errors": {
+          "sessionCookieNotConfigured": "セッション Cookie が設定されていません",
+          "opencodeNoAuthCookie": "認証 Cookie が見つかりません — opencode.ai の DevTools から Cookie ヘッダー全体を貼り付けてください",
+          "opencodeNoWorkspaceId": "ワークスペース ID が見つかりません — 設定でワークスペース ID の上書きを設定してください",
+          "opencodeNoWorkspaceIdShort": "ワークスペース ID が見つかりません",
+          "workspacesFetchFailed": "ワークスペースの取得に失敗しました（{{status}}）",
+          "usagePageFetchFailed": "使用量ページの取得に失敗しました（{{status}}）",
+          "couldNotParseUsagePage": "ページから使用量データを解析できませんでした",
+          "couldNotParseUsageAnyWorkspace": "利用可能ないずれのワークスペースからも使用量データを解析できませんでした",
+          "minimaxCookieNotConfigured": "MiniMax のセッション Cookie が設定されていません",
+          "minimaxSessionExpired": "MiniMax のセッションの有効期限が切れました。設定で MiniMax の Cookie を置き換えてください。",
+          "minimaxAuthCookieMissing": "MiniMax の認証 Cookie が見つかりません — _token を含む Cookie ヘッダーを貼り付けてください",
+          "minimaxModelUsageMissing": "設定されたモデルの MiniMax 使用量データが見つかりませんでした",
+          "minimaxCookieDecryptFailed": "MiniMax のセッション Cookie を復号できませんでした",
+          "kimiNotSignedIn": "Kimi Code にサインインしていません",
+          "kimiCredentialsInvalid": "Kimi の認証情報ファイルが無効です",
+          "kimiCredentialsMissingToken": "Kimi の認証情報ファイルにアクセストークンがありません",
+          "kimiQuotaWindowsMissing": "Kimi の使用量レスポンスにクォータの期間が含まれていませんでした",
+          "wslKimiHomeUnavailable": "{{distro}} の WSL Kimi ホームディレクトリを利用できません",
+          "kimiSessionExpired": "Kimi のセッションの有効期限が切れました — kimi を実行してから（{{where}}）、使用量の取得を再試行してください。",
+          "kimiUsageUnauthorizedHttp": "Kimi の使用量リクエストが認証されていません（HTTP {{status}}）",
+          "kimiUsageFailedHttp": "Kimi の使用量リクエストに失敗しました（HTTP {{status}}）",
+          "grokNotSignedIn": "Grok にサインインしていません — grok login を実行してください",
+          "grokAuthInvalid": "Grok の認証ファイルが無効です",
+          "grokAuthUnreadable": "Grok の認証ファイルを読み取れません",
+          "grokSignInExpired": "Grok のサインインの有効期限が切れました — Orca を実行しているコンピュータで grok を実行し、求められたらサインインしてください。チャットメッセージを送る必要はありません。",
+          "grokBillingConfigMissing": "Grok の課金レスポンスに設定が含まれていませんでした",
+          "grokBillingUsageMissing": "Grok の課金レスポンスにクレジット使用量が含まれていませんでした",
+          "grokUsageUnauthorizedHttp": "Grok の使用量リクエストが認証されていません（HTTP {{status}}）",
+          "grokUsageFailedHttp": "Grok の使用量リクエストに失敗しました（HTTP {{status}}）",
+          "geminiOauthDisabled": "Gemini CLI の OAuth は設定で無効になっています",
+          "geminiCredentialsNotFound": "Gemini CLI の認証情報が見つかりません",
+          "geminiProjectIdNotFound": "Gemini のプロジェクト ID が見つかりません",
+          "tokenRefreshFailed": "トークンの更新に失敗しました",
+          "codexNotSignedIn": "Codex にサインインしていません",
+          "codexHomeUnavailable": "Codex のホームディレクトリを利用できません",
+          "wslCodexHomeUnavailable": "{{distro}} の WSL Codex ホームディレクトリを利用できません",
+          "codexRebuildingIndex": "Codex がセッションインデックスを再構築中のため、復旧が完了すると使用量が更新されます",
+          "chatgptAuthRequired": "レート制限を読み取るには ChatGPT の認証が必要です",
+          "claudeRateLimited": "現在、Claude の使用量の取得がレート制限されています。",
+          "claudeUsageUnavailable": "現在、Claude の使用量を取得できません。",
+          "claudeOauthTokenUnavailable": "Claude の OAuth アクセストークンを利用できません",
+          "claudeKeychainUnavailable": "Claude のキーチェーン認証情報を利用できません",
+          "claudePlanUsageUnavailable": "この Claude CLI セッションでは Claude プランの使用量を利用できません。",
+          "waitingForClaudeSession": "Claude セッションを待機中",
+          "wslClaudeConfigUnavailable": "{{distro}} の WSL Claude 設定を利用できません",
+          "noCredentials": "認証情報がありません",
+          "fetchAborted": "レート制限の取得が中断されました",
+          "failedToLoadUsage": "使用量データの読み込みに失敗しました",
+          "ptyUsageTimeout": "PTY がタイムアウトしました — /usage パネルが表示されませんでした",
+          "cliExitedBeforeUsage": "/usage が表示される前に CLI が終了しました",
+          "cliExitedBeforeStatus": "ステータスを取得する前に CLI が終了しました",
+          "quotaFetchFailed": "クォータの取得に失敗しました（{{status}}）",
+          "geminiProjectIdLoadFailed": "Gemini のプロジェクト ID を読み込めませんでした（HTTP {{status}}）",
+          "geminiProjectIdMissingInResponse": "API レスポンスに Gemini のプロジェクト ID が見つかりません",
+          "minimaxUsageFetchFailed": "MiniMax の使用量の取得に失敗しました（{{status}}）",
+          "minimaxReturnedError": "MiniMax がエラーを返しました",
+          "minimaxInvalidUsageResponse": "MiniMax の使用量レスポンスが無効です",
+          "minimaxUnknownUsageError": "MiniMax の使用量の取得で不明なエラーが発生しました",
+          "kimiCredentialsUnreadable": "Kimi の認証情報を読み取れません",
+          "kimiUsageRequestFailed": "Kimi の使用量リクエストに失敗しました",
+          "grokUsageRequestFailed": "Grok の使用量リクエストに失敗しました",
+          "rpcTimeout": "RPC がタイムアウトしました",
+          "rpcFailed": "RPC に失敗しました",
+          "signInWithChatgpt": "ChatGPT でサインイン",
+          "codexCliNotFound": "Codex CLI が見つかりません",
+          "codexCliCannotRun": "Codex CLI は見つかりましたが実行できませんでした — Node.js が PATH に含まれていない可能性があります",
+          "rpcProcessExited": "RPC プロセスが予期せず終了しました",
+          "ptyTimeout": "PTY がタイムアウトしました",
+          "failedToParseCliOutput": "CLI 出力の解析に失敗しました",
+          "codexSignInCheckTimeout": "Codex のサインイン状態の確認中にタイムアウトしました",
+          "codexSignInStatusUnavailable": "Codex のサインイン状態を取得できません",
+          "codexResetFailedHttp": "Codex のリセットに失敗しました: HTTP {{status}}",
+          "codexResetUnknownOutcome": "Codex のリセット結果が不明です",
+          "codexResetIdempotencyRequired": "Codex のリセットには冪等性キーが必要です",
+          "noSubscriptionApiKeyBilling": "サブスクリプションプランなし — APIキーによる課金",
+          "claudeWaitingCredentialRotate": "Claude の使用量の更新は、実行中の Claude ターミナルが認証情報をローテーションするのを待っています。",
+          "unknown": "不明なエラー",
+          "opencodeInvalidWorkspaceId": "ワークスペース ID の形式が無効です"
+        }
       }
     }
   }

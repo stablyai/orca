@@ -38,7 +38,7 @@ describe('requestRelayAssignment origin alternates', () => {
     expect(director.requests).toHaveLength(1)
     expect(director.requests[0].url).toBe(`${DIRECTOR_URL}/v1/assign`)
     expect(director.requests[0].headers.get('x-orca-host-capabilities')).toBe(
-      'origin-alternates-v1'
+      'origin-alternates-v1, front-door-auth-v1'
     )
   })
 
@@ -107,5 +107,41 @@ describe('requestRelayAssignment origin alternates', () => {
         ).fetch
       )
     ).rejects.toThrow(RelayHttpError)
+  })
+})
+
+describe('requestRelayAssignment authOrigin', () => {
+  const DOOR = 'https://front-door.example.test'
+
+  it('returns the same assignment as before when the field is absent', async () => {
+    const assignment = await assign(fakeDirector(assignmentAnswer()).fetch)
+    expect('authOrigin' in assignment).toBe(false)
+  })
+
+  it('keeps an authOrigin equal to cellUrl or one of the alternates', async () => {
+    const onDoor = await assign(
+      fakeDirector({ ...assignmentAnswer({ authOrigin: DOOR }), cellUrl: DOOR }).fetch
+    )
+    expect(onDoor).toMatchObject({ cellUrl: DOOR, authOrigin: DOOR })
+    const viaAlternate = await assign(
+      fakeDirector(assignmentAnswer({ alternateCellUrls: [DOOR], authOrigin: DOOR })).fetch
+    )
+    expect(viaAlternate).toMatchObject({ cellUrl: CELL_URL, authOrigin: DOOR })
+  })
+
+  it('ignores an invalid authOrigin or one this assignment does not connect to', async () => {
+    for (const authOrigin of [
+      'https://elsewhere.example.test',
+      'http://front-door.example.test',
+      `${CELL_URL}/`,
+      `${CELL_URL}/v1`,
+      42,
+      null,
+      [CELL_URL]
+    ]) {
+      const assignment = await assign(fakeDirector(assignmentAnswer({ authOrigin })).fetch)
+      expect(assignment.cellUrl).toBe(CELL_URL)
+      expect('authOrigin' in assignment).toBe(false)
+    }
   })
 })

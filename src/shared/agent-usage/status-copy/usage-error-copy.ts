@@ -1,11 +1,20 @@
-import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { translate } from '@/i18n/i18n'
-import type { Translate } from '@/i18n/use-translate'
-import { formatRateLimitUserFacingError } from '@/components/status-bar/usage/errors/rate-limit-user-facing-error'
-import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
+import type { ProviderRateLimits, UsageRateLimitMetadata } from '../rate-limits/rate-limit-types'
+import { getProviderDisplayName } from '../display/usage-provider-windows'
 import { describeOwnerNotSetUp, getOwnerNotSetUpLabel } from './owner-not-set-up-copy'
+import { formatRateLimitUserFacingError } from './rate-limit-user-facing-error'
+import type { UsageCopyTranslate } from './usage-copy-translate'
 
-function isUsageRateLimitError(p: ProviderRateLimits): boolean {
+/** The fields the copy reads; strings stay open so a phone can pass a newer host's kind, which gets the generic copy. */
+export type UsageStatusCopySource = {
+  provider: string
+  error: string | null
+  usageMetadata?: Pick<UsageRateLimitMetadata, 'ownerNotSetUp' | 'unverifiableOwner'> & {
+    failureKind?: string
+    credentialSource?: string
+  }
+}
+
+function isUsageRateLimitError(p: UsageStatusCopySource): boolean {
   const failureKind = p.usageMetadata?.failureKind
   // Structured failure kinds outrank wording that may only name the unread rate limits.
   if (failureKind && failureKind !== 'unknown') {
@@ -44,7 +53,7 @@ function isUsageAuthError(message: string | null): boolean {
 }
 
 function getDelegatedCliRefreshProvider(
-  p: ProviderRateLimits
+  p: UsageStatusCopySource
 ): Extract<ProviderRateLimits['provider'], 'grok' | 'kimi'> | null {
   if (p.usageMetadata?.failureKind !== 'delegated-refresh-required') {
     return null
@@ -54,13 +63,13 @@ function getDelegatedCliRefreshProvider(
 }
 
 /** An idle login's access token lapsed, not the login: Claude refreshes it the next time it runs. */
-export function isClaudeUsageWaitingForClaude(p: ProviderRateLimits): boolean {
+export function isClaudeUsageWaitingForClaude(p: UsageStatusCopySource): boolean {
   return p.provider === 'claude' && p.usageMetadata?.failureKind === 'stale-token'
 }
 
 export function getProviderUsageStatusLabel(
-  p: ProviderRateLimits,
-  t: Translate = translate
+  p: UsageStatusCopySource,
+  t: UsageCopyTranslate
 ): string {
   if (p.usageMetadata?.ownerNotSetUp) {
     return getOwnerNotSetUpLabel(p.usageMetadata.ownerNotSetUp, t)
@@ -131,8 +140,8 @@ export function getProviderUsageStatusLabel(
 }
 
 export function getProviderUsageErrorMessage(
-  p: ProviderRateLimits,
-  t: Translate = translate
+  p: UsageStatusCopySource,
+  t: UsageCopyTranslate
 ): string {
   const fallback = t('auto.components.status.bar.tooltip.2c35eca8d4', 'Unable to fetch usage')
   if (!p.error) {
@@ -184,7 +193,7 @@ export function getProviderUsageErrorMessage(
           'Claude sign-in is being refreshed. Agent sessions may still be signed in.'
         )
       case 'missing-scope':
-        return formatRateLimitUserFacingError(p.error) || p.error
+        return formatRateLimitUserFacingError(p.error, t) || p.error
       case 'network':
         return t(
           'auto.components.status.bar.tooltip.c06c1d215d',
@@ -216,7 +225,7 @@ export function getProviderUsageErrorMessage(
     }
   }
   if (isUsageRateLimitError(p)) {
-    return formatRateLimitUserFacingError(p.error) || p.error
+    return formatRateLimitUserFacingError(p.error, t) || p.error
   }
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
     return p.usageMetadata.credentialSource === 'api-key'
@@ -241,5 +250,5 @@ export function getProviderUsageErrorMessage(
       { value0: name }
     )
   }
-  return formatRateLimitUserFacingError(p.error) || p.error
+  return formatRateLimitUserFacingError(p.error, t) || p.error
 }
