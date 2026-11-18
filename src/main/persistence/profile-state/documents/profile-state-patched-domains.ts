@@ -18,9 +18,7 @@ type CommittedDomain = { contentHash: string; value: unknown }
 
 // The writer's own parsed copy of each patched domain as last committed, so the next patch skips
 // reading, verifying and parsing the stored parts. Checked against the stored hash before use.
-const committedDomains = new WeakMap<Database.Database, Map<string, CommittedDomain>>()
-// The same maps, so a complete write can release every cached copy.
-const committedMaps = new Set<Map<string, CommittedDomain>>()
+let committedDomains = new WeakMap<Database.Database, Map<string, CommittedDomain>>()
 
 function takeCommittedValue(db: Database.Database, domain: string, contentHash: string): unknown {
   const committed = committedDomains.get(db)?.get(domain)
@@ -38,7 +36,6 @@ export function rememberPatchedProfileStateDomains(
   if (!domains) {
     domains = new Map()
     committedDomains.set(db, domains)
-    committedMaps.add(domains)
   }
   for (const { domain, payloadHash, splitDomainValue } of mutations) {
     if (payloadHash !== null && splitDomainValue !== undefined) {
@@ -92,7 +89,5 @@ export const profileStateWriterPatching: ProfileStateDomainPatching = {
 
 /** After a complete write: main saves the session whole next, so the old copies only hold memory. */
 export function forgetCommittedProfileStateDomains(): void {
-  for (const domains of committedMaps) {
-    domains.clear()
-  }
+  committedDomains = new WeakMap()
 }
