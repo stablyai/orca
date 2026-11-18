@@ -36,7 +36,7 @@ export type SessionShellReadyBarrierDeps = {
 /** A wrapper-run startup command, typed after timeout only if the wrapper has not claimed it. */
 export type StartupCommandFallback = {
   claim(): Promise<boolean>
-  build(): string
+  build(): Promise<string>
   /** Drops the launch builder so a settled fallback no longer pins the create request. */
   release(): void
 }
@@ -213,12 +213,17 @@ export class SessionShellReadyBarrier {
   private runStartupCommandFallback(): void {
     const fallback = this.startupCommandFallback
     this.startupCommandFallback = null
-    void fallback?.claim().then((won) => {
-      if (won && !this.writesClosed) {
-        this.deps.subprocess.write(fallback.build())
-      }
-      fallback.release()
-    })
+    void fallback
+      ?.claim()
+      .then(async (won) => {
+        if (won && !this.writesClosed) {
+          const line = await fallback.build()
+          if (!this.writesClosed) {
+            this.deps.subprocess.write(line)
+          }
+        }
+      })
+      .finally(() => fallback.release())
   }
 
   private flushPreReadyQueue(): void {

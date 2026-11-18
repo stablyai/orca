@@ -231,10 +231,11 @@ export async function spawnAndPublishSession(
     sessionId: opts.sessionId,
     reportReadinessEvent: deps.reportReadinessEvent
   }
-  const buildSubmission = (command: string): string => buildStartupSubmission(command, submission)
+  const buildSubmission = (command: string): Promise<string> =>
+    buildStartupSubmission(command, submission)
   const command = opts.command
   if (command && startupCommandWritten) {
-    session.writeStartupCommand(buildSubmission(command))
+    session.writeStartupCommand(await buildSubmission(command))
   }
 
   return {

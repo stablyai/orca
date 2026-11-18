@@ -1,6 +1,7 @@
 import type { Session } from '../sessions/session'
 import {
-  stageStartupCommand,
+  discardStagedStartupCommandAsync,
+  stageStartupCommandAsync,
   startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../../shared/shell/launch/startup-command-staging'
@@ -18,12 +19,19 @@ export type StartupSubmissionInputs = {
   reportReadinessEvent: TerminalHostSessionCreateDependencies['reportReadinessEvent']
 }
 
-export function buildStartupSubmission(command: string, inputs: StartupSubmissionInputs): string {
-  const staged = stageStartupCommand({
+export async function buildStartupSubmission(
+  command: string,
+  inputs: StartupSubmissionInputs
+): Promise<string> {
+  const staged = await stageStartupCommandAsync({
     command,
     shellPath: inputs.shellPath,
     orcaBuiltLine: inputs.orcaBuiltLine
   })
+  if (!inputs.session.isAlive) {
+    // The exit handler already ran, so it can't remove a script staged after it.
+    void discardStagedStartupCommandAsync(staged)
+  }
   inputs.staging.current = staged
   const notice = startupStagingFailureNotice(staged)
   if (notice) {

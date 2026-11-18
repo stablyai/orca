@@ -449,9 +449,8 @@
 1 src/main/daemon/server/daemon-session-background-routing.ts
 1 src/main/daemon/server/daemon-terminal-admission.ts
 7 src/main/daemon/shell-readiness/shell-ready.ts
-1 src/main/daemon/terminal-host/terminal-host-session-create.ts
 1 src/main/daemon/terminal-host/terminal-host-session-process.ts
-2 src/main/daemon/terminal-host/terminal-host-session-publish.ts
+1 src/main/daemon/terminal-host/terminal-host-session-publish.ts
 1 src/main/daemon/transport/client/daemon-client-socket-connect.ts
 3 src/main/daemon/transport/client/daemon-client.ts
 1 src/main/daemon/transport/stream/daemon-stream-data-batcher.ts
@@ -1622,4 +1621,3 @@
 2 src/shared/shell/command-resolution/cli-fs-reads.ts
 16 src/shared/shell/command-resolution/node-cli-command-resolution.ts
 1 src/shared/shell/command-resolution/nvm-version-directories.ts
-1 src/shared/shell/launch/startup-command-staging.ts

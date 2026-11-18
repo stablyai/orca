@@ -73,12 +73,12 @@ export async function takeShellWrapperStartupClaim(claimPath: string): Promise<b
 // Built outside the create scope so releasing the builder frees the request it captured.
 export function createStartupCommandFallback(
   claimPath: string,
-  typeLaunch: () => string
+  typeLaunch: () => Promise<string>
 ): StartupCommandFallback {
-  let pendingLaunch: (() => string) | null = typeLaunch
+  let pendingLaunch: (() => Promise<string>) | null = typeLaunch
   return {
     claim: () => takeShellWrapperStartupClaim(claimPath),
-    build: () => pendingLaunch?.() ?? '',
+    build: async () => (await pendingLaunch?.()) ?? '',
     release: () => {
       pendingLaunch = null
     }
