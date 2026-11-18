@@ -14,7 +14,7 @@ import { getSourceControlDirectoryActionPaths } from './directory-action-paths'
 import { SourceControlTreeDirectoryRow } from './tree-directory-rows'
 import { SubmodulePlaceholderRow } from './submodule-placeholder-row'
 import { UncommittedEntryRow } from './uncommitted-entry-row'
-import { VirtualizedList } from '../../../virtualized-list'
+import { VirtualizedList } from '../../../ui/virtualized-list'
 
 export function SourceControlSectionFileList({
   sourceControlViewMode,

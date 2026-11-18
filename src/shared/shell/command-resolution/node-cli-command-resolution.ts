@@ -111,6 +111,8 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
   if (platform === 'win32') {
     // Native Windows Claude installs here; GUI launches may lack the user PATH entry.
     directories.push(join(homePath, '.local', 'bin'))
+    // Codex's official Windows installer; also absent from a GUI launch's PATH until restart.
+    directories.push(join(homePath, 'AppData', 'Local', 'Programs', 'OpenAI', 'Codex', 'bin'))
     directories.push(join(homePath, 'AppData', 'Roaming', 'npm'))
     directories.push(join(homePath, 'AppData', 'Local', 'pnpm'))
     directories.push(join(homePath, 'AppData', 'Local', 'Yarn', 'bin'))

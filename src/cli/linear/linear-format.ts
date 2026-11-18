@@ -81,7 +81,8 @@ export function formatLinearSearch(result: LinearSearchResult): string {
   return appendLinearListTruncation(
     result.issues.map(formatSearchRow).join('\n'),
     result.issues.length,
-    result.truncated ?? result.meta.limitReached
+    result.truncated ?? result.meta.limitReached,
+    result.meta.total
   )
 }
 
@@ -238,7 +239,8 @@ export function printLinearIssueWarnings(result: LinearIssueContextResult): void
 
 export function printLinearSearchWarnings(result: LinearSearchResult): void {
   if (result.meta.limitReached) {
-    console.error(`warning: showing first ${result.meta.returned} Linear issues`)
+    const total = result.meta.total === undefined ? '' : ` of ${result.meta.total}`
+    console.error(`warning: showing first ${result.meta.returned}${total} Linear issues`)
   }
   for (const error of result.meta.workspaceErrors ?? []) {
     console.error(

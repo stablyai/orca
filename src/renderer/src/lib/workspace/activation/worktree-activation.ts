@@ -7,7 +7,7 @@ import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/ident
 import { registerWorktreeActivation } from '@/lib/workspace/activation/worktree-activation-nav-registration'
 import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
-import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
+import { shouldAutoCreateInitialTerminal } from '@/lib/workspace/activation/initial-surface/initial-terminal'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey

@@ -42,10 +42,8 @@ import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat
 import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
 import type { PendingNativeChatImage } from './composer/attachments/mobile-native-chat-image-attachment'
 import type { MobilePastedImages } from './composer/attachments/mobile-native-chat-composer-paste'
-import {
-  MobileNativeChatDraftComposer,
-  type MobileNativeChatSendProps
-} from './composer/MobileNativeChatComposer'
+import type { MobileNativeChatSendProps } from './composer/MobileNativeChatComposer'
+import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import type { MobileNativeChatStructuredComposer } from './composer/commands/mobile-native-chat-structured-composer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
 import type { MobileNativeChatMicProps } from './composer/dictation/MobileNativeChatComposerMic'
@@ -325,8 +323,10 @@ export function MobileNativeChatView({
     offlineQueue.lockReason,
     turnIndicator?.afterStop
   )
+  // A collapsed structured question still holds the input: the agent waits on that answer alone.
+  const promptHeld = promptShown || collapsedPrompt?.holdsInput === true
   const promptOwnsInput = useMobileNativeChatPromptInputOwner(
-    { promptShown, ask, askRequiresTerminal, permission, micActive, micProcessing },
+    { promptShown: promptHeld, ask, askRequiresTerminal, permission, micActive, micProcessing },
     inputRef
   )
   const emptyStateView = emptyState ? <MobileNativeChatEmptyStateView copy={emptyState} /> : null

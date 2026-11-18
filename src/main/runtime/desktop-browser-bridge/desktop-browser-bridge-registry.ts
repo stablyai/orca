@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../browser/browser-error'
 import {
+  DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE,
   type DesktopBrowserBridgeEvent,
@@ -19,7 +20,7 @@ type Attachment = {
   pairedDeviceId: string
   acceptsCancel?: boolean
   enforcesExpectUrl?: boolean
-  readsTabAnnotations?: boolean
+  capabilities?: readonly string[]
   emit: (event: DesktopBrowserBridgeEvent) => void
 }
 
@@ -58,8 +59,9 @@ export class DesktopBrowserBridgeRegistry {
     return this.attachments.at(-1)?.enforcesExpectUrl === true
   }
 
-  newestAttachmentReadsTabAnnotations(): boolean {
-    return this.attachments.at(-1)?.readsTabAnnotations === true
+  newestAttachmentServes(method: string): boolean {
+    const required = DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES.get(method)
+    return !required || (this.attachments.at(-1)?.capabilities?.includes(required) ?? false)
   }
 
   forward(

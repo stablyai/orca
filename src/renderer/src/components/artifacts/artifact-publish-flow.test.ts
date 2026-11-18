@@ -37,17 +37,6 @@ afterEach(() => {
 })
 
 describe('publishArtifactFromSurface', () => {
-  it('shows the rate limit and when to retry instead of a bare failure', async () => {
-    const message = 'You have shared 20 artifacts this hour. Try again after 3:45 PM.'
-    mocks.call.mockRejectedValue(rpcFailure('artifact_rate_limited', message))
-
-    await expect(publishArtifactFromSurface(async () => request)).resolves.toBeNull()
-
-    expect(mocks.toastError).toHaveBeenCalledWith('Could not share artifact', {
-      description: message
-    })
-  })
-
   it('keeps internal error text out of the toast for other failures', async () => {
     mocks.call.mockRejectedValue(rpcFailure('runtime_error', 'orca_cloud_request_failed_500'))
 

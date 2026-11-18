@@ -94,7 +94,8 @@ export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntime
       resolveExecutionHostKey: (id) => this.resolveBrowserExecutionHostKeyForWorkspace(id),
       notifyWorkspace: (id) => this.notifyMobileSessionTabsChanged(id),
       resolveWorkspace: (selector) =>
-        resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector)
+        resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector),
+      resolveWorkspacePath: async (id) => (await this.resolveBrowserWorkspace(`id:${id}`)).path
     })
   }
 

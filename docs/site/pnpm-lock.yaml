@@ -184,6 +184,8 @@ patchedDependencies:
   braces@3.0.3: c07bb14cec04bc891e1fe529720444cc9729a25117f9aaf24253cfe3132a34fd
   glob@13.0.6: 163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223
   minimatch@10.2.6: 4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6
+  picomatch@2.3.2: 1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254
+  picomatch@4.0.5: 7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c
   zod@3.25.76: 8f57d8e7910df51ec3c40c412b4f8fb3d01fd65e1889c057aae0e4a15483bcec
 
 importers:
@@ -4974,7 +4976,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
       estree-walker: 2.0.2
-      picomatch: 4.0.5
+      picomatch: 4.0.5(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
 
   '@shikijs/core@4.3.1':
     dependencies:
@@ -5396,7 +5398,7 @@ snapshots:
       glob: 13.0.6(patch_hash=163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223)
       graceful-fs: 4.2.11
       node-gyp-build: 4.8.4
-      picomatch: 4.0.5
+      picomatch: 4.0.5(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       resolve-from: 5.0.0
     transitivePeerDependencies:
       - encoding
@@ -5918,9 +5920,9 @@ snapshots:
     dependencies:
       pend: 1.2.0
 
-  fdir@6.5.0(picomatch@4.0.5):
+  fdir@6.5.0(picomatch@4.0.5(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)):
     optionalDependencies:
-      picomatch: 4.0.5
+      picomatch: 4.0.5(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
 
   file-uri-to-path@1.0.0: {}
 
@@ -5998,7 +6000,7 @@ snapshots:
       mdast-util-mdx: 3.0.0
       mdast-util-to-markdown: 2.1.2
       picocolors: 1.1.1
-      picomatch: 4.0.5
+      picomatch: 4.0.5(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       unified: 11.0.5
@@ -6793,7 +6795,7 @@ snapshots:
   micromatch@4.0.8:
     dependencies:
       braces: 3.0.3(patch_hash=c07bb14cec04bc891e1fe529720444cc9729a25117f9aaf24253cfe3132a34fd)
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254)
 
   mime-db@1.52.0: {}
 
@@ -7038,9 +7040,9 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@2.3.2: {}
+  picomatch@2.3.2(patch_hash=1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254): {}
 
-  picomatch@4.0.5: {}
+  picomatch@4.0.5(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c): {}
 
   postcss@8.5.23:
     dependencies:
@@ -7424,8 +7426,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.5)
-      picomatch: 4.0.5
+      fdir: 6.5.0(picomatch@4.0.5(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c))
+      picomatch: 4.0.5(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
 
   to-regex-range@5.0.1:
     dependencies:

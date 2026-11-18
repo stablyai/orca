@@ -1,4 +1,4 @@
-import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '../ui/ShortcutKeyCombo'
 import { WorktreeJumpPaletteTaskSearchStatus } from './tasks/worktree-jump-palette-task-search-status'
 import type React from 'react'
 import { CommandDialog, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command'

@@ -47,7 +47,12 @@ export function applyOpenCodeStatusPluginEnv(
   config: OpenCodeSourceConfig,
   options: Pick<
     BuildPtyHostEnvOptions,
-    'launchAgent' | 'agentStatusHooksEnabled' | 'disabledTuiAgents' | 'isWsl' | 'shellPath'
+    | 'launchAgent'
+    | 'agentStatusHooksEnabled'
+    | 'disabledTuiAgents'
+    | 'isWsl'
+    | 'shellPath'
+    | 'agentsOnPath'
   >,
   command: string | undefined
 ): 'opencode' | 'opencode2' | null {
@@ -55,7 +60,8 @@ export function applyOpenCodeStatusPluginEnv(
     options.launchAgent,
     command,
     (candidate) =>
-      options.agentStatusHooksEnabled && isTuiAgentEnabled(candidate, options.disabledTuiAgents)
+      options.agentStatusHooksEnabled && isTuiAgentEnabled(candidate, options.disabledTuiAgents),
+    (candidate) => options.agentsOnPath?.has(candidate) === true
   )
   restoreOrStripOverlayEnv(
     env,
