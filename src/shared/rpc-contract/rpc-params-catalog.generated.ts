@@ -750,7 +750,9 @@ import {
 } from './terminal/terminal-viewport-schemas-params'
 import { UpdaterCheckParams } from './updater/updater-params'
 import {
+  WorkspaceCleanupCodexHistoryDiskUsageParams,
   WorkspaceCleanupPreviewParams,
+  WorkspaceCleanupReleaseCodexHistoryDiskUsageParams,
   WorkspaceCleanupReportUnsavedEditorsParams,
   WorkspaceCleanupRunNowParams
 } from './workspace-cleanup/workspace-cleanup-runner-params'
@@ -1687,8 +1689,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
-  'workspaceCleanup.codexHistoryDiskUsage': null,
+  'workspaceCleanup.codexHistoryDiskUsage': WorkspaceCleanupCodexHistoryDiskUsageParams,
   'workspaceCleanup.preview': WorkspaceCleanupPreviewParams,
+  'workspaceCleanup.releaseCodexHistoryDiskUsage':
+    WorkspaceCleanupReleaseCodexHistoryDiskUsageParams,
   'workspaceCleanup.report': null,
   'workspaceCleanup.reportUnsavedEditors': WorkspaceCleanupReportUnsavedEditorsParams,
   'workspaceCleanup.runNow': WorkspaceCleanupRunNowParams,

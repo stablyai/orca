@@ -42,3 +42,19 @@ describe('createCodexHistoryDiskUsageReader', () => {
     await expect(reader.read(walk(before).measure)).resolves.toEqual(after)
   })
 })
+
+describe('releasing a Codex history size read', () => {
+  it('keeps the walk while another reader waits and stops it when the last one leaves', async () => {
+    const reader = createCodexHistoryDiskUsageReader(60_000, () => 0)
+    const running = walk(before)
+    const first = reader.read(running.measure, 'window-a')
+    void reader.read(running.measure, 'window-b').catch(() => undefined)
+
+    reader.release('window-a')
+    expect(running.aborted()).toBe(false)
+    reader.release('window-b')
+
+    expect(running.aborted()).toBe(true)
+    await expect(first).rejects.toThrow('aborted')
+  })
+})

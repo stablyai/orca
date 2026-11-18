@@ -1,11 +1,16 @@
 import {
+  WorkspaceCleanupCodexHistoryDiskUsageParams,
   WorkspaceCleanupPreviewParams,
+  WorkspaceCleanupReleaseCodexHistoryDiskUsageParams,
   WorkspaceCleanupReportUnsavedEditorsParams,
   WorkspaceCleanupRunNowParams
 } from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-runner-params'
 import { requireWorkspaceCleanupRunner } from '../../../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { reportClientUnsavedEditors } from '../../../../workspaces/cleanup/workspace-cleanup-client-unsaved-editors'
-import { getCodexHistoryDiskUsage } from '../../../../codex/history/disk-usage/codex-history-disk-usage'
+import {
+  getCodexHistoryDiskUsage,
+  releaseCodexHistoryDiskUsage
+} from '../../../../codex/history/disk-usage/codex-history-disk-usage'
 import { defineMethod } from '../../core'
 
 /** The cleanup runner of the host that owns the repos; clients merge hosts themselves. */
@@ -32,9 +37,18 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
   defineMethod({
     name: 'workspaceCleanup.codexHistoryDiskUsage',
     permission: 'workspace',
-    params: null,
-    handler: (_params, { runtime }) =>
-      getCodexHistoryDiskUsage(runtime.requireStore().getSettings())
+    params: WorkspaceCleanupCodexHistoryDiskUsageParams,
+    handler: (params, { runtime }) =>
+      getCodexHistoryDiskUsage(runtime.requireStore().getSettings(), params.consumerId)
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.releaseCodexHistoryDiskUsage',
+    permission: 'workspace',
+    params: WorkspaceCleanupReleaseCodexHistoryDiskUsageParams,
+    handler: (params) => {
+      releaseCodexHistoryDiskUsage(params.consumerId)
+      return { released: true }
+    }
   }),
   defineMethod({
     name: 'workspaceCleanup.reportUnsavedEditors',

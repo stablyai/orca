@@ -85,7 +85,13 @@ export function forgetCodexHistoryDiskUsage(): void {
 
 /** Read-only and off the main thread; callers asking during a walk share it. */
 export function getCodexHistoryDiskUsage(
-  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
+  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
+  consumerId?: string
 ): Promise<CodexHistoryDiskUsage> {
-  return reader.read((signal) => measure(settings, signal))
+  return reader.read((signal) => measure(settings, signal), consumerId)
+}
+
+/** A settings view stopped waiting; the walk stops once no view waits for it. */
+export function releaseCodexHistoryDiskUsage(consumerId: string): void {
+  reader.release(consumerId)
 }

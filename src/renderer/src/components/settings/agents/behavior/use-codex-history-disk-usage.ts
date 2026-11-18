@@ -52,20 +52,26 @@ export function useCodexHistoryDiskUsage(
     if (!shown || !windowVisible || readRevision === revision) {
       return
     }
+    const target = runtimeTargetForOwnerEnvironment(environmentId)
+    // Names this read so the host can stop the walk once no view waits for it.
+    const consumerId = crypto.randomUUID()
     let current = true
+    let settled = false
     void callRuntimeRpc<CodexHistoryDiskUsage>(
-      runtimeTargetForOwnerEnvironment(environmentId),
+      target,
       'workspaceCleanup.codexHistoryDiskUsage',
-      undefined,
+      { consumerId },
       { timeoutMs: DISK_USAGE_TIMEOUT_MS }
     ).then(
       (usage) => {
+        settled = true
         if (current) {
           setState({ ownerKey, revision, usage })
         }
       },
       // An older host lacks the method; a failed walk shows no line.
       () => {
+        settled = true
         if (current) {
           setState({ ownerKey, revision, usage: null })
         }
@@ -73,6 +79,12 @@ export function useCodexHistoryDiskUsage(
     )
     return () => {
       current = false
+      if (!settled) {
+        // Closed, hidden or switched host before the size arrived; an older host ignores this.
+        void callRuntimeRpc(target, 'workspaceCleanup.releaseCodexHistoryDiskUsage', {
+          consumerId
+        }).catch(() => undefined)
+      }
     }
   }, [environmentId, ownerKey, revision, readRevision, shown, windowVisible])
 
