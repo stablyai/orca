@@ -40,6 +40,8 @@ export type WorktreeVirtualRowContext = {
   projection: LineageRowProjection
   activeFamilyRoots: ReadonlySet<number>
   renderRows: RenderRow[]
+  /** True on rows belonging to every other project section, so adjacent bands read apart. */
+  sectionBandByRowIndex: ReadonlyMap<number, boolean>
   firstHeaderIndex: number
   activeStickyHeaderIndexRef: React.MutableRefObject<number | null>
   activeStickyHostIndexRef: React.MutableRefObject<number | null>
@@ -141,6 +143,7 @@ export function renderWorktreeVirtualRow(
           index: vItem.index,
           firstHeaderIndex: ctx.firstHeaderIndex
         }),
+        sectionBanded: ctx.sectionBandByRowIndex.get(vItem.index) ?? false,
         measureVirtualRowElement: ctx.measureVirtualRowElement
       },
       t
@@ -152,6 +155,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      sectionBanded: ctx.sectionBandByRowIndex.get(vItem.index) ?? false,
       actionStateByProjectId: ctx.importedWorktreeCardActionState,
       onShow: ctx.onShowImportedWorktrees,
       onKeepHidden: ctx.onKeepImportedWorktreesHidden
@@ -163,6 +167,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      sectionBanded: ctx.sectionBandByRowIndex.get(vItem.index) ?? false,
       actionState: ctx.newExternalWorktreeInboxActionState.get(row.repo.id),
       onReview: ctx.onOpenWorktreeVisibility,
       onSuppress: ctx.onOpenSuppressExternalWorktreeInbox
@@ -173,7 +178,8 @@ export function renderWorktreeVirtualRow(
     return renderPendingCreationVirtualRow({
       row,
       vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      sectionBanded: ctx.sectionBandByRowIndex.get(vItem.index) ?? false
     })
   }
 
@@ -222,6 +228,7 @@ export function renderWorktreeVirtualRow(
       data-workspace-status={itemWorkspaceStatus ?? undefined}
       className={cn(
         'absolute left-0 right-0 top-0',
+        ctx.sectionBandByRowIndex.get(vItem.index) && 'worktree-section-band',
         activeFamily && frame.root === vItem.index && 'worktree-sidebar-family-root',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'

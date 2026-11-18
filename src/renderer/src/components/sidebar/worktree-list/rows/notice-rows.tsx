@@ -7,11 +7,13 @@ import ImportedWorktreesVisibilityLine from '../listing/ImportedWorktreesVisibil
 import NewExternalWorktreesInboxLine from '../listing/NewExternalWorktreesInboxLine'
 import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
+import { cn } from '@/lib/class-names'
 
 type NoticeRowFrameProps = {
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   className?: string
+  banded?: boolean
   children: React.ReactNode
 }
 
@@ -19,7 +21,8 @@ type NoticeRowFrameProps = {
 function NoticeRowFrame({
   vItem,
   measureVirtualRowElement,
-  className = 'absolute left-0 right-0 top-0',
+  className = 'absolute left-0 right-0 top-0 pb-[3px]',
+  banded = false,
   children
 }: NoticeRowFrameProps): React.JSX.Element {
   return (
@@ -30,7 +33,7 @@ function NoticeRowFrame({
       data-worktree-virtual-row-start={vItem.start}
       data-index={vItem.index}
       ref={measureVirtualRowElement}
-      className={className}
+      className={cn(className, banded && 'worktree-section-band')}
       style={{ transform: getVirtualRowTransform(vItem.start) }}
     >
       {children}
@@ -42,6 +45,7 @@ export function renderImportedWorktreesVirtualRow(args: {
   row: Extract<Row, { type: 'imported-worktrees-card' }>
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  sectionBanded: boolean
   actionStateByProjectId: ReadonlyMap<string, ImportedWorktreeCardActionState>
   onShow: (projectId: string) => void
   onKeepHidden: (projectId: string) => void
@@ -52,6 +56,7 @@ export function renderImportedWorktreesVirtualRow(args: {
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
+      banded={args.sectionBanded}
     >
       {line}
     </NoticeRowFrame>
@@ -90,6 +95,7 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
   row: Extract<Row, { type: 'new-external-worktrees-inbox' }>
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  sectionBanded: boolean
   actionState: NewExternalWorktreesInboxActionState | undefined
   onReview: (repo: Extract<Row, { type: 'new-external-worktrees-inbox' }>['repo']) => void
   onSuppress: (projectId: string) => void
@@ -100,6 +106,7 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
+      banded={args.sectionBanded}
     >
       <NewExternalWorktreesInboxLine
         repoDisplayName={row.repo.displayName}
@@ -119,13 +126,15 @@ export function renderPendingCreationVirtualRow(args: {
   row: Extract<Row, { type: 'pending-creation' }>
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  sectionBanded: boolean
 }): React.JSX.Element {
   return (
     <NoticeRowFrame
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
-      className="absolute left-0 right-0 top-0 px-2 pb-1.5"
+      banded={args.sectionBanded}
+      className="absolute left-0 right-0 top-0 px-2 pb-[9px]"
     >
       <PendingWorktreeRow
         creationId={args.row.creationId}

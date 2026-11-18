@@ -55,12 +55,21 @@ type BuildArgs = {
 
 export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtualRowContext {
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
+  const sectionBandByRowIndex = new Map<number, boolean>()
+  let sectionBand = false
+  args.renderRows.forEach((row, index) => {
+    if (row.type === 'header') {
+      sectionBand = !sectionBand
+    }
+    sectionBandByRowIndex.set(index, row.type === 'host-header' ? false : sectionBand)
+  })
   return {
     dragUnitsByRow: args.dragUnitsByRow,
     hiddenDragRanges: args.hiddenDragRanges,
     projection: args.projection,
     activeFamilyRoots: args.activeFamilyRoots,
     renderRows: args.renderRows,
+    sectionBandByRowIndex,
     firstHeaderIndex: args.firstHeaderIndex,
     activeStickyHeaderIndexRef: args.virtualization.activeStickyHeaderIndexRef,
     activeStickyHostIndexRef: args.virtualization.activeStickyHostIndexRef,
