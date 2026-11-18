@@ -37,30 +37,24 @@ function parseEnabledExtensionIds(value: unknown): Record<string, string[]> {
   return result
 }
 
+/** Enabled extensions per metadata file as last read; every write goes through persistBrowserSessionMeta. */
+const enabledExtensionIdsByPath = new Map<
+  string,
+  BrowserSessionMeta['enabledExtensionIdsByProfileId']
+>()
+
+function copyIdLists(byProfileId: Record<string, string[]>): Record<string, string[]> {
+  return Object.fromEntries(Object.entries(byProfileId).map(([id, ids]) => [id, [...ids]]))
+}
+
 // Resolve the path inside the load error boundary.
 export function loadBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string
 ): BrowserSessionMeta {
-  return (
-    readBrowserSessionMeta(resolveMetadataPath, defaultPartition) ?? {
-      defaultSource: null,
-      pendingCookieDbPath: null,
-      pendingCookieImports: {},
-      profiles: [],
-      enabledExtensionIdsByProfileId: {},
-      pinnedExtensionIdsByProfileId: {}
-    }
-  )
-}
-
-/** The saved metadata, or null when it can't be read or parsed (missing included). */
-function readBrowserSessionMeta(
-  resolveMetadataPath: () => string,
-  defaultPartition: string
-): BrowserSessionMeta | null {
   try {
-    const raw = readFileSync(resolveMetadataPath(), 'utf-8')
+    const path = resolveMetadataPath()
+    const raw = readFileSync(path, 'utf-8')
     const data = JSON.parse(raw)
     const legacyPendingCookieDbPath =
       typeof data?.pendingCookieDbPath === 'string' ? data.pendingCookieDbPath : null
@@ -81,7 +75,7 @@ function readBrowserSessionMeta(
     if (legacyPendingCookieDbPath && !pendingCookieImports[defaultPartition]) {
       pendingCookieImports[defaultPartition] = legacyPendingCookieDbPath
     }
-    return {
+    const meta: BrowserSessionMeta = {
       defaultSource: data?.defaultSource ?? null,
       pendingCookieDbPath: legacyPendingCookieDbPath,
       pendingCookieImports,
@@ -91,37 +85,31 @@ function readBrowserSessionMeta(
       ),
       pinnedExtensionIdsByProfileId: parseEnabledExtensionIds(data?.pinnedExtensionIdsByProfileId)
     }
+    // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
+    enabledExtensionIdsByPath.set(path, copyIdLists(meta.enabledExtensionIdsByProfileId))
+    return meta
   } catch {
-    return null
+    return {
+      defaultSource: null,
+      pendingCookieDbPath: null,
+      pendingCookieImports: {},
+      profiles: [],
+      enabledExtensionIdsByProfileId: {},
+      pinnedExtensionIdsByProfileId: {}
+    }
   }
 }
 
-/** Enabled extensions per metadata file as last read; every write goes through persistBrowserSessionMeta. */
-const enabledExtensionIdsByPath = new Map<
-  string,
-  BrowserSessionMeta['enabledExtensionIdsByProfileId']
->()
-
-// Why cached: a profile reattaching after it went idle shouldn't reread every profile's metadata.
-export function loadBrowserExtensionEnabledIds(
-  resolveMetadataPath: () => string,
-  defaultPartition: string,
+/**
+ * A profile's enabled extensions from the last successful read, or null before one. Why: a profile
+ * reattaching after it went idle shouldn't reread every profile's metadata.
+ */
+export function getCachedBrowserExtensionEnabledIds(
+  metadataPath: string,
   profileId: string
-): string[] {
-  const path = resolveMetadataPath()
-  let byProfileId = enabledExtensionIdsByPath.get(path)
-  if (!byProfileId) {
-    // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
-    byProfileId = readBrowserSessionMeta(
-      () => path,
-      defaultPartition
-    )?.enabledExtensionIdsByProfileId
-    if (!byProfileId) {
-      return []
-    }
-    enabledExtensionIdsByPath.set(path, byProfileId)
-  }
-  return [...(byProfileId[profileId] ?? [])]
+): string[] | null {
+  const byProfileId = enabledExtensionIdsByPath.get(metadataPath)
+  return byProfileId ? [...(byProfileId[profileId] ?? [])] : null
 }
 
 // Write to a temporary file so an interrupted write leaves the existing metadata intact.
@@ -131,12 +119,13 @@ export function persistBrowserSessionMeta(
   updates: Partial<BrowserSessionMeta>
 ): void {
   try {
-    enabledExtensionIdsByPath.delete(resolveMetadataPath())
     const existing = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
     const tmpPath = `${resolveMetadataPath()}.tmp`
     mkdirSync(dirname(resolveMetadataPath()), { recursive: true })
     writeFileSync(tmpPath, JSON.stringify({ ...existing, ...updates }))
     renameSync(tmpPath, resolveMetadataPath())
+    // After the rename: the read above cached the contents this write replaced.
+    enabledExtensionIdsByPath.delete(resolveMetadataPath())
   } catch {}
 }
 

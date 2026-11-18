@@ -19,7 +19,7 @@ import {
 import {
   BROWSER_SESSION_META_FILE_NAME,
   forgetBrowserSessionProfileMeta,
-  loadBrowserExtensionEnabledIds,
+  getCachedBrowserExtensionEnabledIds,
   loadBrowserSessionMeta,
   persistBrowserSessionMeta,
   type BrowserSessionMeta
@@ -158,7 +158,8 @@ class BrowserSessionRegistry {
   }
 
   getEnabledExtensionIds(profileId: string): string[] {
-    return loadBrowserExtensionEnabledIds(() => this.metadataPath, this.defaultPartition, profileId)
+    const cached = getCachedBrowserExtensionEnabledIds(this.metadataPath, profileId)
+    return cached ?? this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
   }
 
   updateEnabledExtensionIds(update: ExtensionIdListUpdate): void {
