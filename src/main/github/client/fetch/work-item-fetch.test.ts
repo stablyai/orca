@@ -19,7 +19,8 @@ const repository = { owner: 'acme', repo: 'widgets', host: 'github.com' }
 const allowedMergeMethods: Record<string, string[]> = { main: ['SQUASH'], 'feature/a': ['MERGE'] }
 
 describe('fetchPullRequestWorkItem', () => {
-  it('offers the merge methods of the branch the stack merges into', async () => {
+  // Stack queue routing lives only in the sidebar, so the queue flag must not come from the stack base.
+  it('offers the stack base merge methods but keeps the immediate base queue flag', async () => {
     exec.mockImplementation(async (args: string[]) => {
       if (args[0] === 'pr') {
         return {
@@ -55,7 +56,7 @@ describe('fetchPullRequestWorkItem', () => {
               rebaseMergeAllowed: false,
               squashMergeAllowed: true,
               autoMergeAllowed: true,
-              mergeQueue: null,
+              mergeQueue: branch === 'main' ? { id: 'queue' } : null,
               ref: {
                 rules: {
                   nodes: [
@@ -74,6 +75,7 @@ describe('fetchPullRequestWorkItem', () => {
 
     const item = await fetchPullRequestWorkItem('/repo', repository, 42)
 
+    expect(item?.mergeQueueRequired).toBe(false)
     expect(item?.mergeMethodSettings).toEqual({
       defaultMethod: 'squash',
       allowedMethods: { squash: true, merge: false, rebase: false }

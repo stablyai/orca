@@ -174,31 +174,32 @@ export async function fetchPullRequestWorkItem(
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
       const executionScope = githubPRStackExecutionScope(connectionId, localGitOptions)
       try {
-        // Merging a stacked PR lands it in the stack base, whose rules then apply.
-        const stack =
+        const [mergeMetadata, stack] = await Promise.all([
+          detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions, executionScope),
           mapped.state === 'open'
-            ? await getCachedGitHubPRStackSummary(
+            ? getCachedGitHubPRStackSummary(ownerRepo, number, ghOptions, executionScope).catch(
+                () => undefined
+              )
+            : undefined
+        ])
+        // A stacked PR merges into the stack base, so its rules limit the methods. The queue flag
+        // stays on the immediate base: here it would offer auto-merge, which stacks refuse.
+        const { mergeMethodSettings } =
+          stack && stack.baseRefName !== baseRefName
+            ? await detectRepositoryMergeMetadata(
                 ownerRepo,
-                number,
+                stack.baseRefName,
                 ghOptions,
                 executionScope
-              ).catch(() => undefined)
-            : undefined
-        const mergeMetadata = await detectRepositoryMergeMetadata(
-          ownerRepo,
-          stack?.baseRefName ?? baseRefName,
-          ghOptions,
-          executionScope
-        )
+              )
+            : mergeMetadata
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,
           ...(mergeMetadata.autoMergeAllowed !== null
             ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
             : {}),
-          ...(mergeMetadata.mergeMethodSettings
-            ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
-            : {})
+          ...(mergeMethodSettings ? { mergeMethodSettings } : {})
         }
       } catch {
         return mapped
