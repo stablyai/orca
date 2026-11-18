@@ -8,6 +8,7 @@ import { JournalSqlOwner } from '../journal-sql-owner'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
 import { JournalSqlConversions } from '../journal-sql-conversions'
 import { JournalSqlActivity } from '../journal-sql-activity'
+import { JournalSqlSendingChats } from '../journal-sql-sending-chats'
 import { JournalSqlBackgroundMaintenance } from '../journal-sql-background-maintenance'
 import type { JournalWriterCommand } from '../journal-writer-command'
 import type { JournalWriterCommit } from '../journal-writer-changes'
@@ -33,6 +34,8 @@ export class JournalSqlDatabase {
   private readonly activity = new JournalSqlActivity()
   private readonly maintenance: JournalSqlBackgroundMaintenance
   private readonly sessions = new Map<string, Promise<unknown>>()
+  /** While held, the chat's writes go ahead of bulk streaming and past WAL pressure. */
+  readonly sending: JournalSqlSendingChats
   private closing: Promise<void> | undefined
   private closed = false
 
@@ -42,6 +45,7 @@ export class JournalSqlDatabase {
     readonly readOnly: boolean,
     options: JournalSqlDatabaseOptions
   ) {
+    this.sending = new JournalSqlSendingChats((sessionId) => writer.promote(sessionId))
     this.readers = new JournalSqlReaderPool(
       journalDomainDatabasePath(stateDirectory),
       journalDatabasePath(stateDirectory),

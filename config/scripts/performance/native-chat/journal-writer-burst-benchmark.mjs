@@ -36,7 +36,8 @@ const arms = String(args.arms ?? 'head=HEAD')
   .split(',')
   .map((entry) => entry.split('='))
 const TEMPLATE_ITEMS = 300
-const filename = join(dir, 'bench-domain.db')
+// --db runs against an existing file (an APFS clone of a real chat database) instead of seeding one.
+const filename = args.db ? resolve(args.db) : join(dir, 'bench-domain.db')
 const journal = 'src/main/native-chat/agent-session-journal'
 
 async function bundleArm(name, ref) {
@@ -101,6 +102,18 @@ const stepsCommand = (sessionId, steps) => ({
 })
 
 async function seed(arm) {
+  if (args.db) {
+    const { db } = arm.openJournalDomainDatabase(filename)
+    const chat = db.prepare(
+      `INSERT OR IGNORE INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('w',?,'epoch',1,1)`
+    )
+    for (let index = 0; index < 64; index++) {
+      chat.run(`burst-${index}`)
+    }
+    chat.run('probe')
+    db.close()
+    return
+  }
   const marker = `${filename}.seeded-${rows}`
   if (existsSync(marker)) {
     return
@@ -235,9 +248,10 @@ function startReaders(count) {
     const { DatabaseSync } = require('node:sqlite');
     const db = new DatabaseSync(workerData.filename, { readOnly: true });
     const read = db.prepare("SELECT length(payload_json) AS bytes FROM journal_items WHERE session_id=? ORDER BY ordinal LIMIT 400");
+    const sessions = db.prepare("SELECT session_id FROM journal_chat_state WHERE session_id NOT LIKE 'burst-%' LIMIT 2000").all().map((row) => row.session_id);
     const loop = () => {
       db.exec('BEGIN');
-      read.all('seed-' + Math.floor(Math.random() * workerData.copies));
+      read.all(sessions[Math.floor(Math.random() * sessions.length)]);
       setTimeout(() => { db.exec('COMMIT'); setTimeout(loop, 20); }, 400);
     };
     loop();`
@@ -278,25 +292,29 @@ async function run(arm, sessions) {
   const probe = []
   const chain = []
   await new Promise((resolve) => setTimeout(resolve, 3000))
-  for (let index = 0; Date.now() < stopAt - 3000; index++) {
-    const startedAt = performance.now()
-    let first = 0
-    for (let step = 0; step < 3; step++) {
-      await owner.write(
-        stepsCommand('probe', [
-          itemStep(
-            message(
-              `probe-${arm.name}-${sessions}-${Date.now()}-${index}-${step}`,
-              'user',
-              'Please continue.',
-              true
-            )
-          )
-        ])
-      )
-      first ||= performance.now() - startedAt
+  // A sending chat's writes carry `urgent`, as the store marks them; builds without the lane ignore it.
+  const control = (label) => ({
+    urgent: true,
+    target: { sessionId: 'probe', epoch: 'epoch', ownerToken: 'bench' },
+    savedAt: Date.now(),
+    operation: {
+      kind: 'item',
+      identity: { provider: 'orca', clientMessageId: label },
+      body: { kind: 'status', text: label },
+      options
     }
-    probe.push(first)
+  })
+  // Handover, then (timed) the turn item and the accepted receipt, as a send's journal chain runs.
+  for (let index = 0; Date.now() < stopAt - 3000; index++) {
+    const label = `probe-${arm.name}-${sessions}-${Date.now()}-${index}`
+    await owner.write(control(`${label}-handover`))
+    const startedAt = performance.now()
+    await owner.write({
+      ...stepsCommand('probe', [itemStep(message(`${label}-turn`, 'assistant', 'turn', false))]),
+      urgent: true
+    })
+    probe.push(performance.now() - startedAt)
+    await owner.write(control(`${label}-accepted`))
     chain.push(performance.now() - startedAt)
     await new Promise((resolve) => setTimeout(resolve, 1500))
   }
@@ -315,8 +333,8 @@ async function run(arm, sessions) {
     arm: arm.name,
     sha: arm.sha,
     sessions,
-    probeWriteMs: summary(probe),
-    probeChainOf3Ms: summary(chain),
+    turnItemMs: summary(probe),
+    receiptMs: summary(chain),
     streamWriteMs: summary(streamWrites),
     writesPerSecond: Math.round(timings.length / seconds),
     ...(instrumented

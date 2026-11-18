@@ -1,14 +1,14 @@
 import type { JournalSqlRequest } from './journal-sql-protocol'
 
-type WriterGate = { beforeWrite(): Promise<void>; afterCommit(): void }
+type WriterGate = { beforeWrite(urgent?: boolean): Promise<void>; afterCommit(): void }
 
 /** Times WAL admission separately from the transaction it admits. */
 export function journalSqlTimedGate(gate: WriterGate, waited: { ms: number }): WriterGate {
   return {
-    beforeWrite: async () => {
+    beforeWrite: async (urgent) => {
       const startedAt = performance.now()
       try {
-        await gate.beforeWrite()
+        await gate.beforeWrite(urgent)
       } finally {
         waited.ms += performance.now() - startedAt
       }

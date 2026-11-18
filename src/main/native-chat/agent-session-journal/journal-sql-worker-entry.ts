@@ -20,6 +20,7 @@ import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 import { journalSqlTimedGate, journalSqlTimingOp } from './journal-sql-writer-timing'
+import { enqueueJournalSqlRequest, promoteJournalSqlSession } from './journal-sql-urgent-queue'
 
 installWorkerSendLedger('orca-journal-sql-writer')
 
@@ -46,6 +47,7 @@ let scheduled = false
 const queue: JournalSqlRequest[] = []
 const receivedAt = new Map<number, number>()
 const gate = { ms: 0 }
+let urgentArrival = Promise.withResolvers<void>()
 
 async function open(): Promise<void> {
   try {
@@ -81,6 +83,12 @@ async function open(): Promise<void> {
 void open()
 
 port.on('message', (request: JournalSqlRequest) => {
+  if (request.command.type === 'promote') {
+    if (promoteJournalSqlSession(queue, request.command.sessionId)) {
+      wakeForUrgent()
+    }
+    return
+  }
   if (closing || !db) {
     reply({
       type: 'failed',
@@ -96,7 +104,9 @@ port.on('message', (request: JournalSqlRequest) => {
     void checkpointClosing?.catch(() => undefined)
   }
   receivedAt.set(request.id, performance.now())
-  queue.push(request)
+  if (enqueueJournalSqlRequest(queue, request)) {
+    wakeForUrgent()
+  }
   if (!scheduled) {
     scheduled = true
     setImmediate(() => {
@@ -105,23 +115,37 @@ port.on('message', (request: JournalSqlRequest) => {
   }
 })
 
+function wakeForUrgent(): void {
+  urgentArrival.resolve()
+  urgentArrival = Promise.withResolvers<void>()
+}
+
 function reply(response: JournalSqlResponse): void {
   port.postMessage(response)
 }
 
 type WriteRequest = {
   id: number
-  command: Exclude<JournalSqlRequest['command'], { type: 'close' }>
+  command: Exclude<JournalSqlRequest['command'], { type: 'close' } | { type: 'promote' }>
 }
 type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects' | 'maintenance' }>
 type TimedResponse = CommitResponse | Extract<JournalSqlResponse, { type: 'failed' }>
 /** Bound ready work before opening a transaction, then yield after its acknowledgements. */
 async function drain(): Promise<void> {
+  const head = queue[0]
+  if (head && head.command.type !== 'close' && checkpoint && !checkpoint.admits(!!head.urgent)) {
+    // Waiting for WAL room must not hold the writer while a send's urgent write queues behind it.
+    await Promise.race([checkpoint.beforeWrite(!!head.urgent), urgentArrival.promise])
+    scheduleNextDrain()
+    return
+  }
   const depth = queue.length
   const startedAt = performance.now()
   const pending = takeJournalSqlReadyBatch(queue)
+  const urgent = pending.every((request) => request.urgent)
   const writes = pending.filter(
-    (request): request is WriteRequest => request.command.type !== 'close'
+    (request): request is WriteRequest =>
+      request.command.type !== 'close' && request.command.type !== 'promote'
   )
   const close = pending.find((request) => request.command.type === 'close')
   const database = db
@@ -171,7 +195,8 @@ async function drain(): Promise<void> {
           (request) => request.command.type === 'write' && request.command.command.forkInstall
         )
           ? 'full'
-          : 'normal'
+          : 'normal',
+        urgent
       )
       forks!.acknowledge()
       // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.

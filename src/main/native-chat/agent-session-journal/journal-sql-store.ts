@@ -186,6 +186,9 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           operation,
           facts,
           savedAt,
+          ...(this.database.sending.has(this.identity.sessionId) && !preparation.forkInstall
+            ? { urgent: true as const }
+            : {}),
           ...(staged ? { effects: staged.effects } : {}),
           ...(preparation.forkInstall ? { forkInstall: preparation.forkInstall } : {})
         }
@@ -231,6 +234,9 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     })
     return this.epochReplacements.notifyFor(operation.kind, written)
   }
+
+  /** Count a send in flight for this chat, from admission until its dispatch settles. */
+  holdSending = (): (() => void) => this.database.sending.hold(this.identity.sessionId)
 
   stageFork(
     copy: JournalSqlForkCopy,

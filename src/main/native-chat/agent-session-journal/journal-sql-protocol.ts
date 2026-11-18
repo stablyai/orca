@@ -7,11 +7,15 @@ import type { JournalSqlMaintenance, JournalSqlMaintenanceResult } from './journ
 export type JournalSqlRequest = {
   id: number
   batch?: { sessionId: string; steps: number; bytes: number }
+  /** A chat with a send in flight: queued ahead of bulk work, never batched with it. */
+  urgent?: true
   command:
     | { type: 'write'; command: JournalWriterCommand }
     | { type: 'effects'; effects: readonly JournalWriterEffect[] }
     | { type: 'maintenance'; operation: JournalSqlMaintenance }
     | { type: 'close' }
+    /** Mark a chat's already queued writes urgent; no reply. */
+    | { type: 'promote'; sessionId: string }
 }
 
 /** Where one request's time went inside the writer; `op` is a closed operation-kind word. */

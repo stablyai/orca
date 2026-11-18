@@ -140,6 +140,13 @@ export class JournalSqlOwner {
     return response.result
   }
 
+  /** Lift a chat's writes already queued as bulk once it starts sending. */
+  promote(sessionId: string): void {
+    if (!this.failure && !this.didExit && !this.closing) {
+      this.worker.postMessage({ id: 0, command: { type: 'promote', sessionId } })
+    }
+  }
+
   close(): Promise<void> {
     this.closed ??= this.finishClose().catch((error: unknown) => {
       this.closed = undefined
