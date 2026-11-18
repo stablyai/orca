@@ -16,7 +16,7 @@ function moduleKey(file) {
   return normalized(file).replace(/\.[cm]?[jt]sx?$/, '')
 }
 
-function isValueReference(node) {
+export function isValueReference(node) {
   const parent = node.parent
   if (
     ts.isImportSpecifier(parent) ||
@@ -55,22 +55,36 @@ export function createGatedCallCollector(families, ratchetName) {
   const advice = new Map(families.flatMap((family) => Object.entries(family.advice)))
   const markers = [
     ...advice.keys(),
+    ...families.flatMap((family) => Object.keys(family.localAdvice ?? {})),
     ...families.filter((family) => family.exportPattern).map(() => 'Sync'),
     ...new Set(
       families.flatMap((family) => family.modules.map((module) => path.posix.basename(module)))
     )
   ]
 
-  function symbolsOf(key) {
-    const matched = families.filter((family) => family.modules.includes(key))
-    if (!matched.length) {
+  const familiesByModule = new Map()
+  for (const family of families) {
+    for (const module of family.modules) {
+      familiesByModule.set(module, [...(familiesByModule.get(module) ?? []), family])
+    }
+  }
+
+  function symbolsOf(key, local = false) {
+    const matched = familiesByModule.get(key)
+    if (!matched) {
       return null
     }
-    const names = new Set(matched.flatMap((family) => Object.keys(family.advice)))
+    const names = new Set(
+      matched.flatMap((family) => [
+        ...Object.keys(family.advice),
+        ...(local ? Object.keys(family.localAdvice ?? {}) : [])
+      ])
+    )
     const patterns = matched.map((family) => family.exportPattern).filter(Boolean)
     names.has = (name) =>
       Set.prototype.has.call(names, name) ||
       (typeof name === 'string' && patterns.some((pattern) => pattern.test(name)))
+    names.moduleKey = key
     return names
   }
 
@@ -100,16 +114,21 @@ export function createGatedCallCollector(families, ratchetName) {
       throw new Error(`Cannot parse ${file}; the ${ratchetName} ratchet must not skip it.`)
     }
     if (!analyze) {
-      return { count: 0, symbols: [] }
+      return { count: 0, symbols: [], sites: [] }
     }
     const used = new Set()
+    const sites = []
     let count = 0
     const namespaces = new Map(
       families.flatMap((family) =>
         (family.globals ?? []).map((name) => [name, new Set(Object.keys(family.advice))])
       )
     )
-    const functions = new Map([...(symbolsOf(moduleKey(file)) ?? [])].map((name) => [name, name]))
+    const functions = new Map(
+      [...(symbolsOf(moduleKey(file), true) ?? [])].map((name) => [name, name])
+    )
+    // Which module each local function binding came from, so same-named exports stay distinct.
+    const origins = new Map([...functions.keys()].map((name) => [name, moduleKey(file)]))
     const aliases = []
     const members = []
     const identifiers = []
@@ -154,8 +173,9 @@ export function createGatedCallCollector(families, ratchetName) {
       }
       return null
     }
-    function recordUse(name) {
+    function recordUse(name, node, module) {
       used.add(name)
+      sites.push({ name, position: node.getStart(source), module })
       count += 1
     }
     function visitImport(node) {
@@ -166,6 +186,10 @@ export function createGatedCallCollector(families, ratchetName) {
       }
       if (clause.name) {
         namespaces.set(clause.name.text, symbols)
+        if (symbols.has('default')) {
+          functions.set(clause.name.text, 'default')
+          origins.set(clause.name.text, symbols.moduleKey)
+        }
       }
       const named = clause.namedBindings
       if (named && ts.isNamespaceImport(named)) {
@@ -175,6 +199,7 @@ export function createGatedCallCollector(families, ratchetName) {
         const imported = (element.propertyName ?? element.name).text
         if (!element.isTypeOnly && symbols.has(imported)) {
           functions.set(element.name.text, imported)
+          origins.set(element.name.text, symbols.moduleKey)
         }
       }
     }
@@ -193,8 +218,7 @@ export function createGatedCallCollector(families, ratchetName) {
               .filter((element) => !element.isTypeOnly)
               .map((element) => (element.propertyName ?? element.name).text)
       for (const name of names.filter((name) => symbols.has(name))) {
-        used.add(name)
-        count += 1
+        recordUse(name, node, symbols.moduleKey)
       }
     }
     function visit(node) {
@@ -241,6 +265,16 @@ export function createGatedCallCollector(families, ratchetName) {
           changed = true
         } else if (gated && !functions.has(name)) {
           functions.set(name, gated)
+          const target = unwrap(initializer)
+          origins.set(
+            name,
+            target && ts.isIdentifier(target)
+              ? origins.get(target.text)
+              : target &&
+                  (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target))
+                ? moduleSymbols(target.expression)?.moduleKey
+                : undefined
+          )
           changed = true
         }
       }
@@ -255,6 +289,7 @@ export function createGatedCallCollector(families, ratchetName) {
             !functions.has(element.name.text)
           ) {
             functions.set(element.name.text, name)
+            origins.set(element.name.text, symbols.moduleKey)
             changed = true
           }
         }
@@ -278,17 +313,18 @@ export function createGatedCallCollector(families, ratchetName) {
     }
     for (const node of members) {
       const name = propertyName(node)
-      if (!aliasSetup.has(node) && moduleSymbols(node.expression)?.has(name)) {
-        recordUse(name)
+      const symbols = aliasSetup.has(node) ? null : moduleSymbols(node.expression)
+      if (symbols?.has(name)) {
+        recordUse(name, node, symbols.moduleKey)
       }
     }
     for (const node of identifiers) {
       const name = aliasSetup.has(node) ? null : functions.get(node.text)
       if (name) {
-        recordUse(name)
+        recordUse(name, node, origins.get(node.text))
       }
     }
-    return { count, symbols: [...used].sort() }
+    return { count, symbols: [...used].sort(), sites }
   }
 
   function adviceFor(symbols) {

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { createEmptyRateLimitState } from '../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import Settings from './Settings'
-import { ConfirmationDialogContext } from '../confirmation-dialog-context'
+import { ConfirmationDialogContext } from '../dismiss/confirmation/confirmation-dialog-context'
 const checkedAt = Date.UTC(2026, 10, 8, 6)
 function quota(provider: ProviderRateLimits['provider'], usedPercent: number): ProviderRateLimits {
   return {

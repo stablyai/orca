@@ -6,7 +6,7 @@ import {
   type WorkspaceMetadataSet
 } from '../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceAttachment } from '../../../shared/worktree/types'
-import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../shared/execution-host/execution-host'
 import type { Store } from '../../persistence/loading-store/store'
 import { getLocalProjectGhExecOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { getIssue } from '../issues/issues'

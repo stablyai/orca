@@ -26,8 +26,7 @@ const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 /** A snapshot only counts under the owner it came from, so A's numbers never render as B's. */
 type OwnedUsage = {
   ownerId: string | null
-  rateLimits: RateLimitState | null
-  accounts: ProviderAccountsSnapshot | null
+  snapshot: ProviderAccountsSnapshot | null
   failure: OwnerUsageFailureReason | null
 }
 
@@ -84,8 +83,7 @@ export function useOwnerUsageRateLimits(
       const current = ownedRef.current
       apply({
         ownerId: owner,
-        rateLimits: current?.ownerId === owner ? current.rateLimits : null,
-        accounts: current?.ownerId === owner ? current.accounts : null,
+        snapshot: current?.ownerId === owner ? current.snapshot : null,
         failure
       })
     },
@@ -94,22 +92,12 @@ export function useOwnerUsageRateLimits(
 
   const applySnapshot = useCallback(
     (owner: string | null, snapshot: ProviderAccountsSnapshot) => {
-      if (snapshot.rateLimits) {
-        apply({
-          ownerId: owner,
-          rateLimits: snapshot.rateLimits,
-          accounts: snapshot,
-          failure: null
-        })
-      } else {
-        // Why: a host that predates published usage answers without it; say so, never spin.
-        apply({
-          ownerId: owner,
-          rateLimits: null,
-          accounts: snapshot,
-          failure: 'usage-not-published'
-        })
-      }
+      // Why: a host that predates published usage answers without it; say so, never spin, and keep its roster.
+      apply({
+        ownerId: owner,
+        snapshot,
+        failure: snapshot.rateLimits ? null : 'usage-not-published'
+      })
     },
     [apply]
   )
@@ -217,11 +205,11 @@ export function useOwnerUsageRateLimits(
         kind: 'remote-unverifiable',
         ownerLabel,
         reason: owned.failure,
-        lastKnown: owned.rateLimits
+        lastKnown: owned.snapshot?.rateLimits ?? null
       }
     }
-    return owned.rateLimits
-      ? { kind: 'remote', ownerLabel, rateLimits: owned.rateLimits }
+    return owned.snapshot?.rateLimits
+      ? { kind: 'remote', ownerLabel, rateLimits: owned.snapshot.rateLimits }
       : { kind: 'remote-pending' }
   }, [remoteOwner, includeAccounts, ownerId, owned, localOwnerLabel])
 
@@ -231,7 +219,7 @@ export function useOwnerUsageRateLimits(
   )
   return {
     rateLimits,
-    accounts: owned?.ownerId === ownerId ? owned.accounts : null,
+    accounts: owned?.ownerId === ownerId ? owned.snapshot : null,
     accountsUnverifiable: owned?.ownerId === ownerId && owned.failure !== null,
     remoteOwner,
     refreshRemote: ownerId ? refreshRemote : null

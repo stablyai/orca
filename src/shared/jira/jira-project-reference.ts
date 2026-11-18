@@ -1,7 +1,7 @@
 import type { JiraIssue, JiraProject } from './jira-types'
 import type { Repo } from '../repository/repo-types'
-import { getRepoExecutionHostId } from '../execution-host'
-import type { ExecutionHostId } from '../execution-host'
+import { getRepoExecutionHostId } from '../execution-host/execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import { resolveJiraSourceHostId } from './jira-source-host'
 
 export type JiraProjectReference = Pick<JiraProject, 'id' | 'key' | 'name'> & { siteId: string }

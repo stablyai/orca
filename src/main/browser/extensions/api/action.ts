@@ -20,7 +20,7 @@ import {
 } from '../api-runtime/browser-extension-namespace-registry'
 import { requireCallerTab } from '../tabs-and-windows/browser-extension-tab-model'
 import { getPinnedBrowserExtensionIds } from '../actions/browser-extension-toolbar-pins'
-import { requestBrowserExtensionPopup } from '../actions/browser-extension-toolbar'
+import { requestBrowserExtensionPopup } from '../actions/browser-extension-popup-request'
 import { findBrowserExtensionCallerAgentPage } from '../tabs-and-windows/browser-extension-agent-caller'
 
 const tabIdSchema = z.number().int().nonnegative()

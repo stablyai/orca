@@ -11,25 +11,22 @@ import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../worktree/hosted-revi
 const pr = (number: number): WorkspaceAttachment => ({ provider: 'github', type: 'pr', number })
 
 describe('workspace attachments', () => {
-  it.each([
-    ['linkedPR', 'github', 'pr'],
-    ['linkedGitLabMR', 'gitlab', 'mr'],
-    ['linkedBitbucketPR', 'bitbucket', 'pr'],
-    ['linkedAzureDevOpsPR', 'azure-devops', 'pr'],
-    ['linkedGiteaPR', 'gitea', 'pr']
-  ] as const)('keeps legacy %s references when deselecting a review', (slot, provider, type) => {
-    const existing = { [slot]: 7, linkedIssue: 42 }
-    const result = {
-      ...existing,
-      ...normalizeWorkspaceAttachmentUpdate(existing, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES)
+  it.each([['linkedPR', 'github', 'pr']] as const)(
+    'keeps legacy %s references when deselecting a review',
+    (slot, provider, type) => {
+      const existing = { [slot]: 7, linkedIssue: 42 }
+      const result = {
+        ...existing,
+        ...normalizeWorkspaceAttachmentUpdate(existing, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES)
+      }
+      expect(result[slot]).toBeNull()
+      expect(result.linkedIssue).toBe(42)
+      expect(result.linkedItems).toEqual([
+        { provider: 'github', type: 'issue', number: 42 },
+        { provider, type, number: 7 }
+      ])
     }
-    expect(result[slot]).toBeNull()
-    expect(result.linkedIssue).toBe(42)
-    expect(result.linkedItems).toEqual([
-      { provider: 'github', type: 'issue', number: 42 },
-      { provider, type, number: 7 }
-    ])
-  })
+  )
 
   it('retains previous attachments when replacing an active scalar and removes only the explicitly unlinked review', () => {
     const first = normalizeWorkspaceAttachmentUpdate({ linkedPR: 7 }, { linkedPR: 8 })

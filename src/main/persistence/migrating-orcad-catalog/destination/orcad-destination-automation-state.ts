@@ -1,3 +1,4 @@
+import { decodeSavedLocalAutomationRun } from '../../restoring-sessions/saved-local-terminal-ids'
 import { automationCanonicalDefinition } from '../../../../shared/automations/launch/automation-launch-setup'
 import { MAX_AUTOMATION_RUNS_PER_AUTOMATION } from '../../../../shared/automations/history/automation-run-retention'
 import {
@@ -5,7 +6,7 @@ import {
   type AutomationRun
 } from '../../../../shared/automations/history/automation-run'
 import type { Automation } from '../../../../shared/automations/automation-definition'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { selectNewRows } from '../catalog-commit/orcad-catalog-row-identity'
 
 export type PreparedOrcadMigrationAutomationState = {
@@ -23,7 +24,9 @@ export function prepareOrcadMigrationAutomationState(
   const incomingAutomations = (automations ?? []).map((entry) =>
     structuredClone(automationCanonicalDefinition(entry))
   )
-  const incomingRuns = (runs ?? []).map((entry) => structuredClone(entry))
+  const incomingRuns = (runs ?? []).map((entry) =>
+    decodeSavedLocalAutomationRun(structuredClone(entry))
+  )
   const newAutomations = selectNewRows(
     incomingAutomations,
     state.automations,

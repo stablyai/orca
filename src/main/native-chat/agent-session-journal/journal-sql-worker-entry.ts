@@ -1,4 +1,5 @@
 import { JournalForkStages } from './journal-fork-stages'
+import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -17,6 +18,9 @@ import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
+import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-journal-sql-writer')
 
 if (
   !parentPort ||
@@ -49,6 +53,9 @@ async function open(): Promise<void> {
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db
     readOnly = opened.readOnly
+    if (!readOnly) {
+      db.exec(JOURNAL_ASYNC_QUESTION_INDEXES)
+    }
     forks = new JournalForkStages(db, stateDirectory)
     commands = new JournalSqlCommand(db, stateDirectory, forks)
     if (!readOnly) {

@@ -10,7 +10,7 @@ import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
 import { getWindowSections, ProviderIcon } from '../status-bar/usage/provider-usage-panel'
 import { formatPlanLabel } from '../status-bar/usage/usage-roster-formatting'
-import { getProviderUsageErrorMessage } from '../status-bar/usage/usage-error-copy'
+import { getProviderUsageErrorMessage } from '../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getProviderDisplayName } from '../../../../shared/agent-usage/display/usage-provider-windows'
 import { formatWindowLabel } from '../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -43,7 +43,7 @@ export function UsageAccountQuotaCard({
       ? [{ ...section, window: section.window }]
       : []
   )
-  const error = provider.error ? getProviderUsageErrorMessage(provider) : null
+  const error = provider.error ? getProviderUsageErrorMessage(provider, t) : null
   return (
     <article
       className="min-w-0 space-y-3 rounded-lg border border-border bg-card p-4"

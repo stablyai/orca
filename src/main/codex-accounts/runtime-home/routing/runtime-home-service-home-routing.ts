@@ -15,6 +15,7 @@ import {
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
+import { codexHookService } from '../../../codex/hooks/installation/hook-service'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {
   getWslSelectionKey,
@@ -218,7 +219,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     homePath: string | null
   ): void {
     this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath)
-    this.startWslSessionBridgeForLaunch(target, homePath)
   }
 
   protected syncWslConfigAndGlobalInstructionsForLaunch(
@@ -286,15 +286,23 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   }
 
   /** Sync shared-mirror credentials for catalog probes; per-account homes already own their auth. */
-  prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
+  async prepareHostCodexHomeForReadOnlyAppServer(
+    homePath: string,
+    launchEnv?: NodeJS.ProcessEnv
+  ): Promise<void> {
+    const mirrorHome = resolveOrcaManagedCodexHomePath()
     if (
       this.getSelfContainedManagedHostAccount() ||
-      normalizeRuntimePathForComparison(homePath) !==
-        normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())
+      normalizeRuntimePathForComparison(homePath) !== normalizeRuntimePathForComparison(mirrorHome)
     ) {
       return
     }
-    this.syncMirrorForReadOnlyAppServer(launchEnv)
+    this.syncForCurrentSelection(undefined, launchEnv)
+    syncSystemCodexResourcesIntoManagedHome()
+    // Launch preparation already mirrored these exact files; repeating it costs a full TOML merge.
+    if (!(await codexHookService.isConfigPreparationCurrent(mirrorHome))) {
+      syncSystemConfigIntoManagedCodexHome()
+    }
   }
 
   private syncMirrorForReadOnlyAppServer(launchEnv?: NodeJS.ProcessEnv): void {

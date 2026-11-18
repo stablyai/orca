@@ -18,6 +18,10 @@
       "title": "帳戶",
       "useReset": "使用重設額度",
       "weeklyWindow": "7 天"
+    },
+    "claude": {
+      "usageSignInLabel": "重新登入",
+      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。"
     }
   },
   "agentHistory": {
@@ -114,11 +118,7 @@
       "codeNoLongerValid": "此配對碼已過期、已被使用或已被取代。請在電腦上顯示新的配對碼後重新掃描。"
     },
     "terminalSettings": {
-      "defaultText": "預設（100%）",
       "keepPhoneSize": "保持手機尺寸（預設）",
-      "largeText": "大（125%）",
-      "largerText": "較大（150%）",
-      "largestText": "最大（200%）",
       "leaveAppDescription": "在手機上使用終端機時，Orca 會將終端機縮小以符合螢幕大小。關閉 App 或切換到其他 App 時，此設定決定終端機要保持手機尺寸（避免互動式 CLI 工具重新排版），還是還原為電腦上的尺寸。您隨時都能使用桌面版橫幅上的「還原」手動調整尺寸。",
       "leaveAppHeading": "離開 App 時",
       "noPairedDesktops": "尚未配對任何電腦。配對一台電腦後，即可設定終端機行為。",
@@ -127,12 +127,6 @@
       "restoreAfterSeconds_one": "{{count}} 秒後",
       "restoreAfterSeconds_other": "{{count}} 秒後",
       "restoreHost": "還原 {{name}}",
-      "smallerText": "較小（75%）",
-      "smallestText": "最小（50%）",
-      "textSize": "文字大小",
-      "textSizeDescription": "調整終端機文字大小。文字較小時可顯示更多欄，並保留兩側邊距；文字較大時顯示的欄數較少，可向左右拖曳來平移。您也可以直接在終端機中用雙指縮放，同時更新此設定。此設定僅影響此裝置的顯示，不會變更電腦上的終端機。",
-      "textSizeHeading": "文字大小",
-      "textSizePickerTitle": "終端機文字大小",
       "title": "終端機"
     }
   },
@@ -405,6 +399,7 @@
       "otherDevice": "其他裝置"
     },
     "sessionOptionCopy": {
+      "none": "無",
       "availableAfterSessionStarts": "工作階段開始後可用。",
       "chooseInAgentPicker": "在代理程式選擇器中選擇…",
       "effort": "推理強度",
@@ -675,6 +670,10 @@
       "mark": "分支 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分支：{{name}}"
+    },
+    "selectionQuote": {
+      "action": "引用",
+      "hint": "將所選文字作為引用加入訊息"
     }
   },
   "common": {
@@ -697,7 +696,9 @@
     "retry": "重試",
     "save": "儲存",
     "settings": "設定",
-    "unknown": "未知"
+    "unknown": "未知",
+    "waitingForHost": "正在等待主機…",
+    "connectingToHost": "正在連線至主機…"
   },
   "components": {
     "accountsSnapshot": {
@@ -707,7 +708,7 @@
       "copyFailed": "無法複製",
       "copyPrompt": "複製提示詞",
       "statusUnreadable": "無法讀取此主機的狀態。正在重試…",
-      "updateRequired": "更新電腦上的 Orca 後，即可從手機啟動代理程式。"
+      "updateRequired": "更新此主機上的 Orca 後，即可從手機啟動代理程式。"
     },
     "agentSpinner": {
       "monitoring": "監控背景任務",
@@ -838,7 +839,7 @@
       "terminalLabel": "{{title}} ({{id}})",
       "unsentNotes_one": "{{count}} 則未傳送的備註",
       "unsentNotes_other": "{{count}} 則未傳送的備註",
-      "updateRequired": "請更新電腦上的 Orca"
+      "updateRequired": "請更新此主機上的 Orca"
     },
     "diffReviewFileSummary": {
       "changed": "已變更",
@@ -902,13 +903,14 @@
       "connectHint": "在 Orca 桌面版的「設定 → 整合」中新增 Jira 網站，然後再次檢查。",
       "connectOnDesktop": "在電腦上連線至 Jira",
       "credentialUnreadable": "Jira 憑證已儲存，但無法讀取：{{credentialError}}",
-      "updateDesktop": "更新 Orca 桌面版"
+      "updateDesktop": "更新此主機上的 Orca"
     },
     "markdownBlocks": {
       "copyCode": "複製程式碼",
       "openImage": "開啟圖片",
       "wrapLines": "自動換行",
-      "disableLineWrap": "停用自動換行"
+      "disableLineWrap": "停用自動換行",
+      "codeLabel": "程式碼"
     },
     "markdownCallout": {
       "note": "備註",
@@ -967,23 +969,23 @@
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主機清單",
-      "desktopTooOldBody": "已配對的桌面版版本過舊，無法搭配目前的 Orca Mobile 使用。請更新電腦上的 Orca，再重新連線至此主機。",
+      "desktopTooOldBody": "此主機上的 Orca 版本過舊，無法搭配目前的 Orca Mobile 使用。請更新此主機上的 Orca，再重新連線。",
       "getVersion": "取得 Orca {{version}}",
-      "mobileTooOldAppStore": "此桌面版需要較新版本的 Orca Mobile。請從 App Store 更新 Orca Mobile，再重新連線至此主機。",
-      "mobileTooOldGooglePlay": "此桌面版需要較新版本的 Orca Mobile。請從 Google Play 更新 Orca Mobile，再重新連線至此主機。",
-      "mobileTooOldGitHubReleases": "此桌面版需要較新版本的 Orca Mobile。請從 GitHub Releases 更新 Orca Mobile，再重新連線至此主機。",
+      "mobileTooOldAppStore": "此主機需要較新版本的 Orca Mobile。請從 App Store 更新 Orca Mobile，再重新連線至此主機。",
+      "mobileTooOldGooglePlay": "此主機需要較新版本的 Orca Mobile。請從 Google Play 更新 Orca Mobile，再重新連線至此主機。",
+      "mobileTooOldGitHubReleases": "此主機需要較新版本的 Orca Mobile。請從 GitHub Releases 更新 Orca Mobile，再重新連線至此主機。",
       "openAppStore": "開啟 App Store",
       "openGooglePlay": "開啟 Google Play",
       "openGitHubReleases": "開啟 GitHub Releases",
       "refreshRecoveryNote": "如果仍顯示此訊息，請移除此主機並重新配對。",
-      "refreshWorkspaceBody": "此主機的工作區快取版本低於桌面版要求的版本。請重新連線至此主機，以下載目前版本。",
+      "refreshWorkspaceBody": "此主機的工作區快取版本低於主機要求的版本。請重新連線至此主機，以下載目前版本。",
       "refreshWorkspaceTitle": "重新整理行動版工作區",
-      "updateDesktopTitle": "更新電腦上的 Orca",
+      "updateDesktopTitle": "更新此主機上的 Orca",
       "updateMobileTitle": "更新 Orca Mobile",
       "updateRecoveryNote": "已經更新了嗎？請返回「主機」並重新整理連線。如果仍顯示此訊息，請移除此主機並重新配對。",
-      "workspaceNeedsUpdateAppStore": "此桌面版的行動版工作區需要較新版本的 Orca Mobile。請從 App Store 更新 Orca Mobile，再重新連線至此主機。",
-      "workspaceNeedsUpdateGooglePlay": "此桌面版的行動版工作區需要較新版本的 Orca Mobile。請從 Google Play 更新 Orca Mobile，再重新連線至此主機。",
-      "workspaceNeedsUpdateGitHubReleases": "此桌面版的行動版工作區需要較新版本的 Orca Mobile。請從 GitHub Releases 更新 Orca Mobile，再重新連線至此主機。"
+      "workspaceNeedsUpdateAppStore": "此主機的行動版工作區需要較新版本的 Orca Mobile。請從 App Store 更新 Orca Mobile，再重新連線至此主機。",
+      "workspaceNeedsUpdateGooglePlay": "此主機的行動版工作區需要較新版本的 Orca Mobile。請從 Google Play 更新 Orca Mobile，再重新連線至此主機。",
+      "workspaceNeedsUpdateGitHubReleases": "此主機的行動版工作區需要較新版本的 Orca Mobile。請從 GitHub Releases 更新 Orca Mobile，再重新連線至此主機。"
     },
     "richMarkdownEditor": {
       "imageUrl": "圖片網址",
@@ -1011,7 +1013,6 @@
       "clearSearch": "清除搜尋"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "一律信任並執行",
       "description": "此存放庫的 orca.yaml 會在工作區啟動前執行。請僅在信任此存放庫時執行。",
       "dontRun": "不執行",
       "newScriptLabel": "新的設定指令碼",
@@ -1395,12 +1396,10 @@
     "fileExplorerPanel": {
       "backToSession": "返回工作階段",
       "closeFiles": "關閉檔案",
-      "connecting": "正在連線至電腦…",
       "emptyState": "找不到檔案",
       "loadFailed": "無法載入檔案",
       "title": "檔案",
-      "truncatedList": "{{worktreeLabel}} - 僅顯示前 5000 筆",
-      "waiting": "正在等待電腦…"
+      "truncatedList": "{{worktreeLabel}} - 僅顯示前 5000 筆"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 無法在行動版使用",
@@ -1430,8 +1429,7 @@
     "fileMediaPreview": {
       "downloading": "正在下載 {{bytes}}，共 {{total}}",
       "loadFailed": "無法載入媒體",
-      "loading": "正在載入媒體…",
-      "waiting": "正在等待電腦…"
+      "loading": "正在載入媒體…"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "無法驗證 SSH 連線。請重新連線至主機後再試一次。"
@@ -1470,8 +1468,7 @@
       "saveArtifact": "儲存終端機產出檔案",
       "saveFailed": "無法儲存檔案",
       "stay": "留在此頁",
-      "title": "預覽",
-      "waiting": "正在等待電腦…"
+      "title": "預覽"
     },
     "filePreviewSourceText": {
       "previewLabel": "檔案預覽",
@@ -1703,13 +1700,13 @@
       "localWindows": "本機 Windows",
       "projectOrder": "專案排序",
       "projects": "專案",
-      "savingToDesktop": "正在儲存至電腦",
+      "savingToDesktop": "正在儲存至主機",
       "show": "顯示",
       "showProperties": "顯示屬性",
       "sortBy": "排序方式",
       "syncedAcrossDevices": "已在您的裝置間同步",
       "thisComputer": "本機",
-      "waitingForDesktop": "仍在等待電腦回應",
+      "waitingForDesktop": "仍在等待主機回應",
       "workspaceOptions": "工作區選項"
     },
     "workspaceRenameSheet": {
@@ -2093,7 +2090,7 @@
       "committedChangesFailed": "載入已提交的變更失敗",
       "committedChangesUnavailable": "無法取得已提交的變更",
       "committedDiffUnavailable": "無法取得已提交的差異",
-      "desktopUpdateRequired": "請更新 Orca 桌面版，以便在手機上審查變更。",
+      "desktopUpdateRequired": "請更新此主機上的 Orca，以便在手機上審查變更。",
       "diffLoadFailed": "無法載入差異",
       "reviewNotesLoadFailed": "無法載入審查備註"
     },
@@ -2342,7 +2339,7 @@
       "emptyPrompt": "此動作儲存的提示詞為空白。請在電腦上更新「原始碼控制 AI」設定。",
       "loadFailed": "無法載入可用的代理程式。",
       "promptNotSent": "代理程式已啟動，但提示詞未傳送。",
-      "updateRequired": "請更新電腦上的 Orca，才能從手機啟動代理程式。"
+      "updateRequired": "更新此主機上的 Orca 後，即可從手機啟動代理程式。"
     },
     "prSidebarState": {
       "loadFailed": "無法載入 PR"
@@ -2432,7 +2429,6 @@
     },
     "sheets": {
       "browser": "瀏覽器",
-      "browserUpdateRequired": "需更新桌面版，才能將瀏覽器畫面串流至手機",
       "chat": "聊天",
       "copyAllAndLeave": "全部複製並離開",
       "copyDraftsFailed": "無法複製草稿",
@@ -2528,7 +2524,6 @@
       "browserCommandFailed": "瀏覽器命令執行失敗",
       "browserCreateFailed": "建立瀏覽器失敗",
       "browserUnavailable": "瀏覽器頁面尚未就緒。",
-      "browserUpdateRequired": "需更新桌面版才能使用行動版瀏覽器串流",
       "invalidUrl": "請輸入有效的網址",
       "noteCreateFailed": "建立 Markdown 筆記失敗",
       "untitledNoteCreateFailed": "無法建立未命名的 Markdown 筆記"
@@ -2539,26 +2534,21 @@
       "noteAdded": "已新增備註",
       "notesCopied": "已複製備註",
       "saveNoteFailed": "儲存備註失敗",
-      "saveNotesFailed": "儲存審查備註失敗",
-      "waitingForDesktop": "等待電腦…"
+      "saveNotesFailed": "儲存審查備註失敗"
     },
     "useDiffReviewCommentActions": {
       "saveFailed": "儲存審查失敗",
-      "saveStateFailed": "儲存審查狀態失敗",
-      "waitingForDesktop": "正在等待電腦…"
+      "saveStateFailed": "儲存審查狀態失敗"
     },
     "useDiffReviewController": {
       "loadFailed": "無法載入審查",
-      "missingWorktree": "找不到工作樹",
-      "waitingForDesktop": "正在等待電腦…"
+      "missingWorktree": "找不到工作樹"
     },
     "useDiffReviewDiffLoading": {
-      "loadFailed": "無法載入差異",
-      "waitingForDesktop": "正在等待電腦…"
+      "loadFailed": "無法載入差異"
     },
     "useDiffReviewGitActions": {
-      "actionFailed": "原始碼控制操作失敗",
-      "waitingForDesktop": "正在等待電腦…"
+      "actionFailed": "原始碼控制操作失敗"
     },
     "useDiffReviewInteractions": {
       "openFailed": "無法在工作階段中開啟"
@@ -2572,8 +2562,7 @@
       "notesSentWithWarning": "審查備註已傳送。{{warning}}",
       "promptNotSent": "代理程式已啟動，但備註未傳送。請使用「複製備註」複製後再貼上。",
       "sendFailed": "傳送備註失敗",
-      "startingAgent": "正在啟動代理程式…",
-      "waitingForDesktop": "正在等待電腦…"
+      "startingAgent": "正在啟動代理程式…"
     },
     "useImageAttachment": {
       "attachFailed": "附加失敗",
@@ -2612,8 +2601,7 @@
       "presetsUnavailable": "代理程式預設無法使用"
     },
     "usePrAiTriage": {
-      "launchFailed": "啟動代理程式失敗",
-      "waitingForDesktop": "等待電腦…"
+      "launchFailed": "啟動代理程式失敗"
     },
     "usePrCommentActions": {
       "actionFailed": "留言操作失敗"
@@ -2681,6 +2669,7 @@
       "conversationCleared": "此對話已被清除。",
       "goalsUnsupported": "此代理程式不支援目標。",
       "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+      "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
       "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
       "historyUnusable": "無法載入此聊天。",
       "hostReconciling": "Orca 重啟後仍在檢查此聊天。",
@@ -2863,7 +2852,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "無法載入通知傳送設定。請重新開啟此畫面再試一次。",
       "saveFailed": "無法儲存通知傳送設定，請再試一次。",
-      "updateDesktopHint": "請配對已更新 Orca 的電腦，即可在此手機上接收通知。"
+      "updateDesktopHint": "請配對已更新 Orca 的主機，即可在此手機上接收通知。"
     },
     "notificationDisplayTest": {
       "accepted": "Orca 的推播服務已接受請求。請查看是否收到通知。",
@@ -2952,8 +2941,7 @@
   },
   "sourceControl": {
     "actionSheetRunners": {
-      "noBaseBranch": "沒有可供變基的基底分支",
-      "waitingForDesktop": "等待電腦…"
+      "noBaseBranch": "沒有可供變基的基底分支"
     },
     "actions": {
       "checkingReviewStatus": "正在檢查審查狀態。",
@@ -3116,8 +3104,7 @@
       "loadFilesFailed": "無法載入該次提交的檔案",
       "noCommits": "沒有提交記錄。",
       "noFileChanges": "沒有檔案變更",
-      "retryFiles": "重新載入提交的檔案",
-      "waitingForDesktop": "正在等待電腦…"
+      "retryFiles": "重新載入提交的檔案"
     },
     "gitStatus": {
       "conflicts": "衝突"
@@ -3182,10 +3169,8 @@
       "changes": "變更"
     },
     "loaders": {
-      "connectingToDesktop": "正在連線至電腦…",
       "loadFailed": "無法載入原始碼控制",
-      "updateDesktop": "請更新 Orca 桌面版，才能在行動裝置上使用原始碼控制。",
-      "waitingForDesktop": "等待電腦…"
+      "updateDesktop": "請更新此主機上的 Orca，才能在行動裝置上使用原始碼控制。"
     },
     "modals": {
       "currentBranch": "目前分支",
@@ -3370,8 +3355,7 @@
       "windowsBatchUnsafeArguments": "{{label}} 透過 Windows 批次指令碼執行，該指令碼無法將多行提示詞作為引數接收。請在「設定」中指定代理程式的執行檔，或使用不含 {prompt} 的自訂命令，讓 Orca 透過 stdin 傳送提示詞。"
     },
     "useMobileCommitFailureRecovery": {
-      "launchFailed": "無法啟動代理程式",
-      "waitingForDesktop": "等待電腦…"
+      "launchFailed": "無法啟動代理程式"
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "無法產生提交訊息"
@@ -3379,8 +3363,7 @@
     "useMobileGitRequests": {
       "actionFailed": "原始碼控制操作失敗",
       "branchUnavailable": "無法取得分支狀態",
-      "commitFailed": "提交失敗",
-      "waitingForDesktop": "等待電腦…"
+      "commitFailed": "提交失敗"
     },
     "conflictActions": {
       "needsNewerHost": "請更新執行此工作區的電腦上的 Orca，才能從手機解決合併衝突。",
@@ -3397,15 +3380,7 @@
       "confirmGitHubRebase": "要將 PR #{{number}} 變基後合併嗎？",
       "confirmGitLabMerge": "要合併合併請求 #{{number}} 嗎？",
       "confirmGitLabSquash": "要將合併請求 #{{number}} 的提交壓縮後合併嗎？",
-      "confirmGitLabRebase": "要將合併請求 #{{number}} 變基後合併嗎？",
-      "merged": "已合併",
-      "closed": "已關閉",
-      "conflicts": "有衝突",
-      "behind": "落後",
-      "blocked": "已封鎖",
-      "checksPending": "等待檢查",
-      "ableToMerge": "可以合併",
-      "unknown": "未知"
+      "confirmGitLabRebase": "要將合併請求 #{{number}} 變基後合併嗎？"
     },
     "pagination": {
       "pageUnreachable": "第 {{page}} 頁超出 GitHub 搜尋可傳回的範圍。",
@@ -3581,8 +3556,8 @@
       "connectLinearMessage": "直接從「任務」瀏覽並開始處理指派給您的 Linear 議題。",
       "connectLinearTitle": "連線您的 Linear 帳戶",
       "jiraStatusFailed": "無法讀取 Jira 狀態",
-      "updateDesktopMessage": "此行動版「任務」檢視需要較新版的桌面執行環境。",
-      "updateDesktopTitle": "更新 Orca 桌面版"
+      "updateDesktopMessage": "此行動版「任務」檢視需要此主機上較新版的 Orca。",
+      "updateDesktopTitle": "更新此主機上的 Orca"
     },
     "options": {
       "all": "全部",
@@ -3810,7 +3785,6 @@
       "title": "任務"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL，例如 project = ABC AND statusCategory != Done",
       "projectPlaceholder": "在專案檢視中搜尋…",
       "providerPlaceholder": "搜尋 {{provider}} 任務…"
     },
@@ -3911,27 +3885,19 @@
       "reconnecting": "重新連線中"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "一律信任並執行",
       "creating": "建立中…",
       "directoriesLabel": "目錄",
       "directories_one": "{{count}} 個目錄",
       "directories_other": "{{count}} 個目錄",
-      "dontRun": "不執行",
       "editSparsePreset": "編輯稀疏預設",
       "nameLabel": "名稱",
       "namePlaceholder": "算繪器介面",
-      "newSetupScript": "新的設定指令碼",
       "newSparsePreset": "新增稀疏預設",
-      "runHooks": "執行鉤子",
       "runSetupAndCreate": "執行設定並建立",
-      "runSetupTitle": "要執行 {{name}} 的設定指令碼嗎？",
-      "setupChangedTitle": "{{name}} 的設定指令碼已變更",
-      "setupScript": "設定指令碼",
       "setupSubtitle": "建立此工作區前，請先選擇是否為 {{name}} 執行設定。",
       "setupTitle": "要執行設定指令碼嗎？",
       "skipSetupAndCreate": "略過設定並建立",
-      "trustFailed": "無法將設定指令碼設為信任。",
-      "trustSubtitle": "此存放庫的 orca.yaml 會在工作區啟動前於您的電腦上執行。請僅在信任此存放庫時執行。"
+      "trustFailed": "無法將設定指令碼設為信任。"
     },
     "worktreeCreateRetry": {
       "createFailed": "建立工作區失敗"
@@ -4258,6 +4224,116 @@
               "3f1422adc1": "工作日 {{time}}",
               "cc71e252ba": "每{{day}} {{time}}"
             }
+          }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "搜尋議題或輸入 JQL，例如 project = ABC",
+        "jiraTextMatchesNotice": "正在顯示文字比對結果。Jira 無法將此搜尋作為 JQL 執行。"
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "已取消"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "已合併",
+              "4f976d3450": "已關閉",
+              "1f8eb81c0e": "需要核准",
+              "c606463dc2": "要求變更",
+              "7e8bbe3cd7": "衝突",
+              "b169f943e1": "準備好後合併",
+              "autoMergeOn": "自動合併已開啟",
+              "039c072f94": "落後",
+              "bf5e4c6c92": "已阻塞",
+              "87fa36ac83": "檢查失敗",
+              "4e2507176b": "檢查待處理",
+              "def355ff38": "可以合併",
+              "f958920f3a": "檢查中"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "已合併",
+                  "88d044c42f": "已關閉",
+                  "96b05e374c": "衝突",
+                  "5105b0e584": "需要核准",
+                  "893a999c8c": "要求變更",
+                  "01ab632a21": "未解決的討論串",
+                  "bf628700f6": "檢查必須通過",
+                  "65c847ad1e": "檢查待處理",
+                  "382c70faeb": "落後",
+                  "195917574e": "檢查中",
+                  "4ecc0d90ee": "已阻塞",
+                  "49ac4fec10": "檢查失敗",
+                  "04a3015a12": "可以合併"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira 無法執行此 JQL 查詢。請檢查語法後再試一次。"
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "沒有來自 {{server}} 的用量資料",
+            "remoteOwnerNotConfigured": "{{server}} 上尚未設定",
+            "claudeUnknownOnHost": "無法從 {{server}} 取得 Claude 用量。可能尚未在該主機登入，或使用 API 金鑰計費。",
+            "remoteOwnerSignInSavedHere": "登入資訊僅儲存在這台電腦上。",
+            "f8b8dbed85": "用量不可用",
+            "e2c6a4f917": "執行 Grok 以重新整理",
+            "f90b3d7a16": "執行 Kimi 以重新整理",
+            "0d8d7cfe15": "等待 Claude 工作階段",
+            "claude": {
+              "waiting": {
+                "label": "執行 Claude 時更新",
+                "message": "Claude 用量將在下次執行 Claude 時更新。"
+              }
+            },
+            "1804cd8c3f": "正在重新整理登入",
+            "bf2e739f18": "登入不可用",
+            "f8f0f9d8cc": "網路問題",
+            "minimax": {
+              "expired": {
+                "label": "登入已過期",
+                "apiKey": "MiniMax API 金鑰已過期。在設定中替換它。",
+                "cookie": "MiniMax 工作階段 cookie 已過期。在設定中替換它。"
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "登入已過期",
+                "message": "請在執行 Orca 的電腦上的終端機中執行 cursor-agent login，然後重新整理用量。"
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "無訂閱"
+              }
+            },
+            "7ad719c4bf": "受限",
+            "e740f92596": "重新整理失敗",
+            "2c35eca8d4": "無法取得用量",
+            "d1b7f509ac": "在執行 Orca 的電腦上的終端機中執行 grok，並等待其啟動。如有提示，請完成登入，然後重試用量檢查。您無需傳送聊天訊息。",
+            "a37e8c15d4": "在執行 Orca 的電腦上的終端機中執行 kimi，等待其啟動，然後重試用量檢查。",
+            "3d3c9c0c1f": "正在執行的 Claude 終端機輪替憑證後，Claude 用量會重新整理。",
+            "42fdd4da1d": "正在重新整理 Claude 登入。代理程式工作階段可能仍處於登入狀態。",
+            "c06c1d215d": "由於網路請求失敗，無法重新整理 Claude 用量。",
+            "cabdc2a9e0": "無法讀取 Claude 登入憑證。",
+            "a7517cccb6": "Claude 用量目前不可用。",
+            "8418ec448d": "{{value0}} 用量無法重新整理。代理程式工作階段可能仍處於登入狀態。"
           }
         }
       }

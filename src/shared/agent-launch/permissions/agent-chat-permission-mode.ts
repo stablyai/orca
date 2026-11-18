@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import { resolvedTuiAgentArgsBypassPermissions } from '../choices/tui-agent-launch-defaults'
 import { YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
 import {

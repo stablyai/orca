@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import { useAppStore } from '@/store/index'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'

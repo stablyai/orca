@@ -1,9 +1,9 @@
 // Send open with the chat’s own tab ID, select only after main draws it, and use afterPendingTab before reading the returned tab from store.
 
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { defaultAgentChatLabel } from '../../../../../../shared/agent-session/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useAppStore } from '@/store/index'
 import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
