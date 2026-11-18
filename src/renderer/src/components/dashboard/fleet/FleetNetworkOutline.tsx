@@ -1,15 +1,17 @@
 import { cn } from '@/lib/class-names'
-import { FleetNetworkNode } from './FleetNetworkNode'
+import { FleetNetworkNode, type FleetCardOpener } from './FleetNetworkNode'
 import { FLEET_GUIDE_LINE_CLASS, FleetTreeGuides } from './FleetTreeGuides'
 import { flattenFleetTree } from './fleet-tree-rows'
 import type { FleetNode } from './fleet-view-model'
 
 export function FleetNetworkOutline({
   root,
-  now
+  now,
+  onOpenCard
 }: {
   root: FleetNode
   now: number
+  onOpenCard: FleetCardOpener
 }): React.JSX.Element {
   return (
     <div>
@@ -17,7 +19,7 @@ export function FleetNetworkOutline({
         <div key={row.card.paneKey} className="relative flex">
           <FleetTreeGuides row={row} />
           <div className="relative min-w-0 flex-1 py-1">
-            <FleetNetworkNode card={row.card} now={now} />
+            <FleetNetworkNode card={row.card} now={now} onOpenCard={onOpenCard} />
             {row.hasChildren ? (
               <span
                 aria-hidden

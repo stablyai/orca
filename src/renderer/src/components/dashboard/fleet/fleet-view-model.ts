@@ -6,15 +6,14 @@ import { buildAgentRowLineageTree } from '../rows/agent-row-lineage-model'
 
 export type FleetBucketCounts = Record<DashboardBucket, number>
 
-export type FleetNode = { card: DashboardCard; depth: number; children: FleetNode[] }
-
-export type FleetTeam = {
-  root: FleetNode
-  size: number
-  counts: FleetBucketCounts
-  startedAt: number
-  endedAt: number | null
+export type FleetNode = {
+  card: DashboardCard
+  depth: number
+  leafCount: number
+  children: FleetNode[]
 }
+
+export type FleetTeam = { root: FleetNode; size: number; counts: FleetBucketCounts }
 
 export type FleetView = {
   summary: FleetBucketCounts & { agents: number; teams: number }
@@ -32,43 +31,16 @@ function emptyCounts(): FleetBucketCounts {
   return { attention: 0, working: 0, done: 0, idle: 0 }
 }
 
-function isLive(card: DashboardCard): boolean {
-  return card.bucket === 'working' || card.bucket === 'attention'
-}
-
-/** finishedAt keeps the last completion, so a live card that finished an earlier turn still ends at now. */
-export function fleetCardEnd(card: DashboardCard, now: number): number {
-  return isLive(card) ? now : (card.finishedAt ?? now)
-}
-
 function lastActivity(card: DashboardCard): number {
   return Math.max(card.stateChangedAt, card.startedAt, card.finishedAt ?? 0)
 }
 
-function collectNodes(node: FleetNode, into: DashboardCard[]): DashboardCard[] {
+function collectCards(node: FleetNode, into: DashboardCard[]): DashboardCard[] {
   into.push(node.card)
   for (const child of node.children) {
-    collectNodes(child, into)
+    collectCards(child, into)
   }
   return into
-}
-
-function buildTeam(root: FleetNode): FleetTeam {
-  const members = collectNodes(root, [])
-  const counts = emptyCounts()
-  let startedAt = 0
-  let endedAt: number | null = 0
-  for (const card of members) {
-    counts[card.bucket] += 1
-    if (card.startedAt > 0) {
-      startedAt = startedAt === 0 ? card.startedAt : Math.min(startedAt, card.startedAt)
-    }
-    endedAt =
-      endedAt === null || isLive(card) || card.finishedAt === null
-        ? null
-        : Math.max(endedAt, card.finishedAt)
-  }
-  return { root, size: members.length, counts, startedAt, endedAt }
 }
 
 export function buildFleetView(cards: readonly DashboardCard[]): FleetView {
@@ -79,13 +51,14 @@ export function buildFleetView(cards: readonly DashboardCard[]): FleetView {
   }))
   const { rootRows, childrenByParentPaneKey } = buildAgentRowLineageTree(rows)
 
-  const toNode = (row: FleetLineageRow, depth: number): FleetNode => ({
-    card: row.card,
-    depth,
-    children: (childrenByParentPaneKey.get(row.paneKey) ?? []).map((child) =>
+  const toNode = (row: FleetLineageRow, depth: number): FleetNode => {
+    const children = (childrenByParentPaneKey.get(row.paneKey) ?? []).map((child) =>
       toNode(child, depth + 1)
     )
-  })
+    const leafCount =
+      children.length === 0 ? 1 : children.reduce((total, child) => total + child.leafCount, 0)
+    return { card: row.card, depth, leafCount, children }
+  }
 
   const ranked: { team: FleetTeam; activity: number }[] = []
   const solo: DashboardCard[] = []
@@ -95,17 +68,22 @@ export function buildFleetView(cards: readonly DashboardCard[]): FleetView {
       solo.push(row.card)
       continue
     }
-    const activity = Math.max(...collectNodes(root, []).map(lastActivity))
-    ranked.push({ team: buildTeam(root), activity })
+    const members = collectCards(root, [])
+    const counts = emptyCounts()
+    for (const card of members) {
+      counts[card.bucket] += 1
+    }
+    ranked.push({
+      team: { root, size: members.length, counts },
+      activity: Math.max(...members.map(lastActivity))
+    })
   }
   ranked.sort((a, b) => b.activity - a.activity)
-  const teams = ranked.map(({ team }) => team)
   solo.sort((a, b) => lastActivity(b) - lastActivity(a))
 
-  const summary = { ...emptyCounts(), agents: cards.length, teams: teams.length }
+  const summary = { ...emptyCounts(), agents: cards.length, teams: ranked.length }
   for (const card of cards) {
     summary[card.bucket] += 1
   }
-
-  return { summary, teams, solo }
+  return { summary, teams: ranked.map(({ team }) => team), solo }
 }

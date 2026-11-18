@@ -28,9 +28,3 @@ export function flattenFleetTree(root: FleetNode): FleetTreeRow[] {
   visit(root, true, [])
   return rows
 }
-
-export function countFleetLeaves(node: FleetNode): number {
-  return node.children.length === 0
-    ? 1
-    : node.children.reduce((total, child) => total + countFleetLeaves(child), 0)
-}

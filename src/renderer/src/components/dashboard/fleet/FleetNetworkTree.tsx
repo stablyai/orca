@@ -1,6 +1,6 @@
 import { cn } from '@/lib/class-names'
-import { FleetNetworkNode } from './FleetNetworkNode'
-import { countFleetLeaves } from './fleet-tree-rows'
+import { FleetNetworkNode, type FleetCardOpener } from './FleetNetworkNode'
+import { FLEET_TREE_BRANCH_GUTTER_PX, FLEET_TREE_NODE_MAX_WIDTH_PX } from './fleet-team-fold'
 import type { FleetNode } from './fleet-view-model'
 
 const CHILD_LIST_CLASS = cn(
@@ -9,7 +9,7 @@ const CHILD_LIST_CLASS = cn(
 )
 
 const BRANCH_CLASS = cn(
-  'relative flex min-w-0 basis-0 flex-col items-center px-1.5 pt-4',
+  'relative flex min-w-0 basis-0 flex-col items-center pt-4',
   'before:absolute before:top-0 before:right-1/2 before:h-4 before:w-1/2 before:border-t',
   'after:absolute after:top-0 after:left-1/2 after:h-4 after:w-1/2 after:border-t after:border-l',
   'before:border-muted-foreground/30 after:border-muted-foreground/30',
@@ -18,14 +18,35 @@ const BRANCH_CLASS = cn(
   'only:pt-0 only:before:hidden only:after:hidden'
 )
 
-function FleetNetworkBranch({ node, now }: { node: FleetNode; now: number }): React.JSX.Element {
+function FleetNetworkBranch({
+  node,
+  now,
+  onOpenCard
+}: {
+  node: FleetNode
+  now: number
+  onOpenCard: FleetCardOpener
+}): React.JSX.Element {
   return (
-    <li className={BRANCH_CLASS} style={{ flexGrow: countFleetLeaves(node) }}>
-      <FleetNetworkNode card={node.card} now={now} className="max-w-56" />
+    <li
+      className={BRANCH_CLASS}
+      style={{ flexGrow: node.leafCount, paddingInline: FLEET_TREE_BRANCH_GUTTER_PX }}
+    >
+      <FleetNetworkNode
+        card={node.card}
+        now={now}
+        onOpenCard={onOpenCard}
+        maxWidthPx={FLEET_TREE_NODE_MAX_WIDTH_PX}
+      />
       {node.children.length > 0 ? (
         <ul className={CHILD_LIST_CLASS}>
           {node.children.map((child) => (
-            <FleetNetworkBranch key={child.card.paneKey} node={child} now={now} />
+            <FleetNetworkBranch
+              key={child.card.paneKey}
+              node={child}
+              now={now}
+              onOpenCard={onOpenCard}
+            />
           ))}
         </ul>
       ) : null}
@@ -35,14 +56,16 @@ function FleetNetworkBranch({ node, now }: { node: FleetNode; now: number }): Re
 
 export function FleetNetworkTree({
   root,
-  now
+  now,
+  onOpenCard
 }: {
   root: FleetNode
   now: number
+  onOpenCard: FleetCardOpener
 }): React.JSX.Element {
   return (
     <ul className="flex">
-      <FleetNetworkBranch node={root} now={now} />
+      <FleetNetworkBranch node={root} now={now} onOpenCard={onOpenCard} />
     </ul>
   )
 }

@@ -19,13 +19,13 @@ export function FleetSummaryBand({
   const tiles: FleetSummaryTile[] = [
     {
       key: 'agents',
-      label: t('dashboard.fleet.summary.agents', 'Agents'),
+      label: t('dashboardPopout.fleet.summary.agents', 'Agents'),
       value: summary.agents,
       icon: <Bot className="size-3" aria-hidden />
     },
     {
       key: 'teams',
-      label: t('dashboard.fleet.summary.teams', 'Teams'),
+      label: t('dashboardPopout.fleet.summary.teams', 'Teams'),
       value: summary.teams,
       icon: <Network className="size-3" aria-hidden />
     },
