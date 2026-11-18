@@ -18,18 +18,26 @@ export function actionableStructuredPrompts(state: PromptState) {
   })
 }
 
-export function actionableStructuredApproval(state: PromptState): StructuredApprovalItem | null {
+export function actionableStructuredApproval(
+  state: PromptState,
+  itemId?: string
+): StructuredApprovalItem | null {
   return (
     actionableStructuredPrompts(state).find(
-      (item): item is StructuredApprovalItem => item.body.kind === 'approval'
+      (item): item is StructuredApprovalItem =>
+        item.body.kind === 'approval' && (itemId === undefined || item.itemId === itemId)
     ) ?? null
   )
 }
 
-export function actionableStructuredQuestion(state: PromptState): StructuredQuestionItem | null {
+export function actionableStructuredQuestion(
+  state: PromptState,
+  itemId?: string
+): StructuredQuestionItem | null {
   return (
     actionableStructuredPrompts(state).find(
-      (item): item is StructuredQuestionItem => item.body.kind === 'question'
+      (item): item is StructuredQuestionItem =>
+        item.body.kind === 'question' && (itemId === undefined || item.itemId === itemId)
     ) ?? null
   )
 }

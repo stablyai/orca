@@ -33,6 +33,13 @@ export const UsageActionSchema = z.enum([
   'getRecentSessions'
 ])
 export type UsageAction = z.infer<typeof UsageActionSchema>
+/** A renderer-privileged usage call (`<provider>:<action>`); the usage service rejects anything else. */
+export const UsageCallParams = z.object({
+  method: z.string().min(1).max(128),
+  params: z.unknown().optional()
+})
+export type UsageCall = z.infer<typeof UsageCallParams>
+export const BACKEND_PUBLIC_USAGE_METHOD = 'usage.public'
 export type BackendResponse = RuntimeRpcResponse<unknown>
 
 export const BackendBootstrapSchema = z

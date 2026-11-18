@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { redactString } from '../../../../observability/redactor'
+import { redactString } from '../../../../../shared/observability/redactor'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'

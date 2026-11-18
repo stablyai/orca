@@ -6,7 +6,7 @@ import {
   claudeProfileTranscriptDirs,
   claudeProfileTranscriptSources
 } from '../claude-usage/transcript-file-discovery'
-import { loadKnownUsageWorktreesByRepo } from '../usage/worktree-attribution/usage-worktree-metadata'
+import { readUsageWorktreeCatalog } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { openCodeUsageAccountRoots } from '../opencode-usage/opencode-usage-account-roots'
 import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
@@ -36,12 +36,7 @@ export function createBackendDesktopCapabilities(
 ): (method: string, params: unknown) => Promise<unknown> {
   return async (method, params) => {
     if (method === 'usage.catalog') {
-      await store.whenLoaded()
-      const repos = store.getRepos()
-      return {
-        repoIds: repos.map((repo) => repo.id),
-        worktreesByRepo: [...loadKnownUsageWorktreesByRepo(store, repos)]
-      }
+      return readUsageWorktreeCatalog(store)
     }
     if (method === 'usage.claudeProfileDirs') {
       return claudeProfileTranscriptDirs()

@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 
 export function renderAppearanceSettingsSection(
   context: SettingsRenderContext,
@@ -52,6 +53,7 @@ export type ChatSettingsRenderContext = {
     | 'sourceControlAiPromptDiscardSignal'
     | 'hasUnsavedChatPromptChanges'
     | 'showDesktopOnlySettings'
+    | 'settingsHostScope'
   >
   interactions: Pick<
     SettingsRenderContext['interactions'],
@@ -75,6 +77,7 @@ export function renderChatSettingsSection(context: ChatSettingsRenderContext): R
       hasUnsavedChatPromptChanges={model.hasUnsavedChatPromptChanges}
       searchEntries={navigation.getSectionSearchEntries('chat')}
       showDesktopOnlySettings={model.showDesktopOnlySettings}
+      hostScope={model.settingsHostScope}
       isMounted={view.isSectionMounted('chat')}
     />
   )
@@ -161,11 +164,13 @@ export function renderStatsSettingsSection(
       )}
       searchEntries={navigation.getSectionSearchEntries('stats')}
     >
-      {view.isSectionMounted('stats') ? (
+      {!view.isSectionMounted('stats') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : (
         <SettingsGroup bodyClassName="py-4">
           <StatsPane hostScope={model.settingsHostScope} />
         </SettingsGroup>
-      ) : null}
+      )}
     </SettingsSection>
   )
 }

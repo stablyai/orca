@@ -1,0 +1,289 @@
+// One chat in the Chats tab: one folded row; its chevron shows the workers it started, capped and stepped.
+import { useState } from 'react'
+import { AppWindow, ChevronRight } from 'lucide-react'
+import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
+import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
+import { useTranslate } from '@/i18n/use-translate'
+import { openBotHomeTab } from '@/lib/bot-catalog'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
+import { cn } from '@/lib/class-names'
+import type { Bot } from '../../../../shared/bot-types'
+import {
+  CHAT_TREE_CAPS,
+  chatFoldSummary,
+  chatRunningCount,
+  chatWaitingCount,
+  type BotChatTreeChat
+} from '../../../../shared/bots/bot-chat-tree'
+import {
+  CHATS_TAB_FIRST_WORKERS,
+  botChatPlace,
+  chatsTabWorkers
+} from '../../../../shared/bots/bot-chat-tree-view'
+import { CONNECTOR_SOURCE_NAMES } from '../../../../shared/connectors/external-conversation-link'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/agent-session-history-modal'
+import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
+import { BotChatPaging, FOLD_TOGGLE_CLASS } from './BotChatRowControls'
+import { openBotAutomation } from './bot-automation-open'
+import { revealWorkerPane } from '@/lib/open-orchestration-worker'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
+import { openBotSession } from './bot-session-open'
+
+function openChat(bot: Bot, chat: BotChatTreeChat): void {
+  const { run } = chat
+  if (run) {
+    // A terminal run has no chat: its terminal is what opens, else its run record.
+    const host = parseExecutionHostId(bot.hostId)
+    if (run.worktreeId && run.paneKey) {
+      revealWorkerPane(run.worktreeId, run.paneKey, host?.kind === 'runtime' ? host.id : undefined)
+    } else {
+      openBotAutomation(run.automationId, run.runId)
+    }
+  } else if (chat.closed) {
+    // A closed chat reads in Session History.
+    openAgentSessionHistoryModal({
+      workspace: { worktreeId: folderWorkspaceKey(bot.folderWorkspaceId) },
+      chatTabId: structuredAgentSessionTabId(chat.chatId),
+      initialQuery: '',
+      alongside: true
+    })
+  } else if (chat.origin === 'home') {
+    void openBotHomeTab(bot)
+  } else {
+    openBotSession(bot, chat.chatId)
+  }
+}
+
+/** A chat row's second line, as the Chats tab shows it (the `@` list's chat rows too). */
+export function BotChatLine({
+  bot,
+  chat,
+  folded
+}: {
+  bot: Bot
+  chat: BotChatTreeChat
+  folded: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  if (chat.live === 'replying') {
+    return <>{t('bots.chats.replying', 'Replying…')}</>
+  }
+  const place = botChatPlace(chat)
+  if (chat.live === 'needs-you') {
+    return (
+      <>
+        {place ? `${place} · ` : null}
+        <span className="text-foreground">{t('bots.chats.waiting', 'Waiting for you')}</span>
+      </>
+    )
+  }
+  const summary = folded ? chatFoldSummary(chat) : null
+  if (summary) {
+    return <>{summary}</>
+  }
+  const closed = chat.closedAt
+    ? t('bots.chats.closedOn', 'closed {{date}}', {
+        date: uiDateTimeFormat({ month: 'short', day: 'numeric' }).format(chat.closedAt)
+      })
+    : null
+  const preview =
+    chat.preview ??
+    (chat.origin === 'home'
+      ? t('bots.chats.sayHi', 'Say hi to {{name}}', { name: bot.name })
+      : null)
+  return <>{[place, closed, preview].filter(Boolean).join(' · ')}</>
+}
+
+const META = 'flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground tabular-nums'
+
+/** The row's right edge: "N waiting" with the waiting dot and "N running" with its spinner while
+ *  workers wait or run (their glyphs alone when narrow), else the time, which a narrow panel drops. */
+function ChatRowMeta({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | null {
+  const t = useTranslate()
+  const waiting = chatWaitingCount(chat)
+  const running = chatRunningCount(chat)
+  if (waiting + running > 0) {
+    const waitingLabel = t('bots.chats.waitingCount', '{{count}} waiting', { count: waiting })
+    const runningLabel = t('bots.chats.runningCount', '{{count}} running', { count: running })
+    return (
+      <span className="flex shrink-0 items-center gap-2">
+        {waiting > 0 ? (
+          <span className={META}>
+            <span
+              role="img"
+              aria-label={waitingLabel}
+              className="block size-[7px] rounded-full bg-agent-question"
+            />
+            <span aria-hidden className="text-agent-question-text @max-[240px]:hidden">
+              {waitingLabel}
+            </span>
+          </span>
+        ) : null}
+        {running > 0 ? (
+          <span className={META}>
+            <StatusIndicator status="working" showTooltip={false} aria-label={runningLabel} />
+            <span aria-hidden className="@max-[240px]:hidden">
+              {runningLabel}
+            </span>
+          </span>
+        ) : null}
+      </span>
+    )
+  }
+  // A Home Chat not started yet has no time.
+  return chat.lastActiveAt > 0 ? (
+    <span className="shrink-0 text-2xs text-muted-foreground tabular-nums @max-[240px]:hidden">
+      {formatShortTimeAgo(chat.lastActiveAt)}
+    </span>
+  ) : null
+}
+
+export function BotChatTreeGroup({
+  bot,
+  chat,
+  unfolded,
+  onFold,
+  loadMore
+}: {
+  bot: Bot
+  chat: BotChatTreeChat
+  /** The panel's own fold, apart from the sidebar's; null for a search's chat hit, which lists no workers. */
+  unfolded: boolean | null
+  onFold: (open: boolean) => void
+  loadMore: (chatId: string) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [limit, setLimit] = useState(CHATS_TAB_FIRST_WORKERS)
+  const foldable = unfolded !== null && chat.runningTotal + chat.finishedTotal > 0
+  const open = foldable && unfolded === true
+  const { workers, more, read } = chatsTabWorkers(chat, limit)
+  const source =
+    chat.origin === 'slack' || chat.origin === 'linear' || chat.origin === 'github'
+      ? CONNECTOR_SOURCE_NAMES[chat.origin]
+      : null
+  // A side chat has no title until its first turn.
+  const title = chat.title || t('bots.chats.untitled', 'New chat')
+  const chatName = [source, title].filter(Boolean).join(' · ')
+  const label = useBotChatLabel(chat, title)
+  const openTabLabel = t('bots.chats.openTab', 'Open in a tab')
+  const toggleFold = (): void => {
+    if (!open && read) {
+      loadMore(chat.chatId)
+    }
+    onFold(!open)
+  }
+  const showMore = (): void => {
+    const next = limit + CHAT_TREE_CAPS.step
+    if (chatsTabWorkers(chat, next).read) {
+      loadMore(chat.chatId)
+    }
+    setLimit(next)
+  }
+  // A press only opens the chat, the open one too; the chevron alone folds. A double-click opens once.
+  const pressRow = (event: { detail: number }): void => {
+    if (event.detail <= 1) {
+      openChat(bot, chat)
+    }
+  }
+  return (
+    <div className="flex flex-col">
+      <div className="group/bot-chat relative flex w-full min-w-0 items-start gap-1 rounded-md py-1.5 pr-2 pl-0.5 hover:bg-accent">
+        <button
+          type="button"
+          aria-label={[label, chat.unread ? t('bots.chats.unread', 'Unread') : null]
+            .filter(Boolean)
+            .join(' · ')}
+          className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onClick={pressRow}
+          // A held key repeats its click; it must not open the chat again and again.
+          onKeyDown={(event) => {
+            if (event.repeat) {
+              event.preventDefault()
+            }
+          }}
+        />
+        <span className="flex h-5 w-3.5 shrink-0 items-center justify-center">
+          {foldable ? (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-label={
+                open
+                  ? t('bots.chats.fold', 'Fold {{name}}', { name: title })
+                  : t('bots.chats.unfold', 'Unfold {{name}}', { name: title })
+              }
+              className={cn('relative size-3.5', FOLD_TOGGLE_CLASS)}
+              onClick={toggleFold}
+            >
+              <ChevronRight className={cn('size-3', open && 'rotate-90')} />
+            </button>
+          ) : null}
+        </span>
+        <BotChatStatusSlot
+          chat={chat}
+          className="h-5 w-4"
+          iconClassName="size-3.5"
+          onClick={pressRow}
+        />
+        <span className="min-w-0 flex-1 pl-1">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className={cn(
+                'min-w-0 truncate text-[13px] font-medium text-foreground',
+                chat.unread && 'font-semibold'
+              )}
+            >
+              {title}
+            </span>
+            {chat.unseen ? (
+              <span className="shrink-0 rounded border border-input px-1 text-[10px] leading-[14px] font-semibold text-foreground">
+                {t('bots.chats.newTag', 'New')}
+              </span>
+            ) : null}
+            {chat.tab ? (
+              <StateIndicatorTooltip label={openTabLabel}>
+                <span role="img" aria-label={openTabLabel} className="relative flex shrink-0">
+                  <AppWindow className="size-3 text-muted-foreground/70" />
+                </span>
+              </StateIndicatorTooltip>
+            ) : null}
+            <span className="flex-1" />
+            <ChatRowMeta chat={chat} />
+          </span>
+          <span className="block truncate text-2xs text-muted-foreground">
+            <BotChatLine bot={bot} chat={chat} folded={false} />
+          </span>
+        </span>
+      </div>
+      {open ? (
+        <div className="mb-1 ml-6 flex flex-col @max-[240px]:ml-3.5">
+          {workers.map((worker) => (
+            <BotChatTreeWorkerRow key={worker.key} bot={bot} worker={worker} chat={chatName} />
+          ))}
+          <BotChatPaging
+            more={
+              more > 0
+                ? [
+                    {
+                      label: t('bots.chats.showMoreCount', 'Show {{count}} more', {
+                        count: Math.min(more, CHAT_TREE_CAPS.step)
+                      }),
+                      onClick: showMore
+                    }
+                  ]
+                : []
+            }
+            onFewer={
+              limit > CHATS_TAB_FIRST_WORKERS ? () => setLimit(CHATS_TAB_FIRST_WORKERS) : null
+            }
+            className="py-1 pl-5 text-xs"
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+}
