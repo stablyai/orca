@@ -16,7 +16,12 @@ export function bindZotzPluginCatalogOptIn(read: () => boolean): void {
 }
 
 export function isZotzPluginCatalogAllowed(): boolean {
-  return isZotzCloudFeatureAllowed('plugin-catalog') || readUserOptIn()
+  // E2E drivers run upstream plugin suites, which install from Orca's catalogs.
+  return (
+    isZotzCloudFeatureAllowed('plugin-catalog') ||
+    readUserOptIn() ||
+    Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
+  )
 }
 
 /** Runs a seed of Orca's catalogs only when Zotz allows it; otherwise rejects without network. */
