@@ -30,6 +30,7 @@ import {
   blockTextDirection,
   hasRightToLeftText,
   markdownProseText,
+  NativeChatParentDirectionContext,
   NativeChatTextDirectionContext,
   textDirectionOf,
   type NativeChatTextDirection
@@ -89,22 +90,44 @@ function containsImage(children: ReactNode): boolean {
 
 type TextBlockProps = { node?: HastElement; children?: ReactNode }
 
-function useBlockDirection(node: HastElement | undefined): NativeChatTextDirection | undefined {
-  return blockTextDirection(node, useContext(NativeChatTextDirectionContext))
+function useBlockDirection(node: HastElement | undefined): {
+  dir: NativeChatTextDirection | undefined
+  effective: NativeChatTextDirection | undefined
+} {
+  const context = useContext(NativeChatTextDirectionContext)
+  const parent = useContext(NativeChatParentDirectionContext)
+  const dir = blockTextDirection(node, context, parent)
+  return { dir, effective: dir ?? parent ?? context.message }
+}
+
+function NestedDirection({
+  direction,
+  children
+}: {
+  direction: NativeChatTextDirection | undefined
+  children: ReactNode
+}): React.JSX.Element {
+  return (
+    <NativeChatParentDirectionContext.Provider value={direction}>
+      {children}
+    </NativeChatParentDirectionContext.Provider>
+  )
 }
 
 function NativeChatParagraph({ node, children }: TextBlockProps): React.JSX.Element {
+  const { dir } = useBlockDirection(node)
   return (
-    <p dir={useBlockDirection(node)} className="my-2.5 first:mt-0 last:mb-0">
+    <p dir={dir} className="my-2.5 first:mt-0 last:mb-0">
       {children}
     </p>
   )
 }
 
 function NativeChatBulletList({ node, children }: TextBlockProps): React.JSX.Element {
+  const { dir, effective } = useBlockDirection(node)
   return (
-    <ul dir={useBlockDirection(node)} className="my-2.5 ms-5 list-disc space-y-0.75">
-      {children}
+    <ul dir={dir} className="my-2.5 ms-5 list-disc space-y-0.75">
+      <NestedDirection direction={effective}>{children}</NestedDirection>
     </ul>
   )
 }
@@ -114,13 +137,10 @@ function NativeChatNumberedList({
   children,
   start
 }: TextBlockProps & { start?: number }): React.JSX.Element {
+  const { dir, effective } = useBlockDirection(node)
   return (
-    <ol
-      start={start}
-      dir={useBlockDirection(node)}
-      className="my-2.5 ms-5 list-decimal space-y-0.75"
-    >
-      {children}
+    <ol start={start} dir={dir} className="my-2.5 ms-5 list-decimal space-y-0.75">
+      <NestedDirection direction={effective}>{children}</NestedDirection>
     </ol>
   )
 }
@@ -187,6 +207,7 @@ export function NativeChatMarkdown({
   rowKey,
   content,
   variant,
+  dir: dirProp,
   ...props
 }: NativeChatMarkdownProps): React.JSX.Element {
   const onLinkClick = useNativeChatLinkClick()
@@ -206,8 +227,10 @@ export function NativeChatMarkdown({
   const { githubRepo } = useContext(NativeChatLinkPeekContext)
   const prose = markdownProseText(content)
   const bidi = hasRightToLeftText(prose)
-  const messageDirection: NativeChatTextDirection | undefined =
+  const detectedDirection: NativeChatTextDirection | undefined =
     bidi && textDirectionOf(prose) === 'rtl' ? 'rtl' : undefined
+  const messageDirection =
+    dirProp === 'rtl' ? 'rtl' : dirProp === 'ltr' ? undefined : detectedDirection
   // Keyed on the outcome, not the text, so streamed tokens don't re-render every memoized block.
   const textDirection = useMemo(
     () => ({ message: messageDirection, bidi }),
@@ -238,7 +261,7 @@ export function NativeChatMarkdown({
           unknownHtmlAsText
           data-word-fade={wordFadeArmed ? '' : undefined}
           data-block-fade={wordFadeArmed && streaming ? '' : undefined}
-          dir={textDirection.message}
+          dir={dirProp ?? textDirection.message}
           data-native-chat-bidi={textDirection.bidi ? '' : undefined}
           className={cn('native-chat-markdown', className)}
         />

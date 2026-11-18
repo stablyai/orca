@@ -1,9 +1,12 @@
 import { createContext } from 'react'
 import type { Element, ElementContent } from 'hast'
 
-// Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan and their presentation forms.
-const RTL_LETTERS = /[֐-ࣿיִ-﷿ﹰ-﻿]/g
-const LTR_LETTERS = /[A-Za-zÀ-ɏͰ-ϿЀ-ӿ]/g
+// Letters only: Arabic-Indic digits share the script but are weak in bidi, so they never vote.
+const RTL_LETTERS =
+  /(?=\p{L})[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}]/gu
+// Every other letter (Latin, Han, Cyrillic, ...) is strong left to right.
+const LTR_LETTERS =
+  /(?![\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}])\p{L}/gu
 
 export type NativeChatTextDirection = 'rtl' | 'ltr'
 
@@ -22,12 +25,19 @@ export function hasRightToLeftText(text: string): boolean {
   return RTL_LETTERS.test(text)
 }
 
-/** Code reads left to right whatever language the prose is in, so it never votes. */
+// A fence opens only at a line start; it closes on a matching fence line or runs to the end.
+const FENCED_CODE =
+  /^ {0,3}(`{3,}|~{3,})[^\n]*(?:\n(?:[\s\S]*?\n {0,3}\1[`~]*[ \t]*(?=\n|$)|[\s\S]*))?/gm
+
+/** Code and link destinations are not read as prose, so they never vote. */
 export function markdownProseText(markdown: string): string {
   return markdown
-    .replace(/```[\s\S]*?(?:```|$)/g, '')
-    .replace(/~~~[\s\S]*?(?:~~~|$)/g, '')
+    .replace(FENCED_CODE, '')
     .replace(/`[^`\n]*`/g, '')
+    .replace(/\]\([^)\s]*(?:\s+(?:"[^"]*"|'[^']*'))?\)/g, ']')
+    .replace(/^ {0,3}\[[^\]\n]+\]:[ \t]*\S+.*$/gm, '')
+    .replace(/<(?:https?|mailto):[^>\s]*>/g, '')
+    .replace(/\bhttps?:\/\/\S+/g, '')
 }
 
 export function hastProseText(node: Element | ElementContent | undefined): string {
@@ -49,14 +59,20 @@ export const NativeChatTextDirectionContext = createContext<{
   bidi: boolean
 }>({ message: undefined, bidi: false })
 
-/** `dir` for one block, or undefined when it just follows the message. */
+/** Direction of the nearest enclosing list, so a nested block is compared with its parent. */
+export const NativeChatParentDirectionContext = createContext<NativeChatTextDirection | undefined>(
+  undefined
+)
+
+/** `dir` for one block, or undefined when it just follows its parent block (or the message). */
 export function blockTextDirection(
   node: Element | undefined,
-  context: { message: NativeChatTextDirection | undefined; bidi: boolean }
+  context: { message: NativeChatTextDirection | undefined; bidi: boolean },
+  parent?: NativeChatTextDirection
 ): NativeChatTextDirection | undefined {
   if (!context.bidi) {
     return undefined
   }
   const direction = textDirectionOf(hastProseText(node))
-  return direction === (context.message ?? 'ltr') ? undefined : direction
+  return direction === (parent ?? context.message ?? 'ltr') ? undefined : direction
 }

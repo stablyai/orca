@@ -38,4 +38,36 @@ describe('NativeChatMarkdown text direction', () => {
     expect(markup).not.toContain('dir=')
     expect(markup).not.toContain('data-native-chat-bidi')
   })
+  it('does not count Arabic-Indic digits as right-to-left letters', () => {
+    expect(renderDocument('Build ١٢٣٤٥٦')).not.toContain('dir=')
+  })
+
+  it('lets Han prose outvote a short Arabic quote', () => {
+    expect(renderDocument('請重新啟動應用程式 (مرحبا)')).not.toMatch(/^<div[^>]* dir="rtl"/)
+  })
+
+  it('ignores link destinations when voting', () => {
+    expect(renderDocument('[مرحبا](https://example.com/documentation)')).toMatch(
+      /^<div[^>]* dir="rtl"/
+    )
+  })
+
+  it('keeps prose after a mid-line tilde run', () => {
+    expect(renderDocument('Note ~~~\n\n- مرحبا بك في التطبيق')).toContain('dir="rtl"')
+  })
+
+  it('compares a nested English list with its Arabic parent list', () => {
+    const markup = renderDocument(
+      'An English reply with a list:\n\n- مرحبا بك في التطبيق\n  - OK fine\n  - Also fine'
+    )
+    expect(markup).toContain('<ul dir="rtl"')
+    expect(markup).toContain('<ul dir="ltr"')
+  })
+
+  it('honors an explicit dir prop', () => {
+    const markup = renderToStaticMarkup(
+      <NativeChatMarkdown content="English text" variant="document" dir="rtl" />
+    )
+    expect(markup).toMatch(/^<div[^>]* dir="rtl"/)
+  })
 })
