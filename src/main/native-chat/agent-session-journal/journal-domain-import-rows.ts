@@ -14,7 +14,7 @@ import {
   settleJournalLegacyCopy
 } from './database/journal-legacy-source'
 import { hydrateJournalStoredItem, journalStoredItemRow } from './journal-stored-output-rows'
-import { restoreCutJournalOutput } from './journal-cut-output'
+import { restoreCutJournalOutput } from './journal-cut-output-restore'
 
 export type JournalDomainImportState =
   | { state: 'converting'; epoch: null }

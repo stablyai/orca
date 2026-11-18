@@ -33,7 +33,7 @@ import {
   journalStoredItemRow,
   readJournalStoredItem
 } from './journal-stored-output-rows'
-import { restoreCutJournalOutput, withJournalOutputOf } from './journal-cut-output'
+import { restoreCutJournalOutput, withJournalOutputOf } from './journal-cut-output-restore'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
