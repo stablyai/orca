@@ -19,6 +19,7 @@ export type WorkerThreadRole =
   | 'orca-port-scan'
   | 'orca-profile-state-backup'
   | 'orca-profile-state-writer'
+  | 'orca-row-cache-checkpoint'
   | 'orca-session-search'
   | 'orca-usage-scan'
   | 'orca-warp-theme-parser'
