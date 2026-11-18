@@ -49,6 +49,25 @@ export function listWorkerTerminalReleaseBacklog(
     .all(limit ?? -1) as WorkerTerminalResourceRow[]
 }
 
+/** Older builds settled a stop without releasing its terminal; these rows pin their Run until proven dead. */
+export function listStoppedWorkerTerminalsStillOwned(
+  this: OrchestrationDb,
+  afterRowid: number,
+  limit: number
+): (WorkerTerminalResourceRow & { row_id: number })[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: res.* plus its rowid.
+  return this.db
+    .prepare(
+      `SELECT res.rowid AS row_id, res.* FROM worker_terminal_resources res
+        JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
+        WHERE res.rowid > ? AND w.state IN ('stopped', 'abandoned')
+          AND res.ownership_state = 'owned' AND res.release_state = 'not_requested'
+          AND res.process_incarnation IS NOT NULL
+        ORDER BY res.rowid LIMIT ?`
+    )
+    .all(afterRowid, limit) as (WorkerTerminalResourceRow & { row_id: number })[]
+}
+
 export const WORKER_LIST_CURSOR_EXPIRED_MESSAGE =
   'The worker inventory changed destructively while paging. Restart without --cursor.'
 
@@ -283,6 +302,7 @@ export type WorkerTerminalListingMethods = {
   getWorkerAutoCloseState: typeof getWorkerAutoCloseState
   keepWorkerTerminalOpen: typeof keepWorkerTerminalOpen
   listWorkerTerminalReleaseBacklog: typeof listWorkerTerminalReleaseBacklog
+  listStoppedWorkerTerminalsStillOwned: typeof listStoppedWorkerTerminalsStillOwned
   listWorkerTerminalResources: typeof listWorkerTerminalResources
   getWorkerTerminalListingSnapshot: typeof getWorkerTerminalListingSnapshot
   getWorkerTerminalOrderingKey: typeof getWorkerTerminalOrderingKey
@@ -298,6 +318,7 @@ export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
     getWorkerAutoCloseState,
     keepWorkerTerminalOpen,
     listWorkerTerminalReleaseBacklog,
+    listStoppedWorkerTerminalsStillOwned,
     listWorkerTerminalResources,
     getWorkerTerminalListingSnapshot,
     getWorkerTerminalOrderingKey,

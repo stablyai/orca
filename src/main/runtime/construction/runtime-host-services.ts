@@ -25,6 +25,7 @@ import type { AgentStatus } from '../../../shared/agent-status/title/agent-title
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-controller'
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
+import { sweepStoppedWorkerTerminals } from '../orchestration/terminal-authority/release/stopped-worker-terminal-release'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
 import { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
@@ -227,7 +228,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     isTerminalProvenAbsent: (candidate) => this.isLeafPtyProvenAbsent(candidate.ptyId),
     hasRequestedReleases: () =>
       (this.getExistingOrchestrationDb()?.listWorkerTerminalReleaseBacklog(1).length ?? 0) > 0,
-    reconcileRequestedReleases: () => reconcileRequestedWorkerTerminalReleases(this),
+    reconcileRequestedReleases: () =>
+      reconcileRequestedWorkerTerminalReleases(this).then(() => sweepStoppedWorkerTerminals(this)),
     reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),
     updateRetry: (plan, deferredDispatchIds, options) =>
       this.updateLegacyWorkerTerminalRecoveryRetry(plan, deferredDispatchIds, options)

@@ -9,6 +9,7 @@ import { refuseStopWhileKeptOpen } from '../worker-terminal/worker-terminal-user
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
 import { markUnreadFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
+import { releaseDeadWorkerTerminalInTransaction } from '../worker-terminal/worker-terminal-release'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -158,11 +159,24 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
     this.closeQuestionsForDispatch(dispatchId)
     // Mail it never read stays for the next send, as a report would keep it.
     markUnreadFollowUpMail(this, dispatchId)
+    releaseStoppedWorkerTerminal(this, dispatchId)
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
+  }
+}
+
+/** Callers settle only after proving the process gone, so its terminal no longer pins the Run. */
+function releaseStoppedWorkerTerminal(database: OrchestrationDb, dispatchId: string): void {
+  const resource = database.getWorkerTerminalResourceByOwner(dispatchId)
+  if (resource?.release_state === 'not_requested' && resource.process_incarnation) {
+    releaseDeadWorkerTerminalInTransaction(database, {
+      requestingDispatchId: dispatchId,
+      resourceId: resource.id,
+      processIncarnation: resource.process_incarnation
+    })
   }
 }
 

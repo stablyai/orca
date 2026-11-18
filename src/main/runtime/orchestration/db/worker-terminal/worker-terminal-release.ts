@@ -95,75 +95,84 @@ export function requestWorkerTerminalRelease(
   }
 }
 
+type DeadWorkerTerminalRelease = {
+  requestingDispatchId: string
+  resourceId: string
+  processIncarnation: string
+}
+
 export function settleDeadWorkerTerminalRelease(
   this: OrchestrationDb,
-  params: {
-    requestingDispatchId: string
-    resourceId: string
-    processIncarnation: string
-  }
+  params: DeadWorkerTerminalRelease
 ):
   | { disposition: 'released'; resource: WorkerTerminalResourceRow }
   | { disposition: 'retained'; resource: WorkerTerminalResourceRow } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    const resource = this.getWorkerTerminalResource(params.resourceId)
-    if (!resource) {
-      throw new OrchestrationError(
-        'dispatch_not_found',
-        `Worker terminal resource ${params.resourceId} was not found.`
-      )
-    }
-    const priorOwners = parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids)
-    const requesterRelated =
-      resource.owner_dispatch_id === params.requestingDispatchId ||
-      priorOwners?.includes(params.requestingDispatchId) === true
-    const requester = this.getWorkerDispatch(params.requestingDispatchId)
-    const owner = this.getWorkerDispatch(resource.owner_dispatch_id)
-    const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
-    const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
-    // Exit proves process death, not a recorded output location; require one whenever recording is reachable.
-    // Capture runs only while requested; an unrequested or retained owner settles unavailable instead.
-    const archive = this.getWorkerTerminalArchive(resource.owner_dispatch_id)
-    const archiveUnreachable =
-      resource.owner_dispatch_id === params.requestingDispatchId &&
-      (resource.release_state === 'not_requested' || resource.release_state === 'retained')
-    if (
-      !priorOwners ||
-      !requesterRelated ||
-      !requesterSettled ||
-      !ownerSettled ||
-      resource.process_incarnation !== params.processIncarnation ||
-      (archive ? archive.resource_id !== resource.id : !archiveUnreachable) ||
-      decideWorkerTerminalRelease(resource).action !== 'proceed'
-    ) {
-      this.db.exec('COMMIT')
-      return { disposition: 'retained', resource }
-    }
-    this.db
-      .prepare(
-        `UPDATE worker_terminal_resources
-         SET release_state = 'released', ownership_state = 'released', retained_reason = NULL,
-             archive_status = COALESCE(?, archive_status),
-             release_requested_at = COALESCE(release_requested_at, datetime('now')),
-             release_completed_at = datetime('now'), release_error = NULL,
-             updated_at = datetime('now')
-         WHERE id = ? AND process_incarnation = ? AND ${WORKER_TERMINAL_RELEASABLE_ROW_SQL}`
-      )
-      .run(
-        archive ? null : ('unavailable' satisfies WorkerTerminalArchiveStatus),
-        params.resourceId,
-        params.processIncarnation
-      )
-    const released = this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
+    const resource = releaseDeadWorkerTerminalInTransaction(this, params)
     this.db.exec('COMMIT')
-    return released.release_state === 'released'
-      ? { disposition: 'released', resource: released }
-      : { disposition: 'retained', resource: released }
+    return resource.release_state === 'released'
+      ? { disposition: 'released', resource }
+      : { disposition: 'retained', resource }
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
   }
+}
+
+/** Marks a resource whose process is proven gone released, inside the caller's transaction. */
+export function releaseDeadWorkerTerminalInTransaction(
+  database: OrchestrationDb,
+  params: DeadWorkerTerminalRelease
+): WorkerTerminalResourceRow {
+  const resource = database.getWorkerTerminalResource(params.resourceId)
+  if (!resource) {
+    throw new OrchestrationError(
+      'dispatch_not_found',
+      `Worker terminal resource ${params.resourceId} was not found.`
+    )
+  }
+  const priorOwners = parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids)
+  const requesterRelated =
+    resource.owner_dispatch_id === params.requestingDispatchId ||
+    priorOwners?.includes(params.requestingDispatchId) === true
+  const requester = database.getWorkerDispatch(params.requestingDispatchId)
+  const owner = database.getWorkerDispatch(resource.owner_dispatch_id)
+  const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
+  const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
+  // Exit proves process death, not a recorded output location; require one whenever recording is reachable.
+  // Capture runs only while requested; an unrequested or retained owner settles unavailable instead.
+  const archive = database.getWorkerTerminalArchive(resource.owner_dispatch_id)
+  const archiveUnreachable =
+    resource.owner_dispatch_id === params.requestingDispatchId &&
+    (resource.release_state === 'not_requested' || resource.release_state === 'retained')
+  if (
+    !priorOwners ||
+    !requesterRelated ||
+    !requesterSettled ||
+    !ownerSettled ||
+    resource.process_incarnation !== params.processIncarnation ||
+    (archive ? archive.resource_id !== resource.id : !archiveUnreachable) ||
+    decideWorkerTerminalRelease(resource).action !== 'proceed'
+  ) {
+    return resource
+  }
+  database.db
+    .prepare(
+      `UPDATE worker_terminal_resources
+       SET release_state = 'released', ownership_state = 'released', retained_reason = NULL,
+           auto_release_at = NULL, archive_status = COALESCE(?, archive_status),
+           release_requested_at = COALESCE(release_requested_at, datetime('now')),
+           release_completed_at = datetime('now'), release_error = NULL,
+           updated_at = datetime('now')
+       WHERE id = ? AND process_incarnation = ? AND ${WORKER_TERMINAL_RELEASABLE_ROW_SQL}`
+    )
+    .run(
+      archive ? null : ('unavailable' satisfies WorkerTerminalArchiveStatus),
+      params.resourceId,
+      params.processIncarnation
+    )
+  return database.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
 }
 
 export type WorkerTerminalReleaseMethods = {
