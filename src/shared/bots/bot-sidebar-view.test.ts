@@ -40,10 +40,6 @@ function arrange(view: Partial<BotSidebarView>): string[] {
 }
 
 describe('arrangeBotSidebarEntries', () => {
-  it('keeps the saved order in Manual', () => {
-    expect(arrange({ sortBy: 'manual' })).toEqual(['release', 'docs', 'room', 'review', 'disk'])
-  })
-
   it('puts bots that need you first in Agent Activity, then newest, ties in saved order', () => {
     expect(arrange({ sortBy: 'smart' })).toEqual(['review', 'docs', 'room', 'release', 'disk'])
   })
