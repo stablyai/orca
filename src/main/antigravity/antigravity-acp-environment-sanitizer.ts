@@ -12,7 +12,12 @@ const AUTH_ENVIRONMENT_KEYS: Partial<
   Record<AntigravityChatAuthConfig['method'], ReadonlySet<string>>
 > = {
   'gemini-api-key': new Set(['GEMINI_API_KEY', 'GOOGLE_GEMINI_BASE_URL']),
-  'agent-platform': new Set(['GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_CLOUD_QUOTA_PROJECT'])
+  'agent-platform': new Set([
+    'GOOGLE_APPLICATION_CREDENTIALS',
+    'GOOGLE_CLOUD_PROJECT',
+    'GOOGLE_CLOUD_LOCATION',
+    'GOOGLE_CLOUD_QUOTA_PROJECT'
+  ])
 }
 
 /** Remove inherited authentication, harness and stale Electron Crashpad overrides, keeping only

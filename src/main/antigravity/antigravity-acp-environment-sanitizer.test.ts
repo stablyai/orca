@@ -23,13 +23,13 @@ describe('scrubAntigravityAcpEnvironment', () => {
     expect(removed).not.toContain('GEMINI_API_KEY')
   })
 
-  it('keeps the ADC file but not an inherited project for Agent Platform', () => {
+  it('keeps the ADC file and project for Agent Platform', () => {
     const env = launchEnv()
-    scrubAntigravityAcpEnvironment(
-      env,
-      {},
-      { method: 'agent-platform', gcpProject: 'p', gcpLocation: 'global' }
-    )
-    expect(env).toEqual({ GOOGLE_APPLICATION_CREDENTIALS: '/adc.json', PATH: '/bin' })
+    scrubAntigravityAcpEnvironment(env, {}, { method: 'agent-platform' })
+    expect(env).toEqual({
+      GOOGLE_APPLICATION_CREDENTIALS: '/adc.json',
+      GOOGLE_CLOUD_PROJECT: 'inherited-project',
+      PATH: '/bin'
+    })
   })
 })

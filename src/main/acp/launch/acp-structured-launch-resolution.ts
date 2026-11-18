@@ -1,3 +1,4 @@
+import { readAntigravityChatApiKey } from '../../antigravity/antigravity-chat-api-key-store'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
 import { withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
@@ -164,6 +165,13 @@ async function readAcpLaunchInvocation(
   if (spec.agent === 'antigravity' && spec.managedRuntime) {
     await prepareAntigravityAcpProxyEnvironment(env, deps.inheritedEnv ?? process.env)
     assertStructuredAgentResolutionCurrent(deps.operation)
+  }
+  // A key pasted in Settings wins over the launch environment's GEMINI_API_KEY.
+  const savedApiKey =
+    antigravityChatAuth?.method === 'gemini-api-key' ? await readAntigravityChatApiKey() : null
+  if (savedApiKey) {
+    assertStructuredAgentResolutionCurrent(deps.operation)
+    env.GEMINI_API_KEY = savedApiKey
   }
   Object.assign(env, spec.env)
   const invocation = resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })

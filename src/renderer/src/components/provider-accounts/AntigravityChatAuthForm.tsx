@@ -18,9 +18,10 @@ import {
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
 } from '../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
-import { Input } from '../ui/input'
-import { Label } from '../ui/label'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
+import { AntigravityChatApiKeyField } from './AntigravityChatApiKeyField'
+import { AntigravityChatGcpFields } from './AntigravityChatGcpFields'
+import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import {
   AntigravityChatAuthMethodItems,
   antigravityChatAuthMethodLabel
@@ -135,6 +136,7 @@ function AuthForm({
   const [project, setProject] = useState('')
   const [location, setLocation] = useState('')
   const [pending, setPending] = useState(false)
+  const [keyStatus, setKeyStatus] = useState<AntigravityChatApiKeyStatus | null>(null)
   const [error, setError] = useState<{
     message: string
     recovery: 'reload' | null
@@ -304,14 +306,13 @@ function AuthForm({
       void save(draft())
     }
   }
-  const commitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
-      event.preventDefault()
-      event.currentTarget.blur()
-    }
-  }
   const methodName = antigravityChatAuthMethodLabel(method, t)
   const usesGcp = method === 'oauth-business' || method === 'agent-platform'
+  const keyMissing =
+    method === 'gemini-api-key' &&
+    keyStatus !== null &&
+    !keyStatus.saved &&
+    !keyStatus.inEnvironment
   return (
     <>
       {heading}
@@ -342,51 +343,39 @@ function AuthForm({
               </Select>
             </AntigravityChatAuthSettingRow>
             {usesGcp && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="min-w-0 space-y-1.5">
-                  <Label htmlFor={`${id}-project`}>
-                    {t('accounts.antigravity.gcpProject', 'Google Cloud project')}
-                  </Label>
-                  <Input
-                    id={`${id}-project`}
-                    value={project}
-                    disabled={blocked}
-                    placeholder={t('accounts.antigravity.projectPlaceholder', 'my-project-id')}
-                    onChange={(event) => {
-                      edited.current = true
-                      setProject(event.target.value)
-                      setError(null)
-                    }}
-                    onBlur={commitText}
-                    onKeyDown={commitOnEnter}
-                  />
-                </div>
-                <div className="min-w-0 space-y-1.5">
-                  <Label htmlFor={`${id}-location`}>
-                    {t('accounts.antigravity.location', 'Location')}
-                  </Label>
-                  <Input
-                    id={`${id}-location`}
-                    value={location}
-                    disabled={blocked}
-                    placeholder={t('accounts.antigravity.locationPlaceholder', 'us-central1')}
-                    onChange={(event) => {
-                      edited.current = true
-                      setLocation(event.target.value)
-                      setError(null)
-                    }}
-                    onBlur={commitText}
-                    onKeyDown={commitOnEnter}
-                  />
-                </div>
-              </div>
+              <AntigravityChatGcpFields
+                id={id}
+                project={project}
+                location={location}
+                optional={method === 'agent-platform'}
+                disabled={blocked}
+                onProject={(value) => {
+                  edited.current = true
+                  setProject(value)
+                  setError(null)
+                }}
+                onLocation={(value) => {
+                  edited.current = true
+                  setLocation(value)
+                  setError(null)
+                }}
+                onCommit={commitText}
+              />
+            )}
+            {method === 'gemini-api-key' && keyAndAdc && (
+              <AntigravityChatApiKeyField
+                owner={owner}
+                disabled={blocked}
+                onStatus={setKeyStatus}
+                onSaved={start}
+              />
             )}
           </div>
         )}
       {children({
         alert: error && !active ? error.message : (signInError ?? null),
         recovering: unavailable,
-        disabled: disabled || preparing || (!unavailable && (!loaded || !valid)),
+        disabled: disabled || preparing || (!unavailable && (!loaded || !valid)) || keyMissing,
         start,
         reauth: authenticatedMethod !== null && authenticatedMethod !== method,
         method: unavailable || !loaded ? null : methodName,

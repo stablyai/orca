@@ -25,7 +25,7 @@ export function antigravityChatAuthMethodLabel(
     case 'gemini-api-key':
       return t('accounts.antigravity.apiKey', 'Gemini API key')
     case 'agent-platform':
-      return t('accounts.antigravity.agentPlatform', 'Agent Platform (ADC)')
+      return t('accounts.antigravity.agentPlatform', 'Google Agent Platform')
     default:
       return null
   }
@@ -38,15 +38,9 @@ function methodDescription(method: AntigravityChatAuthConfig['method'], t: Trans
     case 'oauth-business':
       return t('accounts.antigravity.enterpriseOption', "Your organization's license")
     case 'gemini-api-key':
-      return t(
-        'accounts.antigravity.apiKeyOption',
-        'Uses GEMINI_API_KEY from your shell or Antigravity’s environment variables'
-      )
+      return t('accounts.antigravity.apiKeyOption', 'A key from Google AI Studio')
     case 'agent-platform':
-      return t(
-        'accounts.antigravity.agentPlatformOption',
-        'Uses this host’s Google Cloud Application Default Credentials'
-      )
+      return t('accounts.antigravity.agentPlatformOption', 'Your gcloud login (ADC)')
   }
 }
 
