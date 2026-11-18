@@ -92,6 +92,9 @@ export function applyJournalSqlAutomaticSubmissionCommand(
           origin: 'host',
           handoverRecorded: true,
           queuedMessageId: card.messageId,
+          // Another agent's card names its sender kind, so selection can tell its in-flight mail
+          // without rereading the card.
+          ...(card.body.from?.kind === 'agent' ? { source: { kind: 'agent' as const } } : {}),
           body: card.body,
           payloadFingerprint: card.fingerprint,
           ...(card.options !== undefined ? { options: card.options } : {})

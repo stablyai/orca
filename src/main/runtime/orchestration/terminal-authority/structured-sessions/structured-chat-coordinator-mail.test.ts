@@ -78,6 +78,30 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   })
 })
 
+describe("another agent's message in a structured chat", () => {
+  it('is sent to the agent exactly as the chat shows it, with no check needed', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+
+    const sent = turnText(chat.turns[0]!)
+    expect(isWholeMail(sent)).toBe(true)
+    expect(sent).toContain('\nSubject: Done')
+    expect(sent).toContain('"outcome":"succeeded"')
+    expect(sent).not.toContain('orchestration check')
+    const snapshot = await readTestHostJournal(host, COORDINATOR)
+    const shown = snapshot.items.flatMap((item) =>
+      item.body?.kind === 'message' && item.body.from?.kind === 'agent'
+        ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+    expect(shown).toEqual([sent])
+    await settleTurn(COORDINATOR, 0)
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
+  })
+})
+
 describe('a /clear keeps the chat its orchestration address', () => {
   it("delivers the conversation's Run to its fresh context under the same address", async () => {
     await openChat(COORDINATOR)

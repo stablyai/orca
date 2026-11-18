@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 import { normalizeGlobalWindowsRuntimeDefault } from '../execution-host/project-runtime-preference'
 
 export type LocalAccountRuntimeTarget = {

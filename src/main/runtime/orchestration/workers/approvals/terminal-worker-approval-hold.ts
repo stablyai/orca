@@ -2,8 +2,13 @@
 import type { ClaudePermissionHookChannel } from '../../../../agent-hooks/server/claude-permission-hook-hold'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
-import type { WorkerTurnStopReportDeps } from '../turn-stops/worker-turn-stop-report'
-import type { ClaudeToolRecord } from './claude-tool-result-close'
+import { claudeTookHookAnswer, type ClaudeToolRecord } from './claude-tool-result-close'
+import { firstWithin } from './first-within'
+import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
+import {
+  reportWorkerApprovalClosed,
+  type WorkerTurnStopReportDeps
+} from '../turn-stops/worker-turn-stop-report'
 import {
   closedApproval,
   type WorkerApprovalOutcome,
@@ -48,6 +53,8 @@ export type TerminalWorkerApprovalHold = {
   refinable: boolean
   /** Its PostToolUse or PostToolUseFailure arrived while an answer was in flight: the tool ran. */
   ranSeen: boolean
+  /** The decision Orca wrote and Claude took; set once answered. */
+  answeredWith?: 'allow' | 'deny'
   expiresAt?: string
   /** The coordinator was told about it, so it is owed one closing line. */
   reported: boolean
@@ -106,4 +113,54 @@ export function holdPayload(
     ...(hold.expiresAt ? { expiresAt: hold.expiresAt } : {})
   }
   return outcome ? closedApproval(open, outcome) : open
+}
+
+/** Whether Claude took the answer Orca just wrote to this hook. Claude takes a hook's answer at once,
+ *  so its dialog leaves or its tool runs; it records an allow only with the tool's result, which a
+ *  long command delays, so only a record already there can name a person or the auto-block. */
+export async function claudeTookAnswer(
+  hold: TerminalWorkerApprovalHold,
+  deps: Pick<TerminalWorkerApprovalHoldsDeps, 'readScreen' | 'readToolRecord' | 'setTimer'>,
+  answer: { decision: 'allow' | 'deny'; message: string }
+): Promise<{ taken: boolean; record: ClaudeToolRecord | null }> {
+  const left = await firstWithin(deps.setTimer, () => {
+    const lines = deps.readScreen(hold.paneKey)
+    return hold.ranSeen || (lines && !showsClaudeDialog(lines)) ? true : null
+  })
+  if (!left) {
+    return { taken: false, record: null }
+  }
+  // A deny is recorded at once, so only its record proves it; an allow's waits on its tool.
+  const record =
+    answer.decision === 'deny'
+      ? await firstWithin(deps.setTimer, () => deps.readToolRecord(hold))
+      : await deps.readToolRecord(hold).catch(() => null)
+  const taken = record
+    ? claudeTookHookAnswer(record, answer.decision, answer.message)
+    : answer.decision === 'allow'
+  return { taken, record }
+}
+
+/** The prompt's one closing line, or with `refines` its correction. */
+export function reportHoldClosed(
+  hold: TerminalWorkerApprovalHold,
+  how: TerminalWorkerApprovalCloseHow | null,
+  deps: Pick<TerminalWorkerApprovalHoldsDeps, 'notify'>,
+  refines: boolean
+): void {
+  reportWorkerApprovalClosed(
+    hold.db,
+    hold.dispatch,
+    {
+      from: hold.handle,
+      approval: holdPayload(hold, {
+        by: how?.by ?? 'unknown',
+        decision: how?.decision ?? null,
+        reason: null,
+        reasonDelivered: false
+      })
+    },
+    deps,
+    refines
+  )
 }

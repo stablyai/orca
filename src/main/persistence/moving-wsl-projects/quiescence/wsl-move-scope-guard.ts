@@ -2,8 +2,14 @@
 import { resolve } from 'node:path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  mayBeInWsl,
+  resetUnreadJournalClassificationForTests
+} from './wsl-move-unread-journal-folders'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import { onWslMoveJournalChange } from '../cutover-recovery/wsl-move-cutover-journal'
 import { onWslDriveUncConversionJournalChange } from '../../../wsl/filesystem/wsl-drive-unc-conversion-journal'
 import { resolveWslMoveFence, type WslMoveFenceState } from './wsl-move-fence'
@@ -67,6 +73,7 @@ export function isWslMoveFenceLoaded(): boolean {
 }
 
 export function resetWslMoveFenceForTests(): void {
+  resetUnreadJournalClassificationForTests()
   stopFollowing?.()
   stopFollowing = null
   loaded = null
@@ -139,7 +146,7 @@ function matchesFence(
   if (fence.readable) {
     return inScope(fence.state.fenced, ref) || (includeHidden && inScope(fence.state.hidden, ref))
   }
-  return !store || isWslUncPath(projectPath(store, ref) ?? '')
+  return !store || mayBeInWsl(projectPath(store, ref) ?? '')
 }
 
 export function assertWslMoveProjectWritable(
@@ -253,16 +260,19 @@ export function isWslMoveWorkspaceBlocked(
 
 /**
  * Whether a new terminal's folder is one a move is taking, whatever workspace it names. A
- * Linux-spelled folder names no distro, so it matches any moving distro. An unreadable journal lets
- * no move reach commit, so it fences nothing here.
+ * Linux-spelled folder names no distro, so it matches any moving distro. An unreadable journal may
+ * hide a committed move, so it fences every Windows-spelled folder that may be in WSL.
  */
 export function isWslMoveCwdFenced(cwd: string): boolean {
   const fence = loaded?.view
-  if (!fence?.readable) {
+  if (!fence) {
     return false
   }
-  return fence.state.fencedRoots.some(({ distro, roots }) => {
-    const path = comparableWslPath(cwd, distro)
+  if (!fence.readable) {
+    return mayBeInWsl(cwd)
+  }
+  return fence.state.fencedRoots.some(({ distro, roots, mappedDrives }) => {
+    const path = comparableWslPath(cwd, distro, mappedDrives)
     return path !== null && roots.some((root) => isAtOrUnder(path, root))
   })
 }

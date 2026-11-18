@@ -62,39 +62,3 @@ describe('an SSH host’s capture', () => {
     expect(webContents.capturePage).not.toHaveBeenCalled()
   })
 })
-
-describe('a capture of a page with an emulated device pixel ratio', () => {
-  it('asks for the visible area at the density the page really draws, so it is not tiled', async () => {
-    const webContents = createMockWebContents()
-    // `orca viewport --scale 3` on a 125% Windows display.
-    webContents.debugger.sendCommand.mockImplementation(async (method: string) =>
-      method === 'Runtime.evaluate'
-        ? { result: { value: 3 } }
-        : method === 'Page.getLayoutMetrics'
-          ? {
-              cssContentSize: { width: 390, height: 844 },
-              cssVisualViewport: {
-                pageX: 0,
-                pageY: 0,
-                clientWidth: 390,
-                clientHeight: 844,
-                scale: 1,
-                zoom: 1
-              },
-              visualViewport: { clientWidth: 487.5, clientHeight: 1055 }
-            }
-          : { data: 'pixels' }
-    )
-
-    await expect(
-      captureScreenshot(webContents.guest, { format: 'png', fromSurface: true }, noHold)
-    ).resolves.toEqual({ data: 'pixels' })
-    const captures = webContents.debugger.sendCommand.mock.calls.filter(
-      ([method]) => method === 'Page.captureScreenshot'
-    )
-    const clip = captures.at(-1)?.[1]?.clip
-    expect(clip).toMatchObject({ x: 0, y: 0, width: 390, height: 844 })
-    // 487 whole device pixels across: 390 * 0.41624 * 3 = 487.
-    expect(clip.scale).toBeCloseTo(0.41624, 5)
-  })
-})

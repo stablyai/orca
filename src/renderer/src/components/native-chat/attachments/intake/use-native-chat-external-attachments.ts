@@ -37,7 +37,7 @@ import type {
 } from './native-chat-session-attachment-drop'
 import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { attachNativeChatLocalAttachmentPaths } from './native-chat-local-attachment-drop'
-import { useMountedRef } from '@/hooks/useMountedRef'
+import { useNativeChatPaneMountedRef } from '../../pane/ownership/native-chat-pane-lifetime'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
 import type { CapturedNativeChatDrop } from './native-chat-pane-file-drop'
 
@@ -81,7 +81,7 @@ export function useNativeChatExternalAttachments({
     options?: NativeChatAttachmentFocusOptions
   ) => (reserved: NativeChatReservedAttachment[]) => Promise<void>
 } {
-  const mountedRef = useMountedRef()
+  const mountedRef = useNativeChatPaneMountedRef()
   const disabledRef = useRef(disabled)
   useLayoutEffect(() => {
     disabledRef.current = disabled

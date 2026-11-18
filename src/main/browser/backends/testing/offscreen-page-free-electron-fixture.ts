@@ -49,6 +49,10 @@ async function run(): Promise<void> {
   const unsaved = await backend.createTab({ url: `${origin}/first`, worktreeId: 'unsaved' })
   const saved = await backend.createTab({ url: `${origin}/first`, worktreeId: SAVED_WORKTREE })
   const savedGuest = pageOf(saved.browserPageId)
+  // Electron destroys a window's WebContents after destroy() returns, so wait for its event.
+  const savedDestroyed = new Promise<void>((resolve) =>
+    savedGuest.once('destroyed', () => resolve())
+  )
   // Navigating under a command's lease; the idle time only starts once the lease ends.
   const releaseNavigation = rendererPublicationThrottle.acquire(savedGuest)
   await waitUntil(
@@ -60,9 +64,9 @@ async function run(): Promise<void> {
   await savedGuest.loadURL(`${origin}/second`)
   releaseNavigation()
 
-  await waitUntil(() => !backend.ownsTab(saved.browserPageId))
+  await savedDestroyed
   const unsavedKept = backend.ownsTab(unsaved.browserPageId)
-  const savedFreed = savedGuest.isDestroyed()
+  const savedFreed = !backend.ownsTab(saved.browserPageId)
 
   // The next use starts the saved tab again under its id, as ServeBrowserTabs.restore does.
   await backend.createTab({

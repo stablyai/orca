@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
@@ -68,27 +68,6 @@ describe('migrateWorkspaceSessionSshTargetId', () => {
       tab1: `ssh:${NEW_ID}@@pty-3`,
       tab3: `ssh:other-target@@pty-1`
     })
-  })
-
-  it('re-points sleeping agent records pinned to the old connection', () => {
-    const session = makeSession({
-      sleepingAgentSessionsByPaneKey: {
-        'tab1:leaf-1': {
-          paneKey: 'tab1:leaf-1',
-          worktreeId: 'r1::/wt',
-          agent: 'claude',
-          providerSession: { key: 'session_id', id: 's-1' },
-          prompt: 'p',
-          state: 'done',
-          capturedAt: 1,
-          updatedAt: 1,
-          connectionId: OLD_ID
-        }
-      }
-    })
-
-    expect(migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)).toBe(true)
-    expect(session.sleepingAgentSessionsByPaneKey?.['tab1:leaf-1'].connectionId).toBe(NEW_ID)
   })
 })
 

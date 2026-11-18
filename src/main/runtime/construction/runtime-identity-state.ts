@@ -1,6 +1,6 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
 import * as savedChatOpen from '../agent-session/records/local-agent-session-record-store-startup-open'
-import type { SessionTitlePublisher } from '../session-tabs/session-title-publisher'
+import type { SessionTitlePublisher } from '../session-tabs/publication/session-title-publisher'
 import { randomUUID } from 'node:crypto'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'

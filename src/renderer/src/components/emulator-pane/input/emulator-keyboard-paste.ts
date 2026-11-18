@@ -1,7 +1,7 @@
 import {
   buildServeSimKeyboardFramesForKey,
   type ServeSimKeyboardFrame
-} from '../../../../../shared/emulator-keyboard-frame'
+} from '../../../../../shared/emulator/emulator-keyboard-frame'
 import { measureUtf8ByteLength } from '../../../../../shared/text/utf8-byte-limits'
 
 export const EMULATOR_KEYBOARD_PASTE_MAX_BYTES = 4 * 1024

@@ -1,15 +1,20 @@
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
+import { ORCA_SCRUB_SAFE_PANE_ENV } from '../../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import {
   POSIX_HOOK_STDIN_BACKGROUND_DRAIN_COMMAND,
   POSIX_HOOK_STDIN_DRAIN_COMMAND
 } from '../scripts/hook-stdin-contract'
+
+// Global hooks also fire outside Orca, where only the drain runs; the alias covers agents that scrub the key.
+// Default-form variables survive Grok prechecks.
+export const POSIX_ORCA_PANE_GUARD = `[ -n "\${ORCA_PANE_KEY-}\${${ORCA_SCRUB_SAFE_PANE_ENV}-}" ]`
 
 // Missing scripts must become silent no-ops rather than fail every tool call.
 export function wrapPosixHookCommand(
   scriptPath: string,
   env: Record<string, string> = {},
   // Gate events treat silence as denial, so missing scripts may need fallback stdout.
-  options: { fallbackStdout?: string; requiredEnvVar?: string; stdinMayStayOpen?: boolean } = {}
+  options: { fallbackStdout?: string; skipPaneGuard?: boolean; stdinMayStayOpen?: boolean } = {}
 ): string {
   // Keep arbitrary paths literal across shell metacharacters.
   const quoted = quotePosixShell(scriptPath)
@@ -24,9 +29,8 @@ export function wrapPosixHookCommand(
     options.fallbackStdout === undefined
       ? drain
       : `printf '%s\\n' ${quotePosixShell(options.fallbackStdout)}; ${drain}`
-  // Default-form variables survive Grok prechecks and defer environment reads to invocation.
   const guards = [
-    ...(options.requiredEnvVar ? [`[ -n "\${${options.requiredEnvVar}-}" ]`] : []),
+    ...(options.skipPaneGuard ? [] : [POSIX_ORCA_PANE_GUARD]),
     `[ -f ${quoted} ]`,
     `[ -r ${quoted} ]`,
     `[ -x ${quoted} ]`

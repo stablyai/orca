@@ -4,7 +4,7 @@ import {
   confirmRootShellAloneFromProcessTable,
   inspectionShowsShellAlone
 } from './run-terminal-shell-alone'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 /** For finished-run cleanup, adopted PTYs have unknown client-use history because this process did not spawn them. */

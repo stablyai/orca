@@ -9,7 +9,7 @@ import type {
   UsageValues,
   WorktreeMemory
 } from '../../shared/diagnostics/process-stats-types'
-import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
+import { ORPHAN_WORKTREE_ID } from '../../shared/terminal/pty/orphan-worktree-id'
 import { listRegisteredPtys } from './pty-registry'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
 import { collectHostMemory } from './host-memory'

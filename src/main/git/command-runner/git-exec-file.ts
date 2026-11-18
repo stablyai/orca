@@ -105,6 +105,8 @@ async function gitExecFileAsyncUnlocked(
           terminationBarrier: options.terminationBarrier,
           admissionTier: options.admissionTier,
           spawnOnWorkerThread: options.spawnOnWorkerThread,
+          // Admission already passed; the capture rechecks at the spawn call itself.
+          ...(options.canStart ? { canStart: options.canStart } : {}),
           onChildTerminated: reportTerminated,
           ...(options.onStderr ? { onStderr: options.onStderr } : {}),
           ...(timeoutMs === undefined
@@ -138,7 +140,7 @@ async function gitExecFileAsyncUnlocked(
           ) {
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
-            if (options.canStart?.() === false) {
+            if (options.canStart?.() === false || (await options.beforeStart?.()) === false) {
               throw createAbortError()
             }
             const fallback = resolveGitCommand(args, effectiveOptions, true, true)
@@ -164,7 +166,7 @@ async function gitExecFileAsyncUnlocked(
       }
       try {
         options.admissionSignal?.throwIfAborted()
-        if (options.canStart?.() === false) {
+        if (options.canStart?.() === false || (await options.beforeStart?.()) === false) {
           throw createAbortError()
         }
         return await runCapturedCommand()

@@ -4,7 +4,7 @@ import {
   type SmartClass,
   type TabPaneInputSources
 } from '../../../../../../shared/sidebar-list/sorting/smart-attention'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { agentVerdictDisplayMark } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import {
   isAgentStatusFresh,
@@ -12,7 +12,7 @@ import {
 } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 /** Row model for Cmd+J's empty-query recent tabs section. */
 export type RecentWorkspaceTabRow = {

@@ -11,7 +11,7 @@ import type {
   GitHubProjectViewSummary
 } from './github-project-reference'
 import type { GitHubProjectIdentity as GitHubProjectRef } from '../../../../src/shared/github/projects/project-identity'
-import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../src/shared/worktree/create-types'
 import type { WorkspaceAgentChoice } from '../../new-workspace/creation/workspace-agent-selection'
 import type {
@@ -229,7 +229,9 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setLinearStatusPickerItem,
     setupPrompt,
     setSetupPrompt,
-    creatingKey,
+    // A created workspace's review, including its approved run, keeps its item busy until it settles.
+    creatingKey:
+      creatingKey ?? (orcaYamlTrustPrompt?.created ? orcaYamlTrustPrompt.item.key : null),
     setCreatingKey,
     mutatingStatus,
     tryBeginMutation,

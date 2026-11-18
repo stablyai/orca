@@ -1,6 +1,6 @@
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
-import { endSubprocessStdin } from '../../../../shared/subprocess-stdin-write'
+import { endSubprocessStdin } from '../../../../shared/process-streams/subprocess-stdin-write'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { nativeExecutableResolver } from '@orca/process-host/native-executable-resolution'
 import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
@@ -26,6 +26,8 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   spawnOnWorkerThread?: boolean
   /** Native Git only: launch an owned group and retain it after abnormal stop until proof. */
   ownedPosixGroup?: boolean
+  /** Rechecked synchronously at the spawn call, after any async executable resolution. */
+  canStart?: () => boolean
 }
 
 export { execFileCaptureToTermination } from './exec-file-capture-to-termination'
@@ -217,6 +219,11 @@ export function execFileCapture(
           if (settled) {
             return
           }
+          if (options.canStart?.() === false) {
+            reportChildTerminated()
+            finish(createAbortError())
+            return
+          }
           child = spawnedExecFile(command, captureOptions, complete, () =>
             spawnNativeProcess(
               program,
@@ -227,6 +234,11 @@ export function execFileCapture(
             )
           )
         } else {
+          if (options.canStart?.() === false) {
+            reportChildTerminated()
+            finish(createAbortError())
+            return
+          }
           child = useWorker
             ? workerExecFile(command, args, captureOptions, complete)
             : ownedPosixGroup

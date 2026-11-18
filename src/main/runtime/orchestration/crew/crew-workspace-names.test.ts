@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { fixture } from '../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import {
   makeTerminalTab,

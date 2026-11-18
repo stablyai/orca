@@ -1,8 +1,8 @@
-import type { QueuedEditLeaseLoss } from '../../../../../../src/shared/queued-message-edit-lease'
+import type { QueuedEditLeaseLoss } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-lease'
 import {
   queuedMessageEditableText,
   queuedEditKeptImages
-} from '../../../../../../src/shared/queued-message-edit'
+} from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit'
 import { agentSessionSendBodyFingerprint } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import { startMobileQueuedEditLease } from './mobile-queued-message-edit-lease'

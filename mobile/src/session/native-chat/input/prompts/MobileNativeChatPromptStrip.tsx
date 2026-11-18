@@ -5,11 +5,18 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 
+export type MobileNativeChatCollapsedPrompt = {
+  title: string
+  expand: () => void
+  /** The agent waits on this answer alone, so collapsing it gives no composer back. */
+  holdsInput?: true
+}
+
 /** A collapsed prompt's one line, above the queue; nothing while no prompt is collapsed. */
 export function MobileNativeChatPromptStrip({
   prompt
 }: {
-  prompt?: { title: string; expand: () => void } | null
+  prompt?: MobileNativeChatCollapsedPrompt | null
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()

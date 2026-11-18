@@ -17,7 +17,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Foreign SQLite reader entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-foreign-sqlite-reader' })
 }
 
 let sharedClient: ForeignSqliteReaderClient | null = null

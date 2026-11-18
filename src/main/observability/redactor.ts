@@ -286,3 +286,14 @@ export function redactSpan(span: RedactableSpan, mode: RedactorMode = 'client'):
     exit
   }
 }
+
+/** Redacts the end of a longer text, which may begin inside a credential: drops the partial first
+ *  line and a key block cut from its BEGIN marker, which no pattern could recognise any more. */
+export function redactTextTail(tail: string): string {
+  const lines = tail.slice(tail.indexOf('\n') + 1 || tail.length)
+  const end = /-----END [A-Z ]+-----/.exec(lines)
+  const begin = lines.indexOf('-----BEGIN ')
+  return redactString(
+    end && (begin === -1 || begin > end.index) ? lines.slice(end.index + end[0].length) : lines
+  )
+}

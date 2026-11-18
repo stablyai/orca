@@ -1,8 +1,8 @@
 import { LoaderCircle } from 'lucide-react'
 import { TabsContent } from '@/components/ui/tabs'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import { CommentCard } from '../gitlab-item-dialog-parts'
+import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
+import { CommentCard } from './gitlab-item-dialog-parts'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import type { GitLabReviewActions } from './use-gitlab-review-actions'
 

@@ -6,7 +6,7 @@ import {
   getDefaultPresetForGitHubTaskKind
 } from '../../../../shared/work-items/task-github-search'
 import { matchGitHubPRPreset, patchGitHubTaskQuery } from './github/listing/task-page-pr-chips'
-import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
+import type { TaskViewPresetId } from '../../../../shared/ui-chrome/ui-chrome-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { GitHubTaskKind } from '@/components/task-page/task-page-localized-options'
