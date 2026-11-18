@@ -1,6 +1,7 @@
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
+import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionTurnCompletion,
@@ -9,7 +10,7 @@ import type {
 import type {
   AgentSessionAttentionEdge,
   StructuredAttentionState
-} from '../../../../shared/agent-session/agent-session-attention'
+} from '../../../../shared/agent-session/view/agent-session-attention'
 import {
   foldAgentLeadStatus,
   heldTurnCountsAsFinished
@@ -32,6 +33,8 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   includePrompts?: boolean
   /** In-process reconciliation on restore and prompt removal. */
   onState?: (state: StructuredAttentionState) => void
+  /** The session closed; a turn it was running ends with no completion. */
+  onClosed?: (sessionId: string) => void
 }
 
 type CompletionFeedCursor = { epoch: string; sequence: number }
@@ -50,6 +53,8 @@ export type StructuredAgentSessionTurnCompletionFeedDeps = {
     journal?: AgentSessionJournal
   ) => Promise<StructuredAgentSessionStatusState | null>
   readChildWork: (sessionId: string) => readonly AgentChildWorkLivenessCandidate[] | undefined
+  /** The person's Skip on the chat's async questions, saved on its record. */
+  readAsyncQuestionsSkippedThrough?: (sessionId: string) => string | undefined
 }
 
 type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
@@ -88,9 +93,16 @@ export class StructuredAgentSessionTurnCompletionFeed {
     }
   }
 
-  /** Reattachments baseline silently instead of announcing old work. */
+  /** A closed session: its reattachment baselines silently instead of announcing old work. */
   forget(sessionId: string): void {
     this.baselines.delete(sessionId)
+    for (const subscriber of this.subscribers.values()) {
+      try {
+        subscriber.onClosed?.(sessionId)
+      } catch {
+        // One subscriber's bookkeeping cannot cost another its close.
+      }
+    }
   }
 
   /** When prompt and clean completion coincide, keep prompt identity; send completion only to legacy clients.
@@ -225,7 +237,9 @@ export class StructuredAgentSessionTurnCompletionFeed {
       outcome: request.outcome,
       completedAt: this.deps.now(),
       // Include attention here: remote clients receive status and completion streams unordered.
-      ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {})
+      ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {}),
+      ...(state.turnFailure ? { failure: state.turnFailure } : {}),
+      ...(state.quiet ? { quiet: true as const } : {})
     }
   }
 
@@ -237,6 +251,16 @@ export class StructuredAgentSessionTurnCompletionFeed {
   ): boolean {
     if (request.outcome !== 'success' || state.summary.status === 'attention') {
       return false
+    }
+    // An open async question pauses the goal on the user, so it is news now.
+    if (
+      state.goalContinues &&
+      !structuredAgentSessionAwaitsAnswer(
+        state.summary.openAsyncQuestion,
+        this.deps.readAsyncQuestionsSkippedThrough?.(sessionId)
+      )
+    ) {
+      return true
     }
     const held = foldAgentLeadStatus({
       leadState: 'done',

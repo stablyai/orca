@@ -11,7 +11,7 @@ import {
   getRuntimeEnvironmentRevision
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
-import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '@/web/web-runtime-request-registry'
+import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '@/web/runtime/client/web-runtime-request-registry'
 import {
   GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY,
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
@@ -37,7 +37,7 @@ export async function callGitHubTargetOperation<TResult>(args: {
 }): Promise<TResult> {
   let target = args.target
   if (target.kind === 'local' && isWebClientLocation()) {
-    const { requireActiveEnvironment } = await import('@/web/preload-api/web-runtime-session')
+    const { requireActiveEnvironment } = await import('@/web/runtime/client/web-runtime-session')
     target = { kind: 'environment', environmentId: requireActiveEnvironment().id }
   }
   if (target.kind === 'local') {

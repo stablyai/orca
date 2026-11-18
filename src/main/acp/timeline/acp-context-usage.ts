@@ -1,4 +1,4 @@
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin

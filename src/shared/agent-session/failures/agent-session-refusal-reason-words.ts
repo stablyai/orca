@@ -213,6 +213,8 @@ const HELD_IN_TERMINAL: AgentSessionRefusalReasonWords = {
   action: 'actFirst'
 }
 
+const SAVED_IN_OTHER_FOLDER = causeWords('savedInOtherFolder', 'goElsewhere')
+
 /** The chat a failed start's refusal named as holding the conversation, or null when it named
  *  none; absent where the refusal's owner was not kept, so who holds it is unknown. */
 export type AgentSessionRefusalHolder = { owner?: AgentSessionConversationOwner | null }
@@ -229,6 +231,9 @@ export function agentSessionRefusalReasonWords(
     failure.owner === null
   ) {
     return HELD_IN_TERMINAL
+  }
+  if (failure.code === 'agent_session_identity_required' && failure.details?.otherFolder) {
+    return SAVED_IN_OTHER_FOLDER
   }
   const byReason: Partial<Record<string, AgentSessionRefusalReasonWords>> | undefined =
     REASON_WORDS[failure.code]

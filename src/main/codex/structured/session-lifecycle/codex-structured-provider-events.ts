@@ -67,7 +67,12 @@ export function deliverCodexServerRequest(
   if (!session) {
     return { accepted: true }
   }
-  const disposition = disposeCodexServerRequest(session.prompts, session.connection, request)
+  const disposition = disposeCodexServerRequest(
+    session.prompts,
+    session.connection,
+    request,
+    session.readOnly ?? null
+  )
   const threadId = readCodexThreadId(request.params) ?? session.threadId
   if (disposition.kind === 'responded') {
     const admission = emit(session, {

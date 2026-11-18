@@ -9,7 +9,7 @@ import {
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../worktree/visibility/visibility-sources'
 import { OptionalFiniteNumber, OptionalString } from '../rpc-param-primitives'
-import { editorFormatterSchema } from '../../editor-formatter'
+import { editorFormatterSchema } from '../../editor/formatting/editor-formatter'
 import { normalizeDictationTerms } from '../../speech/dictation/dictation-dictionary'
 import { RepoWorkspaceCleanupPolicyParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
 

@@ -1,7 +1,7 @@
 import {
   LINEAR_AUTHENTICATION_ERROR,
   isIntegrationCredentialDecryptionError
-} from '../../../shared/integration-credential-errors'
+} from '../../../shared/secure-storage/integration-credential-errors'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 import { acquire, release } from '../requests/linear-request-concurrency'

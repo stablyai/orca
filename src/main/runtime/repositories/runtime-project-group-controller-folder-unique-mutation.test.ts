@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { FolderWorkspacePersistenceOperations } from '../../persistence/restoring-sessions/folder-workspace-operations'
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 

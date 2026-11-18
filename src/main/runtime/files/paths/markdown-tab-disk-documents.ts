@@ -8,7 +8,7 @@ import {
   utf8ByteLength,
   type RuntimeMarkdownReadTabResult,
   type RuntimeMarkdownSaveTabResult
-} from '../../../../shared/mobile-markdown-document'
+} from '../../../../shared/editor/markdown/mobile-markdown-document'
 import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   FileWriteDiskPrecondition,
@@ -19,7 +19,7 @@ import type {
   PersistedOpenFile,
   WorkspaceSessionState
 } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { findListedEditorFile } from '../../session-tabs/headless-editor-tabs'
+import { findListedEditorFile } from '../../session-tabs/restoration/headless-editor-tabs'
 
 export type MarkdownDiskFile = { content: string; byteLength: number }
 

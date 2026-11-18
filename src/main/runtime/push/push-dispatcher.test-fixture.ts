@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { MobilePushRegistration } from '../../../shared/mobile-push-contract'
+import type { MobilePushRegistration } from '../../../shared/notifications/mobile-push-contract'
 import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendResult } from './push-gateway-client'
 import { PushDispatcher, type PushDispatcherRegistry } from './push-dispatcher'

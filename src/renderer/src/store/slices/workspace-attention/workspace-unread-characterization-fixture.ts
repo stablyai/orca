@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { AppState } from '../../types'
 import { persistWorktreeMeta } from '../worktrees/metadata/worktree-meta-persist'
 import { createTestStore } from '../../testing/app-store-test-fixture'
@@ -12,7 +12,7 @@ import {
   resetFloatingWorkspaceUnreadSelectorCacheForTest,
   selectFloatingWorkspaceHasUnread
 } from '@/store/workspaces/floating/floating-workspace-unread-selector'
-import { startOnScreenAttentionScan } from '@/hooks/on-screen-attention-scan'
+import { startOnScreenAttentionScan } from '@/attention/on-screen-attention-scan'
 
 // Store setup and observables for the unread characterization suites; the events live in the driver.
 

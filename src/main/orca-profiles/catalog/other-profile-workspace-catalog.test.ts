@@ -63,7 +63,8 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
 
     expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
       unreadableProfiles: 1,
-      ids: new Set()
+      ids: new Set(),
+      repoIds: new Set()
     })
   })
 

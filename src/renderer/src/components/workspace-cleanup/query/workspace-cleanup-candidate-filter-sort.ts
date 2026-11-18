@@ -1,4 +1,4 @@
-import { compareDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
+import { compareDisplayName } from '../../../../../shared/worktree/display-name-order'
 import {
   isWorkspaceCleanupHeadLanded,
   type WorkspaceCleanupCandidate
