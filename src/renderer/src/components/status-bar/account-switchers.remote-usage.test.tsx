@@ -12,6 +12,7 @@ import {
   type OwnerUsageRateLimits
 } from './usage/use-owner-usage-rate-limits'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
+import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
 
 const mocks = vi.hoisted(() => {
   const watchers: Parameters<typeof ProviderAccountsClient.watchProviderAccounts>[1][] = []
@@ -130,6 +131,7 @@ function ownerUsage(): OwnerUsageRateLimits & { accounts: ProviderAccountsSnapsh
     ]
   })
   return {
+    owner: { target: mocks.owner, wslHostDistro: null },
     rateLimits,
     accounts: { claude: { accounts: [], activeAccountId: null }, codex: accounts, rateLimits },
     remoteOwner: { environmentId: 'laptop', label: 'Laptop' },
@@ -256,5 +258,68 @@ describe('Codex account usage on a paired host', () => {
       accountRevision: 1,
       offerRevision: expect.stringMatching(/^v1:/)
     })
+  })
+})
+
+function claudeAccount(id: string, email: string) {
+  return {
+    id,
+    email,
+    authMethod: 'subscription-oauth' as const,
+    createdAt: 1,
+    updatedAt: 1,
+    lastAuthenticatedAt: 1
+  }
+}
+
+describe('Claude account usage on a paired host', () => {
+  it('shows host active and inactive quotas, never the viewer store, for a colliding account id', async () => {
+    mocks.state.mockReturnValue({
+      ...localState(),
+      rateLimits: createEmptyRateLimitState({
+        claude: { ...usage(91), provider: 'claude' },
+        inactiveClaudeAccounts: [
+          {
+            accountId: 'same-id',
+            rateLimits: { ...usage(99), provider: 'claude' },
+            updatedAt: 1,
+            isFetching: false
+          }
+        ]
+      }),
+      fetchInactiveClaudeAccountUsage: vi.fn(),
+      refreshClaudeRateLimitsForTarget: vi.fn()
+    })
+    const owned = ownerUsage()
+    owned.accounts.claude = {
+      accounts: [
+        claudeAccount('active-id', 'active@laptop.test'),
+        claudeAccount('same-id', 'other@laptop.test')
+      ],
+      activeAccountId: 'active-id',
+      activeAccountIdsByRuntime: { host: 'active-id', wsl: {} }
+    }
+    const claude: ProviderRateLimits = { ...usage(4), provider: 'claude' }
+    owned.rateLimits.claude = claude
+    owned.rateLimits.inactiveClaudeAccounts = [
+      {
+        accountId: 'same-id',
+        rateLimits: { ...usage(25), provider: 'claude' },
+        updatedAt: 1,
+        isFetching: false
+      }
+    ]
+    render(
+      <ClaudeSwitcherMenu claude={claude} ownerUsage={owned} compact={false} iconOnly={false} />
+    )
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Open Claude details and account switcher' }),
+      { button: 0, ctrlKey: false }
+    )
+    const other = await screen.findByRole('menuitem', { name: /other@laptop.test/ })
+    expect(within(other).getByRole('img').getAttribute('aria-label')).toContain('25%')
+    const active = screen.getByRole('menuitem', { name: /active@laptop.test/ })
+    expect(within(active).getByRole('img').getAttribute('aria-label')).toContain('4%')
+    expect(screen.queryByRole('img', { name: /99%|91%/ })).toBeNull()
   })
 })

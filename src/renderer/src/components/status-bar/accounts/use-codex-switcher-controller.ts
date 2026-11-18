@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { useAppStore } from '../../../store/index'
-import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   emptyCodexAccountsState,
@@ -19,7 +17,7 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
-import { getCodexOwnerUsageProjection } from './codex-switcher-projection'
+import { getOwnerAccountRows } from './owner-account-rows'
 import { getCodexAccountSyncKey } from './provider-account-sync-key'
 import {
   getCodexStatusRuntimeKey,
@@ -37,16 +35,13 @@ import {
 } from './status-bar-codex-accounts'
 import { signInCodexAccount } from './codex-sign-in-action'
 import { useCodexResetAction } from './use-codex-reset-action'
-import {
-  getUsageOwnerHostScope,
-  type OwnerUsageRateLimits
-} from '../usage/use-owner-usage-rate-limits'
+import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 
 const EMPTY_CODEX_ACCOUNTS: CodexRateLimitAccountsState = emptyCodexAccountsState()
 
 export function useCodexSwitcherController(
   codex: ProviderRateLimits,
-  ownerUsage?: OwnerUsageRateLimits
+  ownerUsage: OwnerUsageRateLimits
 ) {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
@@ -61,23 +56,11 @@ export function useCodexSwitcherController(
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const refreshCodexRateLimitsForTarget = useAppStore((s) => s.refreshCodexRateLimitsForTarget)
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
-  const localRateLimits = useAppStore((s) => s.rateLimits)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const { target: focusedTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
-  const usageOwner = ownerUsage?.remoteOwner
-  const runtimeTarget = useMemo(
-    () => (usageOwner === undefined ? focusedTarget : getUsageOwnerHostScope(usageOwner)),
-    [usageOwner, focusedTarget]
-  )
+  const { target: runtimeTarget, wslHostDistro } = ownerUsage.owner
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
-  const { inactiveCodexAccounts, codexTarget, activeUsage } = getCodexOwnerUsageProjection(
-    codex,
-    localRateLimits,
-    ownerUsage?.rateLimits,
-    hasActiveRuntimeEnvironment
-  )
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
         ?.name ?? t('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
@@ -102,11 +85,12 @@ export function useCodexSwitcherController(
     false,
     !hasActiveRuntimeEnvironment
   )
-  const accountState = resolveCodexStatusAccountState(
-    settings,
-    hasActiveRuntimeEnvironment ? (ownerUsage?.accounts?.codex ?? EMPTY_CODEX_ACCOUNTS) : accounts,
-    activeRuntimeEnvironmentId
-  )
+  const {
+    roster,
+    inactiveAccounts: inactiveCodexAccounts,
+    usageTarget: codexTarget
+  } = getOwnerAccountRows('codex', ownerUsage, accounts, EMPTY_CODEX_ACCOUNTS)
+  const accountState = resolveCodexStatusAccountState(settings, roster, activeRuntimeEnvironmentId)
 
   useEffect(() => {
     mountedRef.current = true
@@ -242,13 +226,12 @@ export function useCodexSwitcherController(
   const reset = useCodexResetAction(
     codex,
     activeRuntimeEnvironmentId,
-    hasActiveRuntimeEnvironment ? (ownerUsage?.accounts ?? null) : null,
+    hasActiveRuntimeEnvironment ? ownerUsage.accounts : null,
     open
   )
 
   return {
     activeTarget,
-    activeUsage,
     handleOpenChange,
     handleSelectAccount,
     handleSelectRuntime,
