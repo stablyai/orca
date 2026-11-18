@@ -81,7 +81,7 @@ export function placeHandedOverMessage(
     turnScope: row.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
   }
   state.items.set(itemId, { ...accepted, ...place })
-  getJournalInputOrder(state)?.echoClaims.noteItem(state, itemId)
+  getJournalInputOrder(state)?.noteItem(state, itemId)
   if (submission.queuedMessageId !== undefined) {
     state.queuedHandOffPlaces.set(submission.clientMessageId, place)
   }
@@ -115,7 +115,7 @@ export function placeQueuedHandOffInDoubt(
   if (item && place) {
     const { sequenceIndex: _rejectedAt, ...rest } = item
     state.items.set(itemId, { ...rest, ...place })
-    getJournalInputOrder(state)?.echoClaims.noteItem(state, itemId)
+    getJournalInputOrder(state)?.noteItem(state, itemId)
   }
   if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
     delete submission.queuedMessageId
@@ -140,7 +140,7 @@ export function placeRejectedMessage(
     observedAt: row.ts,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
-  getJournalInputOrder(state)?.echoClaims.noteItem(state, itemId)
+  getJournalInputOrder(state)?.noteItem(state, itemId)
 }
 
 export function acceptSubmissionFromProviderItem(

@@ -48,7 +48,7 @@ export function upsertJournalItem(
     state.items.set(itemId, journalItemRevisionValue(existing, next))
     state.tombstones.delete(itemId)
   }
-  getJournalInputOrder(state)?.echoClaims.noteItem(state, itemId)
+  getJournalInputOrder(state)?.noteItem(state, itemId)
 }
 
 /** Revisions preserve the current placement, including a handover or rejection's later move. */
@@ -101,5 +101,5 @@ export function removeJournalItem(
   state.items.delete(itemId)
   state.itemFences.delete(itemId)
   state.itemExecutionOwners.delete(itemId)
-  getJournalInputOrder(state)?.echoClaims.noteItem(state, itemId)
+  getJournalInputOrder(state)?.noteItem(state, itemId)
 }

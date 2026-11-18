@@ -179,6 +179,11 @@ export class JournalInputOrder extends JournalInputEvidence {
     }
   }
 
+  /** Item folds report each write; the owner's own key map names the send it belongs to. */
+  noteItem(state: JournalReducerState, itemId: string): void {
+    this.echoClaims.noteItem(state, itemId, this.observationFacts.inputIds.get(itemId))
+  }
+
   private refreshItem(state: JournalReducerState, itemId: string): void {
     const id = this.observationFacts.inputIds.get(itemId)
     if (id !== undefined) {

@@ -146,12 +146,12 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
         set: (entry) => {
           const value = item.parse(entry)
           items.set(value.itemId, value)
-          getJournalInputOrder(state)?.echoClaims.noteItem(state, value.itemId)
+          getJournalInputOrder(state)?.noteItem(state, value.itemId)
         },
         remove: (key) => {
           if (isString(key)) {
             items.delete(key)
-            getJournalInputOrder(state)?.echoClaims.noteItem(state, key)
+            getJournalInputOrder(state)?.noteItem(state, key)
           }
         }
       }
