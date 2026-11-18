@@ -23,13 +23,20 @@ export function UpdateReleaseHistoryPager({
   history
 }: {
   history: UpdateReleaseHistory
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
-  const [index, setIndex] = useState(0)
   const { releases } = history
-  const pageIndex = Math.min(index, releases.length - 1)
+  const newestVersion = releases[0]?.version
+  // A newer update replaces the history; restart at its newest release.
+  const [page, setPage] = useState({ newestVersion, index: 0 })
+  const pageIndex =
+    page.newestVersion === newestVersion ? Math.min(page.index, releases.length - 1) : 0
+  const setIndex = (index: number): void => setPage({ newestVersion, index })
   const release = releases[pageIndex]
+  if (!release) {
+    return null
+  }
   const publishedAt = release.publishedAt ? Date.parse(release.publishedAt) : Number.NaN
   return (
     <div className="flex min-w-0 flex-col gap-2">
