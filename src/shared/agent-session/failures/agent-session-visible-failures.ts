@@ -4,6 +4,9 @@ import {
 } from './agent-session-failure'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import { isStructuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row-key'
+import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
+import { readAgentJournalTurnOutcome } from '../lifecycle/records/agent-session-turn-record'
+import { agentTurnVerdict } from '../../agent-status/lifecycle/agent-turn-outcome'
 
 /** Loaded startup causes and authentication explanations already visible in the transcript. */
 export function agentSessionVisibleFailureFacts(
@@ -22,6 +25,33 @@ export function agentSessionVisibleFailureFacts(
     }
   }
   return facts
+}
+
+/** Failure rows and sent messages after the latest successful turn; that turn resolved every failure before it. */
+export function agentSessionUnresolvedFailureRows(
+  items: readonly AgentJournalRenderItem[]
+): string[] {
+  const rows: string[] = []
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!
+    const { body } = item
+    const turn = body.kind === 'turn' ? body : body.kind === 'status' ? body.turnLifecycle : null
+    if (
+      turn &&
+      isRootAgentJournalItem(item) &&
+      agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) }) ===
+        'success'
+    ) {
+      break
+    }
+    if (
+      (body.kind === 'status' && body.failure !== undefined) ||
+      (body.kind === 'message' && body.role === 'user')
+    ) {
+      rows.push(item.itemId)
+    }
+  }
+  return rows
 }
 
 function sameInstallation(

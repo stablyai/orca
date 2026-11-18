@@ -11,6 +11,8 @@ import {
   agentSessionInstallCommand,
   agentSessionSignInCommand
 } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionUnresolvedFailureRows } from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -64,6 +66,8 @@ export type NativeChatHostSetup = {
   update?: AgentCliUpdateView | null
   /** The chat's host, so setup links open Settings on it. */
   host?: RuntimeClientTarget
+  /** Rows whose failure no later successful turn resolved; absent when the transcript is unknown. */
+  unresolvedFailureRows?: ReadonlySet<string>
 }
 
 export const NativeChatHostSetupContext = createContext<NativeChatHostSetup | null>(null)
@@ -148,6 +152,7 @@ type NativeChatHostSetupInput = {
   account: AgentSessionAccountKind | undefined
   failure: unknown
   startFailures: readonly { kind: string }[]
+  journalItems: readonly AgentJournalRenderItem[]
   /** After a recheck reads the host's agents, so the chat can retry what the install fixed. */
   onRechecked: () => void
 }
@@ -284,14 +289,21 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const signIn = useNativeChatSignIn(input, terminal)
   const install = useNativeChatInstall(input, terminal)
   const update = useNativeChatCliUpdate(input.target, input.agent, input.onRechecked)
-  const { target } = input
+  const { target, journalItems } = input
+  // Keyed by its ids so a streamed reply leaves the set, and the rows reading it, alone.
+  const unresolvedKey = useMemo(
+    () => agentSessionUnresolvedFailureRows(journalItems).join('\n'),
+    [journalItems]
+  )
+  const unresolvedFailureRows = useMemo(() => new Set(unresolvedKey.split('\n')), [unresolvedKey])
   return useMemo(
     () => ({
       signIn,
       install,
       update,
-      host: target
+      host: target,
+      unresolvedFailureRows
     }),
-    [signIn, install, update, target]
+    [signIn, install, update, target, unresolvedFailureRows]
   )
 }

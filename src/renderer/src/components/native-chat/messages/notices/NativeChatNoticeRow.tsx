@@ -331,7 +331,7 @@ export function NativeChatNoticeRow({
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
         ) : null}
       </div>
-      <NativeChatSetupButton failureKind={block.failure?.kind} />
+      <NativeChatSetupButton failureKind={block.failure?.kind} rowId={messageId} />
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}

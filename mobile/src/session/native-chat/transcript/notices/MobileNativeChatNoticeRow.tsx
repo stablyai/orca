@@ -149,8 +149,12 @@ export function MobileNativeChatNoticeRow({
   const lineText = noticeLineText(notice, names, t)
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   const failureDetail = agentSessionFailureDetailText(failure)
+  const resolved =
+    cardId !== undefined &&
+    names.unresolvedFailureRows !== undefined &&
+    !names.unresolvedFailureRows.has(cardId)
   const signInCommand =
-    failure?.kind === 'notSignedIn'
+    failure?.kind === 'notSignedIn' && !resolved
       ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
       : null
   const runInTerminal = names.onRunInTerminal
