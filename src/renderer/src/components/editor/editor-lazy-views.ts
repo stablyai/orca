@@ -17,4 +17,5 @@ export const ImageDiffViewer = lazy(() => import('./diff/large-files/ImageDiffVi
 export const MermaidViewer = lazy(() => import('./diagrams/MermaidViewer'))
 export const CsvViewer = lazy(() => import('./csv/CsvViewer'))
 export const CsvPagedViewer = lazy(() => import('./csv/preview/CsvPagedViewer'))
+export const ParquetViewer = lazy(() => import('./parquet/ParquetViewer'))
 export const IpynbViewer = lazy(() => import('./notebook/document/IpynbViewer'))
