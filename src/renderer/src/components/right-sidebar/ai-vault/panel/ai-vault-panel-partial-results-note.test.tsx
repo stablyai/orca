@@ -10,7 +10,7 @@ import type {
   AiVaultScanProgressUpdate
 } from '../../../../../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import { useAppStore } from '@/store/index'
-import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
+import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { resetAiVaultForcedRescanThrottleForTest } from '../scanning/ai-vault-session-refresh'
 import AiVaultPanel from './AiVaultPanel'
 
