@@ -3,9 +3,9 @@ import { buildProcessIndex, type ProcRow } from '../../memory/process-index'
 
 const enumerateHostProcesses = vi.fn()
 vi.mock('../../memory/host-process-index', () => ({
-  enumerateHostProcesses: () => enumerateHostProcesses()
+  enumerateHostProcesses: () => enumerateHostProcesses(),
+  readExecutableNames: async () => {}
 }))
-vi.mock('../../memory/local-daemon-pid', () => ({ getLocalDaemonPid: () => 50 }))
 
 import { registerPty, unregisterPty } from '../../memory/pty-registry'
 import {
@@ -61,6 +61,28 @@ describe('pre-gone PTY tree memory', () => {
     unregisterPty('a')
     unregisterPty('b')
     unregisterPty('c')
+  })
+
+  const runTicks = async (freeMBAt: (tick: number) => number, ticks: number) => {
+    for (let tick = 0; tick < ticks; tick += 1) {
+      notePreGoneHostMemorySample(commitFree(freeMBAt(tick)), tick * 10_000, 'win32')
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+  }
+
+  it('caps sweeps per hour when headroom swings across the episode boundary', async () => {
+    // 4,000 MB opens an episode and 4,700 MB ends it, every 20 s for an hour.
+    await runTicks((tick) => (tick % 2 === 0 ? 4_000 : 4_700), 360)
+    // A burst of 4 (0, 40, 80, 120 s), then one per 5-minute token (300 ... 3,300 s).
+    expect(enumerateHostProcesses).toHaveBeenCalledTimes(15)
+  })
+
+  it('probes a sweep that keeps failing every 30 minutes after three failures', async () => {
+    enumerateHostProcesses.mockRejectedValue(new Error('CIM blocked'))
+    await runTicks(() => 900, 720)
+    // 0, 30, 60 s, then 1,860, 3,660 and 5,460 s over two hours.
+    expect(enumerateHostProcesses).toHaveBeenCalledTimes(6)
+    expect(preGonePtyTreeMemoryDetails(0)).toEqual({})
   })
 
   it('never sweeps processes while the host has headroom', () => {

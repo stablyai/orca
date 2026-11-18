@@ -27,9 +27,10 @@ let previousCpuSample: WindowsProcessSample | null = null
 let retryCimAtMs = 0
 
 /** `trackCpu: false` leaves the resource view's CPU baseline untouched and reports no CPU. */
-export async function enumerateWindowsProcessResources(
-  trackCpu = true
-): Promise<WindowsProcessResourceRow[]> {
+export async function enumerateWindowsProcessResources({
+  trackCpu = true,
+  withNames = false
+}: { trackCpu?: boolean; withNames?: boolean } = {}): Promise<WindowsProcessResourceRow[]> {
   // Reuse one CIM sweep for resources and identity instead of spawning PowerShell twice per poll.
   if (processBackend === 'typeperf') {
     if (performance.now() < retryCimAtMs) {
@@ -38,7 +39,7 @@ export async function enumerateWindowsProcessResources(
     processBackend = 'cim'
   }
 
-  const sample = await enumerateWindowsWithCim()
+  const sample = await enumerateWindowsWithCim(withNames)
   if (sample) {
     return trackCpu ? applyWindowsCpuSample(sample) : sample.rows
   }
@@ -87,16 +88,18 @@ function applyWindowsCpuSample(sample: WindowsProcessSample): WindowsProcessReso
   return sample.rows
 }
 
-async function enumerateWindowsWithCim(): Promise<WindowsProcessSample | null> {
+async function enumerateWindowsWithCim(withNames: boolean): Promise<WindowsProcessSample | null> {
   // PageFileUsage includes committed memory hidden by working-set trimming.
+  const nameProperty = withNames ? ',Name' : ''
+  const nameField = withNames ? ', $_.Name' : ''
   const args = [
     '-NoLogo',
     '-NoProfile',
     '-NonInteractive',
     '-Command',
     "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; " +
-      'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,WorkingSetSize,KernelModeTime,UserModeTime,CreationDate,PageFileUsage,Name | ' +
-      'ForEach-Object { try { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.WorkingSetSize, [string]$_.KernelModeTime, [string]$_.UserModeTime, $_.CreationDate.ToUniversalTime().Ticks, $_.PageFileUsage, $_.Name)) } catch {} }'
+      `Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,WorkingSetSize,KernelModeTime,UserModeTime,CreationDate,PageFileUsage${nameProperty} | ` +
+      `ForEach-Object { try { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.WorkingSetSize, [string]$_.KernelModeTime, [string]$_.UserModeTime, $_.CreationDate.ToUniversalTime().Ticks, $_.PageFileUsage${nameField})) } catch {} }`
   ]
   try {
     const stdout = await execFileText('powershell.exe', args)

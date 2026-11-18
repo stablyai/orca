@@ -1,19 +1,27 @@
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
-import { enumerateHostProcesses } from '../../memory/host-process-index'
-import { getLocalDaemonPid } from '../../memory/local-daemon-pid'
+import { enumerateHostProcesses, readExecutableNames } from '../../memory/host-process-index'
 import { collectSubtree, type ProcIndex, type ProcRow } from '../../memory/process-index'
 import { claimPtyProcessTrees } from '../../memory/pty-process-trees'
-import { listRegisteredPtys, type PtyRegistration } from '../../memory/pty-registry'
+import {
+  hasRegisteredPtyWithPid,
+  listRegisteredPtys,
+  type PtyRegistration
+} from '../../memory/pty-registry'
 import { SYSTEM_MEMORY_KEY_PREFIX } from './system-memory-details'
 
 // Why: app.getAppMetrics() cannot see PTY children (agents, shells), which can own the
-// commit an OOM exhausts. A host sweep spawns ps/PowerShell, so it runs only in a pressure
-// episode, and within one only at new lows: a bounded handful per episode, none on a plateau.
+// commit an OOM exhausts. A host sweep spawns ps/PowerShell, so a pressure episode decides
+// when one is useful (its start, then new lows) and a global token bucket caps how often.
 
 type CrashReportDetails = Record<string, CrashReportDetailValue>
 
 export const PTY_TREE_MEMORY_MIN_SAMPLE_INTERVAL_MS = 30_000
-const MAX_FAILURE_BACKOFF_MS = 5 * 60_000
+// At most 4 + 12 sweeps in any hour, 12/h sustained, failures included.
+const SWEEP_TOKEN_CAPACITY = 4
+const SWEEP_TOKEN_REFILL_MS = 5 * 60_000
+// A sweep that keeps failing then probes rarely instead of spending the budget.
+const FAILURES_BEFORE_PROBING = 3
+const FAILED_PROBE_INTERVAL_MS = 30 * 60_000
 const HEADROOM_DROP_MAX_MB = 512
 const HEADROOM_DROP_FRACTION = 0.25
 // An episode ends only this far above the threshold, so hovering at it is one episode.
@@ -35,8 +43,16 @@ let sample: PtyTreeMemorySample | null = null
 type PressureEpisode = {
   /** Headroom at the last stored sweep; null until one succeeds. */
   sweptLowMB: number | null
-  lastAttemptAtMs: number | null
-  consecutiveFailures: number
+}
+
+// Admission state outlives episodes, so re-entering pressure cannot reset it.
+// Tokens are held as milliseconds of refill time so admission is exact integer math.
+const FULL_BUCKET_MS = SWEEP_TOKEN_CAPACITY * SWEEP_TOKEN_REFILL_MS
+const admission = {
+  bucketMs: FULL_BUCKET_MS,
+  refilledAtMs: null as number | null,
+  lastAttemptAtMs: null as number | null,
+  consecutiveFailures: 0
 }
 
 let episode: PressureEpisode | null = null
@@ -93,22 +109,13 @@ function trackEpisode(details: CrashReportDetails, platform: NodeJS.Platform): n
   if (!episode && headroom.headroomMB >= thresholdMB) {
     return null
   }
-  episode ??= { sweptLowMB: null, lastAttemptAtMs: null, consecutiveFailures: 0 }
+  episode ??= { sweptLowMB: null }
   return headroom.headroomMB
 }
 
-function sweepDue(current: PressureEpisode, headroomMB: number, nowMs: number): boolean {
+function sweepUseful(current: PressureEpisode, headroomMB: number): boolean {
   if (headroomMB < MIN_HEADROOM_TO_SAMPLE_MB) {
     return false
-  }
-  if (current.lastAttemptAtMs !== null) {
-    const backoffMs = Math.min(
-      MAX_FAILURE_BACKOFF_MS,
-      PTY_TREE_MEMORY_MIN_SAMPLE_INTERVAL_MS * 2 ** current.consecutiveFailures
-    )
-    if (nowMs - current.lastAttemptAtMs < backoffMs) {
-      return false
-    }
   }
   if (current.sweptLowMB === null) {
     return true
@@ -117,7 +124,27 @@ function sweepDue(current: PressureEpisode, headroomMB: number, nowMs: number): 
   return headroomMB <= current.sweptLowMB - step
 }
 
-/** Called with each host sample; sweeps once per pressure episode, then only at new lows. */
+function admitSweep(nowMs: number): boolean {
+  if (admission.refilledAtMs !== null) {
+    const elapsedMs = Math.max(0, nowMs - admission.refilledAtMs)
+    admission.bucketMs = Math.min(FULL_BUCKET_MS, admission.bucketMs + elapsedMs)
+  }
+  admission.refilledAtMs = nowMs
+  const sinceAttemptMs =
+    admission.lastAttemptAtMs === null ? Infinity : nowMs - admission.lastAttemptAtMs
+  const spacingMs =
+    admission.consecutiveFailures >= FAILURES_BEFORE_PROBING
+      ? FAILED_PROBE_INTERVAL_MS
+      : PTY_TREE_MEMORY_MIN_SAMPLE_INTERVAL_MS
+  if (sinceAttemptMs < spacingMs || admission.bucketMs < SWEEP_TOKEN_REFILL_MS) {
+    return false
+  }
+  admission.bucketMs -= SWEEP_TOKEN_REFILL_MS
+  admission.lastAttemptAtMs = nowMs
+  return true
+}
+
+/** Called with each host sample; sweeps at an episode's start and new lows, within budget. */
 export function notePreGoneHostMemorySample(
   hostDetails: CrashReportDetails,
   nowMs: number,
@@ -125,41 +152,58 @@ export function notePreGoneHostMemorySample(
 ): void {
   const headroomMB = trackEpisode(hostDetails, platform)
   const current = episode
-  if (inFlight || headroomMB === null || !current || !sweepDue(current, headroomMB, nowMs)) {
+  if (
+    inFlight ||
+    headroomMB === null ||
+    !current ||
+    !sweepUseful(current, headroomMB) ||
+    !hasRegisteredPtyWithPid() ||
+    !admitSweep(nowMs)
+  ) {
     return
   }
   // Capture what to attribute now: a PTY closing mid-sweep must not erase its evidence.
   const ptys = listRegisteredPtys().filter((pty) => pty.pid != null)
-  if (ptys.length === 0) {
-    return
-  }
-  const daemonPid = getLocalDaemonPid()
-  current.lastAttemptAtMs = nowMs
   inFlight = true
   const startedGeneration = generation
   // Skip CPU: it would reset the resource view's CPU baseline.
-  void enumerateHostProcesses({ trackCpu: false })
-    .then((index) => {
+  void collectPtyTreeMemory(ptys)
+    .then((details) => {
       if (startedGeneration !== generation) {
         return
       }
-      if (index.byPid.size === 0) {
-        current.consecutiveFailures += 1
+      if (!details) {
+        admission.consecutiveFailures += 1
         return
       }
-      sample = { details: summarizePtyTreeMemory(index, ptys, daemonPid), sampledAtMs: nowMs }
+      sample = { details, sampledAtMs: nowMs }
       current.sweptLowMB = headroomMB
-      current.consecutiveFailures = 0
+      admission.consecutiveFailures = 0
     })
     .catch(() => {
       // Keep the earlier sample; a failed sweep proves nothing about the tree.
-      current.consecutiveFailures += 1
+      if (startedGeneration === generation) {
+        admission.consecutiveFailures += 1
+      }
     })
     .finally(() => {
       if (startedGeneration === generation) {
         inFlight = false
       }
     })
+}
+
+async function collectPtyTreeMemory(
+  ptys: readonly PtyRegistration[]
+): Promise<CrashReportDetails | null> {
+  const index = await enumerateHostProcesses({ trackCpu: false, withNames: true })
+  if (index.byPid.size === 0) {
+    return null
+  }
+  const rows = claimPtyProcessTrees(index, ptys).flatMap((tree) => tree.rows)
+  const top = topByCommit(rows)
+  await readExecutableNames(top)
+  return summarizePtyTreeMemory(index, ptys, rows, top)
 }
 
 const toMB = (bytes: number): number => Math.round(Math.max(0, bytes) / BYTES_PER_MB)
@@ -186,12 +230,35 @@ function addMemoryDetails(
   }
 }
 
+function topByCommit(rows: readonly ProcRow[]): ProcRow[] {
+  const rank = (row: ProcRow): number => row.privateMemory ?? row.memory
+  return [...rows].sort((a, b) => rank(b) - rank(a)).slice(0, TOP_PROCESS_COUNT)
+}
+
+/** The process most PTY roots hang from, other than Orca's main process: the terminal daemon. */
+function daemonPidFromPtyRoots(index: ProcIndex, ptys: readonly PtyRegistration[]): number | null {
+  const parents = new Map<number, number>()
+  for (const pty of ptys) {
+    const ppid = pty.pid == null ? undefined : index.byPid.get(pty.pid)?.ppid
+    if (ppid !== undefined && ppid !== process.pid && index.byPid.has(ppid)) {
+      parents.set(ppid, (parents.get(ppid) ?? 0) + 1)
+    }
+  }
+  let best: number | null = null
+  for (const [pid, count] of parents) {
+    if (best === null || count > (parents.get(best) ?? 0)) {
+      best = pid
+    }
+  }
+  return best
+}
+
 function summarizePtyTreeMemory(
   index: ProcIndex,
   ptys: readonly PtyRegistration[],
-  daemonPid: number | null
+  rows: readonly ProcRow[],
+  top: readonly ProcRow[]
 ): CrashReportDetails {
-  const rows: ProcRow[] = claimPtyProcessTrees(index, ptys).flatMap((tree) => tree.rows)
   const details: CrashReportDetails = {
     [`${KEY_PREFIX}PtyCount`]: ptys.length,
     [`${KEY_PREFIX}ProcessCount`]: rows.length,
@@ -200,6 +267,7 @@ function summarizePtyTreeMemory(
   addMemoryDetails(details, '', sumMemory(rows))
   // getAppMetrics omits the detached daemon. Its other descendants (console hosts, PTYs
   // the registry could not attribute) are reported apart so they never read as daemon memory.
+  const daemonPid = daemonPidFromPtyRoots(index, ptys)
   if (daemonPid !== null) {
     const daemonRow = index.byPid.get(daemonPid)
     if (daemonRow) {
@@ -211,8 +279,6 @@ function summarizePtyTreeMemory(
       addMemoryDetails(details, 'Unattributed', sumMemory(others))
     }
   }
-  const rank = (row: ProcRow): number => row.privateMemory ?? row.memory
-  const top = [...rows].sort((a, b) => rank(b) - rank(a)).slice(0, TOP_PROCESS_COUNT)
   top.forEach((row, i) => {
     const key = `${KEY_PREFIX}Top${i + 1}`
     details[`${key}Name`] = row.name ?? 'unknown'
@@ -237,6 +303,10 @@ export function preGonePtyTreeMemoryDetails(nowMs: number): CrashReportDetails {
 export function resetPreGonePtyTreeMemoryForTest(): void {
   sample = null
   episode = null
+  admission.bucketMs = FULL_BUCKET_MS
+  admission.refilledAtMs = null
+  admission.lastAttemptAtMs = null
+  admission.consecutiveFailures = 0
   inFlight = false
   // Invalidate pending sweeps so they cannot repopulate a reset sample.
   generation += 1
