@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { MobileBrowserJavaScriptDialog } from './MobileBrowserJavaScriptDialog'
 
 vi.mock('react-native', () => ({ Pressable: 'Pressable', Text: 'Text', View: 'View' }))
@@ -14,15 +14,10 @@ vi.mock('../../i18n/use-mobile-translation', () => ({
   useMobileTranslation: () => (_key: string, fallback: string) => fallback
 }))
 
-let renderer: ReactTestRenderer | null = null
-afterEach(() => {
-  act(() => renderer?.unmount())
-  renderer = null
-})
-
 describe('MobileBrowserJavaScriptDialog', () => {
   it('starts a prompt at the page default and sends the typed answer', () => {
     const sendDialogCommand = vi.fn(async () => {})
+    let renderer!: ReactTestRenderer
     act(() => {
       renderer = create(
         createElement(MobileBrowserJavaScriptDialog, {
@@ -38,10 +33,11 @@ describe('MobileBrowserJavaScriptDialog', () => {
         })
       )
     })
-    const field = renderer!.root.findByType('FieldTextInput')
+    const field = renderer.root.findByType('FieldTextInput')
     expect(field.props.value).toBe('Ada')
     act(() => field.props.onChangeText('Grace'))
-    act(() => renderer!.root.findAllByType('Pressable').at(-1)!.props.onPress())
+    act(() => renderer.root.findAllByType('Pressable').at(-1)!.props.onPress())
     expect(sendDialogCommand).toHaveBeenCalledWith('browser.dialogAccept', 'Grace')
+    act(() => renderer.unmount())
   })
 })
