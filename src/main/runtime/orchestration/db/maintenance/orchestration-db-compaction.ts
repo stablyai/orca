@@ -1,16 +1,20 @@
-import { open, statfs } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { open } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
 import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { orchestrationDbFile } from '../orchestration-db-file'
 
-const MIN_FREE_BYTES = 32 * 1024 * 1024
+const MIB = 1024 * 1024
+const MIN_FREE_BYTES = 32 * MIB
 const MIN_FREE_FRACTION = 0.25
+// Launch waits for the rewrite; this keeps it within seconds on slow disks and well inside remote readiness deadlines.
+const MAX_LIVE_BYTES = 512 * MIB
 
 type PageCounts = { pageSize: number; pages: number; freePages: number }
 
 export type OrchestrationDbCompaction =
   | { kind: 'not-needed' }
+  | { kind: 'too-large'; liveBytes: number }
   | { kind: 'low-disk'; neededBytes: number; availableBytes: number }
   | { kind: 'busy' }
   | { kind: 'compacted'; beforeBytes: number; afterBytes: number; ms: number }
@@ -21,33 +25,50 @@ function isCompactionWarranted({ pageSize, pages, freePages }: PageCounts): bool
   return freePages * pageSize >= MIN_FREE_BYTES && freePages >= pages * MIN_FREE_FRACTION
 }
 
-// Evaluated source, as the checkpoint worker. Re-reads the counts under SQLite's own view (WAL included).
+// Evaluated source, as the checkpoint worker. Decides on SQLite's own counts (WAL included), under an exclusive lock.
 const compactionWorkerSource = `
 const { workerData, parentPort } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
-const db = new DatabaseSync(workerData.filename);
-const pragma = (name) => Object.values(db.prepare('PRAGMA ' + name).get())[0];
+const { statfsSync } = require('node:fs');
+const { dirname } = require('node:path');
+const w = workerData;
+const available = (dir) => {
+  const disk = statfsSync(dir);
+  return Number(disk.bavail) * Number(disk.bsize);
+};
 const started = performance.now();
+let db;
 try {
-  // Never wait: any other connection means Orca is not alone with the file, so retry next launch.
-  db.exec('PRAGMA busy_timeout = 0');
+  db = new DatabaseSync(w.filename);
+  const pragma = (name) => Object.values(db.prepare('PRAGMA ' + name).get())[0];
+  // Fails at once if any other connection, in any process, has the file open; retried next launch.
+  db.exec('PRAGMA busy_timeout = 0; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT');
   const pageSize = pragma('page_size');
-  const counts = { pageSize, pages: pragma('page_count'), freePages: pragma('freelist_count') };
+  const pages = pragma('page_count');
+  const freePages = pragma('freelist_count');
+  const fileBytes = pages * pageSize;
+  const liveBytes = (pages - freePages) * pageSize;
   const warranted =
-    counts.freePages * pageSize >= workerData.minFreeBytes &&
-    counts.freePages >= counts.pages * workerData.minFreeFraction;
+    freePages * pageSize >= w.minFreeBytes && freePages >= pages * w.minFreeFraction;
   if (pragma('auto_vacuum') !== 0 || !warranted) {
     parentPort.postMessage({ kind: 'not-needed' });
+  } else if (liveBytes > w.maxLiveBytes) {
+    parentPort.postMessage({ kind: 'too-large', liveBytes });
   } else {
-    db.exec('PRAGMA auto_vacuum = INCREMENTAL');
-    db.exec('VACUUM');
-    db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get();
-    parentPort.postMessage({
-      kind: 'compacted',
-      beforeBytes: counts.pages * pageSize,
-      afterBytes: pragma('page_count') * pageSize,
-      ms: Math.round(performance.now() - started)
-    });
+    // VACUUM builds the copy in the temp directory, then writes it through the WAL beside the file.
+    const neededBytes = 2 * fileBytes;
+    const availableBytes = available(dirname(w.filename));
+    if (availableBytes < neededBytes || available(w.tempDir) < liveBytes) {
+      parentPort.postMessage({ kind: 'low-disk', neededBytes, availableBytes });
+    } else {
+      db.exec('PRAGMA auto_vacuum = INCREMENTAL; VACUUM; PRAGMA wal_checkpoint(TRUNCATE)');
+      parentPort.postMessage({
+        kind: 'compacted',
+        beforeBytes: fileBytes,
+        afterBytes: pragma('page_count') * pageSize,
+        ms: Math.round(performance.now() - started)
+      });
+    }
   }
 } catch (error) {
   const code = (error && error.errcode) & 0xff;
@@ -55,7 +76,7 @@ try {
     code === 5 || code === 6 ? { kind: 'busy' } : { kind: 'failed', error: String(error) }
   );
 } finally {
-  db.close();
+  db?.close();
 }
 `
 
@@ -96,16 +117,10 @@ async function readHeaderCounts(filename: string): Promise<PageCounts | null> {
 export async function compactOrchestrationDbOnce(
   filename: string
 ): Promise<OrchestrationDbCompaction> {
+  // A cheap first look, so ordinary launches start no worker; the worker decides on SQLite's own view.
   const counts = await readHeaderCounts(filename)
   if (!counts || !isCompactionWarranted(counts)) {
     return { kind: 'not-needed' }
-  }
-  // VACUUM writes a full copy through the WAL before the old pages go.
-  const neededBytes = 2 * counts.pages * counts.pageSize
-  const disk = await statfs(dirname(filename))
-  const availableBytes = Number(disk.bavail) * Number(disk.bsize)
-  if (availableBytes < neededBytes) {
-    return { kind: 'low-disk', neededBytes, availableBytes }
   }
   return new Promise((resolve) => {
     let worker: ReturnType<typeof spawnWorkerThread>
@@ -115,17 +130,28 @@ export async function compactOrchestrationDbOnce(
         eval: true,
         workerData: {
           filename,
+          tempDir: tmpdir(),
           minFreeBytes: MIN_FREE_BYTES,
-          minFreeFraction: MIN_FREE_FRACTION
+          minFreeFraction: MIN_FREE_FRACTION,
+          maxLiveBytes: MAX_LIVE_BYTES
         }
       })
     } catch (error) {
       resolve({ kind: 'failed', error: String(error) })
       return
     }
-    worker.once('message', resolve)
-    worker.once('error', (error) => resolve({ kind: 'failed', error: String(error) }))
-    worker.once('exit', () => resolve({ kind: 'failed', error: 'worker exited without a result' }))
+    let result: OrchestrationDbCompaction = {
+      kind: 'failed',
+      error: 'worker exited without a result'
+    }
+    worker.once('message', (message: OrchestrationDbCompaction) => {
+      result = message
+    })
+    worker.once('error', (error) => {
+      result = { kind: 'failed', error: String(error) }
+    })
+    // Only after exit has the worker closed the file, so the runtime can open it.
+    worker.once('exit', () => resolve(result))
   })
 }
 

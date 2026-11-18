@@ -49,19 +49,22 @@ describe('compactOrchestrationDbOnce', () => {
 
     expect(result.kind).toBe('compacted')
     expect(statSync(file).size).toBeLessThan(before / 4)
+    // Resolved only once the worker let go: the runtime opens and writes without waiting.
+    const next = new DatabaseSync(file)
+    next.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE; COMMIT')
+    next.close()
     expect(autoVacuum(file)).toBe(2)
     expect(await compactOrchestrationDbOnce(file)).toEqual({ kind: 'not-needed' })
   })
 
-  it('leaves a file another connection is writing for the next launch', async () => {
+  it('leaves a file another connection has open for the next launch', async () => {
     const file = legacyDatabase(8, 40)
-    const holder = new DatabaseSync(file)
-    holder.exec('BEGIN IMMEDIATE')
+    const reader = new DatabaseSync(file)
+    reader.prepare('SELECT count(*) FROM rows').get()
     try {
       expect(await compactOrchestrationDbOnce(file)).toEqual({ kind: 'busy' })
     } finally {
-      holder.exec('ROLLBACK')
-      holder.close()
+      reader.close()
     }
     expect(autoVacuum(file)).toBe(0)
   })
