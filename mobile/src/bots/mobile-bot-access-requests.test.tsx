@@ -228,7 +228,6 @@ describe('who can ask in the bot sheet', () => {
       { botId: 'bot-1', updates: { permissionMode: 'ask' } }
     ])
   })
-
 })
 
 describe('decideBotAccessRequest', () => {

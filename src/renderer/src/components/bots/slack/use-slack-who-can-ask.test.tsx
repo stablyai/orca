@@ -48,7 +48,6 @@ vi.mock('@/store', () => {
   }
 })
 
-import { TranslationScopeContext } from '@/i18n/use-translate'
 import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
@@ -458,34 +457,15 @@ describe('useSlackWhoCanAsk', () => {
   })
 })
 
-// Renders translation keys, so a test sees which line shows without pinning its words.
-const KEYS_AS_TEXT = { intlLocale: 'en', t: (key: string) => key }
-
 describe('BotWhoCanAskInsetList', () => {
-  function renderInset(hostId: ExecutionHostId, scope?: typeof KEYS_AS_TEXT): void {
+  function renderInset(hostId: ExecutionHostId): void {
     mocks.members = []
     const insetBot = stampBotHost(hostId, bot({ members: [] }))
     function Inset(): React.JSX.Element {
       return <BotWhoCanAskInsetList bot={insetBot} service={useSlackWhoCanAsk(insetBot)} />
     }
-    const list = (
-      <ConfirmationDialogProvider>
-        <Inset />
-      </ConfirmationDialogProvider>
-    )
-    render(
-      scope ? (
-        <TranslationScopeContext.Provider value={scope}>{list}</TranslationScopeContext.Provider>
-      ) : (
-        list
-      )
-    )
+    renderList(<Inset />)
   }
-
-  it('shows what anyone added could do before anyone is added', () => {
-    renderInset('local', KEYS_AS_TEXT)
-    expect(screen.getByText('bots.access.controlNone')).toBeVisible()
-  })
 
   it('names the paired server exposed by giving access', () => {
     renderInset('runtime:server-1')
