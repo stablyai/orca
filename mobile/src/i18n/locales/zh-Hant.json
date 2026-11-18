@@ -187,7 +187,18 @@
       "webView": "顯示桌面版網站"
     },
     "loadFailure": {
-      "retry": "重試"
+      "retry": "重試",
+      "connectionNotSecure": "連線不安全",
+      "certificateNameMismatch": "憑證與 {{value0}} 不相符。",
+      "certificateDateInvalid": "{{value0}} 的憑證在目前日期和時間無效。",
+      "certificateAuthorityInvalid": "Orca 不信任簽發 {{value0}} 憑證的機構。",
+      "certificateVerificationFailed": "Orca 無法驗證 {{value0}} 的憑證。",
+      "proceedUnsafe": "仍然繼續（不安全）",
+      "connecting": "正在連線…",
+      "certificateChallengeExpired": "此憑證的核准已過期。請重試此頁面以重新要求核准。",
+      "certificateChallengeChanged": "憑證要求已變更。請重試該頁面並檢視新的警告。",
+      "certificateProceedFailed": "Orca 無法核准此憑證要求。請重試該頁面後再試。",
+      "certificateChallengeUnavailable": "此憑證要求已無法使用。請重試該頁面以提出新的要求。"
     }
   },
   "chat": {
@@ -2789,6 +2800,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "找不到該訊息。"
+    },
+    "browserProfile": {
+      "default": "預設"
     }
   },
   "settings": {
