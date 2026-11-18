@@ -19866,7 +19866,7 @@
       "rewind": {
         "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
         "historyNotPaginated": "Dieser ältere Codex-Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden. Einen neuen Chat starten, um „Bis hierher zurücksetzen“ zu verwenden.",
-        "busy": "Verfügbar, sobald der Agent inaktiv ist und im Chat keine Aktion mehr aussteht.",
+        "busy": "Verfügbar, wenn der Chat inaktiv ist",
         "staleEpoch": "Das Gespräch hat sich geändert. Die neuesten Nachrichten prüfen und erneut versuchen.",
         "invalidTarget": "Das Gespräch kann nicht zu dieser Nachricht zurückgesetzt werden. Es wurde nichts geändert.",
         "historyLimit": "Dieses Gespräch ist zu lang, um darin zurückzugehen. Es wurde nichts geändert.",
