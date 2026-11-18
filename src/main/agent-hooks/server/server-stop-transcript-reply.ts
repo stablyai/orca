@@ -42,7 +42,8 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     if (!enriched) {
       return undefined
     }
-    if (!normalized.stopTranscriptPath) {
+    // A refused hook must not retry onto, or end the read of, the row it lost to.
+    if (enriched !== rowBefore && !normalized.stopTranscriptPath) {
       this.scheduleAssistantMessageRetry(source, body, enriched)
     }
     this.followStopReply(rowBefore, enriched, normalized.stopTranscriptPath)
