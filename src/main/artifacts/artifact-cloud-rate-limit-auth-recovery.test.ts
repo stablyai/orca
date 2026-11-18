@@ -13,11 +13,16 @@ vi.mock('../../shared/secure-storage/secure-file', async (importOriginal) => {
   const actual = await importOriginal<typeof SecureFile>()
   return {
     ...actual,
-    writeDurableSecureFile: async (
-      ...[path, contents, options]: Parameters<typeof actual.writeDurableSecureFile>
-    ) => actual.writeSecureFile(path, contents, { ...options, durable: true }),
     bestEffortFsyncDirectory: async (directory: string) =>
       actual.bestEffortFsyncDirectorySync(directory)
+  }
+})
+vi.mock('../../shared/secure-storage/secure-file-async-write', async () => {
+  const secureFile = await import('../../shared/secure-storage/secure-file')
+  return {
+    writeSecureFileAsync: async (
+      ...[path, contents, options]: Parameters<typeof secureFile.writeSecureFile>
+    ) => secureFile.writeSecureFile(path, contents, options)
   }
 })
 
@@ -219,7 +224,12 @@ describe('a rate-limited artifact request that needs a session refresh', () => {
     ])
     expect(new Set(cloudStub.sent.map(({ key }) => key)).size).toBe(1)
     expect(
-      getArtifactShareRecord(signin.profileId, signin.userDataPath, writeRequest.sourceKey, scope)
+      await getArtifactShareRecord(
+        signin.profileId,
+        signin.userDataPath,
+        writeRequest.sourceKey,
+        scope
+      )
     ).toMatchObject({ slug: 'artifact-a', editToken: 'edit-secret' })
   })
 

@@ -82,12 +82,14 @@ export class ArtifactCloudService {
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<ArtifactPublishedLink | null>> {
     return this.withAuth(request, async (_token, _apiUrl, auth) => {
-      const record = getArtifactShareRecord(
+      const record = await getArtifactShareRecord(
         auth.profileId,
         this.userDataPath,
         request.sourceKey,
         auth.scope
       )
+      // The read waited on the disk; a sign-out meanwhile must not hand back its link.
+      auth.assertCurrent()
       return record ? { shareUrl: record.shareUrl } : null
     })
   }
@@ -116,7 +118,7 @@ export class ArtifactCloudService {
     return this.withAuth(request, (token, apiUrl, auth) =>
       this.publisher.runForSource(request.sourceKey, auth, async () => {
         auth.assertCurrent()
-        const record = getArtifactShareRecord(
+        const record = await getArtifactShareRecord(
           auth.profileId,
           this.userDataPath,
           request.sourceKey,
@@ -159,7 +161,7 @@ export class ArtifactCloudService {
     return this.withAuth(request, (token, apiUrl, auth) =>
       this.publisher.runForSource(request.sourceKey, auth, async () => {
         auth.assertCurrent()
-        const record = getArtifactShareRecord(
+        const record = await getArtifactShareRecord(
           auth.profileId,
           this.userDataPath,
           request.sourceKey,

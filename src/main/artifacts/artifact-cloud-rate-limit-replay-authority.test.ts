@@ -13,11 +13,16 @@ vi.mock('../../shared/secure-storage/secure-file', async (importOriginal) => {
   const actual = await importOriginal<typeof SecureFile>()
   return {
     ...actual,
-    writeDurableSecureFile: async (
-      ...[path, contents, options]: Parameters<typeof actual.writeDurableSecureFile>
-    ) => actual.writeSecureFile(path, contents, { ...options, durable: true }),
     bestEffortFsyncDirectory: async (directory: string) =>
       actual.bestEffortFsyncDirectorySync(directory)
+  }
+})
+vi.mock('../../shared/secure-storage/secure-file-async-write', async () => {
+  const secureFile = await import('../../shared/secure-storage/secure-file')
+  return {
+    writeSecureFileAsync: async (
+      ...[path, contents, options]: Parameters<typeof secureFile.writeSecureFile>
+    ) => secureFile.writeSecureFile(path, contents, options)
   }
 })
 
@@ -133,7 +138,9 @@ function revokeSession({ profileId, userDataPath }: Signin): void {
 
 // The wait is scheduled after the 429 body is read; act only once it exists.
 async function untilRetryScheduled(): Promise<void> {
-  for (let turn = 0; turn < 1000 && vi.getTimerCount() === 0; turn++) {
+  // Real disk I/O runs first, so bound this by wall time; vi.waitUntil would advance the fake clock.
+  const deadline = performance.now() + 10_000
+  while (vi.getTimerCount() === 0 && performance.now() < deadline) {
     await new Promise((resolve) => setImmediate(resolve))
   }
   expect(vi.getTimerCount()).toBe(1)
@@ -206,7 +213,7 @@ describe('a rate-limited artifact request whose account changes during the wait'
     await expect(signingOut).resolves.toMatchObject({ status: 'signed-out' })
     expect(artifactMethods).toEqual(['POST'])
     expect(
-      getArtifactShareRecord(signin.profileId, signin.userDataPath, writeRequest.sourceKey, {
+      await getArtifactShareRecord(signin.profileId, signin.userDataPath, writeRequest.sourceKey, {
         cloudUserId: cloudA.userId,
         cloudProfileId: cloudA.cloudProfileId,
         cloudOrganizationId: '',

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import {
   serializeArtifactFileChange,
@@ -8,27 +10,18 @@ import {
 } from './artifact-guarded-secure-write'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 import {
-  isArtifactShareRecord,
   pruneRecords,
   type ArtifactShareRecord,
   type ArtifactShareScope
 } from './artifact-share-record-retention'
+import {
+  artifactSharesPrunedOnRead,
+  parseArtifactShareRecordFile,
+  type ArtifactShareRecordFile,
+  type PreserveExpired
+} from './artifact-share-record-file'
 
 export type { ArtifactShareScope } from './artifact-share-record-retention'
-
-type ArtifactShareRecordFile = {
-  version: 2
-  lifecycleGeneration: number
-  lifecycleNonce: string
-  shares: Record<string, ArtifactShareRecord>
-}
-
-type ParsedArtifactShareRecordFile = {
-  version?: unknown
-  lifecycleGeneration?: unknown
-  lifecycleNonce?: unknown
-  shares?: unknown
-}
 
 function recordPath(profileId: string, userDataPath: string): string {
   return join(getOrcaProfileDirectory(profileId, userDataPath), 'artifact-shares.json')
@@ -37,56 +30,38 @@ function recordPath(profileId: string, userDataPath: string): string {
 function readRecords(
   profileId: string,
   userDataPath: string,
-  preserveExpired?: { sourceKey: string; slug: string; editToken: string },
+  preserveExpired?: PreserveExpired,
   pruneExpired = true
 ): ArtifactShareRecordFile {
   const path = recordPath(profileId, userDataPath)
   if (!existsSync(path)) {
-    return { version: 2, lifecycleGeneration: 0, lifecycleNonce: '', shares: {} }
+    return parseArtifactShareRecordFile(undefined, preserveExpired, pruneExpired)
   }
-  let parsed: ParsedArtifactShareRecordFile
+  let text: string
   try {
-    parsed = JSON.parse(readFileSync(path, 'utf8')) as ParsedArtifactShareRecordFile
+    text = readFileSync(path, 'utf8')
   } catch (error) {
     throw new Error('Artifact share records could not be read safely.', { cause: error })
   }
-  if (parsed.version === 1) {
-    return { version: 2, lifecycleGeneration: 0, lifecycleNonce: '', shares: {} }
-  }
-  if (
-    parsed.version !== 2 ||
-    !parsed.shares ||
-    typeof parsed.shares !== 'object' ||
-    Array.isArray(parsed.shares)
-  ) {
-    throw new Error('Artifact share records have an unsupported format.')
-  }
-  const shareEntries = Object.entries(parsed.shares as Record<string, unknown>)
-  const validShares = Object.fromEntries(
-    shareEntries.filter((entry): entry is [string, ArtifactShareRecord] =>
-      isArtifactShareRecord(entry[1])
-    )
-  )
-  const pruned = pruneExpired
-    ? pruneRecords(validShares, Date.now(), preserveExpired)
-    : { shares: validShares, changed: false }
-  const records: ArtifactShareRecordFile = {
-    version: 2,
-    lifecycleGeneration:
-      Number.isSafeInteger(parsed.lifecycleGeneration) && Number(parsed.lifecycleGeneration) >= 0
-        ? Number(parsed.lifecycleGeneration)
-        : 0,
-    lifecycleNonce: typeof parsed.lifecycleNonce === 'string' ? parsed.lifecycleNonce : '',
-    shares: pruned.shares
-  }
-  if (pruned.changed || shareEntries.length !== Object.keys(validShares).length) {
-    prunedOnRead.add(records)
-  }
-  return records
+  return parseArtifactShareRecordFile(text, preserveExpired, pruneExpired)
 }
 
-// Reads that dropped rows (expired or invalid) the file still holds.
-const prunedOnRead = new WeakSet<ArtifactShareRecordFile>()
+async function readRecordsAsync(
+  profileId: string,
+  userDataPath: string,
+  preserveExpired?: PreserveExpired
+): Promise<ArtifactShareRecordFile> {
+  let text: string | undefined
+  try {
+    text = await readFile(recordPath(profileId, userDataPath), 'utf8')
+  } catch (error) {
+    if (errnoCodeOrUnknown(error) !== 'ENOENT') {
+      throw new Error('Artifact share records could not be read safely.', { cause: error })
+    }
+  }
+  return parseArtifactShareRecordFile(text, preserveExpired, true)
+}
+
 const prunesQueued = new Set<string>()
 
 /** Lookups never write: the rows one dropped are written by a single queued change, held to the
@@ -125,14 +100,14 @@ function matchesScopeIdentity(record: ArtifactShareRecord, scope: ArtifactShareS
   )
 }
 
-export function getArtifactShareRecord(
+export async function getArtifactShareRecord(
   profileId: string,
   userDataPath: string,
   sourceKey: string,
   scope: ArtifactShareScope
-): ArtifactShareRecord | null {
-  const records = readRecords(profileId, userDataPath)
-  if (prunedOnRead.has(records)) {
+): Promise<ArtifactShareRecord | null> {
+  const records = await readRecordsAsync(profileId, userDataPath)
+  if (artifactSharesPrunedOnRead.has(records)) {
     persistPrune(profileId, userDataPath)
   }
   const record = records.shares[sourceKey]
@@ -148,17 +123,26 @@ function changeRecords(
   assertCurrent: () => void,
   options: {
     durable: boolean
-    preserveExpired?: { sourceKey: string; slug: string; editToken: string }
+    preserveExpired?: PreserveExpired
   },
   change: (records: ArtifactShareRecordFile) => boolean
 ): Promise<void> {
   const path = recordPath(profileId, userDataPath)
   return serializeArtifactFileChange(path, async () => {
     assertCurrent()
-    const records = readRecords(profileId, userDataPath, options.preserveExpired)
-    if (change(records) || prunedOnRead.has(records)) {
+    const records = await readRecordsAsync(profileId, userDataPath, options.preserveExpired)
+    if (change(records) || artifactSharesPrunedOnRead.has(records)) {
       const contents = JSON.stringify(records, null, 2)
-      await writeArtifactFileWhileCurrent(path, contents, options.durable, assertCurrent, false)
+      await writeArtifactFileWhileCurrent(
+        path,
+        contents,
+        options.durable,
+        assertCurrent,
+        false,
+        () =>
+          // Our own write keeps the lifecycle, so the next account check need not re-read the index.
+          rememberLifecycle(path, `${records.lifecycleGeneration}:${records.lifecycleNonce}`)
+      )
     }
   })
 }
@@ -252,15 +236,23 @@ const lifecycleByPath = new Map<string, { stamp: string; lifecycle: string }>()
 
 /** Every write replaces the file (new inode), so its stat stamp names one lifecycle: account checks
  *  read the whole index only when the file changed. */
-export function captureArtifactShareLifecycle(profileId: string, userDataPath: string): string {
-  const path = recordPath(profileId, userDataPath)
-  let stamp = 'missing'
+function lifecycleStamp(path: string): string {
   try {
     const stat = statSync(path, { bigint: true })
-    stamp = `${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`
+    return `${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`
   } catch {
     // A missing or unreadable file goes through the full read, which reports it as before.
+    return 'missing'
   }
+}
+
+function rememberLifecycle(path: string, lifecycle: string): void {
+  lifecycleByPath.set(path, { stamp: lifecycleStamp(path), lifecycle })
+}
+
+export function captureArtifactShareLifecycle(profileId: string, userDataPath: string): string {
+  const path = recordPath(profileId, userDataPath)
+  const stamp = lifecycleStamp(path)
   const cached = lifecycleByPath.get(path)
   if (cached?.stamp === stamp) {
     return cached.lifecycle

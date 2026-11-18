@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, rmSync } from 'node:fs'
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import {
@@ -35,17 +36,13 @@ function intentDirectory(profileId: string, userDataPath: string): string {
   return join(getOrcaProfileDirectory(profileId, userDataPath), 'artifact-create-intents')
 }
 
-function ensureIntentDirectory(profileId: string, userDataPath: string): string {
-  const directory = intentDirectory(profileId, userDataPath)
-  mkdirSync(directory, { recursive: true, mode: 0o700 })
-  return directory
-}
-
 const waitingCreatesByFolder = new Map<string, number>()
+// Idempotency key of each intent this process wrote or read, so removal need not re-read a body up to 10 MiB.
+const idempotencyKeyByPath = new Map<string, string>()
 
-function persistedIntentCount(folder: string): number {
+async function persistedIntentCount(folder: string): Promise<number> {
   try {
-    return readdirSync(folder).filter((name) => name.endsWith('.json')).length
+    return (await readdir(folder)).filter((name) => name.endsWith('.json')).length
   } catch (error) {
     if (errnoCodeOrUnknown(error) === 'ENOENT') {
       return 0
@@ -54,10 +51,10 @@ function persistedIntentCount(folder: string): number {
   }
 }
 
-function removeTemporaryIntents(directory: string): void {
-  for (const name of readdirSync(directory)) {
+async function removeTemporaryIntents(directory: string): Promise<void> {
+  for (const name of await readdir(directory)) {
     if (name.endsWith('.tmp')) {
-      rmSync(join(directory, name), { force: true })
+      await rm(join(directory, name), { force: true })
     }
   }
 }
@@ -119,10 +116,10 @@ function isScope(value: unknown): value is ArtifactShareScope {
   ].every((field) => typeof field === 'string')
 }
 
-function readIntent(path: string): ArtifactCreateIntent {
+async function readIntent(path: string): Promise<ArtifactCreateIntent> {
   let size: number
   try {
-    size = statSync(path).size
+    size = (await stat(path)).size
   } catch (error) {
     throw new Error('Artifact create recovery record could not be read safely.', { cause: error })
   }
@@ -131,7 +128,7 @@ function readIntent(path: string): ArtifactCreateIntent {
   }
   let parsed: unknown
   try {
-    parsed = JSON.parse(readFileSync(path, 'utf8'))
+    parsed = JSON.parse(await readFile(path, 'utf8'))
   } catch (error) {
     throw new Error('Artifact create recovery record could not be read safely.', { cause: error })
   }
@@ -152,20 +149,34 @@ function readIntent(path: string): ArtifactCreateIntent {
   if (artifactIntentRequestByteLength(intent.sourceKey, intent.body) > ARTIFACT_MAX_REQUEST_BYTES) {
     throw new Error('Artifact create recovery record exceeds the supported size.')
   }
+  idempotencyKeyByPath.set(path, intent.idempotencyKey)
   return intent as ArtifactCreateIntent
 }
 
-export function getArtifactCreateIntent(
+async function intentExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch (error) {
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
+      idempotencyKeyByPath.delete(path)
+      return false
+    }
+    throw error
+  }
+}
+
+export async function getArtifactCreateIntent(
   profileId: string,
   userDataPath: string,
   sourceKey: string,
   scope: ArtifactShareScope
-): ArtifactCreateIntent | null {
+): Promise<ArtifactCreateIntent | null> {
   const path = intentPath(profileId, userDataPath, sourceKey, scope)
-  if (!existsSync(path)) {
+  if (!(await intentExists(path))) {
     return null
   }
-  const intent = readIntent(path)
+  const intent = await readIntent(path)
   if (intent.sourceKey !== sourceKey || !scopeMatches(intent.scope, scope)) {
     throw new Error('Artifact create recovery record does not match its storage identity.')
   }
@@ -191,51 +202,63 @@ export async function getOrCreateArtifactCreateIntent(
   }
   const folder = intentDirectory(profileId, userDataPath)
   // Waiting creates hold their bodies, so they count against the cap before they queue.
-  const waiting = waitingCreatesByFolder.get(folder) ?? 0
-  if (waiting + persistedIntentCount(folder) >= MAX_PENDING_ARTIFACT_CREATES) {
-    throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
-  }
-  waitingCreatesByFolder.set(folder, waiting + 1)
-  // One create per profile at a time: the temp sweep and the pending cap read the whole folder.
-  return serializeArtifactFileChange(folder, async () => {
-    assertCurrent()
-    const existing = getArtifactCreateIntent(profileId, userDataPath, sourceKey, scope)
-    if (existing) {
-      return existing
-    }
-    const directory = ensureIntentDirectory(profileId, userDataPath)
-    removeTemporaryIntents(directory)
-    const pendingCount = persistedIntentCount(directory)
-    if (pendingCount >= MAX_PENDING_ARTIFACT_CREATES) {
+  waitingCreatesByFolder.set(folder, (waitingCreatesByFolder.get(folder) ?? 0) + 1)
+  try {
+    const waiting = (waitingCreatesByFolder.get(folder) ?? 1) - 1
+    if (waiting + (await persistedIntentCount(folder)) >= MAX_PENDING_ARTIFACT_CREATES) {
       throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
     }
-    const intent: ArtifactCreateIntent = {
-      version: 1,
-      sourceKey,
-      scope,
-      idempotencyKey,
-      body
-    }
-    const serializedIntent = JSON.stringify(intent, null, 2)
-    if (Buffer.byteLength(serializedIntent, 'utf8') > MAX_ARTIFACT_CREATE_INTENT_BYTES) {
-      throw new Error('Artifact create recovery record exceeds the supported size.')
-    }
-    await writeArtifactFileWhileCurrent(
-      intentPath(profileId, userDataPath, sourceKey, scope),
-      serializedIntent,
-      true,
-      assertCurrent,
-      true
+    // One create per profile at a time: the temp sweep and the pending cap read the whole folder.
+    return await serializeArtifactFileChange(folder, () =>
+      writeNewIntent(profileId, userDataPath, sourceKey, scope, idempotencyKey, body, assertCurrent)
     )
-    return intent
-  }).finally(() => {
+  } finally {
     const left = (waitingCreatesByFolder.get(folder) ?? 1) - 1
     if (left > 0) {
       waitingCreatesByFolder.set(folder, left)
     } else {
       waitingCreatesByFolder.delete(folder)
     }
-  })
+  }
+}
+
+async function writeNewIntent(
+  profileId: string,
+  userDataPath: string,
+  sourceKey: string,
+  scope: ArtifactShareScope,
+  idempotencyKey: string,
+  body: ArtifactWriteBody,
+  assertCurrent: () => void
+): Promise<ArtifactCreateIntent> {
+  assertCurrent()
+  const existing = await getArtifactCreateIntent(profileId, userDataPath, sourceKey, scope)
+  if (existing) {
+    return existing
+  }
+  const directory = intentDirectory(profileId, userDataPath)
+  await mkdir(directory, { recursive: true, mode: 0o700 })
+  await removeTemporaryIntents(directory)
+  const pendingCount = await persistedIntentCount(directory)
+  if (pendingCount >= MAX_PENDING_ARTIFACT_CREATES) {
+    throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
+  }
+  const intent: ArtifactCreateIntent = {
+    version: 1,
+    sourceKey,
+    scope,
+    idempotencyKey,
+    body
+  }
+  const serializedIntent = JSON.stringify(intent, null, 2)
+  if (Buffer.byteLength(serializedIntent, 'utf8') > MAX_ARTIFACT_CREATE_INTENT_BYTES) {
+    throw new Error('Artifact create recovery record exceeds the supported size.')
+  }
+  const path = intentPath(profileId, userDataPath, sourceKey, scope)
+  await writeArtifactFileWhileCurrent(path, serializedIntent, true, assertCurrent, true, () =>
+    idempotencyKeyByPath.set(path, idempotencyKey)
+  )
+  return intent
 }
 
 export async function removeArtifactCreateIntent(
@@ -246,17 +269,19 @@ export async function removeArtifactCreateIntent(
   expectedIdempotencyKey: string
 ): Promise<void> {
   const path = intentPath(profileId, userDataPath, sourceKey, scope)
-  if (!existsSync(path)) {
+  if (!(await intentExists(path))) {
     return
   }
   let matches = true
   try {
-    matches = readIntent(path).idempotencyKey === expectedIdempotencyKey
+    const known = idempotencyKeyByPath.get(path) ?? (await readIntent(path)).idempotencyKey
+    matches = known === expectedIdempotencyKey
   } catch {
     // Unreadable intents cannot be replayed and may be discarded after completion.
   }
   if (matches) {
-    rmSync(path, { force: true })
+    await rm(path, { force: true })
+    idempotencyKeyByPath.delete(path)
     await bestEffortFsyncDirectory(intentDirectory(profileId, userDataPath))
   }
 }
@@ -269,6 +294,7 @@ export function clearArtifactCreateIntents(profileId: string, userDataPath: stri
   for (const name of readdirSync(directory)) {
     if (name.endsWith('.json') || name.endsWith('.tmp')) {
       rmSync(join(directory, name), { force: true })
+      idempotencyKeyByPath.delete(join(directory, name))
     }
   }
   bestEffortFsyncDirectorySync(directory)

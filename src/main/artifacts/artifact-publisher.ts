@@ -88,7 +88,7 @@ export class ArtifactPublisher {
   ): Promise<ArtifactListItem> {
     return this.runForSource(request.sourceKey, auth, async () => {
       auth.assertCurrent()
-      const pending = getArtifactCreateIntent(
+      const pending = await getArtifactCreateIntent(
         auth.profileId,
         this.userDataPath,
         request.sourceKey,
@@ -117,7 +117,7 @@ export class ArtifactPublisher {
   ): Promise<ArtifactPublishResult> {
     return this.runForSource(request.sourceKey, auth, async () => {
       auth.assertCurrent()
-      const pending = getArtifactCreateIntent(
+      const pending = await getArtifactCreateIntent(
         auth.profileId,
         this.userDataPath,
         request.sourceKey,
@@ -136,7 +136,7 @@ export class ArtifactPublisher {
         await this.removeCreateIntent(request, auth, created.intent)
         return { change: 'created', item }
       }
-      const record = getArtifactShareRecord(
+      const record = await getArtifactShareRecord(
         auth.profileId,
         this.userDataPath,
         request.sourceKey,

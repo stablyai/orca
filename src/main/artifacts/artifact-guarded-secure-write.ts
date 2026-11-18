@@ -1,4 +1,4 @@
-import { writeDurableSecureFile, writeSecureFile } from '../../shared/secure-storage/secure-file'
+import { writeSecureFileAsync } from '../../shared/secure-storage/secure-file-async-write'
 
 const ACCOUNT_CHANGED = 'The signed-in Orca account changed while the artifact request was running.'
 
@@ -11,7 +11,9 @@ export async function writeArtifactFileWhileCurrent(
   durable: boolean,
   assertCurrent: () => void,
   /** Re-check once the write resolves, for callers that act on it next (sending a request). */
-  recheckAfterWrite: boolean
+  recheckAfterWrite: boolean,
+  /** Runs synchronously with the rename, before anything else can read the published file. */
+  onPublished?: () => void
 ): Promise<void> {
   let published = false
   const options = {
@@ -25,14 +27,11 @@ export async function writeArtifactFileWhileCurrent(
     },
     onPublished: () => {
       published = true
+      onPublished?.()
     }
   }
   try {
-    if (durable) {
-      await writeDurableSecureFile(path, contents, options)
-    } else {
-      writeSecureFile(path, contents, options)
-    }
+    await writeSecureFileAsync(path, contents, { ...options, durable })
   } catch (error) {
     // A sign-out clears staged files too; report the account change, not the vanished file.
     assertCurrent()

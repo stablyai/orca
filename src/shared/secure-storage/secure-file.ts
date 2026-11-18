@@ -116,21 +116,17 @@ export function writeDurableSecureJsonFile(
   return writeSecureFile(targetPath, JSON.stringify(value, null, 2), { ...options, durable: true })
 }
 
-const discardStage = (tmpFile: string): void => rmSync(tmpFile, { force: true })
+export const discardStage = (tmpFile: string): void => rmSync(tmpFile, { force: true })
 
-type SecureWriteOptions = {
+export type SecureWriteOptions = {
   shouldPublish?: () => boolean
   onPublished?: () => void
   // Publish only a file owner-only permissions hold for, else nothing and false.
   ownerOnly?: boolean
 }
-type StagedSecureFile = { tmpFile: string; dir: string; restricted: boolean }
+export type StagedSecureFile = { tmpFile: string; dir: string; restricted: boolean }
 
-function stageSecureFile(
-  targetPath: string,
-  contents: string,
-  ownerOnly: boolean | undefined
-): StagedSecureFile {
+export function prepareSecureStage(targetPath: string): { dir: string; tmpFile: string } {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -138,6 +134,15 @@ function stageSecureFile(
   // Windows dir hardening stays async + path-cached (it stormed the main thread, #4901); POSIX keeps the metadata cache to catch chmod/ctime drift.
   hardenSecurePathOnce(dir, true)
   const tmpFile = `${targetPath}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
+  return { dir, tmpFile }
+}
+
+export function stageSecureFile(
+  targetPath: string,
+  contents: string,
+  ownerOnly: boolean | undefined
+): StagedSecureFile {
+  const { dir, tmpFile } = prepareSecureStage(targetPath)
   try {
     // Create restricted on Windows: mode is ignored there, leaving inherited DACL exposure until a later fix.
     const restricted =
@@ -151,7 +156,7 @@ function stageSecureFile(
   }
 }
 
-function publishStagedSecureFile(
+export function publishStagedSecureFile(
   staged: StagedSecureFile,
   targetPath: string,
   options: SecureWriteOptions
@@ -200,26 +205,6 @@ export function writeSecureFile(
   return restricted
 }
 
-/** `writeSecureFile` with `durable`, waiting for the disk without blocking the thread. The
- *  shouldPublish check and the rename still run together, after the staged file is on disk. */
-export async function writeDurableSecureFile(
-  targetPath: string,
-  contents: string,
-  options: SecureWriteOptions = {}
-): Promise<boolean> {
-  const staged = stageSecureFile(targetPath, contents, options.ownerOnly)
-  let restricted: boolean
-  try {
-    await fsyncPath(staged.tmpFile, process.platform === 'win32' ? 'r+' : 'r')
-    restricted = publishStagedSecureFile(staged, targetPath, options)
-  } catch (error) {
-    discardStage(staged.tmpFile)
-    throw error
-  }
-  await bestEffortFsyncDirectory(staged.dir)
-  return restricted
-}
-
 function writeModeRestrictedFile(tmpFile: string, contents: string): boolean {
   writeFileSync(tmpFile, contents, { encoding: 'utf-8', mode: 0o600 })
   // The umask can strip bits from `mode` but never add them; chmod sets exactly 0o600.
@@ -261,7 +246,7 @@ export function bestEffortFsyncDirectorySync(directory: string): void {
   }
 }
 
-async function fsyncPath(path: string, flags: 'r' | 'r+'): Promise<void> {
+export async function fsyncPath(path: string, flags: 'r' | 'r+'): Promise<void> {
   const handle = await open(path, flags)
   try {
     await handle.sync()
