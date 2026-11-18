@@ -50,10 +50,15 @@ type PressureEpisode = {
 // Admission state outlives episodes, so re-entering pressure cannot reset it.
 // Tokens are held as milliseconds of refill time so admission is exact integer math.
 const FULL_BUCKET_MS = SWEEP_TOKEN_CAPACITY * SWEEP_TOKEN_REFILL_MS
-const admission = {
+const admission: {
+  bucketMs: number
+  refilledAtMs: number | null
+  lastAttemptAtMs: number | null
+  consecutiveFailures: number
+} = {
   bucketMs: FULL_BUCKET_MS,
-  refilledAtMs: null as number | null,
-  lastAttemptAtMs: null as number | null,
+  refilledAtMs: null,
+  lastAttemptAtMs: null,
   consecutiveFailures: 0
 }
 
