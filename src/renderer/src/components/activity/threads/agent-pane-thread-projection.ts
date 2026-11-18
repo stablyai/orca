@@ -137,10 +137,14 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
     }
     const { storeData, chatNames } = current
     const projection = storeData.agentStatusByPaneKey.projection
+    const previous = built
+    const previousCursor = statusCursor
     const cursor = projection.changeCursor()
     const changedPaneKeys =
-      built && statusCursor?.projection === projection && samePaneInputs(built.inputs, current)
-        ? (projection.changesSince(statusCursor.cursor) ?? undefined)
+      previous &&
+      previousCursor?.projection === projection &&
+      samePaneInputs(previous.inputs, current)
+        ? (projection.changesSince(previousCursor.cursor) ?? undefined)
         : undefined
     const next = buildActivityEvents(
       {
@@ -169,7 +173,8 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
 
   function readFull(current: Inputs): AgentPaneThreadSnapshot {
     const build = events(current)
-    if (full?.events !== build) {
+    let cached = full
+    if (cached?.events !== build) {
       const allThreads = buildAgentPaneThreads(
         {
           events: build.events,
@@ -179,9 +184,10 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
         },
         threadCache
       )
-      full = { events: build, snapshot: { storeData: current.storeData, allThreads } }
+      cached = { events: build, snapshot: { storeData: current.storeData, allThreads } }
+      full = cached
     }
-    return full.snapshot
+    return cached.snapshot
   }
 
   function readBadge(current: Inputs): AgentPaneThreadSnapshot {
