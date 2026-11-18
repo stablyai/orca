@@ -223,6 +223,17 @@ describe('artifact writes in flight when the account changes', () => {
     }
   }
 
+  it('sends nothing when sign-out has started but remote logout has not finished', async () => {
+    const service = await restartedService()
+    // The restarted service holds its own session ticket, so sign out through its module graph.
+    const owner = await import('../orca-profiles/cloud-session/profile-cloud-session-owner')
+    faults.beforePublish = (path) =>
+      path.includes('intents') && owner.signOutCloudSession(account.profileId, account.userDataPath)
+    await expect(service.publish(request())).rejects.toThrow()
+    expect(server.posts).toEqual([])
+    expect(await intentFiles()).toEqual([])
+  })
+
   for (const [name, change] of Object.entries(changes)) {
     it(`publishes no intent and sends nothing after a ${name} during the intent write`, async () => {
       faults.beforePublish = (path) => path.includes('intents') && change()

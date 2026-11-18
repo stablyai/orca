@@ -207,6 +207,8 @@ export function removeArtifactShareRecords(
 }
 
 export function clearArtifactShareRecords(profileId: string, userDataPath: string): void {
+  // A recycled inode must not let an in-flight fence keep the lifecycle this clear ends.
+  lifecycleByPath.delete(recordPath(profileId, userDataPath))
   let lifecycleGeneration = 0
   try {
     lifecycleGeneration = readRecords(profileId, userDataPath, undefined, false).lifecycleGeneration

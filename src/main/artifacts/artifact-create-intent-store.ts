@@ -1,13 +1,12 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, rmSync } from 'node:fs'
-import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import {
   ARTIFACT_MAX_CONTENT_BYTES,
   ARTIFACT_MAX_REQUEST_BYTES,
-  artifactContentByteLength,
-  artifactWriteRequestByteLength
+  artifactContentByteLength
 } from '../../shared/artifacts/artifacts'
 import { bestEffortFsyncDirectorySync } from '../../shared/secure-storage/secure-file'
 import { bestEffortFsyncDirectory } from '../../shared/secure-storage/secure-file-async-write'
@@ -18,25 +17,23 @@ import {
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 import type { ArtifactWriteBody } from './artifact-cloud-request'
 import type { ArtifactShareScope } from './artifact-share-record-store'
+import {
+  artifactIntentRequestByteLength,
+  MAX_ARTIFACT_CREATE_INTENT_BYTES,
+  readIntent,
+  readIntentKey,
+  type ArtifactCreateIntent
+} from './artifact-create-intent-file'
+
+export { MAX_ARTIFACT_CREATE_INTENT_BYTES, type ArtifactCreateIntent }
 
 export const MAX_PENDING_ARTIFACT_CREATES = 32
-export const MAX_ARTIFACT_CREATE_INTENT_BYTES = ARTIFACT_MAX_REQUEST_BYTES + 128 * 1024
-
-export type ArtifactCreateIntent = {
-  version: 1
-  sourceKey: string
-  scope: ArtifactShareScope
-  idempotencyKey: string
-  body: ArtifactWriteBody
-}
 
 function intentDirectory(profileId: string, userDataPath: string): string {
   return join(getOrcaProfileDirectory(profileId, userDataPath), 'artifact-create-intents')
 }
 
 const waitingCreatesByFolder = new Map<string, number>()
-// Idempotency key of each intent this process wrote or read, so removal need not re-read a body up to 10 MiB.
-const idempotencyKeyByPath = new Map<string, string>()
 
 async function persistedIntentCount(folder: string): Promise<number> {
   try {
@@ -83,81 +80,12 @@ function scopeMatches(left: ArtifactShareScope, right: ArtifactShareScope): bool
   )
 }
 
-function isWriteBody(value: unknown): value is ArtifactWriteBody {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  const body = value as Partial<ArtifactWriteBody>
-  return (
-    typeof body.content === 'string' &&
-    artifactContentByteLength(body.content) <= ARTIFACT_MAX_CONTENT_BYTES &&
-    (body.contentType === 'text/html' || body.contentType === 'text/markdown') &&
-    typeof body.fileName === 'string' &&
-    (body.title === undefined || typeof body.title === 'string')
-  )
-}
-
-function artifactIntentRequestByteLength(sourceKey: string, body: ArtifactWriteBody): number {
-  return artifactWriteRequestByteLength({ sourceKey, ...body })
-}
-
-function isScope(value: unknown): value is ArtifactShareScope {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  const scope = value as Partial<ArtifactShareScope>
-  return [
-    scope.cloudUserId,
-    scope.cloudProfileId,
-    scope.cloudOrganizationId,
-    scope.apiOrigin
-  ].every((field) => typeof field === 'string')
-}
-
-async function readIntent(path: string): Promise<ArtifactCreateIntent> {
-  let size: number
-  try {
-    size = (await stat(path)).size
-  } catch (error) {
-    throw new Error('Artifact create recovery record could not be read safely.', { cause: error })
-  }
-  if (size > MAX_ARTIFACT_CREATE_INTENT_BYTES) {
-    throw new Error('Artifact create recovery record exceeds the supported size.')
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(await readFile(path, 'utf8'))
-  } catch (error) {
-    throw new Error('Artifact create recovery record could not be read safely.', { cause: error })
-  }
-  if (!parsed || typeof parsed !== 'object') {
-    throw new Error('Artifact create recovery record has an unsupported format.')
-  }
-  const intent = parsed as Partial<ArtifactCreateIntent>
-  if (
-    intent.version !== 1 ||
-    typeof intent.sourceKey !== 'string' ||
-    typeof intent.idempotencyKey !== 'string' ||
-    !intent.idempotencyKey ||
-    !isScope(intent.scope) ||
-    !isWriteBody(intent.body)
-  ) {
-    throw new Error('Artifact create recovery record has an unsupported format.')
-  }
-  if (artifactIntentRequestByteLength(intent.sourceKey, intent.body) > ARTIFACT_MAX_REQUEST_BYTES) {
-    throw new Error('Artifact create recovery record exceeds the supported size.')
-  }
-  idempotencyKeyByPath.set(path, intent.idempotencyKey)
-  return intent as ArtifactCreateIntent
-}
-
 async function intentExists(path: string): Promise<boolean> {
   try {
     await stat(path)
     return true
   } catch (error) {
     if (errnoCodeOrUnknown(error) === 'ENOENT') {
-      idempotencyKeyByPath.delete(path)
       return false
     }
     throw error
@@ -200,17 +128,18 @@ export async function getOrCreateArtifactCreateIntent(
   }
   const folder = intentDirectory(profileId, userDataPath)
   // Waiting creates hold their bodies, so they count against the cap before they queue.
-  waitingCreatesByFolder.set(folder, (waitingCreatesByFolder.get(folder) ?? 0) + 1)
-  try {
-    const waiting = (waitingCreatesByFolder.get(folder) ?? 1) - 1
-    if (waiting + (await persistedIntentCount(folder)) >= MAX_PENDING_ARTIFACT_CREATES) {
-      throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
+  const waiting = waitingCreatesByFolder.get(folder) ?? 0
+  if (waiting >= MAX_PENDING_ARTIFACT_CREATES) {
+    throw new Error(TOO_MANY_CREATES)
+  }
+  waitingCreatesByFolder.set(folder, waiting + 1)
+  let released = false
+  // A published intent counts as a file, so it stops counting as waiting.
+  const release = (): void => {
+    if (released) {
+      return
     }
-    // One create per profile at a time: the temp sweep and the pending cap read the whole folder.
-    return await serializeArtifactFileChange(folder, () =>
-      writeNewIntent(profileId, userDataPath, sourceKey, scope, idempotencyKey, body, assertCurrent)
-    )
-  } finally {
+    released = true
     const left = (waitingCreatesByFolder.get(folder) ?? 1) - 1
     if (left > 0) {
       waitingCreatesByFolder.set(folder, left)
@@ -218,16 +147,39 @@ export async function getOrCreateArtifactCreateIntent(
       waitingCreatesByFolder.delete(folder)
     }
   }
+  try {
+    const others = (waitingCreatesByFolder.get(folder) ?? 1) - 1
+    if (others + (await persistedIntentCount(folder)) >= MAX_PENDING_ARTIFACT_CREATES) {
+      throw new Error(TOO_MANY_CREATES)
+    }
+    // One create per profile at a time: the temp sweep and the pending cap read the whole folder.
+    return await serializeArtifactFileChange(folder, () =>
+      writeNewIntent(
+        { profileId, userDataPath, sourceKey, scope, idempotencyKey, body, assertCurrent },
+        release
+      )
+    )
+  } finally {
+    release()
+  }
+}
+
+const TOO_MANY_CREATES =
+  'Too many artifact creates are waiting for recovery. Retry an earlier share.'
+
+type NewIntent = {
+  profileId: string
+  userDataPath: string
+  sourceKey: string
+  scope: ArtifactShareScope
+  idempotencyKey: string
+  body: ArtifactWriteBody
+  assertCurrent: () => void
 }
 
 async function writeNewIntent(
-  profileId: string,
-  userDataPath: string,
-  sourceKey: string,
-  scope: ArtifactShareScope,
-  idempotencyKey: string,
-  body: ArtifactWriteBody,
-  assertCurrent: () => void
+  { profileId, userDataPath, sourceKey, scope, idempotencyKey, body, assertCurrent }: NewIntent,
+  onPublished: () => void
 ): Promise<ArtifactCreateIntent> {
   assertCurrent()
   const existing = await getArtifactCreateIntent(profileId, userDataPath, sourceKey, scope)
@@ -239,7 +191,7 @@ async function writeNewIntent(
   await removeTemporaryIntents(directory)
   const pendingCount = await persistedIntentCount(directory)
   if (pendingCount >= MAX_PENDING_ARTIFACT_CREATES) {
-    throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
+    throw new Error(TOO_MANY_CREATES)
   }
   const intent: ArtifactCreateIntent = {
     version: 1,
@@ -253,8 +205,13 @@ async function writeNewIntent(
     throw new Error('Artifact create recovery record exceeds the supported size.')
   }
   const path = intentPath(profileId, userDataPath, sourceKey, scope)
-  await writeArtifactFileWhileCurrent(path, serializedIntent, true, assertCurrent, true, () =>
-    idempotencyKeyByPath.set(path, idempotencyKey)
+  await writeArtifactFileWhileCurrent(
+    path,
+    serializedIntent,
+    true,
+    assertCurrent,
+    true,
+    onPublished
   )
   return intent
 }
@@ -272,14 +229,13 @@ export async function removeArtifactCreateIntent(
   }
   let matches = true
   try {
-    const known = idempotencyKeyByPath.get(path) ?? (await readIntent(path)).idempotencyKey
+    const known = (await readIntentKey(path)) ?? (await readIntent(path)).idempotencyKey
     matches = known === expectedIdempotencyKey
   } catch {
     // Unreadable intents cannot be replayed and may be discarded after completion.
   }
   if (matches) {
     await rm(path, { force: true })
-    idempotencyKeyByPath.delete(path)
     await bestEffortFsyncDirectory(intentDirectory(profileId, userDataPath))
   }
 }
@@ -292,7 +248,6 @@ export function clearArtifactCreateIntents(profileId: string, userDataPath: stri
   for (const name of readdirSync(directory)) {
     if (name.endsWith('.json') || name.endsWith('.tmp')) {
       rmSync(join(directory, name), { force: true })
-      idempotencyKeyByPath.delete(join(directory, name))
     }
   }
   bestEffortFsyncDirectorySync(directory)
