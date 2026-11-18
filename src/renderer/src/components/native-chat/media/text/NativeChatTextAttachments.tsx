@@ -1,7 +1,7 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { createContext, useCallback, useContext, useState, useMemo, type ReactNode } from 'react'
-import { Button } from '@/components/ui/button'
+import { NativeChatFileCard, nativeChatFileType } from '../../files/NativeChatFileCard'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   nativeChatTextAttachmentPaths,
@@ -81,19 +81,26 @@ function AttachmentButton({
   if (open && !visible) {
     setOpen(false)
   }
+  const name = chatTextAttachmentName(
+    path,
+    t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
+  )
+  const previewLabel = t('components.native-chat.attachment.preview', 'Preview attachment')
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => visible && (opener ? opener(path) : setOpen(true))}
-      >
-        {chatTextAttachmentName(
-          path,
-          t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
-        )}
-      </Button>
+      <NativeChatFileCard
+        variant="card"
+        path={path}
+        name={name}
+        // Type only in v1: a size would need an owner-scoped read per attachment.
+        meta={nativeChatFileType(path)}
+        action={{
+          label: previewLabel,
+          tooltip: previewLabel,
+          glyph: 'attachment-preview',
+          onOpen: () => visible && (opener ? opener(path) : setOpen(true))
+        }}
+      />
       {open && visible ? (
         <NativeChatTextAttachmentPreview
           path={path}

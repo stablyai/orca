@@ -45,3 +45,14 @@ export function showFileLinkUnresolvedToast(pathText: string): void {
     )
   )
 }
+
+/** An explicit "Open in Orca Browser" that showed no page; it never falls back to the editor silently. */
+export function showFileOrcaBrowserOpenFailureToast(filePath: string): void {
+  toast.error(
+    translate(
+      'components.native-chat.fileLinks.orcaBrowserFailed',
+      "Couldn't open {{value0}} in the Orca Browser",
+      { value0: filePath.split(/[\\/]/).pop() || filePath }
+    )
+  )
+}

@@ -3,3 +3,6 @@ export type FileOpenFailure = {
   verdict: 'missing' | 'unverifiable' | 'unavailable'
   error?: unknown
 }
+
+/** An explicit open button's destination, chosen by the caller instead of link routing. */
+export type ExplicitFileOpenDestination = 'orca-browser' | 'editor'

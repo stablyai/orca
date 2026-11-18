@@ -29,6 +29,8 @@ export type NativeChatTurnDiffFile = {
   added: number
   removed: number
   truncated: boolean
+  /** The turn's last edit removed the file, so there is nothing left to open. */
+  deleted: boolean
   target: NativeChatDiffTarget
   edits: NativeChatTurnDiffEdit[]
 }
@@ -87,6 +89,7 @@ export function nativeChatTurnDiffs(
             added: 0,
             removed: 0,
             truncated: false,
+            deleted: false,
             target,
             edits: []
           }
@@ -101,6 +104,7 @@ export function nativeChatTurnDiffs(
         entry.added += file.added
         entry.removed += file.removed
         entry.truncated ||= file.truncated
+        entry.deleted = file.changeKind === 'deleted'
         entry.target = target
         entry.edits.push({ call, result: edit.result, fileIndex, target, order: editOrder++ })
         files.set(file.path, entry)

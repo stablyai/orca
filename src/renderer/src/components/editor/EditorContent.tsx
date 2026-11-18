@@ -12,6 +12,7 @@ import { EditorDiffFileSurface } from './panel/EditorDiffFileSurface'
 import { EditorEditFileSurface } from './panel/EditorEditFileSurface'
 import { EditorFileLoadErrorView } from './loading/EditorFileLoadErrorView'
 import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
+import { markdownPreviewContent } from './markdown-preview/markdown-preview-content'
 import {
   HOST_STARTED,
   USER_RETRY,
@@ -230,8 +231,11 @@ export function EditorContent({
         </div>
       )
     }
-    const previewSourceFileId = activeFile.markdownPreviewSourceFileId ?? activeFile.filePath
-    const previewContent = editBuffers[previewSourceFileId] ?? fileContent.content
+    const { sourceFileId: previewSourceFileId, content: previewContent } = markdownPreviewContent(
+      activeFile,
+      editBuffers,
+      fileContent.content
+    )
     return (
       <div className="min-h-0 flex-1">
         <MarkdownPreviewSizeGate content={previewContent}>

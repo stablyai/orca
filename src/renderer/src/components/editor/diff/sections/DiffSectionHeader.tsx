@@ -1,5 +1,10 @@
 import { combinedDiffHeaderAttributes } from '../../combined-diff/scroll-viewport/combined-diff-viewport'
-import { ChevronDown, ChevronRight, ExternalLink, Eye } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
+import {
+  changedFileOpenLabel,
+  type ChangedFileOpenTarget
+} from '@/lib/files/open/changed-file-view'
+import { ChangedFileOpenIcon } from '@/lib/files/open/ChangedFileOpenIcon'
 import type { MouseEvent, ReactElement, ReactNode } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { splitPathForDisplay } from '../../panel/header/editor-path-display'
@@ -13,7 +18,7 @@ export function DiffSectionHeader({
   onToggle,
   onOpenSection,
   openSectionTitle,
-  onOpenPreview,
+  preview,
   trailingContent
 }: {
   path: string
@@ -24,7 +29,8 @@ export function DiffSectionHeader({
   onToggle: () => void
   onOpenSection: (event: MouseEvent) => void
   openSectionTitle: string
-  onOpenPreview?: (event: MouseEvent) => void
+  /** Opens the working file rendered beside the diff; the target names where it lands. */
+  preview?: { target: ChangedFileOpenTarget; onOpen: (event: MouseEvent) => void }
   trailingContent?: ReactNode
 }): ReactElement {
   const t = useTranslate()
@@ -32,7 +38,7 @@ export function DiffSectionHeader({
   return (
     <div
       {...combinedDiffHeaderAttributes}
-      className="sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors group cursor-pointer"
+      className="@container sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors group cursor-pointer"
       onClick={onToggle}
     >
       <span className="flex min-w-0 flex-1 items-center text-muted-foreground">
@@ -70,7 +76,7 @@ export function DiffSectionHeader({
         <span className="flex shrink-0 items-center">
           {dirty && <span className="font-medium ml-1">M</span>}
           {(added > 0 || removed > 0) && (
-            <span className="tabular-nums ml-2">
+            <span className="diff-section-header-counts tabular-nums ml-2">
               {added > 0 && <span className="text-green-600 dark:text-green-500">+{added}</span>}
               {added > 0 && removed > 0 && <span> </span>}
               {removed > 0 && <span className="text-red-500">-{removed}</span>}
@@ -78,27 +84,21 @@ export function DiffSectionHeader({
           )}
         </span>
       </span>
-      <div className="flex items-center gap-1 shrink-0 ml-2">
+      <div className="diff-section-header-actions flex items-center gap-1 shrink-0 ml-2">
         {trailingContent}
-        {onOpenPreview != null && (
+        {preview != null && (
           <button
             type="button"
             // Keep preview visible for touch and consistent with the single-file header.
             className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
             onClick={(event) => {
               event.stopPropagation()
-              onOpenPreview(event)
+              preview.onOpen(event)
             }}
-            title={t(
-              'auto.components.editor.EditorPanelHeader.fb8331694e',
-              'Open Preview to the Side'
-            )}
-            aria-label={t(
-              'auto.components.editor.EditorPanelHeader.fb8331694e',
-              'Open Preview to the Side'
-            )}
+            title={changedFileOpenLabel(preview.target, t, 'side')}
+            aria-label={changedFileOpenLabel(preview.target, t, 'side')}
           >
-            <Eye className="size-3.5" />
+            <ChangedFileOpenIcon target={preview.target} className="size-3.5" />
           </button>
         )}
         <button

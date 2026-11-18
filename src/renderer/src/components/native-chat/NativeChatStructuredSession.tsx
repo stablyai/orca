@@ -36,7 +36,7 @@ import { NativeChatFindBar } from '@/components/native-chat/viewport/find/Native
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from '@/components/native-chat/links/actions/use-native-chat-link-actions'
-import { NativeChatLinkClickContext } from '@/components/native-chat/links/actions/native-chat-link-click-context'
+import { NativeChatLinkProviders } from '@/components/native-chat/links/actions/NativeChatLinkProviders'
 import { useNativeChatFileLinkContext } from '@/components/native-chat/links/actions/use-native-chat-file-link-context'
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from '@/components/native-chat/links/actions/use-native-chat-file-link-existence'
 import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
@@ -160,11 +160,10 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const find = useNativeChatFind(paneActive, rootRef, composerRef, submits.messageListRef)
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
-  const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
-    fileLinkContext,
-    rootRef,
-    { sessionId: props.sessionId, isVisible: props.isVisible }
-  )
+  const links = useNativeChatLinkActions(fileLinkContext, rootRef, {
+    sessionId: props.sessionId,
+    isVisible: props.isVisible
+  })
   const handOff = useNativeChatHandOff({
     pane: props,
     directory: fileLinkContext,
@@ -407,8 +406,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       )}
       {paneCommands.menu}
       {handOff.dialog}
-      <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
+      <LinkActionPopover request={links.linkActionRequest} onClose={links.closeLinkActions} />
     </div>
   )
-  return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
+  return <NativeChatLinkProviders links={links}>{root}</NativeChatLinkProviders>
 }

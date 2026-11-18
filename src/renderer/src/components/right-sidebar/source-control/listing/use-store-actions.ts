@@ -1,12 +1,10 @@
 import { basename, getRelativePathInsideRoot } from '@/lib/path'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import type { AppState } from '@/store/types'
-import {
-  sourceControlScopeRuntimeEnvironmentId,
-  useSourceControlScope
-} from '../panel/worktree-scope'
+import { useSourceControlScope } from '../panel/worktree-scope'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { sourceControlRouting } from './source-control-file-open-actions'
 
 const commands = {
   allocateCommitMessageGenerationRequestId: (
@@ -77,10 +75,8 @@ const commands = {
 
 /** Read fixed-identity actions via getState; key section wrappers on primitive routing so store writes never rebuild them. */
 export function useSourceControlStoreActions() {
-  const scope = useSourceControlScope()
-  const executionHostId = scope?.executionHostId
-  const placementWorkspaceId = scope?.placementWorkspaceId
-  const runtimeEnvironmentId = sourceControlScopeRuntimeEnvironmentId(scope)
+  const { executionHostId, placementWorkspaceId, runtimeEnvironmentId } =
+    sourceControlRouting(useSourceControlScope())
 
   return useMemo(() => {
     const options = { placementWorkspaceId, executionHostId, runtimeEnvironmentId }

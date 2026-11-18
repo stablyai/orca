@@ -305,7 +305,8 @@ export function createStructuredSessionMocks() {
       useNativeChatTabOwnerWorktreeId: () => mocks.ownerWorktreeId
     }),
     useNativeChatFileLinkClick: () => ({
-      useNativeChatFileLinkClick: (context: unknown) => (context ? mocks.fileLinkClick : undefined)
+      useNativeChatFileLinkClick: (context: unknown) => (context ? mocks.fileLinkClick : undefined),
+      useNativeChatExplicitFileOpener: () => undefined
     }),
     nativeChatMessageList: () => ({
       NativeChatMessageList: (props: typeof mocks.messageListProps) => {

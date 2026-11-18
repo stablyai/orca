@@ -6,6 +6,7 @@ export type TerminalLinkStoreSettings = {
   openLinksInApp?: boolean
   openLinksInAppPreferencePrompted?: boolean
   activeRuntimeEnvironmentId?: string | null
+  terminalLinkClickBehavior?: 'none' | 'actions' | 'open'
 }
 
 export type TerminalLinkStoreState = {
