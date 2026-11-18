@@ -108,7 +108,10 @@ function fileChangeToolCall(item: CodexThreadItem, output?: string): CodexJourna
 
 /** The patch a completed file change saves: its diffs, one per changed path, joined. */
 export function codexFileChangePatch(item: CodexThreadItem): string | null {
-  const changes = fileChanges(item)
+  return joinedPatch(fileChanges(item))
+}
+
+function joinedPatch(changes: readonly { diff: string }[]): string | null {
   return changes.length === 0 ? null : changes.map((change) => change.diff).join('\n')
 }
 
@@ -128,7 +131,7 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
     return fileChangeToolCall(item)
   }
   const changes = fileChanges(item)
-  const patch = codexFileChangePatch(item)
+  const patch = joinedPatch(changes)
   if (patch === null) {
     return fileChangeToolCall(item)
   }
