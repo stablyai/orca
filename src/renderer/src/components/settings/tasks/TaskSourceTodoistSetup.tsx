@@ -22,9 +22,13 @@ export function TodoistSetupSteps(props: ConnectStepProps): React.JSX.Element {
           title={t('auto.components.settings.TasksPane.connectTodoistTitle', 'Connect Todoist')}
           description={
             props.connected && viewerEmail
-              ? t('auto.components.settings.TasksPane.todoistConnectedAs', 'Connected as {{email}}.', {
-                  email: viewerEmail
-                })
+              ? t(
+                  'auto.components.settings.TasksPane.todoistConnectedAs',
+                  'Connected as {{email}}.',
+                  {
+                    email: viewerEmail
+                  }
+                )
               : t(
                   'auto.components.settings.TasksPane.connectTodoistDescription',
                   'Add your Todoist API token from Todoist integration settings.'

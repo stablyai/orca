@@ -6,10 +6,20 @@ import type { TodoistComment, TodoistTask } from '../../../../../shared/todoist/
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import { getTodoistPriorityLabel } from './todoist-task-order'
 import { TodoistTaskStatusBadge } from './TaskStatusBadge'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+
+async function completeTodoistTask(id: string): Promise<string | null> {
+  try {
+    const result = await window.api.todoist.closeTask({ id })
+    return result.ok ? null : result.error
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
 
 export function TodoistTaskDrawer({
   task,
@@ -22,6 +32,7 @@ export function TodoistTaskDrawer({
   onStartWorkspace: (task: TodoistTask) => void
   onCompleted: (taskId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [comments, setComments] = useState<TodoistComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [completing, setCompleting] = useState(false)
@@ -46,17 +57,12 @@ export function TodoistTaskDrawer({
 
   const handleComplete = async (target: TodoistTask): Promise<void> => {
     setCompleting(true)
-    try {
-      const result = await window.api.todoist.closeTask({ id: target.id })
-      if (result.ok) {
-        onCompleted(target.id)
-      } else {
-        toast.error(result.error)
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
-    } finally {
-      setCompleting(false)
+    const error = await completeTodoistTask(target.id)
+    setCompleting(false)
+    if (error) {
+      toast.error(error)
+    } else {
+      onCompleted(target.id)
     }
   }
 
@@ -70,12 +76,12 @@ export function TodoistTaskDrawer({
       >
         <VisuallyHidden.Root asChild>
           <SheetTitle>
-            {task?.content ?? translate('auto.components.TodoistTaskDrawer.title', 'Todoist task')}
+            {task?.content ?? t('auto.components.TodoistTaskDrawer.title', 'Todoist task')}
           </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate(
+            {t(
               'auto.components.TodoistTaskDrawer.description',
               'Preview, complete, and start work from the selected task.'
             )}
@@ -104,7 +110,7 @@ export function TodoistTaskDrawer({
                   size="icon-sm"
                   className="shrink-0"
                   onClick={onClose}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.TodoistTaskDrawer.close',
                     'Close Todoist task preview'
                   )}
@@ -114,7 +120,7 @@ export function TodoistTaskDrawer({
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button size="sm" onClick={() => onStartWorkspace(task)}>
-                  {translate('auto.components.TodoistTaskDrawer.start', 'Start workspace')}
+                  {t('auto.components.TodoistTaskDrawer.start', 'Start workspace')}
                   <ArrowRight className="size-4" />
                 </Button>
                 {task.completed ? null : (
@@ -129,16 +135,16 @@ export function TodoistTaskDrawer({
                     ) : (
                       <Check className="size-4" />
                     )}
-                    {translate('auto.components.TodoistTaskDrawer.complete', 'Complete')}
+                    {t('auto.components.TodoistTaskDrawer.complete', 'Complete')}
                   </Button>
                 )}
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => window.api.shell.openUrl(task.url)}
+                  onClick={(event) => openAppHttpLink(task.url, { event })}
                 >
                   <ExternalLink className="size-4" />
-                  {translate('auto.components.TodoistTaskDrawer.open', 'Open in Todoist')}
+                  {t('auto.components.TodoistTaskDrawer.open', 'Open in Todoist')}
                 </Button>
               </div>
             </div>
@@ -151,18 +157,18 @@ export function TodoistTaskDrawer({
                 />
               ) : (
                 <p className="text-sm italic text-muted-foreground">
-                  {translate('auto.components.TodoistTaskDrawer.noDescription', 'No description.')}
+                  {t('auto.components.TodoistTaskDrawer.noDescription', 'No description.')}
                 </p>
               )}
               <section>
                 <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  {translate('auto.components.TodoistTaskDrawer.comments', 'Comments')}
+                  {t('auto.components.TodoistTaskDrawer.comments', 'Comments')}
                 </h3>
                 {commentsLoading ? (
                   <LoaderCircle className="mt-3 size-4 animate-spin text-muted-foreground" />
                 ) : comments.length === 0 ? (
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {translate('auto.components.TodoistTaskDrawer.noComments', 'No comments.')}
+                    {t('auto.components.TodoistTaskDrawer.noComments', 'No comments.')}
                   </p>
                 ) : (
                   <ul className="mt-2 space-y-3">

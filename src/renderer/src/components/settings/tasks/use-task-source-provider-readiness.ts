@@ -30,7 +30,6 @@ export function useTaskSourceProviderReadiness(
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const todoistStatus = useAppStore((s) => s.todoistStatus)
   const todoistStatusChecked = useAppStore((s) => s.todoistStatusChecked)
-  const todoistStatusContextKey = useAppStore((s) => s.todoistStatusContextKey)
   const linearConnected = useLinearProviderConnected()
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -62,8 +61,7 @@ export function useTaskSourceProviderReadiness(
     preflightStatus.glab.authenticated === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
-  const todoistChecking =
-    todoistStatusContextKey !== providerRuntimeContextKey || !todoistStatusChecked
+  const todoistChecking = !todoistStatusChecked
   const todoistConnected = !todoistChecking && todoistStatus.connected
   const linearChecking =
     linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked

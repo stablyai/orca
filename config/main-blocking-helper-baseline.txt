@@ -1510,6 +1510,8 @@
 4 src/main/text-generation/models/commit-message-model-discovery.ts
 1 src/main/text-generation/policies/source-control-read-only-policy.ts
 1 src/main/text-generation/requests/jira-issue-summary-requests.ts
+1 src/main/todoist/todoist-client.ts # one-shot credential save on user connect; shared atomic writer is sync
+2 src/main/todoist/todoist-credential-store.ts # one-shot credential save on user connect; shared atomic writer is sync
 1 src/main/tray/system-tray.ts
 2 src/main/updater/lifecycle/main-window-updater.ts
 1 src/main/updater/lifecycle/updater-check-state.ts

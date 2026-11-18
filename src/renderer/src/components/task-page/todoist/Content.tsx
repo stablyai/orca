@@ -3,7 +3,7 @@ import { ArrowRight, LoaderCircle, RefreshCw, Search } from 'lucide-react'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import type { TodoistTask } from '../../../../../shared/todoist/todoist-types'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import { TodoistConnectDialog } from '@/components/integrations/task-trackers/to
 import { TodoistTaskDrawer } from './TaskDrawer'
 import { getTodoistPriorityLabel, sortTodoistTasks } from './todoist-task-order'
 import { TodoistTaskStatusBadge } from './TaskStatusBadge'
+import { useTodoistStartWorkspace } from './use-todoist-start-workspace'
 
 const SEARCH_DEBOUNCE_MS = 400
 const TASK_LIMIT = 200
@@ -21,7 +22,9 @@ export function TaskPageTodoistContent({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element {
-  const { hideTaskSource, handleUseTodoistItem } = model
+  const t = useTranslate()
+  const { hideTaskSource } = model
+  const handleUseTodoistItem = useTodoistStartWorkspace(model)
   const status = useAppStore((s) => s.todoistStatus)
   const statusChecked = useAppStore((s) => s.todoistStatusChecked)
   const checkTodoistConnection = useAppStore((s) => s.checkTodoistConnection)
@@ -45,24 +48,21 @@ export function TaskPageTodoistContent({
       <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
         <TodoistIcon className="mb-4 size-8 text-muted-foreground/60" />
         <p className="text-base font-medium text-foreground">
-          {translate(
-            'auto.components.TaskPage.todoist.connectTitle',
-            'Connect your Todoist account'
-          )}
+          {t('auto.components.TaskPage.todoist.connectTitle', 'Connect your Todoist account')}
         </p>
         <p className="mt-2 max-w-sm text-sm text-muted-foreground">
           {status.error ??
-            translate(
+            t(
               'auto.components.TaskPage.todoist.connectDescription',
               'Browse your Todoist tasks and start workspaces from them directly from here.'
             )}
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <Button onClick={() => setConnectOpen(true)}>
-            {translate('auto.components.TaskPage.todoist.connect', 'Connect Todoist')}
+            {t('auto.components.TaskPage.todoist.connect', 'Connect Todoist')}
           </Button>
           <Button variant="outline" onClick={() => hideTaskSource('todoist', 'Todoist')}>
-            {translate('auto.components.TaskPage.todoist.hide', 'Hide Todoist')}
+            {t('auto.components.TaskPage.todoist.hide', 'Hide Todoist')}
           </Button>
         </div>
         <TodoistConnectDialog open={connectOpen} onOpenChange={setConnectOpen} />
@@ -77,6 +77,7 @@ function TodoistTaskList({
 }: {
   onStartWorkspace: (task: TodoistTask) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [queryInput, setQueryInput] = useState('')
   const [query, setQuery] = useState('')
   const [refreshNonce, setRefreshNonce] = useState(0)
@@ -140,11 +141,11 @@ function TodoistTaskList({
         <Input
           value={queryInput}
           onChange={(event) => setQueryInput(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.TaskPage.todoist.filterPlaceholder',
             'Todoist filter, e.g. today | overdue, #Work, @label'
           )}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.TaskPage.todoist.filterPlaceholder',
             'Todoist filter, e.g. today | overdue, #Work, @label'
           )}
@@ -152,12 +153,12 @@ function TodoistTaskList({
         />
 
         <span className="shrink-0 text-[11px] text-muted-foreground">
-          {tasks.length} {translate('auto.components.TaskPage.todoist.shown', 'shown')}
+          {tasks.length} {t('auto.components.TaskPage.todoist.shown', 'shown')}
         </span>
         <Button
           variant="outline"
           size="icon-sm"
-          aria-label={translate('auto.components.TaskPage.todoist.refresh', 'Refresh')}
+          aria-label={t('auto.components.TaskPage.todoist.refresh', 'Refresh')}
           onClick={() => setRefreshNonce((n) => n + 1)}
           disabled={loading}
         >
@@ -172,18 +173,15 @@ function TodoistTaskList({
         {!loading && !error && tasks.length === 0 ? (
           <div className="px-4 py-10 text-center">
             <p className="text-sm font-medium text-foreground">
-              {translate('auto.components.TaskPage.todoist.empty', 'No Todoist tasks found')}
+              {t('auto.components.TaskPage.todoist.empty', 'No Todoist tasks found')}
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
               {query
-                ? translate(
+                ? t(
                     'auto.components.TaskPage.todoist.emptyFilter',
                     'Try a different Todoist filter.'
                   )
-                : translate(
-                    'auto.components.TaskPage.todoist.emptyAll',
-                    'You have no active tasks.'
-                  )}
+                : t('auto.components.TaskPage.todoist.emptyAll', 'You have no active tasks.')}
             </p>
           </div>
         ) : null}
@@ -220,6 +218,7 @@ function TodoistTaskRow({
   onOpen: (task: TodoistTask) => void
   onStartWorkspace: (task: TodoistTask) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     // Why: the row holds an action button, so a native button wrapper would nest buttons.
     <div
@@ -276,7 +275,7 @@ function TodoistTaskRow({
         }}
       >
         <ArrowRight className="size-3.5" />
-        {translate('auto.components.TaskPage.todoist.start', 'Start')}
+        {t('auto.components.TaskPage.todoist.start', 'Start')}
       </Button>
     </div>
   )

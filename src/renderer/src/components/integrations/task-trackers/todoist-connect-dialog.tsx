@@ -14,7 +14,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 const TODOIST_TOKEN_SETTINGS_URL = 'https://app.todoist.com/app/settings/integrations/developer'
 
@@ -29,6 +30,7 @@ export function TodoistConnectDialog({
   onOpenChange,
   onConnected
 }: TodoistConnectDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const connectTodoist = useAppStore((s) => s.connectTodoist)
   const mountedRef = useMountedRef()
   const tokenId = useId()
@@ -78,10 +80,10 @@ export function TodoistConnectDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.todoist.connect.dialog.title', 'Connect Todoist')}
+            {t('auto.components.todoist.connect.dialog.title', 'Connect Todoist')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.todoist.connect.dialog.description',
               'Use your Todoist API token to browse tasks and start workspaces from them.'
             )}
@@ -98,13 +100,13 @@ export function TodoistConnectDialog({
           <div className="flex flex-col gap-3">
             <div className="space-y-2">
               <Label htmlFor={tokenId}>
-                {translate('auto.components.todoist.connect.dialog.tokenLabel', 'API token')}
+                {t('auto.components.todoist.connect.dialog.tokenLabel', 'API token')}
               </Label>
               <Input
                 id={tokenId}
                 type="password"
                 autoFocus
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.todoist.connect.dialog.tokenPlaceholder',
                   'Todoist API token'
                 )}
@@ -124,16 +126,13 @@ export function TodoistConnectDialog({
               </p>
             ) : null}
             <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.todoist.connect.dialog.tokenHint',
-                'Copy your token from'
-              )}{' '}
+              {t('auto.components.todoist.connect.dialog.tokenHint', 'Copy your token from')}{' '}
               <button
                 type="button"
                 className="text-primary underline-offset-2 hover:underline"
-                onClick={() => window.api.shell.openUrl(TODOIST_TOKEN_SETTINGS_URL)}
+                onClick={(event) => openAppHttpLink(TODOIST_TOKEN_SETTINGS_URL, { event })}
               >
-                {translate(
+                {t(
                   'auto.components.todoist.connect.dialog.tokenLink',
                   'Todoist integration settings'
                 )}
@@ -142,7 +141,7 @@ export function TodoistConnectDialog({
             </p>
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 shrink-0" />
-              {translate(
+              {t(
                 'auto.components.todoist.connect.dialog.storage',
                 'Your token is stored locally and encrypted when local runtime storage supports it.'
               )}
@@ -155,16 +154,16 @@ export function TodoistConnectDialog({
               onClick={() => onOpenChange(false)}
               disabled={connecting}
             >
-              {translate('auto.components.todoist.connect.dialog.cancel', 'Cancel')}
+              {t('auto.components.todoist.connect.dialog.cancel', 'Cancel')}
             </Button>
             <Button type="submit" disabled={!apiToken.trim() || connecting}>
               {connecting ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  {translate('auto.components.todoist.connect.dialog.verifying', 'Verifying…')}
+                  {t('auto.components.todoist.connect.dialog.verifying', 'Verifying…')}
                 </>
               ) : (
-                translate('auto.components.todoist.connect.dialog.connect', 'Connect')
+                t('auto.components.todoist.connect.dialog.connect', 'Connect')
               )}
             </Button>
           </DialogFooter>

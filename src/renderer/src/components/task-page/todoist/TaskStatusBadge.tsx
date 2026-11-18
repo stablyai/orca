@@ -1,6 +1,6 @@
 import React from 'react'
 import { cn } from '@/lib/class-names'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getJiraStatusTone } from '@/components/task-page/jira/listing/task-page-jira-status-tone'
 
 // Why: Todoist has only open/completed, so reuse Jira's done/new pill tones.
@@ -11,6 +11,7 @@ export function TodoistTaskStatusBadge({
   completed: boolean
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span
       className={cn(
@@ -20,8 +21,8 @@ export function TodoistTaskStatusBadge({
       )}
     >
       {completed
-        ? translate('auto.components.TodoistTaskStatusBadge.completed', 'Completed')
-        : translate('auto.components.TodoistTaskStatusBadge.open', 'Open')}
+        ? t('auto.components.TodoistTaskStatusBadge.completed', 'Completed')
+        : t('auto.components.TodoistTaskStatusBadge.open', 'Open')}
     </span>
   )
 }

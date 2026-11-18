@@ -75,8 +75,8 @@ async function fetchPages(token: string, path: string, limit: number): Promise<u
   return items.slice(0, limit)
 }
 
-function requireToken(): string {
-  const token = loadTodoistToken()
+async function requireToken(): Promise<string> {
+  const token = await loadTodoistToken()
   if (!token) {
     throw new Error('Todoist is not connected.')
   }
@@ -97,25 +97,25 @@ export async function connectTodoist(apiToken: string): Promise<TodoistConnectRe
     if (!viewer) {
       return { ok: false, error: 'Todoist returned an unexpected user response.' }
     }
-    saveTodoistCredential(token, viewer)
+    await saveTodoistCredential(token, viewer)
     return { ok: true, viewer }
   } catch (error) {
     return { ok: false, error: errorMessage(error) }
   }
 }
 
-export function disconnectTodoist(): void {
-  clearTodoistCredential()
+export async function disconnectTodoist(): Promise<void> {
+  await clearTodoistCredential()
 }
 
-export function getTodoistStatus(): TodoistConnectionStatus {
-  const viewer = getStoredTodoistViewer()
+export async function getTodoistStatus(): Promise<TodoistConnectionStatus> {
+  const viewer = await getStoredTodoistViewer()
   const error = getTodoistCredentialError()
   return { connected: viewer !== null, viewer, ...(error ? { error } : {}) }
 }
 
 async function listTodoistProjects(): Promise<TodoistProject[]> {
-  const raw = await fetchPages(requireToken(), '/projects', 1000)
+  const raw = await fetchPages(await requireToken(), '/projects', 1000)
   return raw.flatMap((item) =>
     isRecord(item) && typeof item.id === 'string' && typeof item.name === 'string'
       ? [{ id: item.id, name: item.name }]
@@ -130,7 +130,7 @@ async function projectNames(): Promise<Map<string, string>> {
 }
 
 export async function listTodoistTasks(query: string, limit: number): Promise<TodoistTask[]> {
-  const token = requireToken()
+  const token = await requireToken()
   const trimmed = query.trim()
   const path = trimmed ? `/tasks/filter?${new URLSearchParams({ query: trimmed })}` : '/tasks'
   const [raw, names] = await Promise.all([fetchPages(token, path, limit), projectNames()])
@@ -142,7 +142,7 @@ export async function listTodoistTasks(query: string, limit: number): Promise<To
 
 export async function getTodoistComments(taskId: string): Promise<TodoistComment[]> {
   const path = `/comments?${new URLSearchParams({ task_id: taskId })}`
-  const raw = await fetchPages(requireToken(), path, 200)
+  const raw = await fetchPages(await requireToken(), path, 200)
   return raw.flatMap((item) => {
     const comment = mapTodoistComment(item)
     return comment ? [comment] : []
@@ -151,7 +151,7 @@ export async function getTodoistComments(taskId: string): Promise<TodoistComment
 
 export async function closeTodoistTask(id: string): Promise<TodoistMutationResult> {
   try {
-    await todoistRequest(requireToken(), `/tasks/${encodeURIComponent(id)}/close`, {
+    await todoistRequest(await requireToken(), `/tasks/${encodeURIComponent(id)}/close`, {
       method: 'POST'
     })
     return { ok: true }

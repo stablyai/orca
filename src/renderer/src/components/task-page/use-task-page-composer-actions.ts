@@ -3,15 +3,9 @@ import { useCallback } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
-import type { TodoistTask } from '../../../../shared/todoist/todoist-types'
-import { normalizeTaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
-import {
-  getLinearIssueWorkspaceName,
-  getLinkedWorkItemSuggestedName
-} from '../../../../shared/workspace/naming/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../../shared/workspace/naming/workspace-name'
 import { useAppStore } from '@/store'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/work-items/linear/linear-issue-workspace-open'
 import { toast } from 'sonner'
@@ -35,7 +29,6 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     taskSource,
     linearTaskSourceContext,
     jiraTaskSourceContext,
-    fallbackTaskSourceProjectId,
     gitlabDialogItem,
     dialogWorkItem,
     selectedLinearIssue,
@@ -243,35 +236,6 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     },
     [openComposerForJiraItem]
   )
-  const handleUseTodoistItem = useCallback(
-    (task: TodoistTask): void => {
-      const taskSourceContext = normalizeTaskSourceContext({
-        provider: 'todoist',
-        projectId: fallbackTaskSourceProjectId,
-        // Why: the Todoist token and API calls live in the local main process, whatever runtime is focused.
-        hostId: LOCAL_EXECUTION_HOST_ID,
-        providerIdentity: {
-          provider: 'todoist',
-          projectId: task.projectId,
-          projectName: task.projectName
-        },
-        accountLabel: task.projectName
-      })
-      openModal('new-workspace-composer', {
-        linkedWorkItem: {
-          type: 'issue',
-          provider: 'todoist',
-          number: 0,
-          title: task.content,
-          url: task.url
-        },
-        taskSourceContext,
-        prefilledName: getLinkedWorkItemSuggestedName({ title: task.content }),
-        telemetrySource: 'sidebar'
-      })
-    },
-    [fallbackTaskSourceProjectId, openModal]
-  )
   const taskPageListChromeHidden = shouldHideTaskPageListChrome({
     taskSource,
     hasGitHubDetail: Boolean(dialogWorkItem),
@@ -291,7 +255,6 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     handleLinearAccessConnected: typeof handleLinearAccessConnected
     openComposerForJiraItem: typeof openComposerForJiraItem
     handleUseJiraItem: typeof handleUseJiraItem
-    handleUseTodoistItem: typeof handleUseTodoistItem
     taskPageListChromeHidden: typeof taskPageListChromeHidden
   }
   nextModel.openComposerForLinearItem = openComposerForLinearItem
@@ -303,7 +266,6 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   nextModel.handleLinearAccessConnected = handleLinearAccessConnected
   nextModel.openComposerForJiraItem = openComposerForJiraItem
   nextModel.handleUseJiraItem = handleUseJiraItem
-  nextModel.handleUseTodoistItem = handleUseTodoistItem
   nextModel.taskPageListChromeHidden = taskPageListChromeHidden
   return nextModel
 }

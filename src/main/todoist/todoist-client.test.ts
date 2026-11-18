@@ -8,10 +8,10 @@ vi.mock('../network/proxy-settings', () => ({
 
 const saveTodoistCredential = vi.fn()
 vi.mock('./todoist-credential-store', () => ({
-  loadTodoistToken: () => 'tok',
+  loadTodoistToken: async () => 'tok',
   saveTodoistCredential: (...args: unknown[]) => saveTodoistCredential(...args),
   clearTodoistCredential: vi.fn(),
-  getStoredTodoistViewer: () => null,
+  getStoredTodoistViewer: async () => null,
   getTodoistCredentialError: () => null
 }))
 

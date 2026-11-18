@@ -20,17 +20,15 @@ import {
   getGeneratedWorktreeCreateRetryCandidate,
   isRetryableWorktreeCreateConflict
 } from '../../../../../../shared/new-workspace/worktree-create-retry-policy'
-import { assertRuntimeEnvironmentCapability } from '../../../../runtime/rpc/compatibility/runtime-capability-proof'
+import { assertContextOnlyLinkCapability } from '../../../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
 import { runtimeTargetSupportsCapability } from '../../../../runtime/rpc/compatibility/runtime-target-capability'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import {
-  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import { getContextOnlyLinkProviderLabel } from '../../../../../../shared/workspace-attachments/workspace-linked-item'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/sidebar/workspace-creation/base-ref-update/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
@@ -220,17 +218,11 @@ export function createCreateWorktree(
         note: options?.note,
         warnParentDropped: warnParentDroppedOnce
       })
-      const contextOnlyLinkProvider = getContextOnlyLinkProviderLabel(
+      await assertContextOnlyLinkCapability(
+        target,
         options?.linkedWorkItem?.provider,
         options?.linkedTaskSourceContext?.provider
       )
-      if (target.kind === 'environment' && contextOnlyLinkProvider) {
-        await assertRuntimeEnvironmentCapability(
-          target.environmentId,
-          WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          `Update the remote runtime to link ${contextOnlyLinkProvider}`
-        )
-      }
       if (
         options?.provisionedRoot &&
         target.kind === 'environment' &&
