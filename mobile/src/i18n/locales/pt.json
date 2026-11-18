@@ -19,6 +19,10 @@
       "useReset": "Redefinir agora",
       "weeklyWindow": "7d",
       "pairingInvalidMessage": "Emparelhe novamente este telefone com seu desktop para ver suas contas."
+    },
+    "claude": {
+      "usageSignInLabel": "Entrar novamente",
+      "usageSignInMessage": "A conta do Claude selecionada precisa de um novo login. Abra Configurações > Contas de provedores de IA ou escolha Padrão do sistema."
     }
   },
   "agentHistory": {
@@ -4968,6 +4972,58 @@
       },
       "taskPageJiraLoadState": {
         "jqlFailed": "O Jira não conseguiu executar esta consulta JQL. Verifique a sintaxe e tente novamente."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "Sem dados de uso de {{server}}",
+            "remoteOwnerNotConfigured": "Não configurado em {{server}}",
+            "claudeUnknownOnHost": "O uso do Claude não está disponível em {{server}}. Talvez não haja uma sessão iniciada lá ou a cobrança seja por chave de API.",
+            "remoteOwnerSignInSavedHere": "O login dele está salvo apenas neste computador.",
+            "f8b8dbed85": "Uso indisponível",
+            "e2c6a4f917": "Execute o Grok para atualizar",
+            "f90b3d7a16": "Execute o Kimi para atualizar",
+            "0d8d7cfe15": "Aguardando sessão do Claude",
+            "claude": {
+              "waiting": {
+                "label": "Atualiza quando o Claude é executado",
+                "message": "O uso do Claude será atualizado na próxima vez que ele for executado."
+              }
+            },
+            "1804cd8c3f": "Atualizando login",
+            "bf2e739f18": "Login indisponível",
+            "f8f0f9d8cc": "Problema de rede",
+            "minimax": {
+              "expired": {
+                "label": "Login expirado",
+                "apiKey": "A chave de API do MiniMax expirou. Substitua-a em Configurações.",
+                "cookie": "O cookie de sessão do MiniMax expirou. Substitua-o em Configurações."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Login expirado",
+                "message": "Execute cursor-agent login em um terminal no computador que executa o Orca e tente consultar o uso novamente."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "Sem assinatura"
+              }
+            },
+            "7ad719c4bf": "Limitado",
+            "e740f92596": "Falha ao atualizar",
+            "2c35eca8d4": "Não foi possível obter o uso",
+            "d1b7f509ac": "Execute o grok em um terminal no computador que está executando o Orca e espere ele iniciar. Se solicitado, conclua o login e depois tente o uso novamente. Não é necessário enviar uma mensagem de chat.",
+            "a37e8c15d4": "Execute o kimi em um terminal no computador que está executando o Orca e espere ele iniciar, depois tente o uso novamente.",
+            "3d3c9c0c1f": "O uso do Claude será atualizado após o terminal ativo do Claude renovar suas credenciais.",
+            "42fdd4da1d": "O login do Claude está sendo atualizado. As sessões de agente podem continuar conectadas.",
+            "c06c1d215d": "Não foi possível atualizar o uso do Claude porque a solicitação de rede falhou.",
+            "cabdc2a9e0": "Não foi possível ler as credenciais de login do Claude.",
+            "a7517cccb6": "O uso do Claude está indisponível agora.",
+            "8418ec448d": "Não foi possível atualizar o uso de {{value0}}. As sessões de agente podem continuar conectadas."
+          }
+        }
       }
     }
   }

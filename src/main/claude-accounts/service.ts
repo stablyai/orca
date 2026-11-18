@@ -60,12 +60,14 @@ export class ClaudeAccountService {
     return this.signInHidden({ accountId }, copyLink)
   }
 
-  addAccountWithPastedCode(
-    channel: HostAccountSignInChannel
+  /** Adds a host account, or re-authenticates `accountId`, through a code pasted on another device. */
+  signInWithPastedCode(
+    channel: HostAccountSignInChannel,
+    accountId?: string
   ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() =>
-      this.registration.signIn({ runtime: 'host' }, (folder) =>
+      this.registration.signIn(accountId ? { accountId } : { runtime: 'host' }, (folder) =>
         runClaudePastedCodeLogin(folder, this.runLoginCommand, channel, (cancel) => {
           this.cancelPendingClaudeLogin = cancel
         })

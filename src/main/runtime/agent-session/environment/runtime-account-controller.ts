@@ -282,15 +282,16 @@ export class RuntimeAccountController {
     return this.requireServices().claudeAccounts.cancelSignIn(signIn)
   }
 
-  /** Adds a host account whose login a client on another device finishes. */
+  /** Adds, or re-authenticates `accountId`, a host account whose login a client on another device finishes. */
   async runHostSignIn(
     provider: HostAccountSignInProvider,
-    channel: HostAccountSignInChannel
+    channel: HostAccountSignInChannel,
+    accountId?: string
   ): Promise<Pick<HostAccountSignInStatus, 'claude' | 'codex'>> {
     const { claudeAccounts, codexAccounts } = this.requireServices()
     return provider === 'claude'
-      ? { claude: await claudeAccounts.addAccountWithPastedCode(channel) }
-      : { codex: await codexAccounts.addAccountWithDeviceCode(channel) }
+      ? { claude: await claudeAccounts.signInWithPastedCode(channel, accountId) }
+      : { codex: await codexAccounts.signInWithDeviceCode(channel, accountId) }
   }
 
   removeCodex(accountId: string): Promise<CodexRateLimitAccountsState> {

@@ -1,29 +1,32 @@
-import { translate } from '@/i18n/i18n'
 import { KNOWN_RATE_LIMIT_ERRORS } from './rate-limit-user-facing-error-catalog'
+import type { UsageCopyTranslate } from './usage-copy-translate'
 
-export function formatRateLimitUserFacingError(raw: string | null | undefined): string {
+export function formatRateLimitUserFacingError(
+  raw: string | null | undefined,
+  t: UsageCopyTranslate
+): string {
   if (!raw?.trim()) {
     return ''
   }
   const message = raw.trim()
   const invalidWorkspace = message.match(/^Invalid workspace ID format:(.*)$/i)
   if (invalidWorkspace) {
-    return `${translate('auto.lib.rateLimits.errors.opencodeInvalidWorkspaceId', 'Invalid workspace ID format')}:${invalidWorkspace[1]}`
+    return `${t('auto.lib.rateLimits.errors.opencodeInvalidWorkspaceId', 'Invalid workspace ID format')}:${invalidWorkspace[1]}`
   }
   for (const known of KNOWN_RATE_LIMIT_ERRORS) {
     if (typeof known.test === 'string') {
       if (message === known.test) {
-        return translate(known.key, known.fallback)
+        return t(known.key, known.fallback)
       }
       // Why: macOS Tailscale DNS hint appends after the base English error.
       if (message.startsWith(`${known.test} `)) {
-        return `${translate(known.key, known.fallback)}${message.slice(known.test.length)}`
+        return `${t(known.key, known.fallback)}${message.slice(known.test.length)}`
       }
       continue
     }
     const match = message.match(known.test)
     if (match) {
-      return translate(known.key, known.fallback, known.vars?.(match))
+      return t(known.key, known.fallback, known.vars?.(match))
     }
   }
   return message

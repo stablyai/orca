@@ -32,6 +32,7 @@ describe('protected copy check', () => {
       'src/renderer/src/i18n/locales/en.json': JSON.stringify({ trust: { allow: 'Allow' } }),
       'src/renderer/src/Dialog.tsx': `<SecuritySurface>{translate('trust.allow', 'Allow')}`,
       'src/main/ready.ts': '',
+      'src/shared/agent-usage/status-copy/empty.ts': '',
       [PROTECTED_COPY_KEYS_PATH.split(path.sep).join('/')]: '{}'
     })
     const root = dirs.at(-1)
