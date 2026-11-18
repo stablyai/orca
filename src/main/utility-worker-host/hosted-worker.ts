@@ -94,10 +94,22 @@ export class HostedWorker extends EventEmitter {
       }
       const bytes = this.chunks.length === 1 ? this.chunks[0]! : Buffer.concat(this.chunks)
       this.chunks = []
+      const { seq } = event
+      let acked = false
+      const release =
+        seq === undefined
+          ? undefined
+          : () => {
+              if (!acked) {
+                acked = true
+                this.send({ type: 'ack', seq })
+              }
+            }
       let message: unknown
       try {
         message = deserialize(bytes)
       } catch (error) {
+        release?.()
         this.emit('error', error)
         return
       }
@@ -108,7 +120,7 @@ export class HostedWorker extends EventEmitter {
         typeof message.type === 'string'
           ? message.type
           : null
-      this.emit('message', message)
+      this.emit('message', message, release)
     }
   }
 

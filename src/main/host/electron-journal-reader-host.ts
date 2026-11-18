@@ -5,6 +5,7 @@ import {
 } from '../worker-threads/worker-thread-entry-path'
 import { JOURNAL_SQL_READER_HOST_NAME } from '../native-chat/agent-session-journal/journal-sql-reader-host-name'
 import { setJournalSqlReaderSpawner } from '../native-chat/agent-session-journal/journal-sql-reader-spawn'
+import { JOURNAL_READER_REPLY_CREDIT_BYTES } from '../native-chat/agent-session-journal/journal-sql-reader-reply-credit'
 import { join } from 'node:path'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { resolveObservabilityConsent } from '../observability'
@@ -25,7 +26,9 @@ export function installElectronJournalReaderHost(): void {
         name,
         workerData: { ...(workerData as object), ...inProcessWorkerData },
         execArgv: []
-      })
+      }),
+    // In-process readers take the same budget as shared credit instead.
+    JOURNAL_READER_REPLY_CREDIT_BYTES
   )
   setJournalSqlReaderSpawner((filename, workerData, inProcessWorkerData) =>
     host.spawn({

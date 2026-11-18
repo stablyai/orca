@@ -3,6 +3,10 @@ import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { setWorkerLargeSendLog } from '../worker-threads/worker-send-ledger'
 import {
+  UTILITY_WORKER_RELAY_HOLD_LIMIT_MS,
+  UtilityWorkerRelayBudget
+} from './utility-worker-relay-budget'
+import {
   UTILITY_WORKER_MESSAGE_CHUNK_BYTES,
   type UtilityWorkerFailure,
   type UtilityWorkerHostEvent,
@@ -50,7 +54,7 @@ Object.defineProperty(parentPort, 'postMessage', {
 require(${JSON.stringify(filename)})`
 }
 
-function relay(id: number, bytes: Uint8Array): void {
+function relay(id: number, bytes: Uint8Array, seq?: number): void {
   for (let start = 0; start < bytes.byteLength; start += UTILITY_WORKER_MESSAGE_CHUNK_BYTES) {
     const end = Math.min(start + UTILITY_WORKER_MESSAGE_CHUNK_BYTES, bytes.byteLength)
     const view = bytes.subarray(start, end)
@@ -59,9 +63,22 @@ function relay(id: number, bytes: Uint8Array): void {
       view.byteOffset === 0 && view.byteLength === view.buffer.byteLength
         ? view
         : new Uint8Array(view)
-    port.postMessage({ type: 'message', id, bytes: chunk, more: end < bytes.byteLength })
+    const more = end < bytes.byteLength
+    port.postMessage({
+      type: 'message',
+      id,
+      bytes: chunk,
+      more,
+      ...(seq === undefined ? {} : { seq })
+    })
   }
 }
+
+const budget = new UtilityWorkerRelayBudget(relay, (id) => {
+  const message = `worker reply waited ${UTILITY_WORKER_RELAY_HOLD_LIMIT_MS / 1000} s for main to consume earlier replies`
+  port.postMessage({ type: 'error', id, error: { name: 'Error', message } })
+  void workers.get(id)?.terminate()
+})
 
 port.on('message', ({ data: request }) => {
   if (request.type === 'spawn') {
@@ -77,16 +94,25 @@ port.on('message', ({ data: request }) => {
         execArgv: []
       })
       workers.set(id, worker)
-      worker.on('message', (bytes: Uint8Array) => relay(id, bytes))
+      worker.on('message', (bytes: Uint8Array) => budget.offer(id, bytes))
       worker.on('error', (error) => port.postMessage({ type: 'error', id, error: failure(error) }))
       worker.once('exit', (code) => {
         workers.delete(id)
+        budget.drop(id)
         port.postMessage({ type: 'exit', id, code })
       })
     } catch (error) {
       port.postMessage({ type: 'error', id, error: failure(error) })
       port.postMessage({ type: 'exit', id, code: 1 })
     }
+    return
+  }
+  if (request.type === 'budget') {
+    budget.setLimit(request.bytes)
+    return
+  }
+  if (request.type === 'ack') {
+    budget.ack(request.seq)
     return
   }
   const worker = workers.get(request.id)

@@ -6,6 +6,7 @@ export type HostedWorkerThread = {
   ref(): void
   unref(): void
   terminate(): Promise<number>
+  /** Under a relay budget a hosted 'message' also passes a release, called once it is consumed. */
   on(event: string, listener: (...args: any[]) => void): unknown
   once(event: string, listener: (...args: any[]) => void): unknown
 }
@@ -24,13 +25,17 @@ export type UtilityWorkerHostRequest =
   | ({ type: 'spawn'; id: number } & UtilityWorkerSpawn)
   | { type: 'post'; id: number; message: unknown }
   | { type: 'terminate'; id: number }
+  /** Bytes main may hold delivered but unconsumed; sent once, before any spawn. */
+  | { type: 'budget'; bytes: number }
+  /** Main consumed the reply relayed with this seq. */
+  | { type: 'ack'; seq: number }
 
 export type UtilityWorkerFailure = { name: string; message: string; code?: string }
 
 /** Worker messages travel as v8-serialized bytes, split so no IPC message passes the chunk size. */
 export type UtilityWorkerHostEvent =
   | { type: 'ready' }
-  | { type: 'message'; id: number; bytes: Uint8Array; more: boolean }
+  | { type: 'message'; id: number; bytes: Uint8Array; more: boolean; seq?: number }
   | { type: 'error'; id: number; error: UtilityWorkerFailure }
   | { type: 'exit'; id: number; code: number }
 

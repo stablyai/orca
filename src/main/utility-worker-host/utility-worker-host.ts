@@ -53,7 +53,9 @@ export class UtilityWorkerHost {
   constructor(
     private readonly serviceName: string,
     private readonly entryPath: () => string,
-    private readonly spawnInProcess: (spawn: UtilityWorkerSpawn) => Worker
+    private readonly spawnInProcess: (spawn: UtilityWorkerSpawn) => Worker,
+    /** Replies main may hold delivered but unconsumed; more wait in the host. */
+    private readonly relayBudgetBytes?: number
   ) {
     app.once('will-quit', () => {
       quitting = true
@@ -93,7 +95,10 @@ export class UtilityWorkerHost {
     const host: Host = {
       child,
       ready: false,
-      queued: [],
+      queued:
+        this.relayBudgetBytes === undefined
+          ? []
+          : [{ type: 'budget', bytes: this.relayBudgetBytes }],
       workers: new Map(),
       retired: false,
       readyTimer: setTimeout(() => this.giveUp(host, 'ready-timeout'), HOST_READY_TIMEOUT_MS)

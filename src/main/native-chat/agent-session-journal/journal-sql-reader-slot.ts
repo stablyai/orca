@@ -87,7 +87,7 @@ export class ReaderSlot {
   private readonly pending = new Map<
     number,
     {
-      resolve: (response: JournalSqlReaderResult) => void
+      resolve: (response: JournalSqlReaderResult, release?: () => void) => void
       reject: (error: Error) => void
     }
   >()
@@ -130,8 +130,10 @@ export class ReaderSlot {
       void this.close()
     }, 10000)
     void this.ready.promise.finally(() => clearTimeout(startup)).catch(() => {})
-    this.worker.on('message', (reply: JournalSqlReaderReply) => {
+    // A hosted reader's release frees its relay budget; anything no caller takes frees it at once.
+    this.worker.on('message', (reply: JournalSqlReaderReply, release?: () => void) => {
       if (reply.type === 'ready') {
+        release?.()
         this.ready.resolve()
         if (this.pending.size === 0) {
           this.worker.unref()
@@ -149,15 +151,19 @@ export class ReaderSlot {
         this.worker.unref()
       }
       if (reply.type === 'failed') {
+        release?.()
         const error = restoreJournalSqlFailure(reply.error)
         pending?.reject(error)
         if (reply.id === undefined) {
           this.fail(error)
         }
       } else if (pending) {
-        pending.resolve(reply)
-      } else if (reply.bytes !== undefined) {
-        this.credit?.release(reply.bytes)
+        pending.resolve(reply, release)
+      } else {
+        release?.()
+        if (reply.bytes !== undefined) {
+          this.credit?.release(reply.bytes)
+        }
       }
     })
     this.worker.on('error', (error) => this.fail(error))
@@ -239,13 +245,14 @@ export class ReaderSlot {
     const result = new Promise<JournalSqlReaderResult>((resolve, reject) => {
       let ticket: JournalReaderTicket | undefined
       this.pending.set(id, {
-        resolve: (reply) => {
+        resolve: (reply, release) => {
           const bytes = reply.bytes ?? 0
           ticket?.received(bytes)
           resolve(reply)
           // Credit returns once the awaiting caller has taken the reply.
           queueMicrotask(() => {
             ticket?.consumed()
+            release?.()
             if (reply.bytes !== undefined) {
               this.credit?.release(reply.bytes)
             }
