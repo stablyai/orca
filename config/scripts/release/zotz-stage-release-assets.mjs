@@ -1,7 +1,15 @@
 #!/usr/bin/env node
-// Copies what the updater needs (manifests and every file they name, with blockmaps) plus
-// human-named installer copies into one folder, see docs/zotz/UPDATES-SPEC.md §4.
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+// Copies what the updater needs (manifests and every file they name, with blockmaps) into one
+// folder under Zotz names, rewriting the manifests to match, see docs/zotz/UPDATES-SPEC.md §4.
+// The build keeps upstream's orca-* artifact names because upstream CI reads them.
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync
+} from 'node:fs'
 import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parse } from 'yaml'
@@ -32,34 +40,46 @@ function copyInto(source, target) {
 /**
  * @param {{ distDir: string, outDir: string, humanCopies: string }} options
  * humanCopies: lines of `<file in dist>=<release name>`, e.g. `orca-windows-setup.exe=zotz-windows-x64-setup.exe`.
+ * Each matched file is published only under its release name, also where a manifest names it.
  */
 export function stageZotzReleaseAssets({ distDir, outDir, humanCopies }) {
   mkdirSync(outDir, { recursive: true })
-  const manifests = readdirSync(distDir).filter((name) => /^latest(-[a-z0-9-]+)?\.yml$/.test(name))
-  if (manifests.length === 0) {
-    throw new Error(`No updater manifest (latest*.yml) in ${distDir}`)
-  }
-  for (const manifest of manifests) {
-    copyInto(join(distDir, manifest), join(outDir, manifest))
-    for (const name of filesNamedByManifest(readFileSync(join(distDir, manifest), 'utf8'))) {
-      copyInto(join(distDir, name), join(outDir, name))
-      const blockmap = join(distDir, `${name}.blockmap`)
-      if (existsSync(blockmap)) {
-        copyInto(blockmap, join(outDir, `${name}.blockmap`))
-      }
-    }
-  }
+  const distFiles = readdirSync(distDir)
+  const renames = new Map()
   for (const line of humanCopies.split('\n')) {
     const [pattern, releaseName] = line.split('=').map((part) => part?.trim())
     if (!pattern || !releaseName) {
       continue
     }
     const matcher = new RegExp(`^${pattern.replaceAll('.', '\\.').replaceAll('*', '.*')}$`)
-    const match = readdirSync(distDir).find((name) => matcher.test(name))
+    const match = distFiles.find((name) => matcher.test(name))
     if (!match) {
       throw new Error(`Missing build output: ${pattern}`)
     }
-    copyInto(join(distDir, match), join(outDir, releaseName))
+    renames.set(match, releaseName)
+  }
+  const releaseName = (name) => renames.get(name) ?? name
+  const manifests = distFiles.filter((name) => /^latest(-[a-z0-9-]+)?\.yml$/.test(name))
+  if (manifests.length === 0) {
+    throw new Error(`No updater manifest (latest*.yml) in ${distDir}`)
+  }
+  for (const manifest of manifests) {
+    let text = readFileSync(join(distDir, manifest), 'utf8')
+    for (const name of filesNamedByManifest(text)) {
+      copyInto(join(distDir, name), join(outDir, releaseName(name)))
+      const blockmap = join(distDir, `${name}.blockmap`)
+      if (existsSync(blockmap)) {
+        copyInto(blockmap, join(outDir, `${releaseName(name)}.blockmap`))
+      }
+      text = text.replaceAll(name, releaseName(name))
+    }
+    writeFileSync(join(outDir, manifest), text)
+    console.log(`staged ${manifest}`)
+  }
+  for (const [name, target] of renames) {
+    if (!existsSync(join(outDir, target))) {
+      copyInto(join(distDir, name), join(outDir, target))
+    }
   }
 }
 
