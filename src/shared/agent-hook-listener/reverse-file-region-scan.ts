@@ -96,6 +96,8 @@ export async function scanFileRegionsBackwardAsync<T>(
         filled += read
       }
       if (filled < chunkSize) {
+        // The file shrank mid-scan: report it so a retry reads in full rather than trusting its size.
+        onError?.()
         return undefined
       }
       bytesRead += filled
