@@ -1,4 +1,5 @@
 import React, { useCallback, useLayoutEffect, useState } from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 
@@ -8,7 +9,17 @@ export function isSidebarLabelTruncated(
   return element.scrollWidth > element.clientWidth
 }
 
-type TruncatedSidebarLabelProps = {
+const sidebarLabelVariants = cva('block min-w-0 truncate', {
+  variants: {
+    variant: {
+      default: '',
+      identity: 'font-mono text-2xs text-muted-foreground leading-none'
+    }
+  },
+  defaultVariants: { variant: 'default' }
+})
+
+type TruncatedSidebarLabelProps = VariantProps<typeof sidebarLabelVariants> & {
   text: string
   className?: string
   tooltipEnabled?: boolean
@@ -19,6 +30,7 @@ type TruncatedSidebarLabelProps = {
 export function TruncatedSidebarLabel({
   text,
   className,
+  variant,
   tooltipEnabled = true,
   tooltipSide = 'right',
   tooltipSideOffset = 8
@@ -68,7 +80,11 @@ export function TruncatedSidebarLabel({
   }, [measureTruncated, text])
 
   const label = (
-    <span ref={handleRef} className={cn('block min-w-0 truncate', className)}>
+    <span
+      ref={handleRef}
+      data-slot="truncated-sidebar-label"
+      className={cn(sidebarLabelVariants({ variant }), className)}
+    >
       {text}
     </span>
   )

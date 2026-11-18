@@ -1,6 +1,6 @@
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import React from 'react'
-import { Bell, GitBranch, Moon } from 'lucide-react'
+import { Bell, Folder, GitBranch, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -47,6 +47,7 @@ type WorktreeCardStatusSlotProps = {
   reviewChecks?: WorkspaceReviewChecksSummary
   newCardStyle?: boolean
   hasBranchIdentity?: boolean
+  isFolderWorkspace?: boolean
   branchIdentityLabel?: string
   /** The review status is the last known one (its WSL host is off). */
   reviewStale?: boolean
@@ -143,6 +144,7 @@ export function WorktreeCardStatusSlot({
   reviewChecks,
   newCardStyle = false,
   hasBranchIdentity = false,
+  isFolderWorkspace = false,
   branchIdentityLabel,
   reviewStale = false,
   className
@@ -172,10 +174,10 @@ export function WorktreeCardStatusSlot({
     (prDisplay !== null || Boolean(collectionChecks)) &&
     !canShowSleepingStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
-  const canShowBranchStatus =
+  const canShowIdentityStatus =
     newCardStyle &&
     showStatus &&
-    hasBranchIdentity &&
+    (hasBranchIdentity || isFolderWorkspace) &&
     prDisplay === null &&
     !collectionChecks &&
     !canShowSleepingStatus &&
@@ -186,8 +188,10 @@ export function WorktreeCardStatusSlot({
       ? workspaceReviewChecksLabel(collectionChecks, t)
       : canShowReviewStatus && prDisplay
         ? getReviewStatusLabel(prDisplay, t)
-        : canShowBranchStatus
-          ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel(t))
+        : canShowIdentityStatus
+          ? isFolderWorkspace
+            ? t('workspace.kind.folder', 'Folder workspace')
+            : (branchIdentityLabel ?? getDefaultBranchIdentityLabel(t))
           : statusLabel
   const reviewLabel =
     isReviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
@@ -206,7 +210,10 @@ export function WorktreeCardStatusSlot({
     // Same last-known treatment as the hover card's reference rows.
     isReviewStale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
   )
-  const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
+  const IdentityIcon = isFolderWorkspace ? Folder : GitBranch
+  const identityStatusIcon = (
+    <IdentityIcon className={branchStatusIconClassName} aria-hidden="true" />
+  )
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />
   const passiveStatus = canShowSleepingStatus ? (
     <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
@@ -228,9 +235,9 @@ export function WorktreeCardStatusSlot({
       ) : null}
       <span className="sr-only">{passiveStatusAnnouncement}</span>
     </span>
-  ) : canShowBranchStatus ? (
+  ) : canShowIdentityStatus ? (
     <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
-      {branchStatusIcon}
+      {identityStatusIcon}
       <span className="sr-only">{passiveStatusAnnouncement}</span>
     </span>
   ) : newCardStyle && showStatus ? (
@@ -313,9 +320,9 @@ export function WorktreeCardStatusSlot({
                     variant="generic"
                   />
                 </span>
-              ) : showStatus && canShowBranchStatus ? (
+              ) : showStatus && canShowIdentityStatus ? (
                 <span className="inline-flex size-5 items-center justify-center p-0.5">
-                  {branchStatusIcon}
+                  {identityStatusIcon}
                 </span>
               ) : showStatus ? (
                 <StatusIndicator status={status} aria-hidden="true" showTooltip={false} />
