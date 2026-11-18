@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // @protected-copy: drawn inside the security-surface setup dialog
 import React, { useEffect, useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
@@ -111,7 +112,7 @@ function BotSlackSetupFlow({
       case 'setting-up': {
         const status = (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             {step.kind === 'checking'
               ? t('bots.slack.setup.checking', 'Checking Slack…')
               : t('bots.slack.setup.settingUp', 'Setting up your Slack app…')}
@@ -217,7 +218,7 @@ function BotSlackSetupFlow({
         return (
           <div className="space-y-4">
             <p role="status" className="flex items-center gap-2 text-sm">
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
               {t('bots.slack.setup.waiting', 'Waiting for Slack…')}
             </p>
             {hostName && step.link ? (

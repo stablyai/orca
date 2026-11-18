@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useState } from 'react'
 import { ExternalLink, Loader2, Lock } from 'lucide-react'
 import { toast } from 'sonner'
@@ -230,7 +231,7 @@ function BotGitHubSetupFlow({
       case 'checking':
         return (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             {t('bots.github.setup.checking', 'Checking GitHub…')}
           </p>
         )
@@ -308,7 +309,7 @@ function BotGitHubSetupFlow({
               <GitHubFinishInBrowser trip={trip} url={step.installUrl} />
             ) : awaiting ? (
               <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
                 {t(
                   'bots.github.setup.installing',
                   'Waiting for the install, or for an owner of the organization to approve…'

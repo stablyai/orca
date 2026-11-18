@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // @protected-copy: drawn inside the security-surface setup dialog
 // The steps of "Add <bot> to Linear" inside its dialog: sign in, pick a workspace, install, turn on.
 import React, { useEffect, useState } from 'react'
@@ -214,7 +215,7 @@ export function BotLinearSetupFlow({
       case 'checking':
         return (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             {t('bots.linear.setup.checking', 'Checking Linear…')}
           </p>
         )
@@ -307,7 +308,7 @@ export function BotLinearSetupFlow({
             </p>
             {linearAwait === 'checking' ? (
               <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
                 {t('bots.linear.setup.installing', 'Waiting for the install…')}
               </p>
             ) : linearAwait === 'unchanged' ? (

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // New bot's primary action, drawn like Create worktree's: spinner while busy, label, ⌘↩ hint.
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
@@ -14,7 +15,9 @@ export function BotCreateButton({
 }): React.JSX.Element {
   return (
     <Button size="sm" {...props}>
-      {busy ? <LoaderCircle className="size-4 animate-spin" /> : null}
+      {busy ? (
+        <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+      ) : null}
       {/* Caption-sized like Create worktree's label; Button owns its own type size. */}
       <span className="text-xs">{children}</span>
       <ButtonKeyHint modifierLabel={getScreenSubmitModifierLabel()} />

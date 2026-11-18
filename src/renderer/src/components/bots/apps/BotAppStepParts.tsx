@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // The pieces every Add to <bot> step is drawn from: its header, a form's heading, and the centred
 // outcome screens (finish in your browser, couldn't sign in, added).
 import React from 'react'
@@ -80,7 +81,10 @@ export function BotAppLogoBadge({
       )}
     >
       {kind === 'waiting' ? (
-        <LoaderCircle className={cn('animate-spin text-foreground', sm ? 'size-3' : 'size-3.5')} />
+        <LoaderCircle
+          ref={observeVisibleAnimation}
+          className={cn('visible-animate-spin text-foreground', sm ? 'size-3' : 'size-3.5')}
+        />
       ) : (
         <span
           className={cn(
@@ -153,7 +157,7 @@ export function BotAppBrowserWait({
       title={t('bots.connectors.finishInBrowser', 'Finish in your browser')}
       line={
         <span className="inline-flex items-center gap-1.5">
-          <LoaderCircle className="size-3.5 animate-spin" />
+          <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           {line}
         </span>
       }

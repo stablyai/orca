@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useId } from 'react'
 import { Ellipsis, ExternalLink, LoaderCircle, Plus, Unplug } from 'lucide-react'
 import type { IntegrationCardStatusTone } from '@/components/integrations/presentation/integration-card-shell'
@@ -47,7 +48,12 @@ export function ConnectorStatus(props: {
   checking: boolean
 }): React.JSX.Element {
   if (props.checking) {
-    return <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
+    return (
+      <LoaderCircle
+        ref={observeVisibleAnimation}
+        className="size-4 shrink-0 visible-animate-spin text-muted-foreground"
+      />
+    )
   }
   return (
     <span className="flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground">

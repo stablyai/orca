@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // The one way a bot surface asks for Orca sign-in before an Orca Cloud feature: a reason, Sign in that
 // opens the browser right away, then the action the owner started carries on in the same place.
 import React, { useState } from 'react'
@@ -51,7 +52,7 @@ function SignInButton({
     <Button {...props} type="button" className={className} disabled={busy} onClick={onClick}>
       {busy ? (
         <>
-          <Loader2 className="animate-spin" />
+          <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
           {t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')}
         </>
       ) : (

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useId, useState } from 'react'
 import { ExternalLink, Loader2, Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -42,7 +43,7 @@ export function ConnectWaiting({
         role="status"
         className="flex min-w-0 flex-1 items-center gap-2 text-sm text-muted-foreground"
       >
-        <Loader2 className="size-4 shrink-0 animate-spin" />
+        <Loader2 ref={observeVisibleAnimation} className="size-4 shrink-0 visible-animate-spin" />
         {label}
       </p>
       {action ?? (

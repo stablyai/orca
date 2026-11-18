@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // One part's exact text, as it goes out, with its flagged lines marked.
 import { useEffect, useState } from 'react'
 import { type BotRef, useStableBotRef } from '@/lib/bot-hosts'
@@ -105,7 +106,12 @@ export function BotSharePartFiles({
     )
   }
   if (!files) {
-    return <Loader2 className="size-4 animate-spin text-muted-foreground" />
+    return (
+      <Loader2
+        ref={observeVisibleAnimation}
+        className="size-4 visible-animate-spin text-muted-foreground"
+      />
+    )
   }
   return <BotShareFileList files={files} showNames={showNames} />
 }

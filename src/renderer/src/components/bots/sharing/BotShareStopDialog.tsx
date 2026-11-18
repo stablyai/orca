@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // Stop sharing a link whose bot isn't on this computer, confirmed: the link stops working.
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
@@ -66,7 +67,9 @@ export function BotShareStopDialog({
             disabled={stopping}
             onClick={() => void stop()}
           >
-            {stopping ? <Loader2 className="animate-spin" /> : null}
+            {stopping ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : null}
             {t('bots.share.stopSharing', 'Stop sharing')}
           </Button>
         </DialogFooter>

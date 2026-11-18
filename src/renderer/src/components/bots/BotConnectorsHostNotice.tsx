@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // The one notice above a server bot's connectors: why Slack, Linear and GitHub aren't reaching it
 // and how to fix that from here. A bot on this computer keeps its own sign-in notice.
 import React from 'react'
@@ -121,7 +122,10 @@ function SignInWaiting({
   return (
     <div className="flex flex-col gap-1">
       <p role="status" className="flex items-start gap-1.5 text-muted-foreground">
-        <Loader2 className="mt-0.5 size-3 shrink-0 animate-spin" />
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="mt-0.5 size-3 shrink-0 visible-animate-spin"
+        />
         <span>
           {firstSignIn
             ? t(

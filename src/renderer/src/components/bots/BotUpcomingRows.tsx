@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // The Automations card's rows: Look around, Tidy memory, automations and waits, each with its switch
 // (waits: Cancel) and how its newest run went.
 import { useState } from 'react'
@@ -147,7 +148,11 @@ function LookAroundRow({
                 disabled={looking}
                 onClick={lookNowClicked}
               >
-                {looking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+                {looking ? (
+                  <LoaderCircle ref={observeVisibleAnimation} className="visible-animate-spin" />
+                ) : (
+                  <RefreshCw />
+                )}
               </Button>
             </span>
           ) : null}

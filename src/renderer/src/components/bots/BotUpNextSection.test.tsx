@@ -249,7 +249,7 @@ describe('Suggestions v2', () => {
     )
     const toggle = screen.getByRole('button', { name: /Looking around…/ })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(container.querySelector('.animate-pulse')).toBeNull()
+    expect(container.querySelector('.visible-animate-pulse')).toBeNull()
     fireEvent.click(toggle)
     expect(screen.getByText('steps of look-1')).toBeTruthy()
     fireEvent.click(toggle)

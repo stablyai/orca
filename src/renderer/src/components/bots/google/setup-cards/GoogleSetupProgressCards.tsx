@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // The live step list, and the card for a step the person does. Neither posts a chat message: Done,
 // "Take over from here" and "Let me do this one" are card answers the bot reads.
 import React, { useCallback, useState } from 'react'
@@ -171,7 +172,11 @@ export function GoogleSetupProgressCard({
         state ? (
           <span className="inline-flex items-center gap-1">
             {state === working ? (
-              <LoaderCircle className="size-3 animate-spin" aria-hidden />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3 visible-animate-spin"
+                aria-hidden
+              />
             ) : null}
             {state}
           </span>
@@ -299,7 +304,11 @@ export function GoogleSetupStepCard({
         trailing={
           watching ? (
             <span className="inline-flex items-center gap-1">
-              <LoaderCircle className="size-3 animate-spin" aria-hidden />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3 visible-animate-spin"
+                aria-hidden
+              />
               {t('bots.googleSetup.step.watching', 'Watching the page')}
             </span>
           ) : null

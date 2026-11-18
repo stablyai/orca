@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // Add to <bot>'s Composio parts: the curated section under All apps, the full catalog behind
 // "Browse all Composio apps" (read with the owner's key), and the With Composio search group.
 import React from 'react'
@@ -70,7 +71,7 @@ function ComposioAppItem({
   } else if (pending) {
     action = (
       <Button variant="ghost" size="xs" onClick={() => actions.resume(app)}>
-        <LoaderCircle className="animate-spin" />
+        <LoaderCircle ref={observeVisibleAnimation} className="visible-animate-spin" />
         {t('bots.apps.signingIn', 'Signing in')}
       </Button>
     )
