@@ -111,7 +111,9 @@ export function claudeBridgeStateEvent(
 export function setClaudeSessionRemoteControl(
   session: ClaudeSession | undefined,
   enabled: boolean,
-  linkDeps: (session: ClaudeSession) => ClaudeRemoteControlLinkDeps
+  sessionId: string,
+  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'requestTimeoutMs' | 'logger'>,
+  emit: (session: ClaudeSession, event: StructuredAgentSessionProviderRemoteControlEvent) => void
 ): boolean {
   if (!session || session.connection.closed || !session.initialization.startup.opened()) {
     return false
@@ -119,7 +121,7 @@ export function setClaudeSessionRemoteControl(
   driveClaudeRemoteControl(
     session,
     enabled ? { type: 'connect', enabledByDefault: false } : { type: 'disconnect' },
-    linkDeps(session)
+    claudeRemoteControlLinkDeps(sessionId, deps, (event) => emit(session, event))
   )
   return true
 }

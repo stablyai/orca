@@ -14,6 +14,7 @@ import {
   driveClaudeRemoteControl
 } from '../remote-control/claude-remote-control-link'
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
+import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -26,6 +27,8 @@ type ClaudeOpenInput = {
   sessions: Map<string, ClaudeSession>
   deps: ClaudeStructuredSessionAdapterDeps
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
+  /** Whether a reader shows the session's prompt suggestions right now. */
+  promptSuggestionsWanted?: (sessionId: string) => boolean
 }
 
 export async function openClaudeStructuredSession(
@@ -94,6 +97,10 @@ async function openStartingClaudeSession(
     }
   }
   current()
+  readyClaudePromptSuggestionPause(
+    session,
+    input.promptSuggestionsWanted?.(request.sessionId) ?? false
+  )
   // The stored leaf is set only on a resume, and is the chat's last completed turn.
   const history = session.initialization.history
   const leafUuid = history.leafUuid

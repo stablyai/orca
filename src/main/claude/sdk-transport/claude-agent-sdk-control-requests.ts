@@ -8,6 +8,10 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
+import {
+  claudeQueryRemoteControl,
+  type ClaudeRemoteControlAnswer
+} from './claude-remote-control-request'
 
 export class ClaudeControlRequestError extends Error {
   constructor(
@@ -53,25 +57,6 @@ export function claudeQueryAsyncCanceller(
 ): ((uuid: string) => Promise<unknown>) | null {
   const cancel = (query as unknown as ClaudeQueryAsyncCanceller).cancelAsyncMessage
   return typeof cancel === 'function' ? cancel.bind(query) : null
-}
-
-/** Claude's answer to `remote_control` enabled:true; enabled:false answers nothing. */
-export type ClaudeRemoteControlAnswer = { sessionUrl?: string }
-
-// enableRemoteControl sends `remote_control` but is absent from Query's declaration.
-function claudeQueryRemoteControl(
-  query: Query
-): ((enabled: boolean) => Promise<ClaudeRemoteControlAnswer>) | null {
-  const send = 'enableRemoteControl' in query ? query.enableRemoteControl : null
-  return typeof send === 'function'
-    ? async (enabled) => readClaudeRemoteControlAnswer(await send.call(query, enabled))
-    : null
-}
-
-function readClaudeRemoteControlAnswer(answer: unknown): ClaudeRemoteControlAnswer {
-  const fields = typeof answer === 'object' && answer !== null ? answer : {}
-  const sessionUrl = 'session_url' in fields ? fields.session_url : undefined
-  return typeof sessionUrl === 'string' && sessionUrl.startsWith('https://') ? { sessionUrl } : {}
 }
 
 // renameSession sends `rename_session` with source 'host' (the CLI's user rename) but is absent
@@ -236,6 +221,8 @@ export type ClaudeControlSurface = {
     enabled: boolean,
     options?: ClaudeControlOptions
   ) => Promise<ClaudeRemoteControlAnswer>
+  /** Stops or restarts the CLI generating prompt suggestions; a new process starts unpaused. */
+  setPromptSuggestionsPaused?: (paused: boolean, options?: ClaudeControlOptions) => Promise<void>
 }
 
 type InterruptingQuery = {
@@ -311,6 +298,22 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
             new ClaudeControlRequestError(
               'rename_session',
               'this SDK exposes no rename_session request'
+            )
+          )
+    },
+    setPromptSuggestionsPaused: (paused, options) => {
+      // Sends `set_prompt_suggestions_paused` but is absent from Query's declaration.
+      const pause = 'setPromptSuggestionsPaused' in query ? query.setPromptSuggestionsPaused : null
+      return typeof pause === 'function'
+        ? runClaudeControl(
+            'set_prompt_suggestions_paused',
+            () => Promise.resolve(pause.call(query, paused)),
+            options?.timeoutMs
+          ).then(() => {})
+        : Promise.reject(
+            new ClaudeControlRequestError(
+              'set_prompt_suggestions_paused',
+              'this SDK exposes no set_prompt_suggestions_paused request'
             )
           )
     },

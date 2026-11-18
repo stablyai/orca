@@ -96,6 +96,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
   })
   // These WebContents own every preview and its failure sink; destruction leaves no readers.
+  const mainWebContentsId = mainWindow.webContents.id
   const associateCreatedGuest = (_event: Electron.Event, guest: Electron.WebContents): void => {
     associateBrowserPageAttach(guest)
     associateBrowserExtensionSidePanelGuest(guest)
@@ -103,7 +104,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   app.on('web-contents-created', associateCreatedGuest)
   mainWindow.webContents.on('destroyed', () => {
     app.off('web-contents-created', associateCreatedGuest)
-    closeBrowserMemoryRenderer(mainWindow.webContents.id)
+    closeBrowserMemoryRenderer(mainWebContentsId)
     setDocPreviewFailureSink(null)
     revokeAllDocPreviewGrants()
   })

@@ -34,6 +34,7 @@ import type { ClaudeInitializeFacts } from './startup/claude-structured-session-
 
 import type { ClaudeStructuredSessionEvent } from './lifecycle/claude-structured-session-event'
 import type { ClaudeRemoteControlPhase } from './remote-control/claude-remote-control-machine'
+import type { ClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
 
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
@@ -161,6 +162,7 @@ export type ClaudeSession = {
   flagSettingsControl?: ClaudeCliFlagFact
   /** This process's Remote Control link; absent is off. */
   remoteControl?: ClaudeRemoteControlPhase
+  promptSuggestionPause?: ClaudePromptSuggestionPause
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker

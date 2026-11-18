@@ -225,7 +225,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
 
 // Why data-slot: a Radix checkbox is also a <button> and must keep its own box.
 const unifiedFooterButtonClass =
-  '[&>[data-slot=button]]:h-auto [&>[data-slot=button]]:min-h-8 [&>[data-slot=button]]:max-w-full [&>[data-slot=button]]:py-1.5 [&>[data-slot=button]]:text-center [&>[data-slot=button]]:whitespace-normal [&>[data-slot=button]]:[overflow-wrap:anywhere]'
+  '[&>[data-slot=button]]:h-auto [&>[data-slot=button]]:min-h-8 [&>[data-slot=button]]:text-[13px] [&>[data-slot=button]]:max-w-full [&>[data-slot=button]]:py-1.5 [&>[data-slot=button]]:text-center [&>[data-slot=button]]:whitespace-normal [&>[data-slot=button]]:[overflow-wrap:anywhere]'
 
 // Why: a ghost action's text lines up with the dialog's left edge, like the link-style extras.
 const unifiedFooterStartClass = 'has-[>[data-variant=ghost]:first-child]:-ml-3'

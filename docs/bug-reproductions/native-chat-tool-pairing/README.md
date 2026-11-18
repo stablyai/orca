@@ -58,8 +58,9 @@ this benchmark's scope.
 
 The deterministic contract runs in `pnpm test:perf:contracts`. Broader coverage
 uses the shared/native-chat and renderer/native-chat suites, provider transcript
-reader suites, and `tests/e2e/native-chat-tool-pairing.spec.ts` for hidden
-Electron rendering and output ownership.
+reader suites. The rendered tool-pairing program was retired; its hidden Electron
+rendering and output-ownership alarms have no equivalent replacement. Historical
+rendered measurements below retain their original scope.
 
 ## Full folding, allocation, and mobile disclosure
 

@@ -4,19 +4,24 @@ import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permi
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { StructuredAgentSessionRuntimeDeps } from '../installation/structured-agent-session-runtime-contract'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { nativeChatShowsPromptSuggestions } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
 /** Per-agent chat gates read from this host's current settings. */
 export function structuredAgentSettingGates(
   getSettings: () => ReturnType<RuntimeStore['getSettings']>
 ): Pick<
   StructuredAgentSessionRuntimeDeps,
-  'resolveAgentFullAccess' | 'piManagedExtensionsEnabled' | 'resolveClaudeRemoteControl'
+  | 'resolveAgentFullAccess'
+  | 'piManagedExtensionsEnabled'
+  | 'resolveClaudeRemoteControl'
+  | 'nativeChatPromptSuggestions'
 > {
   return {
     resolveAgentFullAccess: (agent) =>
       isTuiAgent(agent) && preModeChatGetsFullAccess(agent, getSettings(), process.platform),
     piManagedExtensionsEnabled: () => isAgentStatusHooksEnabledForAgent(getSettings(), 'pi'),
     resolveClaudeRemoteControl: () =>
-      nativeChatClaudeRemoteControl(getSettings().nativeChatClaudeRemoteControl)
+      nativeChatClaudeRemoteControl(getSettings().nativeChatClaudeRemoteControl),
+    nativeChatPromptSuggestions: () => nativeChatShowsPromptSuggestions(getSettings())
   }
 }
