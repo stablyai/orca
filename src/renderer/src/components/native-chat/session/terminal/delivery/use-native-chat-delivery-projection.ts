@@ -2,7 +2,7 @@ import { pendingSendsAsMessages } from '../../../../../../../shared/native-chat/
 import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage
-} from '../../../../../../../shared/native-chat/native-chat-streaming'
+} from '../../../../../../../shared/native-chat/transcript/streaming/native-chat-streaming'
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { NativeChatLaunchPrompt } from '../../../drafts/native-chat-launch-prompt'

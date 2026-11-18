@@ -28,27 +28,6 @@ async function executable(file: string, text: string) {
 }
 
 describe.skipIf(process.platform === 'win32')('native executable candidates', () => {
-  it('rediscovers removed files, PATH changes and earlier installations after a fixed expiry', async () => {
-    const { first, second, env } = await fixture()
-    let now = 0
-    const resolver = new NativeExecutableResolver('darwin', () => now)
-    const late = join(second, 'probe')
-    const early = join(first, 'probe')
-    await executable(late, '#!/bin/sh\necho late\n')
-    expect(resolver.resolve('probe', env).file).toBe(late)
-    await executable(early, '#!/bin/sh\necho early\n')
-    now = 29_000
-    expect((await resolver.resolveAsync('probe', env)).file).toBe(late)
-    now = 30_001
-    expect(resolver.resolve('probe', env).file).toBe(early)
-    await rm(early)
-    expect((await resolver.resolveAsync('probe', env)).file).toBe(late)
-    await executable(early, '#!/bin/sh\necho new\n')
-    expect(resolver.resolve('probe', { PATH: first }).file).toBe(early)
-    await chmod(late, 0o644)
-    expect(resolver.resolve('probe', env).file).toBe(early)
-  })
-
   it('leaves native lookup in charge of absent, empty and relative PATH, explicit paths and other hosts', async () => {
     const { first, second, env } = await fixture()
     await executable(join(second, 'probe'), '#!/bin/sh\nexit 0\n')

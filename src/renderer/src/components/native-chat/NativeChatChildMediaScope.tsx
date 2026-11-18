@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { resolveWorkspaceDirectory } from '@/lib/workspace/paths/workspace-directory'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { NativeChatMarkdownImageOwnerContext } from './media/images/native-chat-markdown-image-owner'
 import {
   NativeChatVisualOwnerContext,

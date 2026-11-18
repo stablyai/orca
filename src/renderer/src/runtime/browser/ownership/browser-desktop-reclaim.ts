@@ -1,4 +1,4 @@
-import { getAllMobileDrivenBrowserPageIds } from './browser-mobile-driver-state'
+import { getAllMobileDrivenBrowserPageIds } from './browser-mobile-driver-store'
 
 /** Ends the phone's hold on every browser page it drives, wherever the page is mounted. */
 export async function reclaimMobileDrivenBrowserPagesForDesktop(): Promise<Set<string>> {

@@ -1,5 +1,5 @@
 import { foundConversation } from './structured-agent-session-create-founding'
-import type { StructuredAgentSessionFirstMessage } from '../../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type {
   AgentSessionAttachResult,

@@ -4,7 +4,7 @@ import {
   type AgentSessionAccountHome,
   isLegacyAgentSessionAccountHome
 } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { isNativeLocalLocation } from '../../../shared/execution-host'
+import { isNativeLocalLocation } from '../../../shared/execution-host/execution-host'
 import type {
   AgentModelCatalogConfiguredChoice,
   AgentModelCatalogListing
@@ -29,7 +29,7 @@ export type AgentModelCatalogWorkspaceDeps = {
   }) => Promise<boolean>
 }
 
-/** Claude and Codex pickers show the account's default everywhere, as the references do; the CLI
+/** Claude and Codex pickers show the account's default everywhere; the CLI
  *  still applies a project's own settings at launch and the chat then reports what it ran. */
 export function agentModelCatalogDefaultFollowsAccount(agent: string): boolean {
   return independentAgentModelCatalog(agent)

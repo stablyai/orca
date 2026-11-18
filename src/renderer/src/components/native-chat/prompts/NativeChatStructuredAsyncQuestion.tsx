@@ -22,12 +22,19 @@ import type { NativeChatStructuredComposerTransport } from '../composer/submit/n
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from '../session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
+import {
+  useStructuredAgentSessionAsyncQuestionSkip,
+  type StructuredAgentSessionAsyncQuestionSkip
+} from './use-structured-agent-session-async-question-skip'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
-/** Async questions leave the composer usable; the next ordinary send answers them and Cancel only hides them. */
+/** Async questions leave the composer usable; the next ordinary send answers them, and Skip hides
+ *  them on every device where the host saves it, else on this screen only. */
 export function NativeChatStructuredAsyncQuestion({
   paneKey,
+  skip,
   session,
   sourceKey,
   sourceScope,
@@ -38,6 +45,8 @@ export function NativeChatStructuredAsyncQuestion({
   submissions = NO_SUBMISSIONS
 }: {
   paneKey: string
+  /** The host's saved Skip; absent on a host that keeps none. */
+  skip?: StructuredAgentSessionAsyncQuestionSkip
   sourceKey: string
   sourceScope: string
   blocked?: boolean
@@ -55,7 +64,8 @@ export function NativeChatStructuredAsyncQuestion({
     viewKey: paneKey,
     messages: session.messages,
     settled: session.readPhase === 'ready' && !blocked,
-    queuedTexts
+    queuedTexts,
+    skip
   })
   if (!prompt) {
     return null
@@ -115,6 +125,18 @@ function NativeChatAsyncQuestionForm({
   )
 }
 
+function NativeChatHostAsyncQuestion({
+  target,
+  sessionId,
+  ...props
+}: Omit<React.ComponentProps<typeof NativeChatStructuredAsyncQuestion>, 'skip'> & {
+  target: RuntimeClientTarget
+  sessionId: string
+}): React.JSX.Element | null {
+  const skip = useStructuredAgentSessionAsyncQuestionSkip(target, sessionId)
+  return <NativeChatStructuredAsyncQuestion {...props} skip={skip} />
+}
+
 export function nativeChatStructuredAsyncQuestion(
   props: Pick<NativeChatStructuredViewProps, 'target' | 'agent' | 'sessionId' | 'tabId'>,
   controller: Pick<
@@ -128,7 +150,9 @@ export function nativeChatStructuredAsyncQuestion(
   const { agent, sessionId } = props
   const { epoch } = controller
   return (
-    <NativeChatStructuredAsyncQuestion
+    <NativeChatHostAsyncQuestion
+      target={props.target}
+      sessionId={sessionId}
       paneKey={structuredAgentSessionPaneKey(props.tabId, sessionId)}
       session={session}
       submissions={controller.submissions}

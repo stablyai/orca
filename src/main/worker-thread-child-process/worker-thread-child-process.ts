@@ -234,7 +234,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Child process worker entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-child-process-spawner' })
 }
 
 let sharedHost: WorkerThreadChildProcessHost | null = null

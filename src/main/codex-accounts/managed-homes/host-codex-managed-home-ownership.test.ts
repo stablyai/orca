@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
@@ -44,6 +52,21 @@ describe('assertOwnedHostCodexManagedHomePath', () => {
       })
     ).toThrow('resolves inside the system Codex home')
     expect(readFileSync(sentinelPath, 'utf-8')).toBe('system-auth\n')
+  })
+
+  it('owns a home whose marker was renamed when it got junctions', () => {
+    const accountHome = join(userDataDir, 'codex-accounts', 'account-1', 'home')
+    mkdirSync(accountHome, { recursive: true })
+    writeFileSync(join(accountHome, '.orca-managed-home-linked'), 'account-1\n', 'utf-8')
+
+    expect(
+      assertOwnedHostCodexManagedHomePath({
+        candidatePath: accountHome,
+        managedAccountsRoot: join(userDataDir, 'codex-accounts'),
+        systemCodexHomePath: systemHomePath,
+        expectedAccountId: 'account-1'
+      })
+    ).toBe(realpathSync(accountHome))
   })
 
   it('rejects a persisted home or marker belonging to another account', () => {

@@ -99,7 +99,9 @@ export class StructuredAgentSessionClientDelivery {
       now,
       readStatusState: async (sessionId, journal) =>
         (await this.journalProjection(sessionId, journal))?.state ?? null,
-      readChildWork: (sessionId) => this.statusFeed.readChildWork(sessionId)
+      readChildWork: (sessionId) => this.statusFeed.readChildWork(sessionId),
+      readAsyncQuestionsSkippedThrough: (sessionId) =>
+        this.deps().store.getRecord(sessionId)?.asyncQuestionsSkippedThrough
     })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.settlementReading(sessionId, this.requireJournal(sessionId))
@@ -121,7 +123,9 @@ export class StructuredAgentSessionClientDelivery {
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
       readCurrentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       readWorkFrame: (sessionId, journal, rows) =>
-        this.statusFeed.journalProjection.workFrame(sessionId, journal, rows)
+        this.statusFeed.journalProjection.workFrame(sessionId, journal, rows),
+      onPromptSuggestionInterest: (sessionId, wanted) =>
+        this.deps().adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
     })
   }
 

@@ -16,7 +16,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import {
   getShownWorkspaceViewSections,
   type WorkspaceViewOptionKey,
@@ -152,8 +152,8 @@ function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'setti
       <ActivityIndicator size="small" color={colors.textMuted} />
       <Text style={styles.filterModalSubtitle}>
         {stale
-          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the desktop')
-          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the desktop')}
+          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the host')
+          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the host')}
       </Text>
     </View>
   )

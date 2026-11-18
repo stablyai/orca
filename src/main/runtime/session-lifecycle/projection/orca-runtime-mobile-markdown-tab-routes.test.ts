@@ -3,9 +3,9 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { hashMarkdownContent } from '../../../../shared/editor/markdown/mobile-markdown-document'
 import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import '../../../../shared/remote-runtime/remote-runtime-client-error'
@@ -28,11 +28,11 @@ vi.mock('../../files/chat-scratch-file-root', async (importOriginal) => ({
   resolveRuntimeAuthorizedPath: async (path: string) => path
 }))
 
-await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
 const { TEST_REPO_ID, TEST_WORKTREE_ID, makeRuntimeStoreWithWorkspaceSession, store } =
-  await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+  await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
 
 type Runtime = InstanceType<typeof OrcaRuntimeService>
 

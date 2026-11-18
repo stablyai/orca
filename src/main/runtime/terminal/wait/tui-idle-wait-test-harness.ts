@@ -1,5 +1,5 @@
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 

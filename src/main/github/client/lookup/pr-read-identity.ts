@@ -1,5 +1,5 @@
 import { ghRepoExecOptions, githubRepoContext } from '../../repositories/github-repository-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   hostedReviewRepoScope,
   scopeGeneration
@@ -79,6 +79,7 @@ function completeReadInputs(
     options.currentHeadOid ?? null,
     options.checkPageLimit ?? null,
     options.exactRepository ?? null,
+    options.linkedPRUrl ?? null,
     options.includeDerivedData !== false,
     options.sharedLinkPaths ?? null
   ]

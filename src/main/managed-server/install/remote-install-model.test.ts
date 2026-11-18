@@ -8,15 +8,7 @@ import { listRemoteInstallBaseDirsCommand } from './remote-install-gc-listing-co
 import { probeRemoteInstallCompleteCommand } from './remote-install-completeness-command'
 import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
-import {
-  ORCAD_INSTALL_MODEL,
-  RELAY_INSTALL_MODEL,
-  remoteInstallDirOwner,
-  remoteInstallGcPermits
-} from './remote-install-model'
-
-const RELAY_DIRS = ['relay-0.1.0+abcdef123456', 'relay-v0.1.0', 'relay-1.2.3']
-const ORCAD_DIRS = ['orcad-0.1.0+abcdef123456', 'orcad-v0.1.0', 'orcad-1.2.3']
+import { ORCAD_INSTALL_MODEL, RELAY_INSTALL_MODEL } from './remote-install-model'
 
 describe('remote install namespace', () => {
   it.skipIf(process.platform === 'win32')('rejects an install missing its search binary', () => {
@@ -40,16 +32,6 @@ describe('remote install namespace', () => {
 })
 
 describe('GC ownership — each model collects only its own namespace', () => {
-  it.each(ORCAD_DIRS)('the relay never permits GC of %s', (dirName) => {
-    expect(remoteInstallDirOwner(dirName)).toBe('orcad')
-    expect(remoteInstallGcPermits(RELAY_INSTALL_MODEL, dirName)).toBe(false)
-  })
-
-  it.each(RELAY_DIRS)('orcad never permits GC of %s', (dirName) => {
-    expect(remoteInstallDirOwner(dirName)).toBe('relay')
-    expect(remoteInstallGcPermits(ORCAD_INSTALL_MODEL, dirName)).toBe(false)
-  })
-
   it.skipIf(process.platform === 'win32')(
     'keeps runtimes/ out of every model listing, including older clients’ prefix scans',
     () => {

@@ -10,13 +10,25 @@ export type AgentInputFocusGuard = () => Promise<() => void>
 export const AGENT_INPUT_FOCUS_GUARD_CHANNEL = 'browser:agentInputFocusGuard'
 export const AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL = 'browser:agentInputFocusGuardReady'
 
-// Wait for the pane to record the user's element before Chromium can move focus.
-const PANE_READY_TIMEOUT_MS = 150
+// The pane answers at once when idle; this only bounds one that never will. Busy installs stall
+// the window renderer for over 1.8 s, so a 150 ms wait refused input the pane would have guarded (#42854).
+const PANE_READY_TIMEOUT_MS = 2000
 
-export function focusGuardUnavailableError(): BrowserError {
+// The CDP helper keeps only the message, so it names the phase too. No "timeout" in names:
+// agent-browser swaps such messages for its own "Operation timed out".
+export type FocusGuardUnavailablePhase = 'missing_page' | 'missing_renderer' | 'no_pane_answer'
+
+export function focusGuardUnavailableError(
+  phase: FocusGuardUnavailablePhase,
+  elapsedMs?: number
+): BrowserError {
+  const waited = elapsedMs === undefined ? '' : ` after ${Math.round(elapsedMs)} ms`
   return new BrowserError(
     'browser_focus_guard_unavailable',
-    "Orca could not protect the user's keyboard focus for this page, so the input was not sent. Retry, or show the page first."
+    `Orca could not protect the user's keyboard focus for this page, so the input was not sent. Retry, or show the page first. (${phase}${waited})`,
+    elapsedMs === undefined
+      ? { phase }
+      : { phase, elapsedMs: Math.round(elapsedMs), timeoutMs: PANE_READY_TIMEOUT_MS }
   )
 }
 
@@ -33,6 +45,7 @@ export async function guardPaneFocusForAgentInput(
   browserPageId: string
 ): Promise<() => void> {
   const token = randomUUID()
+  const startedAt = performance.now()
   const answer = await new Promise<'ready' | 'unavailable' | 'composing'>((resolve) => {
     const finish = (outcome: 'ready' | 'unavailable' | 'composing'): void => {
       clearTimeout(timer)
@@ -66,7 +79,9 @@ export async function guardPaneFocusForAgentInput(
   }
   if (answer !== 'ready') {
     release()
-    throw answer === 'composing' ? userComposingError() : focusGuardUnavailableError()
+    throw answer === 'composing'
+      ? userComposingError()
+      : focusGuardUnavailableError('no_pane_answer', performance.now() - startedAt)
   }
   return release
 }

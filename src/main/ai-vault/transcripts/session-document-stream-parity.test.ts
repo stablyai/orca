@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseHermesSessionContent,
-  parseHermesSessionDocument
-} from '../scanners/hermes/session-scanner-hermes-parser'
-import {
   parseDevinSessionContent,
   parseDevinSessionDocument
 } from '../scanners/devin/session-scanner-devin-parser'
@@ -29,13 +25,6 @@ async function* bytes(content: string) {
   }
 }
 const fixtures = [
-  {
-    agent: 'hermes',
-    parse: parseHermesSessionContent,
-    stream: parseHermesSessionDocument,
-    content:
-      '{"messages":[{"role":"user","content":"Ü🐋 first"},{"role":"assistant","content":"answer"}],"session_id":"id","cwd":"/repo","model":"root","session_start":"2026-01-01T00:00:00Z","last_updated":"2026-01-02T00:00:00Z","message_count":99}'
-  },
   {
     agent: 'devin',
     parse: parseDevinSessionContent,

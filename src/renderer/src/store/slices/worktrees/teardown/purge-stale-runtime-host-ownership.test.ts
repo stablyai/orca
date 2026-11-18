@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 
 vi.mock('sonner', () => ({

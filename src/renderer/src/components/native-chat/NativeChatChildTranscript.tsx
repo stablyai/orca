@@ -10,7 +10,7 @@ import type { NativeChatMessageListHandle } from './messages/actions/use-native-
 import { nativeChatChildTranscript } from './native-chat-child-transcript'
 import { NativeChatChildTranscriptFrame } from './NativeChatChildTranscriptFrame'
 import { NativeChatStructuredChildTranscript } from './NativeChatStructuredChildTranscript'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
 export type NativeChatChildTranscriptProps = {

@@ -1,6 +1,6 @@
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { parseRoutableExecutionHostId } from '../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type {
   OrchestrationChildExecutionHost,

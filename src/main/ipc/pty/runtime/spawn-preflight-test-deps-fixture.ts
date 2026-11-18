@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { finishPtyShutdown } from '../provider/liveness'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 

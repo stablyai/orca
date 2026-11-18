@@ -76,14 +76,15 @@ import { MANAGED_RUNTIME_INSTALL_METHODS } from './host-management/managed-runti
 import { ARTIFACT_METHODS } from './artifacts/artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
+import { AGENT_CONVERSATION_METHODS } from './agent-conversations/agent-conversation-methods'
 import { CONNECTOR_METHODS } from './connectors/connector'
 import {
   LAYOUT_APPLY_METHODS,
   LAYOUT_VIEW_REPORT_METHODS,
   WORKSPACE_LAYOUT_METHODS
 } from './workspace-layout/workspace-layout'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 // Keep registration order and the full RPC/security surface visible in one manifest.
 export const ALL_RPC_METHODS = [
@@ -109,6 +110,7 @@ export const ALL_RPC_METHODS = [
   ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
   ...MANAGED_RUNTIME_INSTALL_METHODS,
   ...AGENT_LAUNCH_METHODS,
+  ...AGENT_CONVERSATION_METHODS,
   ...CONNECTOR_METHODS,
   ...TERMINAL_METHODS,
   ...TERMINAL_ORPHAN_METHODS,

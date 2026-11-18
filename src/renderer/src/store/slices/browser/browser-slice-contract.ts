@@ -30,7 +30,7 @@ import type {
   PendingClientHostedBrowserClose
 } from '@/runtime/browser/closing/client-hosted-browser-close-intents'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contract'
 import type { RuntimeBrowserPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 
@@ -86,7 +86,7 @@ export type ClosedBrowserWorkspaceSnapshot = {
   position?: RecentlyClosedTabPosition
 }
 
-import type { BrowserInitializationPresentation } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
+import type { BrowserInitializationPresentation } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
 
 export type RemoteBrowserPageHandle = {
   initializationPresentation?: BrowserInitializationPresentation

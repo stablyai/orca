@@ -5,7 +5,7 @@ import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agen
 import { useAppStore } from '@/store'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { isStructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { OrchestrationSessionChild } from '../../../../shared/orchestration-session-children'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 

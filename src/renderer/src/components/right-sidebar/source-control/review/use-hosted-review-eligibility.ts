@@ -17,6 +17,7 @@ export function useSourceControlHostedReviewEligibility({
   activeRepoPath,
   activeWorktreeId,
   branchName,
+  currentHeadOid,
   effectiveBaseRef,
   fallbackGitHubPRNumber,
   getHostedReviewCreationEligibility,
@@ -44,6 +45,7 @@ export function useSourceControlHostedReviewEligibility({
   activeRepoPath: SourceControlWorktreeContext['activeRepoPath']
   activeWorktreeId: string | null
   branchName: string
+  currentHeadOid: string | null
   effectiveBaseRef: string | null
   fallbackGitHubPRNumber: SourceControlLinkedReviews['fallbackGitHubPRNumber']
   getHostedReviewCreationEligibility: SourceControlStoreActions['getHostedReviewCreationEligibility']
@@ -74,8 +76,11 @@ export function useSourceControlHostedReviewEligibility({
     )
   // The provider can settle after the probe starts; a failure must read the latest one without restarting it.
   const resolveProviderRef = useRef(resolveProvider)
+  // Commits already rerun this probe through status/upstream changes; HEAD alone must not add lookups.
+  const currentHeadOidRef = useRef(currentHeadOid)
   useLayoutEffect(() => {
     resolveProviderRef.current = resolveProvider
+    currentHeadOidRef.current = currentHeadOid
   })
 
   useEffect(() => {
@@ -120,7 +125,8 @@ export function useSourceControlHostedReviewEligibility({
       linkedGitLabMR,
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
-      linkedGiteaPR
+      linkedGiteaPR,
+      currentHeadOid: currentHeadOidRef.current
     })
       .then((result) => {
         if (!stale) {

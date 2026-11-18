@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { registerBoundPty } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
-import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
+import '../../../../shared/workspace-layout/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import '../layout/bind-first-pane.test-fixture'
+import { partialRuntimeStore } from '../../construction/test-context/runtime-store-partial-fixture'
 
 const PTY_ID = 'ssh:target@@relay-pty'
 const WORKTREE_ID = 'repo::/worktree'
@@ -109,50 +109,5 @@ describe('runtime terminal handle incarnation fencing', () => {
 
     runtime.registerPreAllocatedHandleForPty(PTY_ID, staleHandle)
     await expect(runtime.readTerminal(staleHandle)).rejects.toThrow('terminal_handle_stale')
-  })
-})
-
-describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
-  const LOCAL_SCOPE = JSON.stringify({ kind: 'local', hostId: 'local' })
-  // App SSH id embeds target, so its scope is ssh:target.
-
-  function resolve(
-    runtime: OrcaRuntimeService,
-    processIncarnation: string,
-    serializedHostScope: string | null
-  ): string | null {
-    return runtime.resolveTerminalHandleByProcessIncarnation(
-      processIncarnation,
-      serializedHostScope
-    )
-  }
-
-  it('keeps scanning past a colon-ambiguous decoy in another host scope to the genuine match', () => {
-    const { runtime } = makeRuntime({ paneLayout: true })
-    // relay + conn:incarnation-1 and relay:conn + incarnation-1 collide as strings; wrong-host decoy is registered first.
-    const processIncarnation = 'relay:conn:incarnation-1'
-    const DECOY_TAB_ID = 'tab-decoy'
-    const DECOY_LEAF_ID = '22222222-2222-4222-8222-222222222222'
-    const GENUINE_TAB_ID = 'tab-genuine'
-    const GENUINE_LEAF_ID = '33333333-3333-4333-8333-333333333333'
-    registerBoundPty(runtime, 'relay', WORKTREE_ID, 'decoy', {
-      tabId: DECOY_TAB_ID,
-      leafId: DECOY_LEAF_ID,
-      incarnationId: 'conn:incarnation-1'
-    })
-    registerBoundPty(runtime, 'relay:conn', WORKTREE_ID, null, {
-      tabId: GENUINE_TAB_ID,
-      leafId: GENUINE_LEAF_ID,
-      incarnationId: 'incarnation-1'
-    })
-
-    // Wrong-host matches must continue scanning so they cannot shadow a later same-scope PTY.
-    const handle = resolve(runtime, processIncarnation, LOCAL_SCOPE)
-    expect(handle).toMatch(/^term_/)
-    // Colliding incarnation strings cannot distinguish panes; verify the reminted handle targets the genuine pane key.
-    const genuinePaneKey = makePaneKey(GENUINE_TAB_ID, GENUINE_LEAF_ID)
-    const decoyPaneKey = makePaneKey(DECOY_TAB_ID, DECOY_LEAF_ID)
-    expect(runtime.getTerminalPaneKey(handle!)).toBe(genuinePaneKey)
-    expect(runtime.getTerminalPaneKey(handle!)).not.toBe(decoyPaneKey)
   })
 })

@@ -2,7 +2,7 @@ import type { FileLinkActions } from '@/components/terminal-pane/links/files/ter
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import type { NativeChatFileLinkContext } from '../../links/actions/native-chat-file-link-context'
 import { nativeChatLinkActions } from '../../links/actions/native-chat-link-target-actions'
-import { readNativeChatQuotableSelection } from '../../selection-quotes/native-chat-quote-selection'
+import { readNativeChatQuotableSelection } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
 
 export type NativeChatContextMenuTarget = {

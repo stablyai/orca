@@ -2,12 +2,12 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { NotificationWorkspaceOwner } from '../../../shared/notifications/notification-source'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
-import type { Tab } from '../../../shared/tab-types'
+import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
 import type { PtyTransport } from '@/components/terminal-pane/pty-transport/pty-transport-types'
 import { resolveTerminalTabPtyOwnership } from '@/lib/workspace/tabs/terminal-tab-for-pty-id'
