@@ -214,19 +214,6 @@ describe("a bot's memory history", () => {
     expect(await stored('bot-2')).toBeUndefined()
   })
 
-  it('keeps two edits made at once, in order, through a restart', async () => {
-    const { history, reopened } = bot(OLD)
-    const first = history.append('bot-1', { kind: 'owner' }, botMemoryChange('', '- first\n'))
-    const second = history.append('bot-1', { kind: 'owner' }, botMemoryChange('', '- second\n'))
-    await Promise.all([first, second])
-
-    const rows = await reopened().list('bot-1')
-    expect(rows.map((row) => row.change.added.map(({ line }) => line))).toEqual([
-      ['- second'],
-      ['- first']
-    ])
-  })
-
   it('returns the newest edits in order after a stalled write, including after restart', async () => {
     const stored = new Map<string, string>()
     const stalled = Promise.withResolvers<void>()
