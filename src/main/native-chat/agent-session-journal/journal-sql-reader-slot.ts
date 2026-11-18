@@ -117,6 +117,8 @@ export class ReaderSlot {
     this.worker.on('message', (reply: JournalSqlReaderReply) => {
       if (reply.type === 'ready') {
         this.ready.resolve()
+        // A hosted reader that moved in-process now has a thread id.
+        this.recordRunning()
         if (this.pending.size === 0) {
           this.worker.unref()
         }
@@ -189,11 +191,11 @@ export class ReaderSlot {
     }
   }
 
-  /** `chat` names a reservation step's chat, which its operation doesn't carry. */
   runsOn(workers: readonly unknown[]): boolean {
     return workers.includes(this.worker)
   }
 
+  /** `chat` names a reservation step's chat, which its operation doesn't carry. */
   request(
     operation: JournalSqlReaderOperation,
     chat?: string | null
@@ -280,7 +282,12 @@ export class ReaderSlot {
     }
     const oldest = this.pending.entries().next().value
     const queued = this.pending.size - 1
-    if (oldest?.[0] === this.running?.id && queued === this.running?.queued) {
+    const threadId = workerThreadId(this.worker)
+    if (
+      oldest?.[0] === this.running?.id &&
+      queued === this.running?.queued &&
+      threadId === this.running?.request.threadId
+    ) {
       return
     }
     if (!oldest) {
@@ -291,7 +298,7 @@ export class ReaderSlot {
     const [id, { operation, chat }] = oldest
     let request: JournalReaderRunningRequest
     if (id === this.running?.id) {
-      request = { ...this.running.request, queued }
+      request = { ...this.running.request, queued, threadId }
     } else {
       const described = describeJournalReaderOperation(operation)
       request = {
@@ -299,7 +306,7 @@ export class ReaderSlot {
         chat: chat === undefined ? described.chat : chat,
         startedAt: Date.now(),
         queued,
-        threadId: workerThreadId(this.worker)
+        threadId
       }
     }
     this.running = { id, queued, request }
