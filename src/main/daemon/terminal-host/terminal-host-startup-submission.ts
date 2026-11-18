@@ -19,19 +19,11 @@ export type StartupSubmissionInputs = {
   reportReadinessEvent: TerminalHostSessionCreateDependencies['reportReadinessEvent']
 }
 
-export async function buildStartupSubmission(
-  command: string,
+/** Records the staged line and turns it into the submission the shell receives. */
+export function submitStagedStartupCommand(
+  staged: StartupCommandStaging,
   inputs: StartupSubmissionInputs
-): Promise<string> {
-  const staged = await stageStartupCommandAsync({
-    command,
-    shellPath: inputs.shellPath,
-    orcaBuiltLine: inputs.orcaBuiltLine
-  })
-  if (!inputs.session.isAlive) {
-    // The exit handler already ran, so it can't remove a script staged after it.
-    void discardStagedStartupCommandAsync(staged)
-  }
+): string {
   inputs.staging.current = staged
   const notice = startupStagingFailureNotice(staged)
   if (notice) {
@@ -49,4 +41,21 @@ export async function buildStartupSubmission(
   return buildStartupCommandSubmission(staged.command, {
     bracketedPasteSafe: inputs.shellReadySupported
   })
+}
+
+/** For the wrapper fallback, which types the launch after readiness has settled. */
+export async function buildStartupSubmission(
+  command: string,
+  inputs: StartupSubmissionInputs
+): Promise<string> {
+  const staged = await stageStartupCommandAsync({
+    command,
+    shellPath: inputs.shellPath,
+    orcaBuiltLine: inputs.orcaBuiltLine
+  })
+  if (!inputs.session.isAlive) {
+    // The exit handler already ran, so it can't remove a script staged after it.
+    void discardStagedStartupCommandAsync(staged)
+  }
+  return submitStagedStartupCommand(staged, inputs)
 }

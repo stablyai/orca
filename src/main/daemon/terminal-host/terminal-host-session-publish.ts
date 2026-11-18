@@ -4,6 +4,7 @@ import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
 import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
 import {
   discardStagedStartupCommandAsync,
+  stageStartupCommand,
   type StartupCommandStaging
 } from '../../../shared/shell/launch/startup-command-staging'
 import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'
@@ -18,6 +19,7 @@ import { shellPathSupportsPtyStartupBarrier } from '../shell-readiness/shell-rea
 import { createStartupCommandFallback } from '../pty-subprocess/shell-wrapper-startup-claim'
 import {
   buildStartupSubmission,
+  submitStagedStartupCommand,
   type StartupSubmissionInputs
 } from './terminal-host-startup-submission'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
@@ -233,9 +235,14 @@ export async function spawnAndPublishSession(
   }
   const buildSubmission = (command: string): Promise<string> =>
     buildStartupSubmission(command, submission)
-  const command = opts.command
-  if (command && startupCommandWritten) {
-    session.writeStartupCommand(await buildSubmission(command))
+  if (startupCommandWritten && opts.command) {
+    // Staged synchronously so the command reserves its barrier slot before any ready marker is read.
+    const staged = stageStartupCommand({
+      command: opts.command,
+      shellPath: subprocess.shellPath,
+      orcaBuiltLine: opts.launchAgent !== undefined
+    })
+    session.writeStartupCommand(submitStagedStartupCommand(staged, submission))
   }
 
   return {
