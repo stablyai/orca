@@ -330,7 +330,7 @@ export function NativeChatNoticeRow({
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
         <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-          {antigravitySignInContent ?? text}
+          {(resolved ? null : antigravitySignInContent) ?? text}
         </p>
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />

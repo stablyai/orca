@@ -5,7 +5,10 @@ import {
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import { isStructuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row-key'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
-import { readAgentJournalTurnOutcome } from '../lifecycle/records/agent-session-turn-record'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../lifecycle/records/agent-session-turn-record'
 import { agentTurnVerdict } from '../../agent-status/lifecycle/agent-turn-outcome'
 
 /** Loaded startup causes and authentication explanations already visible in the transcript. */
@@ -48,7 +51,7 @@ export function agentSessionUnresolvedFailureRows(
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]!
     const { body } = item
-    const turn = body.kind === 'turn' ? body : body.kind === 'status' ? body.turnLifecycle : null
+    const turn = readAgentJournalTurn(body)
     if (
       turn &&
       isRootAgentJournalItem(item) &&
