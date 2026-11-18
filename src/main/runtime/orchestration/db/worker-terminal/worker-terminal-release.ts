@@ -120,6 +120,40 @@ export function settleDeadWorkerTerminalRelease(
   }
 }
 
+/** Releases a settled worker's own, never-requested terminal once its process is proven gone. */
+export function releaseExitedWorkerTerminalInTransaction(
+  database: OrchestrationDb,
+  dispatchId: string
+): void {
+  const resource = database.getWorkerTerminalResourceByOwner(dispatchId)
+  if (resource?.release_state === 'not_requested' && resource.process_incarnation) {
+    releaseDeadWorkerTerminalInTransaction(database, {
+      requestingDispatchId: dispatchId,
+      resourceId: resource.id,
+      processIncarnation: resource.process_incarnation
+    })
+  }
+}
+
+/** One transaction, so a sweep's page wakes Crew readers once rather than once per row. */
+export function settleDeadWorkerTerminalReleases(
+  this: OrchestrationDb,
+  releases: readonly DeadWorkerTerminalRelease[]
+): number {
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    const released = releases.filter(
+      (release) =>
+        releaseDeadWorkerTerminalInTransaction(this, release).release_state === 'released'
+    ).length
+    this.db.exec('COMMIT')
+    return released
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 /** Marks a resource whose process is proven gone released, inside the caller's transaction. */
 export function releaseDeadWorkerTerminalInTransaction(
   database: OrchestrationDb,
@@ -178,11 +212,13 @@ export function releaseDeadWorkerTerminalInTransaction(
 export type WorkerTerminalReleaseMethods = {
   requestWorkerTerminalRelease: typeof requestWorkerTerminalRelease
   settleDeadWorkerTerminalRelease: typeof settleDeadWorkerTerminalRelease
+  settleDeadWorkerTerminalReleases: typeof settleDeadWorkerTerminalReleases
 }
 
 export function attachWorkerTerminalRelease(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     requestWorkerTerminalRelease,
-    settleDeadWorkerTerminalRelease
+    settleDeadWorkerTerminalRelease,
+    settleDeadWorkerTerminalReleases
   })
 }

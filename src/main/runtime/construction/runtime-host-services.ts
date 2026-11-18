@@ -229,7 +229,9 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     hasRequestedReleases: () =>
       (this.getExistingOrchestrationDb()?.listWorkerTerminalReleaseBacklog(1).length ?? 0) > 0,
     reconcileRequestedReleases: () =>
-      reconcileRequestedWorkerTerminalReleases(this).then(() => sweepStoppedWorkerTerminals(this)),
+      reconcileRequestedWorkerTerminalReleases(this).then(() =>
+        sweepStoppedWorkerTerminals(this, () => this.legacyWorkerRecovery.isStopped())
+      ),
     reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),
     updateRetry: (plan, deferredDispatchIds, options) =>
       this.updateLegacyWorkerTerminalRecoveryRetry(plan, deferredDispatchIds, options)

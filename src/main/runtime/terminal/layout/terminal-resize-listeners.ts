@@ -4,6 +4,7 @@ import { observeStructuredWorker } from '../../orchestration/terminal-authority/
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 import {
@@ -71,7 +72,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       : { reason: 'exited' as const, cause: errorContext }
     const settledLocally = this.failActiveDispatchAndReport(handle, paneKey ?? undefined, {
       error: errorContext,
-      options: { workerProcessExited: true, terminationReason: cause.kind },
+      options: { workerProcessExited: true, terminalExited: true, terminationReason: cause.kind },
       processExited: true,
       stop: { ...stop, lastOutput }
     })
@@ -205,9 +206,11 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     return this.terminalList.list(worktreeSelector, limit, opts)
   }
 
+  /** `inventories`, shared across one sweep's calls, lists each host once instead of once per call. */
   async inspectTerminalProcessIncarnationLiveness(
     processIncarnation: string,
-    serializedHostScope: string | null
+    serializedHostScope: string | null,
+    inventories?: Map<string, Promise<readonly PtyProcessInfo[] | null>>
   ): Promise<'live' | 'exited' | 'unverifiable'> {
     const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
     if (structuredSessionId) {
@@ -215,21 +218,21 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       return observeStructuredWorker({ sessionId: structuredSessionId }).status
     }
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
-    if (!hostScope || !this.ptyController?.listProcesses) {
+    const controller = this.ptyController
+    if (!hostScope || !controller?.listProcesses) {
       return 'unverifiable'
     }
-    const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(
-        hostScope.kind === 'ssh'
-          ? toSshExecutionHostId(hostScope.targetId)
-          : LOCAL_EXECUTION_HOST_ID
-      ),
-      PTY_CONTROLLER_LIST_TIMEOUT_MS
-    )
-    if (!listed.ok) {
-      return 'unverifiable'
+    const hostId =
+      hostScope.kind === 'ssh' ? toSshExecutionHostId(hostScope.targetId) : LOCAL_EXECUTION_HOST_ID
+    let listing = inventories?.get(hostId)
+    if (!listing) {
+      listing = withTimeoutResult(controller.listProcesses(hostId), PTY_CONTROLLER_LIST_TIMEOUT_MS).then(
+        (listed) => (listed.ok ? listed.value : null)
+      )
+      inventories?.set(hostId, listing)
     }
-    return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
+    const sessions = await listing
+    return sessions ? classifyWorkerTerminalProcessIncarnation(processIncarnation, sessions) : 'unverifiable'
   }
 
   protected getTerminalTopologyRevision(worktreeId: string): number {

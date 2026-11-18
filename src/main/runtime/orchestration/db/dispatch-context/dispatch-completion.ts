@@ -1,4 +1,5 @@
 import type { TaskStatus, DispatchContextRow } from '../orchestration-records'
+import { releaseExitedWorkerTerminalInTransaction } from '../worker-terminal/worker-terminal-release'
 import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from './dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -108,7 +109,13 @@ export function failDispatch(
   this: OrchestrationDb,
   ctxId: string,
   error: string,
-  options: { workerProcessExited?: boolean; terminationReason?: string; workerStage?: string } = {}
+  options: {
+    workerProcessExited?: boolean
+    /** The worker's terminal process itself exited; a lost agent session in a live pane does not count. */
+    terminalExited?: boolean
+    terminationReason?: string
+    workerStage?: string
+  } = {}
 ): DispatchContextRow | undefined {
   // Reserve the WAL writer before reading to prevent SQLITE_BUSY_SNAPSHOT.
   const transaction = beginLifecycleWriteTransaction(this.db, FAIL_DISPATCH_SAVEPOINT)
@@ -182,6 +189,9 @@ export function failDispatch(
           updated_at: new Date().toISOString()
         }
       })
+      if (options.terminalExited) {
+        releaseExitedWorkerTerminalInTransaction(this, ctxId)
+      }
     }
 
     // Retry as ready: pending tasks are promoted only when a dependency completes.

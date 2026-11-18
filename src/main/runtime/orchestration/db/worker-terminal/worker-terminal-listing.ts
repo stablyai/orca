@@ -49,8 +49,8 @@ export function listWorkerTerminalReleaseBacklog(
     .all(limit ?? -1) as WorkerTerminalResourceRow[]
 }
 
-/** Older builds settled a stop without releasing its terminal; these rows pin their Run until proven dead. */
-export function listStoppedWorkerTerminalsStillOwned(
+/** Older builds settled a stop or exit without releasing its terminal; these rows pin their Run. */
+export function listSettledWorkerTerminalsStillOwned(
   this: OrchestrationDb,
   afterRowid: number,
   limit: number
@@ -60,7 +60,7 @@ export function listStoppedWorkerTerminalsStillOwned(
     .prepare(
       `SELECT res.rowid AS row_id, res.* FROM worker_terminal_resources res
         JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
-        WHERE res.rowid > ? AND w.state IN ('stopped', 'abandoned')
+        WHERE res.rowid > ? AND w.state IN ('succeeded', 'failed', 'stopped', 'abandoned')
           AND res.ownership_state = 'owned' AND res.release_state = 'not_requested'
           AND res.process_incarnation IS NOT NULL
         ORDER BY res.rowid LIMIT ?`
@@ -302,7 +302,7 @@ export type WorkerTerminalListingMethods = {
   getWorkerAutoCloseState: typeof getWorkerAutoCloseState
   keepWorkerTerminalOpen: typeof keepWorkerTerminalOpen
   listWorkerTerminalReleaseBacklog: typeof listWorkerTerminalReleaseBacklog
-  listStoppedWorkerTerminalsStillOwned: typeof listStoppedWorkerTerminalsStillOwned
+  listSettledWorkerTerminalsStillOwned: typeof listSettledWorkerTerminalsStillOwned
   listWorkerTerminalResources: typeof listWorkerTerminalResources
   getWorkerTerminalListingSnapshot: typeof getWorkerTerminalListingSnapshot
   getWorkerTerminalOrderingKey: typeof getWorkerTerminalOrderingKey
@@ -318,7 +318,7 @@ export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
     getWorkerAutoCloseState,
     keepWorkerTerminalOpen,
     listWorkerTerminalReleaseBacklog,
-    listStoppedWorkerTerminalsStillOwned,
+    listSettledWorkerTerminalsStillOwned,
     listWorkerTerminalResources,
     getWorkerTerminalListingSnapshot,
     getWorkerTerminalOrderingKey,
