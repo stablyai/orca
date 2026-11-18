@@ -38,7 +38,11 @@ export const AssignmentResponseSchema = z
     // Other origins that reach the same edge host session as cellUrl (the edge's own URL and a
     // front door), in order of preference; never equal to cellUrl. Sent only when the request carried
     // RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES in RELAY_HOST_CAPABILITIES_HEADER.
-    alternateCellUrls: z.array(CanonicalHttpsOriginSchema).min(1).max(2).optional()
+    alternateCellUrls: z.array(CanonicalHttpsOriginSchema).min(1).max(2).optional(),
+    // The front door origin this answer routes through, which also serves POST
+    // /v1/desktop/auth/refresh and /v1/desktop/auth/relay-token; a second origin for token renewal.
+    // Sent only when the request carried RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH.
+    authOrigin: CanonicalHttpsOriginSchema.optional()
   })
   .strict()
 

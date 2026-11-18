@@ -78,11 +78,20 @@ export type EdgeControlFlags = {
   // nobody gets it. A bad value drops only this key (reported in ignoredKeys) and keeps the last
   // applied one. An older director ignores the key (ignoredKeys) and never sends the field.
   alternates?: EdgeAlternates
+  // Whether a host answered through an allowed front door gets AssignmentResponse.authOrigin (that
+  // front door's origin), so the desktop can renew its relay token through it when the auth domain
+  // is unreachable. Only an ask carrying the front-door-auth-v1 host capability gets the field.
+  // 'off' (also when absent): nobody. 'on': every capable host whose answered cellUrl is in
+  // ORCA_RELAY_EDGE_FRONT_DOOR_URLS. A bad value drops only this key (reported in ignoredKeys) and
+  // keeps the last applied one. An older director ignores the key and never sends the field.
+  frontDoorAuth?: EdgeFrontDoorAuth
 }
 
 export type EdgeCohortRegion = 'ask' | 'host'
 
 export type EdgeAlternates = 'off' | 'listed' | 'country'
+
+export type EdgeFrontDoorAuth = 'off' | 'on'
 
 export type EdgeFrontDoorFlag = { url: string; countries?: string[]; hosts?: string[] }
 
@@ -105,10 +114,12 @@ const EdgeControlFlagsSchema = z.object({
   regionExcludeUnknownCountry: z.partialRecord(regionKey, z.boolean()).optional(),
   frontDoor: z.unknown().optional(),
   cohortRegion: z.unknown().optional(),
-  alternates: z.unknown().optional()
+  alternates: z.unknown().optional(),
+  frontDoorAuth: z.unknown().optional()
 })
 const EdgeCohortRegionSchema = z.enum(['ask', 'host'])
 const EdgeAlternatesSchema = z.enum(['off', 'listed', 'country'])
+const EdgeFrontDoorAuthSchema = z.enum(['off', 'on'])
 const EdgeFrontDoorSchema = z
     .object({
       // A bare https origin; that it is an allowed front door is checked against the boot list.
@@ -143,7 +154,7 @@ const EdgeControlObjectSchema = z.object({
 // voids the whole object, so the last applied flags stay.
 export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => parseEdgeControlOver(body, undefined)
 
-// As parseEdgeControl, with the flags applied now: a bad frontDoor (cohortRegion, alternates) keeps the last good one (as a bad
+// As parseEdgeControl, with the flags applied now: a bad frontDoor (cohortRegion, alternates, frontDoorAuth) keeps the last good one (as a bad
 // file keeps the last applied flags), reported in ignoredKeys; the rest of the object applies.
 export function parseEdgeControlOver(
   body: unknown,
@@ -167,7 +178,8 @@ export function parseEdgeControlOver(
     regionExcludeUnknownCountry,
     frontDoor: rawFrontDoor,
     cohortRegion: rawCohortRegion,
-    alternates: rawAlternates
+    alternates: rawAlternates,
+    frontDoorAuth: rawFrontDoorAuth
   } = parsed.data.flags
   const frontDoor = rawFrontDoor === undefined ? undefined : parseFrontDoor(rawFrontDoor)
   if (frontDoor === null) { ignoredKeys.push('frontDoor') }
@@ -178,6 +190,10 @@ export function parseEdgeControlOver(
   const alternates = rawAlternates === undefined ? undefined : EdgeAlternatesSchema.safeParse(rawAlternates)
   if (alternates?.success === false) { ignoredKeys.push('alternates') }
   const keptAlternates = alternates === undefined ? undefined : alternates.success ? alternates.data : previous?.alternates
+  const frontDoorAuth = rawFrontDoorAuth === undefined ? undefined : EdgeFrontDoorAuthSchema.safeParse(rawFrontDoorAuth)
+  if (frontDoorAuth?.success === false) { ignoredKeys.push('frontDoorAuth') }
+  const keptFrontDoorAuth =
+    frontDoorAuth === undefined ? undefined : frontDoorAuth.success ? frontDoorAuth.data : previous?.frontDoorAuth
   ignoredKeys.sort()
   return {
     flags: {
@@ -189,7 +205,8 @@ export function parseEdgeControlOver(
       ...(regionExcludeUnknownCountry === undefined ? {} : { regionExcludeUnknownCountry }),
       ...(keptFrontDoor === undefined ? {} : { frontDoor: keptFrontDoor }),
       ...(keptCohortRegion === undefined ? {} : { cohortRegion: keptCohortRegion }),
-      ...(keptAlternates === undefined ? {} : { alternates: keptAlternates })
+      ...(keptAlternates === undefined ? {} : { alternates: keptAlternates }),
+      ...(keptFrontDoorAuth === undefined ? {} : { frontDoorAuth: keptFrontDoorAuth })
     },
     ignoredKeys
   }
