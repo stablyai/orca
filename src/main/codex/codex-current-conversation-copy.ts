@@ -30,7 +30,7 @@ export async function copyCurrentCodexConversation(
     ...(input.signal ? [input.signal] : [])
   ])
   const home = requireLegacyAgentSessionAccountHome(record.accountHome).path
-  let dispatched = false
+  let dispatched = Boolean(input.copiedSessionId)
   try {
     return await runCodexProviderAppServer(
       record,
@@ -40,29 +40,35 @@ export async function copyCurrentCodexConversation(
       },
       { timeoutMs: 60_000, signal, experimentalApi: true },
       async (rpc, cwd) => {
-        const metadata = asRecord(
-          asRecord(
-            await rpc.request('thread/read', {
-              threadId: input.providerSessionId,
-              includeTurns: false
-            })
-          )?.thread
-        )
-        if (metadata?.id !== input.providerSessionId) {
-          throw new AgentConversationCopyError('Codex could not verify the source chat.')
+        let fork: Record<string, unknown> | null = input.copiedSessionId
+          ? { id: input.copiedSessionId }
+          : null
+        if (!fork) {
+          const metadata = asRecord(
+            asRecord(
+              await rpc.request('thread/read', {
+                threadId: input.providerSessionId,
+                includeTurns: false
+              })
+            )?.thread
+          )
+          if (metadata?.id !== input.providerSessionId) {
+            throw new AgentConversationCopyError('Codex could not verify the source chat.')
+          }
+          signal.throwIfAborted()
+          rpc.signal?.throwIfAborted()
+          dispatched = true
+          fork = asRecord(
+            asRecord(
+              await rpc.request('thread/fork', {
+                threadId: input.providerSessionId,
+                excludeTurns: true,
+                cwd,
+                ...codexForkModelOverrides(record.options?.model, metadata)
+              })
+            )?.thread
+          )
         }
-        signal.throwIfAborted()
-        dispatched = true
-        const fork = asRecord(
-          asRecord(
-            await rpc.request('thread/fork', {
-              threadId: input.providerSessionId,
-              excludeTurns: true,
-              cwd,
-              ...codexForkModelOverrides(record.options?.model, metadata)
-            })
-          )?.thread
-        )
         if (
           typeof fork?.id !== 'string' ||
           !fork.id.trim() ||
@@ -70,7 +76,10 @@ export async function copyCurrentCodexConversation(
         ) {
           throw new Error('Codex did not confirm an independent conversation.')
         }
+        let remembered = false
         try {
+          await input.onCopyConfirmed?.(fork.id)
+          remembered = Boolean(input.onCopyConfirmed)
           try {
             await rpc.request('thread/goal/clear', { threadId: fork.id, origin: 'user' })
           } catch (error) {
@@ -101,14 +110,20 @@ export async function copyCurrentCodexConversation(
         } catch (error) {
           let archived = false
           try {
-            await rpc.request('thread/archive', { threadId: fork.id }, { timeoutMs: 5_000 })
-            archived = true
+            if (!remembered) {
+              await rpc.request('thread/archive', { threadId: fork.id }, { timeoutMs: 5_000 })
+              archived = true
+            }
           } catch {
             // Keep the confirmed id recoverable even if cleanup also loses its reply.
           }
           throw new AgentConversationCopyStartError(
             `Codex created chat ${fork.id}, but could not finish opening it. ${
-              archived ? 'The copy is in archived history.' : 'Check this copy in Codex history.'
+              remembered
+                ? 'Retry will reopen this saved copy.'
+                : archived
+                  ? 'The copy is in archived history.'
+                  : 'Check this copy in Codex history.'
             } ${error instanceof Error ? error.message : 'Copy preparation failed.'}`
           )
         }

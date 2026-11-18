@@ -124,7 +124,14 @@ function copy(
   selected = `${SOURCE}:a1`,
   settled = true,
   turnId?: string,
-  options: { signal?: AbortSignal; selectedItemId?: string; model?: string; current?: true } = {}
+  options: {
+    signal?: AbortSignal
+    selectedItemId?: string
+    model?: string
+    current?: true
+    copiedSessionId?: string
+    onCopyConfirmed?: (sessionId: string) => Promise<void>
+  } = {}
 ) {
   return copyCodexConversation(
     {
@@ -144,6 +151,8 @@ function copy(
       },
       providerSessionId: SOURCE,
       signal: options.signal,
+      copiedSessionId: options.copiedSessionId,
+      onCopyConfirmed: options.onCopyConfirmed,
       title: 'Source fork',
       accountHome: { variable: 'CODEX_HOME', path: root },
       ...(options.current ? { current: true as const } : {}),
@@ -344,3 +353,46 @@ it.each(['missing-rollout', 'clear-failed', 'archive-unconfirmed'])(
     ])
   }
 )
+
+it('reopens a receipt-confirmed copy without reading or forking the source again', async () => {
+  state.paths.set(CHILD, join(root, 'sessions', 'child.jsonl'))
+  state.request.mockImplementation(async (method, params) => {
+    if (method !== 'thread/goal/clear') {
+      throw new Error('must not create another snapshot')
+    }
+    expect(params).toEqual({ threadId: CHILD, origin: 'user' })
+    return {}
+  })
+  await expect(
+    copy(undefined, false, undefined, { current: true, copiedSessionId: CHILD })
+  ).resolves.toEqual({
+    sessionId: CHILD,
+    filePath: join(root, 'sessions', 'child.jsonl')
+  })
+  expect(state.request).toHaveBeenCalledWith('thread/goal/clear', {
+    threadId: CHILD,
+    origin: 'user'
+  })
+})
+
+it('confirms the native child before optional copy preparation can fail', async () => {
+  const confirmed: string[] = []
+  state.request.mockImplementation(async (method) => {
+    if (method === 'thread/read') {
+      return { thread: { id: SOURCE } }
+    }
+    if (method === 'thread/fork') {
+      return { thread: { id: CHILD } }
+    }
+    throw new Error('goal clear failed')
+  })
+  await expect(
+    copy(undefined, false, undefined, {
+      current: true,
+      onCopyConfirmed: async (sessionId) => {
+        confirmed.push(sessionId)
+      }
+    })
+  ).rejects.toThrow('Retry will reopen this saved copy.')
+  expect(confirmed).toEqual([CHILD])
+})

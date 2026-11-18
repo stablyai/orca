@@ -1,3 +1,4 @@
+import { copyStructuredAgentSessionCurrentContext } from './structured-agent-session-current-copy'
 import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { agentSessionExecutionLocationsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -11,6 +12,7 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
 
 export async function prepareStructuredAgentSessionCurrentFork(input: {
   host: StructuredAgentSessionHost
+  callerKey?: string
   forkFrom: { sessionId: string; current: true; permission: 'inherit' | 'read-only' }
   agent: AgentSessionAttachParams['agent']
   location: AgentSessionAttachParams['location']
@@ -44,6 +46,11 @@ export async function prepareStructuredAgentSessionCurrentFork(input: {
       reason: 'requestMalformed'
     })
   }
+  if (!input.callerKey) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'requestMalformed'
+    })
+  }
   const source = host.deps.store.getRecord(forkFrom.sessionId) ?? fail()
   const context = activeProviderContext(source)
   const current = () => {
@@ -70,18 +77,25 @@ export async function prepareStructuredAgentSessionCurrentFork(input: {
     return next.head!
   }
   const handle = current().handle
-  const copy = await host.deps.adapter.copyConversation({
-    current: true,
-    record: source,
-    identity: {
-      sessionId: source.sessionId,
-      agent: input.agent,
-      workspaceId: source.location.workspaceId,
-      hostId: source.location.executionHostId,
-      providerHandle: handle
-    },
-    providerSessionId: handle.nativeId,
-    accountHome: source.accountHome
+  const copy = await copyStructuredAgentSessionCurrentContext({
+    store: host.deps.store,
+    callerKey: input.callerKey,
+    envelope: input.envelope,
+    permission: forkFrom.permission,
+    copy: (copyInput) => host.deps.adapter.copyConversation!(copyInput),
+    source: {
+      current: true,
+      record: source,
+      identity: {
+        sessionId: source.sessionId,
+        agent: input.agent,
+        workspaceId: source.location.workspaceId,
+        hostId: source.location.executionHostId,
+        providerHandle: handle
+      },
+      providerSessionId: handle.nativeId,
+      accountHome: source.accountHome
+    }
   })
   current()
   if (!copy.filePath || !copy.sessionId.trim() || copy.sessionId === handle.nativeId) {

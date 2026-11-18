@@ -4,6 +4,10 @@ import type { AgentSessionAccountHome } from '../../../../shared/agent-session/l
 
 export type StructuredAgentSessionConversationCopyInput = {
   current?: true
+  /** A durable native-copy receipt reopens this copy instead of forking again. */
+  copiedSessionId?: string
+  /** Persist the confirmed child before optional Goal or transcript I/O. */
+  onCopyConfirmed?: (sessionId: string) => Promise<void>
   record?: AgentSessionRecord
   checkpoint?: {
     selectedItemId: string
