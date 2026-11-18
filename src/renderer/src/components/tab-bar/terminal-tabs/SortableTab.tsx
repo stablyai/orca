@@ -174,7 +174,7 @@ export default function SortableTab({
   const tabTitle = tab.customTitle ?? tab.title
   const sideChatName = (
     <span className="flex min-w-0 items-center gap-1">
-      <span className="hidden shrink-0 rounded-sm border border-border bg-muted px-1 text-3xs font-medium text-muted-foreground @min-[10rem]/tab:inline-flex">
+      <span className="hidden shrink-0 rounded-sm border border-border bg-muted px-1 text-3xs font-medium text-muted-foreground @min-[10rem]/tab:inline-flex group-data-[side-chat-only=true]/side-chat-pane:hidden">
         {t('components.native-chat.currentSideChat.mark', 'btw')}
       </span>
       <span className="min-w-0 truncate">{displayTitle}</span>

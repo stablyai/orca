@@ -33,7 +33,10 @@ export async function copyCurrentCodexConversation(
   try {
     return await runCodexProviderAppServer(
       record,
-      invocation,
+      {
+        ...invocation,
+        resolveLaunchArgs: () => record.launchArgs ?? invocation.resolveLaunchArgs()
+      },
       { timeoutMs: 60_000, signal, experimentalApi: true },
       async (rpc, cwd) => {
         const metadata = asRecord(

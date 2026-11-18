@@ -24,7 +24,7 @@ export function CurrentSideChatMenu({ worktreeId, tabId }: { worktreeId: string;
   )
   const statuses = useAppStore((state) => state.runtimeStatusByEnvironmentId)
   useHostStructuredAgentsVersion()
-  const host = tab ? structuredAgentSessionOwnerForTab(useAppStore.getState(), tab) : null
+  const host = useAppStore((state) => (tab ? structuredAgentSessionOwnerForTab(state, tab) : null))
   const target = structuredAgentSessionTargetForHost(host)
   const support = useStructuredAgentSessionHostCapabilityState(
     target,

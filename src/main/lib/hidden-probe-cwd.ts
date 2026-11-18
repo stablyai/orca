@@ -1,4 +1,5 @@
 import { mkdirSync, realpathSync, statSync } from 'node:fs'
+import { mkdir, realpath, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -22,6 +23,18 @@ export function resolveHiddenProbeCwd(options?: { userDataPath?: string | null }
   mkdirSync(cwd, { recursive: true })
   const realCwd = realpathSync(cwd)
   if (isRootLikePath(realCwd) || !statSync(realCwd).isDirectory()) {
+    throw new Error(`Hidden probe cwd is not a safe directory: ${realCwd}`)
+  }
+  return realCwd
+}
+
+export async function resolveHiddenProbeCwdAsync(options?: {
+  userDataPath?: string | null
+}): Promise<string> {
+  const cwd = join(resolveUserDataRoot(options?.userDataPath), HIDDEN_PROBE_CWD_DIR)
+  await mkdir(cwd, { recursive: true })
+  const realCwd = await realpath(cwd)
+  if (isRootLikePath(realCwd) || !(await stat(realCwd)).isDirectory()) {
     throw new Error(`Hidden probe cwd is not a safe directory: ${realCwd}`)
   }
   return realCwd

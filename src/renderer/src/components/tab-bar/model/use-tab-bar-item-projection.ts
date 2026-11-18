@@ -21,6 +21,7 @@ export type TabBarItemProjection = {
   /** The active item's unified tab id; resolved here so strip re-renders don't search every tab. */
   activeUnifiedTabId: string | null
   tabStripLayoutKey: string
+  sideChatOnly?: boolean
 }
 
 export function useTabBarItemProjection({
@@ -178,6 +179,11 @@ export function useTabBarItemProjection({
     dropIndicatorByVisibleId,
     activeVisibleTabId,
     activeUnifiedTabId,
-    tabStripLayoutKey
+    tabStripLayoutKey,
+    sideChatOnly:
+      orderedItems.length > 0 &&
+      orderedItems.every(
+        (item) => item.type === 'agent-session' && chatNames.get(item.data)?.sideChat === true
+      )
   }
 }

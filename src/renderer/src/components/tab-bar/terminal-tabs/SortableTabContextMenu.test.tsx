@@ -15,6 +15,8 @@ const storeMock = vi.hoisted(() => {
   return { state }
 })
 
+vi.mock('../session-actions/CurrentSideChatMenu', () => ({ CurrentSideChatMenu: () => null }))
+
 vi.mock('@/lib/keyboard/useShortcutLabel', () => ({
   formatShortcutLabel: () => '⌘D',
   useOptionalShortcutLabel: () => '⌘D'
