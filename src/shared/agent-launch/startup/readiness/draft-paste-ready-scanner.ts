@@ -1,5 +1,9 @@
 // OpenCode show-cursor follows composer mount ~2s after paste mode; mimo-code shares this signal.
 import { CURSOR_SHOW_SEQUENCE as DECTCEM_SHOW_CURSOR } from '../../../terminal/protocol/escape/terminal-cursor-restore'
+import {
+  SYNCHRONIZED_OUTPUT_END_SEQUENCE,
+  SYNCHRONIZED_OUTPUT_START_SEQUENCE
+} from '../../../terminal/protocol/escape/terminal-synchronized-output-scan'
 import type { DraftPasteReadySignal, TuiAgentConfig } from '../../catalog/tui-agent-config-types'
 import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
 import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
@@ -9,12 +13,12 @@ const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
 // Grok ❯ also appears in shell prompts: require alt screen. Legacy Windows > is too generic, so retain quiet/timeout fallback.
 const GROK_COMPOSER_PROMPT = '❯'
-// ZCode’s locale-independent round composer corner differs from square modal corners; anchor alt screen because powerline shell prompts also draw ╭.
+// ZCode’s round corner (the official composer's; npm zcode-app-cli's header card, drawn in the composer's frame) differs from
+// square modal corners; anchor a screen takeover because powerline shell prompts also draw ╭.
 const ZCODE_COMPOSER_BOX_CORNER = '╭'
-// The npm zcode-app-cli redistribution of the ZCode Desktop runtime renders inline instead of taking the alternate
-// screen: it clears the pane and the scrollback — which a shell prompt never touches — then draws the same round
-// composer corner. Evidence: zcode-app-cli 3.17.2-45 and 3.18.2-47 (see zcode-app-cli-composer-ready.txt).
-const ZCODE_INLINE_SCREEN_TAKEOVER = '\x1b[2J\x1b[H\x1b[3J'
+// npm zcode-app-cli renders inline: one synchronized frame erases the screen, then paints its ╭ header card and
+// composer. Shells and clear(1) never open such a frame. Evidence: zcode-app-cli-composer-ready.txt (3.18.2-47).
+const ZCODE_INLINE_FRAME_START = `${SYNCHRONIZED_OUTPUT_START_SEQUENCE}\x1b[2J`
 // Why: Claude Code's prompt-input mode indicator is `figures.pointer` + NBSP; its startup menus
 // (trust, theme) draw the same pointer followed by a cursor move, so the NBSP means the composer.
 const CLAUDE_COMPOSER_PROMPT = '❯\u00a0'
@@ -34,16 +38,21 @@ const COPILOT_COMPOSER_READY = new RegExp(`─{8}${SGR_RUN}\\r*\\n${SGR_RUN}❯`
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
-/** A takeover that arms `marker`: its bytes enter the takeover and, for modes the agent can leave, its bytes revoke it. */
-type MarkerAnchorVariant = {
-  /** Bytes that must precede `marker` for it to count. */
-  enter: string
-  /** Bytes that revoke `enter` again, or null when the takeover is sticky until the stream ends. */
-  exit: string | null
+/** A takeover that arms `marker` from `enter` until `exit`; re-entry re-arms. */
+type MarkerAnchorVariant = { enter: string; exit: string }
+
+/** Per-variant memory: whether its takeover holds, the marker window it owns, and its split-anchor carry. */
+type AnchorScanState = MarkerAnchorVariant & {
+  marker: string | RegExp
+  /** Longest anchor minus one: rejoins a split anchor; a shorter exit fits only while disarmed, where it is ignored. */
+  carryChars: number
+  sawMarkerAnchor: boolean
+  postAnchorRecent: string
+  anchorCarry: string
 }
 
 type DraftPasteReadySignalSpec = {
-  /** Takeover variants that arm `marker`, tried in order; the first to arm owns the marker until its exit revokes it. Null when there is no marker. */
+  /** Takeovers that each arm `marker` independently; null when there is no marker. */
   markerAnchors: readonly MarkerAnchorVariant[] | null
   /** Composer-ready marker, or null for signals that only use the quiet window. */
   marker: string | RegExp | null
@@ -96,11 +105,9 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
   },
   'zcode-composer-prompt': {
     markerAnchors: [
-      // The official CLI takes the alternate screen.
       { enter: DECSET_ALT_SCREEN, exit: DECRST_ALT_SCREEN },
-      // zcode-app-cli renders inline and takes over with the scrollback-wiping clear instead; sticky because
-      // exiting the agent revokes nothing the pane would re-arm for a shell.
-      { enter: ZCODE_INLINE_SCREEN_TAKEOVER, exit: null }
+      // A wipe holds no mode, so only the frame it opens may draw ╭.
+      { enter: ZCODE_INLINE_FRAME_START, exit: SYNCHRONIZED_OUTPUT_END_SEQUENCE }
     ],
     marker: ZCODE_COMPOSER_BOX_CORNER,
     // ZCode banner animates indefinitely; keep quiet fallback for inline builds whose alt-screen marker never arms.
@@ -126,9 +133,6 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     quietAnchor: DECSET_BRACKETED_PASTE
   }
 }
-
-/** Longest anchor sequence minus one — the carry needed to rejoin one split across chunks. */
-const ANCHOR_CARRY_CHARS = 7
 
 /** Whether the signal has a composer marker, rather than only a quiet window after its anchor. */
 export function draftPasteReadySignalHasMarker(readySignal: DraftPasteReadySignal): boolean {
@@ -178,7 +182,7 @@ function isSingleSignal(signal: DraftPasteReadySignal): signal is SingleSignal {
 function createSingleSignalScanner(readySignal: SingleSignal): {
   observe: (data: string) => DraftPasteReadyScanResult
 } {
-  let recent = ''
+  let quietCarry = ''
   let sawQuietAnchor = false
 
   const {
@@ -187,48 +191,42 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
     quietAnchor
   } = DRAFT_PASTE_READY_SIGNALS[readySignal]
 
-  /** Per-variant anchor memory: the mode state, the marker search window it owns, and its split-anchor carry. */
-  type AnchorScanState = {
-    sawMarkerAnchor: boolean
-    postAnchorRecent: string
-    anchorCarry: string
-  }
-  const anchorStates: readonly AnchorScanState[] | null =
-    markerAnchors !== null
-      ? markerAnchors.map(() => ({
+  const anchorStates: AnchorScanState[] =
+    signalMarker === null
+      ? []
+      : (markerAnchors ?? []).map((variant) => ({
+          ...variant,
+          marker: signalMarker,
+          carryChars: Math.max(variant.enter.length, variant.exit.length) - 1,
           sawMarkerAnchor: false,
           postAnchorRecent: '',
           anchorCarry: ''
         }))
-      : null
 
-  /** Track one variant's revocable anchor in stream order so markers count only while the mode is held; exit revokes and re-entry re-arms. */
-  const scanRevocableAnchorSegments = (
-    state: AnchorScanState,
-    window: string,
-    carriedLength: number,
-    anchor: string,
-    end: string,
-    marker: string | RegExp
-  ): boolean => {
+  /** Track one variant's anchor in stream order so markers count only while it holds; exit revokes and re-entry re-arms. */
+  const scanAnchorVariant = (state: AnchorScanState, data: string): boolean => {
+    // Carry only split-anchor bytes so prior output cannot create a second enter/leave transition.
+    const carriedLength = state.anchorCarry.length
+    const window = state.anchorCarry + data
+    state.anchorCarry = window.slice(-state.carryChars)
     let cursor = 0
     while (cursor < window.length) {
       if (!state.sawMarkerAnchor) {
-        const enterIndex = window.indexOf(anchor, cursor)
+        const enterIndex = window.indexOf(state.enter, cursor)
         if (enterIndex === -1) {
           return false
         }
         state.sawMarkerAnchor = true
         state.postAnchorRecent = ''
-        cursor = enterIndex + anchor.length
+        cursor = enterIndex + state.enter.length
         continue
       }
-      const leaveIndex = window.indexOf(end, cursor)
+      const leaveIndex = window.indexOf(state.exit, cursor)
       // Carry rejoins anchors only; replaying it into postAnchorRecent could fabricate a marker at the duplicated seam.
       const segmentStart = Math.max(cursor, carriedLength)
       const segment =
         leaveIndex === -1 ? window.slice(segmentStart) : window.slice(segmentStart, leaveIndex)
-      if (containsMarker(state.postAnchorRecent + segment, marker)) {
+      if (containsMarker(state.postAnchorRecent + segment, state.marker)) {
         return true
       }
       if (leaveIndex === -1) {
@@ -237,74 +235,25 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       }
       state.sawMarkerAnchor = false
       state.postAnchorRecent = ''
-      cursor = leaveIndex + end.length
+      cursor = leaveIndex + state.exit.length
     }
-    return false
-  }
-
-  /** One variant's verdict on this chunk; sticky takeovers arm once and never revoke. */
-  const scanAnchorVariant = (
-    state: AnchorScanState,
-    variant: { enter: string; exit: string | null },
-    data: string,
-    combined: string,
-    marker: string | RegExp
-  ): boolean => {
-    if (variant.exit !== null) {
-      // Carry only split-anchor bytes so prior output cannot create a second enter/leave transition.
-      const carriedLength = state.anchorCarry.length
-      const window = state.anchorCarry + data
-      state.anchorCarry = window.slice(-ANCHOR_CARRY_CHARS)
-      return scanRevocableAnchorSegments(
-        state,
-        window,
-        carriedLength,
-        variant.enter,
-        variant.exit,
-        marker
-      )
-    }
-    if (!state.sawMarkerAnchor) {
-      const anchorIndex = combined.indexOf(variant.enter)
-      if (anchorIndex === -1) {
-        return false
-      }
-      state.sawMarkerAnchor = true
-      const postAnchorChunk = combined.slice(anchorIndex + variant.enter.length)
-      if (containsMarker(postAnchorChunk, marker)) {
-        return true
-      }
-      state.postAnchorRecent = postAnchorChunk.slice(-512)
-      return false
-    }
-    if (containsMarker(state.postAnchorRecent + data, marker)) {
-      return true
-    }
-    state.postAnchorRecent = (state.postAnchorRecent + data).slice(-512)
     return false
   }
 
   return {
     observe(data: string): DraftPasteReadyScanResult {
-      const combined = recent + data
-      recent = combined.slice(-512)
-      if (!sawQuietAnchor && quietAnchor !== null && combined.includes(quietAnchor)) {
-        sawQuietAnchor = true
+      if (!sawQuietAnchor && quietAnchor !== null) {
+        const window = quietCarry + data
+        sawQuietAnchor = window.includes(quietAnchor)
+        quietCarry = window.slice(-(quietAnchor.length - 1))
       }
-      if (signalMarker !== null && anchorStates !== null && markerAnchors !== null) {
-        for (let index = 0; index < markerAnchors.length; index += 1) {
-          if (
-            scanAnchorVariant(
-              anchorStates[index],
-              markerAnchors[index],
-              data,
-              combined,
-              signalMarker
-            )
-          ) {
-            return { ready: true, armQuietTimer: false }
-          }
-        }
+      // Every variant sees every chunk, so one firing cannot leave another's exit unread.
+      let ready = false
+      for (const state of anchorStates) {
+        ready = scanAnchorVariant(state, data) || ready
+      }
+      if (ready) {
+        return { ready: true, armQuietTimer: false }
       }
       // No quiet anchor for cursor/Codex signals: OpenCode startup silence can last ~3.9s before mount. Wait for markers within caller timeout/process-ownership fallback.
       return { ready: false, armQuietTimer: sawQuietAnchor }

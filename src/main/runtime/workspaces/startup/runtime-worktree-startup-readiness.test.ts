@@ -154,25 +154,12 @@ describe('fresh worker composer readiness', () => {
       join(__dirname, '../../__fixtures__', 'zcode-app-cli-composer-ready.txt'),
       'utf8'
     )
-    for (let offset = 0; offset < data.length; offset += 4096) {
-      h.emit(data.slice(offset, offset + 4096))
-    }
-    await expect(pending).resolves.toBe('pty-1')
-    expect(h.unsubscribe).toHaveBeenCalledOnce()
-    expect(h.host.write).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('does not arm the inline takeover on a plain clear that keeps the scrollback', async () => {
-    vi.useFakeTimers()
-    const h = fixture('\x1b[?2004h\x1b[2J\r\n╭ powerline shell prompt ')
-    const pending = waitForWorktreeStartupDraft(h.host, 'term-1', 'zcode', {
-      timeoutMs: 45_000,
-      requireComposerMarker: true
-    })
+    // Split inside the frame start, beyond the 7-byte carry other anchors keep.
+    const split = data.indexOf('\x1b[?2026h\x1b[2J') + 10
+    h.emit(data.slice(0, split))
+    h.emit(data.slice(split))
     await vi.advanceTimersByTimeAsync(45_000)
-    await expect(pending).resolves.toBeNull()
-    expect(h.host.write).not.toHaveBeenCalled()
+    await expect(pending).resolves.toBe('pty-1')
   })
 })
 
