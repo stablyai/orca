@@ -175,7 +175,7 @@ export function useHostWorktreeCatalog(args: {
       clearConfirmedActiveWorktreeIdentity(pending, confirmed)
     )
     // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
-    setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
+    setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed, false))
     // Sync server pins only without the feed; feed-built lists keep no local pin cache.
     if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
       const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
@@ -229,6 +229,8 @@ export function useHostWorktreeCatalog(args: {
   useEffect(() => {
     if (servers.data && !relaysRuledOut) {
       setServerWorkspaces(servers.data)
+      const confirmed = servers.data.worktrees
+      setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed, true))
     } else if (!relays) {
       // Also drops a previous host's rows when the sidebar switches to one with none stored.
       setServerWorkspaces(NO_SERVER_WORKSPACES)

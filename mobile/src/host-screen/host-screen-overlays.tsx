@@ -152,20 +152,19 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                         icon: Edit3,
                         onPress: () => setRenameTarget(actionTarget)
                       },
-                      // Server sleep is not offered yet; the desktop would sleep its own id.
-                      ...(actionServer.server
-                        ? []
-                        : [
-                            {
-                              id: 'sleep',
-                              label: t('hostScreen.hostScreenOverlays.sleep', 'Sleep'),
-                              icon: Moon,
-                              onPress: () => {
-                                actions.putWorktreeToSleep(actionTarget)
-                                state.setActionTarget(null)
-                              }
-                            }
-                          ]),
+                      {
+                        id: 'sleep',
+                        label: t('hostScreen.hostScreenOverlays.sleep', 'Sleep'),
+                        icon: Moon,
+                        // Like desktop, greyed out with nothing to sleep; older hosts omit the fact.
+                        disabled:
+                          actionTarget.hasHostSidebarActivity === false ||
+                          actionServer.routeHost === null,
+                        onPress: () => {
+                          actions.putWorktreeToSleep(actionTarget)
+                          state.setActionTarget(null)
+                        }
+                      },
                       {
                         id: 'togglePin',
                         label: isWorktreePinned(actionTarget, state.pinnedIds)
