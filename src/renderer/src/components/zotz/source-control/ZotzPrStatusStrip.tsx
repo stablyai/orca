@@ -25,6 +25,7 @@ import {
   zotzPrTone
 } from '../pr-status/zotz-pr-status'
 import { useZotzPrChecksMonitor } from './use-zotz-pr-checks'
+import { ZotzPrStatusIcon } from '../pr-status/ZotzPrStatusIcon'
 import { ZotzPrChecksList, ZotzPrChecksSummary } from './ZotzPrChecksList'
 import { zotzReviewRef } from './ZotzPrChip'
 import type { Repo } from '../../../../../shared/repository/repo-types'
@@ -166,16 +167,17 @@ function StripWithPr({
           aria-expanded={open}
           className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          <span className={cn('shrink-0 font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
+          <ZotzPrStatusIcon status={status} />
+          <span className={cn('min-w-0 truncate font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
             {zotzPrStatusLabel(status, t)}
           </span>
-          <span className="min-w-0 truncate text-muted-foreground">
+          <span className="ml-auto shrink-0">
             <ZotzPrChecksSummary monitor={monitor} />
           </span>
           {open ? (
-            <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
           ) : (
-            <ChevronRight className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
           )}
         </button>
         {canMerge ? (

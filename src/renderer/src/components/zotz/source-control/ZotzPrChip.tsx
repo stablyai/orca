@@ -17,7 +17,8 @@ import {
   zotzPrTone
 } from '../pr-status/zotz-pr-status'
 import { useZotzPrChecksMonitor } from './use-zotz-pr-checks'
-import { ZotzPrChecksList } from './ZotzPrChecksList'
+import { ZotzPrChecksList, ZotzPrChecksSummary } from './ZotzPrChecksList'
+import { ZotzPrStatusIcon } from '../pr-status/ZotzPrStatusIcon'
 import type { ZotzReviewRef } from './zotz-pr-fix-checks'
 
 // Closed for this run only: a new PR or a restart brings the chip back.
@@ -35,18 +36,6 @@ export function zotzReviewRef(found: ZotzWorktreePr): ZotzReviewRef {
     headSha: hosted?.headSha ?? githubPR?.headSha,
     githubRepository: hosted?.githubRepository ?? githubPR?.prRepo ?? undefined
   }
-}
-
-function CiDot({ failed, running }: { failed: number; running: number }): React.JSX.Element {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        'size-2 rounded-full',
-        failed > 0 ? 'bg-destructive' : running > 0 ? 'bg-muted-foreground' : 'bg-status-success'
-      )}
-    />
-  )
 }
 
 function ChipBody({
@@ -87,7 +76,8 @@ function ChipBody({
       </button>
       <span className="text-muted-foreground">{repoName}</span>
       <span className="min-w-0 truncate rounded-sm bg-muted px-1.5 py-0.5 font-mono">{branch}</span>
-      <span className={cn('shrink-0 font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
+      <span className={cn('flex shrink-0 items-center gap-1 font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
+        <ZotzPrStatusIcon status={status} />
         {zotzPrStatusLabel(status, t)}
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-2">
@@ -100,8 +90,7 @@ function ChipBody({
         <Popover>
           <PopoverTrigger asChild>
             <Button type="button" variant="outline" size="xs">
-              <CiDot failed={monitor.counts.failed} running={monitor.counts.running} />
-              CI
+              <ZotzPrChecksSummary monitor={monitor} />
               <ChevronDown className="size-3" />
             </Button>
           </PopoverTrigger>

@@ -20,6 +20,7 @@ import {
   type ZotzPrStatusKind
 } from '../pr-status/zotz-pr-status'
 import { archiveZotzConversation } from './zotz-archive'
+import { ZotzPrStatusIcon } from '../pr-status/ZotzPrStatusIcon'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
 function StatusMark({
@@ -139,6 +140,7 @@ export function ZotzConversationRow({
               <GitPullRequest className="size-3 shrink-0" />
               <span className="shrink-0">#{pr.pr.number}</span>
               <span aria-hidden>·</span>
+              <ZotzPrStatusIcon status={pr.status} className="size-3" />
               <span className={cn('shrink-0 font-medium', ZOTZ_PR_TONE_TEXT[prTone])}>
                 {zotzPrStatusLabel(pr.status, t)}
               </span>

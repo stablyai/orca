@@ -24,6 +24,33 @@ function CheckIcon({ kind }: { kind: ZotzCheckKind }): React.JSX.Element {
   }
 }
 
+function Counter({
+  icon,
+  count,
+  label,
+  className
+}: {
+  icon: React.ReactNode
+  count: number
+  label: string
+  className: string
+}): React.JSX.Element {
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-px font-medium tabular-nums',
+        className
+      )}
+    >
+      {icon}
+      {count}
+    </span>
+  )
+}
+
+/** Failed, running and passed checks as colored counters; zero counts stay out of the way. */
 export function ZotzPrChecksSummary({
   monitor
 }: {
@@ -43,16 +70,31 @@ export function ZotzPrChecksSummary({
     return <span>{t('zotz.prChecks.none', 'No checks on this pull request')}</span>
   }
   return (
-    <span className="flex items-center gap-x-2 whitespace-nowrap">
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
       {counts.failed > 0 ? (
-        <span className="font-medium text-destructive">
-          {t('zotz.prChecks.failed', '{{count}} failed', { count: counts.failed })}
-        </span>
+        <Counter
+          icon={<CircleX className="size-3" />}
+          count={counts.failed}
+          label={t('zotz.prChecks.failed', '{{count}} failed', { count: counts.failed })}
+          className="text-destructive"
+        />
       ) : null}
       {counts.running > 0 ? (
-        <span>{t('zotz.prChecks.running', '{{count}} running', { count: counts.running })}</span>
+        <Counter
+          icon={<LoadingSpinner className="size-3" />}
+          count={counts.running}
+          label={t('zotz.prChecks.running', '{{count}} running', { count: counts.running })}
+          className="text-zotz-working-wave"
+        />
       ) : null}
-      <span>{t('zotz.prChecks.passed', '{{count}} passed', { count: counts.passed })}</span>
+      {counts.passed > 0 ? (
+        <Counter
+          icon={<CircleCheck className="size-3" />}
+          count={counts.passed}
+          label={t('zotz.prChecks.passed', '{{count}} passed', { count: counts.passed })}
+          className="text-status-success"
+        />
+      ) : null}
     </span>
   )
 }
