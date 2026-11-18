@@ -1,9 +1,5 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
-import {
-  pollCodexTranscriptStatus,
-  readCodexTranscriptPoll,
-  type CodexTranscriptPollReads
-} from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
+import { ServerCodexRolloutTail } from './server-codex-rollout-tail'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   hasPendingAgentResultText,
@@ -16,16 +12,14 @@ import {
   museLogOffset,
   nextMusePollDelay,
   shouldPollHookTranscript,
-  hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
-import { codexReplayLeftTranscriptWork } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
   ASSISTANT_MESSAGE_RETRY_MS,
-  CODEX_SUBAGENT_POLL_MS
+  TRANSCRIPT_POLL_MS
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
 
@@ -48,9 +42,23 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   })
 
   private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
-    CODEX_SUBAGENT_POLL_MS,
-    (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
+    TRANSCRIPT_POLL_MS,
+    (paneKey, poll) => this.runTranscriptPoll(paneKey, poll),
+    (paneKey, fileName) => this.codexTail.follower.noteWrite(paneKey, fileName)
   )
+
+  private readonly codexTail = new ServerCodexRolloutTail<TranscriptPoll>({
+    state: this.state,
+    env: () => this.env,
+    listening: () => this.server !== null && this.server !== undefined,
+    scheduler: () => this.transcriptPollScheduler,
+    publish: (update, body) => {
+      const next = this.applyNormalizedStatus(update)
+      if (next) {
+        this.scheduleTranscriptPoll('codex', body, next)
+      }
+    }
+  })
 
   protected readonly replayTranscriptPolls = new Map<
     string,
@@ -101,6 +109,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   protected clearAllTranscriptPolls(): void {
     this.replayTranscriptPolls.clear()
     this.transcriptPollScheduler.clearAll()
+    this.codexTail.follower.clearAll()
     this.claudeHelperKills.clearAll()
   }
 
@@ -113,8 +122,17 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     this.assistantMessageRetryTimers.delete(paneKey)
   }
 
+  /** A pane's authority moved: its Codex reads in flight and held approvals follow it. */
+  protected moveTranscriptPoll(fromPaneKey: string, toPaneKey: string): void {
+    const poll = this.transcriptPollScheduler.peek(fromPaneKey)
+    this.transcriptPollScheduler.clear(fromPaneKey)
+    this.claudeHelperKills.clear(fromPaneKey)
+    this.codexTail.move(fromPaneKey, toPaneKey, poll)
+  }
+
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.codexTail.follower.clear(paneKey)
     this.claudeHelperKills.clear(paneKey)
   }
 
@@ -133,14 +151,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
   }
 
-  /** Replay drains before the server binds, and a poll that runs then is dropped, so these wait for it to listen. */
+  /** Replayed Codex hooks start the reads they need (names, reviewer, tail) once the server listens. */
   protected requestReplayTranscriptPoll(
     body: unknown,
     original: EnrichedAgentHookEventPayload
   ): void {
-    if (!codexReplayLeftTranscriptWork(this.state, original.paneKey)) {
-      return
-    }
     if (this.server) {
       this.scheduleTranscriptPoll('codex', body, original)
     } else {
@@ -168,18 +183,23 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (source !== 'codex' && source !== 'muse') {
       return
     }
+    if (source === 'codex') {
+      this.codexTail.follower.observe(original.paneKey, { body })
+    }
     if (!shouldPollHookTranscript(this.state, source, original)) {
       this.transcriptPollScheduler.clear(original.paneKey)
-      return
+    } else if (source === 'codex') {
+      this.codexTail.schedule(original.paneKey, { source, body, original })
+    } else {
+      // A Muse poll without a delay is a fresh hook's 1s poll.
+      const museDelayMs = delayMs ?? nextMusePollDelay()
+      this.transcriptPollScheduler.schedule(
+        original.paneKey,
+        { source, body, original, delayMs: museDelayMs },
+        undefined,
+        museDelayMs
+      )
     }
-    // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
-    const museDelayMs = source === 'muse' ? (delayMs ?? nextMusePollDelay()) : undefined
-    this.transcriptPollScheduler.schedule(
-      original.paneKey,
-      { source, body, original, delayMs: museDelayMs },
-      hookTranscriptWatchPath(this.state, source, original.paneKey),
-      museDelayMs
-    )
   }
 
   protected rearmIgnoredMuseHook(body: unknown): void {
@@ -193,52 +213,22 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
   }
 
-  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void | Promise<void> {
-    if (!this.ownsTranscriptPoll(paneKey, poll)) {
+  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
+    if (poll.source === 'codex') {
+      this.codexTail.tick(paneKey, poll)
       return
     }
-    if (poll.source !== 'codex') {
-      this.applyTranscriptPoll(paneKey, poll, undefined)
-      return
-    }
-    // Why: rollout reads stay off the main thread (#43539); the next tick waits for this one.
-    return readCodexTranscriptPoll(this.state, paneKey).then((reads) => {
-      // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
-      const current = this.transcriptPollScheduler.peek(paneKey)
-      const owner = this.ownsTranscriptPoll(paneKey, poll)
-        ? poll
-        : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
-          ? current
-          : undefined
-      try {
-        if (owner) {
-          this.applyTranscriptPoll(paneKey, owner, reads)
-        }
-      } finally {
-        reads.batch.release()
-      }
-    })
-  }
-
-  // Recheck ownership at callback time; newer events supersede this payload even if children remain.
-  private ownsTranscriptPoll(paneKey: string, { original }: TranscriptPoll): boolean {
-    return (
-      paneKey === original.paneKey &&
-      Boolean(this.server) &&
-      this.state.lastStatusByPaneKey.get(original.paneKey) === original
-    )
-  }
-
-  private applyTranscriptPoll(
-    paneKey: string,
-    poll: TranscriptPoll,
-    codexReads: CodexTranscriptPollReads | undefined
-  ): void {
+    // Recheck ownership at callback time; newer events supersede this payload.
     const { source, body, original } = poll
+    if (
+      paneKey !== original.paneKey ||
+      !this.server ||
+      this.state.lastStatusByPaneKey.get(original.paneKey) !== original
+    ) {
+      return
+    }
     const logOffset = source === 'muse' ? museLogOffset(this.state, paneKey) : undefined
-    const normalized = codexReads
-      ? pollCodexTranscriptStatus(this.state, original, body, this.env, codexReads)
-      : normalizeHookPayload(this.state, source, body, this.env)
+    const normalized = normalizeHookPayload(this.state, source, body, this.env)
     if (!normalized) {
       return
     }

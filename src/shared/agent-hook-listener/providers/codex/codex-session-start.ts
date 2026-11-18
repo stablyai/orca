@@ -36,7 +36,7 @@ export function previousCodexTurnContext<T extends AgentHookEventPayload>(
 function clearCodexSessionState(state: HookListenerState, paneKey: string): void {
   state.codexAsyncQuestionsByPaneKey.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
-  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+  state.codexRolloutByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
 }
 

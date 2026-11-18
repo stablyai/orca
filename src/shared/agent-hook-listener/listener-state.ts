@@ -13,7 +13,7 @@ import type { ClaudeLaunchedBackgroundTasks } from './providers/claude/backgroun
 import type { ClaudeSubagentRoster } from './providers/claude/lifecycle/claude-subagent-roster'
 import type { ClaudeToolRequest } from './claude-tool-request-identity'
 import type { CodexSubagentRoster } from './providers/codex/codex-subagent-roster'
-import type { CodexSubagentTranscriptState } from './providers/codex/codex-subagent-transcript'
+import type { CodexRolloutState } from './providers/codex/codex-rollout-state'
 import type { CodexAsyncQuestions } from './providers/codex/codex-async-questions'
 import type { MusePaneState } from './providers/muse/muse-pane-state'
 import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
@@ -73,8 +73,8 @@ export type HookListenerState = {
   hookRootAttempts: Map<string, HookRootAttempt>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
-  /** Incremental parent/child rollout cursors for Codex collaboration v2. */
-  codexSubagentTranscriptByPaneKey: Map<string, CodexSubagentTranscriptState>
+  /** Async rollout reads for the facts Codex hooks lack: turn ends, reviewer, legacy cancel. */
+  codexRolloutByPaneKey: Map<string, CodexRolloutState>
   /** Root Codex state/model, kept separate from child hook traffic. */
   codexLeadStateByPaneKey: Map<string, CodexLeadTurnState>
   /** Mid-turn async questions Codex's TUI holds open; its own status keeps saying working. */
@@ -151,7 +151,7 @@ export function createHookListenerState(
     claudeSessionOwnerByPaneKey: new Map(),
     hookRootAttempts: new Map(),
     codexSubagentRosterByPaneKey: new Map(),
-    codexSubagentTranscriptByPaneKey: new Map(),
+    codexRolloutByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map(),
     codexAsyncQuestionsByPaneKey: new Map(),
     codexEphemeralForkSessionsByPaneKey: new Map(),
@@ -229,7 +229,7 @@ export function clearPaneProcessCacheState(state: HookListenerState, paneKey: st
   state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
-  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+  state.codexRolloutByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
   state.codexAsyncQuestionsByPaneKey.delete(paneKey)
   state.codexEphemeralForkSessionsByPaneKey.delete(paneKey)
@@ -286,7 +286,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeLaunchedBackgroundTasksByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSessionOwnerByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.codexRolloutByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexAsyncQuestionsByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexEphemeralForkSessionsByPaneKey, fromPaneKey, toPaneKey)
@@ -334,7 +334,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeLaunchedBackgroundTasksByPaneKey.clear()
   state.claudeSessionOwnerByPaneKey.clear()
   state.codexSubagentRosterByPaneKey.clear()
-  state.codexSubagentTranscriptByPaneKey.clear()
+  state.codexRolloutByPaneKey.clear()
   state.codexLeadStateByPaneKey.clear()
   state.codexAsyncQuestionsByPaneKey.clear()
   state.codexEphemeralForkSessionsByPaneKey.clear()

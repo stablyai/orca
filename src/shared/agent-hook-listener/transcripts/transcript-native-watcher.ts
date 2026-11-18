@@ -13,11 +13,12 @@ export type TranscriptNativeWatcher = {
 /** Native watches only accelerate polling reconciliation: remote filesystems may reject them while files remain readable, so retry binding without owning liveness. */
 export function createTranscriptNativeWatcher(
   filePath: string,
-  onEvent: () => void,
+  onEvent: (changedName?: string) => void,
   onError: () => void,
-  options: { watchParent?: boolean } = {}
+  options: { watchParent?: boolean; acceptsName?: (name: string) => boolean } = {}
 ): TranscriptNativeWatcher {
   const watchedName = basename(filePath)
+  const accepts = options.acceptsName ?? ((name: string) => name === watchedName)
   let disposed = false
   let watcher: FSWatcher | null = null
   let rebindNeeded = true
@@ -42,14 +43,14 @@ export function createTranscriptNativeWatcher(
         nextWatcher = watch(
           options.watchParent === false ? filePath : dirname(filePath),
           (event, changedName) => {
-            if (changedName !== null && changedName.toString() !== watchedName) {
+            if (changedName !== null && !accepts(changedName.toString())) {
               return
             }
             // Why: a parent replacement may emit rename without a watcher error.
             if (event === 'rename') {
               invalidateCandidate(nextWatcher)
             }
-            onEvent()
+            onEvent(changedName?.toString())
           }
         )
       } catch {

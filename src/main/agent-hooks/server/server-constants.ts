@@ -5,7 +5,7 @@ import {
 
 export const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 export const ASSISTANT_MESSAGE_RETRY_MS = 50
-export const CODEX_SUBAGENT_POLL_MS = 1_000
+export const TRANSCRIPT_POLL_MS = 1_000
 
 // Version 1 lacked ordering clocks; mismatched caches hydrate empty.
 export const LAST_STATUS_FILE_VERSION = 2

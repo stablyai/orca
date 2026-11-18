@@ -20,8 +20,7 @@ import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecyc
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
-import type { HookServerStartOptions, NormalizedLocalHook } from './server-types'
-import { withPrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
+import type { HookServerStartOptions } from './server-types'
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
   private readonly startup = new AgentHookStartup()
@@ -137,24 +136,12 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         await this.checkHookOwner(source, aliasedBody)
-        // Why: rollout reads stay off the main thread; a slow open on Windows froze the window (#43539).
-        const prefetch =
-          source === 'codex'
-            ? await this.codexRolloutPrefetcher.prefetch(this.state, aliasedBody)
-            : undefined
-        let toolCallOwner: NormalizedLocalHook['event'] = null
-        try {
-          if (!isStatusCurrent()) {
-            res.writeHead(204)
-            res.end()
-            return
-          }
-          toolCallOwner = withPrefetchedRolloutReads(prefetch?.reads, () =>
-            this.ingestLocalHook(source, aliasedBody)
-          )
-        } finally {
-          prefetch?.release()
+        if (!isStatusCurrent()) {
+          res.writeHead(204)
+          res.end()
+          return
         }
+        const toolCallOwner = this.ingestLocalHook(source, aliasedBody)
         await this.respondToHook(req, res, source, aliasedBody, toolCallOwner)
       } catch (error) {
         if (pathname === OPENCODE_STARTUP_PROMPT_CLAIM_PATH) {

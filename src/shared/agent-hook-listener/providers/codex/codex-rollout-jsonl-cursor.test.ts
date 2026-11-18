@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { appendFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { readJsonlCursorBytes, RolloutReadBatch } from './codex-rollout-async-reads'
+import { readJsonlCursorBytes, readJsonlFirstRecordAsync } from './codex-rollout-async-reads'
 import { applyJsonlCursorBytes, type JsonlCursor } from './codex-rollout-jsonl-format'
 
 const directories: string[] = []
@@ -14,9 +14,9 @@ afterEach(() => {
   }
 })
 
-describe('readJsonlFirstRecord', () => {
+describe('async rollout reads', () => {
   it.skipIf(process.platform === 'win32')(
-    'rejects writer-less FIFOs and symlinks to them without blocking',
+    'reject writer-less FIFOs and symlinks to them instead of pinning a threadpool worker',
     async () => {
       const directory = mkdtempSync(join(tmpdir(), 'codex-rollout-fifo-'))
       directories.push(directory)
@@ -25,25 +25,12 @@ describe('readJsonlFirstRecord', () => {
       const created = await runProcess({ program: 'mkfifo', args: [fifo], timeoutMs: 5000 })
       expect(created.code).toBe(0)
       symlinkSync(fifo, link)
-      const readerPath = resolve(
-        'src/shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor.ts'
-      )
-      const result = await runProcess({
-        program: process.execPath,
-        args: [
-          '--import',
-          'tsx',
-          '--eval',
-          `const assert = require('node:assert/strict');
-const { readJsonlFirstRecord } = require(${JSON.stringify(readerPath)});
-for (const path of ${JSON.stringify([fifo, link, directory])}) {
-  assert.equal(readJsonlFirstRecord(path), undefined);
-}`
-        ],
-        timeoutMs: 5000
-      })
-      expect(result.timedOut).toBe(false)
-      expect(result.code, result.stderr).toBe(0)
+      for (const path of [fifo, link, directory]) {
+        await expect(readJsonlFirstRecordAsync(path)).resolves.toBeUndefined()
+        await expect(
+          readJsonlCursorBytes({ filePath: path, offset: 0, carry: '' })
+        ).resolves.toBeUndefined()
+      }
     }
   )
 })
@@ -59,14 +46,9 @@ describe('readJsonlCursorBytes', () => {
 
   it('applies only the unread part of bytes another reader overtook', async () => {
     const { path, cursor } = rollout('{"a":1}\n')
-    const batch = new RolloutReadBatch()
-    const early = await readJsonlCursorBytes(cursor, batch)
+    const early = await readJsonlCursorBytes(cursor)
     appendFileSync(path, '{"a":2}\n')
-    const late = await readJsonlCursorBytes(cursor, batch)
-    batch.release()
-    if (early === 'deferred' || late === 'deferred') {
-      throw new Error('a lone batch always fits the read budget')
-    }
+    const late = await readJsonlCursorBytes(cursor)
     expect(applyJsonlCursorBytes(cursor, early)).toEqual([{ a: 1 }])
     expect(applyJsonlCursorBytes(cursor, late)).toEqual([{ a: 2 }])
     // Bytes the cursor has fully consumed yield nothing, never a replay.

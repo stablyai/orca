@@ -1,10 +1,10 @@
+import { basename } from 'node:path'
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
-import { hasCodexTranscriptSubagents } from './providers/codex/codex-state'
 import { hasMuseSessionLog } from './providers/muse/muse-events'
-import { hasPendingCodexSubagentIdentity } from './providers/codex/codex-subagent-roster'
 import { parseHookEnvelope } from './hook-envelope'
+import { codexChildRolloutPath } from './providers/codex/codex-subagent-roster'
 
 export function shouldPollHookTranscript(
   state: HookListenerState,
@@ -12,12 +12,7 @@ export function shouldPollHookTranscript(
   event: AgentHookEventPayload
 ): boolean {
   if (source === 'codex') {
-    return (
-      hasCodexTranscriptSubagents(state, event.paneKey) ||
-      hasPendingCodexSubagentIdentity(state.codexSubagentRosterByPaneKey.get(event.paneKey)) ||
-      (state.codexLeadStateByPaneKey.get(event.paneKey)?.state !== 'done' &&
-        Boolean(state.codexSubagentTranscriptByPaneKey.get(event.paneKey)?.parent.filePath))
-    )
+    return codexRolloutTailPath(state, event.paneKey) !== undefined
   }
   if (source === 'muse') {
     // Muse question waits/answers exist only in the session log.
@@ -61,15 +56,40 @@ export function museHookPollPane(
     : undefined
 }
 
-/** Child rollout discovery keeps its existing cadence; only a root-only pane can use one file watch. */
-export function hookTranscriptWatchPath(
+/** Codex's rollouts are tailed only while a root turn is open with no Stop or Interrupt yet (/review
+ *  and failed turns end without either) or a child is live (an errored, interrupted or aborted child
+ *  sends no SubagentStop); only the rollouts record those ends. */
+export function codexRolloutTailPath(
   state: HookListenerState,
-  source: AgentHookSource,
   paneKey: string
 ): string | undefined {
-  return source === 'codex' && !hasCodexTranscriptSubagents(state, paneKey)
-    ? state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath
-    : undefined
+  const root = state.codexRolloutByPaneKey.get(paneKey)?.root?.cursor.filePath
+  if (root && state.codexLeadStateByPaneKey.get(paneKey)?.state !== 'done') {
+    return root
+  }
+  const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
+  const child = [...(roster?.values() ?? [])]
+    .map((tracked) => codexChildRolloutPath(tracked, root))
+    .find(Boolean)
+  return child ? (root ?? child) : undefined
+}
+
+/** The tail's directory watch wakes for the root rollout and its live children's rollouts. */
+export function codexRolloutWatchesName(
+  state: HookListenerState,
+  paneKey: string,
+  name: string
+): boolean {
+  const root = state.codexRolloutByPaneKey.get(paneKey)?.root?.cursor.filePath
+  if (root && basename(root) === name) {
+    return true
+  }
+  for (const child of state.codexSubagentRosterByPaneKey.get(paneKey)?.values() ?? []) {
+    if (child.rolloutPath && basename(child.rolloutPath) === name) {
+      return true
+    }
+  }
+  return false
 }
 
 export function transcriptPollUpdate<T extends AgentHookEventPayload>(
