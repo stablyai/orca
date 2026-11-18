@@ -57,7 +57,8 @@
       "currentWorktree": "현재 워크트리",
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
-      "resumeSession": "에이전트 세션 재개"
+      "resumeSession": "에이전트 세션 재개",
+      "continueInCli": "CLI에서 계속"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "호스트에 연결할 수 없습니다.",

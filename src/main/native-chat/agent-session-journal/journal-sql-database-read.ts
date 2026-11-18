@@ -12,6 +12,14 @@ import {
 } from '../../runtime/agent-session/records/agent-session-tab-table'
 import { readCommandReceipt } from './writing/command-receipt-table'
 import type { CommandReceiptScope } from './writing/command-receipt-schema'
+import {
+  journalLegacyCopySourceKey,
+  journalLegacyFailureKey
+} from './database/journal-legacy-source'
+import {
+  pendingJournalLegacyCompares,
+  type JournalLegacyCompare
+} from './database/journal-legacy-compare'
 import { readForgottenJournalChats } from './journal-forgotten-chats'
 import { readJournalConnectorReplies } from './connector-replies/journal-connector-replies'
 import type { JournalConnectorReplyRow } from '../../../shared/agent-session/journal/journal-connector-reply'
@@ -20,6 +28,12 @@ export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'
   sessionTabs: [tabId: string, sessionId: string][] | null
   backgroundSessions: StoredAgentSessionBackground | null
 }
+
+/** Background conversion leaves a copy whose history failed to convert to an open. */
+const UNFAILED_COPY = `NOT EXISTS (SELECT 1 FROM agent_session_store_meta f
+  WHERE f.key='${journalLegacyFailureKey('')}'||c.session_id
+    AND EXISTS (SELECT 1 FROM agent_session_store_meta m
+      WHERE m.key='${journalLegacyCopySourceKey('')}'||c.session_id))`
 
 /** A pending chat; epoch is null once its head is gone, generation settles exactly this entry. */
 export type JournalRetiredHead = { sessionId: string; epoch: string | null; generation: number }
@@ -33,6 +47,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
+  | { kind: 'legacy-compares'; after: string | null }
   | { kind: 'forgotten-chats'; after: string | null }
   | { kind: 'connector-replies'; sessionId?: string }
 
@@ -42,6 +57,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
+  | { kind: 'legacy-compares'; compares: JournalLegacyCompare[] }
   | { kind: 'retired-heads'; heads: JournalRetiredHead[]; through: string | null }
   | {
       kind: 'attachment-claims'
@@ -106,15 +122,22 @@ function read(
             .get(operation.sessionId)
             ?.epoch?.toString() ?? null
       }
+    case 'legacy-compares':
+      return {
+        kind: 'legacy-compares',
+        compares: pendingJournalLegacyCompares(db, operation.after)
+      }
     case 'sessions': {
       const rows =
         operation.after === null
           ? db
-              .prepare('SELECT session_id FROM journal_chat_state ORDER BY session_id LIMIT 32')
+              .prepare(
+                `SELECT session_id FROM journal_chat_state c WHERE ${UNFAILED_COPY} ORDER BY session_id LIMIT 32`
+              )
               .all()
           : db
-              .prepare(`SELECT session_id FROM journal_chat_state
-                WHERE session_id>? ORDER BY session_id LIMIT 32`)
+              .prepare(`SELECT session_id FROM journal_chat_state c
+                WHERE session_id>? AND ${UNFAILED_COPY} ORDER BY session_id LIMIT 32`)
               .all(operation.after)
       return { kind: 'sessions', sessionIds: rows.map((row) => String(row.session_id)) }
     }

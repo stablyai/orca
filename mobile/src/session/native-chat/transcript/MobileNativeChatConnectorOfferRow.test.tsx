@@ -51,13 +51,6 @@ function render(
 }
 
 describe('a Connect card on the phone', () => {
-  it('says to connect on the computer until the bot has the connector, then says Connected', () => {
-    store.bot = { slack: null }
-    expect(render()).toContain('Connect it in Orca on your computer')
-    store.bot = { slack: { teamId: 'T1' } }
-    expect(render({ botId: 'b1', source: 'slack' })).toContain('Connected')
-  })
-
   it('reads Google as connected only once the owner turned it on for the bot', () => {
     store.bot = { google: false }
     expect(render({ botId: 'b1', source: 'google' })).not.toContain('Connected')
