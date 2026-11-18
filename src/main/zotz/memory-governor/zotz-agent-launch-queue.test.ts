@@ -21,7 +21,7 @@ function fakeGovernor() {
     getState: () => state,
     getLedger: () => ({}),
     wake: () => {},
-    sample(availableGb: number, runningAgents: number) {
+    sample(availableGb: number, runningAgents: number, paneKeys: readonly string[] = []) {
       state = {
         totalBytes: 16 * GB,
         availableBytes: availableGb * GB,
@@ -29,7 +29,7 @@ function fakeGovernor() {
         // A 16 GB machine: 2 agents at a time, 2.4 GB always free.
         limits: computeZotzMemoryGovernorDefaults(16 * GB),
         agents: Array.from({ length: runningAgents }, (_, index) => ({
-          paneKey: `running-${index}`,
+          paneKey: paneKeys[index] ?? `running-${index}`,
           agent: 'claude' as const,
           state: 'working' as const,
           worktreeId: null,
@@ -109,5 +109,32 @@ describe('ZotzAgentLaunchQueue', () => {
       queue.admit({ agent: 'codex', priority: 'manual', paneKey: 'b', label: 'b' })
     ).resolves.toBeUndefined()
     expect(queue.list()).toEqual([])
+  })
+
+  it('stops reserving for an admitted agent once a sample measures it', async () => {
+    const governor = fakeGovernor()
+    const queue = new ZotzAgentLaunchQueue(governor, now)
+    const started: string[] = []
+    const launch = (paneKey: string) =>
+      queue.admit({ agent: 'codex', priority: 'manual', paneKey, label: paneKey }).then(() => {
+        started.push(paneKey)
+      })
+
+    // 16 GB: two agents at a time; one already runs, so only the first launch fits.
+    governor.sample(12, 1)
+    const first = launch('first')
+    void launch('second')
+    await first
+    expect(started).toEqual(['first'])
+
+    // The next sample measures "first"; its reservation must not take the last slot twice.
+    governor.sample(11, 2, ['running-0', 'first'])
+    await Promise.resolve()
+    expect(started).toEqual(['first'])
+
+    // "running-0" ends: the slot frees at once, without waiting out the reservation.
+    governor.sample(12, 1, ['first'])
+    await Promise.resolve()
+    expect(started).toEqual(['first', 'second'])
   })
 })

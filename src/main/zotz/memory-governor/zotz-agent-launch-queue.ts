@@ -38,7 +38,8 @@ type Waiter = {
   reject: (error: Error) => void
 }
 
-type Reservation = { agent: TuiAgent; bytes: number; until: number }
+/** Holds an admitted agent's estimate until a sample measures it (by pane) or it times out. */
+type Reservation = { id: string; agent: TuiAgent; bytes: number; until: number }
 
 // A started agent shows up in the memory sample within a few samples; until then its estimate holds its place.
 const RESERVATION_MS = 90_000
@@ -166,6 +167,7 @@ export class ZotzAgentLaunchQueue {
     this.queue = removeZotzAgentTask(this.queue, id)
     this.waiters.delete(id)
     this.reservations.push({
+      id,
       agent: task.agent,
       bytes: task.estimatedBytes,
       until: this.now() + RESERVATION_MS
@@ -180,7 +182,11 @@ export class ZotzAgentLaunchQueue {
     if (!state || now - state.sampledAt > FRESH_SAMPLE_MS) {
       return null
     }
-    this.reservations = this.reservations.filter((reservation) => reservation.until > now)
+    // A measured agent already counts in the sample; keeping its reservation counted it twice.
+    const measured = new Set(state.agents.map((agent) => agent.paneKey))
+    this.reservations = this.reservations.filter(
+      (reservation) => reservation.until > now && !measured.has(reservation.id)
+    )
     const reservedBytes = this.reservations.reduce((sum, reservation) => sum + reservation.bytes, 0)
     const measuredBytes = state.agents.reduce((sum, agent) => sum + agent.bytes, 0)
     return {
