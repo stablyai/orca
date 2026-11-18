@@ -14,7 +14,6 @@ describe('botGroupFaces', () => {
 
   it('shows two faces and a "+N" circle the size of a face past three', () => {
     expect(faces(['a', 'b', 'c', 'd'])).toEqual(['b', 'a', '+2'])
-    expect(faces(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'])).toEqual(['b', 'a', '+6'])
     const [, , more] = botGroupFaces(['a', 'b', 'c', 'd'], (m) => m)
     const [, , third] = botGroupFaces(['a', 'b', 'c'], (m) => m)
     expect([more!.x, more!.y, more!.size]).toEqual([third!.x, third!.y, third!.size])

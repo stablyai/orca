@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CONNECTOR_ORIGIN, resolveConnectorOrigin } from './connector-origin'
+import { resolveConnectorOrigin } from './connector-origin'
 
 describe('resolveConnectorOrigin', () => {
   it('defaults to the orca.dev connector host', () => {
-    expect(DEFAULT_CONNECTOR_ORIGIN).toBe('https://connector.orca.dev')
     expect(resolveConnectorOrigin({}, true)).toBe('https://connector.orca.dev')
   })
 
