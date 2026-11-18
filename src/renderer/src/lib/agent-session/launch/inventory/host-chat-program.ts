@@ -1,6 +1,6 @@
 import { nativeChatPreferenceFor } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../../../../shared/agent-launch/installation/managed-runtime-install'
+import { registeredAgentChatInstallable } from '../../../../../../shared/agent-session/agent-discovery/agent-session-registered-agents'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY
@@ -107,8 +107,7 @@ export function readChatProgram(
     ? 'unlearned'
     : detected?.includes(agent)
       ? 'available'
-      : catalog?.some((row) => row.agent === agent && row.managedRuntime) &&
-          capabilities.includes(INSTALL)
+      : registeredAgentChatInstallable(catalog, agent, capabilities)
         ? 'installable'
         : !catalog && capabilities.includes(CATALOG)
           ? hostStructuredAgentsReadFailed(executionHostId, runtimeId)

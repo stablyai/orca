@@ -21,6 +21,7 @@ import { defineMethod, defineStreamingMethod } from '../../core'
 import { isAbsolute } from 'node:path'
 import {
   CLAUDE_MANAGED_RUNTIME,
+  onManagedClaudeUse,
   rememberManagedClaudeRelease
 } from '../../../../claude/managed-runtime/claude-managed-runtime'
 import { resolveCliCommandAsync } from '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution'
@@ -125,6 +126,42 @@ export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeServic
       console.warn(`[managed-runtime] ${agent} releases not reclaimed at launch:`, error)
     }
   }
+}
+
+const AUTO_UPDATE_FIRST_CHECK_MS = 2 * 60_000
+const AUTO_UPDATE_USE_THROTTLE_MS = 10 * 60_000
+let autoUpdatesStarted = false
+const lastUseCheck = new Map<string, number>()
+
+function checkForUpdate(agent: string): void {
+  installations
+    .get(agent)
+    ?.updateIfBehind()
+    .catch((error: unknown) => {
+      console.warn(`[managed-runtime] ${agent} update check failed:`, error)
+    })
+}
+
+/** Keep Orca's own copies current without a client ever prompting: once after launch, then as they're used. */
+export function startManagedRuntimeAutoUpdates(): void {
+  if (autoUpdatesStarted) {
+    return
+  }
+  autoUpdatesStarted = true
+  // Wait out startup so the first check never competes with launching the app.
+  setTimeout(() => {
+    for (const agent of installations.keys()) {
+      checkForUpdate(agent)
+    }
+  }, AUTO_UPDATE_FIRST_CHECK_MS).unref()
+  // Use is the signal a copy matters; the release lookup itself is cached for an hour.
+  onManagedClaudeUse(() => {
+    const now = Date.now()
+    if (now - (lastUseCheck.get('claude') ?? 0) >= AUTO_UPDATE_USE_THROTTLE_MS) {
+      lastUseCheck.set('claude', now)
+      checkForUpdate('claude')
+    }
+  })
 }
 
 export const MANAGED_RUNTIME_INSTALL_METHODS = [

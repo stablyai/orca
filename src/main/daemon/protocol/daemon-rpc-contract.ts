@@ -1,3 +1,4 @@
+import type { HostedProviderRequest } from './daemon-provider-process-protocol'
 import type { TerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
@@ -240,6 +241,7 @@ export type TakePendingOutputResult = {
 }
 
 export type DaemonRequest =
+  | HostedProviderRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest

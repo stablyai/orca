@@ -22,19 +22,28 @@ import {
   useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostQueuesMessages
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import type { ProjectGroupingModel } from '../../../../../shared/sidebar-list/sections/project-section-grouping'
+import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
+import type { Bot } from '../../../../../shared/bot-types'
 import {
   buildCapabilitySettingsSections,
   buildSetupSettingsSections
 } from './settings-navigation-capability-sections'
 import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
-import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
+import {
+  buildBotSettingsSections,
+  buildBotsPageSettingsSections
+} from './settings-navigation-bots-sections'
+import {
+  buildProjectSettingsSections,
+  buildRemoteSettingsSections
+} from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from '../../../runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
-import type { ProjectGroupingModel } from '../../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
@@ -48,6 +57,7 @@ export function buildSettingsNavigationMetadata(
     isLocalWindowsHost = isWindows,
     isWindowsTerminalHost = isWindows,
     isWebClient,
+    botsEnabled = true,
     hostQueuesMessages = false,
     typedChatPermissions = false,
     managedBrowserCreationEnabled = !isWebClient,
@@ -55,6 +65,7 @@ export function buildSettingsNavigationMetadata(
     isDev = import.meta.env.DEV,
     isLinearConnected = false,
     repos,
+    bots = [],
     projectGroups,
     projectGrouping
   }: {
@@ -63,6 +74,7 @@ export function buildSettingsNavigationMetadata(
     isLocalWindowsHost?: boolean
     isWindowsTerminalHost?: boolean
     isWebClient: boolean
+    botsEnabled?: boolean
     hostQueuesMessages?: boolean
     typedChatPermissions?: boolean
     managedBrowserCreationEnabled?: boolean
@@ -71,6 +83,7 @@ export function buildSettingsNavigationMetadata(
     isLinearConnected?: boolean
     projectGroups?: readonly ProjectGroupSettingsEntry[]
     repos: readonly Repo[]
+    bots?: readonly Bot[]
     projectGrouping?: ProjectGroupingModel
   },
   t?: Translate
@@ -98,6 +111,7 @@ export function buildSettingsNavigationMetadata(
     isLocalWindowsHost,
     isWindowsTerminalHost,
     isWebClient,
+    botsEnabled,
     hostQueuesMessages,
     typedChatPermissions,
     managedBrowserCreationEnabled,
@@ -105,6 +119,7 @@ export function buildSettingsNavigationMetadata(
     isDev,
     isLinearConnected,
     repos,
+    bots,
     projectGroups,
     projectGrouping
   }
@@ -113,9 +128,13 @@ export function buildSettingsNavigationMetadata(
   return [
     ...buildCapabilitySettingsSections(options, t),
     ...buildSetupSettingsSections(options, t),
+    ...buildBotsPageSettingsSections(options),
     ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries, t),
     ...buildInterfaceSettingsSections(options, t),
-    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById, t)
+    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, t),
+    // Directly above Projects, as bots sit above the projects in the sidebar.
+    ...buildBotSettingsSections(options),
+    ...buildProjectSettingsSections(options, reposById, t)
   ]
 }
 
@@ -125,6 +144,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const languageRevision = useUiLanguageRevision()
   const projectGroups = useSupportedGroupHookSettings()
   const repos = useAppStore((state) => state.repos)
+  const botsEnabled = useBotsEnabled()
+  const bots = useBots(botsEnabled)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
@@ -179,6 +200,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           isLocalWindowsHost,
           isWindowsTerminalHost,
           isWebClient,
+          botsEnabled,
           hostQueuesMessages,
           typedChatPermissions,
           managedBrowserCreationEnabled,
@@ -186,6 +208,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           isDev: import.meta.env.DEV,
           isLinearConnected,
           repos,
+          bots,
           projectGroups,
           projectGrouping: {
             projects: projectHostSetupProjection.projects,
@@ -201,12 +224,14 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isLocalWindowsHost,
       isWindowsTerminalHost,
       isWebClient,
+      botsEnabled,
       hostQueuesMessages,
       typedChatPermissions,
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,
       repos,
+      bots,
       projectGroups,
       projectHostSetupProjection,
       languageRevision,
