@@ -136,6 +136,10 @@ export class UtilityWorkerHost {
     return worker
   }
 
+  get pauseMessage(): string | null {
+    return this.paused ? this.crashCap!.message : null
+  }
+
   /** A user asked again: clear the crash history and let the next spawn start a fresh host. */
   retry(): void {
     if (!this.paused) {

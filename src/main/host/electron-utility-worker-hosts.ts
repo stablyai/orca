@@ -9,7 +9,7 @@ import { setJournalSqlReaderSpawner } from '../native-chat/agent-session-journal
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { resolveObservabilityConsent } from '../observability'
 import { getLogsDirectory } from '../observability/logs-directory'
-import { setHeavyWorkerSpawner } from '../utility-worker-host/heavy-worker-spawn'
+import { setHeavyWorkerHost } from '../utility-worker-host/heavy-worker-spawn'
 import { HEAVY_WORKER_HOST_NAME } from '../utility-worker-host/heavy-worker-host-name'
 
 const CRASH_WINDOW_MS = 5 * 60_000
@@ -51,12 +51,13 @@ export function installElectronHeavyWorkerHost(): void {
       message: 'Orca stopped this after its background worker crashed 3 times in 5 minutes. Try again, or restart Orca if it keeps happening.'
     }
   )
-  setHeavyWorkerSpawner(
-    (filename, { name, workerData }) =>
+  setHeavyWorkerHost({
+    spawn: (filename, { name, workerData }) =>
       // Only tests and unbuilt sources name a URL entry; the host can load built files only.
       filename instanceof URL
         ? spawnWorkerThread(filename, { name, workerData })
         : host.spawn({ filename, name, workerData, ...largeSendLog() }),
-    () => host.retry()
-  )
+    retry: () => host.retry(),
+    pauseMessage: () => host.pauseMessage
+  })
 }
