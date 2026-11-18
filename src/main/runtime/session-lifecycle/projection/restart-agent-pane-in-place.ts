@@ -1,5 +1,7 @@
 import { OrcaRuntimeWithResumeAgentSessionInWorkspace } from './resume-agent-session-in-workspace'
 import { retireReplacedPaneBinding } from '../../../ipc/pty/pane/pane-owner-replacement'
+import type { AgentSessionResumeClaim } from './agent-session-resume-claims'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -12,6 +14,7 @@ export type AgentPaneRestartRefusal =
   | 'viewer_cannot_follow'
   | 'no_resume_command'
   | 'busy'
+  /** The stop was sent but its exit unconfirmed: the terminal may still end, with no replacement. */
   | 'stop_failed'
   /** Stopped, but no new terminal took the pane: its conversation waits for a manual resume. */
   | 'create_failed'
@@ -23,11 +26,16 @@ export type AgentPaneRestartResult =
 export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntimeWithResumeAgentSessionInWorkspace {
   private readonly agentPaneRestartsByPaneKey = new Set<string>()
 
+  protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
+
   /** Restarts a pane's agent conversation in a new terminal in the same tab and leaf; the spawn
-   *  applies whatever account is selected now. Every refusal but `create_failed` stops nothing. */
+   *  applies whatever account is selected now. Refusals other than `stop_failed` and
+   *  `create_failed` stop nothing. `stillCurrent` says, just before the stop, that the pane still
+   *  runs `session`. */
   async restartAgentPaneInPlace(
     ptyId: string,
-    session: { agent: TuiAgent; providerSession: AgentProviderSessionMetadata }
+    session: { agent: TuiAgent; providerSession: AgentProviderSessionMetadata },
+    stillCurrent: () => boolean = () => true
   ): Promise<AgentPaneRestartResult> {
     const pty = this.ptysById.get(ptyId)
     const recorded = this.paneOfPty(pty)
@@ -63,6 +71,10 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       if (!resume) {
         return { ok: false, reason: 'no_resume_command' }
       }
+      const ownPaneKey = makePaneKey(tabId, pane.leafId)
+      if (await this.isProviderSessionLiveInAnotherPane(session, ownPaneKey)) {
+        return { ok: false, reason: 'busy' }
+      }
       const wasActive =
         this.mobileSessionTabsByWorktree
           .get(pty.worktreeId)
@@ -73,15 +85,20 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
               tab.leafId === pane.leafId &&
               tab.isActive
           ) === true
-      // A viewer may have joined during the awaits above; checked again just before the stop.
-      if (!this.ptysById.get(ptyId)?.connected) {
+      // The awaits above let the pane move, change conversation or gain a viewer: checked again
+      // with no await before the stop.
+      const current = this.ptysById.get(ptyId)
+      if (!current?.connected || this.paneOfPty(current).paneKey !== recorded.paneKey) {
         return { ok: false, reason: 'not_local' }
+      }
+      if (!stillCurrent()) {
+        return { ok: false, reason: 'busy' }
       }
       if (!this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(ptyId)) {
         return { ok: false, reason: 'viewer_cannot_follow' }
       }
       // Held from before the stop, so no other resume can start this conversation in the gap.
-      const claim = this.agentSessionResumeClaims.claim(session, makePaneKey(tabId, pane.leafId))
+      const claim = this.agentSessionResumeClaims.claim(session, ownPaneKey)
       if (!claim) {
         return { ok: false, reason: 'busy' }
       }
@@ -134,10 +151,10 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         if (created.tab.status === 'ready' && created.tab.ptyId) {
           return { ok: true, ptyId: created.tab.ptyId }
         }
-        claim.settleFailure(dispatched)
+        this.settleUnboundRestart(claim, ownPaneKey, ptyId, dispatched)
         return { ok: false, reason: 'create_failed' }
       } catch (error) {
-        claim.settleFailure(dispatched, error)
+        this.settleUnboundRestart(claim, ownPaneKey, ptyId, dispatched, error)
         throw error
       }
     } catch (error) {
@@ -146,5 +163,22 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     } finally {
       this.agentPaneRestartsByPaneKey.delete(paneKey)
     }
+  }
+
+  /** A create that failed after its spawn may still have started an agent in the pane: the claim
+   *  watches that terminal rather than staying held forever. */
+  private settleUnboundRestart(
+    claim: AgentSessionResumeClaim,
+    paneKey: string,
+    stoppedPtyId: string,
+    dispatched: boolean,
+    error?: unknown
+  ): void {
+    const spawned = dispatched ? this.getPtyRecordForPaneKey(paneKey) : null
+    if (spawned?.connected && spawned.ptyId !== stoppedPtyId) {
+      claim.bind(spawned.ptyId)
+      return
+    }
+    claim.settleFailure(dispatched, error)
   }
 }

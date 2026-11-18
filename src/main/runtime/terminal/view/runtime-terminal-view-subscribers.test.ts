@@ -24,4 +24,14 @@ describe('host respawn viewer gate', () => {
     releaseNew()
     expect(views.everyRemoteViewFollowsHostRespawn('pty-1')).toBe(true)
   })
+
+  it('ignores a release from before the PTY id was cleared', () => {
+    const views = subscribers()
+    const releaseStale = views.registerRemote('pty-1')
+    views.clearSubscribers('pty-1')
+    views.registerRemote('pty-1')
+
+    releaseStale()
+    expect(views.everyRemoteViewFollowsHostRespawn('pty-1')).toBe(false)
+  })
 })
