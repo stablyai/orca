@@ -6,8 +6,7 @@ import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalPagedMaintenanceKind, JournalSqlMaintenance } from './journal-sql-maintenance'
 import { JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
 
-const MINUTE = 60_000
-const COMPACTION_INTERVAL = 6 * 60 * MINUTE
+const COMPACTION_INTERVAL = 6 * 60 * 60_000
 // About 8k saved outputs a minute at the shared 10% duty cycle; none while writes are off.
 const STORED_OUTPUT_PAGES_PER_TICK = JOURNAL_STORED_OUTPUT_WRITES ? 256 : 0
 
@@ -28,7 +27,7 @@ export class JournalSqlBackgroundMaintenance {
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
     private readonly readers: Pick<JournalSqlReaderPool, 'database'>,
-    private readonly conversions: Pick<JournalSqlConversions, 'ensure'>,
+    private readonly conversions: Pick<JournalSqlConversions, 'ensure' | 'compareLegacyChats'>,
     private readonly activity: JournalSqlActivity,
     private readonly onError: (error: unknown, sessionId?: string) => void,
     private readonly onTick?: () => void
@@ -68,7 +67,7 @@ export class JournalSqlBackgroundMaintenance {
       this.wake = new AbortController()
       this.armPeriodic()
       void this.requestRun()
-    }, MINUTE)
+    }, 60_000)
     this.timer.unref()
   }
 
@@ -114,6 +113,7 @@ export class JournalSqlBackgroundMaintenance {
       if (this.discover) {
         this.discover = false
         try {
+          await this.conversions.compareLegacyChats(() => this.boundary())
           await this.convertSavedChats()
         } catch (error) {
           this.report(error)
@@ -313,7 +313,6 @@ export class JournalSqlBackgroundMaintenance {
       }
     }
   }
-
   private report(error: unknown, sessionId?: string): void {
     if (!this.stopped.signal.aborted) {
       this.onError(error, sessionId)

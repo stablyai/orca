@@ -6,6 +6,8 @@ import type { RunRow } from '../orchestration-records'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
 import { getRemoteDispatch, listRemoteDispatches } from './remote-dispatch-records'
 import { importRemoteOwnedItem, type PulledRemoteOwnedItem } from './remote-owned-import'
+import { structuredMailSource } from '../../mailbox/structured-mail/structured-mail-source'
+import { observeSenderSnapshot } from '../../mailbox/senders/agent-message-sender'
 import { reconcileLifecycleMessage } from '../../workers/lifecycle/lifecycle-reconciliation'
 import {
   getRemotePlacement,
@@ -385,6 +387,65 @@ describe('remote-owned records on the coordinating Orca', () => {
         worker_state: 'succeeded'
       })
       expect(db.getTask('task_t')?.status).toBe('completed')
+    })
+  })
+
+  describe("a server's worker mail on its card here", () => {
+    it.each([
+      'status',
+      'dispatch',
+      'worker_done',
+      'merge_ready',
+      'escalation',
+      'handoff',
+      'decision_gate',
+      'question'
+    ])('names its %s by the Dispatch the import recorded', (type) => {
+      placeTask('task_t')
+      recordRemoteStart(db, {
+        conversationId: link.conversation_id,
+        taskId: 'task_t',
+        dispatchId: 'ctx_b1',
+        requestKey: 'key_task_t',
+        peerRunId: PEER_RUN,
+        agent: 'claude'
+      })
+      importItem(
+        item('worker_mail', {
+          v: 1,
+          id: 'msg_b1',
+          homeRunId: run.id,
+          peerRunId: PEER_RUN,
+          message: {
+            from: 'term_on_b',
+            type,
+            subject: 'from the server',
+            body: 'body',
+            payload: null,
+            priority: 'normal',
+            threadId: null
+          },
+          dispatchId: 'ctx_b1',
+          taskId: 'task_t'
+        })
+      )
+      const sources = {
+        db,
+        records: null,
+        chatTab: () => null,
+        terminal: () => null,
+        generatedTitlesEnabled: false,
+        store: null
+      }
+      const sender = structuredMailSource({
+        db,
+        mailboxHandle: `run:${run.id}`,
+        dispatchId: null,
+        batch: [db.getMessageById('msg_b1')!],
+        senderSnapshot: (party, reported) => observeSenderSnapshot(party, sources, reported)
+      }).senders[0]
+
+      expect(sender).toMatchObject({ name: 'do task_t', agent: 'claude' })
     })
   })
 })

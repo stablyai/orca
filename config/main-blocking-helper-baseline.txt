@@ -826,22 +826,13 @@
 4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-13 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts # store-open tail fold (one-shot startup); same SQL already in main-blocking-sqlite-baseline
 5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
-8 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-40 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
-1 src/main/native-chat/agent-session-journal/database/journal-legacy-source-receipt.ts
-4 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
 5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
-2 src/main/native-chat/agent-session-journal/input-order/journal-input-conversion.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
-10 src/main/native-chat/agent-session-journal/journal-domain-import-rows.ts
-1 src/main/native-chat/agent-session-journal/journal-domain-import-submissions.ts
-7 src/main/native-chat/agent-session-journal/journal-domain-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
@@ -849,7 +840,6 @@
 2 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
 6 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-stop-notes.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-submission-consume.ts
 1 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
 11 src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
@@ -860,12 +850,7 @@
 5 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
 10 src/main/native-chat/agent-session-journal/journal-text-tail.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
-2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-table.ts
-1 src/main/native-chat/agent-session-journal/queued-messages/journal-queue-import.ts
-1 src/main/native-chat/agent-session-journal/replay/journal-historical-inputs.ts
-13 src/main/native-chat/agent-session-journal/replay/journal-open.ts
 4 src/main/native-chat/agent-session-journal/replay/journal-read-row.ts
-2 src/main/native-chat/agent-session-journal/replay/journal-retained-inputs.ts
 3 src/main/native-chat/agent-session-journal/replay/journal-stored-cursor.ts
 3 src/main/native-chat/agent-session-journal/writing/command-receipt-table.ts
 1 src/main/native-chat/agent-session-journal/writing/command-receipt-transaction.ts
@@ -1212,8 +1197,6 @@
 1 src/main/runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery.ts
 1 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 4 src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.ts
-5 src/main/runtime/agent-session/records/agent-session-background-meta.ts
-5 src/main/runtime/agent-session/records/agent-session-record-rows.ts
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts
 8 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 2 src/main/runtime/agent-session/records/agent-session-store-transactions.ts

@@ -9,7 +9,10 @@ import type Database from '../../sqlite/sync-database'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
-import { recordJournalLegacyChatRevision } from './database/journal-legacy-source'
+import {
+  recordJournalLegacyChatRevision,
+  settleJournalLegacyCopy
+} from './database/journal-legacy-source'
 import { hydrateJournalStoredItem, journalStoredItemRow } from './journal-stored-output-rows'
 import { moveJournalItemOutputToFile } from './journal-output-files'
 
@@ -215,6 +218,7 @@ export function finishJournalDomainImport(
   if (header.sourceRevision) {
     recordJournalLegacyChatRevision(db, header.sessionId, header.sourceRevision)
   }
+  settleJournalLegacyCopy(db, header.sessionId)
   return state.epoch
 }
 
