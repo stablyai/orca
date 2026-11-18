@@ -3380,15 +3380,7 @@
       "confirmGitHubRebase": "PR #{{number}} yeniden temellendirilip birleştirilsin mi?",
       "confirmGitLabMerge": "Birleştirme isteği #{{number}} birleştirilsin mi?",
       "confirmGitLabSquash": "Birleştirme isteği #{{number}} commit’leri squash edilerek birleştirilsin mi?",
-      "confirmGitLabRebase": "Birleştirme isteği #{{number}} yeniden temellendirilip birleştirilsin mi?",
-      "merged": "Birleştirildi",
-      "closed": "Kapatıldı",
-      "conflicts": "Çakışmalar",
-      "behind": "Geride",
-      "blocked": "Engellendi",
-      "checksPending": "Kontroller bekleniyor",
-      "ableToMerge": "Birleştirilebilir",
-      "unknown": "Bilinmiyor"
+      "confirmGitLabRebase": "Birleştirme isteği #{{number}} yeniden temellendirilip birleştirilsin mi?"
     },
     "pagination": {
       "pageUnreachable": "{{page}}. sayfa GitHub aramasının döndürebileceği aralığın dışında.",
@@ -3793,7 +3785,6 @@
       "title": "Görevler"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL, ör. project = ABC AND statusCategory != Done",
       "projectPlaceholder": "Proje görünümünde ara…",
       "providerPlaceholder": "{{provider}} görevlerinde ara…"
     },
@@ -4235,6 +4226,64 @@
             }
           }
         }
+      },
+      "TaskPage": {
+        "99c2755218": "Sorun arayın veya JQL girin; ör. project = ABC",
+        "jiraTextMatchesNotice": "Metin eşleşmeleri gösteriliyor. Jira bu aramayı JQL olarak çalıştıramadı."
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "İptal Edildi"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Merge Edildi",
+              "4f976d3450": "Kapatıldı",
+              "1f8eb81c0e": "Onay gerekli",
+              "c606463dc2": "Değişiklik istendi",
+              "7e8bbe3cd7": "Conflict'ler",
+              "b169f943e1": "Hazır olunca merge et",
+              "autoMergeOn": "Otomatik merge açık",
+              "039c072f94": "Geride",
+              "bf5e4c6c92": "Engellendi",
+              "87fa36ac83": "Kontroller başarısız oldu",
+              "4e2507176b": "Kontroller bekliyor",
+              "def355ff38": "Merge edilebilir",
+              "f958920f3a": "Kontrol ediliyor"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Merge edildi",
+                  "88d044c42f": "Kapatıldı",
+                  "96b05e374c": "Conflict'ler",
+                  "5105b0e584": "Onay gerekiyor",
+                  "893a999c8c": "Değişiklik istendi",
+                  "01ab632a21": "Çözülmemiş konular",
+                  "bf628700f6": "Kontroller geçmeli",
+                  "65c847ad1e": "Kontroller bekliyor",
+                  "382c70faeb": "Geride",
+                  "195917574e": "Kontrol ediliyor",
+                  "4ecc0d90ee": "Engellendi",
+                  "49ac4fec10": "Kontroller başarısız",
+                  "04a3015a12": "Merge edilebilir"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Bu JQL sorgusu Jira'da çalıştırılamadı. Sözdizimini kontrol edip yeniden deneyin."
       }
     }
   }

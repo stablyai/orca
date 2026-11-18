@@ -36,7 +36,7 @@ export function getCodexOwnerUsageProjection(
 
 export function getCodexResetProjection(
   codex: ProviderRateLimits,
-  hasActiveRuntimeEnvironment: boolean,
+  redeemable: boolean,
   t?: Translate
 ): {
   resetCreditCount: number | null
@@ -51,8 +51,6 @@ export function getCodexResetProjection(
   return {
     resetCreditCount,
     resetCreditExpiry,
-    // Why: reset credits redeem against the desktop's own Codex login, not a remote account owner's.
-    canRedeemReset:
-      !hasActiveRuntimeEnvironment && resetCreditCount !== null && resetCreditCount > 0
+    canRedeemReset: redeemable && resetCreditCount !== null && resetCreditCount > 0
   }
 }
