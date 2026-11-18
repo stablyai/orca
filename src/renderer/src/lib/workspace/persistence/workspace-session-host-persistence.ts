@@ -41,6 +41,14 @@ import {
   extendWorktreeIdByTabId,
   type WorkspaceTabOwnerCatalog
 } from '../../../../../shared/workspace-session/workspace-session-host-records'
+import type {
+  WorkspaceSessionEntriesPatch,
+  WorkspaceSessionEntriesPatchResult
+} from '../../../../../shared/workspace-session/workspace-session-entries-patch'
+import {
+  isEmptyWorkspaceSessionEntriesPatch,
+  type AcknowledgedWorkspaceSessionEntries
+} from './workspace-session-acknowledged-entries'
 
 export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
@@ -64,6 +72,11 @@ export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
 type SessionApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
   patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+  /** Absent on clients whose session store takes whole fields only (the paired web client). */
+  patchEntries?: (
+    args: WorkspaceSessionEntriesPatch,
+    hostId?: ExecutionHostId
+  ) => Promise<WorkspaceSessionEntriesPatchResult>
 }
 
 type DurableSessionApi = SessionApi & {
@@ -226,17 +239,50 @@ function splitWorkspaceSessionForWrite(
   return slices
 }
 
+/** One partition's write: only the entries main hasn't acknowledged when it supports that, else
+ *  the whole fields. A failed or fenced write forgets main's copy so the next one goes whole. */
+function patchHostSlice(
+  api: SessionApi,
+  slice: WorkspaceSessionPatch,
+  hostId: ExecutionHostId,
+  acknowledged: AcknowledgedWorkspaceSessionEntries | undefined
+): Promise<void> {
+  const target = hostId === LOCAL_EXECUTION_HOST_ID ? undefined : hostId
+  if (!acknowledged || !api.patchEntries) {
+    return api.patch(slice, target)
+  }
+  const { patch, acknowledge } = acknowledged.diff(hostId, slice as WorkspaceSessionState)
+  if (isEmptyWorkspaceSessionEntriesPatch(patch)) {
+    acknowledge()
+    return Promise.resolve()
+  }
+  return api.patchEntries(patch, target).then(
+    (result) => {
+      if (result === 'skipped') {
+        acknowledged.forget(hostId)
+      } else {
+        acknowledge()
+      }
+    },
+    (error: unknown) => {
+      acknowledged.forget(hostId)
+      throw error
+    }
+  )
+}
+
 /** Split patches by owner. localWrite orders SSH upload; written waits for all partitions and rejects failures so callers requeue fields. */
 export function patchWorkspaceSessionByHost(
   api: SessionApi,
   patch: WorkspaceSessionPatch,
-  state: HostPersistenceState
+  state: HostPersistenceState,
+  acknowledged?: AcknowledgedWorkspaceSessionEntries
 ): { localWrite: Promise<void>; written: Promise<void> } {
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
-  const localWrite = api.patch(local)
+  const localWrite = patchHostSlice(api, local, LOCAL_EXECUTION_HOST_ID, acknowledged)
   const hostWrites = nonLocalHostSessionEntries(slices).map(([hostId, slice]) =>
-    api.patch(slice, hostId).catch((err: unknown) => {
+    patchHostSlice(api, slice, hostId, acknowledged).catch((err: unknown) => {
       console.warn(`[session] host partition patch failed for ${hostId}:`, err)
       throw err
     })
