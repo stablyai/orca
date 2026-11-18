@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getCodexAccountDisplayDetail } from '../../../../../../shared/agent-accounts/codex-account-display-label'
 import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
@@ -178,13 +179,15 @@ export function renderCodexAccountRow(
               void runCodexAccountAction(
                 `reauth:${account.id}`,
                 () =>
-                  window.api.codexAccounts.reauthenticate({
-                    accountId: account.id
-                  }),
+                  accountOwner.kind === 'environment'
+                    ? signInCodexAccountOnHost(accountOwner, account.id)
+                    : window.api.codexAccounts.reauthenticate({
+                        accountId: account.id
+                      }),
                 getProviderAccountRuntime(account)
               )
             }}
-            disabled={isRemoteAccountScope || isBusy}
+            disabled={isBusy}
             className="h-6 px-2 text-muted-foreground hover:text-foreground"
           >
             {isReauthing ? (

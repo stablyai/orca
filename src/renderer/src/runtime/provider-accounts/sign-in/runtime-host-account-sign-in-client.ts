@@ -10,7 +10,10 @@ import {
   type HostAccountSignInProvider,
   type HostAccountSignInStatus
 } from '../../../../../shared/agent-accounts/host-account-sign-in-types'
-import { HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import {
+  HOST_ACCOUNT_REAUTH_RUNTIME_CAPABILITY,
+  HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY
+} from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { classifyTerminalProcessInspectionFailure } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -36,6 +39,8 @@ const CANCELLED_MESSAGE: Record<HostAccountSignInProvider, string> = {
 type Attempt = {
   owner: EnvironmentTarget
   provider: HostAccountSignInProvider
+  /** The saved account to re-authenticate; undefined adds a new one. */
+  accountId: string | undefined
   pairingRevision: number | undefined
   stage: 'checking' | 'starting' | 'following'
   cancelRequested: boolean
@@ -119,6 +124,13 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
     HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY,
     'This server runs an older Orca that cannot add accounts from here. Update Orca on that server, or run `orca account add` in a terminal there.'
   )
+  if (attempt.accountId) {
+    await assertRuntimeEnvironmentCapability(
+      attempt.owner.environmentId,
+      HOST_ACCOUNT_REAUTH_RUNTIME_CAPABILITY,
+      'This server runs an older Orca that cannot re-authenticate accounts from here. Update Orca on that server, or remove the account and add it again.'
+    )
+  }
   if (attempt.cancelRequested) {
     throw new Error(CANCELLED_MESSAGE[attempt.provider])
   }
@@ -127,7 +139,10 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
   advance(
     attempt,
     await retryLostAnswers(() =>
-      call(attempt, 'accounts.hostSignInStart', { provider: attempt.provider })
+      call(attempt, 'accounts.hostSignInStart', {
+        provider: attempt.provider,
+        ...(attempt.accountId ? { accountId: attempt.accountId } : {})
+      })
     )
   )
   attempt.stage = 'following'
@@ -188,13 +203,19 @@ function settle(attempt: Attempt): HostAccountSignInStatus {
   throw new Error(hostAccountSignInFailureText(status))
 }
 
-/** Starts a sign-in on `owner`, or joins the one this client already runs there. */
+/** Starts a sign-in on `owner`, or joins the same one this client already runs there. */
 function runHostAccountSignIn(
   owner: EnvironmentTarget,
-  provider: HostAccountSignInProvider
+  provider: HostAccountSignInProvider,
+  accountId: string | undefined
 ): Promise<HostAccountSignInStatus> {
   const key = keyOf(owner, provider)
   const running = attempts.get(key)
+  if (running && running.accountId !== accountId) {
+    return Promise.reject(
+      new Error('Another sign-in is already running on this server. Finish or cancel it first.')
+    )
+  }
   if (running?.done) {
     return running.done
   }
@@ -209,6 +230,7 @@ function runHostAccountSignIn(
   const attempt: Attempt = {
     owner,
     provider,
+    accountId,
     pairingRevision: captureRuntimeEnvironmentRequestRevision(owner.environmentId),
     stage: 'checking',
     cancelRequested: false,
@@ -267,22 +289,24 @@ export function readHostAccountSignIn(
     : null
 }
 
-/** Adds a Claude account on `owner`: its login runs there, and this client relays the code. */
-export async function addClaudeAccountOnHost(
-  owner: EnvironmentTarget
+/** Adds a Claude account on `owner`, or re-authenticates `accountId`: its login runs there, and this client relays the code. */
+export async function signInClaudeAccountOnHost(
+  owner: EnvironmentTarget,
+  accountId?: string
 ): Promise<ClaudeRateLimitAccountsState> {
-  const status = await runHostAccountSignIn(owner, 'claude')
+  const status = await runHostAccountSignIn(owner, 'claude', accountId)
   if (!status.claude) {
     throw new Error('Claude signed in, but the server sent no account list.')
   }
   return status.claude
 }
 
-/** Adds a Codex account on `owner` through codex's device code, opened on this device. */
-export async function addCodexAccountOnHost(
-  owner: EnvironmentTarget
+/** Adds a Codex account on `owner`, or re-authenticates `accountId`, through codex's device code opened on this device. */
+export async function signInCodexAccountOnHost(
+  owner: EnvironmentTarget,
+  accountId?: string
 ): Promise<CodexRateLimitAccountsState> {
-  const status = await runHostAccountSignIn(owner, 'codex')
+  const status = await runHostAccountSignIn(owner, 'codex', accountId)
   if (!status.codex) {
     throw new Error('Codex signed in, but the server sent no account list.')
   }

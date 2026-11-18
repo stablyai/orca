@@ -76,7 +76,37 @@ describe('account RPC methods', () => {
           })
         ).toMatchObject({ phase: 'signedIn', claude: claudeState })
       )
-      expect(runHostAccountSignIn).toHaveBeenCalledWith('claude', received)
+      expect(runHostAccountSignIn).toHaveBeenCalledWith('claude', received, undefined)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    're-authenticates the saved account a paired client names, without joining another sign-in',
+    async () => {
+      const codexState = { accounts: [], activeAccountId: null }
+      const runHostAccountSignIn = vi.fn(
+        (_provider: string, channel: HostAccountSignInChannel, _accountId?: string) =>
+          new Promise<{ codex: typeof codexState }>((resolve) =>
+            channel.signal.addEventListener('abort', () => resolve({ codex: codexState }))
+          )
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sign-in methods call only this runtime member.
+      const runtime = { runHostAccountSignIn } as unknown as OrcaRuntimeService
+      const ctx = { runtime, caller: { kind: 'paired-device' as const, deviceId: 'laptop' } }
+      const start = method('accounts.hostSignInStart')
+      if (isStreamingMethod(start) || !start.params) {
+        throw new Error('accounts.hostSignInStart must be a request method with params')
+      }
+      const call = (params: unknown) => start.handler(start.params!.parse(params), ctx)
+
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hostSignInStart answers with a HostAccountSignInStatus.
+      const started = (await call({
+        provider: 'codex',
+        accountId: 'acct-1'
+      })) as HostAccountSignInStatus
+      expect(runHostAccountSignIn).toHaveBeenCalledWith('codex', expect.anything(), 'acct-1')
+      await expect(call({ provider: 'codex' })).rejects.toThrow('already running')
+      await method('accounts.hostSignInCancel').handler({ flowId: started.flowId }, ctx)
     }
   )
 })

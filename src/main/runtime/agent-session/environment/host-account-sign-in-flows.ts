@@ -27,11 +27,14 @@ const LOGIN_CANCELLED_MESSAGES = new Set([
 
 export type HostAccountSignInRunner = (
   provider: HostAccountSignInProvider,
-  channel: HostAccountSignInChannel
+  channel: HostAccountSignInChannel,
+  accountId: string | undefined
 ) => Promise<Pick<HostAccountSignInStatus, 'claude' | 'codex'>>
 
 type Flow = {
   owner: string
+  /** The saved account this flow re-authenticates; undefined adds a new one. */
+  accountId: string | undefined
   status: HostAccountSignInStatus
   ended: AbortController
   stop: 'cancelled' | 'silent' | null
@@ -55,7 +58,11 @@ export class HostAccountSignInFlows {
     private readonly platform: NodeJS.Platform = process.platform
   ) {}
 
-  start(owner: string, provider: HostAccountSignInProvider): HostAccountSignInStatus {
+  start(
+    owner: string,
+    provider: HostAccountSignInProvider,
+    accountId?: string
+  ): HostAccountSignInStatus {
     if (this.platform === 'win32') {
       throw new Error(
         'Adding accounts from another device is not available on Windows hosts yet. Run `orca account add` in a terminal on that host.'
@@ -63,7 +70,12 @@ export class HostAccountSignInFlows {
     }
     const current = this.active
     if (current) {
-      if (current.owner === owner && current.status.provider === provider && !current.stop) {
+      if (
+        current.owner === owner &&
+        current.status.provider === provider &&
+        current.accountId === accountId &&
+        !current.stop
+      ) {
         this.touch(current)
         return current.status
       }
@@ -78,6 +90,7 @@ export class HostAccountSignInFlows {
     code.promise.catch(() => {})
     const flow: Flow = {
       owner,
+      accountId,
       status: { flowId: randomUUID(), provider, revision: 1, phase: 'starting' },
       ended: new AbortController(),
       stop: null,
@@ -109,7 +122,7 @@ export class HostAccountSignInFlows {
       nextCode: () => flow.code.promise
     }
     try {
-      const result = await this.run(flow.status.provider, channel)
+      const result = await this.run(flow.status.provider, channel, flow.accountId)
       this.update(flow, { phase: 'signedIn', prompt: undefined, ...result })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
