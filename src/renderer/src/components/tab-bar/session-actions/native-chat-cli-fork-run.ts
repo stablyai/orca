@@ -53,6 +53,13 @@ function launchedLeafId(node: TerminalPaneLayoutNode | null | undefined): string
   return !node ? undefined : node.type === 'leaf' ? node.leafId : launchedLeafId(node.first)
 }
 
+/** Drops this desktop's agent command overrides; other settings still describe the launch. */
+export function withoutDesktopAgentCommands(state: AppState): AppState {
+  return state.settings
+    ? { ...state, settings: { ...state.settings, agentCmdOverrides: {} } }
+    : state
+}
+
 /** Binds the chat to the first conversation the fork's own pane reports, so a later one is not mistaken for it. */
 function rememberForkOrigin(
   terminalTabId: string,
@@ -204,11 +211,15 @@ export async function runNativeChatCliFork(args: {
       return
     }
     const target = prepared.session
+    const state = useAppStore.getState()
+    // The startup line is built here and only run there: a desktop command override must not
+    // travel to a paired host, which resolves the agent command from its own settings (#44168).
+    const remote = host !== null && host.kind !== 'local'
     const startupArgs = {
-      state: useAppStore.getState(),
+      state: remote ? withoutDesktopAgentCommands(state) : state,
       worktreeId: subject.workspaceId,
       session: target,
-      commandOverride: args.commandOverrides?.[target.agent]
+      commandOverride: remote ? undefined : args.commandOverrides?.[target.agent]
     }
     assertAiVaultCopiedSessionLaunchAllowed(startupArgs)
     const startup = prepared.copied
