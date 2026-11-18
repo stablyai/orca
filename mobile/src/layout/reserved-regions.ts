@@ -25,13 +25,22 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
-/** Active fold and camera regions in window points; none off iPhone Duo or before iOS 27.1. */
+/** The window's active reserved regions in window points; none before iOS 27.1. */
 export function useReservedRegions(): ReservedRegions {
   return useSyncExternalStore(
     subscribe,
     () => current,
     () => NO_REGIONS
   )
+}
+
+/**
+ * What a header may share the top strip beside: only a fold-division device's (iPhone Duo) camera.
+ * Keeps out the status-bar-edge rect iPadOS 27.1 appears to report (inferred from a screenshot).
+ */
+export function useTopChromeOcclusions(): ReservedRegions['occlusions'] {
+  const { hasFoldDivision, occlusions } = useReservedRegions()
+  return hasFoldDivision ? occlusions : NO_REGIONS.occlusions
 }
 
 /** Future native geometry only; cached frames must not overwrite a newer keyboard event. */
