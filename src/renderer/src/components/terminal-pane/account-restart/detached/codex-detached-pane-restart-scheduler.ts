@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { subscribeMountedTerminalTabChanges } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
+import type { PaneAccountRestart } from '@/store/terminals/terminal-contracts'
 import {
   resetDetachedCodexPaneRestartClaimsForTests,
   sweepUnclaimedCodexPaneRestarts
@@ -11,13 +11,17 @@ let executorGeneration = 0
 let sweepQueued = false
 
 export function hasAddedPendingCodexPaneRestart(
-  current: Record<string, AccountRestartAgent>,
-  previous: Record<string, AccountRestartAgent>
+  current: Record<string, PaneAccountRestart>,
+  previous: Record<string, PaneAccountRestart>
 ): boolean {
   if (current === previous) {
     return false
   }
-  return Object.keys(current).some((ptyId) => !previous[ptyId])
+  return Object.entries(current).some(([key, value]) =>
+    typeof value === 'object'
+      ? value.phase === 'accepted' && previous[key] !== value
+      : !previous[key]
+  )
 }
 
 /** Installed once at app startup; returns the uninstaller (tests). */

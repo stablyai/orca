@@ -5,6 +5,7 @@ import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resu
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { armPaneOwnerRetry } from '../host-ownership/pane-owner-recovery'
 import { runPaneResumeAttempt } from './in-place-resume-hold'
+import { holdPaneResumeInPlace } from '../../session-restore/spawn-deferral/pane-spawn-deferral-registry'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
@@ -174,5 +175,28 @@ it('allows activation recovery after synchronous start failure', () => {
       throw new Error('start failed')
     })
   ).toThrow('start failed')
+  expect(openWorkspace()).toHaveLength(2)
+})
+
+it('cannot release a successor handoff through a late attempt with updated dependencies', async () => {
+  const predecessor = createSession()
+  const releaseOriginal = holdPaneResumeInPlace(predecessor.cacheKey, () => true)
+  predecessor.deps.releaseResumeInPlace = releaseOriginal
+  const oldAttempt = Promise.withResolvers<string | null>()
+  void runPaneResumeAttempt(predecessor, () => oldAttempt.promise)
+  predecessor.disposed = true
+  while (predecessor.waitTeardowns.length) {
+    predecessor.waitTeardowns.pop()?.()
+  }
+  releaseOriginal()
+  const releaseSuccessor = holdPaneResumeInPlace(predecessor.cacheKey, () => true)
+  predecessor.deps.releaseResumeInPlace = releaseSuccessor
+  try {
+    oldAttempt.resolve(null)
+    await oldAttempt.promise
+    expect(openWorkspace()).toEqual(['tab'])
+  } finally {
+    releaseSuccessor()
+  }
   expect(openWorkspace()).toHaveLength(2)
 })

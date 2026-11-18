@@ -1,6 +1,11 @@
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import { getFirstTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import type { useAppStore } from '@/store/index'
+import {
+  isCodexAccountRestart,
+  isCurrentCodexAccountRestart
+} from '@/store/terminals/codex-account-restart-continuation'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type {
@@ -176,6 +181,20 @@ export function recordPaneIsOwnedByPreservedPane(
       return false
     }
     const tab = owner.tab
+    const restart = state.pendingPaneAccountRestarts[record.paneKey]
+    if (
+      isCodexAccountRestart(restart) &&
+      isCurrentCodexAccountRestart(state, restart) &&
+      record.agent === 'codex' &&
+      (record.connectionId ?? null) === (restart.connectionId ?? null) &&
+      agentProviderSessionsEqual(
+        'codex',
+        record.providerSession,
+        restart.startup?.resumeProviderSession ?? restart.startupInput?.providerSession
+      )
+    ) {
+      return true
+    }
     if (activationTreatsNoteAsFinished(record)) {
       return true
     }

@@ -68,7 +68,11 @@ export const TERMINAL_QUERY_METHODS = [
     permission: 'workspace',
     params: TerminalResolvePane,
     handler: async (params, { runtime }) => ({
-      terminal: runtime.resolveTerminalPane(params.paneKey, params.worktreeId)
+      terminal: runtime.resolveTerminalPane(
+        params.paneKey,
+        params.worktreeId,
+        params.accountRestart === true
+      )
     })
   }),
   defineMethod({

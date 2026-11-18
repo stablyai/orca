@@ -4,12 +4,12 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
-import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { ProviderIcon } from './provider-usage-panel'
 import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
-import { formatPlanLabel } from './usage-roster-formatting'
+import { formatPlanLabel, scopedUsageTitle } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import {
@@ -27,9 +27,10 @@ import {
   soonestResetLabel,
   validResetAt
 } from './usage-reset-caption'
-import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatBareUsagePercentage } from './usage-percentage-label'
 import { getUsageHealthTone } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
+import { CodexRosterRestartBadge } from '../accounts/CodexRestartBadge'
 
 type ProviderId = ProviderRateLimits['provider']
 
@@ -62,26 +63,6 @@ function DetailMetric({
         className="text-[11px]"
       />
     </span>
-  )
-}
-
-/** Spells out what a Fable figure limits; MCP windows are not weekly, so they get no title. */
-function scopedUsageTitle(
-  p: ProviderRateLimits,
-  section: UsageSection,
-  display: UsagePercentageDisplay,
-  t: Translate
-): string | undefined {
-  if (section.window !== p.fableWeekly) {
-    return undefined
-  }
-  return t(
-    'auto.components.status.bar.UsageRosterPanel.modelWeeklyLimit',
-    '{{model}} weekly limit: {{usage}}',
-    {
-      model: section.label,
-      usage: formatUsagePercentageLabel(section.window.usedPercent, display, t)
-    }
   )
 }
 
@@ -217,6 +198,7 @@ export function UsageRow({
           {name}
           {plan ? <span className="font-normal text-muted-foreground"> · {plan}</span> : null}
         </span>
+        {p.provider === 'codex' ? <CodexRosterRestartBadge /> : null}
         {!hasUsage ? (
           <>
             <span className="min-w-0 truncate text-[11px] text-muted-foreground">

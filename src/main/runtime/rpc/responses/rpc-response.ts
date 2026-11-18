@@ -1,3 +1,4 @@
+import { withAccountRestartReceipt } from './account-restart-rpc-failure'
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
 import { BotItemError } from '../../../bots/bot-item-error'
 import { AgentConversationRefusal } from '../../agent-conversations/agent-conversation-refusal'
@@ -171,7 +172,10 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)
 ])
 
-export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
+export const mapRuntimeError = (id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure =>
+  withAccountRestartReceipt(mapRuntimeFailure(id, meta, error), error)
+
+function mapRuntimeFailure(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)

@@ -21,9 +21,10 @@ export function runPaneResumeAttempt<T>(
   start: () => Promise<T>
 ): Promise<T> {
   const releaseHold = holdSessionResume(session, session.cacheKey)
+  const releaseHandoff = session.deps.releaseResumeInPlace
   const release = (): void => {
     releaseHold()
-    session.deps.releaseResumeInPlace?.()
+    releaseHandoff?.()
   }
   try {
     const attempt = start()

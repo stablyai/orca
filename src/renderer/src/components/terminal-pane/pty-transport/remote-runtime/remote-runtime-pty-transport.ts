@@ -1634,11 +1634,13 @@ export function createRemoteRuntimePtyTransport(
     options: { cols?: number; rows?: number; existingPtyId?: string },
     notifySpawn = true,
     expectedAttachGeneration?: number,
-    expectedRecoveryEpoch?: number
+    expectedRecoveryEpoch?: number,
+    expectedLifecycleEpoch?: number
   ): Promise<PtyConnectResult | undefined> {
     if (
       destroyed ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
+      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration) ||
+      (expectedLifecycleEpoch !== undefined && expectedLifecycleEpoch !== lifecycleEpoch)
     ) {
       return undefined
     }
@@ -1682,7 +1684,8 @@ export function createRemoteRuntimePtyTransport(
       destroyed ||
       !connected ||
       !remotePtyId ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
+      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration) ||
+      (expectedLifecycleEpoch !== undefined && expectedLifecycleEpoch !== lifecycleEpoch)
     ) {
       return undefined
     }
@@ -3595,6 +3598,11 @@ export function createRemoteRuntimePtyTransport(
     }
     const connectLifecycleEpoch = ++lifecycleEpoch
     const createEnvironmentId = currentRuntimeEnvironmentId
+    const accountRestart = options.accountRestart
+    const isAccountRestartCurrent = options.isAccountRestartCurrent
+    const shouldContinue = options.shouldContinue
+    const onAccountRestartDispatch = options.onAccountRestartDispatch
+    const onAccountRestartFailure = options.onAccountRestartFailure
     lastConnectOptions = options
     lastAttachOptions = null
     storedCallbacks = options.callbacks
@@ -3609,7 +3617,41 @@ export function createRemoteRuntimePtyTransport(
 
     let releasePrewarmedStream: (() => void) | null = null
     try {
-      if (isWebTerminalSurfaceTabId(tabId ?? '')) {
+      if (options.attachOnlyView) {
+        const hostTabId = toHostSessionTabId(tabId ?? '')
+        const terminal = await resolveHostSessionPane(hostTabId)
+        if (destroyed || lifecycleEpoch !== connectLifecycleEpoch) {
+          return undefined
+        }
+        if (
+          isAccountRestartCurrent &&
+          (!terminal || terminal.connected === false || !terminal.incarnationId)
+        ) {
+          throw new Error('terminal_account_restart_outcome_unknown')
+        }
+        if (
+          !terminal ||
+          terminal.handle !== getRemoteRuntimeTerminalHandle(options.sessionId ?? '') ||
+          terminal.connected === false ||
+          (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
+          (shouldContinue &&
+            !shouldContinue({
+              id: toRemoteRuntimePtyId(terminal.handle, createEnvironmentId),
+              incarnationId: terminal.incarnationId
+            }))
+        ) {
+          throw new Error('terminal_pane_owner_changed')
+        }
+        return await adoptResolvedHostPane(
+          terminal,
+          options,
+          true,
+          attachGeneration,
+          undefined,
+          connectLifecycleEpoch
+        )
+      }
+      if (isWebTerminalSurfaceTabId(tabId ?? '') && !accountRestart) {
         // Commit tab/layout reattach ownership before publishing replacement as a fresh spawn.
         return await attachHostSessionMirror(
           options,
@@ -3670,9 +3712,10 @@ export function createRemoteRuntimePtyTransport(
         ? await trustOptions(createEnvironmentId)
         : {}
       const legacyCreateParams = {
+        ...(accountRestart ? { accountRestart: accountRestart } : {}),
         ...sectionTrustOptions,
         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
-        clientMutationId: terminalCreateMutationId,
+        clientMutationId: accountRestart?.attemptId ?? terminalCreateMutationId,
         ...(commandToSend !== undefined ? { command: commandToSend } : {}),
         ...(startupCommandDeliveryToSend !== undefined
           ? { startupCommandDelivery: startupCommandDeliveryToSend }
@@ -3690,10 +3733,11 @@ export function createRemoteRuntimePtyTransport(
           ? { shell: opts.shellOverride }
           : {}),
         ...spawnIntentParams,
+        ...(accountRestart ? { spawnIntent: 'user-resume' as const } : {}),
         ...terminalCreateThemeParams(terminalColorQueryReplies),
         ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
-        tabId,
-        leafId,
+        tabId: accountRestart?.pane.tabId ?? tabId,
+        leafId: accountRestart?.pane.leafId ?? leafId,
         focus: false,
         // Why: transport backs an already-mounted pane; activation is local state, not permission for remote UI reveal.
         presentation: 'background' as const,
@@ -3731,8 +3775,17 @@ export function createRemoteRuntimePtyTransport(
         }
         const result = await createWithUnknownOutcomeRecovery(
           'terminal',
-          (timeoutMs, reconcileExisting) =>
-            callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
+          (timeoutMs, reconcileExisting) => {
+            if (
+              accountRestart &&
+              (!isAccountRestartCurrent?.() ||
+                destroyed ||
+                lifecycleEpoch !== epoch ||
+                (onAccountRestartDispatch && !onAccountRestartDispatch()))
+            ) {
+              throw new Error('terminal_account_restart_view_changed')
+            }
+            return callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
               createEnvironmentId,
               'terminal.create',
               {
@@ -3740,7 +3793,8 @@ export function createRemoteRuntimePtyTransport(
                 ...(reconcileExisting ? { reconcileExisting: true } : {})
               },
               timeoutMs
-            ),
+            )
+          },
           createEnvironmentId,
           epoch
         )
@@ -3860,26 +3914,28 @@ export function createRemoteRuntimePtyTransport(
       const resumeHostAuthorityCapability = resumeProviderSessionToSend
         ? agentResumeHostAuthorityCapability(launchAgentToSend)
         : undefined
-      const created = replayLaunch
-        ? await replayLaunch(connectLifecycleEpoch)
-        : launchAgentToSend
-          ? agentSessionRequiresHostAuthorityReplay
-            ? await hostAuthorityCreate()
-            : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
-                environmentId: createEnvironmentId,
-                hostAuthority: () => {
-                  replayLaunch = hostAuthorityCreate
-                  return hostAuthorityCreate()
-                },
-                ...(resumeHostAuthorityCapability
-                  ? { hostAuthorityCapability: resumeHostAuthorityCapability }
-                  : {}),
-                legacy: () => {
-                  replayLaunch = legacyCreate
-                  return legacyCreate()
-                }
-              })
-          : await (replayLaunch = legacyCreate)()
+      const created = accountRestart
+        ? await legacyCreate()
+        : replayLaunch
+          ? await replayLaunch(connectLifecycleEpoch)
+          : launchAgentToSend
+            ? agentSessionRequiresHostAuthorityReplay
+              ? await hostAuthorityCreate()
+              : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
+                  environmentId: createEnvironmentId,
+                  hostAuthority: () => {
+                    replayLaunch = hostAuthorityCreate
+                    return hostAuthorityCreate()
+                  },
+                  ...(resumeHostAuthorityCapability
+                    ? { hostAuthorityCapability: resumeHostAuthorityCapability }
+                    : {}),
+                  legacy: () => {
+                    replayLaunch = legacyCreate
+                    return legacyCreate()
+                  }
+                })
+            : await (replayLaunch = legacyCreate)()
       if (!created) {
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
           connecting = false
@@ -3888,6 +3944,16 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       const createdTerminal = created.terminal
+      if (
+        accountRestart &&
+        shouldContinue &&
+        !shouldContinue({
+          id: toRemoteRuntimePtyId(createdTerminal.handle, createEnvironmentId),
+          incarnationId: createdTerminal.incarnationId
+        })
+      ) {
+        return
+      }
       adoptExecutionMetadata(createdTerminal)
       if (created.disposition !== undefined && tabId && createdTerminal.tabId) {
         recordWebAgentSessionHandoff({
@@ -4010,9 +4076,21 @@ export function createRemoteRuntimePtyTransport(
         ...(createdTerminal.isReattach === true ? { isReattach: true } : {})
       } satisfies PtyConnectResult
     } catch (error) {
+      onAccountRestartFailure?.(error)
       if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
         connecting = false
         const message = runtimeTerminalErrorMessage(error)
+        if (accountRestart || isAccountRestartCurrent) {
+          const deferral = readTerminalSpawnDeferral(error)
+          recovery.cancel()
+          emitRecoveryState()
+          if (deferral) {
+            storedCallbacks.onSpawnDeferred?.(deferral, message)
+          } else {
+            surfaceErrorMessage(message)
+          }
+          return undefined
+        }
         if (message.includes(ownerChanged)) {
           return await reconcilePaneOwner(options, connectLifecycleEpoch)
         }
@@ -4020,7 +4098,7 @@ export function createRemoteRuntimePtyTransport(
         if (deferral) {
           recovery.cancel()
           emitRecoveryState()
-          storedCallbacks.onSpawnDeferred?.(deferral)
+          storedCallbacks.onSpawnDeferred?.(deferral, message)
         } else if (isRemoteTerminalGoneMessage(message)) {
           recovery.cancel()
           handleRemoteTerminalError(error)

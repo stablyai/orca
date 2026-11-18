@@ -1,3 +1,9 @@
+import {
+  assertAccountRestartOwner,
+  accountRestartExecutionFacts,
+  stampAccountRestartFailure,
+  settleAccountRestartReservation
+} from '../pane/account-restart-owner'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { AdoptStablePaneArgs } from '../ipc/spawn-types'
 import { adoptedOutcome, type PtySpawnOutcome } from './spawn-outcome'
@@ -81,14 +87,21 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
   const args = ctx.args
   ctx.preAdoptedStablePane = args.adoptedStablePane ?? null
   ctx.paneSpawnOperation = args.paneSpawnOperation
-  const replacementKey = adapter.replace ? resolveEarlyPaneSpawnReservationKey(args) : null
+  const replacementKey =
+    adapter.replace || ctx.accountRestartOperation
+      ? resolveEarlyPaneSpawnReservationKey(args)
+      : null
   // Keep replacement authority across stopping the previous process.
   if (replacementKey) {
     ctx.paneSpawnReservation = await reserveIdlePaneSpawn(replacementKey)
     ctx.paneSpawnReservationKey = replacementKey
   }
+  const operation = ctx.accountRestartOperation
+  const baseFacts = adapter.facts
+  adapter.facts = () => accountRestartExecutionFacts(ctx, baseFacts())
   let prepared = false
   const finish = (outcome: PtySpawnOutcome) => {
+    settleAccountRestartReservation(ctx, outcome)
     ctx.paneSpawnOperation?.acquisition?.settle(outcome)
     if (outcome.kind === 'registration-exited') {
       adapter.releasePreparation?.()
@@ -241,6 +254,9 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     return complete(operation)
   }
   try {
+    if (operation) {
+      assertAccountRestartOwner(ctx.deps.store, ctx.deps.runtime, operation, args.connectionId)
+    }
     if (adapter.replace) {
       await adapter.replace()
     }
@@ -251,6 +267,9 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     }
     if (adapter.adoption?.().completed?.materialized) {
       return await acquire(resolveEarlyPaneKey(args)!, fresh)
+    }
+    if (operation) {
+      return await fresh({ mustExist: true })
     }
     const paneKey = resolveEarlyPaneKey(args)
     return await (paneKey && !ctx.paneSpawnOperation
@@ -263,11 +282,19 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     cancelRegistration(ctx)
     restoreProvisionalPtySize(ctx)
     if (ctx.replacedPaneOwner) {
-      await releaseStoppedPaneBinding(ctx.deps.store, ctx.replacedPaneOwner)
+      await releaseStoppedPaneBinding(ctx.deps.store, ctx.replacedPaneOwner, operation)
     }
     // Every failure settles the exact reservation so later starts can acquire it.
     rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, error)
-    throw error
+    throw operation
+      ? stampAccountRestartFailure(
+          error,
+          operation,
+          ctx.deps.store,
+          ctx.deps.runtime,
+          args.connectionId
+        )
+      : error
   } finally {
     cancelRegistration(ctx)
     ctx.releaseWorktreeSpawn?.()

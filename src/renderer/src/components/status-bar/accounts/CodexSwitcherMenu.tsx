@@ -3,10 +3,8 @@ import { CodexResetCredits, CodexResetConfirmation } from './CodexResetCredits'
 import { DropdownMenuItem, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  AccountRuntimeToggle,
-  CodexRestartStatusPrompt
-} from '../composition/StatusBarAccountControls'
+import { CodexRestartBanner } from './CodexRestartBanner'
+import { AccountRuntimeToggle } from '../composition/StatusBarAccountControls'
 import { AccountUsageGauge } from './AccountUsageGauge'
 import {
   InlineUsageSignInAction,
@@ -146,6 +144,7 @@ export function CodexSwitcherMenu({
         activeTarget?.label ??
         t('auto.components.status.bar.StatusBar.c676918adc', 'System default')
       }
+      bannerContent={open ? <CodexRestartBanner /> : null}
       panelFooter={
         resetCreditCount !== null ? (
           <CodexResetCredits
@@ -154,15 +153,14 @@ export function CodexSwitcherMenu({
             canRedeemReset={canRedeemReset}
             isRedeemingReset={isRedeemingReset}
             onReset={handleResetMenuSelect}
-            renderAction={(action) => (
+            renderAction={(content) => (
               <DropdownMenuItem
-                asChild
                 disabled={isRedeemingReset}
                 onSelect={(event) => {
                   event.preventDefault()
                 }}
               >
-                {action}
+                {content}
               </DropdownMenuItem>
             )}
           />
@@ -197,7 +195,6 @@ export function CodexSwitcherMenu({
             }
           : {})}
       />
-      {open ? <CodexRestartStatusPrompt /> : null}
       <AccountSwitchSection
         heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
         targets={selectedGroup?.targets ?? []}

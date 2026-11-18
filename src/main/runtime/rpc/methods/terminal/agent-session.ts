@@ -1,3 +1,4 @@
+import { accountRestartBoundary } from '../../../../ipc/pty/pane/account-restart-owner'
 import { ensureAgentSessionFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import {
@@ -47,9 +48,11 @@ export const AGENT_SESSION_METHODS = [
     permission: 'workspace',
     params: EnsureAgentSessionParams,
     handler: (params, context) =>
-      context.runtime.ensureAgentSession(
-        withExecutionHostAgentPresentation(params, context.clientKind),
-        callerContext(context)
+      accountRestartBoundary(params.kind === 'explicit' ? params.accountRestart : undefined, () =>
+        context.runtime.ensureAgentSession(
+          withExecutionHostAgentPresentation(params, context.clientKind),
+          callerContext(context)
+        )
       )
   }),
   defineMethod({

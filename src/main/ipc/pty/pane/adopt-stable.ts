@@ -16,7 +16,7 @@ import {
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey,
   reservePaneSpawn,
-  resolvePaneSpawnReservation,
+  settlePaneSpawnReservation,
   rejectPaneSpawnReservation
 } from './spawn-reservation'
 import { resolveStablePaneOwner } from './stable-owner'
@@ -132,13 +132,9 @@ export async function adoptStablePane(
     }
   }
   const settle = (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => {
-    if (reservation.outcome) {
-      return
+    if (settlePaneSpawnReservation(key, reservation, outcome, operation)) {
+      args.onOutcome?.(outcome, operation)
     }
-    reservation.outcome = outcome
-    reservation.operation = operation
-    resolvePaneSpawnReservation(key, reservation, outcome.result)
-    args.onOutcome?.(outcome, operation)
   }
   let mustExist = false
   let absentOwner: AbsentPaneBinding | undefined

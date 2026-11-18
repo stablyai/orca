@@ -82,11 +82,22 @@ export function usePaneProcessRestart({
   | 'worktreeId'
 >) {
   const handleRestartPane = useCallback(
-    (paneId: number, startup: PtyConnectionDeps['startup'], options: { focus: boolean }) => {
+    (
+      paneId: number,
+      startup: PtyConnectionDeps['startup'],
+      options: { focus: boolean } & Pick<
+        PtyConnectionDeps,
+        'accountRestart' | 'accountRestartToken'
+      >
+    ) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
         return
+      }
+      const transport = paneTransportsRef.current.get(paneId)
+      if (options.accountRestartToken && transport && !transport.detach) {
+        throw new Error('terminal_account_restart_unsupported')
       }
       // Activation must not fork the retained conversation while its replacement has no PTY.
       const releaseResumeInPlace = holdPaneResumeInPlace(
@@ -94,7 +105,6 @@ export function usePaneProcessRestart({
         () => true
       )
       try {
-        const transport = paneTransportsRef.current.get(paneId)
         const panePtyBinding = panePtyBindingsRef.current.get(paneId)
         const existingPtyId = transport?.getPtyId()
         if (existingPtyId) {
@@ -105,7 +115,10 @@ export function usePaneProcessRestart({
         panePtyBinding?.dispose()
         panePtyBindingsRef.current.delete(paneId)
         syncPanePtyLayoutBinding(paneId, null)
-        const replacesPtyId = releasePaneTransportForRestart(transport)
+        const replacesPtyId = releasePaneTransportForRestart(
+          transport,
+          Boolean(options.accountRestartToken)
+        )
         paneTransportsRef.current.delete(paneId)
         setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
         setTerminalError(null)
@@ -116,6 +129,8 @@ export function usePaneProcessRestart({
           cwd,
           startup,
           releaseResumeInPlace,
+          accountRestart: options.accountRestart,
+          accountRestartToken: options.accountRestartToken,
           ...(replacesPtyId ? { replacesPtyId } : {}),
           mountFollowsTerminalPark: false,
           invalidateRetainedInlineScrollback: (leafId) => {
