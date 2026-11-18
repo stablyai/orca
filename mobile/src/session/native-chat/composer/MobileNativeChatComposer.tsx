@@ -7,7 +7,7 @@ import {
   pruneMobileNativeChatDraftSkills
 } from './drafts/mobile-native-chat-draft-inputs'
 import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComposerAllocation'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -15,6 +15,8 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
 import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
+import { useMobileNativeChatSendFence } from './delivery/use-mobile-native-chat-send-fence'
+import { useMobileNativeChatTerminalFiles } from './attachments/mobile-native-chat-terminal-files-context'
 import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
 import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
 import { MobileNativeChatSessionOptionPickers } from '../input/session-options/MobileNativeChatSessionOptionPickers'
@@ -98,7 +100,9 @@ export function MobileNativeChatComposer({
   const [picker, setPicker] = useMobileNativeChatPickerPresentation(
     sessionOptions?.controller.optionPickerRequest
   )
-  const files = structured?.files ?? NO_FILES
+  const terminalFiles = useMobileNativeChatTerminalFiles()
+  const fileSource = structured ?? terminalFiles
+  const files = fileSource?.files ?? NO_FILES
   const onWebPaste = mobileNativeChatComposerPasteHandler({
     disabled: disabled || offline || editSession?.locked === true,
     onPasteImages,
@@ -153,15 +157,8 @@ export function MobileNativeChatComposer({
     placeCaret: menu.placeCaret
   })
   const sendingRef = useRef(false)
-  const mountedRef = useRef(true)
-  const sendSurfaceIdRef = useRef(sendSurfaceId)
-  const sendSurfaceGenerationRef = useRef(0)
-  useLayoutEffect(() => {
-    if (sendSurfaceIdRef.current !== sendSurfaceId) {
-      sendSurfaceIdRef.current = sendSurfaceId
-      sendSurfaceGenerationRef.current += 1
-    }
-  }, [sendSurfaceId])
+  const { mountedRef, generationRef: sendSurfaceGenerationRef } =
+    useMobileNativeChatSendFence(sendSurfaceId)
   const [sending, setSending] = useState(false)
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   const filesUploading = files.some((file) => file.path === null)
@@ -175,14 +172,6 @@ export function MobileNativeChatComposer({
     !isAttaching &&
     !filesUploading &&
     !sessionOptionDispatching
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      sendSurfaceGenerationRef.current += 1
-    }
-  }, [])
 
   const handleSend = async (
     intent?: MobileNativeChatSendIntent,
@@ -239,7 +228,7 @@ export function MobileNativeChatComposer({
             images={attachments}
             files={files}
             onRemoveImage={editSession?.locked ? undefined : onRemoveAttachment}
-            onRemoveFile={editSession?.locked ? undefined : structured?.onRemoveFile}
+            onRemoveFile={editSession?.locked ? undefined : fileSource?.onRemoveFile}
           />
           <MobileNativeChatComposerField
             ref={fieldRef}

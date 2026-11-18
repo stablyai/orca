@@ -5,6 +5,7 @@ import { triggerSelection, triggerError } from '../../platform/haptics/haptics'
 import { resolveMobileImageAttachmentAgent } from './mobile-image-paste-agent'
 import { useMobileNewTabAgentOptions } from '../../session/agent-launch/use-mobile-new-tab-agent-options'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
+import { useMobileNativeChatTerminalFileAttachments } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-terminal-file-attachments'
 import { useMobileNativeChatStructuredComposer } from '../../session/native-chat/composer/commands/use-mobile-native-chat-structured-composer'
 import {
   isMobileNativeChatAgentConfirmed,
@@ -121,6 +122,10 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     mcpPanel: nativeChatController.nativeChatMcpPanel
   })
 
+  const nativeChatFileAttachments = useMobileNativeChatTerminalFileAttachments(
+    structuredNativeChat ? null : nativeChatFiles
+  )
+
   useEffect(() => {
     let mounted = true
     const refresh = () => {
@@ -163,7 +168,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     attachImage,
     isAttaching,
     nativeChatImages,
-    nativeChatStructuredComposer
+    nativeChatStructuredComposer,
+    nativeChatFileAttachments
   }
 }
 

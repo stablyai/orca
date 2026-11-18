@@ -12,7 +12,6 @@ import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge
 import { MobileFileTooLargeError, type MediaPicker } from './media-picker-contract'
 import {
   createMediaTestShell,
-  encodeTestBase64,
   stagedTestBytes,
   type MediaTestShell,
   type StagedTestMedia
@@ -117,8 +116,7 @@ describe('pickFiles', () => {
     }
 
     expect(seen).toHaveLength(2)
-    // A string compare: toEqual walks a 786 KB array element by element and times out under load.
-    expect(encodeTestBase64(joined(seen))).toBe(encodeTestBase64(media.bytes))
+    expect(joined(seen)).toEqual(media.bytes)
     expect(shell.released).toEqual(['media-1'])
     expect(shell.calls[0]).toBe('picklarge files single')
   })
