@@ -22152,18 +22152,18 @@
       "view": {
         "label": "仪表盘视图",
         "board": "看板",
-        "fleet": "舰队"
+        "fleet": "编队"
       },
-      "empty": "没有代理",
+      "empty": "没有智能体",
       "solo": {
-        "title": "独立代理"
+        "title": "独立智能体"
       },
       "summary": {
-        "agents": "代理",
+        "agents": "智能体",
         "teams": "团队"
       },
       "team": {
-        "members_other": "{{count}} 个代理"
+        "members_other": "{{count}} 个智能体"
       }
     }
   },
