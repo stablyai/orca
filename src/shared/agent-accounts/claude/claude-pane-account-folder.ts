@@ -1,12 +1,17 @@
-import type {
-  ClaudeManagedAccount,
-  ClaudeRateLimitAccountsState
-} from '../../../../../../shared/agent-accounts/managed-account-types'
-import { getRendererAppPlatform } from '../../../../app-shell/platform/renderer-app-platform'
+import type { ClaudeManagedAccount, ClaudeRateLimitAccountsState } from '../managed-account-types'
 
-function normalizeFolder(path: string): string {
+function normalizeFolder(path: string, platform: NodeJS.Platform): string {
   const slashed = path.replace(/\\/g, '/').replace(/\/+$/, '')
-  return getRendererAppPlatform() === 'win32' ? slashed.toLowerCase() : slashed
+  return platform === 'win32' ? slashed.toLowerCase() : slashed
+}
+
+/** Resolve the account actually used at launch; an account without its own login may use System default (null). */
+export function claudeLaunchAccountId(
+  state: Pick<ClaudeRateLimitAccountsState, 'accounts'>,
+  accountId: string | null
+): string | null {
+  const account = state.accounts.find((candidate) => candidate.id === accountId)
+  return account?.runsOnSystemDefault ? null : accountId
 }
 
 /** The host's Claude folders and logins as main read them at the switch; WSL guests' are never read. */
@@ -21,20 +26,22 @@ export type ClaudePaneFolder =
   | { kind: 'system-default' }
   | { kind: 'own-folder' }
 
-/** Undefined means no hook evidence; without the host's default home every unmanaged folder is System default. */
+/** Undefined means no hook evidence; without the host's default home every unmanaged folder is System default.
+ *  `platform` is the machine whose paths these are. */
 export function resolveClaudePaneFolder(
   transcriptPath: string | undefined,
   saved: readonly ClaudeManagedAccount[],
-  host?: ClaudeHostFolders
+  host: ClaudeHostFolders | undefined,
+  platform: NodeJS.Platform
 ): ClaudePaneFolder | undefined {
-  const transcript = transcriptPath ? normalizeFolder(transcriptPath) : ''
+  const transcript = transcriptPath ? normalizeFolder(transcriptPath, platform) : ''
   const projectsIndex = transcript.lastIndexOf('/projects/')
   if (projectsIndex <= 0) {
     return undefined
   }
   const configDir = transcript.slice(0, projectsIndex)
   const isConfigDir = (folder: string | null | undefined): boolean =>
-    !!folder && normalizeFolder(folder) === configDir
+    !!folder && normalizeFolder(folder, platform) === configDir
   const account =
     saved.find((candidate) =>
       [candidate.managedAuthPath, candidate.wslLinuxAuthPath].some(isConfigDir)
