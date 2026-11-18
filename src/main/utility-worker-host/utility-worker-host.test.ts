@@ -148,9 +148,9 @@ const inProcess = vi.fn(
 )
 
 function newHost(
-  crashCap?: ConstructorParameters<typeof UtilityWorkerHost>[3]
+  crashCap?: ConstructorParameters<typeof UtilityWorkerHost>[4]
 ): InstanceType<typeof UtilityWorkerHost> {
-  return new UtilityWorkerHost('test host', () => hostEntry, inProcess, crashCap)
+  return new UtilityWorkerHost('test host', () => hostEntry, inProcess, undefined, crashCap)
 }
 
 function nextMessage(worker: {

@@ -11,7 +11,7 @@ import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/dur
 import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
 import { HostedWorker } from './hosted-worker'
 import {
-  UTILITY_WORKER_HOST_PAUSED,
+  UtilityWorkerHostPausedError,
   type HostedWorkerThread,
   type UtilityWorkerHostEvent,
   type UtilityWorkerHostRequest,
@@ -37,10 +37,6 @@ export type UtilityWorkerHostCrashCap = {
   onResume: () => void
 }
 
-export class UtilityWorkerHostPausedError extends Error {
-  readonly code = UTILITY_WORKER_HOST_PAUSED
-}
-
 /** A new thread that can't get memory in a crowded host could load in a healthy one. */
 const RESOURCE_START_FAILURES = new Set(['ERR_WORKER_OUT_OF_MEMORY', 'ERR_WORKER_INIT_FAILED'])
 
@@ -54,6 +50,8 @@ type Host = {
   retired: boolean
   /** Its loss is counted once, by whichever of port close or process exit main hears first. */
   lossCounted: boolean
+  /** The owner's context, taken at the first port close, before any worker fails. */
+  exitContext?: CrashReportBreadcrumbData
 }
 
 /** A child still launching has no PID to kill yet; kill it once it has one. */
@@ -83,6 +81,10 @@ export class UtilityWorkerHost {
     private readonly serviceName: string,
     private readonly entryPath: () => string,
     private readonly spawnInProcess: (spawn: UtilityWorkerSpawn) => Worker,
+    /** The owner's account of what this host's workers were doing, for the exit breadcrumb. */
+    private readonly exitContext?: (
+      workers: readonly HostedWorkerThread[]
+    ) => CrashReportBreadcrumbData,
     private readonly crashCap?: UtilityWorkerHostCrashCap
   ) {
     if (crashCap) {
@@ -115,6 +117,7 @@ export class UtilityWorkerHost {
       // is still on the way, and a request arriving meanwhile must start a fresh host.
       portLost: () => {
         if (!host.retired && host.ready) {
+          host.exitContext ??= this.exitContext?.([...host.workers.values()])
           this.countLoss(host)
           if (this.host === host) {
             this.host = undefined
@@ -316,6 +319,8 @@ export class UtilityWorkerHost {
         data[`w${index}_lastReply`] = worker.lastReplyType
         data[`w${index}_receivedMB`] = Math.round(worker.receivedBytes / 2 ** 20)
       })
+      // Before the workers fail, which ends what their owners were waiting on.
+      Object.assign(data, host.exitContext ?? this.exitContext?.(workers))
       recordDurableCrashBreadcrumb('utility_worker_host_exited', data)
     }
     // Counted before consumers hear, so none of them can start a host past the cap.

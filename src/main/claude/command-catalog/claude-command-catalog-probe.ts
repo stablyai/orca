@@ -5,6 +5,7 @@ import {
 } from '../model-catalog/claude-model-catalog-probe'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 import { readClaudeControlResponses } from '../sdk-transport/claude-control-responses'
+import type { ClaudeCliLaunch } from '../cli-capabilities/claude-cli-flag-support'
 
 const REQUEST_ID = 'orca-command-discovery'
 
@@ -20,15 +21,18 @@ export type ClaudeCommandCatalogProbe = (request: {
   accountHomePath: string
   signal?: AbortSignal
   isCurrent?: () => boolean
+  /** The chat's discovery flags, so the list matches what its launch would load. */
+  discovery?: (launch: ClaudeCliLaunch) => Promise<readonly string[]>
 }) => Promise<AgentSessionSlashCommand[]>
 
 export function createClaudeCommandCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): ClaudeCommandCatalogProbe {
-  return async ({ cwd, accountHomePath, isCurrent, signal }) => {
+  return async ({ cwd, accountHomePath, isCurrent, signal, discovery }) => {
     const stdout = await runClaudeListing(deps, {
       accountHomePath,
       cwd,
+      ...(discovery ? { discovery } : {}),
       stdin: CLAUDE_COMMAND_LIST_STDIN,
       site: 'claude-command-catalog-probe',
       isCurrent,

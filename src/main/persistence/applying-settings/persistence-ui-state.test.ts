@@ -86,6 +86,22 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('round-trips the dragged Bots section height and resets it with null', async () => {
+    const store = await createStore()
+    expect(store.getUI().sidebarBotsHeight).toBeUndefined()
+    store.updateUI({ sidebarBotsHeight: 312.4 })
+    store.updateUI({ sidebarWidth: 400 })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().sidebarBotsHeight).toBe(312)
+    reloaded.updateUI({ sidebarBotsHeight: null })
+    reloaded.flush()
+
+    const reset = await createStore()
+    expect(reset.getUI().sidebarBotsHeight).toBeUndefined()
+  })
+
   // Paired-client updates omit local ordering fields; omission must preserve the desktop’s own values.
 
   it('updateUI survives a throwing UI listener so the shutdown checkpoint is not vetoed', async () => {

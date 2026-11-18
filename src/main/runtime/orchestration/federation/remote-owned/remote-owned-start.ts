@@ -134,6 +134,7 @@ export async function startRemoteOwnedWorker(
     parent: _parent,
     ...options
   } = params
+  const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)
   let receipt: unknown
   try {
     receipt = await callRemoteOwnedServer(runtime, link, {
@@ -181,18 +182,15 @@ export async function startRemoteOwnedWorker(
         { server: server.name }
       )
     }
-    // As local and attached starts do: a start the server could not ready leaves no card.
-    if (started.data.state === 'ready') {
-      prepareWorkerStartCard(
-        runtime,
-        ctx.orchestrationCaller
-      )({
-        dispatchId: started.data.dispatchId,
-        workerAddress: `dispatch:${started.data.dispatchId}`,
-        task: task.spec,
-        agent
-      })
-    }
+    startCard({
+      // As local and attached starts do: a start the server could not ready leaves no card.
+      ready: started.data.state === 'ready',
+      dispatchId: started.data.dispatchId,
+      taskId: task.id,
+      workerAddress: `dispatch:${started.data.dispatchId}`,
+      task: task.spec,
+      agent
+    })
   }
   const answer = inServerTerms(receipt, { server: server.name, forward })
   return withRun(

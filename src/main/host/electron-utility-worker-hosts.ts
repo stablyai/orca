@@ -13,6 +13,10 @@ import {
 } from '../worker-threads/worker-thread-entry-path'
 import { JOURNAL_SQL_READER_HOST_NAME } from '../native-chat/agent-session-journal/journal-sql-reader-host-name'
 import { setJournalSqlReaderSpawner } from '../native-chat/agent-session-journal/journal-sql-reader-spawn'
+import {
+  journalReaderRequestData,
+  readJournalReaderRequests
+} from '../native-chat/agent-session-journal/journal-sql-reader-requests'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { resolveObservabilityConsent } from '../observability'
 import { getLogsDirectory } from '../observability/logs-directory'
@@ -50,7 +54,8 @@ export function installElectronJournalReaderHost(): void {
     JOURNAL_SQL_READER_HOST_NAME,
     hostEntry,
     ({ filename, name, workerData }) =>
-      spawnWorkerThread(filename, { name, workerData, execArgv: [] })
+      spawnWorkerThread(filename, { name, workerData, execArgv: [] }),
+    (workers) => journalReaderRequestData(readJournalReaderRequests(workers))
   )
   setJournalSqlReaderSpawner((filename, workerData) =>
     host.spawn({ filename, name: 'orca-journal-sql-reader', workerData, ...largeSendLog() })
@@ -66,6 +71,7 @@ export function installElectronHeavyWorkerHost(): void {
     HEAVY_WORKER_HOST_NAME,
     hostEntry,
     ({ filename, name, workerData }) => spawnWorkerThread(filename, { name, workerData }),
+    undefined,
     {
       crashes: CRASH_LIMIT,
       windowMs: CRASH_WINDOW_MS,

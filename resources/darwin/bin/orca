@@ -1,6 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# A login shell can put this launcher ahead of the session's own CLI on PATH; run the one the
+# session names. ORCA_CLI_HANDOFF marks the hop so the named CLI never hands back.
+function real_file() {
+	local source=$1 dir
+	while [ -h "$source" ]; do
+		dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+		source="$(readlink "$source")"
+		[[ $source != /* ]] && source="$dir/$source"
+	done
+	echo "$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)/$(basename "$source")"
+}
+SESSION_CLI="${ORCA_CLI_COMMAND:-}"
+if [[ $SESSION_CLI == /* ]] && [ "${ORCA_CLI_HANDOFF:-}" != "$SESSION_CLI" ] &&
+	[ -f "$SESSION_CLI" ] && [ -x "$SESSION_CLI" ] &&
+	[ "$(real_file "$SESSION_CLI")" != "$(real_file "${BASH_SOURCE[0]}")" ]; then
+	export ORCA_CLI_HANDOFF="$SESSION_CLI"
+	exec "$SESSION_CLI" "$@"
+fi
+unset ORCA_CLI_HANDOFF
+
 function app_realpath() {
 	SOURCE=$1
 	while [ -h "$SOURCE" ]; do

@@ -19,7 +19,7 @@ import { deliverTerminalAgentLaunchPrompt } from '../../runtime/rpc/methods/agen
 import { AutomationRunLaunchError, type AutomationLaunch } from './automation-launch'
 import { AutomationDispatchRefusedError } from '../dispatch/automation-launch-runner'
 import { buildAutomationWorktreeCreateArgs } from './automation-workspace-create'
-import type { AutomationRunTargetResult } from '../ownership/run-target-resolution'
+import type { AutomationRepoRunTarget } from '../ownership/run-target-resolution'
 
 const TERMINAL_ONLY_MESSAGE = 'An automation starts a terminal agent only.'
 
@@ -39,7 +39,7 @@ export async function launchAutomationTerminalAgent(
   request: {
     automation: Automation
     run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'trigger'>
-    target: Extract<AutomationRunTargetResult, { ok: true }>
+    target: AutomationRepoRunTarget
     runs: readonly AutomationRun[]
   }
 ): Promise<AutomationTerminalAgentLaunch> {
@@ -205,7 +205,7 @@ async function sendToReusableSession(
     run: Pick<AutomationRun, 'id'>
     runs: readonly AutomationRun[]
     text: string
-    target: Extract<AutomationRunTargetResult, { ok: true }>
+    target: AutomationRepoRunTarget
   },
   workspaceDisplayName: string | null,
   physicalHostId: string
@@ -268,7 +268,7 @@ async function sendToReusableSession(
 async function resolveLocalExistingWorkspace(
   runtime: OrcaRuntimeService,
   automation: Automation,
-  target: Extract<AutomationRunTargetResult, { ok: true }>
+  target: AutomationRepoRunTarget
 ) {
   const unavailable = new AutomationDispatchRefusedError(automationRunFailure('targetUnavailable'))
   const selected = await runtime
