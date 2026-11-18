@@ -1,6 +1,6 @@
-import { CredentialDecryptionError } from '../integration-credential-file'
+import { taskProviderFailure } from '../../shared/work-items/task-provider-failure'
+import { CredentialDecryptionError } from '../credentials/integration-credential-file'
 import type {
-  JiraAuthType,
   JiraConnectArgs,
   JiraConnectionStatus,
   JiraSite,
@@ -26,7 +26,13 @@ import {
   jiraRequest,
   type JiraClientForSite
 } from './authenticated-request'
-import { getSiteId, normalizeJiraSiteUrl, siteToViewer, toViewer } from './site-identity'
+import {
+  getSiteId,
+  normalizeJiraSiteUrl,
+  resolveJiraAuthType,
+  siteToViewer,
+  toViewer
+} from './site-identity'
 import { verifyJiraCredentials } from './credential-verification'
 
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
@@ -82,23 +88,22 @@ export async function connect(
   try {
     siteUrl = normalizeJiraSiteUrl(args.siteUrl)
   } catch {
-    return { ok: false, error: 'Enter a valid Jira site URL.' }
+    return taskProviderFailure('jira.invalidSiteUrl', 'Enter a valid Jira site URL.')
   }
 
-  const authType: JiraAuthType = args.authType === 'server' ? 'server' : 'cloud'
+  const authType = resolveJiraAuthType(siteUrl, args.authType)
   const email = args.email.trim()
   const apiToken = args.apiToken.trim()
   if (authType === 'server') {
     if (!apiToken) {
       // A username present means classic Basic auth (password); its absence
       // means the credential is a personal access token sent as Bearer.
-      return {
-        ok: false,
-        error: email ? 'Password is required.' : 'Personal access token is required.'
-      }
+      return email
+        ? taskProviderFailure('jira.passwordRequired', 'Password is required.')
+        : taskProviderFailure('jira.personalTokenRequired', 'Personal access token is required.')
     }
   } else if (!apiToken) {
-    return { ok: false, error: 'API token is required.' }
+    return taskProviderFailure('jira.apiTokenRequired', 'API token is required.')
   }
 
   await acquire()
@@ -126,7 +131,9 @@ export async function connect(
     })
     return { ok: true, viewer }
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Connection failed.' }
+    return error instanceof Error
+      ? { ok: false, error: error.message }
+      : taskProviderFailure('jira.connectionFailed', 'Connection failed.')
   } finally {
     release()
   }
@@ -167,10 +174,12 @@ export async function testConnection(
   try {
     client = getClients(siteId)[0]
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Connection failed.' }
+    return error instanceof Error
+      ? { ok: false, error: error.message }
+      : taskProviderFailure('jira.connectionFailed', 'Connection failed.')
   }
   if (!client) {
-    return { ok: false, error: 'Not connected to Jira.' }
+    return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
   }
   await acquire()
   try {
@@ -180,7 +189,9 @@ export async function testConnection(
     )
     return { ok: true, viewer }
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Connection failed.' }
+    return error instanceof Error
+      ? { ok: false, error: error.message }
+      : taskProviderFailure('jira.connectionFailed', 'Connection failed.')
   } finally {
     release()
   }

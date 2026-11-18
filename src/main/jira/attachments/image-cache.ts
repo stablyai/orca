@@ -1,6 +1,6 @@
 // Description, comments, and lazy image reads share one bounded cache.
 
-import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../../../shared/concurrency/timer-delay'
 
 const CACHE_TTL_MS = 30 * 60_000
 const MAX_CACHE_ENTRIES = 96

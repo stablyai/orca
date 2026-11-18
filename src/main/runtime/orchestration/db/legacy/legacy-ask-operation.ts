@@ -1,4 +1,4 @@
-import type { MessageRow, LegacyOperationReceiptRow, QuestionRow } from '../../types'
+import type { MessageRow, LegacyOperationReceiptRow, QuestionRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { legacyMessageMatchesQuestion } from '../legacy-question-identity'

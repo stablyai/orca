@@ -1,5 +1,5 @@
 // Sentinels skip noisy login profiles; base64 framing prevents PowerShell text decoding from corrupting bytes.
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { orcadPosixNodeRuntimeGlobs } from '../install/orcad-node-runtime-globs'
 
 export type OrcadStdioBridgeMode = 'raw' | 'base64'
@@ -19,7 +19,7 @@ export const ORCAD_STDIO_BRIDGE_FUNCTION = `function orcadStdioBridge(port, mode
   const exit = () => out.write('', () => process.exit(0))
   out.on('error', () => process.exit(0))
   let connected = false
-  const socket = net.connect({ host: '127.0.0.1', port })
+  const socket = net.connect({ host: '127.0.0.1', port, noDelay: true })
   socket.on('error', (error) => {
     if (!connected) out.write(${text(`${ORCAD_STDIO_BRIDGE_REFUSED} `)} + String(error.code || 'ERROR') + '\\n', () => process.exit(0))
   })
@@ -90,7 +90,8 @@ export function orcadBashStdioBridgeCommand(port: number): string {
     'cat <&3 & r=$!;',
     'cat <&4 >&3 & w=$!;',
     'exec 4<&-;',
-    'wait -n; kill $r $w 2>/dev/null; exit 0; fi;',
+    // Reap the cat just killed: WSL's session init never does, and its zombie keeps the distro up.
+    'wait -n; kill $r $w 2>/dev/null; wait; exit 0; fi;',
     'eval "$1"'
   ].join(' ')
   // Carry the Node bridge once, as data both shells can run.

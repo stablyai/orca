@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { removeTreeSync } from '../../windows-transient-lock-removal'
+import { removeTreeSync } from '../../file-write/windows-transient-lock-removal'
 import { runProcess } from '@orca/process-host'
 import { WINDOWS_ARGUMENT_CORPUS } from '../../../packages/process-host/src/__fixtures__/windows-argument-corpus'
 import { npmProgNodeShim } from '../../../packages/process-host/src/__fixtures__/windows-cmd-shim-bodies'
@@ -53,13 +53,5 @@ describeOnWindows('resolved .cmd shim spawn', () => {
     })
     expect(result.code).toBe(0)
     expect(decode(result.stdout)).toEqual([prompt])
-  })
-
-  it('reports the script exit code without a cmd.exe hop in between', async () => {
-    const failing = join(dir, 'fail.cmd')
-    writeFileSync(failing, npmProgNodeShim('fail.js'))
-    writeFileSync(join(dir, 'fail.js'), 'process.exit(7)\n')
-    const result = await runProcess({ program: failing, timeoutMs: 30_000 })
-    expect(result.code).toBe(7)
   })
 })

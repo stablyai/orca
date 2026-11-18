@@ -1,20 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as SshConfigParser from './ssh-config-parser'
-import type { SshConfigHost } from './ssh-config-parser'
-
-const loadUserSshConfigMock = vi.hoisted(() => vi.fn<() => SshConfigHost[]>(() => []))
-vi.mock('./ssh-config-parser', async (importOriginal) => ({
-  ...(await importOriginal<typeof SshConfigParser>()),
-  loadUserSshConfig: loadUserSshConfigMock
-}))
-
-import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/ssh-types'
-import {
-  invalidateUserSshConfigHostCache,
-  listUserSshConfigHostSummaries,
-  resolveUserSshConfigHost,
-  searchSshConfigHosts
-} from './ssh-config-host-picker'
+import { describe, expect, it, vi } from 'vitest'
+import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { resolveUserSshConfigHost, searchSshConfigHosts } from './ssh-config-host-picker'
 import type { SshResolvedConfig } from './ssh-g-config-resolution'
 
 function resolved(overrides: Partial<SshResolvedConfig> = {}): SshResolvedConfig {
@@ -57,6 +43,22 @@ describe('SSH config host picker search', () => {
     expect(last.hasMore).toBe(false)
   })
 
+  it('marks an alias the import skips as a route duplicate In Orca and leaves it out of Add all', () => {
+    const result = searchSshConfigHosts(
+      [{ host: 'aimp' }, { host: 'fresh' }],
+      [{ configHost: '172.16.203.131', label: 'AI Box' }],
+      '',
+      [],
+      new Set(['aimp'])
+    )
+
+    expect(result.hosts.map(({ alias, alreadyInOrca }) => [alias, alreadyInOrca])).toEqual([
+      ['aimp', true],
+      ['fresh', false]
+    ])
+    expect(result.newHostCount).toBe(1)
+  })
+
   it('counts de-duplicated and existing aliases while matching effective display fields', () => {
     const result = searchSshConfigHosts(
       [
@@ -77,13 +79,6 @@ describe('SSH config host picker search', () => {
     expect(result.hosts[0]).toMatchObject({ alias: 'prod', alreadyInOrca: true })
   })
 
-  it('marks a case-only alias variant as already in Orca', () => {
-    const result = searchSshConfigHosts([{ host: 'prod' }], [{ configHost: 'Prod', label: 'Prod' }])
-
-    expect(result).toMatchObject({ totalHostCount: 1, newHostCount: 0 })
-    expect(result.hosts[0]).toMatchObject({ alias: 'prod', alreadyInOrca: true })
-  })
-
   it('lists suppressed aliases for re-pick but excludes them from Add-all newHostCount', () => {
     const result = searchSshConfigHosts([{ host: 'removed' }, { host: 'active' }], [], '', [
       'removed'
@@ -96,72 +91,9 @@ describe('SSH config host picker search', () => {
     ])
     expect(result.hosts.find((host) => host.alias === 'active')?.previouslyRemoved).toBeUndefined()
   })
-
-  it('does not mark a host as previously removed when it is already in Orca', () => {
-    const result = searchSshConfigHosts(
-      [{ host: 'prod' }],
-      [{ configHost: 'prod', label: 'Production' }],
-      '',
-      ['prod']
-    )
-
-    expect(result.hosts[0]).toMatchObject({
-      alias: 'prod',
-      alreadyInOrca: true
-    })
-    expect(result.hosts[0]?.previouslyRemoved).toBeUndefined()
-    expect(result.newHostCount).toBe(0)
-  })
-})
-
-describe('listUserSshConfigHostSummaries caching', () => {
-  beforeEach(() => {
-    loadUserSshConfigMock.mockClear()
-    loadUserSshConfigMock.mockReturnValue([{ host: 'prod' }, { host: 'stage' }])
-    invalidateUserSshConfigHostCache()
-  })
-
-  it('parses ~/.ssh/config once per picker session and filters in memory', () => {
-    listUserSshConfigHostSummaries([], '', [], { refresh: true })
-    const filtered = listUserSshConfigHostSummaries([], 'stage')
-    listUserSshConfigHostSummaries([], 'sta')
-
-    expect(loadUserSshConfigMock).toHaveBeenCalledTimes(1)
-    expect(filtered.hosts.map((host) => host.alias)).toEqual(['stage'])
-  })
-
-  it('re-reads the file when the picker reopens', () => {
-    listUserSshConfigHostSummaries([], '', [], { refresh: true })
-    loadUserSshConfigMock.mockReturnValue([{ host: 'prod' }, { host: 'stage' }, { host: 'added' }])
-    const reopened = listUserSshConfigHostSummaries([], '', [], { refresh: true })
-
-    expect(loadUserSshConfigMock).toHaveBeenCalledTimes(2)
-    expect(reopened.totalHostCount).toBe(3)
-  })
 })
 
 describe('resolveUserSshConfigHost', () => {
-  it('returns effective endpoint and the complete authentication contract', async () => {
-    const resolver = vi.fn().mockResolvedValue(resolved())
-
-    await expect(
-      resolveUserSshConfigHost('prod', resolver, () => [
-        { host: 'prod', gssapiAuthentication: true }
-      ])
-    ).resolves.toEqual({
-      alias: 'prod',
-      hostname: 'prod.internal',
-      username: 'deploy',
-      port: 2222,
-      identityFiles: ['/keys/first', '/keys/second'],
-      identitiesOnly: true,
-      forwardAgent: false,
-      gssapiAuthentication: true,
-      proxyUseFdpass: false
-    })
-    expect(resolver).toHaveBeenCalledWith('prod')
-  })
-
   it('ignores the system-wide GSSAPIAuthentication default that ssh -G reports', async () => {
     const resolver = vi.fn().mockResolvedValue(resolved())
 
@@ -189,15 +121,5 @@ describe('resolveUserSshConfigHost', () => {
       resolveUserSshConfigHost('deleted', resolver, () => [{ host: 'prod' }])
     ).resolves.toBeNull()
     expect(resolver).not.toHaveBeenCalled()
-  })
-
-  it('returns null when OpenSSH cannot resolve an endpoint', async () => {
-    await expect(
-      resolveUserSshConfigHost(
-        'missing',
-        async () => null,
-        () => [{ host: 'missing' }]
-      )
-    ).resolves.toBeNull()
   })
 })

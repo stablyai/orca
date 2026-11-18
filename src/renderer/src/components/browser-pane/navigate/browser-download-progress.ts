@@ -1,7 +1,7 @@
 import type {
   BrowserDownloadRequestedEvent,
   BrowserDownloadProgressEvent
-} from '../../../../../shared/browser-guest-events'
+} from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { formatByteCount } from './browser-notices'
 
 export type BrowserDownloadState = Omit<BrowserDownloadRequestedEvent, 'status' | 'savePath'> & {

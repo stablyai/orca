@@ -2,12 +2,12 @@ import {
   decideWorkerTerminalRelease,
   WORKER_SETTLED_STATES,
   WORKER_TERMINAL_RELEASABLE_ROW_SQL
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import type {
   WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { parseWorkerTerminalPriorOwnerIds } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -78,7 +78,7 @@ export function requestWorkerTerminalRelease(
                WHEN release_state = 'releasing' THEN 'releasing'
                ELSE 'requested'
              END,
-             retained_reason = NULL,
+             retained_reason = NULL, auto_release_at = NULL,
              release_requested_at = COALESCE(release_requested_at, datetime('now')),
              release_error = NULL, updated_at = datetime('now')
          WHERE id = ? AND ${WORKER_TERMINAL_RELEASABLE_ROW_SQL}`
@@ -122,7 +122,7 @@ export function settleDeadWorkerTerminalRelease(
     const owner = this.getWorkerDispatch(resource.owner_dispatch_id)
     const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
     const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
-    // Exit proves process death, not preserved output; require an archive whenever capture is reachable.
+    // Exit proves process death, not a recorded output location; require one whenever recording is reachable.
     // Capture runs only while requested; an unrequested or retained owner settles unavailable instead.
     const archive = this.getWorkerTerminalArchive(resource.owner_dispatch_id)
     const archiveUnreachable =

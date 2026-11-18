@@ -1,5 +1,5 @@
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { migrateStatusBarItems } from './ui-slice-hydration-sanitizers'
 
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
@@ -9,6 +9,8 @@ const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 const DEFAULT_ON_CURSOR_STATUS_BAR_ITEM: StatusBarItem = 'cursor'
 const DEFAULT_ON_ZCODE_STATUS_BAR_ITEM: StatusBarItem = 'zcode'
+const DEFAULT_ON_MUSE_STATUS_BAR_ITEM: StatusBarItem = 'muse'
+const DEFAULT_ON_GIT_BLAME_STATUS_BAR_ITEM: StatusBarItem = 'git-blame'
 
 export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
   let items = migrateStatusBarItems(ui.statusBarItems)
@@ -19,7 +21,9 @@ export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
     ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
     ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM],
     ['_cursorStatusBarDefaultAdded', DEFAULT_ON_CURSOR_STATUS_BAR_ITEM],
-    ['_zcodeStatusBarDefaultAdded', DEFAULT_ON_ZCODE_STATUS_BAR_ITEM]
+    ['_zcodeStatusBarDefaultAdded', DEFAULT_ON_ZCODE_STATUS_BAR_ITEM],
+    ['_museStatusBarDefaultAdded', DEFAULT_ON_MUSE_STATUS_BAR_ITEM],
+    ['_gitBlameStatusBarDefaultAdded', DEFAULT_ON_GIT_BLAME_STATUS_BAR_ITEM]
   ] as const
   for (const [flag, item] of defaults) {
     if (!ui[flag] && !items.includes(item)) {

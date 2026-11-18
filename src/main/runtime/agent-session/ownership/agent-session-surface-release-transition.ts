@@ -1,16 +1,16 @@
 // Last-surface close may release this host's provider root on observed exit, even with unverifiable descendants.
 // This proves root exit, not tree death; advance the fence to reject the stopped owner's late effects.
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   MAX_AGENT_SESSION_DEATH_DETAIL_CHARS,
   type AgentSessionRecord
-} from '../../../../shared/agent-session-record'
-import { nextAgentSessionFence } from '../../../../shared/agent-session-next-fence'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-next-fence'
 import { assertFence, withLease } from './agent-session-lease-transitions'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 
-export type AgentSessionRecordTransitionStore = Pick<AgentSessionRecordStore, 'transitionHandoff'>
+export type AgentSessionRecordTransitionStore = Pick<AgentSessionRecordStore, 'updateRecord'>
 
 /** Only this host's owned lease is releasable; handoffs and free leases use other transitions. */
 export function isSurfaceReleasableAgentSessionRecord(record: AgentSessionRecord): boolean {
@@ -26,6 +26,7 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   expectedFence: number
   now: number
   /** Exit receipt can precede a delayed journal settlement and lease release. */
+  deathEvidenceKind?: 'kill-delivered'
   exitObservedAt?: number
   exitReason?: string
 }): AgentSessionRecord {
@@ -43,7 +44,7 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
     handoffStage: null,
     lastRenewedAt: args.now,
     deathEvidence: {
-      kind: 'exit-observed',
+      kind: args.deathEvidenceKind ?? 'exit-observed',
       // A provider's exit reason can carry kilobytes of stderr; a longer detail fails the write.
       detail: args.exitReason
         ? args.exitReason.slice(0, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS)
@@ -60,11 +61,10 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     sessionId: string
     expectedFence: number
     now: number
+    deathEvidenceKind?: 'kill-delivered'
     exitObservedAt?: number
     exitReason?: string
   }
 ): Promise<AgentSessionRecord> {
-  return store.transitionHandoff(args.sessionId, (record) =>
-    releaseAgentSessionOwnerAfterSurfaceClose({ ...args, record })
-  )
+  return store.updateRecord(args.sessionId, { kind: 'release-surface', args })
 }

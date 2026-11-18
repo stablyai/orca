@@ -1,15 +1,14 @@
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
+import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { AppState } from '@/store/types'
-import { isClaudeManagementTitle } from '../../../../shared/agent-detection'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
-import type { Tab } from '../../../../shared/tab-types'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   isNativeChatTabWideFallbackSafe,
-  nativeChatLaunchAgentForLeaf,
   resolveNativeChatActiveLayoutLeafId
-} from '../../components/native-chat/native-chat-leaf-routing'
+} from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
 
 export function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
@@ -39,12 +38,60 @@ export function getRuntimeLeafIdsForTerminal(
   if (liveLeafIds.length > 0) {
     return liveLeafIds
   }
-  const persistedLeafIds = collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
+  const persistedLeafIds = collectLayoutLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
   if (persistedLeafIds.length > 0) {
     return persistedLeafIds
   }
   // Only a tab with no saved layout, or an older rootless one, gets here; do not fabricate pane:1.
   return []
+}
+
+export function rendererTerminalBinding(
+  numericPaneId: number | null,
+  livePtyId: string | null | undefined,
+  savedPtyId: string | null | undefined,
+  leafCount: number | (() => number),
+  tabPtyId: string | null | undefined
+): string | null {
+  if (numericPaneId !== null) {
+    return livePtyId ?? savedPtyId ?? null
+  }
+  if (savedPtyId != null) {
+    return savedPtyId
+  }
+  if (tabPtyId == null) {
+    return null
+  }
+  return (typeof leafCount === 'function' ? leafCount() : leafCount) === 1 ? tabPtyId : null
+}
+
+const savedTerminalLeafCountByRoot = new WeakMap<object, number>()
+
+/** Saved terminal leaves counted up to 2: the binding only asks "exactly one?". */
+export function countSavedTerminalLeavesUpToTwo(
+  savedLayout: AppState['terminalLayoutsByTabId'][string] | undefined
+): number {
+  const root = savedLayout?.root
+  if (!root) {
+    return 0
+  }
+  // Why: saved layouts are immutable store values, so status churn reuses the count.
+  const cached = savedTerminalLeafCountByRoot.get(root)
+  if (cached !== undefined) {
+    return cached
+  }
+  let count = 0
+  const stack = [root]
+  while (stack.length > 0 && count < 2) {
+    const node = stack.pop()!
+    if (node.type === 'leaf') {
+      count += isTerminalLeafId(node.leafId) ? 1 : 0
+    } else {
+      stack.push(node.second, node.first)
+    }
+  }
+  savedTerminalLeafCountByRoot.set(root, count)
+  return count
 }
 
 export function resolveMobileTabWideAgentHintLeafId(
@@ -77,9 +124,28 @@ export function isMobileFileDiffSource(
   return diffSource === 'staged' || diffSource === 'unstaged'
 }
 
+export function getMobileMarkdownSourceFile(
+  file: AppState['openFiles'][number],
+  openFilesById: ReadonlyMap<string, AppState['openFiles'][number]> | undefined
+): AppState['openFiles'][number] | null {
+  if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
+    return null
+  }
+  if (file.language !== 'markdown' && file.mode !== 'markdown-preview') {
+    return null
+  }
+  return file.mode === 'markdown-preview' && file.markdownPreviewSourceFileId
+    ? (openFilesById?.get(file.markdownPreviewSourceFileId) ?? file)
+    : file
+}
+
 export function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
   // A tab mirrored from a paired host is that host's; republishing it echoes it back to the host.
   if (file.mirroredFromRuntimeSession === true) {
+    return false
+  }
+  // Virtual review/check views use display labels as paths, not readable files.
+  if (file.mode !== 'edit' && file.mode !== 'diff' && file.mode !== 'markdown-preview') {
     return false
   }
   // Combined diff tabs use display labels as paths and need the desktop renderer.
@@ -107,5 +173,3 @@ export function isUnifiedTabActiveInActiveGroup(
     (group) => group.id === inputs.activeGroupId && group.activeTabId === unifiedTabId
   )
 }
-
-export { isClaudeManagementTitle, isTerminalLeafId, makePaneKey, nativeChatLaunchAgentForLeaf }

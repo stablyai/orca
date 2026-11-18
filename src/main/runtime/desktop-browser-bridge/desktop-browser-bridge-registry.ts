@@ -2,11 +2,12 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../browser/browser-error'
 import {
+  DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE,
   type DesktopBrowserBridgeEvent,
   type DesktopBrowserBridgeResultParams
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 
 // Stay below the subscription's 32-unacknowledged-request bound or completed results could strand.
 export const MAX_PENDING_PER_ATTACHMENT = 16
@@ -18,6 +19,8 @@ type Attachment = {
   connectionId: string
   pairedDeviceId: string
   acceptsCancel?: boolean
+  enforcesExpectUrl?: boolean
+  capabilities?: readonly string[]
   emit: (event: DesktopBrowserBridgeEvent) => void
 }
 
@@ -49,6 +52,16 @@ export class DesktopBrowserBridgeRegistry {
 
   hasAttachment(): boolean {
     return this.attachments.length > 0
+  }
+
+  /** Commands go to the newest attachment only, so an older one behind it can't help. */
+  newestAttachmentEnforcesExpectUrl(): boolean {
+    return this.attachments.at(-1)?.enforcesExpectUrl === true
+  }
+
+  newestAttachmentServes(method: string): boolean {
+    const required = DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES.get(method)
+    return !required || (this.attachments.at(-1)?.capabilities?.includes(required) ?? false)
   }
 
   forward(
@@ -150,7 +163,7 @@ export class DesktopBrowserBridgeRegistry {
     if (result.ok) {
       pending.resolve(result.result)
     } else {
-      pending.reject(new BrowserError(result.error.code, result.error.message))
+      pending.reject(new BrowserError(result.error.code, result.error.message, result.error.data))
     }
     return true
   }

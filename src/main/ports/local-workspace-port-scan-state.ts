@@ -1,4 +1,7 @@
-import type { WorkspacePortScanResult, WorkspacePortProbe } from '../../shared/workspace-ports'
+import type {
+  WorkspacePortScanResult,
+  WorkspacePortProbe
+} from '../../shared/workspace/ports/workspace-ports'
 import { isPortScanWorkerUnavailableError } from './port-scan-command-client'
 import { PortScanCommandTimeoutError } from './port-scan-command-protocol'
 import {
@@ -133,6 +136,7 @@ export function partitionListenersNeedingMetadata(
     if (
       remembered?.commandLine !== undefined &&
       remembered.processName === port.processName &&
+      port.socketId !== undefined &&
       remembered.socketId === port.socketId &&
       metadataScanSequence - remembered.probedAtScan < METADATA_REPROBE_INTERVAL_SCANS &&
       port.pid !== undefined

@@ -1,7 +1,7 @@
-import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
-import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
-import { toSourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
-import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
+import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
+import { toSourceControlAiRepoUpdate } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 
 type PersistQueueOptions = {
   getRepoId: () => string

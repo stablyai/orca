@@ -8,16 +8,14 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE,
   isDesktopBrowserBridgeMethod,
   type DesktopBrowserBridgeRequest
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { parseCdpKeyEvent } from '../cdp-keyboard-us-layout'
-import { iterateBrowserTextInsertionChunks } from '../browser-text-insertion'
-import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from '../agent-browser-bridge-types'
+import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'
 
 export type DesktopBrowserBridgeOutcome =
   | { ok: true; result: unknown }
-  | { ok: false; error: { code: string; message: string } }
+  | { ok: false; error: { code: string; message: string; data?: unknown } }
 
 export type DesktopBrowserBridgeAuditEntry = {
   environmentId: string
@@ -32,6 +30,8 @@ export type DesktopBrowserBridgeAuditEntry = {
 
 export type DesktopBrowserBridgeExecutorDeps = {
   environmentId: string
+  /** The SSH host the bridge serves; its tabs say it is controlling them. */
+  targetId: string
   hostLabel: string
   /** Resolve host ownership via the renderer, which also knows unmounted pages. */
   resolveWorkspace(scope: {
@@ -48,10 +48,9 @@ export type DesktopBrowserBridgeExecutorDeps = {
   audit(entry: DesktopBrowserBridgeAuditEntry): void
 }
 
-// Hosts cannot choose a new tab's desktop identity, profile, group or focus.
+// Hosts cannot choose a new tab's desktop identity, group or focus.
 const TAB_CREATE_STRIPPED_PARAMS = [
   'page',
-  'profileId',
   'placement',
   'targetGroupId',
   'activate',
@@ -100,11 +99,12 @@ export async function executeDesktopBrowserBridgeRequest(
       signal,
       (webContentsId) =>
         deps.isHostBrowsingRouted() && deps.isGuestRoutedThroughHost(webContentsId),
-      hostRevoked
+      hostRevoked,
+      { targetId: deps.targetId, hostLabel: deps.hostLabel }
     )
     if (!response.ok) {
       deps.audit({ ...audit, outcome: 'failed', code: response.error.code })
-      return { ok: false, error: { code: response.error.code, message: response.error.message } }
+      return { ok: false, error: response.error }
     }
     deps.audit({ ...audit, outcome: 'ok' })
     return { ok: true, result: response.result }
@@ -139,6 +139,19 @@ async function scopeRequest(
   }
   const params: Record<string, unknown> = { ...request.params }
   if (request.method === 'browser.tabCreate') {
+    if (params.split !== undefined) {
+      throw new BridgeRefusal(
+        'invalid_argument',
+        'tab create --split is not available from an SSH host; the desktop decides where its tabs open.'
+      )
+    }
+    // Refused, not dropped: the host would otherwise believe its tab used the profile.
+    if (params.profileId !== undefined) {
+      throw new BridgeRefusal(
+        'invalid_argument',
+        'tab create --profile is not available from an SSH host; the desktop picks the profile for new tabs. Drop --profile, or open the tab on the desktop.'
+      )
+    }
     for (const key of TAB_CREATE_STRIPPED_PARAMS) {
       delete params[key]
     }
@@ -153,7 +166,6 @@ async function scopeRequest(
       'An SSH host can open only http:// or https:// URLs in the desktop browser. Pass the full URL.'
     )
   }
-  assertNoOptionLikeArguments(request.method, params)
   if (request.method === 'browser.keypress' && isPasteChord(params.key)) {
     throw new BridgeRefusal(
       DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
@@ -204,40 +216,6 @@ function isWebNavigationUrl(value: unknown, optional: boolean): boolean {
   }
 }
 
-// These parameters bypass argv: eval uses CDP and fill uses stdin.
-const NON_ARGV_PARAMS: Readonly<Record<string, readonly string[]>> = {
-  'browser.eval': ['expression'],
-  'browser.fill': ['value']
-}
-// Each text chunk becomes a separate argv value and needs its own option check.
-const CHUNKED_ARGV_PARAMS: Readonly<Record<string, string>> = {
-  'browser.type': 'input',
-  'browser.keyboardInsertText': 'text'
-}
-
-// agent-browser accepts global options anywhere in argv; leading dashes could redirect its CDP proxy.
-function assertNoOptionLikeArguments(method: string, params: Record<string, unknown>): void {
-  const exempt = new Set(NON_ARGV_PARAMS[method] ?? [])
-  const chunked = CHUNKED_ARGV_PARAMS[method]
-  for (const [name, value] of Object.entries(params)) {
-    if (name === 'worktree' || name === 'page' || exempt.has(name)) {
-      continue
-    }
-    const values =
-      name === chunked && typeof value === 'string'
-        ? [...iterateBrowserTextInsertionChunks(value, AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES)]
-        : Array.isArray(value)
-          ? value
-          : [value]
-    if (values.some((entry) => typeof entry === 'string' && entry.trimStart().startsWith('-'))) {
-      throw new BridgeRefusal(
-        'invalid_argument',
-        `An SSH host cannot send a --${name} value that starts with "-". Rephrase it, or type it with orca fill.`
-      )
-    }
-  }
-}
-
 const CTRL_OR_META = 2 | 4
 const SHIFT = 8
 const PASTE_MODIFIER_NAMES = new Set(['control', 'ctrl', 'meta', 'cmd', 'command', 'super', 'win'])
@@ -282,24 +260,5 @@ function urlOrigin(value: unknown): string | null {
     return new URL(value).origin
   } catch {
     return null
-  }
-}
-
-// Routed tabs can still display local files; those remain off-limits to hosts.
-// Allow chrome-error: so hosts can navigate away from failed loads.
-const HOST_REACHABLE_DOCUMENT_PROTOCOLS = new Set([
-  'http:',
-  'https:',
-  'about:',
-  'blob:',
-  'data:',
-  'chrome-error:'
-])
-
-export function isHostReachableDocument(url: string): boolean {
-  try {
-    return HOST_REACHABLE_DOCUMENT_PROTOCOLS.has(new URL(url).protocol)
-  } catch {
-    return url === ''
   }
 }

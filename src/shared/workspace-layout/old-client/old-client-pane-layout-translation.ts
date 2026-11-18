@@ -1,13 +1,13 @@
 // Translate an older desktop’s whole pane tree to commands against owner order. Refuse structures no single command reaches while retaining title/chat updates.
 
-import type { TerminalPaneLayoutNode } from '../../terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 import {
   collectLayoutLeafIdsInOrder,
   insertLeafBeside,
   removeLayoutLeaf,
   samePanesIgnoringRatios,
   type PaneSide
-} from '../terminal-pane-tree'
+} from '../terminal-topology/terminal-pane-tree'
 import type { LayoutCommand } from '../workspace-layout-command-types'
 import type { LayoutTerminalTab, WorkspaceLayout } from '../workspace-layout-model'
 

@@ -1,5 +1,11 @@
-import type { ArtifactWriteRequest } from '../../shared/artifacts'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+import {
+  ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS,
+  ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS,
+  type ArtifactWriteRequest
+} from '../../shared/artifacts/artifacts'
+import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
+import { readArtifactRateLimitResponse } from './artifact-cloud-rate-limit'
+import type { ArtifactRateLimitReplay } from './artifact-cloud-auth-context'
 
 export type ArtifactWriteBody = {
   content: string
@@ -17,13 +23,22 @@ export function artifactWriteBody(request: ArtifactWriteRequest): ArtifactWriteB
   }
 }
 
-export async function artifactRequest<T>(
+type ArtifactRequestOptions = {
+  method?: string
+  body?: unknown
+  editToken?: string
+  idempotencyKey?: string
+  /** The operation's single 429 replay; without it a 429 never replays. */
+  rateLimitReplay?: ArtifactRateLimitReplay
+}
+
+function sendArtifactRequest(
   apiUrl: string,
   token: string,
   path: string,
-  options: { method?: string; body?: unknown; editToken?: string; idempotencyKey?: string } = {}
-): Promise<T> {
-  const response = await fetch(`${apiUrl}/v1/artifacts${path}`, {
+  options: ArtifactRequestOptions
+): Promise<Response> {
+  return fetch(`${apiUrl}/v1/artifacts${path}`, {
     method: options.method ?? 'GET',
     headers: {
       authorization: `Bearer ${token}`,
@@ -33,8 +48,45 @@ export async function artifactRequest<T>(
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
     redirect: 'error',
-    signal: AbortSignal.timeout(20_000)
+    signal: AbortSignal.timeout(ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS)
   })
+}
+
+// A POST without an Idempotency-Key could create a second artifact if the first one landed.
+function canReplay(options: ArtifactRequestOptions): boolean {
+  return (
+    options.rateLimitReplay !== undefined &&
+    ((options.method ?? 'GET') !== 'POST' || Boolean(options.idempotencyKey))
+  )
+}
+
+export async function artifactRequest<T>(
+  apiUrl: string,
+  token: string,
+  path: string,
+  options: ArtifactRequestOptions = {}
+): Promise<T> {
+  let response = await sendArtifactRequest(apiUrl, token, path, options)
+  if (response.status === 429) {
+    const limited = await readArtifactRateLimitResponse(response)
+    const delay = limited.retryAfterSeconds
+    // One replay with the same Idempotency-Key for a short wait, per operation; never loop on 429.
+    if (
+      delay === null ||
+      delay > ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS ||
+      !canReplay(options) ||
+      !options.rateLimitReplay?.claim()
+    ) {
+      throw limited.error
+    }
+    await new Promise((resolve) => setTimeout(resolve, delay * 1000))
+    // A sign-out or account switch during the wait must not create, update or delete under the old token.
+    options.rateLimitReplay?.assertCanReplay()
+    response = await sendArtifactRequest(apiUrl, token, path, options)
+    if (response.status === 429) {
+      throw (await readArtifactRateLimitResponse(response)).error
+    }
+  }
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { code?: string } | null
     throw new OrcaCloudRequestError(response.status, body?.code)

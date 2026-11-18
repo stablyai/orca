@@ -3,9 +3,9 @@ import {
   getBrowserLanguageDetection,
   setRendererLanguageDetection,
   type UiLanguageDetection
-} from '../../../shared/ui-locale'
-import { isWebClientLocation } from '../lib/web-client-location'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+} from '../../../shared/i18n/ui-locale'
+import { isWebClientLocation } from '../app-shell/platform/web-client-location'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 export const useLanguageReadiness = create<{
   ready: boolean
