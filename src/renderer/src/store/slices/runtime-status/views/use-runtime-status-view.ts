@@ -3,7 +3,7 @@ import { createRuntimeStatusSubscriptions } from './runtime-status-subscriptions
 import { isDisconnectedRuntimeHostState } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '../../../index'
-import { useAppStateView } from '../../../retained-views/app-state-view'
+import { useAppStateView, useAppStateViewActive } from '../../../retained-views/app-state-view'
 
 const runtimeStatusSubscriptions = createRuntimeStatusSubscriptions(useAppStore)
 
@@ -57,7 +57,7 @@ export function useRuntimeHostStatusViewSelector<T>(
   select: (entry: RuntimeEnvironmentStatus | undefined) => T
 ): T {
   const store = useAppStateView()
-  const live = store === useAppStore
+  const live = useAppStateViewActive()
   const id = environmentId ?? null
   const subscribe = useCallback(
     (listener: () => void) =>
