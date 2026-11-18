@@ -4,12 +4,16 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../../agent-hook-server'
 import { buildBody, PANE, postHookEvent } from '../../server.test-fixtures'
+import type * as TranscriptReader from '../../../../../../shared/agent-hook-listener/transcript-reader'
 
-const reads = vi.hoisted(() => [] as ((text: string | undefined) => void)[])
+const reads = vi.hoisted(() => {
+  const pending: ((text: string | undefined) => void)[] = []
+  return pending
+})
 vi.mock('../../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 vi.mock('../../../../../../shared/agent-hook-listener/transcript-reader', async (original) => ({
-  ...(await original<typeof import('../../../../../../shared/agent-hook-listener/transcript-reader')>()),
+  ...(await original<typeof TranscriptReader>()),
   readLastAssistantFromTranscriptAsync: () =>
     new Promise<string | undefined>((resolve) => reads.push(resolve))
 }))
