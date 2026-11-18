@@ -1,15 +1,13 @@
-import { useDeferredValue, useMemo, useRef } from 'react'
-import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import { buildActivityEvents } from '../events/activity-event-builder'
-import { createActivityEventBuildCache } from '@/components/activity/events/activity-event-build-cache'
-import { freshActivityLiveAgentState, isRunningActivityState } from '../events/activity-event-state'
+import { useDeferredValue, useMemo } from 'react'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
+import { isRunningActivityState } from '../events/activity-event-state'
 import {
   useAgentPaneThreadsDefaultHostId,
-  useAllAgentPaneThreadStoreData,
   type AgentPaneThreadsStoreData,
   type AllAgentPaneThreadsStoreData
 } from './use-agent-pane-thread-store-data'
-import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
+import { useAgentPaneThreadSnapshot } from './agent-pane-thread-projection'
 import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
@@ -29,95 +27,17 @@ import type {
   ThreadReadFilter
 } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
-import { useAppStore } from '@/store'
-import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 const EMPTY_THREADS: AgentPaneThread[] = []
 const EMPTY_GROUPS: ActivityThreadGroup[] = []
-const EMPTY_ACTIVITY_BUILD: ReturnType<typeof buildActivityEvents> = {
-  events: [],
-  liveAgentByPaneKey: {},
-  paneEntryByPaneKey: {}
-}
 
-/** Every Activity thread before any view filter: store data to events and threads. */
+/** Every Activity thread before any view filter; badge-only callers get live rows only. */
 export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: boolean } = {}): {
   storeData: AllAgentPaneThreadsStoreData
   allThreads: AgentPaneThread[]
 } {
-  const storeData = useAllAgentPaneThreadStoreData()
-  // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
-  const agentStatusEpoch = useAppStoreWithChannels((s) => s.agentStatusEpoch)
-  const chatNames = useStructuredChatTabNames()
-
-  // Per-hook caches preserve unchanged pane/event/thread identities across status writes, including repeated StrictMode/deferred builds.
-  const eventBuildCacheRef = useRef<ReturnType<typeof createActivityEventBuildCache>>(undefined!)
-  eventBuildCacheRef.current ??= createActivityEventBuildCache()
-  const threadReuseCacheRef = useRef<ReturnType<typeof createAgentPaneThreadReuseCache>>(undefined!)
-  threadReuseCacheRef.current ??= createAgentPaneThreadReuseCache()
-
-  const {
-    events: allEvents,
-    liveAgentByPaneKey,
-    paneEntryByPaneKey
-  } = useMemo(
-    () => {
-      const now = Date.now()
-      if (
-        badgeOnly &&
-        Object.keys(storeData.migrationUnsupportedByPtyId).length === 0 &&
-        !Array.from(storeData.agentStatusByPaneKey.values()).some((entry) =>
-          freshActivityLiveAgentState(entry, now)
-        )
-      ) {
-        eventBuildCacheRef.current.panes.clear()
-        eventBuildCacheRef.current.tabs = undefined
-        return EMPTY_ACTIVITY_BUILD
-      }
-      // Global history caps affect live-thread unread and search state.
-      return buildActivityEvents(
-        {
-          chatNames,
-          agentStatusByPaneKey: storeData.agentStatusByPaneKey,
-          runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
-          migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
-          tabsByWorktree: storeData.tabsByWorktree,
-          ptyIdsByTabId: storeData.ptyIdsByTabId,
-          unifiedTabsByWorktree: storeData.activityTabs,
-          worktreeMap: storeData.worktreeMap,
-          repoMap: storeData.repoMap,
-          repos: storeData.repos,
-          resolveWorktree: storeData.getKnownWorktreeById,
-          acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
-          activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
-          // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
-          now
-        },
-        eventBuildCacheRef.current
-      )
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storeData, agentStatusEpoch, chatNames, badgeOnly]
-  )
-
-  const allThreads = useMemo(
-    () =>
-      buildAgentPaneThreads(
-        {
-          events: badgeOnly
-            ? allEvents.filter((event) => liveAgentByPaneKey[event.entry.paneKey])
-            : allEvents,
-          liveAgentByPaneKey,
-          paneEntryByPaneKey,
-          generatedTitlesEnabled: storeData.generatedTitlesEnabled
-        },
-        threadReuseCacheRef.current
-      ),
-    [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled, badgeOnly]
-  )
-
-  return { storeData, allThreads }
+  return useAgentPaneThreadSnapshot(!badgeOnly)
 }
 
 /** Shared Activity/sidebar pipeline: store data to events, threads, filters and groups. */

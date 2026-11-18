@@ -1,5 +1,3 @@
-import { useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { useAppStore } from '@/store'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
@@ -15,7 +13,6 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type AllAgentPaneThreadsStoreData = Pick<
   AppState,
@@ -29,6 +26,7 @@ export type AllAgentPaneThreadsStoreData = Pick<
   | 'folderWorkspaces'
   | 'floatingWorkspacePath'
   | 'detectedWorktreesByRepo'
+  | 'projectGroups'
   | 'getKnownWorktreeById'
   | 'acknowledgedAgentsByPaneKey'
   | 'activityClearedAtByPaneKey'
@@ -52,42 +50,41 @@ export function useAgentPaneThreadsDefaultHostId(): ExecutionHostId {
   return useAppStore((s) => getSettingsFocusedExecutionHostId(s.settings))
 }
 
+export type ActivityTabProjectionCache = {
+  raw: AppState['unifiedTabsByWorktree'] | null
+  projected: ActivityTabProjection | null
+}
+
 /** Store inputs for every Activity thread, before any view scope. */
-export function useAllAgentPaneThreadStoreData(): AllAgentPaneThreadsStoreData {
+export function selectAllAgentPaneThreadStoreData(
+  s: AppState,
   // Keep original native tabs for owner-qualified names; preserve terminal projections across focus writes.
-  const tabProjectionRef = useRef<{
-    raw: AppState['unifiedTabsByWorktree'] | null
-    projected: ActivityTabProjection | null
-  }>({ raw: null, projected: null })
-  return useAppStoreWithChannels(
-    useShallow((s) => ({
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
-      migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
-      tabsByWorktree: s.tabsByWorktree,
-      ptyIdsByTabId: s.ptyIdsByTabId,
-      activityTabs: (() => {
-        const cache = tabProjectionRef.current
-        if (cache.raw === s.unifiedTabsByWorktree && cache.projected) {
-          return cache.projected
-        }
-        const projected = projectActivityTabs(s.unifiedTabsByWorktree, cache.projected)
-        tabProjectionRef.current = { raw: s.unifiedTabsByWorktree, projected }
-        return projected
-      })(),
-      repos: s.repos,
-      worktreesByRepo: selectWorktreesByRepo(s),
-      folderWorkspaces: selectFolderWorkspaces(s),
-      floatingWorkspacePath: s.floatingWorkspacePath,
-      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
-      getKnownWorktreeById: s.getKnownWorktreeById,
-      worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(s)),
-      repoMap: getIndexedRepoMap(s.repos),
-      acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
-      activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
-      acknowledgeAgents: s.acknowledgeAgents,
-      unacknowledgeAgents: s.unacknowledgeAgents,
-      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
-    }))
-  )
+  tabProjection: ActivityTabProjectionCache
+): AllAgentPaneThreadsStoreData {
+  if (tabProjection.raw !== s.unifiedTabsByWorktree || !tabProjection.projected) {
+    tabProjection.projected = projectActivityTabs(s.unifiedTabsByWorktree, tabProjection.projected)
+    tabProjection.raw = s.unifiedTabsByWorktree
+  }
+  return {
+    agentStatusByPaneKey: s.agentStatusByPaneKey,
+    runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
+    migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
+    tabsByWorktree: s.tabsByWorktree,
+    ptyIdsByTabId: s.ptyIdsByTabId,
+    activityTabs: tabProjection.projected,
+    repos: s.repos,
+    worktreesByRepo: selectWorktreesByRepo(s),
+    folderWorkspaces: selectFolderWorkspaces(s),
+    floatingWorkspacePath: s.floatingWorkspacePath,
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
+    projectGroups: s.projectGroups,
+    getKnownWorktreeById: s.getKnownWorktreeById,
+    worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(s)),
+    repoMap: getIndexedRepoMap(s.repos),
+    acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
+    activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
+    acknowledgeAgents: s.acknowledgeAgents,
+    unacknowledgeAgents: s.unacknowledgeAgents,
+    generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
+  }
 }

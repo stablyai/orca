@@ -46,6 +46,8 @@ export type BuildActivityEventsArgs = {
   /** Per-pane "Clear completed" cutoffs; events stamped at or before the cutoff are hidden. */
   activityClearedAtByPaneKey?: Record<string, number>
   now: number
+  /** Panes whose status or freshness changed since the cache was built; every other pane reuses its cached build. */
+  changedPaneKeys?: ReadonlySet<string>
 }
 
 export function buildActivityEvents(
@@ -78,6 +80,18 @@ export function buildActivityEvents(
   }
 
   for (const [paneKey, entry] of Array.from(args.agentStatusByPaneKey.entries())) {
+    const reusable =
+      args.changedPaneKeys && !args.changedPaneKeys.has(paneKey)
+        ? cache?.panes.get(`live:${paneKey}`)
+        : undefined
+    if (reusable?.source === entry) {
+      seenCacheKeys?.add(`live:${paneKey}`)
+      if (reusable.live) {
+        liveAgentByPaneKey[paneKey] = reusable.live
+      }
+      pushPaneEvents(reusable.events, reusable.rowEntry)
+      continue
+    }
     const parsed = parseAgentStatusPaneIdentity(
       paneKey,
       args.unifiedTabsByWorktree
