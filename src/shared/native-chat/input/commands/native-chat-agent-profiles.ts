@@ -12,8 +12,8 @@ export type NativeChatAgentProfile = {
   skillSourceOwner: AgentType
   /** The agent reports and invokes each skill under this prefix, e.g. Pi's `skill:<name>`. */
   skillNamePrefix?: string
-  /** Another agent whose own skill folders, though not its plugins, this agent also reads. */
-  readsSkillFoldersOf?: AgentType
+  /** Other agents whose own skill folders, though not their plugins, this agent also reads. */
+  readsSkillFoldersOf?: readonly AgentType[]
   /** OpenCode 1.x reports some skills as commands; 2.x reports none. Keep folder scans for running chats. */
   keepsScannedSkills?: true
   /** The agent's own harness expands a slash command out of the message text, so
@@ -30,7 +30,7 @@ export type NativeChatAgentProfile = {
 const OPENCODE_PROFILE: NativeChatAgentProfile = {
   skillPrefix: '/',
   skillSourceOwner: 'opencode',
-  readsSkillFoldersOf: 'claude',
+  readsSkillFoldersOf: ['claude'],
   keepsScannedSkills: true,
   expandsSlashCommandsFromText: true
 }
@@ -53,6 +53,13 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     expandsSlashCommandsFromText: true
   },
   opencode: OPENCODE_PROFILE,
+  // Cursor also loads Claude, Codex and Grok skill folders, and ACP reports skills as plain commands.
+  cursor: {
+    skillPrefix: '/',
+    skillSourceOwner: 'cursor',
+    readsSkillFoldersOf: ['claude', 'codex', 'grok'],
+    keepsScannedSkills: true
+  },
   opencode2: OPENCODE_PROFILE,
   // ACP reports built-in commands but no skills; the server never reads Gemini CLI's ~/.gemini/skills.
   antigravity: {
@@ -74,7 +81,7 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
 }
 
 /** Whether skills under `source` reach `profile`'s agent: shared roots, its own, and the skill
- *  folders of an agent it also reads. */
+ *  folders of agents it also reads. */
 export function readsSkillSource(
   profile: Pick<NativeChatAgentProfile, 'skillSourceOwner' | 'readsSkillFoldersOf'>,
   source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>
@@ -82,7 +89,9 @@ export function readsSkillSource(
   return (
     source.owner === null ||
     source.owner === profile.skillSourceOwner ||
-    (source.owner === profile.readsSkillFoldersOf && source.sourceKind !== 'plugin')
+    (source.owner !== null &&
+      profile.readsSkillFoldersOf?.includes(source.owner) === true &&
+      source.sourceKind !== 'plugin')
   )
 }
 

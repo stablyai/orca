@@ -221,7 +221,15 @@ export function buildSkillDiscoverySources(
         null
       ),
       ...providerRepoSources(repoPath, label, pathApi),
-      // OpenCode and Qoder also read their own project folders; they install into the canonical root above.
+      // Cursor, OpenCode and Qoder also read their own project folders; they install into the canonical root above.
+      source(
+        `repo-cursor-${stablePathId(repoPath)}`,
+        `${label} .cursor`,
+        pathApi.join(repoPath, '.cursor', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'cursor'
+      ),
       source(
         `repo-qoder-${stablePathId(repoPath)}`,
         `${label} .qoder`,
