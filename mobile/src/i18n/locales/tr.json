@@ -57,7 +57,8 @@
       "currentWorktree": "mevcut worktree",
       "messages_one": "{{count}} mesaj",
       "messages_other": "{{count}} mesaj",
-      "resumeSession": "Ajan oturumuna devam et"
+      "resumeSession": "Ajan oturumuna devam et",
+      "continueInCli": "CLI'de Devam Et"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Sunucuya ulaşılamadı",
@@ -2465,6 +2466,11 @@
       "sendReviewNotes": "İnceleme Notlarını Gönder",
       "shortcut": "Kısayol",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD Prompt",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Terminal adı",
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
       "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın.",

@@ -59,7 +59,8 @@
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
-      "resumeSession": "Reprendre la session d'agent"
+      "resumeSession": "Reprendre la session d'agent",
+      "continueInCli": "Continuer en CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Impossible de joindre l'hôte",
@@ -2535,6 +2536,11 @@
       "sendReviewNotes": "Envoyer les notes de revue",
       "shortcut": "Raccourci",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "Invite CMD",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
       "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",

@@ -11032,10 +11032,8 @@
             "f61af83316": "Nova Pasta",
             "37c875d827": "Novo Arquivo",
             "b3e288bf41": "Falha ao baixar '{{value0}}'.",
-            "f729bcd97d": "Falha ao baixar a pasta '{{value0}}'.",
             "1a3df04ae1": "Abrir",
             "bce4d4e44f": "'{{value0}}' baixado",
-            "a4029c996b": "Pasta '{{value0}}' baixada",
             "e26010014a": "Ignorado pelo .gitignore",
             "a06551beee": "Enter",
             "66a29dde82": "Copiar Caminho Relativo",
@@ -23182,9 +23180,7 @@
     "updateFailed": "Falha ao atualizar campo do projeto"
   },
   "mediaPreview": {
-    "unavailable": "Não foi possível reproduzir este arquivo de mídia. O arquivo pode estar indisponível ou usar um codec incompatível.",
-    "openFailed": "Não foi possível abrir este arquivo no aplicativo padrão.",
-    "openDefault": "Abrir no aplicativo padrão"
+    "unavailable": "Não foi possível reproduzir este arquivo de mídia. O arquivo pode estar indisponível ou usar um codec incompatível."
   },
   "workspace": {
     "branchChoice": {

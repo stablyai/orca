@@ -27,6 +27,8 @@ import { discardForgottenJournalChatPage } from './journal-forgotten-chats'
 import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import { storedAgentSessionBackground } from '../../runtime/agent-session/records/agent-session-tab-table'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
+import { settleJournalLegacyCompare } from './database/journal-legacy-compare'
+import { recordJournalLegacyCopyFailure } from './database/journal-legacy-copies'
 import {
   fillJournalConnectorReplies,
   sentJournalConnectorReplies
@@ -60,6 +62,8 @@ export type JournalSqlMaintenance =
   | { kind: 'import-finish'; header: JournalDomainImportHeader }
   | JournalDomainMaintenance
   | { kind: 'event-tail-prune'; now: number }
+  | ({ kind: 'legacy-compare-settle' } & Parameters<typeof settleJournalLegacyCompare>[1])
+  | { kind: 'legacy-copy-failed'; sessionId: string; error: string }
   // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
   | { kind: 'connector-replies-fill'; fills: readonly JournalConnectorReplyFill[]; now: number }
   | { kind: 'connector-replies-sent'; keys: readonly JournalConnectorReplyKey[]; now: number }
@@ -129,6 +133,12 @@ export function applyJournalSqlMaintenance(
       return completeJournalDomainCompaction(db, operation.now)
     case 'event-tail-prune':
       return pruneJournalSqlEventTail(db, operation.now)
+    case 'legacy-compare-settle':
+      settleJournalLegacyCompare(db, operation)
+      return null
+    case 'legacy-copy-failed':
+      recordJournalLegacyCopyFailure(db, operation.sessionId, operation.error)
+      return null
     case 'stored-output-compaction':
       return compactJournalStoredOutputPage(db)
   }
