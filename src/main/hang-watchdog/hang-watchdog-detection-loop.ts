@@ -69,7 +69,8 @@ export function createHangWatchdogDetectionLoop(
           detected = null
           config.onStallEndedBySleep?.()
         }
-        if (!detected && !wokeHeartbeat) {
+        // A wake heartbeat older than a sleep gap predates another sleep; it no longer marks main's start.
+        if (!detected && !(wokeHeartbeat && now - lastHeartbeatAt <= sleepGapMs)) {
           lastHeartbeatAt = now
         }
         wokeHeartbeat = false

@@ -264,4 +264,17 @@ describe('createHangWatchdogDetectionLoop', () => {
     loop.recordHeartbeat()
     expect(onStallMissed).toHaveBeenCalledExactlyOnceWith(8_500, 120_000)
   })
+
+  it('drops a wake heartbeat when the machine slept again before the overdue tick', () => {
+    const { loop, onHangDetected, advance } = loopWithClock(0, 8_000)
+    loop.recordHeartbeat()
+    loop.tick()
+    advance(60_000)
+    loop.recordHeartbeat()
+    advance(60_000)
+    loop.tick()
+    advance(5_000)
+    loop.tick()
+    expect(onHangDetected).not.toHaveBeenCalled()
+  })
 })
