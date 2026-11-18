@@ -8,6 +8,7 @@ import {
 import { codexCommandOutput, mcpToolOutput } from '../../structured/items/codex-item-result-readers'
 import type { CodexThreadItem } from '../../structured/items/codex-thread-item-identity'
 import { readRecord } from '../../app-server/codex-item-field-readers'
+import { codexItemRunState } from '../../structured/items/codex-item-run-state'
 import { historyInvocationFields } from './codex-history-source-facts'
 import {
   cutJournalOutput,
@@ -187,9 +188,14 @@ export function constrainSavedHistoryItem(
         if (item.type === 'mcpToolCall' && item.error == null) {
           delete item.result
         } else if (item.type === 'mcpToolCall') {
-          // Still an error, without the text the row holds.
+          // Still an error, without the text the row holds; a result would stand in for it.
           const { message: _, ...error } = readRecord(item.error)
           item.error = error
+          delete item.result
+          // The message is what made it failed; keep that once it is gone.
+          if (item.status === 'completed') {
+            item.status = 'failed'
+          }
         }
       }
       if (body.output && !body.output.truncated) {
@@ -208,7 +214,12 @@ export function constrainSavedHistoryItem(
     }
   }
   const cut = cutJournalOutput(saved)
-  if (item.type === 'fileChange' && cut && isCutJournalOutputOf(cut, codexFileChangePatch(item))) {
+  if (
+    item.type === 'fileChange' &&
+    cut &&
+    codexItemRunState(item) !== 'running' &&
+    isCutJournalOutputOf(cut, codexFileChangePatch(item))
+  ) {
     // The row holds this patch whole: drop the source copy so the saved cut is borrowed.
     delete item.changes
   }

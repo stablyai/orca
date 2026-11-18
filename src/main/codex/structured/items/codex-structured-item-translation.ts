@@ -124,9 +124,12 @@ function fileChanges(item: CodexThreadItem): { path: string; diff: string }[] {
 }
 
 function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
+  if (codexItemRunState(item) !== 'completed') {
+    return fileChangeToolCall(item)
+  }
   const changes = fileChanges(item)
   const patch = codexFileChangePatch(item)
-  if (patch === null || codexItemRunState(item) !== 'completed') {
+  if (patch === null) {
     return fileChangeToolCall(item)
   }
   return {
