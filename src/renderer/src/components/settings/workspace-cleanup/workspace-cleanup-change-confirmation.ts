@@ -26,7 +26,7 @@ import type { WorkspaceCleanupRuleChangeRequest } from './workspace-cleanup-rule
 type Confirmation =
   | { kind: 'cancelled' }
   | { kind: 'refresh'; request: WorkspaceCleanupRuleChangeRequest }
-  | { kind: 'pin-failed'; row: WorkspaceCleanupPreviewRow }
+  | { kind: 'pin-failed'; row: WorkspaceCleanupPreviewRow; tooLate?: boolean }
   | {
       kind: 'ready'
       change: WorkspaceCleanupPolicyChange
@@ -82,7 +82,7 @@ async function complete(
     owner,
     change,
     latest,
-    pending.kind === 'disable-ignored-files' && !pending.kept.size,
+    pending.kind === 'disable-ignored-files' && !pending.selection.getSnapshot().count,
     true
   )
   if (!isCurrent()) {
@@ -91,8 +91,8 @@ async function complete(
   const rows = cleanupDestructiveRows(comparison.next)
   const added = cleanupAddedRows(rows, pending.rows)
   const allKeys = new Set(comparison.next.rows.map(cleanupChangeRowKey))
-  const missing = [...(pending.keepRefs?.values() ?? [])].filter(
-    (row) => pending.kept.has(cleanupChangeRowKey(row)) && !allKeys.has(cleanupChangeRowKey(row))
+  const missing = [...pending.selection.rows()].filter(
+    (row) => !allKeys.has(cleanupChangeRowKey(row))
   )
   if (missing.length) {
     if (missing.some((row) => !row.instanceId)) {
@@ -110,10 +110,17 @@ async function complete(
       throw new Error('workspace_cleanup_identity_unknown')
     }
   }
-  const kept = new Set([...pending.kept].filter((key) => allKeys.has(key)))
-  const keepRefs = new Map([...(pending.keepRefs ?? [])].filter(([key]) => kept.has(key)))
+  const kept = pending.selection.copyFor(rows, allKeys)
+  if (!pending.reviewed) {
+    throw new Error('workspace_cleanup_review_unavailable')
+  }
+  const reviewed = {
+    state: structuredClone(comparison.read.state),
+    change: structuredClone(change)
+  }
+  const policyChanged = JSON.stringify(reviewed) !== JSON.stringify(pending.reviewed)
   const currentKeys = new Set(cleanupDestructiveRows(comparison.current).map(cleanupChangeRowKey))
-  if (added.size || missing.length) {
+  if (policyChanged || added.size || missing.length) {
     return {
       kind: 'refresh',
       request: {
@@ -121,9 +128,9 @@ async function complete(
         rows: cleanupNewRowsFirst(rows, added),
         newKeys: added,
         currentKeys,
-        kept,
-        keepRefs,
-        status: { added: added.size, deleted: missing.map((row) => row.displayName) }
+        selection: kept,
+        reviewed,
+        status: { added: added.size, deleted: missing.map((row) => row.displayName), policyChanged }
       }
     }
   }
@@ -140,12 +147,13 @@ async function complete(
         instanceId: row.instanceId!
       }))
     }
-    let proof: { pinned: string[]; deleted: string[] }
+    let proof: { pinned: string[]; deleted: string[]; tooLate?: string[] }
     try {
       const result = await callRuntimeRpc<{
         pinned: string[]
         deleted: string[]
         failed: string[]
+        tooLate?: string[]
       }>(owner, 'workspaceCleanup.pinBatch', refs, { timeoutMs: 10 * 60 * 1000 })
       proof = result.failed.length
         ? await callRuntimeRpc(owner, 'workspaceCleanup.inspectKept', refs)
@@ -160,6 +168,11 @@ async function complete(
     if (!isCurrent()) {
       return { kind: 'cancelled' }
     }
+    const tooLateKeys = new Set(proof.tooLate)
+    const tooLate = keepRows.find((row) => tooLateKeys.has(row.worktreeId))
+    if (tooLate) {
+      return { kind: 'pin-failed', row: tooLate, tooLate: true }
+    }
     const gone = new Set(proof.deleted)
     const removed = keepRows.filter((row) => gone.has(row.worktreeId))
     if (removed.length) {
@@ -171,8 +184,11 @@ async function complete(
           rows: rows.filter((row) => !removedKeys.has(cleanupChangeRowKey(row))),
           newKeys: new Set(),
           currentKeys,
-          kept: new Set([...kept].filter((key) => !removedKeys.has(key))),
-          keepRefs: new Map([...keepRefs].filter(([key]) => !removedKeys.has(key))),
+          selection: kept.copyFor(
+            rows.filter((row) => !removedKeys.has(cleanupChangeRowKey(row))),
+            new Set([...allKeys].filter((key) => !removedKeys.has(key)))
+          ),
+          reviewed,
           status: { added: 0, deleted: removed.map((row) => row.displayName) }
         }
       }

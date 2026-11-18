@@ -4,7 +4,7 @@ import {
   queueWorkspaceArchive,
   queueWorkspaceDelete
 } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
-import { getEffectiveHooks } from '../../workspace-hooks/hooks'
+import { getEffectiveHooksAsync } from '../../workspace-hooks/effective-hooks-reader'
 import { errorMessage } from '../../../shared/errors/error-message'
 import {
   evaluateWorkspaceCleanup,
@@ -34,7 +34,8 @@ async function decideWorkspaceCleanup(
   runtime: OrcaRuntimeService,
   workspace: WorkspaceCleanupWorkspace,
   now: number,
-  terminalActivity?: () => Promise<WorkspaceCleanupTerminalActivity>
+  terminalActivity?: () => Promise<WorkspaceCleanupTerminalActivity>,
+  readHooks: typeof getEffectiveHooksAsync = getEffectiveHooksAsync
 ): Promise<WorkspaceCleanupEvaluation> {
   if (workspace.removing) {
     return { action: 'keep', cause: 'removing' }
@@ -47,8 +48,8 @@ async function decideWorkspaceCleanup(
   // An unattended run never runs repo scripts nobody approved, and never skips the teardown they do.
   // The checkout's own orca.yaml can add one the repo root lacks.
   if (
-    getEffectiveHooks(workspace.repo)?.scripts.archive ||
-    getEffectiveHooks(workspace.repo, workspace.ref.path)?.scripts.archive
+    (await readHooks(workspace.repo))?.scripts.archive ||
+    (await readHooks(workspace.repo, workspace.ref.path))?.scripts.archive
   ) {
     return { action: 'keep', cause: 'archive-script', reason }
   }

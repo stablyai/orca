@@ -75,13 +75,14 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     sourceDefaultsSupported = true,
     includeAgentWait = false,
     worktreeId?: string,
-    repoId?: string
+    repoId?: string,
+    freshInventory = false
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
     const { worktrees: resolvedWorktrees, platformByRepoId } = this.visibleResolvedWorktreeSnapshot(
-      await this.listResolvedWorktreeSnapshot(),
+      await this.listResolvedWorktreeSnapshot(freshInventory ? (repoId ?? null) : undefined),
       sourceDefaultsSupported
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)

@@ -52,7 +52,7 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
         return
       }
       adopt(value)
-      setCapability(value.protocol === 2 ? 'ready' : 'old')
+      setCapability(value.protocol === 3 ? 'ready' : 'old')
     } catch (failure) {
       if (token === generation.current) {
         setCapability(hasRuntimeRpcErrorCode(failure, 'method_not_found') ? 'old' : 'error')

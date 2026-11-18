@@ -33,7 +33,7 @@ export type WorkspaceCleanupPolicyPreviewRequest = {
 export type WorkspaceCleanupPolicyRead = {
   state: WorkspaceCleanupPolicyState
   expiresAt: number
-  protocol: 2
+  protocol: 3
   pendingWrites?: boolean
 }
 export type WorkspaceCleanupPolicyComparison = {

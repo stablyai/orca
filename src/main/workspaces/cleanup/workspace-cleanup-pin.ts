@@ -4,6 +4,14 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/executio
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { workspaceLifecycleKey } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
+import { hasWorkspaceCleanupAdmission } from './workspace-cleanup-admission'
+
+export type WorkspaceCleanupPinProof = {
+  pinned: string[]
+  deleted: string[]
+  failed: string[]
+  tooLate: string[]
+}
 
 type PinRuntime = Pick<OrcaRuntimeService, 'requireStore'> & {
   workspaceLifecycle?: OrcaRuntimeService['workspaceLifecycle']
@@ -23,7 +31,7 @@ export async function pinWorkspaceForCleanup(
   instanceId: string
 ): Promise<void> {
   const result = await pinWorkspacesForCleanup(runtime, [{ worktreeId, instanceId }])
-  if (result.deleted.length || result.failed.length) {
+  if (result.deleted.length || result.failed.length || result.tooLate.length) {
     throw new Error('workspace_cleanup_kept_workspace_deleted')
   }
 }
@@ -31,9 +39,9 @@ export async function pinWorkspaceForCleanup(
 export async function pinWorkspacesForCleanup(
   runtime: PinRuntime,
   rows: readonly { worktreeId: string; instanceId: string }[]
-): Promise<{ pinned: string[]; deleted: string[]; failed: string[] }> {
+): Promise<WorkspaceCleanupPinProof> {
   if (!rows.length) {
-    return { pinned: [], deleted: [], failed: [] }
+    return { pinned: [], deleted: [], failed: [], tooLate: [] }
   }
   if (rows.length > 100_000) {
     throw new Error('workspace_cleanup_pin_batch_too_large')
@@ -52,23 +60,26 @@ export async function pinWorkspacesForCleanup(
       .map((item) => [item.worktreeId, item])
   )
   return store.runDurableMutation(() => {
-    const result: { pinned: string[]; deleted: string[]; failed: string[] } = {
+    const result: WorkspaceCleanupPinProof = {
       pinned: [],
       deleted: [],
-      failed: []
+      failed: [],
+      tooLate: []
     }
     const lifecycle = runtime.workspaceLifecycle?.hints() ?? {}
     for (const { worktreeId, instanceId } of rows) {
       const row = inventory.get(worktreeId)
       const meta = readWorktreeMetaForHost(store, worktreeId, LOCAL_EXECUTION_HOST_ID)
+      if (!row || row.worktreeInstanceId !== instanceId || meta?.instanceId !== instanceId) {
+        result.deleted.push(worktreeId)
+        continue
+      }
       if (
-        !row ||
-        row.worktreeInstanceId !== instanceId ||
+        hasWorkspaceCleanupAdmission(store, worktreeId, instanceId) ||
         row.removing ||
-        meta?.instanceId !== instanceId ||
         lifecycle[workspaceLifecycleKey(LOCAL_EXECUTION_HOST_ID, worktreeId)]?.kind === 'delete'
       ) {
-        result.deleted.push(worktreeId)
+        result.tooLate.push(worktreeId)
         continue
       }
       try {

@@ -245,7 +245,7 @@ it('fences a reserved write whose resolver outlives its original client', async 
   const rejection = expect(pending).rejects.toThrow('workspace_cleanup_policy_conflict')
   await entered.promise
   expect(readWorkspaceCleanupPolicy(store, repo.id).pendingWrites).toBe(true)
-  recoverWorkspaceCleanupPolicyWrites(store)
+  settleWorkspaceCleanupPolicyWrite(expected.id, expected.expiresAt)
   expect(readWorkspaceCleanupPolicy(store, repo.id).pendingWrites).toBe(false)
   release.resolve()
   await rejection
@@ -262,7 +262,7 @@ it('fences a reserved global policy write after client recovery', () => {
   const { store, guard } = fixture()
   const expected = { ...guard(null), requireReservation: true as const }
   reserveWorkspaceCleanupPolicyWrite(store, expected)
-  recoverWorkspaceCleanupPolicyWrites(store)
+  settleWorkspaceCleanupPolicyWrite(expected.id, expected.expiresAt)
   expect(() =>
     store.updateSettings({
       workspaceCleanupPolicy: { ...getDefaultWorkspaceCleanupRules(), merged: { enabled: true } },
@@ -284,4 +284,51 @@ it('refuses a late reserved-protocol packet without its reservation', () => {
     mode: 'custom',
     rules: { merged: { enabled: true } }
   })
+})
+
+it('preserves another live project writer while a second client opens settings', async () => {
+  const { store, repo, guard } = fixture()
+  const expected = { ...guard(repo.id), requireReservation: true as const }
+  reserveWorkspaceCleanupPolicyWrite(store, expected)
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const controller = new RuntimeRepositorySettingsController({
+    getStore: () => store,
+    resolveRepo: async () => {
+      entered.resolve()
+      await release.promise
+      return store.getRepo(repo.id)!
+    },
+    forgetTerminalTopology: () => {},
+    invalidateResolvedWorktrees: () => {},
+    invalidateWorktreeScan: () => {},
+    notifyReposChanged: () => {},
+    notifyWorktreesChanged: () => {}
+  })
+  const pending = controller.update(repo.id, {
+    workspaceCleanupPolicy: null,
+    workspaceCleanupGuard: expected
+  })
+  await entered.promise
+  expect(recoverWorkspaceCleanupPolicyWrites(store)).toBe(true)
+  expect(readWorkspaceCleanupPolicy(store, repo.id).pendingWrites).toBe(true)
+  release.resolve()
+  await pending
+  await store.runDurableMutation(() => ({ value: true, persist: 'if-dirty' }))
+  expect(
+    readPersistedState().repos.find((row) => row.id === repo.id)?.workspaceCleanupPolicy
+  ).toBeUndefined()
+})
+
+it('preserves another live global writer when a second client reads recovery state', () => {
+  const { store, guard } = fixture()
+  const expected = { ...guard(null), requireReservation: true as const }
+  reserveWorkspaceCleanupPolicyWrite(store, expected)
+  expect(recoverWorkspaceCleanupPolicyWrites(store)).toBe(true)
+  store.updateSettings({
+    workspaceCleanupPolicy: { ...getDefaultWorkspaceCleanupRules(), merged: { enabled: true } },
+    workspaceCleanupGuard: expected
+  })
+  expect(store.getSettings().workspaceCleanupPolicy?.merged.enabled).toBe(true)
+  expect(readWorkspaceCleanupPolicy(store, null).pendingWrites).toBe(false)
 })

@@ -1,9 +1,22 @@
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export const cleanupPolicyOwnerKey = (owner: RuntimeClientTarget) =>
   owner.kind === 'environment' ? `environment:${owner.environmentId}` : 'local'
 const prefix = (owner: RuntimeClientTarget) =>
-  `orca:cleanup-write:${encodeURIComponent(cleanupPolicyOwnerKey(owner))}:`
+  `orca:cleanup-write:${encodeURIComponent(cleanupPolicyOwnerKey(owner))}:${clientId()}:`
+
+function clientId(): string {
+  const storage = window.sessionStorage
+  const key = 'orca:cleanup-write-client'
+  const existing = storage.getItem(key)
+  if (existing) {
+    return existing
+  }
+  const id = createNonSecureContextUuid()
+  storage.setItem(key, id)
+  return id
+}
 
 export function recordCleanupWrite(owner: RuntimeClientTarget, id: string, expiresAt: number) {
   window.localStorage.setItem(`${prefix(owner)}${id}`, JSON.stringify({ expiresAt }))

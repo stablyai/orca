@@ -28,7 +28,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   rmSync(testState.dir, { recursive: true, force: true })
 })
-function fixture() {
+function fixture(withQueue = true) {
   const root = join(testState.dir, 'repo'),
     path = join(testState.dir, 'work')
   const git = (args: string[]) => {
@@ -84,7 +84,7 @@ function fixture() {
   }
   const removed: string[] = []
   const runtime = {
-    workspaceLifecycle: new WorkspaceLifecycleQueue(),
+    workspaceLifecycle: withQueue ? new WorkspaceLifecycleQueue() : null,
     requireStore: () => store,
     getWorktreePs: async () => ({ truncated: false, worktrees: [summary] }),
     getExistingOrchestrationDb: () => null,
@@ -165,20 +165,62 @@ it('keeps a real unpushed commit made after status in the final removal recheck'
   expect(existsSync(join(f.path, 'new-work'))).toBe(true)
   expect(f.git(['-C', f.path, 'rev-list', '--count', 'main..HEAD'])).toBe('1')
 })
-it('honors a durable Keep after automatic eligibility was read but before actual queue admission', async () => {
-  const f = fixture()
+it.each([true, false])(
+  'honors a durable Keep after eligibility but before automatic admission (queue=%s)',
+  async (withQueue) => {
+    const f = fixture(withQueue)
+    const [workspace] = await collectWorkspaceCleanupWorkspaces({
+      store: f.store,
+      runtime: f.host,
+      globalRules: f.rules,
+      now: Date.now()
+    })
+    const sampled = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    f.runtime.listTerminals = async () => {
+      sampled.resolve()
+      await resume.promise
+      return { terminals: [], truncated: false }
+    }
+    const removal = removeWorkspaceForCleanup({
+      store: f.store,
+      runtime: f.host,
+      workspace,
+      globalRules: () => f.rules,
+      now: Date.now
+    })
+    await sampled.promise
+    expect(await pinWorkspacesForCleanup(f.host, [{ worktreeId: f.id, instanceId: 'a' }])).toEqual({
+      pinned: [f.id],
+      deleted: [],
+      failed: [],
+      tooLate: []
+    })
+    resume.resolve()
+    expect(await removal).toMatchObject({
+      outcome: 'kept',
+      keepCause: 'pinned',
+      keptOnRecheck: true
+    })
+    expect(f.removed).toEqual([])
+  }
+)
+
+it('refuses a stale-inventory Keep after automatic deletion starts with no lifecycle queue', async () => {
+  const f = fixture(false)
   const [workspace] = await collectWorkspaceCleanupWorkspaces({
     store: f.store,
     runtime: f.host,
     globalRules: f.rules,
     now: Date.now()
   })
-  const sampled = Promise.withResolvers<void>()
-  const resume = Promise.withResolvers<void>()
-  f.runtime.listTerminals = async () => {
-    sampled.resolve()
-    await resume.promise
-    return { terminals: [], truncated: false }
+  const started = Promise.withResolvers<void>()
+  const finish = Promise.withResolvers<void>()
+  f.runtime.removeManagedWorktree = async () => {
+    started.resolve()
+    await finish.promise
+    f.removed.push(f.id)
+    return {}
   }
   const removal = removeWorkspaceForCleanup({
     store: f.store,
@@ -187,17 +229,15 @@ it('honors a durable Keep after automatic eligibility was read but before actual
     globalRules: () => f.rules,
     now: Date.now
   })
-  await sampled.promise
+  await started.promise
   expect(await pinWorkspacesForCleanup(f.host, [{ worktreeId: f.id, instanceId: 'a' }])).toEqual({
-    pinned: [f.id],
+    pinned: [],
     deleted: [],
-    failed: []
+    failed: [],
+    tooLate: [f.id]
   })
-  resume.resolve()
-  expect(await removal).toMatchObject({
-    outcome: 'kept',
-    keepCause: 'pinned',
-    keptOnRecheck: true
-  })
-  expect(f.removed).toEqual([])
+  finish.resolve()
+  expect(await removal).toMatchObject({ outcome: 'removed' })
+  expect(f.store.getWorktreeMetaForHost(f.id, 'local')?.isPinned ?? false).toBe(false)
+  expect(f.removed).toEqual([f.id])
 })

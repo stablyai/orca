@@ -213,6 +213,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   readPairedFolderChildren?: () => Promise<PairedFolderChildren>
   comparison?: { state: WorkspaceCleanupPolicyState; change: WorkspaceCleanupPolicyChange }
   requireComplete?: boolean
+  freshInventory?: boolean
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
@@ -224,7 +225,8 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     true,
     false,
     args.withFolderSiblings ? undefined : worktreeId,
-    args.comparison?.state.repoId ?? undefined
+    args.comparison?.state.repoId ?? undefined,
+    args.freshInventory
   )
   if (ps.truncated) {
     throw new Error('Could not list every workspace on this host.')

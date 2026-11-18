@@ -20803,7 +20803,9 @@
           "keptPinned": "Behaltene Arbeitsbereiche werden angeheftet.",
           "alreadySet": "Zeilen ohne Neu sind bereits zum Löschen vorgesehen.",
           "cancelCurrent": "Abbrechen verhindert nicht, dass aktuelle Regeln einige dieser Arbeitsbereiche löschen.",
-          "apply": "Anwenden"
+          "apply": "Anwenden",
+          "keepTooLate": "{{name}} konnte nicht behalten werden, da das Löschen bereits begonnen hat. Regel nicht geändert.",
+          "proposalChanged": "Die Bereinigungsregeln wurden an anderer Stelle geändert. Prüfe die aktualisierten Regeln: {{rules}}"
         },
         "rules": {
           "merged": "Zusammengeführte Arbeitsbereiche löschen",

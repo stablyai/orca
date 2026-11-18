@@ -24,6 +24,7 @@ import {
 import { setWorkspaceCleanupRuleEnabled } from './workspace-cleanup-rule-keys'
 import { WorkspaceCleanupRuleChangeDialog } from './workspace-cleanup-rule-change-dialog'
 import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-settings-search'
+import { useWorkspaceCleanupHostName } from './use-workspace-cleanup-host-name'
 
 export function WorkspaceCleanupSettingsPane({
   hostScope,
@@ -36,6 +37,7 @@ export function WorkspaceCleanupSettingsPane({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const owner = hostScope.target
+  const host = useWorkspaceCleanupHostName(owner, settings?.machineName)
   const query = useAppStateValue((state) => state.settingsSearchQuery)
   const { hostRules, reload } = useWorkspaceCleanupHostRules(owner, settings, updateSettings)
   const change = useWorkspaceCleanupRuleChange({
@@ -72,9 +74,6 @@ export function WorkspaceCleanupSettingsPane({
       : change.errorSetting
   const phase: WorkspaceCleanupRulePhase =
     change.checking && change.enabling ? 'checking' : change.enabling ? 'enabling' : 'saving'
-  const host =
-    (owner.kind === 'local' ? settings?.machineName : undefined) ||
-    t('components.settings.workspaceCleanup.change.thisHost', 'this host')
   const report = hostReport.state === 'ready' ? hostReport.report : null
   const errorLine =
     change.error && !change.pending ? (

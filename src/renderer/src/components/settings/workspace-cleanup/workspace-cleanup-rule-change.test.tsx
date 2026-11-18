@@ -45,7 +45,7 @@ const save = vi.fn()
 beforeEach(() => {
   vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 10, 14, 12))
   read = {
-    protocol: 2,
+    protocol: 3,
     expiresAt: Date.UTC(2026, 10, 14, 12, 1),
     state: {
       repoId: 'project',
@@ -122,6 +122,24 @@ afterEach(() => {
   useAppStore.setState(original, true)
   Object.defineProperty(window, 'api', { configurable: true, value: api })
   vi.restoreAllMocks()
+})
+
+it('keeps focus inside the confirmation when its save fails', async () => {
+  save.mockRejectedValueOnce(new Error('Write refused'))
+  const normal = runtime.getMockImplementation()!
+  runtime.mockImplementation(async (request) =>
+    request.method === 'workspaceCleanup.settlePolicyWrite'
+      ? { ok: true, result: { outcome: 'cancelled' } }
+      : normal(request)
+  )
+  await open()
+  fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
+  await waitFor(() => {
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.contains(document.activeElement)).toBe(true)
+    expect(screen.getByRole('alert').contains(document.activeElement)).toBe(true)
+  })
+  expect(read.state.projects[0].policy).toMatchObject({ rules: { merged: { enabled: false } } })
 })
 function Harness({ global = false }: { global?: boolean }) {
   const change = useWorkspaceCleanupRuleChange({
@@ -344,11 +362,11 @@ it('reads back a durable Keep after its reply is lost before activating the poli
   const normal = runtime.getMockImplementation()!
   runtime.mockImplementation(async (request) => {
     if (request.method === 'workspaceCleanup.pinBatch') {
-      pin.push(request.params.worktreeId)
+      pin.push(...request.params.rows.map((item: { worktreeId: string }) => item.worktreeId))
       throw new Error('Reply lost')
     }
     if (request.method === 'workspaceCleanup.inspectKept') {
-      return { ok: true, result: { deleted: [], pinned: ['project::/existing'] } }
+      return { ok: true, result: { deleted: [], pinned: [...pin] } }
     }
     return normal(request)
   })

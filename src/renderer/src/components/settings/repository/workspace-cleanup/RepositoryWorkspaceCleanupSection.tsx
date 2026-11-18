@@ -20,6 +20,7 @@ import { getRepositoryWorkspaceCleanupSearchEntry } from './repository-workspace
 import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { matchesSettingsSearch } from '../../search/settings-search'
+import { useWorkspaceCleanupHostName } from '../../workspace-cleanup/use-workspace-cleanup-host-name'
 
 type PolicyChoice = 'global' | RepoWorkspaceCleanupPolicy['mode']
 
@@ -42,6 +43,7 @@ export function RepositoryWorkspaceCleanupSection({
   const updateSettings = useAppStore((state) => state.updateSettings)
   const ownerTarget = ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo))
   const owner = ownerTarget ?? { kind: 'local' as const }
+  const host = useWorkspaceCleanupHostName(owner, settings?.machineName)
   const { hostRules } = useWorkspaceCleanupHostRules(owner, settings, updateSettings)
   const change = useWorkspaceCleanupRuleChange({
     owner,
@@ -90,9 +92,6 @@ export function RepositoryWorkspaceCleanupSection({
     })
   }
   const oldHost = change.capability === 'old' || hostRules.state === 'unsupported'
-  const host =
-    (owner.kind === 'local' ? settings?.machineName : undefined) ||
-    t('components.settings.workspaceCleanup.change.thisHost', 'this host')
 
   return (
     <div
@@ -209,7 +208,7 @@ export function RepositoryWorkspaceCleanupSection({
           {change.error &&
           !change.pending &&
           (!change.errorSetting || change.errorSetting === 'mode') ? (
-            <p role="alert" className="text-xs text-muted-foreground">
+            <p role="alert" className="mb-3 text-xs text-destructive">
               {change.error}{' '}
               <button type="button" className="underline" onClick={change.retry}>
                 {t('components.settings.workspaceCleanup.retry', 'Try again')}
@@ -266,6 +265,7 @@ export function RepositoryWorkspaceCleanupSection({
         settling={change.settling}
         error={change.error}
         onRetry={change.retry}
+        onCloseAutoFocus={change.returnFocus}
       />
     </div>
   )

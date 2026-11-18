@@ -18,6 +18,7 @@ import {
   pinWorkspaceForCleanup,
   pinWorkspacesForCleanup
 } from '../../../../workspaces/cleanup/workspace-cleanup-pin'
+import { hasWorkspaceCleanupAdmission } from '../../../../workspaces/cleanup/workspace-cleanup-admission'
 import {
   WorkspaceCleanupCodexHistoryDiskUsageParams,
   WorkspaceCleanupPreviewParams,
@@ -130,16 +131,19 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
       }
       return store.runDurableMutation(() => {
         const deleted: string[] = [],
-          pinned: string[] = []
+          pinned: string[] = [],
+          tooLate: string[] = []
         for (const row of params.rows) {
           const meta = readWorktreeMetaForHost(store, row.worktreeId, LOCAL_EXECUTION_HOST_ID)
           if (meta?.instanceId !== row.instanceId) {
             deleted.push(row.worktreeId)
+          } else if (hasWorkspaceCleanupAdmission(store, row.worktreeId, row.instanceId)) {
+            tooLate.push(row.worktreeId)
           } else if (meta.isPinned) {
             pinned.push(row.worktreeId)
           }
         }
-        return { value: { deleted, pinned }, persist: 'if-dirty' }
+        return { value: { deleted, pinned, tooLate }, persist: 'if-dirty' }
       })
     }
   }),

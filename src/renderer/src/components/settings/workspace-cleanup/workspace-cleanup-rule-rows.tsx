@@ -192,7 +192,7 @@ export function WorkspaceCleanupRuleRows({
           }
         />
         {error?.key === key && !failed ? (
-          <p role="alert" className="text-xs text-muted-foreground">
+          <p role="alert" className="mb-3 text-xs text-destructive">
             {error.message}{' '}
             <button type="button" className="underline" onClick={error.retry}>
               {t('components.settings.workspaceCleanup.retry', 'Try again')}
@@ -266,7 +266,7 @@ function InactiveRuleOptions({
         max={WORKSPACE_CLEANUP_POLICY_MAX_DAYS}
         integer
         suffix={t('components.settings.workspaceCleanup.rules.days', 'days')}
-        disabled={disabled}
+        ariaDisabled={disabled}
         onChange={(afterDays) => setInactive({ afterDays })}
       />
       {WORKSPACE_ARCHIVE_SUPPORTED ? (

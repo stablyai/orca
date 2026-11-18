@@ -107,11 +107,12 @@ export async function readCleanupPolicy(
     'workspaceCleanup.policyState',
     { repoId }
   )
-  if (read.protocol !== 2 || !isCurrent()) {
+  if (read.protocol !== 3 || !isCurrent()) {
     return read
   }
   const journal = journaledCleanupWrites(owner)
   if (!read.pendingWrites && !journal.length) {
+    onRecovery?.(false)
     return read
   }
   onRecovery?.(true)

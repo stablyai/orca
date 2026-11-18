@@ -21,6 +21,7 @@ import {
 } from './workspace-cleanup-terminal-activity'
 import { decideWorkspaceCleanup } from './workspace-cleanup-removal-step'
 import { workspaceCleanupRowDetails } from './workspace-cleanup-run-summary'
+import { createEffectiveHooksReader } from '../../workspace-hooks/effective-hooks-reader'
 
 export function readWorkspaceCleanupPolicy(
   store: Pick<RuntimeStore, 'getSettings' | 'getRepos' | 'getProfileStorageDirectory'>,
@@ -29,7 +30,7 @@ export function readWorkspaceCleanupPolicy(
   return {
     state: captureWorkspaceCleanupPolicyState(store.getSettings(), store.getRepos(), repoId),
     expiresAt: Date.now() + WORKSPACE_CLEANUP_WRITE_LEASE_MS,
-    protocol: 2,
+    protocol: 3,
     pendingWrites: hasPendingWorkspaceCleanupWrites(store)
   }
 }
@@ -47,7 +48,8 @@ export async function previewWorkspaceCleanupChange(
   deps: WorkspaceCleanupRunnerDeps,
   change: WorkspaceCleanupPolicyChange,
   read: WorkspaceCleanupPolicyRead,
-  signal: AbortSignal
+  signal: AbortSignal,
+  freshInventory = false
 ): Promise<WorkspaceCleanupPolicyComparison> {
   const evaluatedAt = Date.now()
   const [workspaces, sizes] = await Promise.all([
@@ -57,10 +59,12 @@ export async function previewWorkspaceCleanupChange(
       globalRules: read.state.rules,
       now: evaluatedAt,
       comparison: { state: read.state, change },
+      freshInventory,
       signal: signal
     }),
     readWorkspaceCleanupSizes(deps.historyDirectory)
   ])
+  const readHooks = createEffectiveHooksReader()
   const pairs = await mapWorkspaceCleanupWithConcurrency(workspaces, 3, async (workspace) => {
     let terminal: Promise<WorkspaceCleanupTerminalActivity> | undefined
     const activity = () =>
@@ -69,12 +73,19 @@ export async function previewWorkspaceCleanupChange(
         workspace.ref.worktreeId,
         workspace.paneAgentStates
       ))
-    const current = await decideWorkspaceCleanup(deps.runtime, workspace, evaluatedAt, activity)
+    const current = await decideWorkspaceCleanup(
+      deps.runtime,
+      workspace,
+      evaluatedAt,
+      activity,
+      readHooks
+    )
     const next = await decideWorkspaceCleanup(
       deps.runtime,
       { ...workspace, policy: workspace.nextPolicy! },
       evaluatedAt,
-      activity
+      activity,
+      readHooks
     )
     const ref = {
       ...workspace.ref,
@@ -136,13 +147,17 @@ export class WorkspaceCleanupChangePreviews {
     if (existing) {
       return existing
     }
-    const request = previewWorkspaceCleanupChange(this.deps, proposal, read, this.signal).finally(
-      () => {
-        if (this.pending.get(key) === request) {
-          this.pending.delete(key)
-        }
+    const request = previewWorkspaceCleanupChange(
+      this.deps,
+      proposal,
+      read,
+      this.signal,
+      fresh
+    ).finally(() => {
+      if (this.pending.get(key) === request) {
+        this.pending.delete(key)
       }
-    )
+    })
     if (!fresh) {
       this.pending.set(key, request)
     }

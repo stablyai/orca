@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
 import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { Button } from '../../ui/button'
-import { Checkbox } from '../../ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -13,8 +12,14 @@ import {
   DialogTitle
 } from '../../ui/dialog'
 import { VirtualizedList } from '../../ui/virtualized-list'
-import { WorkspaceCleanupWorkspaceLine } from './workspace-cleanup-workspace-line'
-import { WorkspaceCleanupReasonChip } from './workspace-cleanup-reason-chip'
+import { WorkspaceCleanupRuleChangeRow } from './workspace-cleanup-rule-change-row'
+import { WorkspaceCleanupKeepSelection } from './workspace-cleanup-keep-selection'
+import type {
+  WorkspaceCleanupPolicyState,
+  WorkspaceCleanupPolicyChange
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
+import { resolveWorkspaceCleanupPolicy } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import { formatWorkspaceCleanupRuleSummary } from './workspace-cleanup-rule-summary'
 import { cleanupChangeRowKey, cleanupExistingRuleNotice } from './workspace-cleanup-change-preview'
 import {
   workspaceCleanupConfirmedSettingTitle,
@@ -28,10 +33,12 @@ export type WorkspaceCleanupRuleChangeRequest = {
   rows: WorkspaceCleanupPreviewRow[]
   newKeys: ReadonlySet<string>
   currentKeys: ReadonlySet<string>
-  kept: ReadonlySet<string>
-  keepRefs?: ReadonlyMap<string, WorkspaceCleanupPreviewRow>
-  status: { added: number; deleted: string[] } | null
+  selection: WorkspaceCleanupKeepSelection
+  reviewed?: { state: WorkspaceCleanupPolicyState; change: WorkspaceCleanupPolicyChange }
+  status: { added: number; deleted: string[]; policyChanged?: boolean } | null
 }
+
+const EMPTY_SELECTION = new WorkspaceCleanupKeepSelection([])
 
 export function WorkspaceCleanupRuleChangeDialog({
   request,
@@ -56,6 +63,7 @@ export function WorkspaceCleanupRuleChangeDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const status = useRef<HTMLDivElement>(null)
+  const failure = useRef<HTMLParagraphElement>(null)
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
   const [activeKey, setActiveKey] = useState<string>()
   useEffect(() => {
@@ -63,16 +71,38 @@ export function WorkspaceCleanupRuleChangeDialog({
       status.current?.focus()
     }
   }, [request?.status])
+  useEffect(() => {
+    if (error) {
+      failure.current?.focus()
+    }
+  }, [error])
   const rows = useMemo(() => request?.rows ?? [], [request?.rows])
   const positions = useMemo(
     () => new Map(rows.map((row, index) => [cleanupChangeRowKey(row), index + 1])),
     [rows]
   )
-  const deleted = rows.filter((row) => !request?.kept.has(cleanupChangeRowKey(row)))
-  const deletedBytes = deleted.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0)
-  const existing = request
-    ? cleanupExistingRuleNotice(rows, request.newKeys, request.currentKeys)
-    : null
+  const selected = useSyncExternalStore(
+    (request?.selection ?? EMPTY_SELECTION).subscribe,
+    (request?.selection ?? EMPTY_SELECTION).getSnapshot
+  )
+  const totalBytes = useMemo(() => rows.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0), [rows])
+  const deletedCount = rows.length - selected.visibleCount
+  const deletedBytes = totalBytes - selected.visibleBytes
+  const newKeys = request?.newKeys
+  const currentKeys = request?.currentKeys
+  const existing = useMemo(
+    () => (newKeys && currentKeys ? cleanupExistingRuleNotice(rows, newKeys, currentKeys) : null),
+    [rows, newKeys, currentKeys]
+  )
+  const reviewed = request?.reviewed
+  const proposedRules = reviewed
+    ? reviewed.change.scope === 'global'
+      ? reviewed.change.rules
+      : resolveWorkspaceCleanupPolicy(
+          { workspaceCleanupPolicy: reviewed.state.rules },
+          { workspaceCleanupPolicy: reviewed.change.policy ?? undefined }
+        ).rules
+    : undefined
   const rule = request ? workspaceCleanupConfirmedSettingTitle(request.setting) : ''
   const project = request?.projectName
   const disablingProtection = request?.kind === 'disable-ignored-files'
@@ -172,16 +202,22 @@ export function WorkspaceCleanupRuleChangeDialog({
             {description}
           </DialogDescription>
         </DialogHeader>
-        {disablingProtection && rows.length ? (
-          <p id="cleanup-pin-note" className="text-xs text-muted-foreground">
-            {t(
-              'components.settings.workspaceCleanup.pinAndKeep.description',
-              'Selected workspaces will be pinned when you confirm. Pinned workspaces are excluded from automatic cleanup until you unpin them.'
-            )}
-          </p>
-        ) : null}
         {request?.status ? (
-          <div ref={status} role="status" tabIndex={-1} className="space-y-1 text-sm outline-none">
+          <div
+            ref={status}
+            role="status"
+            tabIndex={-1}
+            className="space-y-1 rounded-md bg-muted p-3 text-sm outline-none focus:ring-[3px] focus:ring-ring/50"
+          >
+            {request.status.policyChanged && proposedRules ? (
+              <p>
+                {t(
+                  'components.settings.workspaceCleanup.change.proposalChanged',
+                  'Cleanup rules changed elsewhere. Review the updated rules: {{rules}}',
+                  { rules: formatWorkspaceCleanupRuleSummary(proposedRules, t) }
+                )}
+              </p>
+            ) : null}
             {request.status.deleted.length ? (
               <p>
                 {request.status.deleted.length === 1
@@ -225,7 +261,7 @@ export function WorkspaceCleanupRuleChangeDialog({
               return
             }
             event.preventDefault()
-            const previous = rows.findIndex((row) => cleanupChangeRowKey(row) === activeKey)
+            const previous = (positions.get(activeKey ?? '') ?? 0) - 1
             const index =
               event.key === 'Home'
                 ? 0
@@ -249,70 +285,24 @@ export function WorkspaceCleanupRuleChangeDialog({
             getRowKey={cleanupChangeRowKey}
             scrollElement={scroller}
             activeRowKey={activeKey}
+            activeRowIndex={(positions.get(activeKey ?? '') ?? 0) - 1}
             estimateRowHeightPx={48}
             renderRow={(row) => {
-              const key = cleanupChangeRowKey(row),
-                keep = request?.kept.has(key),
-                isNew = request?.newKeys.has(key)
+              const key = cleanupChangeRowKey(row)
               return (
-                <div
+                <WorkspaceCleanupRuleChangeRow
                   key={key}
-                  role="listitem"
-                  aria-setsize={rows.length}
-                  aria-posinset={positions.get(key)}
-                  aria-label={`${isNew ? `${t('components.settings.workspaceCleanup.change.new', 'New')} ` : ''}${row.displayName}`}
-                  className="flex min-w-0 items-center gap-2 border-b border-border py-2"
-                >
-                  {isNew ? (
-                    <span className="shrink-0 rounded-full border border-border px-1.5 text-xs">
-                      {t('components.settings.workspaceCleanup.change.new', 'New')}
-                    </span>
-                  ) : null}
-                  <WorkspaceCleanupWorkspaceLine
-                    workspace={row}
-                    hideProject={Boolean(project)}
-                    className="flex-1"
-                  />
-                  {row.evaluation.action !== 'keep' ? (
-                    <span className="hidden sm:inline-flex">
-                      <WorkspaceCleanupReasonChip
-                        reason={row.evaluation.reason}
-                        prNumber={row.prNumber}
-                      />
-                    </span>
-                  ) : null}
-                  {row.sizeBytes !== undefined ? (
-                    <span className="hidden text-xs tabular-nums text-muted-foreground sm:inline">
-                      {formatBytes(row.sizeBytes)}
-                    </span>
-                  ) : null}
-                  <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <Checkbox
-                      data-keep-key={key}
-                      aria-describedby={disablingProtection ? 'cleanup-pin-note' : undefined}
-                      checked={Boolean(keep)}
-                      disabled={confirming || settling}
-                      onFocus={() => setActiveKey(key)}
-                      onCheckedChange={() => onToggleKeep(row)}
-                      aria-label={
-                        disablingProtection
-                          ? t(
-                              'components.settings.workspaceCleanup.pinAndKeep.named',
-                              'Pin and keep {{name}}',
-                              { name: row.displayName }
-                            )
-                          : t(
-                              'components.settings.workspaceCleanup.enable.keepNamed',
-                              'Keep {{name}}',
-                              { name: row.displayName }
-                            )
-                      }
-                    />
-                    {disablingProtection
-                      ? t('components.settings.workspaceCleanup.pinAndKeep.label', 'Pin and keep')
-                      : t('components.settings.workspaceCleanup.enable.keep', 'Keep')}
-                  </label>
-                </div>
+                  row={row}
+                  keep={selected.has(key)}
+                  isNew={request?.newKeys.has(key) ?? false}
+                  project={Boolean(project)}
+                  position={positions.get(key)}
+                  total={rows.length}
+                  disabled={confirming || settling}
+                  pinLabel={disablingProtection}
+                  onToggleKeep={onToggleKeep}
+                  onFocus={setActiveKey}
+                />
               )
             }}
           />
@@ -326,11 +316,11 @@ export function WorkspaceCleanupRuleChangeDialog({
               {t(
                 'components.settings.workspaceCleanup.enable.summary',
                 '{{count}} will be deleted',
-                { count: deleted.length, defaultValue_one: '1 will be deleted' }
+                { count: deletedCount, defaultValue_one: '1 will be deleted' }
               )}
               {deletedBytes > 0 ? ` · ${formatBytes(deletedBytes)}` : null}
             </p>
-            {request?.kept.size ? (
+            {selected.count || disablingProtection ? (
               <p>
                 {t(
                   'components.settings.workspaceCleanup.change.keptPinned',
@@ -354,7 +344,12 @@ export function WorkspaceCleanupRuleChangeDialog({
               </p>
             ) : null}
             {error ? (
-              <p role="alert">
+              <p
+                ref={failure}
+                role="alert"
+                tabIndex={-1}
+                className="outline-none focus:ring-[3px] focus:ring-ring/50"
+              >
                 {error}{' '}
                 {onRetry ? (
                   <button type="button" className="underline" onClick={onRetry}>

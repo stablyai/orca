@@ -21738,7 +21738,9 @@
           "inactiveDescription_other": "{{count}} 天没有活动",
           "matchesCount_other": "当前匹配 {{count}} 个工作区",
           "checking": "正在检查匹配的工作区…",
-          "checkFailed": "无法检查匹配的工作区"
+          "checkFailed": "无法检查匹配的工作区",
+          "inactiveDescription_one": "1 天没有活动。",
+          "matchesCount_one": "当前匹配 1 个工作区"
         },
         "protection": {
           "title": "保护",
@@ -21772,7 +21774,12 @@
           "description_other": "当前有 {{count}} 个工作区匹配，开启后几秒内会将其删除",
           "summary": "将删除 {{count}} 个",
           "cancel": "取消",
-          "turnOn": "开启"
+          "turnOn": "开启",
+          "description_one": "当前有 1 个工作区匹配，开启后几秒内会将其删除。",
+          "summary_one": "将删除 1 个",
+          "summary_other": "将删除 {{count}} 个",
+          "keep": "保留",
+          "keepNamed": "保留 {{name}}"
         },
         "reason": {
           "merged": "已合并",
@@ -21844,7 +21851,34 @@
         },
         "change": {
           "title": "更改“{{rule}}”？",
-          "apply": "应用"
+          "apply": "应用",
+          "thisHost": "此主机",
+          "oldProject": "请更新 {{host}} 上的 Orca 以更改规则。仍可选择关闭。",
+          "oldProjectUnsupported": "请更新 {{host}} 上的 Orca 以更改此处的清理设置。",
+          "oldGlobal": "请更新 {{host}} 上的 Orca 以更改清理规则。",
+          "saveFailed": "无法保存。规则未更改。",
+          "conflict": "清理规则已在别处更改。请重新检查更改。",
+          "checkingSaved": "正在检查已保存的规则…",
+          "previewFailed": "无法检查匹配的工作区。",
+          "pinFailed": "无法保留 {{name}}。规则未更改。",
+          "inheritTitle": "为 {{project}} 使用全局规则？",
+          "projectEnableTitle": "为 {{project}} 开启“{{rule}}”？",
+          "projectTitle": "更改 {{project}} 的“{{rule}}”？",
+          "inheritDescription_one": "当前有 1 个工作区匹配全局规则，切换后几秒内会将其删除。",
+          "inheritDescription_other": "当前有 {{count}} 个工作区匹配全局规则，切换后几秒内会将其删除。",
+          "fullDescription_one": "当前有 1 个工作区匹配，应用此更改后几秒内会将其删除。",
+          "fullDescription_other": "当前有 {{count}} 个工作区匹配，应用此更改后几秒内会将其删除。",
+          "keptDeleted": "{{name}} 已被删除。",
+          "keptDeletedCount_one": "1 个选为保留的工作区已被删除。",
+          "keptDeletedCount_other": "{{count}} 个选为保留的工作区已被删除。",
+          "moreMatches_one": "现在又有 1 个工作区匹配。请检查并再次确认。",
+          "moreMatches_other": "现在又有 {{count}} 个工作区匹配。请检查并再次确认。",
+          "new": "新增",
+          "keptPinned": "选为保留的工作区会被固定。",
+          "alreadySet": "没有“新增”标记的行已被设为删除。",
+          "cancelCurrent": "即使取消，当前规则仍会删除其中一些工作区。",
+          "keepTooLate": "{{name}} 的删除已开始，无法保留。规则未更改。",
+          "proposalChanged": "清理规则已在别处更改。请检查更新后的规则：{{rules}}"
         },
         "rulesLoadFailed": "无法加载此主机的清理规则：{{error}}",
         "retry": "重试",
@@ -21864,7 +21898,6 @@
           "turnOff": "关闭保护"
         },
         "pinAndKeep": {
-          "description": "确认后会固定所选工作区，已固定的工作区在取消固定前不会被自动清理",
           "named": "固定并保留 {{name}}",
           "label": "固定并保留"
         },

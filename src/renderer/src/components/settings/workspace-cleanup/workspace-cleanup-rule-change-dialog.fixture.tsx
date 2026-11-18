@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { WorkspaceCleanupKeepSelection } from './workspace-cleanup-keep-selection'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
@@ -18,7 +19,10 @@ function rows(count: number): WorkspaceCleanupPreviewRow[] {
     instanceId: `instance-${index}`,
     repoId: 'example',
     repoName: 'Example project',
-    displayName: `Workspace ${index + 1}`,
+    displayName:
+      index === 0
+        ? 'Preserve authentication sessions while reconnecting the development environment'
+        : `Workspace ${index + 1}`,
     branch: `feature-${index + 1}`,
     path: `/synthetic/workspace-${index}`,
     executionHostId: 'local',
@@ -35,28 +39,19 @@ function request(count = 3): WorkspaceCleanupRuleChangeRequest {
     rows: [...list.slice(-1), ...list.slice(0, -1)],
     newKeys: new Set([cleanupChangeRowKey(list.at(-1)!)]),
     currentKeys: new Set(list.slice(0, -1).map(cleanupChangeRowKey)),
-    kept: new Set(),
+    selection: new WorkspaceCleanupKeepSelection(list),
     status: null
   }
 }
 function Example({ value, error }: { value: WorkspaceCleanupRuleChangeRequest; error?: string }) {
-  const [current, setCurrent] = useState(value)
+  const [current] = useState(value)
   return (
     <div className="h-screen">
       <WorkspaceCleanupRuleChangeDialog
         request={current}
         onCancel={() => {}}
         onConfirm={async () => {}}
-        onToggleKeep={(row) =>
-          setCurrent((previous) => {
-            const kept = new Set(previous.kept)
-            const key = cleanupChangeRowKey(row)
-            if (!kept.delete(key)) {
-              kept.add(key)
-            }
-            return { ...previous, kept }
-          })
-        }
+        onToggleKeep={(row) => current.selection.toggle(row)}
         error={error}
       />
     </div>
@@ -89,7 +84,7 @@ export const refreshedMixedKeep = defineFixture({
           rows: [list[2], list[0], list[1]],
           newKeys: new Set([cleanupChangeRowKey(list[2])]),
           currentKeys: new Set([cleanupChangeRowKey(list[0])]),
-          kept: new Set([cleanupChangeRowKey(list[0])]),
+          selection: new WorkspaceCleanupKeepSelection(list, [list[0]]),
           status: { added: 1, deleted: [] }
         }}
       />
@@ -108,7 +103,7 @@ export const pinError = defineFixture({
   width: 360,
   render: () => (
     <Example
-      value={{ ...request(), kept: new Set([cleanupChangeRowKey(rows(3)[0])]) }}
+      value={{ ...request(), selection: new WorkspaceCleanupKeepSelection(rows(3), [rows(3)[0]]) }}
       error="Couldn't keep Workspace 1. Rule not changed."
     />
   )
@@ -133,14 +128,45 @@ export const thousand = defineFixture({
     />
   )
 })
-const settings = getDefaultSettings('/synthetic')
+async function reachLastRow() {
+  const list = document.querySelector<HTMLElement>('[role="dialog"] [role="list"]')!
+  list.focus()
+  list.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
+  await new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  )
+}
+export const manyEnd = defineFixture({ ...many, interact: reachLastRow })
+export const thousandEnd = defineFixture({ ...thousand, interact: reachLastRow })
+export const german = defineFixture({
+  ...refreshedMixedKeep,
+  interact: async () => {
+    const { setRendererUiLanguage } = await import('@/i18n/i18n')
+    await setRendererUiLanguage('de')
+  }
+})
+export const chinese = defineFixture({
+  ...refreshedMixedKeep,
+  interact: async () => {
+    const { setRendererUiLanguage } = await import('@/i18n/i18n')
+    await setRendererUiLanguage('zh')
+  }
+})
+const settings = {
+  ...getDefaultSettings('/synthetic'),
+  machineName: 'Build Mac Studio',
+  workspaceCleanupPolicy: {
+    ...getDefaultWorkspaceCleanupRules(),
+    inactive: { enabled: true, afterDays: 90, action: 'delete' as const }
+  }
+}
 const repo = {
   id: 'example',
   path: '/synthetic/project',
   displayName: 'Example project',
   addedAt: 1,
   badgeColor: 'gray',
-  workspaceCleanupPolicy: { mode: 'custom' as const, rules: getDefaultWorkspaceCleanupRules() }
+  workspaceCleanupPolicy: { mode: 'custom' as const, rules: settings.workspaceCleanupPolicy }
 }
 function oldHost() {
   window.api.runtime.call = async ({ method }) =>
@@ -205,7 +231,7 @@ function previewHost(fail: boolean) {
         ok: true,
         _meta: { runtimeId: 'fixture' },
         result: {
-          protocol: 2,
+          protocol: 3,
           expiresAt: Date.now() + 60_000,
           state: {
             repoId: 'example',

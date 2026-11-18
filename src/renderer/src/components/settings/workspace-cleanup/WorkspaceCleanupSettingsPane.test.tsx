@@ -104,7 +104,7 @@ beforeEach(() => {
           }
         }) => {
           const policyRead = () => ({
-            protocol: 2,
+            protocol: 3,
             expiresAt: Date.UTC(2026, 10, 15, 12, 10),
             state: {
               repoId: null,

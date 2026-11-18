@@ -24,7 +24,7 @@ import type {
   WorkspaceCleanupPreview,
   WorkspaceCleanupPreviewRow
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
-import { createCleanupChangeRequest, toggleCleanupKeep } from './workspace-cleanup-change-preview'
+import { createCleanupChangeRequest } from './workspace-cleanup-change-preview'
 import type { WorkspaceCleanupRuleChangeRequest } from './workspace-cleanup-rule-change-dialog'
 
 export function useWorkspaceCleanupRuleChange({
@@ -75,7 +75,7 @@ export function useWorkspaceCleanupRuleChange({
     setSaving(false)
   }
   const active = (token: number) => generation.current === token
-  const finish = (token: number, reset = false) => {
+  const finish = (token: number, reset = false, restore = true) => {
     if (!active(token)) {
       return
     }
@@ -86,11 +86,13 @@ export function useWorkspaceCleanupRuleChange({
     if (reset) {
       setUnsavedChanges((value) => value + 1)
     }
-    requestAnimationFrame(() => {
-      if (active(token)) {
-        focus.restore()
-      }
-    })
+    if (restore) {
+      requestAnimationFrame(() => {
+        if (active(token)) {
+          focus.restore()
+        }
+      })
+    }
   }
   const commit = async (
     change: WorkspaceCleanupPolicyChange,
@@ -125,7 +127,7 @@ export function useWorkspaceCleanupRuleChange({
     if (result.read) {
       adopt(result.read)
     }
-    finish(token, result.outcome !== 'saved')
+    finish(token, result.outcome !== 'saved', result.outcome === 'saved' || pending === null)
   }
 
   const requestChange = async (intent: CleanupChangeIntent) => {
@@ -175,12 +177,13 @@ export function useWorkspaceCleanupRuleChange({
         owner,
         next,
         latest,
-        intent.kind === 'disable-ignored-files'
+        intent.kind === 'disable-ignored-files',
+        true
       )
       if (!active(token)) {
         return
       }
-      const request = createCleanupChangeRequest(comparison, intent, projectName)
+      const request = createCleanupChangeRequest(comparison, intent, next, projectName)
       if (!request) {
         await commit(next, comparison.read, token, comparison.next)
         return
@@ -222,11 +225,17 @@ export function useWorkspaceCleanupRuleChange({
       }
       if (result.kind === 'pin-failed') {
         setError(
-          t(
-            'components.settings.workspaceCleanup.change.pinFailed',
-            "Couldn't keep {{name}}. Rule not changed.",
-            { name: result.row.displayName }
-          )
+          result.tooLate
+            ? t(
+                'components.settings.workspaceCleanup.change.keepTooLate',
+                "Couldn't keep {{name}} because deletion has already started. Rule not changed.",
+                { name: result.row.displayName }
+              )
+            : t(
+                'components.settings.workspaceCleanup.change.pinFailed',
+                "Couldn't keep {{name}}. Rule not changed.",
+                { name: result.row.displayName }
+              )
         )
         confirming.current = false
         setSaving(false)
@@ -281,7 +290,6 @@ export function useWorkspaceCleanupRuleChange({
         void reload().then(() => setError(null))
       }
     },
-    toggleKeep: (row: WorkspaceCleanupPreviewRow) =>
-      setPending((value) => toggleCleanupKeep(value, row))
+    toggleKeep: (row: WorkspaceCleanupPreviewRow) => pending?.selection.toggle(row)
   }
 }

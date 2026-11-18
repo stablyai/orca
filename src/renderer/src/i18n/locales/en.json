@@ -23448,7 +23448,9 @@
           "new": "New",
           "keptPinned": "Kept workspaces get pinned.",
           "alreadySet": "Rows without New are already set to be deleted.",
-          "cancelCurrent": "Cancel won't stop current rules from deleting some of these."
+          "cancelCurrent": "Cancel won't stop current rules from deleting some of these.",
+          "keepTooLate": "Couldn't keep {{name}} because deletion has already started. Rule not changed.",
+          "proposalChanged": "Cleanup rules changed elsewhere. Review the updated rules: {{rules}}"
         },
         "rulesLoadFailed": "Couldn't load this host's cleanup rules: {{error}}",
         "retry": "Try again",
@@ -23468,7 +23470,6 @@
           "turnOff": "Turn off protection"
         },
         "pinAndKeep": {
-          "description": "Selected workspaces will be pinned when you confirm. Pinned workspaces are excluded from automatic cleanup until you unpin them.",
           "named": "Pin and keep {{name}}",
           "label": "Pin and keep"
         },

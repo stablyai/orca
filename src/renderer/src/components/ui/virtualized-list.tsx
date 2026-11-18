@@ -64,6 +64,7 @@ export function VirtualizedList<TRow>({
   scrollElement,
   estimateRowHeightPx = VIRTUALIZED_LIST_ROW_HEIGHT_PX,
   activeRowKey,
+  activeRowIndex,
   minimumRows = VIRTUALIZED_LIST_MIN_ROWS,
   announceListPosition = false,
   hasUnloadedRows
@@ -77,6 +78,7 @@ export function VirtualizedList<TRow>({
   estimateRowHeightPx?: number
   // Why: keyboard-driven lists must mount and reveal selections outside the current window.
   activeRowKey?: string
+  activeRowIndex?: number
   minimumRows?: number
   // Expose list semantics only by opt-in on the windowed path; small fragments have no role container, and other surfaces own their a11y roles.
   announceListPosition?: boolean
@@ -86,8 +88,16 @@ export function VirtualizedList<TRow>({
   const containerRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
   const virtualize = rows.length >= minimumRows
+  const getItemKey = useCallback(
+    (index: number) => {
+      const row = rows[index]
+      return row === undefined ? index : getRowKey(row)
+    },
+    [rows, getRowKey]
+  )
   const activeIndex =
-    activeRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === activeRowKey)
+    activeRowIndex ??
+    (activeRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === activeRowKey))
   const rangeExtractor = useCallback(
     (range: Parameters<typeof defaultRangeExtractor>[0]) => {
       const indexes = defaultRangeExtractor(range)
@@ -131,10 +141,7 @@ export function VirtualizedList<TRow>({
     // Threshold crossing first attaches the virtualizer; preserve current scroll position instead of its initial zero.
     initialOffset: () => scrollElement?.scrollTop ?? 0,
     // Stable keys preserve item identity across status polls instead of remounting rows.
-    getItemKey: (index) => {
-      const row = rows[index]
-      return row === undefined ? index : getRowKey(row)
-    }
+    getItemKey
   })
 
   useLayoutEffect(() => {

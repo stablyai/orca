@@ -1,4 +1,4 @@
-import { preserveFolderUpgradeWorktreePath } from './folder-upgrade-worktree-path'
+import { preserveFolderUpgradeWorktreePathAsync } from './folder-upgrade-worktree-path'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import {
@@ -99,7 +99,7 @@ async function listRoutedRepoWorktrees(
   const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listLocal(repo.path, options)
     : await listLocal(repo.path)
-  return preserveFolderUpgradeWorktreePath(repo, worktrees)
+  return preserveFolderUpgradeWorktreePathAsync(repo, worktrees)
 }
 
 // Path-only callers skip the expensive per-worktree sparse-checkout probe.
@@ -114,7 +114,7 @@ export async function listRepoWorktreeGraph(
   const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreeGraph(repo.path, options)
     : await listWorktreeGraph(repo.path)
-  return preserveFolderUpgradeWorktreePath(repo, worktrees)
+  return preserveFolderUpgradeWorktreePathAsync(repo, worktrees)
 }
 
 export async function listLocalRepoWorktreesStrict(
@@ -130,5 +130,5 @@ export async function listLocalRepoWorktreesStrict(
   const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreesStrict(repo.path, options)
     : await listWorktreesStrict(repo.path)
-  return preserveFolderUpgradeWorktreePath(repo, worktrees)
+  return preserveFolderUpgradeWorktreePathAsync(repo, worktrees)
 }

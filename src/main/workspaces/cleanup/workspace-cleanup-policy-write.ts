@@ -133,12 +133,7 @@ export function hasPendingWorkspaceCleanupWrites(owner: CleanupWriteOwner): bool
     (receipt) => receipt.owner === token && receipt.outcome === 'pending'
   )
 }
-export function recoverWorkspaceCleanupPolicyWrites(owner: CleanupWriteOwner): void {
-  pruneReceipts()
-  const token = ownerToken(owner)
-  for (const receipt of receipts.values()) {
-    if (receipt.owner === token && receipt.outcome === 'pending') {
-      receipt.outcome = 'cancelled'
-    }
-  }
+export function recoverWorkspaceCleanupPolicyWrites(owner: CleanupWriteOwner): boolean {
+  // Only explicit request settlement or lease expiry may fence another client's live writer.
+  return hasPendingWorkspaceCleanupWrites(owner)
 }

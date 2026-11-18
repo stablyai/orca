@@ -1,34 +1,17 @@
-import type { WorkspaceCleanupPolicyComparison } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
+import type {
+  WorkspaceCleanupPolicyComparison,
+  WorkspaceCleanupPolicyChange
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import type { CleanupChangeIntent } from './workspace-cleanup-rule-change-intent'
 import type { WorkspaceCleanupRuleChangeRequest } from './workspace-cleanup-rule-change-dialog'
 import type {
   WorkspaceCleanupPreviewRow,
   WorkspaceCleanupPreview
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
+import { WorkspaceCleanupKeepSelection } from './workspace-cleanup-keep-selection'
+import { cleanupChangeRowKey } from './workspace-cleanup-row-key'
+export { cleanupChangeRowKey } from './workspace-cleanup-row-key'
 
-export function cleanupChangeRowKey(row: WorkspaceCleanupPreviewRow): string {
-  return `${row.executionHostId ?? 'local'}:${row.worktreeId}:${row.instanceId ?? ''}`
-}
-export function toggleCleanupKeep<
-  T extends {
-    kept: ReadonlySet<string>
-    keepRefs?: ReadonlyMap<string, WorkspaceCleanupPreviewRow>
-  }
->(value: T | null, row: WorkspaceCleanupPreviewRow): T | null {
-  if (!value) {
-    return value
-  }
-  const kept = new Set(value.kept),
-    keepRefs = new Map(value.keepRefs)
-  const key = cleanupChangeRowKey(row)
-  if (kept.delete(key)) {
-    keepRefs.delete(key)
-  } else {
-    kept.add(key)
-    keepRefs.set(key, row)
-  }
-  return { ...value, kept, keepRefs }
-}
 function strength(row: WorkspaceCleanupPreviewRow): number {
   return row.evaluation.action === 'delete' ? 2 : row.evaluation.action === 'archive' ? 1 : 0
 }
@@ -64,9 +47,6 @@ export function cleanupExistingRuleNotice(
   added: ReadonlySet<string>,
   current: ReadonlySet<string>
 ): 'all' | 'some' | null {
-  if (!added.size || added.size === rows.length) {
-    return null
-  }
   let existing = 0,
     unmarked = 0
   for (const row of rows) {
@@ -78,12 +58,13 @@ export function cleanupExistingRuleNotice(
       unmarked++
     }
   }
-  return unmarked === 0 ? 'all' : existing > 0 ? 'some' : null
+  return existing === 0 ? null : added.size > 0 && unmarked === 0 ? 'all' : 'some'
 }
 
 export function createCleanupChangeRequest(
   comparison: WorkspaceCleanupPolicyComparison,
   intent: CleanupChangeIntent,
+  change: WorkspaceCleanupPolicyChange,
   projectName?: string
 ): (WorkspaceCleanupRuleChangeRequest & { intent: CleanupChangeIntent }) | null {
   const rows = cleanupDestructiveRows(comparison.next)
@@ -100,8 +81,8 @@ export function createCleanupChangeRequest(
     rows: cleanupNewRowsFirst(rows, newKeys),
     newKeys,
     currentKeys: new Set(current.map(cleanupChangeRowKey)),
-    kept: new Set(),
-    keepRefs: new Map(),
+    selection: new WorkspaceCleanupKeepSelection(rows),
+    reviewed: { state: structuredClone(comparison.read.state), change: structuredClone(change) },
     status: null,
     intent
   }
