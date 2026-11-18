@@ -152,8 +152,21 @@ export function measureCodexHistoryDiskUsage(
   const seenFolders = new Set<string>()
   const pending: string[] = []
   const folders: string[] = []
+  // One home can arrive under two spellings (a trailing slash, a link); list each once.
+  const seenHomes = new Set<string>()
   for (const home of homes) {
-    if (!addHistoryFolders(walk, home, folders)) {
+    let real: string
+    try {
+      real = realpathSync(home)
+    } catch (error) {
+      noteFailure(walk, error)
+      continue
+    }
+    if (seenHomes.has(real)) {
+      continue
+    }
+    seenHomes.add(real)
+    if (!addHistoryFolders(walk, real, folders)) {
       return walk.usage
     }
   }
@@ -200,7 +213,7 @@ if (port) {
         }
       }
       const usage = measureCodexHistoryDiskUsage(
-        [...new Set([...request.homes, ...accountHomes])],
+        [...request.homes, ...accountHomes],
         request.budget
       )
       response = {

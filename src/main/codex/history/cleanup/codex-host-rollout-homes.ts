@@ -32,9 +32,12 @@ async function listAccountHomeCandidates(
     }
     throw error
   }
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({ accountsRoot, accountId: entry.name }))
+  return (
+    entries
+      // A relocated account folder is a link; ownership checks where it resolves.
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .map((entry) => ({ accountsRoot, accountId: entry.name }))
+  )
 }
 
 function uniqueHostHomes(candidates: readonly string[]): string[] {
