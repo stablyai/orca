@@ -85,3 +85,34 @@ it('Send-now steers a second card while the first steer is still unechoed', asyn
   expect(await rig.sendNow(second.id)).toMatchObject({ ok: true })
   await eventually(async () => expect((await rig.handoff(second.id))?.handedOverAt).toBeDefined())
 })
+
+it('a steer a restart holds publishes as a card Send can reach, not as a steer on its way in', async () => {
+  const opener = await rig.workingSend()
+  await rig.settleAccepted(opener, 'opening')
+  await openRigTurnFor(rig, opener)
+  rig.providerEvents().appendItem(
+    { provider: 'orca' as const, clientMessageId: 'approval' },
+    {
+      kind: 'approval',
+      title: 'Run command',
+      detail: null,
+      subject: { kind: 'plan', text: 'Run the command' },
+      options: [{ id: 'allow', label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await host.flushStreamedEvents(SESSION)
+  const steer = rig.send('also do this')
+  await steer.result
+  const steers = async () => {
+    const page = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    if (!page.ok) {
+      throw new Error('history refused')
+    }
+    return page.page.queuedMessages?.find((card) => card.messageId === steer.id)?.steers ?? false
+  }
+  expect(await steers()).toBe(true)
+  await rig.restartHostProcess()
+  expect(await steers()).toBe(false)
+})

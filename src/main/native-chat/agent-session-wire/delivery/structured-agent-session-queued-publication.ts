@@ -9,6 +9,7 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import {
+  queuePauseHolding,
   queuePauseLiftOnItsWay,
   resumableQueuePause,
   type DerivedQueuePause
@@ -82,7 +83,8 @@ export function structuredQueueSendGate(
 /** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
  *  Stop pauses the queue, published once beside it. */
 function computePublishedQueuedMessages(
-  rows: readonly QueuedMessageRow[]
+  rows: readonly QueuedMessageRow[],
+  pauses: readonly DerivedQueuePause[]
 ): AgentSessionQueuedMessage[] {
   const published: AgentSessionQueuedMessage[] = []
   for (const row of rows) {
@@ -90,12 +92,15 @@ function computePublishedQueuedMessages(
       continue
     }
     const held = row.state === 'waiting' && row.holdReason !== null
+    // Only a steer that goes in without the person: a pause holding it (restart, clear, failed
+    // turn, Stop) leaves it a card that Send can reach, even where no Resume is published.
     const steers =
       row.state === 'waiting' &&
       !held &&
       row.deliveryMode === 'steer' &&
       row.unattended === false &&
-      row.body.command === undefined
+      row.body.command === undefined &&
+      queuePauseHolding(pauses, row) === undefined
     published.push({
       messageId: row.messageId,
       position: row.position,
@@ -141,7 +146,7 @@ async function publishedQueueRows(journal: AgentSessionJournal): Promise<ListMem
   }
   const rows = await journal.queuedMessages.list()
   const pauses = await structuredQueuePauses(journal)
-  const list = computePublishedQueuedMessages(rows)
+  const list = computePublishedQueuedMessages(rows, pauses)
   const serialized = JSON.stringify(list)
   const next = {
     key,
