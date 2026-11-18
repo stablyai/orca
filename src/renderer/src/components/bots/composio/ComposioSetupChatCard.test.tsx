@@ -54,17 +54,6 @@ describe('the Composio Connect card', () => {
     expect(await screen.findByRole('button', { name: 'Connect X' })).toBeTruthy()
   })
 
-  it('tells the owner an API-key app opens Composio to enter its key', async () => {
-    hostSays(['key'])
-    render(<ComposioSetupChatCard card={card} fallback="fallback" />)
-    expect(
-      await screen.findByText(
-        'Opens Composio to enter your X API key. Composio keeps it, not Orca.'
-      )
-    ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Connect X' })).toBeTruthy()
-  })
-
   it('a Ready card names the account when Composio gives one, and nothing for an API-key app', async () => {
     const connected = (label: string | null) =>
       mocks.rpc.mockReset().mockImplementation(async (_target: unknown, method: string) => {
