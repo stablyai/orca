@@ -65,6 +65,9 @@ export class TerminalCommandPaint {
   /** A 133;C parsed since the last 133;D or reattach fence; later ones are the agent's own. */
   private startSeen = false
   private repaintOffered = false
+  /** The last read finished a command and started the next. Its reports are stamped after this
+   *  observer runs, so none of them count; the next read's arrival starts the new command. */
+  private startFollowsFinishInRead = false
   /** When a report restored across the reattach was admitted for the process now running. */
   private restoredReportAt: number | null = null
   private markerEndInChunk = -1
@@ -81,6 +84,10 @@ export class TerminalCommandPaint {
   )
 
   observe(data: string, normalizedText: string, at: number): void {
+    if (this.startFollowsFinishInRead) {
+      this.startFollowsFinishInRead = false
+      this.startedAt = at
+    }
     this.markerEndInChunk = -1
     const finishEnd = this.scanner.scan(data)
     if (finishEnd > this.markerEndInChunk) {
@@ -94,11 +101,11 @@ export class TerminalCommandPaint {
     }
     if (this.markerEndInChunk !== -1) {
       // Why only at a boundary: an agent that writes its own 133;C mid-session is not a new command.
-      // Why a finish before it too: then this C starts the next command, not the agent's own. Why
-      // after now then: this read's reports, stamped before this runs, are the finished command's.
+      // Why a finish before it too: then this C starts the next command, not the agent's own.
       if (!this.startSeen || finishEnd !== -1) {
-        this.startedAt = finishEnd === -1 ? at : Math.max(at, Date.now()) + 1
+        this.startedAt = at
         this.startSeen = true
+        this.startFollowsFinishInRead = finishEnd !== -1
       }
       this.betweenCommands = false
       this.repaintRequestable = false
@@ -172,6 +179,7 @@ export class TerminalCommandPaint {
     }
     this.startedAt = null
     this.startSeen = false
+    this.startFollowsFinishInRead = false
     this.betweenCommands = false
     this.awaitingPaint = false
     this.composers = null
@@ -204,7 +212,7 @@ export class TerminalCommandPaint {
 
   /** Whether the agent's own report at `observedAt` speaks for the command now running. */
   isCurrentReport(observedAt: number | null | undefined): boolean {
-    if (this.betweenCommands) {
+    if (this.betweenCommands || this.startFollowsFinishInRead) {
       return false
     }
     return (

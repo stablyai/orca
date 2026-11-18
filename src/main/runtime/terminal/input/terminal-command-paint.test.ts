@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   awaitReattachedTerminalPaint,
   hasTerminalAgentPainted,
@@ -95,12 +95,12 @@ describe('the command an agent report speaks for', () => {
     const record: TerminalCommandPaintRecord = {}
     observeTerminalCommandPaint(record, START, START, 1_000)
     const handoff = `${FINISH}~/repo % codex\r\n${START}`
-    vi.useFakeTimers({ now: 5_000 })
     observeTerminalCommandPaint(record, handoff, handoff, 5_000)
-    vi.useRealTimers()
-    expect(isCurrentCommandReport(record, 2_000)).toBe(false)
     // A report stamped while that read was handled may precede its finish.
-    expect(isCurrentCommandReport(record, 5_000)).toBe(false)
-    expect(isCurrentCommandReport(record, 5_001)).toBe(true)
+    expect(isCurrentCommandReport(record, 2_000)).toBe(false)
+    expect(isCurrentCommandReport(record, 5_004)).toBe(false)
+    observeTerminalCommandPaint(record, 'Python 3', 'Python 3', 6_000)
+    expect(isCurrentCommandReport(record, 5_004)).toBe(false)
+    expect(isCurrentCommandReport(record, 6_000)).toBe(true)
   })
 })
