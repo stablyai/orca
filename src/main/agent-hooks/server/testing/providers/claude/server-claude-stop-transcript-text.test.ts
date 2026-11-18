@@ -34,6 +34,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const server of servers.splice(0)) {
     server.stop()
   }
@@ -87,5 +88,20 @@ describe('Stop without its text', () => {
     // The read settles in a microtask; one macrotask turn lets any late apply land.
     await new Promise((resolve) => setImmediate(resolve))
     expect(row(server)).toEqual(newer)
+  })
+
+  it("keeps an earlier turn's reply off a newer one stamped in the same millisecond", async () => {
+    const server = await createServer()
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
+    await hook(server, { hook_event_name: 'UserPromptSubmit', prompt: 'ship it' })
+    await hook(server, { hook_event_name: 'Stop' })
+    await hook(server, { hook_event_name: 'UserPromptSubmit', prompt: 'ship it' })
+    await hook(server, { hook_event_name: 'Stop' })
+
+    reads[0]!('Earlier turn.')
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(row(server)?.lastAssistantMessage).toBeUndefined()
+    reads[1]!('All done.')
+    await vi.waitFor(() => expect(row(server)?.lastAssistantMessage).toBe('All done.'))
   })
 })
