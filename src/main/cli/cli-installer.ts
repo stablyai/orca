@@ -15,6 +15,7 @@ import {
 import { isAppImageStableLauncherReady } from './appimage/appimage-stable-launcher'
 import { CliPathRegistration } from './command-paths/cli-path-registration'
 import { removeLinuxBareOrcaDispatcher } from './launchers/linux-bare-orca-dispatcher'
+import { otherMacAppBundle } from './installation/cli-command-inspection'
 
 export class CliInstaller extends CliPathRegistration {
   isAppImageRegistrationOwnedBySibling(status: CliInstallStatus): boolean {
@@ -155,9 +156,16 @@ export class CliInstaller extends CliPathRegistration {
       )
     }
 
-    return extractedRoot
+    const finalStatus = await (extractedRoot
       ? this.getStatusForLauncher(extractedRoot.stableLauncherPath)
-      : this.getStatus()
+      : this.getStatus())
+    const replacedApp = await otherMacAppBundle(status.currentTarget, status.launcherPath)
+    return replacedApp && finalStatus.state === 'installed'
+      ? {
+          ...finalStatus,
+          detail: `Replaced the ${status.commandPath} link to ${replacedApp}. To switch back, register the CLI again in that app.`
+        }
+      : finalStatus
   }
 
   async remove(): Promise<CliInstallStatus> {
