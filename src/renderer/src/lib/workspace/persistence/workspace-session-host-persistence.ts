@@ -275,7 +275,6 @@ export async function persistWorkspaceSessionByHost(
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): Promise<void> {
-  windowAcknowledgedSessionEntries.forget()
   await Promise.all(
     buildWorkspaceSessionHostSnapshots(payload, state).map((s) => api.set(s.state, s.hostId))
   )
