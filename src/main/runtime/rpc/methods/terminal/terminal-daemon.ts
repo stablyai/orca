@@ -4,7 +4,6 @@ import {
   readSeveredDaemonStatus,
   restartSeveredDaemon
 } from '../../../../daemon/providers/lifecycle/daemon-host-image-state'
-import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { defineMethod } from '../../core'
 
 export const TERMINAL_DAEMON_METHODS = [
@@ -38,17 +37,5 @@ export const TERMINAL_DAEMON_METHODS = [
     permission: 'host-admin',
     params: TerminalDaemonRestartSeveredParams,
     handler: async (params) => restartSeveredDaemon(params)
-  }),
-  defineMethod({
-    name: 'terminalDaemon.stopForUninstall',
-    permission: 'host-admin',
-    params: null,
-    // `orca uninstall` comes here so the app that owns the daemon stops it without respawning one.
-    handler: async () => {
-      const { stopTerminalDaemonsForUninstall } =
-        await import('../../../../daemon/providers/lifecycle/daemon-uninstall-shutdown')
-      await stopTerminalDaemonsForUninstall(getAppEnvironment().getPath('userData'))
-      return { stopped: true }
-    }
   })
 ]

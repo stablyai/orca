@@ -17,7 +17,7 @@ import type { RpcContext } from '../../core'
 import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../../shared/shell/launch/startup-cwd-fallback'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from '../structured-sessions/creation/structured-agent-session-create'
-import { structuredAgentRuntimeMetadata } from '../../../agent-session/installation/structured-agent-runtime-metadata'
+import { supportedStructuredSeedOptions } from '../../../agent-session/installation/structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
@@ -61,11 +61,9 @@ export function agentLaunchSurfaceFactory(
       signal
     }) => {
       const sessionId = requested ?? createOrcaSessionId(randomUUID)
-      const definition = structuredAgentRuntimeMetadata(agent)?.definition
-      const supported = Object.fromEntries(
-        Object.entries(narrowStructuredLaunchSeedOptions(options) ?? {}).filter(([key]) =>
-          definition?.restingOptions.acceptsKey(key)
-        )
+      const supported = supportedStructuredSeedOptions(
+        agent,
+        narrowStructuredLaunchSeedOptions(options)
       )
       const seeded = chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined)
       // A client that creates chats without starting them starts this one on its first message.

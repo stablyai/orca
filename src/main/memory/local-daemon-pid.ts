@@ -8,3 +8,14 @@ export function setLocalDaemonPidReader(reader: () => number | null): void {
 export function getLocalDaemonPid(): number | null {
   return readLocalDaemonPid()
 }
+
+// The pid the current daemon generation authenticated as: memory only, safe on any timer.
+let readKnownLocalDaemonPid: () => number | null = () => null
+
+export function setKnownLocalDaemonPidReader(reader: () => number | null): void {
+  readKnownLocalDaemonPid = reader
+}
+
+export function getKnownLocalDaemonPid(): number | null {
+  return readKnownLocalDaemonPid()
+}

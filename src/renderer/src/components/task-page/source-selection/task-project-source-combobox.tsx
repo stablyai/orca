@@ -10,7 +10,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { projectHostCountLabel } from '../../host-picker/project-host-count-label'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import type { TaskProjectPickerGroup } from '../task-page-default-repo-selection'
+import type { TaskProjectPickerGroup } from '../../../../../shared/work-items/task-repo-selection'
 import {
   getSelectedTaskProjectSource,
   hasMultipleTaskProjectHosts,

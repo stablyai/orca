@@ -17,6 +17,9 @@ export type MetricEvent =
   | 'db_op'
   // Object backend daily sweep: label 'swept' | 'wiped'.
   | 'sweep'
+  // Erasure index write from a host object's alarm (user-index.ts): label 'ok' | 'retry' |
+  // 'unbound' (no USER_HOSTS binding in this deploy). Dark: only with the director endpoints on.
+  | 'user_index'
   // Director admin calls: label '<op>:<outcome or status>' ('<op>:replay' for a reused jti).
   | 'admin'
   // Admin call accepted from a token without a jti (transitional, admin.ts): label '<op>'.

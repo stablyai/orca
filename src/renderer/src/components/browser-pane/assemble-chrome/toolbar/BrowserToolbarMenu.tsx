@@ -36,6 +36,8 @@ type BrowserToolbarMenuProps = {
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu, built by the toolbar that owns the pinned buttons. */
   extensionsSub: React.ReactNode
+  /** False where the page's session isn't one of this desktop's profiles, so switching and cookie import can't reach it. */
+  showProfiles?: boolean
   overflow: BrowserChromeOverflowMenuProps
 }
 
@@ -49,6 +51,7 @@ export function BrowserToolbarMenu({
   isBlankTab,
   pageActions,
   extensionsSub,
+  showProfiles = true,
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
@@ -68,7 +71,8 @@ export function BrowserToolbarMenu({
   // Force the menu open for the tour unless a new tab page is already showing the Import hint.
   const importHintOnPage =
     isBlankTab && shouldShowBrowserImportHint({ persistedUIReady, browserImportHintHidden })
-  const shouldForceMenuOpen = browserCookieTourStepActive && isActive && !importHintOnPage
+  const shouldForceMenuOpen =
+    showProfiles && browserCookieTourStepActive && isActive && !importHintOnPage
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
@@ -263,20 +267,24 @@ export function BrowserToolbarMenu({
         browserPageId={browserPageId}
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}
-        profile={{
-          browserPageId,
-          allProfiles,
-          effectiveProfileId,
-          onSwitchProfile: handleSwitchProfile,
-          onNewProfile: () => setNewProfileDialogOpen(true),
-          detectedBrowsers,
-          onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
-          browserSessionImportState,
-          onImportFromBrowser: (browserFamily, browserProfile) =>
-            void handleImportFromBrowser(browserFamily, browserProfile),
-          onImportFromFile: () => void handleImportFromFile(),
-          forceOpen: shouldForceMenuOpen
-        }}
+        profile={
+          showProfiles
+            ? {
+                browserPageId,
+                allProfiles,
+                effectiveProfileId,
+                onSwitchProfile: handleSwitchProfile,
+                onNewProfile: () => setNewProfileDialogOpen(true),
+                detectedBrowsers,
+                onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
+                browserSessionImportState,
+                onImportFromBrowser: (browserFamily, browserProfile) =>
+                  void handleImportFromBrowser(browserFamily, browserProfile),
+                onImportFromFile: () => void handleImportFromFile(),
+                forceOpen: shouldForceMenuOpen
+              }
+            : null
+        }
         pageActions={pageActions}
         extensionsSub={extensionsSub}
         viewportPresetId={viewportPresetId}

@@ -7,6 +7,7 @@ import type {
 } from '../orcad-migration/orcad-migration-manifest'
 import { isOrcadMigrationLocalWslSource } from '../orcad-migration/orcad-migration-source-kind'
 import { WslMoveBrowserCookieCopySchema } from './wsl-move-browser-cookie-copy'
+import { WslMappedDrivesSchema } from './wsl-mapped-drive-paths'
 import {
   MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS,
   isOrcadMigrationTerminalRestoreHintCwd,
@@ -14,6 +15,12 @@ import {
 } from '../orcad-migration/orcad-migration-terminal-restore-hints'
 
 export const WSL_MOVE_CUTOVER_VERSION = 1
+/**
+ * A move that took mapped-drive projects. Builds before it accept only version 1, so they read
+ * such a record as unreadable and fence every WSL project rather than recover it without the
+ * mapping (their parser would drop `mappedDrives` and treat `W:\` rows as outside the move).
+ */
+export const WSL_MOVE_MAPPED_DRIVE_CUTOVER_VERSION = 2
 
 /** In order; each crash point resumes from the last one written (design, section 4.4). */
 export const WSL_MOVE_CUTOVER_PHASES = [
@@ -31,7 +38,10 @@ export type WslMoveCutoverPhase = (typeof WSL_MOVE_CUTOVER_PHASES)[number]
 
 // Accept newer optional fields without making journals unreadable.
 const WslMoveCutoverSchema = z.object({
-  version: z.literal(WSL_MOVE_CUTOVER_VERSION),
+  version: z.union([
+    z.literal(WSL_MOVE_CUTOVER_VERSION),
+    z.literal(WSL_MOVE_MAPPED_DRIVE_CUTOVER_VERSION)
+  ]),
   migrationId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
   phase: z.enum(WSL_MOVE_CUTOVER_PHASES),
   startedAt: z.string().datetime(),
@@ -79,6 +89,9 @@ const WslMoveCutoverSchema = z.object({
     .record(z.string().min(1).max(1_024), z.boolean())
     .optional()
     .catch(undefined),
+  // Drive letters mapped into the distro when the move was planned; every recovery reads these,
+  // never the drive. Strict: a malformed list fails closed.
+  mappedDrives: WslMappedDrivesSchema.optional(),
   manifest: z.unknown()
 })
 
@@ -91,9 +104,20 @@ export function wslMoveJournalKey(distro: string): string {
   return `local-wsl:${distro.toLowerCase()}`
 }
 
+/** The record version a move with these mapped drives is written as. */
+export function wslMoveCutoverVersionFor(
+  mappedDrives: readonly unknown[] | undefined
+): WslMoveCutover['version'] {
+  return mappedDrives?.length ? WSL_MOVE_MAPPED_DRIVE_CUTOVER_VERSION : WSL_MOVE_CUTOVER_VERSION
+}
+
 /** Throws on anything that is not exactly a WSL move whose manifest matches its binding. */
 export function parseWslMoveCutover(value: unknown): WslMoveCutover {
   const record = WslMoveCutoverSchema.parse(value)
+  // Version 2 exactly when drives were mapped, so no older build can read a mapped move.
+  if (record.version !== wslMoveCutoverVersionFor(record.mappedDrives)) {
+    throw new Error('wsl_move_cutover_version_mismatch')
+  }
   const manifest = parseOrcadMigrationManifest(record.manifest)
   const { source } = manifest
   if (

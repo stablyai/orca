@@ -65,6 +65,7 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
   notifyAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
     this.notifier?.automationsChanged?.(payload)
     this.emitClientEvent({ type: 'automationsChanged', ...payload })
+    this.botChangeNotices.changed({ kinds: ['automations'] })
   }
 
   /** The cleanup runner finished a run on this host; clients may toast. */

@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { getStatus as getLinearStatus } from '../../../linear/accounts/linear-account-client'
+import { requireConnectedWorkspaces } from '../../../linear/issues/context/linear-connected-workspaces'
 import { listTeamsOrThrow as listLinearTeamsOrThrow } from '../../../linear/teams/linear-team-queries'
 import {
   LinearAgentAccessError,
@@ -156,10 +157,8 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
-    if (teams.length === 0 && (getLinearStatus().workspaces?.length ?? 0) === 0) {
-      throw linearError('linear_not_connected', 'Linear is not connected.', {
-        nextSteps: ['Connect Linear from Orca settings, then retry the issue create.']
-      })
+    if (teams.length === 0) {
+      requireConnectedWorkspaces()
     }
     const matches = teams.filter(
       (team) =>

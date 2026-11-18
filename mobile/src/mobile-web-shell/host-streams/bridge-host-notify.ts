@@ -12,6 +12,7 @@ import { BRIDGE_LIVENESS_PROBE_NOTIFY } from '../bridge/native-capabilities/brid
 import { bridgeNotifyRefusal } from '../bridge/protocol/bridge-notify-grants'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from '../bridge/page-lifecycle/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from '../bridge/page-lifecycle/bridge-page-location'
+import { BRIDGE_SWAP_SAFE_NOTIFY } from '../bridge/page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../bridge/page-lifecycle/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from '../bridge/page-lifecycle/bridge-route-update'
 import { BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY } from '../bridge/native-capabilities/bridge-terminal-key'
@@ -48,6 +49,10 @@ export function createBridgeNotifyForwarder(args: {
     }
     if (message.name === BRIDGE_PAGE_LOCATION) {
       options.onPageLocation(message.href)
+      return
+    }
+    if (message.name === BRIDGE_SWAP_SAFE_NOTIFY) {
+      options.onPageSwapSafe?.(message.safe, message.round)
       return
     }
     if (message.name === BRIDGE_BACK_CLAIM_NOTIFY) {

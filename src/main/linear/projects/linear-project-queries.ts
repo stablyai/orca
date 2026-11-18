@@ -32,31 +32,46 @@ import {
   normalizeConcreteWorkspaceId
 } from '../collections/linear-collection-models'
 import { readCollection } from './linear-project-collection-read'
-import { linearConnectionHasNextPage } from '../issues/context/linear-connection-pages'
+import {
+  linearConnectionHasNextPage,
+  readConnectionPages
+} from '../issues/context/linear-connection-pages'
+import { linearUncappedReadDeadline } from '../requests/linear-read-budget'
 
 export async function listProjects(
   query: string | undefined,
-  limit = 20,
+  limit: number | null = 20,
   workspaceId?: LinearWorkspaceSelection | null,
   force = false,
-  signal?: AbortSignal
+  { signal, summaryOnly = false }: { signal?: AbortSignal; summaryOnly?: boolean } = {}
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
-  const first = clampLimit(limit)
+  // A null limit reads every page, bounded by the uncapped read budget.
+  const cap = limit === null ? Number.POSITIVE_INFINITY : clampLimit(limit)
+  const deadline = limit === null ? linearUncappedReadDeadline() : undefined
   const trimmed = query?.trim()
-  const key = `listProjects:${workspaceId ?? 'default'}:${trimmed ?? ''}:${first}`
+  const detail = !summaryOnly
+  const key = `listProjects:${workspaceId ?? 'default'}:${trimmed ?? ''}:${cap}:${detail}`
   return readCollection(
     key,
     workspaceId,
-    async (entry) => {
-      const variables = trimmed ? { term: trimmed, first } : { first, orderBy: 'updatedAt' }
-      const result = await entry.client.client.rawRequest<
-        ProjectConnectionResponse,
-        LinearRawVariables
-      >(trimmed ? SEARCH_PROJECTS_QUERY : PROJECTS_QUERY, variables)
-      const connection = trimmed ? result.data?.searchProjects : result.data?.projects
+    async (entry, yieldSlot) => {
+      const { nodes, hasMore } = await readConnectionPages(
+        cap,
+        async (page) => {
+          const result = await entry.client.client.rawRequest<
+            ProjectConnectionResponse,
+            LinearRawVariables
+          >(
+            trimmed ? SEARCH_PROJECTS_QUERY : PROJECTS_QUERY,
+            trimmed ? { term: trimmed, ...page, detail } : { ...page, orderBy: 'updatedAt', detail }
+          )
+          return trimmed ? result.data?.searchProjects : result.data?.projects
+        },
+        { pageSize: LINEAR_PROJECT_API_PAGE_SIZE_MAX, deadline, beforeNextPage: yieldSlot }
+      )
       return {
-        items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
-        hasMore: linearConnectionHasNextPage(connection)
+        items: nodes.map((project) => mapProjectForWorkspace(entry, project)),
+        hasMore
       }
     },
     force,

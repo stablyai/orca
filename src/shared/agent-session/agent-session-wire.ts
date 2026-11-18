@@ -32,8 +32,11 @@ import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
 import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
-export type AgentSessionTurnActivity = {
-  turnId: string
+export type AgentSessionTurnActivity = { turnId: string; text: string }
+
+/** The agent's guess at the user's next prompt; never journaled, replaced when a turn opens. */
+export type AgentSessionPromptSuggestion = {
+  id: string
   text: string
 }
 
@@ -167,6 +170,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
+      /** Sent only to subscribers that asked for suggestions; null clears, absent keeps. */
+      promptSuggestion?: AgentSessionPromptSuggestion | null
       /** Rides every batch that carries rows, removals or submissions, so absent there means an
        *  older host; absent on one that carries none, which changes no turn. */
       latestTurn?: AgentSessionLatestTurn | null

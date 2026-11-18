@@ -5,7 +5,8 @@ import type {
   AutomationRunOutputSnapshot,
   AutomationRunSetupSkippedReason
 } from '../../../shared/automations/history/automation-run'
-import type { AutomationRunTargetResult } from '../ownership/run-target-resolution'
+import type { AutomationBotRunTarget } from '../bot-run-target'
+import type { AutomationRepoRunTarget } from '../ownership/run-target-resolution'
 import type { AutomationRunFailureCodeFields } from '../../../shared/automations/history/automation-run-failure-copy'
 
 const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
@@ -31,11 +32,17 @@ export type AutomationLaunch = {
   >
 }
 
-export type AutomationLauncher = (request: {
+/** Launches a run in main. */
+export type AutomationMainLauncher<Target> = (request: {
   automation: Automation
   run: AutomationRun
-  target: Extract<AutomationRunTargetResult, { ok: true }>
+  target: Target
 }) => Promise<AutomationLaunch>
+
+export type AutomationLauncher = AutomationMainLauncher<AutomationRepoRunTarget>
+
+/** Bot runs always launch in main: the bot's session needs no window. */
+export type AutomationBotLauncher = AutomationMainLauncher<AutomationBotRunTarget>
 
 /** Main's terminal launcher; `available` is false while no window graph can hold run terminals. */
 export type AutomationTerminalLauncher = {

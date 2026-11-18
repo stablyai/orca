@@ -22,6 +22,8 @@ import type { BridgeSafeAreaInsets } from '../bridge/page-geometry/bridge-safe-a
 import type { BridgeFoldDivision } from '../bridge/page-geometry/bridge-fold-division'
 import type { BridgeHapticsKind } from '../bridge/native-capabilities/bridge-haptics-notify'
 import { createBridgeHost } from '../host-bridge/bridge-host'
+import { latestBridgeCallbacks } from './bridge-latest-callbacks'
+import { usePageAppPresence } from './use-page-app-presence'
 import type { BridgeHost, BridgeNavigateBackOutcome } from '../host-bridge/bridge-host-contract'
 import type { BridgeSessionBack } from '../host-bridge/bridge-host-back'
 import type { BridgeNativeVerb } from '../bridge/native-capabilities/bridge-native-verbs'
@@ -71,8 +73,6 @@ export type MobileWebShellBridgeView = {
    * serves never said it takes one — the caller then leaves the key to the navigator.
    */
   readonly sendBack: () => boolean
-  /** Tells the mounted page the app is leaving the foreground; nothing with no host or an older page. */
-  readonly sendAppInactive: () => void
 }
 
 export type MobileWebShellBridgeArgs = {
@@ -113,6 +113,7 @@ export type MobileWebShellBridgeArgs = {
   // Document resets explicitly publish false so retired pages cannot retain Back.
   onPageBackClaim: (claimed: boolean) => void
   onPageLocation: (href: string) => void
+  onPageSwapSafe: (safe: boolean, round: number) => void
   /** The page shows a terminal with its key row, or stopped; false again on each new document. */
   onTerminalKeyRailClaim: (
     claimed: boolean,
@@ -192,12 +193,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           recordShellLifecycleLine(latest.hostId, line)
         }
       }),
-      onNavigate: (href, replace) => argsRef.current.onNavigate(href, replace),
-      onNavigateBack: () => argsRef.current.onNavigateBack(),
-      onExternalLink: (url) => argsRef.current.onExternalLink(url),
-      onHaptic: (kind) => argsRef.current.onHaptic(kind),
-      serveNativeVerb: (verb, params) => argsRef.current.serveNativeVerb(verb, params),
-      readStorage: () => argsRef.current.readStorage(),
+      ...latestBridgeCallbacks(argsRef),
+      // Page writes must not echo through the mirrored-key subscription as a fresh publish.
       onStorageWrite: (key, value) => {
         writingFromPageRef.current = true
         try {
@@ -206,16 +203,6 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           writingFromPageRef.current = false
         }
       },
-      onPageFault: (error) => argsRef.current.onPageFault(error),
-      onRouteParamClear: (param, value) => argsRef.current.onRouteParamClear(param, value),
-      onRouteRefused: (issue) => argsRef.current.onRouteRefused(issue),
-      onBinaryFramesDropped: (total) => argsRef.current.onBinaryFramesDropped(total),
-      onPageReady: () => argsRef.current.onPageReady(),
-      onPagePainted: () => argsRef.current.onPagePainted(),
-      onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed),
-      onPageLocation: (href) => argsRef.current.onPageLocation(href),
-      onTerminalKeyRailClaim: (claimed, inputOwner, toolbar) =>
-        argsRef.current.onTerminalKeyRailClaim(claimed, inputOwner, toolbar)
     })
     hostRef.current = { sessionId, host }
     // Reset host-owned drop totals on rebuild so a new lower count cannot look like frames being recovered.
@@ -267,6 +254,14 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       mounted.host.publishHostStatus()
     }
   }, [colorScheme, uiLocale, verdictOpen, sessionId])
+
+  // Fenced on the session like Back, so a host left from a past session hears nothing.
+  usePageAppPresence(args.hostId, (frame) => {
+    const mounted = hostRef.current
+    if (mounted?.sessionId === sessionId) {
+      mounted.host.sendAppFrame(frame)
+    }
+  })
 
   return {
     bridgeEnabled: ready !== null,
@@ -374,10 +369,6 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     sendBack: useCallback(() => {
       const mounted = hostRef.current
       return mounted !== null && mounted.sessionId === sessionId && mounted.host.sendBack()
-    }, [sessionId]),
-    sendAppInactive: useCallback(() => {
-      const mounted = hostRef.current
-      return mounted?.sessionId === sessionId ? mounted.host.sendAppInactive() : undefined
     }, [sessionId])
   }
 }

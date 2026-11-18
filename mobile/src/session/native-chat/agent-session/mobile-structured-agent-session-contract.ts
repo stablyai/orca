@@ -1,3 +1,4 @@
+import type { MobileSessionItemLink } from '../../mobile-session-item-target'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
@@ -17,6 +18,7 @@ import type { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion
 import type { StructuredMobileSendAttachment } from '../composer/delivery/use-mobile-structured-send-with-outcome'
 import type {
   AgentJournalSkillRef,
+  AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
@@ -39,6 +41,7 @@ export type StructuredMobileSession = Omit<
   'contextUsageSupport'
 > &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
+    journal: Pick<AgentJournalSnapshot, 'items' | 'submissions'>
     /** The composer ring's readout; null until the session reports usage. */
     contextUsage: NativeChatContextUsageSummary | null
     submissions: readonly AgentJournalSubmission[]
@@ -86,6 +89,7 @@ export type StructuredMobileSession = Omit<
   }
 
 export type MobileStructuredAgentSessionArgs = {
+  itemLink?: MobileSessionItemLink
   client: RpcClient | null
   /** The paired host the route opened: its query cache holds the chat's last model lists. */
   hostId?: string

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { readOrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
+import { BOT_ITEM_WRITE_METHOD_NAMES } from '../../../shared/bots/bot-items'
+import { CONNECTOR_POST_METHOD_NAMES } from '../../../shared/connector-action-contract'
 import type { RuntimeOrchestrationEnvelope } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export function createOrchestrationCompatibilityEnvelope(
@@ -27,10 +29,20 @@ export function createChatCallerEvidence(
   return { agentSessionId }
 }
 
-const AGENT_LAUNCH_METHODS: ReadonlySet<string> = new Set(['agent.launch', 'agent.launchReplay'])
+/** Methods whose calling agent session the host verifies: a launch, which it records in the caller's
+ *  chat (older hosts ignore the evidence), and automation, item and connector post writes, which act
+ *  for that session. */
+const SESSION_EVIDENCE_METHODS: ReadonlySet<string> = new Set([
+  'agent.launch',
+  'agent.launchReplay',
+  'automation.create',
+  'automation.update',
+  ...BOT_ITEM_WRITE_METHOD_NAMES,
+  ...CONNECTOR_POST_METHOD_NAMES
+])
 
 function namesChatCaller(method: string): boolean {
-  return AGENT_LAUNCH_METHODS.has(method) || method.startsWith('browser.')
+  return SESSION_EVIDENCE_METHODS.has(method) || method.startsWith('browser.')
 }
 
 /** The caller evidence one request carries, read from this process's environment once. */

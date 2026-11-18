@@ -2,7 +2,7 @@
 import type * as AttachmentOwnerModule from '../uploads/native-chat-attachment-owner'
 import type * as SessionAttachmentUploadModule from '../uploads/native-chat-session-attachment-upload'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, createElement } from 'react'
+import { act, createElement, useLayoutEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
 import {
@@ -82,17 +82,17 @@ function Probe({
   setNotice: (notice: string | null) => void
   onReady: (api: HookApi) => void
 }): null {
-  onReady(
-    useNativeChatExternalAttachments({
-      terminalTabId: 'tab-1',
-      structuredWorktreeId,
-      structuredSession,
-      disabled,
-      attachResolvedPaths,
-      pendingChips,
-      setNotice
-    })
-  )
+  const api = useNativeChatExternalAttachments({
+    terminalTabId: 'tab-1',
+    structuredWorktreeId,
+    structuredSession,
+    disabled,
+    attachResolvedPaths,
+    pendingChips,
+    setNotice
+  })
+  // Hand each committed render's api to the test, never one from discarded render work.
+  useLayoutEffect(() => onReady(api))
   return null
 }
 

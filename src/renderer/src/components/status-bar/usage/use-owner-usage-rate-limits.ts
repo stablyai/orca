@@ -8,6 +8,7 @@ import {
   type ProviderAccountsSnapshot
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '../../../store/index'
@@ -27,7 +28,7 @@ const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 /** A snapshot only counts under the owner it came from, so A's numbers never render as B's. */
 type OwnedUsage = {
   ownerId: string
-  rateLimits: RateLimitState | null
+  snapshot: ProviderAccountsSnapshot | null
   failure: OwnerUsageFailureReason | null
 }
 
@@ -45,7 +46,10 @@ export function getUsageOwnerHostScope(remoteOwner: RemoteUsageOwner | null): Ru
 }
 
 export type OwnerUsageRateLimits = {
+  /** Whose accounts the shown usage belongs to; account switchers list this owner's accounts. */
+  owner: AccountOwner
   rateLimits: RateLimitState
+  accounts: ProviderAccountsSnapshot | null
   /** Null when this device owns the shown usage. */
   remoteOwner: RemoteUsageOwner | null
   /** Forces the owning host to re-read usage; null when this device owns it. */
@@ -57,8 +61,8 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   // Why: route by the focused workspace's owner, never by the Active Server setting.
-  const { target } = useActiveAccountOwner(LOCAL_TARGET)
-  const ownerId = runtimeTargetEnvironmentId(target)
+  const owner = useActiveAccountOwner(LOCAL_TARGET)
+  const ownerId = runtimeTargetEnvironmentId(owner.target)
   const ownerName = useAppStore(
     (s) => s.runtimeEnvironments.find((environment) => environment.id === ownerId)?.name ?? null
   )
@@ -76,7 +80,7 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
       const current = ownedRef.current
       apply({
         ownerId: owner,
-        rateLimits: current?.ownerId === owner ? current.rateLimits : null,
+        snapshot: current?.ownerId === owner ? current.snapshot : null,
         failure
       })
     },
@@ -85,14 +89,14 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
 
   const applySnapshot = useCallback(
     (owner: string, snapshot: ProviderAccountsSnapshot) => {
-      if (snapshot.rateLimits) {
-        apply({ ownerId: owner, rateLimits: snapshot.rateLimits, failure: null })
-      } else {
-        // Why: a host that predates published usage answers without it; say so, never spin.
-        fail(owner, 'usage-not-published')
-      }
+      // Why: a host that predates published usage answers without it; say so, never spin, and keep its roster.
+      apply({
+        ownerId: owner,
+        snapshot,
+        failure: snapshot.rateLimits ? null : 'usage-not-published'
+      })
     },
-    [apply, fail]
+    [apply]
   )
 
   const ownerIdRef = useRef(ownerId)
@@ -185,11 +189,11 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
         kind: 'remote-unverifiable',
         ownerLabel: remoteOwner.label,
         reason: owned.failure,
-        lastKnown: owned.rateLimits
+        lastKnown: owned.snapshot?.rateLimits ?? null
       }
     }
-    return owned.rateLimits
-      ? { kind: 'remote', ownerLabel: remoteOwner.label, rateLimits: owned.rateLimits }
+    return owned.snapshot?.rateLimits
+      ? { kind: 'remote', ownerLabel: remoteOwner.label, rateLimits: owned.snapshot.rateLimits }
       : { kind: 'remote-pending' }
   }, [remoteOwner, owned])
 
@@ -198,7 +202,9 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
     [local, ownerState, t]
   )
   return {
+    owner,
     rateLimits,
+    accounts: ownerId && owned?.ownerId === ownerId ? owned.snapshot : null,
     remoteOwner,
     refreshRemote: ownerId ? refreshRemote : null
   }
