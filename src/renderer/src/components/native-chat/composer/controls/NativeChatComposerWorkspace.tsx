@@ -164,7 +164,9 @@ export function NativeChatComposerWorkspace({
               size="xs"
               className={
                 identity
-                  ? 'hidden h-5.5 min-w-0 max-w-56 shrink justify-start @lg:flex'
+                  ? showProjectName
+                    ? 'hidden h-5.5 min-w-0 max-w-56 shrink justify-start @lg:flex'
+                    : 'hidden h-5.5 min-w-0 max-w-56 shrink justify-start @sm:flex'
                   : 'h-5.5 min-w-0 max-w-56 shrink justify-start'
               }
               aria-label={t(

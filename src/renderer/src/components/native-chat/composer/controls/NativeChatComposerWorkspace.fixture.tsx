@@ -133,6 +133,11 @@ function workspaceFixture({
         if (!project || project.getBoundingClientRect().width === 0) {
           throw new Error('The project name must be visible in the composer footer')
         }
+      } else if (!folder && width >= 384) {
+        const checkoutButton = frame.querySelector<HTMLElement>(`[aria-label="Copy ${checkout}"]`)
+        if (!checkoutButton || checkoutButton.getBoundingClientRect().width === 0) {
+          throw new Error('A matching project and checkout must keep the checkout visible')
+        }
       }
       const button =
         frame.querySelector<HTMLButtonElement>('[aria-label^="Switch branch:"]') ??
@@ -206,6 +211,7 @@ function workspaceFixture({
 }
 
 export const shortBranch = workspaceFixture()
+export const sameProjectAndCheckout = workspaceFixture({ width: 440 })
 export const projectAndWorktree = workspaceFixture({
   projectName: 'orca',
   checkout: 'feature-worktree'
