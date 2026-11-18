@@ -136,7 +136,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   async resolveTerminalWorkspaceLaunchScope(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {},
+    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace
   ): Promise<TerminalWorkspaceLaunchScope> {
@@ -154,7 +154,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   protected async resolveTerminalWorkspaceLaunchTarget(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {},
+    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace,
     checkPath = true
@@ -177,7 +177,8 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       selector,
       options,
       resolvedFolder,
-      checkPath
+      // A read must not touch the disk: a WSL UNC path would start its distro.
+      checkPath && !options.readOnly
     )
     if (folderScope) {
       return {
@@ -202,7 +203,8 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
     triggerTerminalSpawnPushTargetMaterialization(
       worktree.path,
-      worktree.pushTarget,
+      // A read must not add remotes or fetch; only a spawn prepares the push target.
+      options.readOnly ? undefined : worktree.pushTarget,
       repo,
       this.store,
       worktree.repoId,

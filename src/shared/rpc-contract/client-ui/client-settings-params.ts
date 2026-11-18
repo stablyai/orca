@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isTaskProvider } from '../../work-items/task-providers'
 import type { TaskProvider } from '../../work-items/task-providers'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
@@ -53,7 +53,9 @@ export const NativeChatSessionOptionsMutation = z.discriminatedUnion('type', [
     .object({
       type: z.literal('apply-picks'),
       agent: NativeChatSessionOptionAgent,
-      picks: z.array(NativeChatSessionOptionPick).min(1).max(8)
+      picks: z.array(NativeChatSessionOptionPick).min(1).max(8),
+      /** The chat the picks were made in; a bot's conversation keeps them on the bot. Older clients omit it. */
+      sessionId: z.string().trim().min(1).max(512).optional()
     })
     .strict(),
   z
@@ -116,8 +118,8 @@ export const SettingsUpdate = z
       .optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
     worktreeCardDetailsRow: z.boolean().optional(),
-    /** No UI: the host-side switch for connectors, so a headless server can be turned on. */
-    experimentalConnectors: z.boolean().optional(),
+    /** The host-side switch for bots, so a headless server can turn them on. */
+    botsEnabled: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
     codexShareHistoryAcrossAccounts: z.boolean().optional(),
     deleteChatHistoryWithWorkspace: z.boolean().optional(),

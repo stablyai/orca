@@ -57,7 +57,8 @@
       "currentWorktree": "현재 워크트리",
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
-      "resumeSession": "에이전트 세션 재개"
+      "resumeSession": "에이전트 세션 재개",
+      "continueInCli": "CLI에서 계속"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "호스트에 연결할 수 없습니다.",
@@ -165,11 +166,13 @@
       "invalidUrl": "유효한 URL을 입력하세요."
     },
     "paneView": {
-      "dialogTitle": "브라우저 대화상자",
       "forward": "앞으로",
       "keyboardPlaceholder": "페이지에 입력…",
       "reload": "새로고침",
-      "sendText": "브라우저로 텍스트 전송"
+      "sendText": "브라우저로 텍스트 전송",
+      "dialogTitleWithOrigin": "{{origin}} 내용:",
+      "dialogTitleNoOrigin": "이 페이지 내용:",
+      "dialogAnswer": "답변"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 클릭 보조 키"
@@ -182,6 +185,9 @@
     "viewModeSwitch": {
       "mobileView": "웹사이트를 모바일 화면으로 보기",
       "webView": "웹사이트를 데스크톱 화면으로 보기"
+    },
+    "loadFailure": {
+      "retry": "다시 시도"
     }
   },
   "chat": {
@@ -215,7 +221,8 @@
     "contextUsage": {
       "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
       "title": "컨텍스트",
-      "estimated": "마지막 응답 기준 추정치입니다."
+      "estimated": "마지막 응답 기준 추정치입니다.",
+      "deferredNote": "필요할 때 불러옵니다. 사용량에 포함되지 않습니다."
     },
     "composerAttachments": {
       "attachedImage": "첨부된 이미지",
@@ -649,7 +656,7 @@
       "confirm": "되감기",
       "unsupported": "이 채팅은 이전 메시지로 돌아갈 수 없습니다.",
       "historyNotPaginated": "이 오래된 Codex 채팅은 이전 메시지로 돌아갈 수 없습니다. 여기로 되감기를 사용하려면 새 채팅을 시작하세요.",
-      "busy": "에이전트가 유휴 상태이고 이 채팅에서 사용자를 기다리는 항목이 없으면 사용할 수 있습니다.",
+      "busy": "채팅이 유휴 상태일 때 사용할 수 있습니다",
       "staleEpoch": "대화가 변경되었습니다. 최신 메시지를 확인하고 다시 시도하세요.",
       "invalidTarget": "대화가 이 메시지로 돌아갈 수 없습니다. 변경된 내용은 없습니다.",
       "historyLimit": "이 대화는 너무 길어 되돌아갈 수 없습니다. 변경된 내용은 없습니다.",
@@ -927,7 +934,9 @@
       "label": "설정 스크립트",
       "run": "실행",
       "runSetupCommand": "설정 명령 실행",
-      "skip": "건너뛰기"
+      "skip": "건너뛰기",
+      "waitForSetup": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
+      "waitForSetupSaveFailed": "시작 동작 저장 실패"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "연결",
@@ -1131,6 +1140,9 @@
       "composer": {
         "planMode": "계획",
         "exitPlanMode": "계획 모드 종료"
+      },
+      "goal": {
+        "sentAsGoal": "목표로 보냄"
       }
     }
   },
@@ -2452,6 +2464,11 @@
       "sendReviewNotes": "리뷰 메모 보내기",
       "shortcut": "단축키",
       "terminal": "터미널",
+      "terminalWithShell": "터미널: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD 프롬프트",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
       "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
@@ -2639,7 +2656,7 @@
       "disconnected": "붙여넣기 실패 (연결 끊김)",
       "imageTooLarge": "이미지가 너무 커서 붙여넣을 수 없습니다.",
       "pasteFailed": "붙여넣기 실패",
-      "pasteTooLarge": "붙여넣을 내용이 너무 큼 (최대 256 KiB)",
+      "pasteTooLarge": "붙여넣기 내용이 너무 큽니다.",
       "terminalChanged": "붙여넣기 취소됨 (터미널 변경됨)"
     },
     "worktreeLabel": {
@@ -2769,6 +2786,9 @@
     "structuredOpen": {
       "worktreeDeleted": "워크트리가 삭제되었습니다.",
       "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다."
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다."
     }
   },
   "settings": {
@@ -4337,6 +4357,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "컴퓨터 페어링",
+      "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링하세요.",
+      "pairAction": "컴퓨터 페어링",
+      "openFailed": "이 링크를 열 수 없습니다",
+      "ambiguous": "이 봇은 {{names}}에 있습니다. 원하는 컴퓨터의 Orca에서 채팅을 여세요.",
+      "computer": "사용자의 컴퓨터",
+      "updateNeeded": "이 링크를 열려면 {{names}}에서 Orca를 업데이트하세요.",
+      "unreachable": "{{names}}에 연결할 수 없습니다. 컴퓨터 중 하나에서 Orca가 실행 중인지 확인한 다음 다시 시도하세요.",
+      "missing": "페어링된 컴퓨터에 이 봇이 없습니다.",
+      "offline": "{{name}}이(가) 오프라인입니다. 다시 연결되면 링크를 다시 여세요.",
+      "chatOpenFailed": "{{name}}에서 이 채팅을 열 수 없습니다. 링크를 다시 시도하세요.",
+      "unreachableSingle": "{{name}}에 연결할 수 없습니다. 해당 컴퓨터에서 Orca가 실행 중인지 확인한 다음 다시 시도하세요.",
+      "workspaceDeleted": "이 채팅의 작업 공간이 {{name}}에서 삭제되었습니다."
     }
   }
 }

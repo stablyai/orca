@@ -154,6 +154,48 @@
     "count": 1
   },
   {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Slack",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Discord",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Google",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Linear",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "GitHub",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/bots/BotMemoryList.tsx",
+    "kind": "jsx-text",
+    "text": "MEMORY.md",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-attribute:title",
     "text": "Claude",

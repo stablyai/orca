@@ -22,6 +22,8 @@ import { createProjectGroupHeaderDragSession } from './project-group-header-drag
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
+import { shiftHeaderDrop } from './project-group-header-drag-preview'
+import { useHeaderDragBodyCursor } from './header-drag-body-cursor'
 
 // Virtualized rows can unmount during drag; pointer events and cached model indices keep drops stable.
 
@@ -31,7 +33,8 @@ export function useProjectGroupHeaderDrag({
   onCommitProjectGroupTabOrder,
   rootProjectHeaderKeys,
   onCommitRootProjectOrder,
-  getScrollContainer
+  getScrollContainer,
+  floatingPreview = false
 }: UseProjectGroupHeaderDragArgs): ProjectGroupHeaderDragController {
   const [state, setState] = useState<ProjectGroupDragState>(INITIAL_PROJECT_GROUP_DRAG_STATE)
   const [sessionArmed, setSessionArmed] = useState(false)
@@ -98,8 +101,9 @@ export function useProjectGroupHeaderDrag({
   const applyDrop = useCallback(
     (groupId: string, drop: { dropIndex: number; dropIndicatorY: number } | null) => {
       latestDropIndexRef.current = drop?.dropIndex ?? null
+      const session = dragSessionRef.current
       const nextState: ProjectGroupDragState = drop
-        ? { draggingGroupId: groupId, ...drop }
+        ? { draggingGroupId: groupId, ...shiftHeaderDrop(floatingPreview, session, drop) }
         : { draggingGroupId: groupId, dropIndex: null, dropIndicatorY: null }
       setState((prev) =>
         prev.draggingGroupId === nextState.draggingGroupId &&
@@ -109,7 +113,7 @@ export function useProjectGroupHeaderDrag({
           : nextState
       )
     },
-    []
+    [floatingPreview]
   )
 
   const cancelAutoscroll = useCallback(() => {
@@ -286,19 +290,7 @@ export function useProjectGroupHeaderDrag({
     sessionArmed
   ])
 
-  useEffect(() => {
-    if (state.draggingGroupId === null) {
-      return
-    }
-    const body = document.body
-    const { cursor: prevCursor, userSelect: prevUserSelect } = body.style
-    body.style.cursor = 'grabbing'
-    body.style.userSelect = 'none'
-    return () => {
-      body.style.cursor = prevCursor
-      body.style.userSelect = prevUserSelect
-    }
-  }, [state.draggingGroupId])
+  useHeaderDragBodyCursor(state.draggingGroupId !== null)
 
   const onHandlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLElement>, groupId: string) => {

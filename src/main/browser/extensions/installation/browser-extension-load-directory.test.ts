@@ -33,6 +33,7 @@ const {
 } = await import('./browser-extension-load-directory')
 const { getBrowserExtensionWorkerToken } =
   await import('../api-runtime/browser-extension-worker-api-host')
+const { getBrowserExtensionInstallStore } = await import('./browser-extension-install-store')
 
 const STORE_KEY = Buffer.from('store public key').toString('base64')
 
@@ -91,6 +92,17 @@ describe('extension load directories', () => {
     const before = readdirSync(source).sort()
     const predicted = await browserExtensionIdForUnpackedFolder(source)
     expect(readdirSync(source).sort()).toEqual(before)
+    getBrowserExtensionInstallStore().save({
+      id: predicted,
+      name: 'Dev',
+      version: '0.1',
+      path: source,
+      source: 'unpacked',
+      iconPath: null,
+      permissions: [],
+      hostPermissions: [],
+      optionsPage: null
+    })
     const first = await prepareBrowserExtensionDirectory({ source: 'unpacked', path: source })
     expect(first.extensionId).toBe(predicted)
     expect(first.directory).not.toBe(source)
