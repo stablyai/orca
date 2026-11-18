@@ -106,7 +106,8 @@ export function shouldDropHiddenRendererPtyData(
 /** Request a restore marker on the first drop after retirement or reveal. */
 export function recordHiddenRendererPtyDataDrop(
   id: string,
-  chars: number
+  chars: number,
+  printed = chars > 0
 ): {
   shouldEmitRestoreMarker: boolean
   hiddenDropEpisode: number
@@ -118,7 +119,7 @@ export function recordHiddenRendererPtyDataDrop(
   const lastNoticeAt = lastHiddenOutputActivityNoticeAt.get(id)
   // Leading edge: the first output after a quiet spell is reported at once.
   const shouldEmitActivityNotice =
-    chars > 0 &&
+    printed &&
     (lastNoticeAt === undefined || now - lastNoticeAt >= HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS)
   if (shouldEmitActivityNotice) {
     lastHiddenOutputActivityNoticeAt.set(id, now)
@@ -134,6 +135,15 @@ export function recordHiddenRendererPtyDataDrop(
   const episode = nextHiddenDropEpisode++
   droppedSinceHiddenPtys.set(id, { state: 'unrevealed', episode })
   return { shouldEmitRestoreMarker: true, hiddenDropEpisode: episode, shouldEmitActivityNotice }
+}
+
+/** Records a dropped pending entry; a byte-cap sentinel carries no data yet stands for output the PTY printed. */
+export function recordHiddenPendingPtyDataDrop(
+  id: string,
+  pending: { data: string; droppedOutput?: true }
+): ReturnType<typeof recordHiddenRendererPtyDataDrop> {
+  const chars = pending.data.length
+  return recordHiddenRendererPtyDataDrop(id, chars, chars > 0 || pending.droppedOutput === true)
 }
 
 export function hiddenRendererPtyDropEpisode(id: string): number | undefined {

@@ -8,7 +8,7 @@ import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagn
 import { installTerminalViewAttributesIpc } from './terminal-view-attributes-ipc'
 import {
   consumeHiddenRendererPtyDropMemory,
-  recordHiddenRendererPtyDataDrop,
+  recordHiddenPendingPtyDataDrop,
   setRendererPtyDeliveryInterest,
   shouldDropHiddenRendererPtyData
 } from '../delivery/pty-hidden-delivery-gate'
@@ -261,7 +261,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
         session.pendingData.delete(args.id)
         session.updateProducerFlowControl(args.id)
         session.pendingOverflowMarkedPtys.delete(args.id)
-        const drop = recordHiddenRendererPtyDataDrop(args.id, pending.data.length)
+        const drop = recordHiddenPendingPtyDataDrop(args.id, pending)
         if (drop.shouldEmitActivityNotice) {
           sendPtyHiddenOutputActivity(session, args.id)
         }

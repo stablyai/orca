@@ -1,5 +1,5 @@
 import {
-  recordHiddenRendererPtyDataDrop,
+  recordHiddenPendingPtyDataDrop,
   shouldDropHiddenRendererPtyData
 } from './pty-hidden-delivery-gate'
 import { advanceEscapeBoundary } from './pty-escape-boundary'
@@ -114,7 +114,7 @@ export function flushPendingData(session: PtyIpcSession): void {
         session.pendingData.remove(selection)
         session.pendingOverflowMarkedPtys.delete(id)
         session.updateProducerFlowControl(id)
-        const drop = recordHiddenRendererPtyDataDrop(id, pending.data.length)
+        const drop = recordHiddenPendingPtyDataDrop(id, pending)
         warnIfDroppingHiddenBytesForVisiblePty(session, id, pending.data.length)
         if (drop.shouldEmitActivityNotice) {
           sendPtyHiddenOutputActivity(session, id)

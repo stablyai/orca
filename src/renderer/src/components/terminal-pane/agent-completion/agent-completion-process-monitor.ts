@@ -217,6 +217,8 @@ export function createAgentCompletionProcessMonitor({
     })
   }
 
+  let trackedPtyId: string | null = null
+
   return {
     requestInspection,
     scheduleNextPoll,
@@ -227,9 +229,11 @@ export function createAgentCompletionProcessMonitor({
       }
     },
     start: () => {
-      // A newly tracked pane polls fast while its foreground identity settles; visibility re-syncs don't count as activity.
-      if (!state.pollTrackingStarted) {
+      // A newly bound PTY polls fast while its foreground identity settles; visibility re-syncs don't count as activity.
+      const ptyId = options.getPtyId()
+      if (!state.pollTrackingStarted || ptyId !== trackedPtyId) {
         state.pollTrackingStarted = true
+        trackedPtyId = ptyId
         state.lastPaneActivityAt = Date.now()
       }
       scheduleNextPoll()
