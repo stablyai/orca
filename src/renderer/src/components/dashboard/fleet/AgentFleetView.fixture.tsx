@@ -6,7 +6,7 @@ import {
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { AgentKanbanBoard } from '../board/AgentKanbanBoard'
 import { AgentFleetView } from './AgentFleetView'
-import { buildFleetMockSnapshot, FLEET_MOCK_NOW } from './fleet-mock-snapshot'
+import { buildFleetMockSnapshot, FLEET_MOCK_NOW } from './fleet-snapshot-fixtures'
 
 const WIDE = 1240
 const NARROW = 520
