@@ -80,7 +80,8 @@ function stop(): Promise<void> {
 
 async function acquireServiceLock(userDataPath: string) {
   // Room for an orphaned holder to notice its desktop is gone and finish stopping.
-  const deadline = Date.now() + ORCAD_SHUTDOWN_DEADLINE_MS + 2 * DESKTOP_OWNER_POLL_MS
+  const ownerWatchSlack = process.platform === 'linux' ? 2 * DESKTOP_OWNER_POLL_MS : 0
+  const deadline = Date.now() + ORCAD_SHUTDOWN_DEADLINE_MS + ownerWatchSlack
   while (!abort.signal.aborted) {
     try {
       return acquireOrcadInstanceLock(join(userDataPath, 'backend-service'), {

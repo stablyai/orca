@@ -128,10 +128,12 @@ static int parse_ms(const char *text, unsigned max, unsigned *out) {
         if (*c < '0' || *c > '9') {
             return -1;
         }
-        value = value * 10 + (unsigned)(*c - '0');
-        if (value > max) {
+        unsigned digit = (unsigned)(*c - '0');
+        // Checked before multiplying so a long input can't wrap back under `max`.
+        if (value > (max - digit) / 10) {
             return -1;
         }
+        value = value * 10 + digit;
     }
     *out = value;
     return 0;
@@ -167,12 +169,16 @@ static int cloexec_inherited_fds(void) {
     }
     int failed = 0;
     struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
+    // readdir returns NULL for both the end and an error; only errno tells them apart.
+    for (errno = 0; (entry = readdir(dir)) != NULL; errno = 0) {
         unsigned fd;
         if (parse_ms(entry->d_name, INT_MAX, &fd) == 0 && fd > 2 && (int)fd != dirfd(dir) &&
                 set_cloexec((int)fd, 1) != 0 && errno != EBADF) {
             failed = 1;
         }
+    }
+    if (errno != 0) {
+        failed = 1;
     }
     closedir(dir);
     return failed ? -1 : 0;

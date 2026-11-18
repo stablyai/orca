@@ -17,17 +17,18 @@ export function watchDesktopOwner(argv: readonly string[], onGone: () => void): 
   if (process.platform !== 'linux' || !Number.isSafeInteger(pid) || pid <= 1) {
     return
   }
-  let started: string | null | undefined
+  // Main forked this backend, so a process on main's pid that started later is a reused pid.
+  const ownStart = readStartTicks('self')
   let checking = false
   const check = (): void => {
     if (checking) {
       return
     }
     checking = true
-    void desktopState(pid)
-      .then((state) => {
-        started ??= state?.startTicks ?? null
-        if (state === null || (started && state.startTicks && state.startTicks !== started)) {
+    void Promise.all([desktopState(pid), ownStart])
+      .then(([state, own]) => {
+        const reused = Boolean(state?.startTicks && own && Number(state.startTicks) > Number(own))
+        if (state === null || reused) {
           clearInterval(timer)
           onGone()
         }
@@ -36,7 +37,7 @@ export function watchDesktopOwner(argv: readonly string[], onGone: () => void): 
         checking = false
       })
   }
-  // No push signal exists for another process's exit; this stops once main is gone.
+  // Node exposes no exit event for a process it didn't spawn; this stops once main is gone.
   const timer = setInterval(check, DESKTOP_OWNER_POLL_MS)
   timer.unref()
   check()
@@ -51,11 +52,15 @@ async function desktopState(pid: number): Promise<{ startTicks: string | null } 
       ? null
       : { startTicks: null }
   }
-  try {
-    const stat = await readFile(`/proc/${pid}/stat`, 'utf8')
-    const state = stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3)
-    return state === 'Z' || state === 'X' ? null : { startTicks: parseLinuxStartTicks(stat) }
-  } catch {
-    return { startTicks: null }
+  const stat = await readFile(`/proc/${pid}/stat`, 'utf8').catch(() => null)
+  const state = stat?.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3)
+  if (state === 'Z' || state === 'X') {
+    return null
   }
+  return { startTicks: stat ? parseLinuxStartTicks(stat) : null }
+}
+
+async function readStartTicks(pid: number | 'self'): Promise<string | null> {
+  const stat = await readFile(`/proc/${pid}/stat`, 'utf8').catch(() => null)
+  return stat ? parseLinuxStartTicks(stat) : null
 }
