@@ -185,7 +185,7 @@ it.each([false, true])(
       shell: 'posix'
     })
     expect(launch.ok && launch.command).toBe(
-      "claude '--append-system-prompt' 'don'\\''t panic' '--model' 'opus'"
+      `claude '--append-system-prompt' 'don'"'"'t panic' '--model' 'opus'`
     )
   }
 )
