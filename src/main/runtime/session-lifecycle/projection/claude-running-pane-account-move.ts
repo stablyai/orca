@@ -240,10 +240,12 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
   }
 
   /** Whether, right now, the pane still runs `session` in Claude, outside Agent Teams, on an
-   *  account other than the selected one: earlier restarts take seconds. */
+   *  account other than the selected one: earlier restarts take seconds. A pane this pass just
+   *  restarted may still be typing its own resume command, so its foreground isn't required. */
   private async claudePaneStillMoves(
     ptyId: string,
-    session: AgentProviderSessionMetadata
+    session: AgentProviderSessionMetadata,
+    justRestarted: boolean
   ): Promise<boolean> {
     const pty = this.ptysById.get(ptyId)
     const pane = pty?.connected ? this.claudePaneOf(pty) : null
@@ -266,7 +268,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     ) {
       return false
     }
-    return (await this.readClaudeForeground(ptyId)) === true
+    return justRestarted || (await this.readClaudeForeground(ptyId)) === true
   }
 
   /** A switch landing during the restart leaves unknown which account its spawn read: restart again
@@ -283,7 +285,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
       const result = await this.restartAgentPaneInPlace(
         restarting,
         { agent: 'claude', providerSession: session },
-        () => this.claudePaneStillMoves(restarting, session)
+        () => this.claudePaneStillMoves(restarting, session, attempt > 0)
       )
       if (!result.ok) {
         // After a stop (create_failed), the pane keeps its surface and its saved resume record.
