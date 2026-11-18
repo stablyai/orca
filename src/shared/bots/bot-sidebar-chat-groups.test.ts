@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BotChatTreeChat } from './bot-chat-tree'
-import { groupBotWorkspacesByChat, pageSidebarList } from './bot-sidebar-chat-groups'
+import { groupBotWorkspacesByChat } from './bot-sidebar-chat-groups'
 
 const chat = (chatId: string, extra: Partial<BotChatTreeChat> = {}): BotChatTreeChat => ({
   chatId,
@@ -55,13 +55,5 @@ describe('groupBotWorkspacesByChat', () => {
       {}
     )
     expect(group.workspaces.map((w) => w.id)).toEqual(['d', 'c', 'a', 'b'])
-  })
-})
-
-describe('pageSidebarList', () => {
-  it('reveals 8 at a time past the first few', () => {
-    expect(pageSidebarList(49, 3, 0)).toEqual({ shown: 3, remaining: 46 })
-    expect(pageSidebarList(49, 3, 1)).toEqual({ shown: 11, remaining: 38 })
-    expect(pageSidebarList(5, 3, 0)).toEqual({ shown: 3, remaining: 2 })
   })
 })

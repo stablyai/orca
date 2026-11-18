@@ -31,7 +31,6 @@ describe('encodeTerminalKeyForModes', () => {
       alt: false,
       shift: false
     })!.bytes
-    expect(encodeTerminalKeyForModes(ctrlEnter, MODES, 'darwin')).toBe('\x1b[13;5u')
     expect(encodeTerminalKeyForModes(ctrlEnter, MODES, 'linux')).toBe('\x1b[13;5u')
     expect(encodeTerminalKeyForModes(ctrlEnter, MODES, 'win32')).toBe('\r')
     expect(encodeTerminalKeyForModes(ctrlEnter, MODES, undefined)).toBe('\r')

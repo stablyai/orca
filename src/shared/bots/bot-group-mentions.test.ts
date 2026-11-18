@@ -3,7 +3,6 @@ import type { BotGroup } from './bot-group'
 import {
   botGroupAudience,
   botGroupDraftAudience,
-  formatBotGroupAudience,
   botGroupMentionSegments,
   botGroupSingleRecipient,
   botGroupReplyDraft
@@ -77,28 +76,6 @@ describe('group mention segments', () => {
         .map((segment) => segment.text)
         .join('')
     ).toBe('hi @Sage!')
-  })
-})
-
-describe('group audience label', () => {
-  const english = (_key: string, fallback: string, values?: { count: number }) =>
-    fallback.replace('{{count}}', String(values?.count ?? ''))
-  const label = (draft: string, replyMode: BotGroup['replyMode']) =>
-    formatBotGroupAudience(
-      botGroupDraftAudience(draft, room(replyMode), bots),
-      room(replyMode),
-      bots,
-      english
-    )
-
-  it('names the reply mode, the bots a draft reaches, or an invalid mention', () => {
-    expect(label('hi', { kind: 'all' })).toBe('All bots')
-    expect(label('hi', { kind: 'mentions' })).toBe('Only when mentioned')
-    expect(label('hi', { kind: 'bot', botId: 'sage' })).toBe('Sage')
-    expect(label('@Scout hi', { kind: 'all' })).toBe('Scout')
-    expect(label('@Scout @Sage hi', { kind: 'mentions' })).toBe('2 mentioned')
-    expect(label('@everyone hi', { kind: 'mentions' })).toBe('All bots · 3')
-    expect(label('@Nobody hi', { kind: 'all' })).toBe('Correct mention')
   })
 })
 

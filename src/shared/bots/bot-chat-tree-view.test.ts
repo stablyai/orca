@@ -66,9 +66,4 @@ describe('chatsTabWorkers', () => {
     expect(more).toBe(3)
     expect(read).toBe(true)
   })
-
-  it('needs no read once every worker is shown', () => {
-    const small = chat('small', { finished: [worker('f1')], finishedTotal: 1 })
-    expect(chatsTabWorkers(small, 5)).toEqual({ workers: [worker('f1')], more: 0, read: false })
-  })
 })

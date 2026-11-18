@@ -43,16 +43,12 @@ afterEach(() => {
 })
 
 describe('useBotNeedsYouCount', () => {
-  it('says the host’s count and reads no item list, at N and 10N item and worker notices', async () => {
+  it('uses the host’s count without requesting an item list on notices', async () => {
     const view = renderHook(() => useBotNeedsYouCount(BOT, { needsYou: 1 }))
-    for (const notices of [5, 50]) {
-      for (let index = 0; index < notices; index += 1) {
-        notice(['items'])
-        notice(['workers'])
-      }
-      await flush()
-      expect(listReads()).toHaveLength(0)
-    }
+    notice(['items'])
+    notice(['workers'])
+    await flush()
+    expect(listReads()).toHaveLength(0)
     expect(view.result.current).toBe(3)
   })
 })

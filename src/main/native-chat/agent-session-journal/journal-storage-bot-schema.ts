@@ -153,6 +153,7 @@ export const storedAutomationRun = z.object({
   trigger: z.string(),
   scheduledFor: z.number().optional(),
   wait: storedWaitEnded.ending.optional(),
+  toConversation: z.literal(true).optional(),
   event: z
     .object({
       source: z.string(),
