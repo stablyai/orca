@@ -206,7 +206,8 @@ export function createClaudeAccountActionRunner(
           }
         )
       }
-      if (switched) {
+      // A server's report counts even when this view already showed the account it switched to.
+      if (switched || runningSessions) {
         void handleRunningClaudeSessionsAfterSwitch({
           owner: accountOwner,
           target: actionRuntime,
@@ -214,7 +215,7 @@ export function createClaudeAccountActionRunner(
           after: { state: next, accountId: nextActiveAccountId },
           ...(runningSessions ? { hostMove: runningSessions } : {})
         }).then((outcome) => {
-          if (outcome === 'show-confirmation') {
+          if (outcome === 'show-confirmation' && switched) {
             showUpdatedToast()
           }
         })

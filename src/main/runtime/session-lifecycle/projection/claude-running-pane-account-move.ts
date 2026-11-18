@@ -41,8 +41,11 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
   /** Panes this host restarted, until their own status row names the conversation again. */
   private readonly restartedClaudePanes = new Map<
     string,
-    { session: AgentProviderSessionMetadata; accountId: string | null }
+    /** `undefined`: switches kept landing while it restarted, so its account is unknown. */
+    { session: AgentProviderSessionMetadata; accountId: string | null | undefined }
   >()
+  /** Bumped by every switch, so a restart can tell its spawn may have read another selection. */
+  private claudeSelectionEpoch = 0
 
   /** A window moves its own panes; a host without one moves its own and says what it did. */
   protected onClaudeAccountSelected(
@@ -52,6 +55,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
       this.notifier?.claudeAccountSelected?.(change)
       return Promise.resolve(undefined)
     }
+    this.claudeSelectionEpoch += 1
     // The switch is already saved: a failed plan must not fail its reply.
     const planned = this.claudePanePlans
       .then(() => this.planClaudePaneMove(change))
@@ -141,6 +145,9 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
   ): ClaudePaneFolder | undefined {
     const restarted = this.restartedClaudePanes.get(pane.pty.ptyId)
     if (restarted) {
+      if (restarted.accountId === undefined) {
+        return undefined
+      }
       return restarted.accountId === null
         ? { kind: 'system-default' }
         : { kind: 'account', accountId: restarted.accountId }
@@ -216,67 +223,94 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
 
   private async restartClaudePanes(panes: readonly ClaudePaneRestart[]): Promise<void> {
     for (const { pty, paneKey, session } of panes) {
+      let requeued = false
       try {
-        // Earlier restarts take seconds: the pane may now run another conversation, or none, or a
-        // switch back may have made its own account the selected one again.
-        const current = pty.connected ? this.claudePaneOf(pty) : null
-        const host = this.accounts.getSnapshot().claude
-        const selected = claudeLaunchAccountId(host, host.activeAccountId)
-        if (
-          current?.session?.id !== session.id ||
-          isClaudePaneOnAccount(
-            this.claudePaneFolder(
-              current,
-              this.store?.getSettings().claudeManagedAccounts ?? [],
-              host
-            ),
-            selected,
-            host
-          ) ||
-          (await this.readClaudeForeground(pty.ptyId)) !== true
-        ) {
-          continue
-        }
-        await this.restartClaudePaneOnSelectedAccount(pty.ptyId, session)
+        requeued = await this.restartClaudePaneOnSelectedAccount(pty, paneKey, session)
+      } catch (error) {
+        console.warn('[runtime] could not move a running Claude terminal', {
+          ptyId: pty.ptyId,
+          error
+        })
       } finally {
-        this.restartingClaudePanes.delete(paneKey)
+        if (!requeued) {
+          this.restartingClaudePanes.delete(paneKey)
+        }
       }
     }
   }
 
-  /** A switch during the restart leaves unknown which account its spawn read; restart once more then. */
-  private async restartClaudePaneOnSelectedAccount(
+  /** Whether, right now, the pane still runs `session` in Claude, outside Agent Teams, on an
+   *  account other than the selected one: earlier restarts take seconds. */
+  private async claudePaneStillMoves(
     ptyId: string,
     session: AgentProviderSessionMetadata
-  ): Promise<void> {
-    const selectedAccount = (): string | null => {
-      const accounts = this.accounts.getSnapshot().claude
-      return claudeLaunchAccountId(accounts, accounts.activeAccountId)
+  ): Promise<boolean> {
+    const pty = this.ptysById.get(ptyId)
+    const pane = pty?.connected ? this.claudePaneOf(pty) : null
+    const handle = this.handleByPtyId.get(ptyId)
+    if (
+      !pane ||
+      pane.session?.id !== session.id ||
+      (handle !== undefined && this.claudeAgentTeams.holdsHandle(handle))
+    ) {
+      return false
     }
-    let current = ptyId
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const before = selectedAccount()
-      const restarting = current
+    const host = this.accounts.getSnapshot().claude
+    const saved = this.store?.getSettings().claudeManagedAccounts ?? []
+    if (
+      isClaudePaneOnAccount(
+        this.claudePaneFolder(pane, saved, host),
+        claudeLaunchAccountId(host, host.activeAccountId),
+        host
+      )
+    ) {
+      return false
+    }
+    return (await this.readClaudeForeground(ptyId)) === true
+  }
+
+  /** A switch landing during the restart leaves unknown which account its spawn read: restart again
+   *  then, and past the limit hand the pane, still reserved, to a fresh pass. True when handed on. */
+  private async restartClaudePaneOnSelectedAccount(
+    pty: RuntimePtyWorktreeRecord,
+    paneKey: string,
+    session: AgentProviderSessionMetadata
+  ): Promise<boolean> {
+    let ptyId = pty.ptyId
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const epoch = this.claudeSelectionEpoch
+      const restarting = ptyId
       const result = await this.restartAgentPaneInPlace(
         restarting,
         { agent: 'claude', providerSession: session },
-        () => {
-          const pty = this.ptysById.get(restarting)
-          return pty !== undefined && this.claudePaneOf(pty)?.session?.id === session.id
-        }
+        () => this.claudePaneStillMoves(restarting, session)
       )
       if (!result.ok) {
-        console.warn('[runtime] a Claude terminal stayed on its previous account', {
-          ptyId: current,
+        // After a stop (create_failed), the pane keeps its surface and its saved resume record.
+        console.warn('[runtime] a Claude terminal did not move to the selected account', {
+          ptyId: restarting,
           reason: result.reason
         })
-        return
+        return false
       }
-      current = result.ptyId
-      if (selectedAccount() === before) {
-        this.restartedClaudePanes.set(current, { session, accountId: before })
-        return
+      ptyId = result.ptyId
+      if (this.claudeSelectionEpoch === epoch) {
+        const accounts = this.accounts.getSnapshot().claude
+        this.restartedClaudePanes.set(ptyId, {
+          session,
+          accountId: claudeLaunchAccountId(accounts, accounts.activeAccountId)
+        })
+        return false
       }
     }
+    this.restartedClaudePanes.set(ptyId, { session, accountId: undefined })
+    const replaced = this.ptysById.get(ptyId)
+    if (!replaced) {
+      return false
+    }
+    this.claudePaneRestarts = this.claudePaneRestarts.then(() =>
+      this.restartClaudePanes([{ pty: replaced, paneKey, session }])
+    )
+    return true
   }
 }

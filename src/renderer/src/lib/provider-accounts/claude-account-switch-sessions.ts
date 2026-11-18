@@ -112,14 +112,14 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   /** What a server did with its own running sessions; absent from older servers. */
   hostMove?: ClaudeHostRunningSessionsMove
 }): Promise<'show-confirmation' | 'handled'> {
+  // Why: a server moves its own sessions and reports them; nothing here runs on it.
+  if (args.owner.kind !== 'local') {
+    return announceHostMove(args.hostMove, args.before, args.after)
+  }
   const fromAccountId = claudeLaunchAccountId(args.before.state, args.before.accountId)
   const toAccountId = claudeLaunchAccountId(args.after.state, args.after.accountId)
   if (fromAccountId === toAccountId) {
     return 'show-confirmation'
-  }
-  // Why: a server moves its own sessions and reports them; nothing here runs on it.
-  if (args.owner.kind !== 'local') {
-    return announceHostMove(args.hostMove, args.before, args.after)
   }
   const generation = ++switchGeneration
   setPrompt(null)
