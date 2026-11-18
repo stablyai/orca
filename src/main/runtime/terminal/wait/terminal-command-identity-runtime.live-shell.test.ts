@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { identifyTerminalCommand } from '../../../../shared/shell/launch/identified-terminal-command'
 import { getDaemonBashShellReadyRcfileContent } from '../../../daemon/shell-readiness/daemon-bash-shell-ready-rcfile'
-import { createTranscriptPane } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+import { createTranscriptPane } from './agent-transcript-pane-test-harness'
 import { failOnLaunchedAgentExit } from './launched-agent-exit-watch'
 
 vi.mock('electron', () => ({
