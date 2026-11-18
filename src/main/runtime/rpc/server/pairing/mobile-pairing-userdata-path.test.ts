@@ -84,11 +84,12 @@ describe('mobile pairing userData path stability', () => {
 
     const { DeviceRegistry } = await import('./device-registry')
     const registry = new DeviceRegistry(getCanonicalUserDataPath())
-    expect(registry.getDevice('late-phone')?.token).toBe('late-token')
+    expect(registry.validateToken('late-token')?.deviceId).toBe('late-phone')
+    const loaded = readFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), 'utf-8')
 
     writeFileSync(join(lateDir, DEVICE_REGISTRY_FILENAME), JSON.stringify([]))
     migrateMobilePairingDataToCanonicalUserDataPath(appState.userData)
-    expect(readFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), 'utf-8')).toBe(lateDevices)
+    expect(readFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), 'utf-8')).toBe(loaded)
   })
 
   it('skips legacy migration when only part of the canonical credential pair exists', async () => {

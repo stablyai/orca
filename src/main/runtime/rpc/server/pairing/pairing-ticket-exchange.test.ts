@@ -46,7 +46,7 @@ describe('pairing ticket exchange', () => {
     const signedIn = registry.validateToken(REPLACEMENT)
     expect(signedIn).toMatchObject({ deviceId: offer.deviceId, token: REPLACEMENT })
     expect(signedIn?.ticket).toBeUndefined()
-    expect(signedIn?.exchangeToken).toBeUndefined()
+    expect(signedIn?.exchangeTokenHash).toBeUndefined()
     expect(registry.validateToken(offer.token)).toBeNull()
 
     // Same pairing for orchestration ownership; sockets still on the pairing token are cut.

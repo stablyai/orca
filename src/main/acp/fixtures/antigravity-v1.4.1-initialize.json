@@ -1,0 +1,57 @@
+{
+  "protocolVersion": 1,
+  "agentCapabilities": {
+    "loadSession": true,
+    "promptCapabilities": {
+      "image": true,
+      "audio": true,
+      "embeddedContext": true
+    },
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    },
+    "sessionCapabilities": {
+      "list": {},
+      "resume": {}
+    },
+    "auth": {
+      "logout": {}
+    },
+    "_meta": {
+      "antigravity": {
+        "tier": true,
+        "systemPrompt": {
+          "append": true
+        }
+      }
+    }
+  },
+  "authMethods": [
+    {
+      "id": "oauth-personal",
+      "name": "Log in with Google",
+      "description": "Log in with your Google account"
+    },
+    {
+      "id": "oauth-business",
+      "name": "Log in with Gemini Enterprise",
+      "description": "Log in with your Gemini Enterprise account"
+    },
+    {
+      "id": "gemini-api-key",
+      "name": "Gemini API key",
+      "description": "Use an API key with Gemini Developer API"
+    },
+    {
+      "id": "agent-platform",
+      "name": "Gemini Enterprise Agent Platform",
+      "description": "Use Gemini Enterprise Agent Platform (formerly Vertex AI) with Application Default Credentials or an API key"
+    }
+  ],
+  "agentInfo": {
+    "name": "antigravity-acp",
+    "title": "Google Antigravity",
+    "version": "1.4.1"
+  }
+}

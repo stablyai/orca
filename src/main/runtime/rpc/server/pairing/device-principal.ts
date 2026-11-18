@@ -17,9 +17,11 @@ export function devicePrincipalOf(device: DeviceEntry): DevicePrincipal {
     deviceId: device.deviceId,
     scope: device.scope,
     clientId: device.token ?? device.deviceId,
+    // A token's hash is its fingerprint, so hashing stored tokens keeps every pairing's identity.
     callerFingerprint:
       device.callerFingerprint ??
-      fingerprintAuthenticatedPairingCredential(device.token ?? `device:${device.deviceId}`),
+      device.tokenHash ??
+      fingerprintAuthenticatedPairingCredential(`device:${device.deviceId}`),
     credentialRevision: device.credentialRevision ?? 0
   }
 }

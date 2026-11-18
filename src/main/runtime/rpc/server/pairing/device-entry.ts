@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto'
 import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { MobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
@@ -5,11 +6,24 @@ import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/p
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import type { NetworkSourceClass } from '../../transports/websocket/source-admission/network-source-class'
+import { hashDeviceToken } from './device-token-hash'
+
+export type DeviceOrcaAccount = { id: string; name: string; computer?: string }
+
+/** Who typed a device's messages: the account claim, its computer, and the relayed phone if any. */
+export type PairedDeviceTypist = DeviceOrcaAccount & { phone?: string }
+
+export type PairedDeviceAccountLookup = (
+  pairedDeviceId: string,
+  connectionClaim?: DeviceOrcaAccount | null
+) => PairedDeviceTypist | null
 
 export type DeviceEntry = {
   deviceId: string
   name: string
-  // Keyed rows have no bearer, so older builds cannot authenticate them.
+  // SHA-256 of the bearer token; keyed rows have none, so older builds cannot authenticate them.
+  tokenHash?: string
+  // The bearer itself, in memory only: minted by this process or presented by the signed-in client.
   token?: string
   scope: DeviceScope
   pairedAt: number
@@ -24,6 +38,9 @@ export type DeviceEntry = {
   pushRegistration?: MobilePushRegistration
   // Relayed phones lose access with their parent desktop grant.
   parentDeviceId?: string
+  // The Orca account a paired desktop says it is signed in to (a plain claim, set on each connect);
+  // names who typed its messages in a bot's Slack thread. A relayed phone reads its parent's.
+  orcaAccount?: DeviceOrcaAccount
   phoneKey?: string
   // Grant only at pairing; absent on older rows means no administrative powers.
   grants?: RuntimeDeviceGrant[]
@@ -44,12 +61,26 @@ export type DeviceEntry = {
   legacyE2EEAuthAt?: number
   // Minted as a pairing offer by a host that can exchange it; clients that never exchange keep using it.
   ticket?: true
-  // Client-chosen replacement; first sign-in with it retires the pairing token (see pairing-ticket-exchange.ts).
-  exchangeToken?: string
+  // SHA-256 of the client-chosen replacement; first sign-in with it retires the pairing token (see pairing-ticket-exchange.ts).
+  exchangeTokenHash?: string
   // First sign-in with a ticket; exchange is offered only shortly after it.
   ticketFirstSeenAt?: number
   // A plain-http browser re-registers a session-only key from this link on each page load.
   servesSessionBrowsers?: true
+  // Minted by `orca pair` in a terminal this paired client opened; revoking that client revokes this.
+  createdByDeviceId?: string
+  // A phone's desktop installation (the one relaying it, or whose terminal minted its offer), whose
+  // current account claim names its messages; a shared parent row's last claim may be another's.
+  originClientInstanceId?: string
+  // Printed by a host start (`orca serve`); the next start replaces it while it is still unused.
+  hostStartOffer?: true
+}
+
+export type PendingOfferOptions = {
+  // Desktop UI only; absent keeps headless offers valid until scanned.
+  offerTtlMs?: number
+  createdByDeviceId?: string
+  hostStart?: boolean
 }
 
 export type TokenDeviceEntry = DeviceEntry & { token: string }
@@ -63,10 +94,24 @@ export type DeviceKeyLookup =
   | { kind: 'unavailable' }
 
 // Only unscanned token rows are rotatable pairing offers; keyed rows never are.
-export function isPendingTokenRow(device: DeviceEntry): device is TokenDeviceEntry {
+export function isPendingTokenRow(device: DeviceEntry): boolean {
   return (
-    device.lastSeenAt === 0 && device.token !== undefined && device.credentialKind === undefined
+    device.lastSeenAt === 0 && device.tokenHash !== undefined && device.credentialKind === undefined
   )
+}
+
+export function matchesDeviceToken(hash: string | undefined, token: string): boolean {
+  if (hash === undefined || !token) {
+    return false
+  }
+  const presented = Buffer.from(hashDeviceToken(token), 'hex')
+  const stored = Buffer.from(hash, 'hex')
+  return stored.length === presented.length && timingSafeEqual(stored, presented)
+}
+
+/** The row as the client that presented `token` sees it, so its principal keeps its token-based ids. */
+export function withPresentedToken(device: DeviceEntry, token: string | undefined): DeviceEntry {
+  return token === undefined || device.token === token ? device : { ...device, token }
 }
 
 export function isExpiredPairingOffer(device: DeviceEntry, now: number): boolean {
@@ -109,9 +154,9 @@ export function isStillAuthenticated(
   return (
     (device.credentialRevision ?? 0) === principal.credentialRevision &&
     (principal.deviceToken === undefined ||
-      device.token === principal.deviceToken ||
+      matchesDeviceToken(device.tokenHash, principal.deviceToken) ||
       // Signed in with the replacement while retiring the pairing token failed to persist.
-      device.exchangeToken === principal.deviceToken) &&
+      matchesDeviceToken(device.exchangeTokenHash, principal.deviceToken)) &&
     // A keyed socket cannot survive replacement by a bearer row.
     (principal.deviceToken !== undefined || device.credentialKind === 'device-key')
   )
@@ -148,7 +193,9 @@ export function findTokenDevice(
   const device =
     token &&
     devices.find(
-      (d) => d.credentialKind === undefined && (d.token === token || d.exchangeToken === token)
+      (d) =>
+        d.credentialKind === undefined &&
+        (matchesDeviceToken(d.tokenHash, token) || matchesDeviceToken(d.exchangeTokenHash, token))
     )
   if (!device || (isExpiredPairingOffer(device, now) && !seen.has(device.deviceId))) {
     return null

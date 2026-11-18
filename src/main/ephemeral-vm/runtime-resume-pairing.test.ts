@@ -22,7 +22,13 @@ const unpaddedHostKey = Buffer.alloc(32, 7).toString('base64url')
 
 /** Stands in for the VM's server: its state dir survives suspend, and each boot prints a startup offer. */
 function bootVm(serverDataPath: string, endpoint: string, publicKeyB64 = hostKey): string {
-  const offer = new DeviceRegistry(serverDataPath).getOrCreatePendingDevice('CLI', 'runtime')
+  const offer = new DeviceRegistry(serverDataPath).getOrCreatePendingDevice(
+    'CLI',
+    'runtime',
+    'network',
+    [],
+    { hostStart: true }
+  )
   return encodePairingOffer({ v: 2, endpoint, deviceToken: offer.token, publicKeyB64 })
 }
 

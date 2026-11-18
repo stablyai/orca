@@ -1,4 +1,6 @@
 import { defineMethod } from '../../core'
+import { readCallerStoreInstallationId } from '../../../hosts/platform-probe/host-descriptor'
+import { getCanonicalUserDataPath } from '../../../../persistence/loading-store/user-data-path'
 import { resolveWorktreeCatalogSnapshot } from '../../workspace-client-views/worktree-catalog-snapshot'
 import { coarsenWorktreePsActivity } from '../../workspace-client-views/worktree-ps-coarse-activity'
 import { markWorktreePsOtherClientRows } from '../../workspace-client-views/worktree-ps-other-client-marks'
@@ -38,7 +40,12 @@ export const WORKTREE_CATALOG_METHODS = [
       )
       // Why: legacy callers keep exact activity; only snapshot pollers are coarsened.
       if (params.afterSnapshotId === undefined && params.acceptRowDelta !== true) {
-        return result
+        // A reader of several hosts joins their cross-machine parents by it (`worktree ps --since`).
+        const installationId = await readCallerStoreInstallationId(
+          context.runtime.getRuntimeId(),
+          getCanonicalUserDataPath()
+        )
+        return installationId ? { ...result, installationId } : result
       }
       // Why: pollers get activity at poll-friendly granularity so the id survives terminal output.
       return resolveWorktreeCatalogSnapshot(coarsenWorktreePsActivity(result), params)

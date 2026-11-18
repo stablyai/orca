@@ -1,12 +1,14 @@
 import { randomBytes, randomUUID } from 'node:crypto'
+import { hashDeviceToken } from './device-token-hash'
 import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
-import type { TokenDeviceEntry } from './device-entry'
+import type { PendingOfferOptions, TokenDeviceEntry } from './device-entry'
 import { validGrants } from './device-registry-row-validation'
 import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 
-export function mintDeviceCredential(): { deviceId: string; token: string } {
-  return { deviceId: randomUUID(), token: randomBytes(24).toString('hex') }
+export function mintDeviceCredential(): { deviceId: string; token: string; tokenHash: string } {
+  const token = randomBytes(24).toString('hex')
+  return { deviceId: randomUUID(), token, tokenHash: hashDeviceToken(token) }
 }
 
 /** A never-seen token row; it authenticates only once the registry persists it. */
@@ -15,7 +17,7 @@ export function mintTokenDevice(
   scope: DeviceScope,
   pairingReach: RuntimePairingReach,
   grants: readonly RuntimeDeviceGrant[],
-  offerTtlMs?: number
+  { offerTtlMs, createdByDeviceId, hostStart }: PendingOfferOptions = {}
 ): TokenDeviceEntry {
   const validatedGrants = validGrants(grants, scope)
   const pairedAt = Date.now()
@@ -29,6 +31,8 @@ export function mintTokenDevice(
     ticket: true,
     pairingReach,
     ...(validatedGrants ? { grants: validatedGrants } : {}),
-    ...(offerTtlMs !== undefined ? { offerExpiresAt: pairedAt + offerTtlMs } : {})
+    ...(offerTtlMs !== undefined ? { offerExpiresAt: pairedAt + offerTtlMs } : {}),
+    ...(createdByDeviceId ? { createdByDeviceId } : {}),
+    ...(hostStart ? { hostStartOffer: true as const } : {})
   }
 }

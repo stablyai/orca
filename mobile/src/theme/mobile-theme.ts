@@ -54,6 +54,8 @@ const darkColors = {
   // --status-success, --status-warning, --destructive
   statusGreen: '#86efac',
   statusAmber: '#eab308',
+  // Desktop's --agent-question: something waits on the owner (an item that needs you).
+  agentQuestion: '#f97316',
   statusRed: '#ff6568',
   // Desktop's --destructive-foreground: dark ink on the light-red dark fill.
   onStatusRed: '#450a0a',
@@ -135,6 +137,7 @@ const lightColors: MobilePalette = {
 
   statusGreen: '#147638',
   statusAmber: '#ca8a04',
+  agentQuestion: '#ea580c',
   statusRed: '#e40014',
   onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',
@@ -204,6 +207,8 @@ export function subscribeMobileColorScheme(listener: () => void): () => void {
 }
 
 export const spacing = {
+  /** Between quiet lines that read as one list (item lines in a chat). */
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,

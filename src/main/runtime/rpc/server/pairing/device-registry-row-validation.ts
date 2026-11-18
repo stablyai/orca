@@ -1,6 +1,7 @@
 import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
-import type { DeviceEntry } from './device-entry'
+import type { DeviceEntry, DeviceOrcaAccount } from './device-entry'
+import { hashDeviceToken } from './device-token-hash'
 import { parseMobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
 import { isDevicePublicKeyB64 } from '../../../../../shared/remote-runtime/pairing/device-key-proof'
 import { isExchangeDeviceToken } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-contract'
@@ -47,8 +48,40 @@ function isTimestamp(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-/** Null for a row without a usable identity; the caller must treat the registry as doubtful. */
-export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
+const SHA256_HEX = /^[0-9a-f]{64}$/
+
+function validOrcaAccount(value: unknown): DeviceOrcaAccount | undefined {
+  return typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'name' in value &&
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    typeof value.name === 'string'
+    ? {
+        id: value.id,
+        name: value.name,
+        ...('computer' in value && typeof value.computer === 'string' && value.computer
+          ? { computer: value.computer }
+          : {})
+      }
+    : undefined
+}
+
+function validTokenHash(value: unknown): string | undefined {
+  return typeof value === 'string' && SHA256_HEX.test(value) ? value : undefined
+}
+
+/** Older registries kept bearer tokens in plain text; only the startup load hashes them in place. */
+export type PlaintextTokenRows = 'migrate' | 'ignore'
+
+/** Null for a row without a usable identity; the caller must treat the registry as doubtful.
+ *  A plain-text token from anywhere but the startup migration stays inert, so a row written into the
+ *  file later can't sign in with a token it names. */
+export function normalizeLoadedDeviceRow(
+  device: unknown,
+  plaintext: PlaintextTokenRows = 'ignore'
+): DeviceEntry | null {
   if (
     !isRecord(device) ||
     typeof device.deviceId !== 'string' ||
@@ -58,12 +91,23 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
   ) {
     return null
   }
+  const legacyToken =
+    plaintext === 'migrate' && typeof device.token === 'string' && device.token
+      ? device.token
+      : undefined
+  const legacyExchange =
+    plaintext === 'migrate' && isExchangeDeviceToken(device.exchangeToken)
+      ? device.exchangeToken
+      : undefined
+  const { exchangeToken: _exchangeToken, ...stored } = device
   return {
-    ...device,
+    ...stored,
     deviceId: device.deviceId,
     name: typeof device.name === 'string' ? device.name : '',
-    // Why: a non-string bearer can never match, so the row stays listed but inert.
-    token: typeof device.token === 'string' ? device.token : undefined,
+    // Why: a malformed hash can never match, so the row stays listed but inert.
+    tokenHash: legacyToken ? hashDeviceToken(legacyToken) : validTokenHash(device.tokenHash),
+    // Kept in memory so this process can still hand it out (an unscanned offer, a relayed phone).
+    token: legacyToken,
     pairedAt: device.pairedAt,
     lastSeenAt: device.lastSeenAt,
     lastSourceClass: NETWORK_SOURCE_CLASSES.find((value) => value === device.lastSourceClass),
@@ -78,6 +122,7 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     // Bad push metadata must not fail registry load and strand all devices.
     pushRegistration: parseMobilePushRegistration(device.pushRegistration),
     parentDeviceId: typeof device.parentDeviceId === 'string' ? device.parentDeviceId : undefined,
+    orcaAccount: validOrcaAccount(device.orcaAccount),
     phoneKey: typeof device.phoneKey === 'string' ? device.phoneKey : undefined,
     credentialRevision:
       typeof device.credentialRevision === 'number' &&
@@ -92,9 +137,16 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     // Unreadable expiry fails open to today's never-expiring offer.
     offerExpiresAt: isTimestamp(device.offerExpiresAt) ? device.offerExpiresAt : undefined,
     ticket: device.ticket === true ? true : undefined,
-    exchangeToken: isExchangeDeviceToken(device.exchangeToken) ? device.exchangeToken : undefined,
+    exchangeTokenHash: legacyExchange
+      ? hashDeviceToken(legacyExchange)
+      : validTokenHash(device.exchangeTokenHash),
     ticketFirstSeenAt: isTimestamp(device.ticketFirstSeenAt) ? device.ticketFirstSeenAt : undefined,
     servesSessionBrowsers: device.servesSessionBrowsers === true ? true : undefined,
+    createdByDeviceId:
+      typeof device.createdByDeviceId === 'string' ? device.createdByDeviceId : undefined,
+    originClientInstanceId:
+      typeof device.originClientInstanceId === 'string' ? device.originClientInstanceId : undefined,
+    hostStartOffer: device.hostStartOffer === true ? true : undefined,
     ...validDeviceKeyFields(device)
   }
 }

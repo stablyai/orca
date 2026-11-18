@@ -26,6 +26,7 @@ import {
 } from '../../tracking-repos/worktree-metadata-normalization'
 import { backfillLegacyAutomationContexts } from '../../scheduling-automations/automation-context-migration'
 import { migrateAutomationOwners } from '../../../automations/ownership/automation-owner-migration'
+import { reseedLoadedAutomationZones } from '../../scheduling-automations/automation-zone-reseed'
 import {
   ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH,
   normalizeSshPtyConsumerRecovery
@@ -249,6 +250,8 @@ export class LoadedStateParsingOperations {
       sshTargets: automationOwnerMigration.sshTargets,
       sshTargetGenerationCounter: automationOwnerMigration.sshTargetGenerationCounter
     }
+
+    result = reseedLoadedAutomationZones(result, this.runtime)
 
     const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({
       ...result,

@@ -187,6 +187,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     grants?: readonly RuntimeDeviceGrant[]
     // Desktop UI only; absent keeps headless offers valid until scanned.
     offerTtlMs?: number
+    // The paired client whose terminal asked; revoking it revokes the offer and whoever paired with it.
+    createdByDeviceId?: string
+    // A host start's own offer, which the next start replaces while unused.
+    hostStart?: boolean
   }):
     | PairingOfferUnavailable
     | {
@@ -226,10 +230,14 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     try {
       const reach = args.reach ?? 'network'
       const grants = args.grants ?? []
-      const ttl = args.offerTtlMs
+      const options = {
+        offerTtlMs: args.offerTtlMs,
+        createdByDeviceId: args.createdByDeviceId,
+        hostStart: args.hostStart
+      }
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, ttl)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, ttl)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, options)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, options)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)

@@ -58,7 +58,7 @@ export class DeviceRegistryStore {
   }
 
   private load(): void {
-    const read = this.writer.read()
+    const read = this.writer.read('migrate')
     this.registryUnreadable = read.unreadable
     this.registryDoubtful = read.doubtful
     this.corruptFilePending = read.corruptFilePending
@@ -66,6 +66,9 @@ export class DeviceRegistryStore {
     // Session-only browser keys died with the prior host; remove their registry rows.
     if (this.devices.length !== read.devices.length) {
       this.saveOrLog({ durable: true }, 'drop session-only devices after restart', read.devices)
+    } else if (read.devices.some((device) => device.token !== undefined)) {
+      // Plain-text tokens from an older build: rewritten as hashes; the clients holding them keep working.
+      this.saveOrLog({ durable: true }, 'hash stored device tokens', read.devices)
     }
   }
 

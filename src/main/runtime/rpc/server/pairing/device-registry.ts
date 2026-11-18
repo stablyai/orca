@@ -26,6 +26,7 @@ import {
   reusablePairingOffer,
   withoutExpiredUnboundOffers
 } from './pairing-offer-expiry'
+import { sameOrcaAccount } from './paired-device-typist'
 import {
   mobilePairingConnectionModeOf,
   findPrincipalDevice,
@@ -33,8 +34,11 @@ import {
   type AuthenticatedPrincipalBinding,
   lookupDeviceKeyRow,
   type DeviceEntry,
+  type DeviceOrcaAccount,
   type DeviceKeyLookup,
-  type TokenDeviceEntry
+  type PendingOfferOptions,
+  type TokenDeviceEntry,
+  withPresentedToken
 } from './device-entry'
 import type { MobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
 
@@ -44,9 +48,9 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = [],
-    offerTtlMs?: number
+    options: PendingOfferOptions = {}
   ): TokenDeviceEntry {
-    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants, offerTtlMs)
+    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants, options)
   }
 
   private createAndPersistDevice(
@@ -55,9 +59,9 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     scope: DeviceScope,
     pairingReach: RuntimePairingReach,
     grants: readonly RuntimeDeviceGrant[],
-    offerTtlMs: number | undefined
+    options: PendingOfferOptions
   ): TokenDeviceEntry {
-    const entry = mintTokenDevice(name, scope, pairingReach, grants, offerTtlMs)
+    const entry = mintTokenDevice(name, scope, pairingReach, grants, options)
     const nextDevices = [...existingDevices, entry]
     // Credentials become valid only after durable persistence.
     this.devices = this.save(nextDevices)
@@ -70,7 +74,7 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = [],
-    offerTtlMs?: number
+    options: PendingOfferOptions = {}
   ): TokenDeviceEntry {
     // Never show a QR for an offer an admin removed on disk.
     this.adoptExternalEdits({ fresh: true })
@@ -80,15 +84,30 @@ export class DeviceRegistry extends DeviceRegistrySightings {
       this.saveOrLog({}, 'prune expired pairing offers', this.devices, live)
     }
     // Reuse only identical grants so re-advertisement cannot expand permissions.
-    const existing = this.getPendingDevice(scope, offerTtlMs, grants)
+    const existing = this.getPendingDevice(
+      scope,
+      options.offerTtlMs,
+      grants,
+      options.createdByDeviceId
+    )
     if (existing) {
       // Widen advertised reach, never narrow it and break an off-host link already handed out.
       const widen = pairingReach === 'network' && existing.pairingReach === 'this-computer'
       // Removed on disk meanwhile: mint a fresh offer rather than hand out a revoked one.
       const offered = widen ? this.setPairingReach(existing, 'network') : existing
-      return offered ?? this.addDevice(name, scope, pairingReach, grants, offerTtlMs)
+      return offered ?? this.addDevice(name, scope, pairingReach, grants, options)
     }
-    return this.addDevice(name, scope, pairingReach, grants, offerTtlMs)
+    // The file keeps no token, so an earlier start's unused link can't be printed again: replace it
+    // rather than leave one more never-expiring link behind on every start.
+    const replaced = options.hostStart
+      ? new Set(
+          this.listPendingDevices(scope).filter(
+            (d) => d.hostStartOffer && d.token === undefined && !d.relayBinding
+          )
+        )
+      : new Set<DeviceEntry>()
+    const retained = this.devices.filter((d) => !replaced.has(d))
+    return this.createAndPersistDevice(retained, name, scope, pairingReach, grants, options)
   }
 
   private setPairingReach(
@@ -105,12 +124,12 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = [],
-    offerTtlMs?: number
+    options: PendingOfferOptions = {}
   ): TokenDeviceEntry {
     // Authentication marks seen before child sync, so pending runtime offers cannot have children.
     const pending = new Set<DeviceEntry>(this.listPendingDevices(scope))
     const retained = this.devices.filter((d) => !pending.has(d))
-    return this.createAndPersistDevice(retained, name, scope, pairingReach, grants, offerTtlMs)
+    return this.createAndPersistDevice(retained, name, scope, pairingReach, grants, options)
   }
 
   listDelegatedMobileDevices(parentDeviceId: string): DeviceEntry[] {
@@ -120,16 +139,17 @@ export class DeviceRegistry extends DeviceRegistrySightings {
   /** Create-or-return one mobile child per phoneKey under `parent`, in `phones` order. */
   upsertDelegatedMobileDevices(
     parent: DeviceEntry,
-    phones: readonly DelegatedPhone[]
+    phones: readonly DelegatedPhone[],
+    origin?: string
   ): DelegatedMobileDeviceEntry[] {
     // Plan over the file as it is: an unchanged child removed on disk would skip the save's merge.
     this.adoptExternalEdits({ fresh: true })
-    const { nextDevices, entries } = planDelegatedMobileDevices(this.devices, parent, phones)
-    if (nextDevices !== this.devices) {
-      this.devices = this.save(nextDevices)
+    const plan = planDelegatedMobileDevices(this.devices, parent, phones, origin)
+    if (plan.nextDevices !== this.devices) {
+      this.devices = this.save(plan.nextDevices)
     }
     // A child the file had already lost is dropped by the save: never hand out its token.
-    return entries.filter((entry) => this.getDevice(entry.deviceId) !== null)
+    return plan.entries.filter((entry) => this.getDevice(entry.deviceId) !== null)
   }
 
   removeDevice(deviceId: string): boolean {
@@ -150,14 +170,20 @@ export class DeviceRegistry extends DeviceRegistrySightings {
   getPendingDevice(
     scope: DeviceScope = 'mobile',
     offerTtlMs?: number,
-    grants: readonly RuntimeDeviceGrant[] = []
+    grants: readonly RuntimeDeviceGrant[] = [],
+    createdByDeviceId?: string
   ): TokenDeviceEntry | null {
     this.adoptExternalEdits({ fresh: true })
     const offers = this.listPendingDevices(scope)
-    return reusablePairingOffer(offers, validGrants(grants, scope) ?? [], offerTtlMs)
+    return reusablePairingOffer(
+      offers,
+      validGrants(grants, scope) ?? [],
+      offerTtlMs,
+      createdByDeviceId
+    )
   }
 
-  listPendingDevices(scope: DeviceScope): TokenDeviceEntry[] {
+  listPendingDevices(scope: DeviceScope): DeviceEntry[] {
     return pendingPairingOffers(this.devices, scope, this.seenDeviceIds)
   }
 
@@ -182,6 +208,25 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     )
   }
 
+  /** A paired desktop's claimed Orca account; null forgets it (signed out). */
+  setOrcaAccount(deviceId: string, account: DeviceOrcaAccount | null): boolean {
+    const current = this.getDevice(deviceId)
+    if (current?.scope !== 'runtime') {
+      return false
+    }
+    if (sameOrcaAccount(current.orcaAccount, account)) {
+      return true
+    }
+    return this.replaceRow(deviceId, (device) => {
+      const { orcaAccount: _dropped, ...rest } = device
+      return account ? { ...rest, orcaAccount: account } : rest
+    })
+  }
+
+  setOriginClientInstance(deviceId: string, originClientInstanceId: string): boolean {
+    return this.replaceRow(deviceId, (device) => ({ ...device, originClientInstanceId }))
+  }
+
   setMobilePairingConnectionMode(deviceId: string, mode: MobilePairingConnectionMode): boolean {
     return (
       this.getDevice(deviceId)?.scope === 'mobile' &&
@@ -200,7 +245,13 @@ export class DeviceRegistry extends DeviceRegistrySightings {
   validateToken(token: string): DeviceEntry | null {
     this.adoptExternalEdits()
     const device = findTokenDevice(this.devices, token, this.seenDeviceIds)
-    return device && isExchangeSignIn(device, token) ? this.retirePairingToken(device) : device
+    if (!device) {
+      return null
+    }
+    return withPresentedToken(
+      isExchangeSignIn(device, token) ? this.retirePairingToken(device) : device,
+      token
+    )
   }
 
   /** Durable before the reply, so a client that stores the replacement can always sign in with it. */
@@ -224,7 +275,7 @@ export class DeviceRegistry extends DeviceRegistrySightings {
   }
 
   /** First sign-in with the replacement; a failed write keeps both tokens and retries next sign-in. */
-  private retirePairingToken(device: DeviceEntry & { exchangeToken: string }): DeviceEntry {
+  private retirePairingToken(device: DeviceEntry & { exchangeTokenHash: string }): DeviceEntry {
     const promoted = promoteExchangedTicket(device)
     try {
       this.devices = this.save(
@@ -236,7 +287,7 @@ export class DeviceRegistry extends DeviceRegistrySightings {
       console.error('[runtime] Failed to retire an exchanged pairing token:', error)
       return {
         ...device,
-        token: device.exchangeToken,
+        tokenHash: device.exchangeTokenHash,
         callerFingerprint: promoted.callerFingerprint
       }
     }
@@ -290,6 +341,7 @@ export class DeviceRegistry extends DeviceRegistrySightings {
 
   resolveAuthenticatedPrincipal(principal: AuthenticatedPrincipalBinding): DeviceEntry | null {
     this.adoptExternalEdits()
-    return findPrincipalDevice(this.devices, principal)
+    const device = findPrincipalDevice(this.devices, principal)
+    return device && withPresentedToken(device, principal.deviceToken)
   }
 }

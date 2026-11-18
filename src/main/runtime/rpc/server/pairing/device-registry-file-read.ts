@@ -4,8 +4,9 @@ import {
   isUnreadableError
 } from '../../../../../shared/secure-storage/secure-file'
 import { corruptRegistryCopyExists, isMissingFileError } from './device-registry-corruption'
+import { isRecord } from '../../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import type { DeviceEntry } from './device-entry'
-import { normalizeLoadedDeviceRow } from './device-registry-row-validation'
+import { normalizeLoadedDeviceRow, type PlaintextTokenRows } from './device-registry-row-validation'
 
 export type DeviceRegistryFileRead = {
   devices: DeviceEntry[]
@@ -17,7 +18,10 @@ export type DeviceRegistryFileRead = {
   corruptFilePending: boolean
 }
 
-export function readDeviceRegistryFile(registryPath: string): DeviceRegistryFileRead {
+export function readDeviceRegistryFile(
+  registryPath: string,
+  plaintext: PlaintextTokenRows = 'ignore'
+): DeviceRegistryFileRead {
   // Quarantined copies block revocation verdicts until removed, even if no rewrite landed.
   const doubtful = corruptRegistryCopyExists(registryPath)
   try {
@@ -26,8 +30,11 @@ export function readDeviceRegistryFile(registryPath: string): DeviceRegistryFile
     if (!Array.isArray(parsed)) {
       throw new Error('Device registry is not an array')
     }
+    // A file this build already wrote holds hashes; plain text in it was planted, not left by an older build.
+    const migrate =
+      plaintext === 'migrate' && !parsed.some((row) => isRecord(row) && 'tokenHash' in row)
     const devices = parsed
-      .map(normalizeLoadedDeviceRow)
+      .map((row) => normalizeLoadedDeviceRow(row, migrate ? 'migrate' : 'ignore'))
       .filter((device): device is DeviceEntry => device !== null)
     // Why: a dropped row may still be some client's credential; set the file aside like a corrupt one.
     const droppedRows = devices.length !== parsed.length

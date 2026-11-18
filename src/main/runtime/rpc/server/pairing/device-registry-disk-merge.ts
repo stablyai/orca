@@ -6,6 +6,7 @@ import {
 import type { DeviceEntry } from './device-entry'
 import { isMissingFileError, quarantineCorruptRegistry } from './device-registry-corruption'
 import { readDeviceRegistryFile, type DeviceRegistryFileRead } from './device-registry-file-read'
+import type { PlaintextTokenRows } from './device-registry-row-validation'
 
 // Phones recheck auth on every frame and request; one stat a second bounds a disk revoke's lag.
 const EXTERNAL_EDIT_CHECK_INTERVAL_MS = 1000
@@ -73,9 +74,9 @@ export class DeviceRegistryWriter {
   }
 
   /** Stamped before reading, so a write landing during the read is caught by the next check. */
-  read(): DeviceRegistryFileRead {
+  read(plaintext: PlaintextTokenRows = 'ignore'): DeviceRegistryFileRead {
     this.readStamp = fileStamp(this.registryPath)
-    return readDeviceRegistryFile(this.registryPath)
+    return readDeviceRegistryFile(this.registryPath, plaintext)
   }
 
   /**
@@ -150,7 +151,7 @@ export class DeviceRegistryWriter {
           : mergeDeviceRegistrySave(baseline, next, disk, this.removedIds)
       let unchanged = true
       const write = options.durable ? writeDurableSecureJsonFile : writeSecureJsonFile
-      write(this.registryPath, merged, {
+      write(this.registryPath, merged.map(storedDeviceRow), {
         // Last check before the rename; a lost race discards the stage and merges again.
         shouldPublish: () =>
           (unchanged = lastAttempt || readRawRegistry(this.registryPath) === snapshot)
@@ -161,6 +162,15 @@ export class DeviceRegistryWriter {
       }
     }
   }
+}
+
+/** Bearer tokens never reach the file; their hashes authenticate. */
+function storedDeviceRow(device: DeviceEntry): DeviceEntry {
+  if (device.token === undefined) {
+    return device
+  }
+  const { token: _token, ...stored } = device
+  return stored
 }
 
 /** Raw file text for compare-and-swap; null when absent, and a marker no file can equal when unreadable. */

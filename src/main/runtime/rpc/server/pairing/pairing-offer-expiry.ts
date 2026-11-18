@@ -19,22 +19,24 @@ export function pendingPairingOffers(
   devices: readonly DeviceEntry[],
   scope: DeviceScope,
   seen: ReadonlySet<string>
-): TokenDeviceEntry[] {
-  return devices.filter(
-    (d): d is TokenDeviceEntry => isPendingTokenRow(d) && d.scope === scope && !seen.has(d.deviceId)
-  )
+): DeviceEntry[] {
+  return devices.filter((d) => isPendingTokenRow(d) && d.scope === scope && !seen.has(d.deviceId))
 }
 
-/** Without a TTL only never-expiring offers are reused, so headless output never expires. */
+/** Without a TTL only never-expiring offers are reused, so headless output never expires.
+ *  Only offers minted by this process can be shown again: the file keeps no token to show. */
 export function reusablePairingOffer(
-  offers: readonly TokenDeviceEntry[],
+  offers: readonly DeviceEntry[],
   grants: readonly RuntimeDeviceGrant[],
   offerTtlMs: number | undefined,
+  createdByDeviceId?: string,
   now = Date.now()
 ): TokenDeviceEntry | null {
   return (
     offers.find(
-      (d) =>
+      (d): d is TokenDeviceEntry =>
+        d.token !== undefined &&
+        d.createdByDeviceId === createdByDeviceId &&
         sameGrants(d, grants) &&
         (offerTtlMs === undefined
           ? d.offerExpiresAt === undefined

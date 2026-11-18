@@ -26,7 +26,8 @@ export async function buildServePairingReadiness(
         address: options.pairingAddress,
         name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
         scope: options.mobilePairing ? 'mobile' : 'runtime',
-        grants: options.grantDesktopControl ? ['desktop-control'] : []
+        grants: options.grantDesktopControl ? ['desktop-control'] : [],
+        hostStart: true
       })
 
   return {
