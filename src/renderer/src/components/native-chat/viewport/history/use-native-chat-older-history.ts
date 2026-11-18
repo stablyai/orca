@@ -9,6 +9,7 @@ import {
   isNativeChatPageBefore,
   NATIVE_CHAT_PAGE,
   nativeChatHistoryCursor,
+  nativeChatHistoryRowCap,
   nativeChatLiveTailJoinsBase,
   nextNativeChatLimit,
   type NativeChatOlderPageResult
@@ -123,10 +124,18 @@ export function useNativeChatOlderHistory({
           return grew ? 'applied' : 'exhausted'
         })
 
+    const rowCap = nativeChatHistoryRowCap(agent, transport.historyRowCap)
     // Reads one page strictly before the oldest held row, so cost stays flat with depth.
-    const readPageBefore = (before: number): Promise<NativeChatOlderPageResult> =>
-      transport
-        .readSession(agent, sessionId, NATIVE_CHAT_PAGE, transcriptPath ?? undefined, {
+    const readPageBefore = (before: number): Promise<NativeChatOlderPageResult> => {
+      const room =
+        rowCap - (heldRef.current.phase === 'ready' ? heldRef.current.messages.length : 0)
+      if (room <= 0) {
+        setHasMore(false)
+        return Promise.resolve('exhausted')
+      }
+      const pageLimit = Math.min(NATIVE_CHAT_PAGE, room)
+      return transport
+        .readSession(agent, sessionId, pageLimit, transcriptPath ?? undefined, {
           ...USER_PAGING,
           beforeOffset: before
         })
@@ -157,10 +166,13 @@ export function useNativeChatOlderHistory({
             nextLimit,
             held.messages.length + page.length
           )
-          const more = result.hasMore ?? page.length >= NATIVE_CHAT_PAGE
+          const more =
+            (result.hasMore ?? page.length >= pageLimit) &&
+            held.messages.length + page.length < rowCap
           setHasMore(more)
           return page.length > 0 ? 'applied' : more ? 'unchanged' : 'exhausted'
         })
+    }
 
     const pageCursor = (base: readonly NativeChatMessage[]): number | undefined =>
       nativeChatLiveTailJoinsBase(agent, base, liveTailRef.current.list)

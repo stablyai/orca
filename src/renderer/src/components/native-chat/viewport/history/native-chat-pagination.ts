@@ -1,6 +1,7 @@
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../../../shared/native-chat/native-chat-agent-support'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import { OPENCODE_TRANSCRIPT_MAX_WINDOW } from '../../../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 
 export const NATIVE_CHAT_INITIAL_LIMIT = 300
 export const NATIVE_CHAT_PAGE = 200
@@ -61,4 +62,16 @@ export function nativeChatLiveTailJoinsBase(
   const start = nativeChatHistoryCursor(agent, liveTail[0])
   const end = nativeChatHistoryCursor(agent, base.at(-1))
   return start !== undefined && end !== undefined && start <= end
+}
+
+/** Cursor pages keep the depth a route's full reread always stopped at; deeper history waits on depth-independent page assembly. */
+export function nativeChatHistoryRowCap(
+  agent: AgentType,
+  transportCap: number | undefined
+): number {
+  const providerCap =
+    resolveNativeChatTranscriptAgent(agent) === 'opencode'
+      ? OPENCODE_TRANSCRIPT_MAX_WINDOW
+      : Number.POSITIVE_INFINITY
+  return Math.min(transportCap ?? Number.POSITIVE_INFINITY, providerCap)
 }

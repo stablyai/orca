@@ -368,6 +368,31 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.hasMore).toBe(false)
   })
 
+  it('stops cursor paging at the depth its route always reached', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { historyRowCap: 400 })
+    const at = (id: string, offset: number) => ({
+      ...assistant(id, 't'),
+      transcriptOrder: offset
+    })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    transport.readSession.mockResolvedValueOnce({
+      messages: Array.from({ length: 100 }, (_unused, n) => at(`older-${n}`, 100 + n)),
+      hasMore: true
+    })
+
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 100, undefined, {
+      wakeWslDistro: true,
+      beforeOffset: 1000
+    })
+    expect(latest?.hasMore).toBe(false)
+  })
+
   it('repairs a live-tail gap through a capped reread, then continues by cursor', async () => {
     const transport = getMockTransport('env-1')
     const at = (id: string, offset: number) => ({
