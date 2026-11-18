@@ -15,7 +15,10 @@ import {
   openWritableProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from './database/profile-state-database'
-import { writeProfileStateDomains } from './documents/profile-state-domain-writes'
+import {
+  writeProfileStateDomains,
+  type ProfileStateDomainTransaction
+} from './documents/profile-state-domain-writes'
 import { validateProfileStateDomainTransaction } from './documents/profile-state-domain-write-validation'
 import {
   parseProfileStateRoot,
@@ -31,7 +34,6 @@ import {
   buildCompleteDocumentReplacements,
   importCompleteDocument
 } from './documents/profile-state-complete-replacements'
-import type { ProfileStateDomainPatch } from './documents/profile-state-domain-patches'
 import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
 import { ensureProfileStateAuthorityMarker } from './database/profile-state-authority-marker'
 import type { ProfileStateWriterInitialization } from './writer/profile-state-writer-protocol'
@@ -194,7 +196,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   writeCompleteSerializedDomains(
     replacements: readonly ProfileStateDomainReplacement[],
-    patches: readonly ProfileStateDomainPatch[] = []
+    { patches = [], patching }: Pick<ProfileStateDomainTransaction, 'patches' | 'patching'> = {}
   ): void {
     this.assertActive()
     if (this.observedRevision === undefined) {
@@ -209,11 +211,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     const opened = this.openWritableDatabase()
     this.legacyDocuments.catchUp(this.writableDatabase?.db)
     const currentRevision = readProfileStateRevision(opened.db)
-    const complete = buildCompleteDocumentReplacements(
-      opened.db,
-      replacements,
-      patches.map(({ domain }) => domain)
-    )
+    const complete = buildCompleteDocumentReplacements(opened.db, replacements, patches)
     // Patches need the stored copy, so they never take the empty-database import.
     if (patches.length === 0 && (currentRevision === 0 || complete.length === 0)) {
       this.observedRevision = importCompleteDocument(opened.db, replacements, this.observedRevision)
@@ -223,7 +221,8 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       expectedRevision: this.observedRevision ?? currentRevision,
       replacements: complete,
       // An unchanged session domain only marks itself present.
-      patches: patches.filter(({ operations }) => operations.length > 0)
+      patches: patches.filter(({ operations }) => operations.length > 0),
+      patching
     }).revision
     this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
