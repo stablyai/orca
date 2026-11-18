@@ -25,7 +25,7 @@ import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
 import { TabBarCreateRowCustomizer } from './TabBarCreateRowCustomizer'
 import { CREATE_ROW_HIGHLIGHT_CLASS, TabBarCreateRowIcons } from './TabBarCreateRowIcons'
 import { useCreateRowScroller } from './use-create-row-scroller'
-import { useCreateRowHoverTooltip } from './use-create-row-hover-tooltip'
+import { isPressedPointer, useCreateRowHoverTooltip } from './use-create-row-hover-tooltip'
 import type { IntroArrowAnchor } from '../../emulator-pane/tab-intro/use-intro-arrow'
 
 const EMPTY_LAYOUT: NewTabMenuLayout = { order: [], hidden: [] }
@@ -113,9 +113,10 @@ export function TabBarCreateRow({
   }
   const activeItem = visible[active]
   // The pointer may enter the row first or already be inside it; either way the keyboard label
-  // it replaces counts as just shown, so the next icon opens without a cold wait.
-  const handOffToPointer = (): void => {
-    if (keyboardActive) {
+  // it replaces counts as just shown, so the next icon opens without a cold wait. A press or drag
+  // is not hover intent and gets no head start.
+  const handOffToPointer = (pressed: boolean): void => {
+    if (keyboardActive && !pressed) {
       hoverTooltip.startSkipWindow()
     }
     setKeyboardNav(false)
@@ -142,9 +143,9 @@ export function TabBarCreateRow({
             'tabBar.createRow.label',
             'New tab actions. Left and Right choose; the last one customizes this row.'
           )}
-          onPointerEnter={() => {
+          onPointerEnter={(event) => {
             pointerInside.current = true
-            handOffToPointer()
+            handOffToPointer(isPressedPointer(event))
           }}
           onPointerLeave={() => {
             pointerInside.current = false
@@ -185,7 +186,7 @@ export function TabBarCreateRow({
             onEscape={closeMenu}
             onHover={(index, pressed) => {
               if (index !== null) {
-                handOffToPointer()
+                handOffToPointer(pressed ?? false)
               }
               setHoveredIndex(index)
               hoverTooltip.hover(index, pressed)

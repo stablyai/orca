@@ -126,3 +126,17 @@ it('hands a keyboard label to a pointer already inside the row', () => {
   fireEvent.pointerMove(icon('terminal'))
   expect(tooltip()).toHaveTextContent('New Terminal')
 })
+
+it('gives a press dragged in during keyboard navigation no head start', () => {
+  renderRow()
+  const row = screen.getByRole('menuitem', { name: /New tab actions/ })
+  act(() => row.focus())
+  fireEvent.keyDown(row, { key: 'ArrowRight' })
+  expect(tooltip()).toHaveTextContent('New Browser')
+
+  fireEvent.pointerEnter(row, { buttons: 1 })
+  fireEvent.pointerMove(icon('terminal'), { buttons: 1 })
+  fireEvent.pointerLeave(icon('terminal'))
+  fireEvent.pointerMove(icon('browser'))
+  expect(tooltip()).toBeNull()
+})

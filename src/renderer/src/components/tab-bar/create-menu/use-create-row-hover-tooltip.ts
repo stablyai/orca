@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
+import type React from 'react'
 
 const CREATE_ROW_TOOLTIP_DELAY_MS = 600
 const CREATE_ROW_TOOLTIP_SKIP_DELAY_MS = 300
+
+/** A touch or held button is a press or drag, not hover intent. */
+export function isPressedPointer(event: React.PointerEvent): boolean {
+  return event.pointerType === 'touch' || event.buttons !== 0
+}
 
 /**
  * Which create-row icon shows its pointer tooltip. The row's tooltips are controlled (the keyboard
@@ -11,7 +17,7 @@ const CREATE_ROW_TOOLTIP_SKIP_DELAY_MS = 300
  */
 export function useCreateRowHoverTooltip(): {
   tooltipIndex: number | null
-  /** `pressed`: a touch or held button is a press or drag, not hover intent. */
+  /** `pressed`: see isPressedPointer. */
   hover: (index: number | null, pressed?: boolean) => void
   press: () => void
   /** Another label just closed (e.g. the keyboard cursor's), so the next hover opens at once. */
