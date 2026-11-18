@@ -143,6 +143,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           trailingRun={slot.trailingRun}
           continuesTurn={slot.continuesTurn}
           inAutomationTurn={slot.inAutomationTurn === true}
+          inActingTurn={slot.inActingTurn === true}
           endsResponse={slot.endsResponse}
           latestResponse={slot.latestResponse === true}
           actionsHang={slot.actionsHang === true && !newRowsMarkerBelow}

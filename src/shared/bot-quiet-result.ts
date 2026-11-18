@@ -23,9 +23,12 @@ export type QuietBotAnswerRow = {
   streaming: boolean
   /** An automation's row opened the turn, which already says what ran. */
   inAutomationTurn: boolean
+  /** The turn changed an item, posted or otherwise did something others see. */
+  inActingTurn: boolean
 }
 
-/** A bot chat's settled answer shows a quiet result as a line, not its marker. */
+/** A bot chat's settled answer hides a quiet result's marker; only a turn that said and did nothing
+ *  reads "Nothing to report", and not under the automation row that opened it. */
 export function quietBotAnswer(
   words: string,
   row: QuietBotAnswerRow
@@ -33,7 +36,12 @@ export function quietBotAnswer(
   if (!row.botAnswer || row.streaming || !isQuietBotResult(words)) {
     return { quiet: false, words, nothingToReport: false }
   }
-  return { quiet: true, words: quietBotResultText(words), nothingToReport: !row.inAutomationTurn }
+  const text = quietBotResultText(words)
+  return {
+    quiet: true,
+    words: text,
+    nothingToReport: !text && !row.inAutomationTurn && !row.inActingTurn
+  }
 }
 
 /** `quietBotAnswer` for a row drawn block by block: the marker ends its last text block. */
