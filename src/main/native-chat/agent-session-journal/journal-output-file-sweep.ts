@@ -62,15 +62,28 @@ export function sweepJournalOutputFiles(
   const files = listFiles(join(root, JOURNAL_OUTPUT_FILE_DIRECTORY, shard)).filter((entry) =>
     /^[0-9a-f]{64}\.txt$/.test(entry.name)
   )
+  // Without the ownership index (writes never on here), proving a file unreferenced would scan
+  // every row, so its files are kept.
+  if (
+    !db
+      .prepare(
+        `SELECT 1 FROM sqlite_master WHERE type='index' AND name='journal_items_output_file'`
+      )
+      .get()
+  ) {
+    return result
+  }
   const referenced = db.prepare(JOURNAL_OUTPUT_FILE_REFERENCED)
   const mark = db.prepare(
     'INSERT OR IGNORE INTO journal_output_file_unreferenced(digest,since) VALUES(?,?)'
   )
   const since = db.prepare('SELECT since FROM journal_output_file_unreferenced WHERE digest=?')
   const clear = db.prepare('DELETE FROM journal_output_file_unreferenced WHERE digest=?')
-  db.prepare(`DELETE FROM journal_output_file_unreferenced WHERE substr(digest,1,2)=?
+  // A key range, so each unit visits only its own shard's markers.
+  db.prepare(`DELETE FROM journal_output_file_unreferenced WHERE digest>=? AND digest<?
     AND digest NOT IN (SELECT value FROM json_each(?))`).run(
     shard,
+    `${shard}~`,
     JSON.stringify(files.map((entry) => entry.name.slice(0, 64)))
   )
   for (const { name, path, size } of files) {

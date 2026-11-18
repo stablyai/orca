@@ -160,7 +160,7 @@ function savedJournalOutputFile(root: string, digest: string, bytes: number): st
  */
 function saveJournalOutputFile(root: string, text: string): string {
   const staging = join(root, DIRECTORY, STAGING)
-  mkdirSync(staging, { recursive: true, mode: 0o700 })
+  durableDirectory(staging)
   const temporary = join(staging, `${randomUUID()}.part`)
   try {
     const hash = createHash('sha256')
@@ -188,15 +188,9 @@ function saveJournalOutputFile(root: string, text: string): string {
     const digest = hash.digest('hex')
     const path = journalOutputFilePath(root, digest)
     if (fileSize(path) !== bytes) {
-      const created = mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+      durableDirectory(dirname(path))
       renameFileWithWindowsRetry(temporary, path)
       syncDirectory(dirname(path))
-      // A new folder is durable only once the folder holding it is synced too.
-      for (let folder = created && dirname(path); folder;) {
-        const parent = dirname(folder)
-        syncDirectory(parent)
-        folder = folder === created || parent === folder ? undefined : parent
-      }
     }
     return digest
   } finally {
@@ -209,6 +203,19 @@ function fileSize(path: string): number {
     return statSync(path).size
   } catch {
     return -1
+  }
+}
+
+/**
+ * Creates a folder and every missing one above it; each new folder is durable only once the
+ * folder holding it is synced, up to the first that already existed.
+ */
+function durableDirectory(path: string): void {
+  const created = mkdirSync(path, { recursive: true, mode: 0o700 })
+  for (let folder = created && path; folder;) {
+    const parent = dirname(folder)
+    syncDirectory(parent)
+    folder = folder === created || parent === folder ? undefined : parent
   }
 }
 
