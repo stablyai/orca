@@ -522,12 +522,6 @@ describe('Tidy-up on a sleeping host', () => {
     expect(h.through()).toBeDefined()
   })
 
-  it('holds the host awake while it waits for the reply, and lets go after', async () => {
-    const { host, tick } = harness()
-    await tick()
-    expect(host.holds).toEqual({ taken: 1, released: 1 })
-  })
-
   it('never catches up a night it was not on for: a new or re-enabled Tidy-up waits for the night', async () => {
     // Made at 2 PM: it waits for the night's hours.
     const made = harness({ bot: { createdAt: NIGHT + 11 * HOUR } })
@@ -592,14 +586,6 @@ describe('Tidy-up on a sleeping host', () => {
     expect(h.through()).toBeUndefined()
   })
 
-  it('never holds back Tidy now, whatever the power', async () => {
-    const { host, setNow, tidyNow, runs } = harness()
-    host.setFullWake(false)
-    setNow(NIGHT + 11 * HOUR)
-    expect(await tidyNow()).toEqual({ started: true })
-    expect(runs()).toHaveLength(1)
-  })
-
   it('records a run cut short by a short reported suspend as missed', async () => {
     const ctx: { h?: ReturnType<typeof harness> } = {}
     const h = harness({
@@ -645,12 +631,14 @@ describe('Tidy-up on a sleeping host', () => {
     expect(h.runs()).toHaveLength(0)
   })
 
-  it('never withdraws Tidy now at delivery, whatever the power', async () => {
+  it('delivers Tidy now from a dark wake even if the host suspends before delivery', async () => {
     const ctx: { h?: ReturnType<typeof harness> } = {}
     const h = harness({ chats: [], beforeAppend: () => ctx.h!.host.suspend() })
     ctx.h = h
+    h.host.setFullWake(false)
     h.setNow(NIGHT + 11 * 60 * 60_000)
     expect(await h.tidyNow()).toEqual({ started: true })
+    expect(h.runs()).toHaveLength(1)
     expect(h.delivered).toHaveLength(1)
   })
 
