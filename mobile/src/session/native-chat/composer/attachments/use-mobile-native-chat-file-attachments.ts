@@ -37,6 +37,8 @@ export type MobileNativeChatFileAttachments = {
   readonly attachFiles: () => Promise<void>
   /** Stores a long paste as a "Pasted text" file, as desktop does; null when no upload can start. */
   readonly attachPastedText: ((text: string) => Promise<void>) | null
+  /** True when a pick can start: connected, a storage target, a draft scope. Gates the + menu's Files entry. */
+  readonly canAttachFiles: boolean
   // Drop only files removed or carried by this send; attachments added while sending must survive.
   readonly removeFiles: (
     ids: readonly string[],
@@ -83,9 +85,17 @@ export function useMobileNativeChatFileAttachments(args: {
         await uploadPickedNativeChatFiles({
           canContinue: () => destination.active,
           picked: picked(),
-          upload: async (file, { id, onProgress }) => {
+          upload: async (file, { id, onProgress: reportProgress }) => {
             const controller = new AbortController()
             transfers.set(id, controller)
+            // A closed draft has no chip to fill: stop the transfer rather than commit a stray file.
+            const onProgress = (sentBytes: number): void => {
+              if (!destination.active) {
+                controller.abort()
+                return
+              }
+              reportProgress(sentBytes)
+            }
             try {
               if (target.kind === 'structured') {
                 return await uploadMobileAgentSessionAttachment(client, {
@@ -173,6 +183,7 @@ export function useMobileNativeChatFileAttachments(args: {
   return {
     files,
     attachFiles,
+    canAttachFiles: canAttach,
     attachPastedText: canAttach && structuredOnly ? attachPastedText : null,
     removeFiles
   }

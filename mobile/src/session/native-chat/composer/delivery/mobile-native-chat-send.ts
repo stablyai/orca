@@ -53,6 +53,8 @@ export type MobileNativeChatSendIntent = {
   onCreated?: (clientMessageId: string) => void
   /** Runs when an unconfirmed send's text goes back to the composer, so its attachments can follow. */
   onHandBack?: () => void
+  /** What reaches the terminal when it differs from the typed draft (file `@path` references). Draft bookkeeping keeps the typed text. */
+  wireText?: string
   /** The chips this send carries, saved with it so a kill mid-send can return them. */
   carried?: {
     images: readonly PendingNativeChatImage[]

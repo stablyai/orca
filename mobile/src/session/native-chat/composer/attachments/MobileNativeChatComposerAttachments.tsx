@@ -63,97 +63,116 @@ export function MobileNativeChatComposerAttachments({
     return null
   }
   const pastedText = t('chat.textAttachmentPreview.pastedText', 'Pasted text')
+  // A file still uploading goes over the phone's connection, so show its progress and warn.
+  const transferring = files.some((file) => file.path === null)
   return (
-    <ScrollView
-      horizontal
-      keyboardShouldPersistTaps="always"
-      showsHorizontalScrollIndicator={false}
-      style={styles.strip}
-      contentContainerStyle={styles.stripContent}
-    >
-      {images.map((image, index) => (
-        <View key={image.id} style={styles.thumb}>
-          {isRenderableImageUri(image.previewUri) ? (
-            <Image
-              source={{ uri: image.previewUri }}
-              style={styles.thumbImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View
-              style={styles.fileIcon}
-              accessible
-              accessibilityLabel={
-                image.path.split(/[\\/]/).at(-1) ||
-                t('chat.composerAttachments.attachedImage', 'Attached image')
-              }
-            >
-              <ImageIcon size={17} color={colors.textSecondary} strokeWidth={2} />
-            </View>
-          )}
-          {image.path ? null : (
-            <View
-              style={styles.uploading}
-              accessibilityLabel={t('chat.composerAttachments.uploadingImage', 'Uploading image')}
-            >
-              <ActivityIndicator size="small" color={colors.onAccent} />
-            </View>
-          )}
-          {numbered ? (
-            <View style={styles.number}>
-              <Text style={styles.numberText}>{index + 1}</Text>
-            </View>
-          ) : null}
-          {onRemoveImage ? (
-            <RemoveBadge
-              label={t('chat.composerAttachments.removeImage', 'Remove image')}
-              onPress={() => onRemoveImage(image.id)}
-            />
-          ) : null}
-        </View>
-      ))}
-      {files.map((file) => (
-        <View key={file.id} style={styles.fileCard}>
-          <View style={styles.fileIcon}>
-            <FileText size={17} color={colors.textSecondary} strokeWidth={2} />
+    <>
+      <ScrollView
+        horizontal
+        keyboardShouldPersistTaps="always"
+        showsHorizontalScrollIndicator={false}
+        style={styles.strip}
+        contentContainerStyle={styles.stripContent}
+      >
+        {images.map((image, index) => (
+          <View key={image.id} style={styles.thumb}>
+            {isRenderableImageUri(image.previewUri) ? (
+              <Image
+                source={{ uri: image.previewUri }}
+                style={styles.thumbImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={styles.fileIcon}
+                accessible
+                accessibilityLabel={
+                  image.path.split(/[\\/]/).at(-1) ||
+                  t('chat.composerAttachments.attachedImage', 'Attached image')
+                }
+              >
+                <ImageIcon size={17} color={colors.textSecondary} strokeWidth={2} />
+              </View>
+            )}
+            {image.path ? null : (
+              <View
+                style={styles.uploading}
+                accessibilityLabel={t('chat.composerAttachments.uploadingImage', 'Uploading image')}
+              >
+                <ActivityIndicator size="small" color={colors.onAccent} />
+              </View>
+            )}
+            {numbered ? (
+              <View style={styles.number}>
+                <Text style={styles.numberText}>{index + 1}</Text>
+              </View>
+            ) : null}
+            {onRemoveImage ? (
+              <RemoveBadge
+                label={t('chat.composerAttachments.removeImage', 'Remove image')}
+                onPress={() => onRemoveImage(image.id)}
+              />
+            ) : null}
           </View>
-          <Pressable
-            style={styles.fileText}
-            disabled={!file.path || !onOpenFile}
-            accessibilityRole="button"
-            onPress={() => file.path && onOpenFile?.(file.path)}
-          >
-            <Text style={styles.fileName} numberOfLines={1}>
-              {chatTextAttachmentName(file.name, pastedText)}
-            </Text>
-            <Text style={styles.fileMeta} numberOfLines={1}>
-              {composerFileMeta(file, t, locale)}
-            </Text>
-          </Pressable>
-          {file.path === null ? (
-            <View
-              style={styles.uploading}
-              accessibilityLabel={t(
-                'chat.composerAttachments.uploadingFile',
-                'Uploading {{name}}',
-                { name: chatTextAttachmentName(file.name, pastedText) }
-              )}
-            >
-              <ActivityIndicator size="small" color={colors.onAccent} />
+        ))}
+        {files.map((file) => (
+          <View key={file.id} style={styles.fileCard}>
+            <View style={styles.fileIcon}>
+              <FileText size={17} color={colors.textSecondary} strokeWidth={2} />
             </View>
-          ) : null}
-          {onRemoveFile ? (
-            <RemoveBadge
-              label={t('chat.composerAttachments.removeFile', 'Remove {{name}}', {
-                name: chatTextAttachmentName(file.name, pastedText)
-              })}
-              onPress={() => onRemoveFile(file.id)}
-            />
-          ) : null}
-        </View>
-      ))}
-    </ScrollView>
+            <Pressable
+              style={styles.fileText}
+              disabled={!file.path || !onOpenFile}
+              accessibilityRole="button"
+              onPress={() => file.path && onOpenFile?.(file.path)}
+            >
+              <Text style={styles.fileName} numberOfLines={1}>
+                {chatTextAttachmentName(file.name, pastedText)}
+              </Text>
+              <Text style={styles.fileMeta} numberOfLines={1}>
+                {composerFileMeta(file, t, locale)}
+              </Text>
+            </Pressable>
+            {file.path === null ? (
+              <View
+                style={styles.uploading}
+                accessibilityLabel={t(
+                  'chat.composerAttachments.uploadingFile',
+                  'Uploading {{name}}',
+                  { name: chatTextAttachmentName(file.name, pastedText) }
+                )}
+              >
+                <Text style={styles.uploadProgress}>
+                  {t('chat.composerAttachments.uploadProgress', '{{percent}}%', {
+                    percent: transferPercent(file)
+                  })}
+                </Text>
+              </View>
+            ) : null}
+            {onRemoveFile ? (
+              <RemoveBadge
+                label={t('chat.composerAttachments.removeFile', 'Remove {{name}}', {
+                  name: chatTextAttachmentName(file.name, pastedText)
+                })}
+                onPress={() => onRemoveFile(file.id)}
+              />
+            ) : null}
+          </View>
+        ))}
+      </ScrollView>
+      {transferring ? (
+        <Text style={styles.keepOpenHint}>
+          {t('chat.composerAttachments.keepOrcaOpen', 'Keep Orca open until the file is sent')}
+        </Text>
+      ) : null}
+    </>
   )
+}
+
+function transferPercent(file: Pick<PendingNativeChatFile, 'sentBytes' | 'byteLength'>): number {
+  return file.byteLength > 0
+    ? Math.min(100, Math.floor((file.sentBytes / file.byteLength) * 100))
+    : 0
 }
 
 function RemoveBadge({ label, onPress }: { label: string; onPress: () => void }) {
@@ -253,6 +272,16 @@ const stylesSheet = themedStyleSheet((colors) => ({
     fontSize: 10,
     fontWeight: '600',
     fontVariant: ['tabular-nums']
+  },
+  uploadProgress: {
+    color: colors.onAccent,
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  keepOpenHint: {
+    color: colors.textMuted,
+    fontSize: 11.5,
+    marginBottom: 8
   },
   // Keep most of the badge inside its item for Android touch delivery; strip padding protects the overhang.
   remove: {

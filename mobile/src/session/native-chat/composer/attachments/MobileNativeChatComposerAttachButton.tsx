@@ -18,6 +18,7 @@ import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../../../../components/list/ListGroup'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
+import { useMobileNativeChatTerminalFiles } from './mobile-native-chat-terminal-files-context'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStylesSheet as inputStylesSheet
@@ -36,10 +37,10 @@ type AddSheet = {
   skillCount: number
 }
 
-/** The composer's + button: the add-to-message sheet in a structured chat, else the photo library. */
+/** Show the add-to-message sheet when there are several ways to attach content. */
 export function MobileNativeChatComposerAttachButton({
   onAttachImage,
-  onAttachFiles,
+  onAttachFiles: onAttachStructuredFiles,
   structured,
   isAttaching,
   disabled,
@@ -52,7 +53,7 @@ export function MobileNativeChatComposerAttachButton({
   structured: boolean
   isAttaching: boolean
   disabled: boolean
-  /** A structured chat's add-to-message sheet; without it the button opens the photo library. */
+  /** The structured chat's workspace file, skill, and command pickers. */
   menu?: AddSheet
   plan?: MobileNativeChatPlanSwitch
   /** Enters goal mode; absent while it is on or where the chat has none. */
@@ -62,9 +63,11 @@ export function MobileNativeChatComposerAttachButton({
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const [attachOpen, setAttachOpen] = useState(false)
-  // A terminal-backed chat has only photos to add, so its + opens the library at once.
+  const terminalFiles = useMobileNativeChatTerminalFiles()
+  const onAttachFiles = structured ? onAttachStructuredFiles : terminalFiles?.onAttachFiles
   const sheet = structured ? menu : undefined
-  const open = sheet ? () => setAttachOpen(true) : onAttachImage
+  const showsMenu = sheet !== undefined || onAttachFiles !== undefined
+  const open = showsMenu ? () => setAttachOpen(true) : onAttachImage
   if (!open) {
     return null
   }
@@ -76,7 +79,7 @@ export function MobileNativeChatComposerAttachButton({
     <>
       <Pressable
         accessibilityLabel={
-          sheet
+          showsMenu
             ? t('chat.composer.addToMessage', 'Add to message')
             : t('chat.composer.attachImage', 'Attach image')
         }
@@ -91,7 +94,7 @@ export function MobileNativeChatComposerAttachButton({
           <Plus size={19} color={colors.textPrimary} strokeWidth={2} />
         )}
       </Pressable>
-      {sheet ? (
+      {showsMenu ? (
         <AddToMessageSheet
           visible={attachOpen}
           onClose={() => setAttachOpen(false)}
@@ -117,7 +120,7 @@ function AddToMessageSheet({
 }: {
   visible: boolean
   onClose: () => void
-  sheet: AddSheet
+  sheet: AddSheet | undefined
   onPhotos: (() => void) | undefined
   onFiles: (() => void) | undefined
   plan: MobileNativeChatPlanSwitch | undefined
@@ -175,30 +178,32 @@ function AddToMessageSheet({
           ) : null}
         </ListGroup>
       ) : null}
-      <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
-        <ListRow
-          key="workspaceFile"
-          title={t('session.nativeChatAttachActions.workspaceFile', 'Workspace file')}
-          leading={icon(AtSign)}
-          navigates
-          onPress={closeThen(sheet.openFileMenu)}
-        />
-        <ListRow
-          key="skills"
-          title={t('session.nativeChatAttachActions.skills', 'Skills')}
-          leading={icon(Package)}
-          {...(sheet.skillCount > 0 ? { value: String(sheet.skillCount) } : {})}
-          navigates
-          onPress={closeThen(() => sheet.openSlashMenu('skill'))}
-        />
-        <ListRow
-          key="commands"
-          title={t('session.nativeChatAttachActions.commands', 'Commands')}
-          leading={icon(Terminal)}
-          navigates
-          onPress={closeThen(() => sheet.openSlashMenu('command'))}
-        />
-      </ListGroup>
+      {sheet ? (
+        <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
+          <ListRow
+            key="workspaceFile"
+            title={t('session.nativeChatAttachActions.workspaceFile', 'Workspace file')}
+            leading={icon(AtSign)}
+            navigates
+            onPress={closeThen(sheet.openFileMenu)}
+          />
+          <ListRow
+            key="skills"
+            title={t('session.nativeChatAttachActions.skills', 'Skills')}
+            leading={icon(Package)}
+            {...(sheet.skillCount > 0 ? { value: String(sheet.skillCount) } : {})}
+            navigates
+            onPress={closeThen(() => sheet.openSlashMenu('skill'))}
+          />
+          <ListRow
+            key="commands"
+            title={t('session.nativeChatAttachActions.commands', 'Commands')}
+            leading={icon(Terminal)}
+            navigates
+            onPress={closeThen(() => sheet.openSlashMenu('command'))}
+          />
+        </ListGroup>
+      ) : null}
       {plan || onGoal ? (
         <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
           {plan ? (

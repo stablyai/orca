@@ -3298,8 +3298,10 @@
       "attachedImage": "Attached image",
       "removeImage": "Remove image",
       "uploadingFile": "Uploading {{name}}",
-      "removeFile": "Remove {{name}}",
-      "uploadingImage": "Uploading image"
+      "uploadingImage": "Uploading image",
+      "uploadProgress": "{{percent}}%",
+      "keepOrcaOpen": "Keep Orca open until the file is sent",
+      "removeFile": "Remove {{name}}"
     },
     "useImageUpload": {
       "disconnected": "Attach failed (disconnected)",
