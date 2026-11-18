@@ -237,10 +237,10 @@ export async function groupCodexRolloutCopyAliases<T>(
   }
 
   const outranked = new Map<T, T[]>()
-  for (const candidate of outrankedBy.keys()) {
-    let preferred = outrankedBy.get(candidate) as T
-    while (outrankedBy.has(preferred)) {
-      preferred = outrankedBy.get(preferred) as T
+  for (const [candidate, outranker] of outrankedBy) {
+    let preferred = outranker
+    for (let next = outrankedBy.get(preferred); next !== undefined; next = outrankedBy.get(next)) {
+      preferred = next
     }
     const copies = outranked.get(preferred)
     if (copies) {
