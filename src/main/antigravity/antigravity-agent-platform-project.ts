@@ -3,6 +3,7 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { z } from 'zod'
 
 const DEFAULT_LOCATION = 'global'
 
@@ -16,12 +17,16 @@ function gcloudConfigDirectory(env: Readonly<Record<string, string>>): string {
   return join(env.HOME ?? env.USERPROFILE ?? homedir(), '.config', 'gcloud')
 }
 
-async function readJsonField(path: string, field: string): Promise<string | null> {
+const AdcFileSchema = z.object({
+  quota_project_id: z.string().trim().min(1).optional(),
+  project_id: z.string().trim().min(1).optional()
+})
+
+/** ADC's quota project, else a service account key's own project. */
+async function readAdcProject(path: string): Promise<string | null> {
   try {
-    const value: unknown = JSON.parse(await readFile(path, 'utf8'))
-    const found =
-      typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[field] : null
-    return typeof found === 'string' && found.trim() ? found.trim() : null
+    const parsed = AdcFileSchema.safeParse(JSON.parse(await readFile(path, 'utf8')))
+    return parsed.success ? (parsed.data.quota_project_id ?? parsed.data.project_id ?? null) : null
   } catch {
     return null
   }
@@ -67,9 +72,7 @@ export async function resolveAgentPlatformProject(
   const project =
     saved.gcpProject ||
     env.GOOGLE_CLOUD_PROJECT ||
-    (await readJsonField(adcFile, 'quota_project_id')) ||
-    // A service account key names its own project.
-    (await readJsonField(adcFile, 'project_id')) ||
+    (await readAdcProject(adcFile)) ||
     env.CLOUDSDK_CORE_PROJECT ||
     (await readGcloudProject(configDirectory, env))
   return {

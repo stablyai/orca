@@ -19,7 +19,10 @@ import {
   subscribeAntigravityChatSignIn
 } from '../../../../antigravity/antigravity-chat-sign-in'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
-import { structuredAgentHostLaunchSources } from '../../../agent-session/launch/structured-agent-launch-support'
+import {
+  resolveHostStructuredAgentLaunchEnvironment,
+  structuredAgentHostLaunchSources
+} from '../../../agent-session/launch/structured-agent-launch-support'
 import { stopStructuredAgentChats } from '../../../agent-session/lifecycle/structured-agent-chat-stop'
 
 import {
@@ -31,7 +34,6 @@ import {
   readAntigravityChatApiKeyStatus,
   storeAntigravityChatApiKey
 } from '../../../../antigravity/antigravity-chat-api-key'
-import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
 
 // Running chats hold the old key until they start again.
 const restartLiveChats = (runtime: OrcaRuntimeService): Promise<void> =>

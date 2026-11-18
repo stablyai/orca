@@ -3,6 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { callAntigravityChatApiKey } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -133,7 +134,7 @@ export function AntigravityChatApiKeyField({
         <p className="text-xs text-muted-foreground">
           {hint ? `${hint} ` : null}
           {!status?.saved && (
-            <ManagedRuntimeLinkButton onClick={() => void window.api.shell.openUrl(GET_KEY_URL)}>
+            <ManagedRuntimeLinkButton onClick={() => openAppHttpLink(GET_KEY_URL)}>
               {t('accounts.antigravity.apiKeyGet', 'Get a key from Google AI Studio')}
             </ManagedRuntimeLinkButton>
           )}

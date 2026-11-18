@@ -24845,6 +24845,7 @@
       "apiKey": "Gemini API key",
       "agentPlatform": "Google Agent Platform",
       "projectFromGcloud": "From gcloud",
+      "locationGlobal": "global",
       "adcHint": "Optional. Orca uses your gcloud project and the global location. Run gcloud auth application-default login once first.",
       "apiKeySaveFailed": "Orca couldn't save the key. Try again.",
       "apiKeySaved": "Key saved on this host, encrypted.",

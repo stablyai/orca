@@ -53,7 +53,9 @@ export function AntigravityChatGcpFields(props: Props): React.JSX.Element {
             value={props.location}
             disabled={disabled}
             placeholder={
-              optional ? 'global' : t('accounts.antigravity.locationPlaceholder', 'us-central1')
+              optional
+                ? t('accounts.antigravity.locationGlobal', 'global')
+                : t('accounts.antigravity.locationPlaceholder', 'us-central1')
             }
             onChange={(event) => props.onLocation(event.target.value)}
             onBlur={props.onCommit}
