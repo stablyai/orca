@@ -320,6 +320,8 @@ export class StructuredAgentSessionHost {
   readCurrentRequests: BackgroundTasks['currentRequests'] = (...a) =>
     this.backgroundTasks.currentRequests(...a)
 
+  observeJournalPublications = this.clientDelivery.observeJournalPublications
+
   subscribe: BackgroundTasks['subscribe'] = (input) => this.backgroundTasks.subscribe(input)
 
   settleLateDispatch = this.mutations.settleLateDispatch
