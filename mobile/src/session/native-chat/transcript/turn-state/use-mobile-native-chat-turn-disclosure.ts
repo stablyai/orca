@@ -165,9 +165,9 @@ export function useMobileNativeChatTurnDisclosure({
         turnKeys[index],
         liveTurnKey,
         enabled && isWorking,
-        unresolvedRowIds?.has(rows[index]!.id)
+        unresolvedRowIds?.has(structuralRows[index]!.id)
       ),
-    [enabled, isWorking, liveTurnKey, turnKeys, unresolvedRowIds, rows]
+    [enabled, isWorking, liveTurnKey, turnKeys, unresolvedRowIds, structuralRows]
   )
   const activeActivityText = enabled && isWorking ? (activityText ?? null) : null
   const line = useMemo(
@@ -236,7 +236,10 @@ export function useMobileNativeChatTurnDisclosure({
           : isWorking && message.id === NATIVE_CHAT_STREAMING_ID,
         trailingRun:
           index === trailingRunIndex ||
-          (workRuns.heads.get(index)?.includes(rows[trailingRunIndex]!) ?? false),
+          (workRuns.heads
+            .get(index)
+            ?.some((row) => row.id === structuralRows[trailingRunIndex]?.id) ??
+            false),
         ...(workRuns.heads.has(index)
           ? { workRun: workRuns.heads.get(index), openReasoning: expandedReasoning }
           : {}),
@@ -258,7 +261,7 @@ export function useMobileNativeChatTurnDisclosure({
     [
       turnKeys,
       summaries,
-      waiting,
+      waiting.indexById,
       bars,
       enabled,
       activeTurnKey,
@@ -269,7 +272,7 @@ export function useMobileNativeChatTurnDisclosure({
       trailingRunIndex,
       workRuns,
       fold,
-      rows,
+      structuralRows,
       latestAssistantId,
       lineYields,
       liveReasoningId,

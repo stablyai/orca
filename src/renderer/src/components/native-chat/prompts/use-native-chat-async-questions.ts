@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
@@ -44,7 +45,11 @@ export function useNativeChatAsyncQuestions({
     useCallback(() => () => dismissals.forgetAsync(scopeKey), [scopeKey])
   )
   const hidden = useSyncExternalStore(dismissals.subscribe, () => dismissals.readAsync(scopeKey))
-  const scan = useMemo(() => (settled ? scanPendingAsks(messages) : null), [messages, settled])
+  const structuralMessages = rowsBesideStreamedText(messages)
+  const scan = useMemo(
+    () => (settled ? scanPendingAsks(structuralMessages) : null),
+    [structuralMessages, settled]
+  )
   const skippedThrough = skip?.skippedThrough
   const contributors = useMemo(
     () => asyncQuestionsAfterSkip(scan?.contributors ?? [], skippedThrough),

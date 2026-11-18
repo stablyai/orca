@@ -1,7 +1,6 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
-import { useCallback, useMemo, type ComponentProps } from 'react'
-import { nativeChatTaskListPredecessors } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
+import { useCallback, type ComponentProps } from 'react'
 import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
@@ -287,12 +286,11 @@ export function MobileNativeChatView({
 
   const rowKeys = useMobileNativeChatRowKeys(folded, messages, sendSurfaceId, turns.presentation)
   const disclosures = useMobileNativeChatDisclosures(sendSurfaceId)
-  const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(data), [data])
   const renderItem = useMobileNativeChatRowRenderer({
     scope: sendSurfaceId,
     rowKeyOf: rowKeys.keyOf,
     runOwners: rowKeys.runOwners,
-    taskListPredecessors,
+    data,
     fontScale,
     structuredActivityUi,
     turns,

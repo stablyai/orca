@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { createContext, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import {
@@ -73,7 +74,8 @@ export function useMobileNativeChatFork(input: {
     () => nativeChatForkSupport(host, registered, input.sessionForkSupport, inheritedOriginal),
     [host, registered, input.sessionForkSupport, inheritedOriginal]
   )
-  const { messages, turnJournal, agentWorking, sessionId, agent, createFork } = input
+  const { messages: liveMessages, turnJournal, agentWorking, sessionId, agent, createFork } = input
+  const messages = rowsBesideStreamedText(liveMessages)
   const turns = useMemo(() => {
     const membership = nativeChatTurnMembership(messages, turnJournal)
     const keyById = new Map(
@@ -85,7 +87,10 @@ export function useMobileNativeChatFork(input: {
       latestTurnKey: membership.turnKeys.findLast((key) => key !== undefined)
     }
   }, [messages, turnJournal])
-  const contextFloorSequence = latestAgentSessionContextClearSequence(turnJournal?.items ?? [])
+  const contextFloorSequence = useMemo(
+    () => latestAgentSessionContextClearSequence(turnJournal?.items ?? []),
+    [turnJournal]
+  )
   // The sheet's row is a display projection; only one naming the agent's own message forks.
   const { forkableItemIds, inheritedThroughSequence } = useMemo(
     () => nativeChatForkInventory(turnJournal?.items ?? []),

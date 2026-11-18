@@ -38,9 +38,13 @@ export function useMobileNativeChatWaitingRows(
       indexById: new Map(base.map((message, index) => [message.id, index]))
     }
   }, [base, journal, enabled, stopping])
-  return {
-    listMessages: project?.list(rows) ?? rows,
-    waitingRows: project?.waiting(rows) ?? [],
-    indexById: project?.indexById ?? null
-  }
+  const listMessages = project?.list(rows) ?? rows
+  const waitingRows = project?.waiting(rows) ?? NO_WAITING
+  const indexById = project?.indexById ?? null
+  return useMemo(
+    () => ({ listMessages, waitingRows, indexById }),
+    [listMessages, waitingRows, indexById]
+  )
 }
+
+const NO_WAITING: readonly { item: NativeChatMessage; index: number }[] = []

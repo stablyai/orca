@@ -1,8 +1,9 @@
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useMemo } from 'react'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
-import type { NativeChatTaskListPredecessors } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
+import { nativeChatTaskListPredecessors } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
 import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { MobileNativeChatRow } from './MobileNativeChatRowItemSource'
 import { mobileNativeChatUnsentNotices } from '../../status/mobile-native-chat-unsent-notices'
@@ -12,7 +13,7 @@ export function useMobileNativeChatRowRenderer({
   scope,
   rowKeyOf,
   runOwners,
-  taskListPredecessors,
+  data,
   fontScale,
   structuredActivityUi,
   turns,
@@ -24,8 +25,7 @@ export function useMobileNativeChatRowRenderer({
   scope: string
   rowKeyOf: (message: NativeChatMessage) => string
   runOwners: ReadonlyMap<string, string>
-  /** The last plan each task-list tool wrote before each row, by row id. */
-  taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
+  data: readonly NativeChatMessage[]
   fontScale: number
   structuredActivityUi: boolean
   turns: ReturnType<typeof useMobileNativeChatTurnDisclosure>
@@ -34,6 +34,11 @@ export function useMobileNativeChatRowRenderer({
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   actionablePromptIds: readonly string[] | undefined
 }): ({ item, index }: { item: NativeChatMessage; index: number }) => React.JSX.Element {
+  const structuralData = rowsBesideStreamedText(data)
+  const taskListPredecessors = useMemo(
+    () => nativeChatTaskListPredecessors(structuralData),
+    [structuralData]
+  )
   const t = useMobileTranslation()
   const unsentNotices = useMemo(
     () => mobileNativeChatUnsentNotices(turnJournal, agent),

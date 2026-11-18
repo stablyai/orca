@@ -42,8 +42,8 @@ export function useMobileStructuredAgentTurnTiming(
     [rows, submissions, turnId, latestTurn]
   )
   const turnJournal = useMemo(
-    () => ({ items, submissions, latestTurn, ...(working !== undefined ? { working } : {}) }),
-    [items, submissions, latestTurn, working]
+    () => ({ items: rows, submissions, latestTurn, ...(working !== undefined ? { working } : {}) }),
+    [rows, submissions, latestTurn, working]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
   // Derive during render so a new turn’s first paint counts from its correct start.

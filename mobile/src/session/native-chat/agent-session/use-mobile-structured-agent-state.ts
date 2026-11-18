@@ -1,3 +1,4 @@
+import { useAppActive } from '../../../hooks/use-now'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { isRootAgentJournalItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import type {
@@ -166,9 +167,10 @@ export function useMobileStructuredAgentState(args: {
     },
     [sessionKey]
   )
+  const appActive = useAppActive()
   useEffect(() => {
     supersede()
-    if (!client || !sessionId || !enabled) {
+    if (!client || !sessionId || !enabled || !appActive) {
       return
     }
     if (!connected || readingStore) {
@@ -228,7 +230,7 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, client, connected, enabled, readingStore, sessionId, sessionKey, supersede])
+  }, [apply, appActive, client, connected, enabled, readingStore, sessionId, sessionKey, supersede])
 
   const loadEarlier = useCallback(() => {
     const start = oldestStructuredAgentSessionCursor(stateRef.current)

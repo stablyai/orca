@@ -89,3 +89,8 @@ export function projectMobileNativeChatText(
 }
 
 const NO_IDS: ReadonlySet<string> = new Set()
+
+/** A structural update must refresh preparation before reusing fold-unit sources. */
+export function isMobileNativeChatTextProjection(value: MobileNativeChatProjection): boolean {
+  return bases.has(value)
+}

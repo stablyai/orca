@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
 import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -132,7 +133,8 @@ function MobileNativeChatOverlayContent({
     ],
     controller.nativeChatShowsCiResultLines
   )
-  const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
+  const structuralFolded = rowsBesideStreamedText(folded)
+  const taskList = useMemo(() => nativeChatDockedTaskList(structuralFolded), [structuralFolded])
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
   const composerTray = useMobileNativeChatComposerTray({

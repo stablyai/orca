@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useMemo } from 'react'
 import type { AgentChildRowContext } from '../../../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentSessionCancelResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
@@ -31,14 +32,15 @@ export function useMobileStructuredBackgroundTasks(args: {
 }): MobileStructuredBackgroundTasks {
   const { connected, mutate, sessionKey, state, turnId } = args
   const { backgroundTasks, items, latestTurn } = state
+  const structuralItems = rowsBesideStreamedText(items)
   const view = useMemo(
     () =>
       structuredSessionBackgroundTasksView(
         backgroundTasks,
         turnId,
-        structuredSessionForegroundCommands(backgroundTasks, { items, latestTurn })
+        structuredSessionForegroundCommands(backgroundTasks, { items: structuralItems, latestTurn })
       ),
-    [backgroundTasks, items, latestTurn, turnId]
+    [backgroundTasks, structuralItems, latestTurn, turnId]
   )
   // Keep the roster through stream failure without claiming its tasks still run.
   const streamLive = connected && state.status === 'ready'

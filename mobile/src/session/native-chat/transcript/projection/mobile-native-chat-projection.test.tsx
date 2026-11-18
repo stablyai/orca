@@ -3,6 +3,7 @@ import type {
   NativeChatBlock,
   NativeChatMessage
 } from '../../../../../../src/shared/native-chat/native-chat-types'
+import { noteStreamedTextRevision } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { projectMobileNativeChatMessages } from './mobile-native-chat-projection'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -115,6 +116,7 @@ it.each([128, 1280])('keeps the complete structured phone pipeline local at %s r
     expect(after.listMessages.at(-1)?.blocks).toEqual([{ type: 'text', text: 'words extended' }])
     expect(after.listMessages[0]).toBe(before.listMessages[0])
     expect(after.presentation.turnKeys).toBe(before.presentation.turnKeys)
+    expect(after.resolveRow).toBe(before.resolveRow)
     expect(reads).toBeLessThan(180)
   } finally {
     act(() => renderer?.unmount())
@@ -330,4 +332,22 @@ it('forgets evicted tool contributions and releases generated orphan names', () 
     'unpaired-tool-results:["sidecar",0]'
   ])
   expect(state.rows[1]?.blocks).toEqual([result('unknown')])
+})
+
+it('keeps current text when a tool row follows text revisions', () => {
+  let input = [prose('user', 'question', 'user'), prose('reply', 'Hel')]
+  let state = projectMobileNativeChatMessages(input, 'claude')
+  const next = [input[0]!, prose('reply', 'Hello, here is the whole streamed answer')]
+  noteStreamedTextRevision(next, input, [1])
+  state = projectMobileNativeChatMessages(next, 'claude', state)
+  expect(state.rows[1]!.blocks).toEqual(next[1]!.blocks)
+  for (const blocks of [[call('read')], [call('read', 'completed'), result('read')]]) {
+    input = [...next, row('tool', 'assistant', blocks)]
+    state = projectMobileNativeChatMessages(input, 'claude', state)
+    expect(state.rows).toEqual(projectMobileNativeChatMessages(input, 'claude').rows)
+    expect(state.rows[1]!.blocks[0]).toEqual(next[1]!.blocks[0])
+  }
+  input = [...input, prose('reply2', 'Another answer')]
+  state = projectMobileNativeChatMessages(input, 'claude', state)
+  expect(state.rows).toEqual(projectMobileNativeChatMessages(input, 'claude').rows)
 })

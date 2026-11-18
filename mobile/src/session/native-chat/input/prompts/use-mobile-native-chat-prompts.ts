@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   aggregateAsyncQuestions,
   newestShownAsyncQuestionRow,
@@ -42,7 +43,8 @@ export function useMobileNativeChatPrompts(args: {
   asyncSourceScope: string
   hiddenAsyncIds: ReadonlySet<string>
 }): MobileNativeChatPrompts {
-  const { enabled, structured = null, status, messages, transcriptLoading } = args
+  const { enabled, structured = null, status, messages: liveMessages, transcriptLoading } = args
+  const messages = rowsBesideStreamedText(liveMessages)
   const scan = useMemo(
     () => (!transcriptLoading ? scanPendingAsks(messages) : null),
     [messages, transcriptLoading]

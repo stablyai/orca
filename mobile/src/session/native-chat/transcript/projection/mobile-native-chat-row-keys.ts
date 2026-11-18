@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { MAX_CACHED_TRANSCRIPTS } from '../persistence/mobile-native-chat-transcript-cache'
@@ -195,14 +196,26 @@ export function assignMobileNativeChatRowKeys(
 }
 
 export function useMobileNativeChatRowKeys(
-  rows: readonly NativeChatMessage[],
-  messages: readonly NativeChatMessage[],
+  liveRows: readonly NativeChatMessage[],
+  liveMessages: readonly NativeChatMessage[],
   scope: string,
-  presentation?: MobileNativeChatRunPresentation
+  livePresentation?: MobileNativeChatRunPresentation
 ): MobileNativeChatRowKeys & {
   runOwners: ReadonlyMap<string, string>
   runPlacements: ReadonlyMap<string, string>
 } {
+  const rows = rowsBesideStreamedText(liveRows)
+  const messages = rowsBesideStreamedText(liveMessages)
+  const presentationRows = livePresentation && rowsBesideStreamedText(livePresentation.rows)
+  const presentation = useMemo(
+    () => livePresentation && { ...livePresentation, rows: presentationRows! },
+    [
+      presentationRows,
+      livePresentation?.workRuns,
+      livePresentation?.turnKeys,
+      livePresentation?.receipts
+    ]
+  )
   // Commit snapshots only: discarded React renders must not become the next baseline. Kept per chat, so a
   // return keeps the keys its disclosures and reading place were saved under.
   const committed = useRef(
