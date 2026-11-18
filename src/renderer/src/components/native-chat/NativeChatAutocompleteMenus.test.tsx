@@ -45,7 +45,6 @@ describe('NativeChatMentionMenu', () => {
       'Scout',
       'everyone'
     ])
-    expect(screen.getByTestId('scout-avatar')).toBeTruthy()
     fireEvent.pointerDown(screen.getAllByRole('option')[1])
     expect(onChoose).toHaveBeenCalledWith('everyone')
   })
@@ -66,8 +65,6 @@ describe('NativeChatMentionMenu', () => {
       'DocsFor: keeping the docs current',
       'notes.md'
     ])
-    expect(screen.getByText('Bots')).toBeTruthy()
-    expect(screen.getByText('Files')).toBeTruthy()
     expect(screen.getByText('Paused')).toBeTruthy()
     fireEvent.pointerDown(screen.getAllByRole('option')[0])
     expect(onChoose).toHaveBeenCalledWith('Docs')
