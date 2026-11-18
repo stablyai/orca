@@ -65,14 +65,24 @@ export function MobileStateView({
 }
 
 /** The one action a centred state offers, such as Retry. */
-export function MobileStateButton({ label, onPress }: MobileStateAction) {
+export function MobileStateButton({
+  label,
+  onPress,
+  disabled
+}: MobileStateAction & { disabled?: boolean }) {
   useMobileColorScheme()
   return (
     <Pressable
-      style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+      style={({ pressed }) => [
+        styles.action,
+        pressed && styles.actionPressed,
+        disabled && styles.actionDisabled
+      ]}
       onPress={onPress}
+      disabled={disabled}
       hitSlop={8}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
     >
       <Text style={styles.actionText}>{label}</Text>
     </Pressable>
@@ -247,6 +257,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised
   },
   actionPressed: { opacity: feedback.pressedOpacity },
+  actionDisabled: { opacity: 0.5 },
   actionText: {
     color: colors.textPrimary,
     fontSize: 13,

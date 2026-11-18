@@ -137,7 +137,8 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
     // Pages that read `connectionPath` frames say so; older pages never receive one.
     connectionPathFrames: z.literal(true).optional().catch(undefined),
     // Pages that read `appInactive` frames say so; older pages never receive one.
-    appInactiveFrames: z.literal(true).optional().catch(undefined)
+    appInactiveFrames: z.literal(true).optional().catch(undefined),
+    botItemLinks: z.literal(true).optional().catch(undefined)
   }),
   z.object({
     v: versionSchema,

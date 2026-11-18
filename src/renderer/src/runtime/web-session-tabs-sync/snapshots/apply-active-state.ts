@@ -1,6 +1,7 @@
 import type { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { withWorktreeEntry, sameStringArray } from './state-equality-core'
 import { toVisibleTabType } from './state-equality-files'
+import { toVisibleTabType as toContentVisibleTabType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   collectLayoutGroupIds,
   appendTabGroupLayout,
@@ -202,7 +203,9 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
       : currentVisibleTabType === 'agent-session' &&
           currentVisibleUnifiedTabId &&
           nextUnifiedTabs?.some(
-            (tab) => tab.id === currentVisibleUnifiedTabId && tab.contentType === 'agent-session'
+            (tab) =>
+              tab.id === currentVisibleUnifiedTabId &&
+              toContentVisibleTabType(tab.contentType) === 'agent-session'
           )
         ? ('agent-session' as const)
         : currentVisibleTabType === 'browser' && currentActiveBrowserStillExists

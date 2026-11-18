@@ -2,7 +2,6 @@ import {
   AgentHookStartup,
   listenForAgentHooks
 } from '../../../shared/agent-hook-listener/transport/agent-hook-startup'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
@@ -21,7 +20,8 @@ import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecyc
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
-import type { HookServerStartOptions } from './server-types'
+import type { HookServerStartOptions, NormalizedLocalHook } from './server-types'
+import { withPrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
   private readonly startup = new AgentHookStartup()
@@ -137,55 +137,23 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         await this.checkHookOwner(source, aliasedBody)
-        if (!isStatusCurrent()) {
-          res.writeHead(204)
-          res.end()
-          return
-        }
-        const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
-        if (source === 'muse' && !normalized.event) {
-          this.rearmIgnoredMuseHook(aliasedBody)
-        }
-        const statusDisposition = normalized.event
-          ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-              source,
-              hookEventName: normalized.event.hookEventName,
-              isReplay: normalized.event.isReplay,
-              hasExplicitPrompt: normalized.event.hasExplicitPrompt,
-              launchToken: normalized.event.launchToken
-            })
-          : 'suppress'
-        let toolCallOwner: typeof normalized.event = null
-        if (normalized.event && statusDisposition !== 'suppress') {
-          const restartedAuthority =
-            statusDisposition === 'restart' && source === 'omp'
-              ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
-              : undefined
-          const event =
-            statusDisposition === 'restart'
-              ? {
-                  ...normalized.event,
-                  launchToken: undefined,
-                  ...(restartedAuthority
-                    ? {
-                        ...restartedAuthority,
-                        tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId
-                      }
-                    : {})
-                }
-              : normalized.event
-          if (statusDisposition === 'restart') {
-            // A new session must not inherit the retired one's observation order.
-            this.observations.rebind(event.paneKey)
+        // Why: rollout reads stay off the main thread; a slow open on Windows froze the window (#43539).
+        const prefetch =
+          source === 'codex'
+            ? await this.codexRolloutPrefetcher.prefetch(this.state, aliasedBody)
+            : undefined
+        let toolCallOwner: NormalizedLocalHook['event'] = null
+        try {
+          if (!isStatusCurrent()) {
+            res.writeHead(204)
+            res.end()
+            return
           }
-          this.recordCurrentAuthorityObservation(event)
-          toolCallOwner = event
-          const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
-          if (enriched) {
-            this.checkAgentPresenceAfterHook(event, enriched)
-            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-            this.scheduleTranscriptPoll(source, aliasedBody, enriched)
-          }
+          toolCallOwner = withPrefetchedRolloutReads(prefetch?.reads, () =>
+            this.ingestLocalHook(source, aliasedBody)
+          )
+        } finally {
+          prefetch?.release()
         }
         await this.respondToHook(req, res, source, aliasedBody, toolCallOwner)
       } catch (error) {
@@ -225,6 +193,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           }
           this.activateClaudeHelperObservations()
           this.maybeWriteEndpointFile()
+          this.scheduleReplayTranscriptPolls()
         },
         (error) => console.error('[agent-hooks] server error', error)
       )
@@ -238,6 +207,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   }
 
   private rollbackTransportStart(): void {
+    this.replayTranscriptPolls.clear()
     this.server?.close()
     this.server = null
     this.port = 0
