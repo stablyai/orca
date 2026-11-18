@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
+import { CrossStoreParentRefSchema } from '../workspaces/cross-store-parent-params'
 
 export const OptionalWorkerLaunchPreference = z
   .string()
@@ -32,8 +33,13 @@ export const WorkerStartParams = z
     retryOf: OptionalString,
     timeoutMs: OptionalFiniteNumber,
     devMode: z.boolean().optional(),
+    /** What the creator started this worker for (`bot-item:<uid>`), checked by its owner before the
+     *  start and kept on the Dispatch; opaque to orchestration. */
+    origin: OptionalString,
     /** Only from the paired Orca coordinating this Run: its own ID for the Task this start creates or reopens. */
-    adoptTaskId: OptionalString
+    adoptTaskId: OptionalString,
+    /** Only from the paired Orca coordinating this Run: its own workspace, the parent of a new-child here. */
+    crossStoreParent: CrossStoreParentRefSchema.optional()
   })
   .superRefine((params, ctx) => {
     if (!params.task && !params.spec) {

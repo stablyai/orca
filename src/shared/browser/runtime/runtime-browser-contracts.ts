@@ -91,7 +91,14 @@ export type BrowserScreencastReadyResult = {
 }
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
-export type BrowserScreencastDialogResult = { type: 'dialog'; dialogType: string; message: string }
+export type BrowserScreencastDialogResult = {
+  type: 'dialog'
+  dialogType: string
+  message: string
+  /** Older hosts omit these two; viewers then start a prompt empty and name no origin. */
+  defaultPromptText?: string
+  origin?: string | null
+}
 export type BrowserScreencastDialogClosedResult = { type: 'dialogClosed' }
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 

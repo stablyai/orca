@@ -13,10 +13,10 @@ export function useClaudeSwitcherState(
   activeRuntimeEnvironmentId: string | null
 ) {
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
-  const inactiveClaudeAccounts = useAppStore((s) =>
-    chatAction?.target.kind === 'environment' ? EMPTY_INACTIVE : s.rateLimits.inactiveClaudeAccounts
+  // Why local chats only: the status bar passes its owner snapshot, and a remote chat's readings live on its host.
+  const chatInactiveClaudeAccounts = useAppStore((s) =>
+    chatAction?.target.kind === 'local' ? s.rateLimits.inactiveClaudeAccounts : EMPTY_INACTIVE
   )
-  const claudeTarget = useAppStore((s) => (chatAction ? undefined : s.rateLimits.claudeTarget))
   const settings = useAppStore((s) => (chatAction ? null : s.settings))
   const ownHostName = useAppStore(
     (s) =>
@@ -34,8 +34,7 @@ export function useClaudeSwitcherState(
       : getClaudeAccountSyncKey(s.settings)
   )
   return {
-    inactiveClaudeAccounts,
-    claudeTarget,
+    chatInactiveClaudeAccounts,
     settings,
     ownHostName,
     accountSettings,
