@@ -14,7 +14,7 @@ Accounts are optional: without any, Orca uses your normal Codex login (**System 
 
 ## Import an existing Codex home
 
-In Codex account settings, choose **Import from home**, then select the home directory containing `auth.json`. Orca copies the login into a new managed account home and activates it on this host. The source directory stays unchanged. This chooser supports native host homes.
+In Codex account settings, choose **Import from home**, then select the home directory containing `auth.json`. Orca copies the login into a new managed account home and activates it on this host. The source credentials stay unchanged. If the source is already an Orca-managed home, normal configuration sync may refresh its `config.toml`. This chooser supports native host homes.
 
 From the CLI, run `orca account add --agent codex --home PATH`. A Windows path imports into the native host; a WSL UNC path selects its own distro. This imports credentials only.
 
