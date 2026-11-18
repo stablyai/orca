@@ -244,7 +244,7 @@ export function useCodexSwitcherController(
     (account) => account.id === displayedAccountId
   )
   const usageAccountLabel = displayedAccount
-    ? getCodexAccountDisplayLabel(displayedAccount, accountState.accounts)
+    ? getCodexAccountDisplayLabel(displayedAccount, accountState.accounts, 'inline')
     : displayedAccountId
       ? t('usage.codex.workspaceAccount', 'Workspace account')
       : activeTarget?.label

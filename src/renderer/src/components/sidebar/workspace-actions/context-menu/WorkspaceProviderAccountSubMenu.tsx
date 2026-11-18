@@ -32,7 +32,15 @@ type HostSettings = {
   }
 }
 type Selection = {
-  accounts: { id: string; label: string; runtime?: string; wslDistro?: string | null }[]
+  accounts: {
+    id: string
+    label: string
+    runtime?: string
+    wslDistro?: string | null
+  }[]
+  activeAccountId: string | null
+  activeAccountIdsByRuntime?: CodexRateLimitAccountsState['activeAccountIdsByRuntime']
+  systemDefaultDetail?: string | null
   bindings: Record<string, string>
 }
 
@@ -103,11 +111,21 @@ export function WorkspaceProviderAccountSubMenu({
           return
         }
         setSelection({
+          activeAccountId: accounts[provider].activeAccountId,
+          activeAccountIdsByRuntime: accounts[provider].activeAccountIdsByRuntime,
+          systemDefaultDetail:
+            provider === 'codex'
+              ? accounts.codex.systemDefault?.email
+                ? [accounts.codex.systemDefault.email, accounts.codex.systemDefault.workspaceLabel]
+                    .filter(Boolean)
+                    .join(' \u00b7 ')
+                : undefined
+              : accounts.claude.systemDefaultEmail,
           accounts:
             provider === 'codex'
               ? accounts.codex.accounts.map((account) => ({
                   id: account.id,
-                  label: getCodexAccountDisplayLabel(account, accounts.codex.accounts),
+                  label: getCodexAccountDisplayLabel(account, accounts.codex.accounts, 'inline'),
                   runtime: account.managedHomeRuntime,
                   wslDistro: account.wslDistro
                 }))
@@ -200,12 +218,25 @@ export function WorkspaceProviderAccountSubMenu({
         : account.runtime !== 'wsl'
     ) ?? []
   const selectedId = selection?.bindings[key]
+  const hostAccountId = distro
+    ? Object.entries(selection?.activeAccountIdsByRuntime?.wsl ?? {}).find(
+        ([name]) => name.toLowerCase() === distro.toLowerCase()
+      )?.[1]
+    : selection?.activeAccountIdsByRuntime
+      ? selection.activeAccountIdsByRuntime.host
+      : selection?.activeAccountId
+  const hostDefaultDetail = hostAccountId
+    ? accounts.find((account) => account.id === hostAccountId)?.label
+    : !distro
+      ? selection?.systemDefaultDetail
+      : undefined
 
   const options = (
     <WorkspaceAccountOptions
       provider={name}
       accounts={accounts}
       selectedId={selectedId}
+      hostDefaultDetail={hostDefaultDetail}
       loading={!selection && Boolean(target) && !wslHost}
       saving={saving || disabled || !target}
       error={

@@ -111,7 +111,7 @@ export function buildCodexStatusSwitchGroups(
         },
         ...accountsForTarget.map((account) => ({
           id: account.id,
-          label: getCodexAccountDisplayLabel(account, accountsForTarget),
+          label: getCodexAccountDisplayLabel(account, accountsForTarget, 'inline'),
           name: getManagedAccountPrimaryLabel(account),
           detail:
             [
