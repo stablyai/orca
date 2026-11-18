@@ -83,8 +83,9 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.on('pty:modelRestoreNeeded', listener)
     return () => ipcRenderer.removeListener('pty:modelRestoreNeeded', listener)
   },
-  onHiddenOutputActivity: (callback: (event: { id: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, event: { id: string }) => callback(event)
+  onHiddenOutputActivity: (callback: (event: { ids: string[] }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: { ids: string[] }) =>
+      callback(event)
     ipcRenderer.on('pty:hiddenOutputActivity', listener)
     return () => ipcRenderer.removeListener('pty:hiddenOutputActivity', listener)
   },

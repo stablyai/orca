@@ -56,7 +56,11 @@ function ensureHiddenOutputActivityChannel(): void {
     return
   }
   hiddenOutputActivityChannelAttached = true
-  onHiddenOutputActivity((event) => ptyHiddenOutputActivityHandlers.get(event.id)?.())
+  onHiddenOutputActivity((event) => {
+    for (const id of event.ids) {
+      ptyHiddenOutputActivityHandlers.get(id)?.()
+    }
+  })
 }
 
 /** Register the handler told when main drops output for this hidden PTY; a new registration replaces a stale one. */

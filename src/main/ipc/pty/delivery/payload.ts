@@ -59,17 +59,31 @@ export function sendModelRestoreNeededMarker(
   return true
 }
 
+// One batched message per window keeps the IPC rate flat however many hidden PTYs print.
+const HIDDEN_OUTPUT_ACTIVITY_BATCH_MS = 250
+const pendingHiddenOutputActivity = new WeakMap<PtyIpcSession, Set<string>>()
+
 /** Tells the renderer a hidden PTY printed bytes that the delivery gate dropped. */
 export function sendPtyHiddenOutputActivity(session: PtyIpcSession, id: string): void {
-  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
+  const pending = pendingHiddenOutputActivity.get(session)
+  if (pending) {
+    pending.add(id)
     return
   }
-  try {
-    session.mainWindow.webContents.send('pty:hiddenOutputActivity', { id })
-  } catch (error) {
-    // Disposed frames can throw synchronously on this data path.
-    console.error('[pty] renderer hidden-output activity send failed', error)
-  }
+  pendingHiddenOutputActivity.set(session, new Set([id]))
+  setTimeout(() => {
+    const ids = pendingHiddenOutputActivity.get(session)
+    pendingHiddenOutputActivity.delete(session)
+    if (!ids || !session.mainWindow || session.mainWindow.isDestroyed()) {
+      return
+    }
+    try {
+      session.mainWindow.webContents.send('pty:hiddenOutputActivity', { ids: [...ids] })
+    } catch (error) {
+      // Disposed frames can throw synchronously on this data path.
+      console.error('[pty] renderer hidden-output activity send failed', error)
+    }
+  }, HIDDEN_OUTPUT_ACTIVITY_BATCH_MS)
 }
 
 export function sendPtyDataToRenderer(

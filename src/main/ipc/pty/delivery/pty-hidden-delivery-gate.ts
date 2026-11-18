@@ -21,7 +21,7 @@ let nextHiddenDropEpisode = 1
 const runtimeOwnedHiddenRendererPtys = new Set<string>()
 
 // Hidden bytes never reach the renderer, so its agent-exit watch learns about output only from this throttled notice.
-const HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS = 2_000
+const HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS = 5_000
 const lastHiddenOutputActivityNoticeAt = new Map<string, number>()
 
 let droppedHiddenDeliveryChars = 0
