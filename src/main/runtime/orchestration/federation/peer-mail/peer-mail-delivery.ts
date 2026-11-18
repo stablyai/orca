@@ -77,7 +77,7 @@ export async function requirePeerMailServer(
     !status.data.capabilities.includes(ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY)
   ) {
     throw new OrchestrationError(
-      'server_mail_type_unsupported',
+      'server_mail_unsupported',
       `Server ${server.name} runs an older Orca that cannot receive --type ${type} agent mail. Update Orca on ${server.name}, then send again. Nothing was sent.`,
       { ...NOTHING_SENT, server: server.name }
     )

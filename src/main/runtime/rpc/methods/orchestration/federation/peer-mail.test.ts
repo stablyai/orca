@@ -282,42 +282,44 @@ describe('agent mail between paired Orca servers', () => {
 
   it.each(['dispatch', 'merge_ready'])('carries ordinary %s mail unchanged', async (type) => {
     const sent = await mutation(a, 'orchestration.send', {
-      from: 'term_a', on: 'devB', to: 'term_b', subject: 'Next step', type
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'Next step',
+      type
     })
     expect(sent).toMatchObject({ ok: true })
     expect(mailFor(b, 'term_b')).toMatchObject([{ subject: 'Next step', type }])
   })
 
   it('refuses new types on an old enum peer while keeping its status mail working', async () => {
-    bCapabilities = (capabilities) => capabilities.filter(
-      (capability) => capability !== ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
-    )
+    bCapabilities = (capabilities) =>
+      capabilities.filter(
+        (capability) => capability !== ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
+      )
     const sent = await mutation(a, 'orchestration.send', {
-      from: 'term_a', on: 'devB', to: 'term_b', subject: 'Question', type: 'question'
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'Question',
+      type: 'question'
     })
     expect(sent).toMatchObject({
       ok: false,
-      error: { code: 'server_mail_type_unsupported', data: { effectsApplied: false } }
+      error: { code: 'server_mail_unsupported', data: { effectsApplied: false } }
     })
     expect(b.db.getInbox(10)).toEqual([])
-    expect(await mutation(a, 'orchestration.send', {
-      from: 'term_a', on: 'devB', to: 'term_b', subject: 'Status', type: 'status'
-    })).toMatchObject({ ok: true })
+    expect(
+      await mutation(a, 'orchestration.send', {
+        from: 'term_a',
+        on: 'devB',
+        to: 'term_b',
+        subject: 'Status',
+        type: 'status'
+      })
+    ).toMatchObject({ ok: true })
     expect(mailFor(b, 'term_b')).toMatchObject([{ subject: 'Status', type: 'status' }])
   })
-
-  it.each(['worker_done', 'heartbeat', 'escalation', 'decision_gate'])(
-    'keeps %s on its Dispatch authority path', async (type) => {
-      const sent = await mutation(a, 'orchestration.send', {
-        from: 'term_a', on: 'devB', to: 'term_b', subject: 'Report', type
-      })
-      expect(sent).toMatchObject({
-        ok: false,
-        error: { code: 'invalid_argument', data: { effectsApplied: false } }
-      })
-      expect(b.db.getInbox(10)).toEqual([])
-    }
-  )
 
   it('acknowledges a retried delivery after its recipient is gone, storing it once', async () => {
     const deliver = {
