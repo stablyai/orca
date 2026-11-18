@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
