@@ -80,6 +80,7 @@ export async function openCodexThread(
     model?: string
     threadConfig?: Record<string, unknown>
     commandEnv?: Record<string, string>
+    developerInstructions?: string
   },
   /** null: no deadline; the start that opens the thread bounds it (`signal`). */
   timeoutMs: number | null | undefined,
@@ -96,7 +97,14 @@ export async function openCodexThread(
     throwIfSignalAborted(signal)
     return connection.request(
       'thread/start',
-      { ...threadSettings, ...(launch.model ? { model: launch.model } : {}) },
+      {
+        ...threadSettings,
+        ...(launch.model ? { model: launch.model } : {}),
+        // A resumed thread keeps the instructions it started with; Codex ignores new ones.
+        ...(launch.developerInstructions
+          ? { developerInstructions: launch.developerInstructions }
+          : {})
+      },
       { timeoutMs }
     )
   }

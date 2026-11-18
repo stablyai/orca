@@ -14,6 +14,7 @@ import type { RuntimeRpcFailure } from '../../shared/remote-runtime/rpc/runtime-
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { readableWslDistroCliRefusal } from '../hosts/wsl-distro-cli-refusal'
 import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
+import { linearNotConnectedRecovery } from '../linear/linear-not-connected-recovery'
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
 
@@ -33,6 +34,9 @@ function contextRecovery(error: unknown, context: CliErrorContext): ContextRecov
       worktree: context.worktreeSelector,
       remoteServerSelected: context.remoteServerSelected
     })
+  }
+  if (code === 'linear_not_connected') {
+    return linearNotConnectedRecovery(context.remoteServer)
   }
   // A remote handle sent locally looks stale rather than missing a flag.
   if (

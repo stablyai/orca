@@ -16,6 +16,7 @@ import { browserSiteDisplayController } from '../browser/site-settings/display/b
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { loadWslMappedDriveAnswers } from '../wsl/filesystem/wsl-mapped-drive-answers-file'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
 import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
@@ -38,9 +39,7 @@ import {
   suppressDevEducationForStore
 } from './profile-startup/dev-education-suppression'
 import { setBrowserNetworkProxySettingsResolver } from '../browser/sessions/proxy/browser-session-proxy'
-import { installDocPreviewProtocolHandler } from '../browser/document-preview/doc-preview-protocol'
-import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
-import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
+import { installPreviewProtocolHandlers } from './preview-protocol-handlers'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
 import {
   initializeBrowserSessionsForApp,
@@ -154,6 +153,8 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   // Why before the store loads: its pane normalization tells a moved project's retained rows from
   // a rival host's, and no handler or runtime may give a moving project a new terminal.
+  // Saved drive answers first: the fence and the move prune read them and never a drive.
+  await loadWslMappedDriveAnswers(getAppEnvironment().getPath('userData'))
   loadWslMoveFence(getAppEnvironment().getPath('userData'))
   const profileState = await createProfileStateStoreForStartup({
     userDataPath: getProfileUserDataPath(),
@@ -292,10 +293,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   // Install the proxy resolver before partitions materialize.
   setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
-  // Protocol-scoped preview handlers must exist before webview attachment.
-  installMediaPreviewProtocolHandler()
-  installJiraImageProtocolHandler()
-  installDocPreviewProtocolHandler()
+  installPreviewProtocolHandlers()
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({

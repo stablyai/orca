@@ -4,6 +4,8 @@ import {
   type ExecutionHostId
 } from '../../execution-host/execution-host'
 import type { Repo } from '../../repository/repo-types'
+import { getWorktreeIdFromHostIdentity } from '../../worktree/host-qualified-identity'
+import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 
 type HiddenRepoRow = Pick<Repo, 'id' | 'hiddenAt' | 'connectionId' | 'executionHostId'>
 
@@ -82,6 +84,25 @@ export function indexHiddenProjects(
         }
   cache.set(repos, { defaultHostId, hidden })
   return hidden
+}
+
+/** A row under a folder workspace is listed by that folder, so hiding its own project leaves it there (#43083). */
+export function isListedByFolderWorkspace(
+  identity: string,
+  parentIdentityOf: (identity: string) => string | undefined
+): boolean {
+  const seen = new Set<string>()
+  for (
+    let parent = parentIdentityOf(identity);
+    parent !== undefined && !seen.has(parent);
+    parent = parentIdentityOf(parent)
+  ) {
+    if (parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder') {
+      return true
+    }
+    seen.add(parent)
+  }
+  return false
 }
 
 /** Drops hidden rows; returns the same array when nothing is hidden so memoized readers stay stable. */

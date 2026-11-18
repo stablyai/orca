@@ -21,6 +21,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   aiVault: 'host',
   artifacts: 'host',
   automation: 'host',
+  bots: 'host',
   browser: 'host',
   clipboard: 'host',
   computer: 'host',
@@ -33,6 +34,8 @@ export const HOST_OPERATION_OWNERSHIP = {
   git: 'host',
   github: 'credential',
   gitlab: 'credential',
+  // Google sign-ins live on the host whose bots use them.
+  google: 'host',
   host: 'host',
   hostedReview: 'credential',
   jira: 'scope-picked',
@@ -47,6 +50,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   nativeChat: 'host',
   network: 'host',
   notifications: 'host',
+  orcaAccount: 'host',
   orcad: 'host',
   orchestration: 'host',
   pairing: 'host',
@@ -75,6 +79,9 @@ export const HOST_OPERATION_OWNERSHIP = {
   terminalDaemon: 'host',
   ui: 'host',
   updater: 'host',
+  usage: 'scope-picked',
+  // A hook belongs to its bot's execution host.
+  webhooks: 'host',
   workspacePorts: 'host',
   worktree: 'host'
 } as const satisfies Record<string, HostOperationOwnership>

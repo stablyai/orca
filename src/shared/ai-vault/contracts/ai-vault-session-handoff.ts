@@ -5,8 +5,8 @@ import type { AiVaultAgent } from './ai-vault-types'
 /** Agents whose rows name one conversation inside an account-wide database. */
 export function isAiVaultDatabaseAgent(
   agent: AiVaultAgent
-): agent is Extract<AiVaultAgent, 'opencode' | 'opencode2' | 'zcode'> {
-  return resolveNativeChatTranscriptAgent(agent) === 'opencode'
+): agent is Extract<AiVaultAgent, 'opencode' | 'opencode2' | 'zcode' | 'hermes'> {
+  return resolveNativeChatTranscriptAgent(agent) === 'opencode' || agent === 'hermes'
 }
 
 /** How long a hand-off waits for the host's saved copy before using the preview. */

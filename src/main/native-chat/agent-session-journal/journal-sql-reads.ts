@@ -11,13 +11,19 @@ import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-re
 import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type { BotMemorySources } from '../../../shared/bots/bot-memory-source'
 import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentJournalSnapshot,
-  AgentJournalRenderItem
+  AgentJournalRenderItem,
+  AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import type { JournalSqlQueueRead, JournalSqlQueueReadResult } from './journal-sql-queued-messages'
+import type {
+  JournalOperationWindow,
+  JournalOperationWindowAnchors
+} from './journal-domain-operation-window'
 import type {
   JournalInputAnswer,
   JournalInputRead,
@@ -40,6 +46,23 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   rewindCut(target: JournalRewindSelection): Promise<JournalRewindCut | null>
   namingPrompt(hostStartedAt?: number): Promise<string>
   automationRun(messageId: string, inputIds: readonly string[]): Promise<AgentJournalSnapshot>
+  /** Where a bot chat's person messages after `after` came from (all when null), never the rows. */
+  botMemorySources(after: number | null): Promise<BotMemorySources>
+  /** Automation-result notes since the last clear, with the sends that read them. */
+  automationResultNotes(): Promise<AgentJournalSnapshot>
+  /** The rows and sends that place these anchors' turns, never the whole conversation. */
+  operationWindow(anchors: JournalOperationWindowAnchors): Promise<JournalOperationWindow>
+  promptItem(end: 'first' | 'last'): Promise<AgentJournalRenderItem | null>
+  runMentions(
+    runId: string
+  ): Promise<{ items: AgentJournalRenderItem[]; sent: AgentJournalRenderItem[] }>
+  turnRanSince(openedAt: number | null): Promise<boolean>
+  /** How many of the chat's turns have ended, each once. */
+  endedTurnCount(): Promise<number>
+  sendFingerprints(): Promise<{ clientMessageId: string; fingerprint: string }[]>
+  operationSent(operationId: string): Promise<boolean>
+  /** The newest accepted send whose provider id or opener row is this row. */
+  acceptedSendOfRow(itemId: string | null): Promise<AgentJournalSubmission | null>
   historySourceItems(clientMessageIds: readonly string[]): Promise<AgentJournalRenderItem[]>
   hasProviderTurn(nativeId: string, sinceFence?: number): Promise<boolean>
   savedItemIds(itemIds: readonly string[]): Promise<string[]>
@@ -121,6 +144,21 @@ export function journalSqlReads(
       (await read({ kind: 'naming-prompt', hostStartedAt })).prompt,
     automationRun: async (messageId, inputIds) =>
       (await read({ kind: 'automation-run', messageId, inputIds })).snapshot,
+    botMemorySources: async (after) => (await read({ kind: 'bot-memory-sources', after })).sources,
+    automationResultNotes: async () => (await read({ kind: 'automation-result-notes' })).snapshot,
+    operationWindow: async (anchors) => (await read({ kind: 'operation-window', anchors })).window,
+    promptItem: async (end) => (await read({ kind: 'prompt-item', end })).item,
+    runMentions: async (runId) => {
+      const { items, sent } = await read({ kind: 'run-mentions', runId })
+      return { items, sent }
+    },
+    turnRanSince: async (openedAt) => (await read({ kind: 'turn-ran-since', openedAt })).ran,
+    endedTurnCount: async () => (await read({ kind: 'ended-turn-count' })).count,
+    sendFingerprints: async () => (await read({ kind: 'send-fingerprints' })).sends,
+    operationSent: async (operationId) =>
+      (await read({ kind: 'operation-sent', operationId })).sent,
+    acceptedSendOfRow: async (itemId) =>
+      (await read({ kind: 'accepted-send-of-row', itemId })).submission,
     historySourceItems: async (clientMessageIds) => {
       const items: AgentJournalRenderItem[] = []
       for (let offset = 0; offset < clientMessageIds.length; offset += 128) {

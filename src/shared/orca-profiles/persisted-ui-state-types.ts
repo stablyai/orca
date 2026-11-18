@@ -1,4 +1,5 @@
 import type { GitHistoryRefs } from '../git/history/git-history-types'
+import type { BotChatFold } from '../bots/bot-chat-tree'
 import type { JiraQuickFilterState } from '../jira/jira-quick-filters'
 import type { BrowserDevToolsDockLayout } from '../browser/devtools/browser-devtools-dock'
 import type { JiraSavedFilterState } from '../jira/jira-saved-filters'
@@ -34,6 +35,7 @@ import type {
 import type { WorkspaceStatusDefinition } from '../worktree/types'
 import type { PersistedAutomationHostFilter } from '../automations/ownership/automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from '../remote-runtime/host-catalog/pending-runtime-repo-removal'
+import type { BotSidebarView } from '../bots/bot-sidebar-view'
 
 export type PersistedUIState = {
   gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>
@@ -104,6 +106,12 @@ export type PersistedUIState = {
   agentsHideWorkspacesFromOtherDevices?: boolean
   agentsHideAutomationGeneratedWorkspaces?: boolean
   agentsHideCliCreatedWorkspaces?: boolean
+  /** A bot's workspaces list only under the bot, not in their project. Absent means on. */
+  hideBotCreatedWorkspaces?: boolean
+  /** The Bots section's Bot options. Absent means Manual order, nothing hidden. */
+  botSidebarView?: BotSidebarView
+  /** A bot chat's manual fold in Activity and the sidebar, by `botChatFoldKey`. Absent means none. */
+  botChatFolds?: Record<string, BotChatFold>
   /** Agents-view: include child (orchestration-dispatched) agent threads. Absent means off. */
   agentsShowChildAgents?: boolean
   /** Agents-view compact thread rows. Absent means on. */
@@ -125,6 +133,8 @@ export type PersistedUIState = {
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number
+  /** Dragged cap on the sidebar Bots section in px; absent or null keeps the default 40% cap. */
+  sidebarBotsHeight?: number | null
   syncTaskStatusFromWorkspaceBoard?: boolean
   /** Migrate reversed defaults once; never infer later user order from IDs/labels. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
@@ -229,6 +239,8 @@ export type PersistedUIState = {
   browserKagiSessionLink?: string | null
   /** Side and size of DevTools docked in a browser pane; one choice for every page, like Chrome. */
   browserDevToolsDock?: BrowserDevToolsDockLayout
+  /** Width of extension side panels, in CSS px; one width for every extension, like Chrome. */
+  browserExtensionSidePanelWidth?: number
   /** Saved window bounds so the app restores last position/size instead of maximizing each launch. */
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */

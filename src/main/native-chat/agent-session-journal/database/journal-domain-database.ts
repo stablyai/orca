@@ -10,6 +10,7 @@ import {
   type OpenJournalDatabase
 } from './journal-database'
 import { journalDatabasePath } from './journal-host-database'
+import { tryFoldJournalTextTails } from '../journal-text-tail'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
   migrateJournalDomainSchema
@@ -140,6 +141,8 @@ export function openJournalDomainDatabase(filename: string): OpenJournalDatabase
     db.pragma('checkpoint_fullfsync = ON')
     db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)
     migrateJournalDomainSchema(db)
+    // Before any chat opens or reader starts, so recovery settles the whole saved text.
+    tryFoldJournalTextTails(db)
     ensurePRWatchTables(db)
     hardenSqliteDatabaseFiles(filename)
     transferred = true

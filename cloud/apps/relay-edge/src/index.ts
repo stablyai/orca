@@ -2,6 +2,7 @@
 // data sockets live in the host's pooled splice objects.
 import { HostRelay } from './host-relay'
 import { SpliceRelay } from './splice-relay'
+import { UserHosts } from './user-hosts'
 import { edgeConfig, type Env } from './env'
 import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
@@ -10,11 +11,12 @@ import { admitPreAuth, notOnEdge } from './preauth'
 import { objectHealth } from './health'
 import { INGRESS_HEADER } from '../../../packages/relay-contract/src/ingress-header'
 import { fromTokenSource, readIngress, type Ingress } from './ingress'
-import { AssignBodySchema, DrainBodySchema, EraseBodySchema, ExportBodySchema, VerifyBodySchema, verifyAdminRequest, type AdminOp } from './admin'
+import { AssignBodySchema, DrainBodySchema, EraseBodySchema, ExportBodySchema, USER_INDEX_ADMIN_OPS, VerifyBodySchema, verifyAdminRequest, type AdminOp, type UserIndexAdminOp } from './admin'
+import { handleUserIndexAdmin } from './admin-user-index'
 import { dialledHostname, directorConfig } from './director-config'
 import { handleDirector, type DirectorContext } from './director'
 
-export { HostRelay, SpliceRelay }
+export { HostRelay, SpliceRelay, UserHosts }
 
 const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id', 'x-edge-place', INGRESS_HEADER, 'x-orca-client-ip', 'x-orca-client-country']
 
@@ -77,12 +79,15 @@ async function handleAdmin(env: Env, request: Request, op: AdminOp): Promise<Res
   return response
 }
 
+const isUserIndexOp = (op: AdminOp): op is UserIndexAdminOp => USER_INDEX_ADMIN_OPS.includes(op)
+
 async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise<Response> {
   if (request.method !== 'POST' || edgeConfig(env).backend !== 'object') { return reject(404) }
   const verified = await verifyAdminRequest(env, request, op)
   if (!verified) { return reject(401) }
   // Transitional (admin.ts): counts the director's calls still made without a jti.
   if (!verified.replay) { metric(env, 'admin_no_jti', 1, op, [], '', requestPlace(request)) }
+  if (isUserIndexOp(op)) { return handleUserIndexAdmin(env, op, verified) }
   const { replay } = verified
   const host = (relayHostId: string) => env.HOST_RELAY.get(env.HOST_RELAY.idFromName(relayHostId))
   if (op === 'assign') {
@@ -135,7 +140,7 @@ export default {
     if (url.pathname === '/__health/object') { return objectHealth(env, request) }
     // Director admin calls are signature-authenticated and never go through a front door: matched
     // before the ingress rules, so an egress overlap with a front door's ranges cannot 403 them.
-    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase|drain|verify)$/)
+    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase|drain|verify|list-hosts|index-host|erase-user-index)$/)
     if (admin) { return handleAdmin(env, request, admin[1] as AdminOp) }
     // A trusted ingress hop (ingress.ts) stands in for the Worker's own URL and the caller's address;
     // anything else, including a header that fails to verify, is treated as absent.

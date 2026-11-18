@@ -1,0 +1,862 @@
+{
+  "about": "PR 1 <-> C1 prompt audience and answer text. Read by the contract test, a host test and the cloud's tests. 'parsed' is the expected parse; absent means the input unchanged.",
+  "valid": [
+    {
+      "name": "a question from the conversation's own turn",
+      "schema": "prompt",
+      "input": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ],
+        "raisedBy": "conversation",
+        "open": {
+          "sessionId": "orca_session_id:s1",
+          "itemId": "p1"
+        }
+      }
+    },
+    {
+      "name": "a question another bot's mail raised",
+      "schema": "prompt",
+      "input": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ],
+        "raisedBy": "orca",
+        "wokenBy": "Eng-Bot-Builder",
+        "open": {
+          "sessionId": "orca_session_id:s1",
+          "itemId": "p1"
+        }
+      }
+    },
+    {
+      "name": "an approval with every audience field",
+      "schema": "prompt",
+      "input": {
+        "kind": "approval",
+        "promptId": "p2",
+        "tool": "Bash",
+        "options": [
+          {
+            "id": "allow",
+            "label": "Allow"
+          }
+        ],
+        "raisedBy": "orca",
+        "wokenBy": "Eng-Bot-Builder",
+        "open": {
+          "sessionId": "orca_session_id:s1",
+          "itemId": "p1"
+        }
+      }
+    },
+    {
+      "name": "an older machine's prompt: no audience (reads 'conversation')",
+      "schema": "prompt",
+      "input": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ]
+      }
+    },
+    {
+      "name": "open names a chat with no item",
+      "schema": "prompt",
+      "input": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ],
+        "open": {
+          "sessionId": "orca_session_id:s1"
+        }
+      }
+    },
+    {
+      "name": "one free-text question answerable by reply",
+      "schema": "prompt",
+      "input": {
+        "kind": "unsupported",
+        "promptId": "p3",
+        "text": "What should the headline say?",
+        "byReply": true,
+        "raisedBy": "conversation"
+      }
+    },
+    {
+      "name": "unsupported text at exactly 1500 bytes",
+      "schema": "prompt",
+      "input": {
+        "kind": "unsupported",
+        "promptId": "p3",
+        "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "a prompt answered in Orca, with what was chosen",
+      "schema": "event",
+      "input": {
+        "kind": "prompt",
+        "conversation": {
+          "source": "slack",
+          "externalId": "T1:C9:1792.9"
+        },
+        "paneKey": "structured:tab:orca_session_id:s1",
+        "prompt": {
+          "kind": "question",
+          "promptId": "p1",
+          "question": "Which layout should ship?",
+          "header": "Layout",
+          "options": [
+            {
+              "id": "1",
+              "label": "Compact"
+            },
+            {
+              "id": "2",
+              "label": "Roomy"
+            }
+          ]
+        },
+        "answered": true,
+        "answeredWith": "Compact"
+      }
+    },
+    {
+      "name": "an answer by option",
+      "schema": "delivery",
+      "input": {
+        "deliveryId": "T1:C9:1793.0001",
+        "seq": 41,
+        "expiresAt": 1793000300000,
+        "conversation": {
+          "source": "slack",
+          "externalId": "T1:C9:1792.9"
+        },
+        "kind": "answer",
+        "promptId": "p1",
+        "optionId": "1"
+      }
+    },
+    {
+      "name": "an answer by text",
+      "schema": "delivery",
+      "input": {
+        "deliveryId": "T1:C9:1793.0001",
+        "seq": 41,
+        "expiresAt": 1793000300000,
+        "conversation": {
+          "source": "slack",
+          "externalId": "T1:C9:1792.9"
+        },
+        "kind": "answer",
+        "promptId": "p3",
+        "text": "Ship faster"
+      }
+    },
+    {
+      "name": "v2 fences a private live prompt",
+      "schema": "events",
+      "oldReaderRejects": true,
+      "input": {
+        "v": 2,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "prompt",
+            "prompt": {
+              "kind": "question",
+              "promptId": "private-prompt",
+              "question": "Review the private sample?",
+              "options": [],
+              "raisedBy": "orca",
+              "open": {
+                "sessionId": "sample-session",
+                "itemId": "private-prompt"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "v2 fences a private snapshot prompt",
+      "schema": "events",
+      "oldReaderRejects": true,
+      "input": {
+        "v": 2,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "kind": "snapshot",
+            "conversations": [
+              {
+                "conversation": {
+                  "source": "slack",
+                  "externalId": "T1:C9:1792.9"
+                },
+                "paneKey": "sample-pane",
+                "agent": "codex",
+                "working": true,
+                "prompt": {
+                  "kind": "question",
+                  "promptId": "private-prompt",
+                  "question": "Review the private sample?",
+                  "options": [],
+                  "raisedBy": "orca",
+                  "open": {
+                    "sessionId": "sample-session",
+                    "itemId": "private-prompt"
+                  }
+                },
+                "turnId": 1793000000000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "v2 fences an atomic mixed batch",
+      "schema": "events",
+      "oldReaderRejects": true,
+      "input": {
+        "v": 2,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "linked",
+            "agent": "codex"
+          },
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "prompt",
+            "prompt": {
+              "kind": "question",
+              "promptId": "private-prompt",
+              "question": "Review the private sample?",
+              "options": [],
+              "raisedBy": "orca",
+              "open": {
+                "sessionId": "sample-session",
+                "itemId": "private-prompt"
+              }
+            }
+          },
+          {
+            "kind": "snapshot",
+            "conversations": [
+              {
+                "conversation": {
+                  "source": "slack",
+                  "externalId": "T1:C9:1792.9"
+                },
+                "paneKey": "sample-pane",
+                "agent": "codex",
+                "working": true,
+                "prompt": {
+                  "kind": "question",
+                  "promptId": "private-prompt",
+                  "question": "Review the private sample?",
+                  "options": [],
+                  "raisedBy": "orca",
+                  "open": {
+                    "sessionId": "sample-session",
+                    "itemId": "private-prompt"
+                  }
+                },
+                "turnId": 1793000000000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "v1 accepts a legacy prompt without audience",
+      "schema": "events",
+      "input": {
+        "v": 1,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "prompt",
+            "prompt": {
+              "kind": "question",
+              "promptId": "private-prompt",
+              "question": "Review the private sample?",
+              "options": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "v2 fences a batch without prompts",
+      "schema": "events",
+      "oldReaderRejects": true,
+      "input": {
+        "v": 2,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "linked",
+            "agent": "codex"
+          }
+        ]
+      }
+    }
+  ],
+  "degrades": [
+    {
+      "name": "a raisedBy this cloud can't read is the most restrictive",
+      "schema": "prompt",
+      "input": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ],
+        "raisedBy": "someone"
+      },
+      "parsed": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ],
+        "raisedBy": "orca"
+      }
+    },
+    {
+      "name": "wokenBy over 64 characters is dropped",
+      "schema": "prompt",
+      "input": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ],
+        "raisedBy": "orca",
+        "wokenBy": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"
+      },
+      "parsed": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ],
+        "raisedBy": "orca"
+      }
+    },
+    {
+      "name": "a malformed open is dropped",
+      "schema": "prompt",
+      "input": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ],
+        "open": {
+          "itemId": "p1"
+        }
+      },
+      "parsed": {
+        "kind": "question",
+        "promptId": "p1",
+        "question": "Which layout should ship?",
+        "header": "Layout",
+        "options": [
+          {
+            "id": "1",
+            "label": "Compact"
+          },
+          {
+            "id": "2",
+            "label": "Roomy"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unsupported text over 1500 bytes is dropped",
+      "schema": "prompt",
+      "input": {
+        "kind": "unsupported",
+        "promptId": "p3",
+        "text": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      },
+      "parsed": {
+        "kind": "unsupported",
+        "promptId": "p3"
+      }
+    },
+    {
+      "name": "byReply other than true is dropped",
+      "schema": "prompt",
+      "input": {
+        "kind": "unsupported",
+        "promptId": "p3",
+        "byReply": "yes"
+      },
+      "parsed": {
+        "kind": "unsupported",
+        "promptId": "p3"
+      }
+    },
+    {
+      "name": "answeredWith over 80 characters is dropped",
+      "schema": "event",
+      "input": {
+        "kind": "prompt",
+        "conversation": {
+          "source": "slack",
+          "externalId": "T1:C9:1792.9"
+        },
+        "paneKey": "structured:tab:orca_session_id:s1",
+        "prompt": {
+          "kind": "question",
+          "promptId": "p1",
+          "question": "Which layout should ship?",
+          "header": "Layout",
+          "options": [
+            {
+              "id": "1",
+              "label": "Compact"
+            },
+            {
+              "id": "2",
+              "label": "Roomy"
+            }
+          ]
+        },
+        "answered": true,
+        "answeredWith": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "parsed": {
+        "kind": "prompt",
+        "conversation": {
+          "source": "slack",
+          "externalId": "T1:C9:1792.9"
+        },
+        "paneKey": "structured:tab:orca_session_id:s1",
+        "prompt": {
+          "kind": "question",
+          "promptId": "p1",
+          "question": "Which layout should ship?",
+          "header": "Layout",
+          "options": [
+            {
+              "id": "1",
+              "label": "Compact"
+            },
+            {
+              "id": "2",
+              "label": "Roomy"
+            }
+          ]
+        },
+        "answered": true
+      }
+    },
+    {
+      "name": "v2 masks malformed provenance as private",
+      "schema": "events",
+      "oldReaderRejects": true,
+      "input": {
+        "v": 2,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "prompt",
+            "prompt": {
+              "kind": "question",
+              "promptId": "private-prompt",
+              "question": "Review the private sample?",
+              "options": [],
+              "raisedBy": "future-audience",
+              "open": {
+                "sessionId": "sample-session",
+                "itemId": "private-prompt"
+              }
+            }
+          }
+        ]
+      },
+      "parsed": {
+        "v": 2,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "prompt",
+            "prompt": {
+              "kind": "question",
+              "promptId": "private-prompt",
+              "question": "Review the private sample?",
+              "options": [],
+              "raisedBy": "orca",
+              "open": {
+                "sessionId": "sample-session",
+                "itemId": "private-prompt"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "an answer with both optionId and text",
+      "schema": "delivery",
+      "input": {
+        "deliveryId": "T1:C9:1793.0001",
+        "seq": 41,
+        "expiresAt": 1793000300000,
+        "conversation": {
+          "source": "slack",
+          "externalId": "T1:C9:1792.9"
+        },
+        "kind": "answer",
+        "promptId": "p1",
+        "optionId": "1",
+        "text": "Compact"
+      }
+    },
+    {
+      "name": "an answer with neither",
+      "schema": "delivery",
+      "input": {
+        "deliveryId": "T1:C9:1793.0001",
+        "seq": 41,
+        "expiresAt": 1793000300000,
+        "conversation": {
+          "source": "slack",
+          "externalId": "T1:C9:1792.9"
+        },
+        "kind": "answer",
+        "promptId": "p1"
+      }
+    },
+    {
+      "name": "an answer text over 4000 characters",
+      "schema": "delivery",
+      "input": {
+        "deliveryId": "T1:C9:1793.0001",
+        "seq": 41,
+        "expiresAt": 1793000300000,
+        "conversation": {
+          "source": "slack",
+          "externalId": "T1:C9:1792.9"
+        },
+        "kind": "answer",
+        "promptId": "p1",
+        "text": "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
+      }
+    },
+    {
+      "name": "v1 refuses a private live prompt",
+      "schema": "events",
+      "input": {
+        "v": 1,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "prompt",
+            "prompt": {
+              "kind": "question",
+              "promptId": "private-prompt",
+              "question": "Review the private sample?",
+              "options": [],
+              "raisedBy": "orca",
+              "open": {
+                "sessionId": "sample-session",
+                "itemId": "private-prompt"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "v1 refuses a private snapshot prompt",
+      "schema": "events",
+      "input": {
+        "v": 1,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "kind": "snapshot",
+            "conversations": [
+              {
+                "conversation": {
+                  "source": "slack",
+                  "externalId": "T1:C9:1792.9"
+                },
+                "paneKey": "sample-pane",
+                "agent": "codex",
+                "working": true,
+                "prompt": {
+                  "kind": "question",
+                  "promptId": "private-prompt",
+                  "question": "Review the private sample?",
+                  "options": [],
+                  "raisedBy": "orca",
+                  "open": {
+                    "sessionId": "sample-session",
+                    "itemId": "private-prompt"
+                  }
+                },
+                "turnId": 1793000000000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "v1 refuses an atomic mixed private batch",
+      "schema": "events",
+      "input": {
+        "v": 1,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "linked",
+            "agent": "codex"
+          },
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "prompt",
+            "prompt": {
+              "kind": "question",
+              "promptId": "private-prompt",
+              "question": "Review the private sample?",
+              "options": [],
+              "raisedBy": "orca",
+              "open": {
+                "sessionId": "sample-session",
+                "itemId": "private-prompt"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "v1 refuses malformed live provenance",
+      "schema": "events",
+      "input": {
+        "v": 1,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "conversation": {
+              "source": "slack",
+              "externalId": "T1:C9:1792.9"
+            },
+            "paneKey": "sample-pane",
+            "kind": "prompt",
+            "prompt": {
+              "kind": "question",
+              "promptId": "private-prompt",
+              "question": "Review the private sample?",
+              "options": [],
+              "raisedBy": "future-audience",
+              "open": {
+                "sessionId": "sample-session",
+                "itemId": "private-prompt"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "v1 refuses malformed snapshot provenance",
+      "schema": "events",
+      "input": {
+        "v": 1,
+        "helloRev": 2,
+        "seq": 0,
+        "events": [
+          {
+            "kind": "snapshot",
+            "conversations": [
+              {
+                "conversation": {
+                  "source": "slack",
+                  "externalId": "T1:C9:1792.9"
+                },
+                "paneKey": "sample-pane",
+                "agent": "codex",
+                "working": true,
+                "prompt": {
+                  "kind": "question",
+                  "promptId": "private-prompt",
+                  "question": "Review the private sample?",
+                  "options": [],
+                  "raisedBy": 23,
+                  "open": {
+                    "sessionId": "sample-session",
+                    "itemId": "private-prompt"
+                  }
+                },
+                "turnId": 1793000000000
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -36,6 +36,8 @@ type AgentLaunchSettings = Partial<
     | 'nativeChatShellEnvironmentVariables'
     | 'terminalWindowsShell'
     | 'terminalWindowsPowerShellImplementation'
+    | 'httpProxyUrl'
+    | 'httpProxyBypassRules'
   >
 >
 
@@ -85,7 +87,9 @@ export function createAgentModelCatalogSettingsExpiry(
         value.nativeChatInheritShellEnvironment,
         value.nativeChatShellEnvironmentVariables,
         value.terminalWindowsShell,
-        value.terminalWindowsPowerShellImplementation
+        value.terminalWindowsPowerShellImplementation,
+        value.httpProxyUrl,
+        value.httpProxyBypassRules
       ])
     if (environment(launch) !== environment(settings)) {
       store.expireLaunchScopes()

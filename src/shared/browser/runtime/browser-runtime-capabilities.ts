@@ -25,9 +25,13 @@ export const BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY =
 // Older hosts drop expectUrl and would act unguarded, so the CLI refuses the flag without this.
 export const BROWSER_EXPECT_URL_RUNTIME_CAPABILITY = 'browser.expect-url.v1' as const
 
+// Older hosts publish server tabs with canGoBack/canGoForward hardcoded false, so clients keep both arrows enabled without this.
+export const BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY = 'browser.tab-history-state.v1' as const
+
 // Headless, identity and certificate trust are host-conditional, so getStatus adds them itself.
 export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
+  BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY,
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
