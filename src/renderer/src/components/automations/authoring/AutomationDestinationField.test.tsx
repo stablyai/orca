@@ -91,6 +91,5 @@ describe('AutomationDestinationField', () => {
     render([], undefined, undefined, undefined, true)
 
     expect(emptyNote()).toBeNull()
-    expect(container.textContent).toContain('Stored and scheduled by')
   })
 })

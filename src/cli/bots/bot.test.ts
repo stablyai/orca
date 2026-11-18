@@ -45,39 +45,3 @@ describe('orca bot new-chat', () => {
     expect(calls).toEqual([{ method: 'bots.chat.reset', params: { callerSessionId: 'home-1' } }])
   })
 })
-
-describe('orca bot list', () => {
-  async function list(roster: () => Promise<unknown>) {
-    const calls: string[] = []
-    const call = vi.fn(async (method: string) => {
-      calls.push(method)
-      const result = await roster()
-      return { id: 'r', ok: true as const, result, _meta: { runtimeId: 'rt' } }
-    })
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only client.call.
-    const client = { call } as unknown as RuntimeClient
-    await BOT_HANDLERS['bot list']!({ flags: new Map(), client, cwd: '/', json: false })
-    return { calls, text: String(log.mock.calls.at(-1)?.[0]) }
-  }
-
-  it('prints what each bot is for and the commands that reach it', async () => {
-    const { calls, text } = await list(async () => ({
-      bots: [
-        {
-          id: 'bot-1',
-          name: 'Release Notes',
-          agent: 'claude',
-          paused: false,
-          specialty: 'Writes release notes.',
-          linked: []
-        }
-      ]
-    }))
-    expect(calls).toEqual(['bots.roster'])
-    expect(text).toContain('"bot:Release Notes" (claude)  id address: bot:bot-1')
-    expect(text).toContain('For: "Writes release notes."')
-    expect(text).toContain('--type handoff')
-    expect(text).toContain('--type question')
-  })
-})

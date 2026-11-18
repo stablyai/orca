@@ -131,14 +131,15 @@ export async function installOnJournal(
       id: 'host-turn-context',
       emit: (event) => {
         if (event.type === 'completion') {
-          const { sessionId, turnId } = event.completion
+          const { sessionId, turnId, outcome } = event.completion
           turnEnded(
             sessionId,
             turnId,
             async (since) =>
               readTurnEndedItems(await installed.journalReads(sessionId), turnId, since),
             (clientMessageId, body) =>
-              writeStructuredAgentSessionOrcaNote(installed, sessionId, clientMessageId, body)
+              writeStructuredAgentSessionOrcaNote(installed, sessionId, clientMessageId, body),
+            { outcome }
           )
         }
       }

@@ -1,7 +1,7 @@
 // google.*: this host's Google client, the accounts signed in on it, and which bots may use them.
 // Tokens stay on this host; clients see emails and per-service states only.
 import { GOOGLE_OWNER_ONLY } from '../../../bots/bot-google-access'
-import { botOfCaller } from '../../../bots/bot-of-caller'
+import { botOfToken } from '../../../bots/bot-of-caller'
 import { getGoogleConnect, type GoogleConnect } from '../../../google/google-connect'
 import type { GoogleStatusView } from '../../../../shared/google/google-connect-types'
 import {
@@ -38,8 +38,9 @@ function flowOwner({ caller }: Pick<RpcContext, 'caller'>): string {
   return rpcCallerOperationKey(caller)
 }
 
-function refuseFromBot(callerSessionId: string | undefined, context: RpcContext): void {
-  if (botOfCaller(context.runtime, callerSessionId, context.pairedDeviceId)) {
+/** A bot's token, even an ended one, is refused; no token is the owner's terminal, Settings or phone. */
+function refuseFromBot(botToken: string | undefined, context: RpcContext): void {
+  if (botOfToken(context.runtime, botToken, context.pairedDeviceId).kind !== 'owner') {
     throw new InvalidArgumentError(GOOGLE_OWNER_ONLY)
   }
 }
@@ -92,8 +93,8 @@ export const GOOGLE_METHODS = [
     name: 'google.client.import',
     permission: 'workspace',
     params: GoogleClientImportParams,
-    handler: async ({ callerSessionId, file }, ctx) => {
-      refuseFromBot(callerSessionId, ctx)
+    handler: async ({ botToken, file }, ctx) => {
+      refuseFromBot(botToken, ctx)
       return { client: google().importClient(file) }
     }
   }),
@@ -101,8 +102,8 @@ export const GOOGLE_METHODS = [
     name: 'google.client.export',
     permission: 'workspace',
     params: GoogleClientExportParams,
-    handler: async ({ callerSessionId }, ctx) => {
-      refuseFromBot(callerSessionId, ctx)
+    handler: async ({ botToken }, ctx) => {
+      refuseFromBot(botToken, ctx)
       return { file: google().exportClient() }
     }
   }),
@@ -110,8 +111,8 @@ export const GOOGLE_METHODS = [
     name: 'google.signIn.start',
     permission: 'workspace',
     params: GoogleSignInStartParams,
-    handler: async ({ callerSessionId, callerLoopbackPort, account, services }, ctx) => {
-      refuseFromBot(callerSessionId, ctx)
+    handler: async ({ botToken, callerLoopbackPort, account, services }, ctx) => {
+      refuseFromBot(botToken, ctx)
       // Only a person at this host sees a browser opened here; a paired device opens its own.
       const here = ctx.caller?.kind === 'local-cli' || ctx.caller?.kind === 'desktop'
       return google().startSignIn(flowOwner(ctx), {
@@ -146,8 +147,8 @@ export const GOOGLE_METHODS = [
     name: 'google.disconnect',
     permission: 'workspace',
     params: GoogleDisconnectParams,
-    handler: async ({ callerSessionId, account, revoke }, ctx) => {
-      refuseFromBot(callerSessionId, ctx)
+    handler: async ({ botToken, account, revoke }, ctx) => {
+      refuseFromBot(botToken, ctx)
       const connect = google()
       return connect.disconnect(pickAccount(connect, account), revoke === true)
     }
@@ -156,8 +157,8 @@ export const GOOGLE_METHODS = [
     name: 'google.bot.set',
     permission: 'workspace',
     params: GoogleBotAccessSetParams,
-    handler: async ({ callerSessionId, botId, on }, ctx) => {
-      refuseFromBot(callerSessionId, ctx)
+    handler: async ({ botToken, botId, on }, ctx) => {
+      refuseFromBot(botToken, ctx)
       ctx.runtime.bots.assertEnabled()
       const bot = await ctx.runtime.bots.update(botId, { google: on })
       // Settings confirms this before turning Google on; the CLI prints it.

@@ -19,6 +19,8 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { NativeChatComposerPrimaryButton } from '../../native-chat/composer/controls/NativeChatComposerPrimaryButton'
 import { NativeChatAttachButton } from '../../native-chat/composer/controls/NativeChatAttachButton'
+import { NativeChatDictationButton } from '../../native-chat/composer/controls/NativeChatDictationButton'
+import { useNativeChatDictation } from '../../native-chat/composer/editor/use-native-chat-dictation'
 import { NativeChatComposerNotices } from '../../native-chat/composer/controls/NativeChatComposerNotices'
 import { useNativeChatComposerNotice } from '../../native-chat/composer/controls/use-native-chat-composer-notice'
 import { NativeChatPromptEditor } from '../../native-chat/composer/editor/NativeChatPromptEditor'
@@ -93,6 +95,7 @@ export function BotItemCommentBox({
   const input = useRef<NativeChatComposerInput | null>(null)
   const composer = useRef<NativeChatComposerHandle | null>(null)
   const lift = useClearOfFloatingTrigger(box)
+  const dictation = useNativeChatDictation(input, sending)
   const access = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
   // Chat's picker and `@` list: workspace files from the bot's folder. A comment runs no commands,
@@ -385,7 +388,15 @@ export function BotItemCommentBox({
           />
         </div>
         {/* Centred in the + button's row height, so it sits level with the + and the last line. */}
-        <div className="flex h-8 shrink-0 items-center pointer-coarse:h-11">
+        <div className="flex h-8 shrink-0 items-center gap-1 pointer-coarse:h-11">
+          <NativeChatDictationButton
+            disabled={dictation.dictationDisabled}
+            isDictating={dictation.isDictating}
+            isHoldMode={dictation.isDictationHoldMode}
+            onToggle={dictation.toggleDictation}
+            onHoldStart={dictation.startHoldDictation}
+            onHoldEnd={dictation.stopHoldDictation}
+          />
           <NativeChatComposerPrimaryButton
             size="compact"
             aria-label={t('bots.items.comment.submit', 'Comment')}

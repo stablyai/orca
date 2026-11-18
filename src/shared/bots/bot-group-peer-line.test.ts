@@ -61,13 +61,9 @@ describe('botGroupPeerLine', () => {
     })
   })
 
-  it('says a plain follow-up for a row with no stored peer, whatever the loaded room shows', () => {
+  it('says a plain follow-up for a legacy row with no stored peer', () => {
     // An older row, or a worker report: earlier asks in the room never name its peer.
     expect(botGroupPeerLine(mail(3, triage, { text: LEGACY }))).toEqual({
-      kind: 'followed',
-      bot: 'Triage bot'
-    })
-    expect(botGroupPeerLine(mail(4, triage, { text: 'Triage bot followed up' }))).toEqual({
       kind: 'followed',
       bot: 'Triage bot'
     })

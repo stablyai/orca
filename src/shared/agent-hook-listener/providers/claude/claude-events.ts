@@ -38,6 +38,7 @@ import { buildClaudeStatusPayload } from './lifecycle/claude-status-build'
 import { claudeWaitRequest, settleClaudeToolBatch } from './lifecycle/claude-tool-request-wait'
 import { trackClaudeTaskNotificationDelivery } from './background-tasks/claude-task-notification-delivery'
 import { recordClaudeTeammateSpawn } from './lifecycle/claude-teammate-spawn'
+import { isClaudeToolEvent, restatePluginToolCall } from './lifecycle/claude-tool-events'
 
 const CLAUDE_HOOK_AGENT_ID_PREFIX = 'hook-agent-'
 
@@ -115,6 +116,11 @@ export function normalizeClaudeEvent(
     (eventName === 'PreToolUse' || eventName === 'PermissionRequest') &&
     isAskUserQuestionTool(eventToolName)
   const isAskUserQuestion = eventName === 'PreToolUse' && isAskUserQuestionWait
+  // Why: plugins can call tools after Stop (#43998); the event stays accepted for tool hooks but does not change status.
+  const restated = restatePluginToolCall(state, eventName, paneKey, hookPayload, isAskUserQuestion)
+  if (restated) {
+    return restated
+  }
   // Manual PostCompact ends at idle without Stop; auto compaction stays in-turn, and PreCompact alone can be aborted (STA-2915).
   const isManualCompactCompletion = eventName === 'PostCompact' && hookPayload.trigger === 'manual'
   // An answered MCP dialog restores the displaced state; a server can elicit outside any turn.
@@ -181,12 +187,7 @@ export function normalizeClaudeEvent(
   // Child tools update their roster only, except child-induced waits and that child's next activity clearing its wait.
   const isWaitingInducing = reportedStateName === 'waiting'
   const subagentOriginId =
-    !isWaitingInducing &&
-    (eventName === 'PreToolUse' ||
-      eventName === 'PostToolUse' ||
-      eventName === 'PostToolUseFailure')
-      ? eventAgentId
-      : undefined
+    !isWaitingInducing && isClaudeToolEvent(eventName) ? eventAgentId : undefined
   // Why: `"type": "agent"` hook runs emit tool hooks (agent_type only if inherited) but never SubagentStop, so their row would stay working forever; real children may be untyped and start-less.
   const isClaudeHookAgent = eventAgentId?.startsWith(CLAUDE_HOOK_AGENT_ID_PREFIX) === true
   if (eventAgentId && (subagentOriginId || isWaitingInducing) && !isClaudeHookAgent) {
