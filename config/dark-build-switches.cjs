@@ -7,7 +7,9 @@ const DARK_BUILD_SWITCHES = [
   // src/shared/workspace-layout/layout-owner-switch.ts
   { variable: 'ORCA_LAYOUT_OWNER', off: 'window' },
   // src/shared/sidebar-list/feed/sidebar-inputs-switch.ts
-  { variable: 'ORCA_SIDEBAR_INPUTS', off: 'window' }
+  { variable: 'ORCA_SIDEBAR_INPUTS', off: 'window' },
+  // src/renderer/src/store/channels/store-channels-switch.ts
+  { variable: 'ORCA_STORE_CHANNELS', off: 'root' }
 ]
 
 function markerFileName(darkSwitch) {
