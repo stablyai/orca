@@ -528,5 +528,20 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - La automatización solo se activa cuando el arranque de la app la configura; así las suites del actualizador de upstream siguen probando su flujo de "clic para descargar".
 - Las builds locales conservan la versión de Orca (`1.4.214`): el actualizador les ofrece el siguiente release de Zotz.
 - macOS no tenía el bloqueo de §6: la tarjeta ofrecía "Update" y Squirrel.Mac iba a rechazar el zip. El `Zotz.app` publicado está firmado ad-hoc (`designated => cdhash H"…"`), y un build re-firmado da `code failed to satisfy specified code requirement(s)` con `codesign -v -R`, que es la misma prueba que hace Squirrel. Ahora `zotz-mac-manual-install.ts` marca la versión como `externallyManaged` con `zotzManualDownloadUrl` (el `zotz-macos-arm64.dmg` del release), main rechaza la descarga, y la tarjeta y Ajustes muestran "Descargar la versión nueva". Cuando haya Developer ID, `isZotzManualMacInstall()` debe devolver `false`.
+- La base de Orca salía de `package.json`, que Orca no sube en `main` (se quedó en `1.4.214` con Orca ya en `1.4.262`): la etiqueta mentía y el tope de 99 builds nunca se reiniciaba. Ahora es el release más nuevo de Orca cuyo corte está mergeado (§3 de `UPDATES-SPEC.md`); el siguiente release queda en `1.4.25901`.
 - macOS se firma con un certificado auto-firmado (`Zotz Release Signing`, gratis). El requisito designado queda `identifier "dev.hugorodriguez.zotz" and certificate leaf = H"…"`: probado aquí, un build re-firmado con otra versión pasa `codesign -v -R` (Squirrel) y con ad-hoc no. CI lo importa (`zotz-import-mac-signing-cert.sh`, confianza con `sudo add-trusted-cert` porque electron-builder solo usa identidades válidas) y revisa `Authority=`. La app lee su firma con `codesign -dvv` al iniciar el actualizador: con certificado usa Squirrel; ad-hoc o desconocida, el `.dmg`.
 - Falta la prueba real: instalar a mano `v1.4.21401`, publicar un cambio y ver que llega, se instala al reiniciar y que en modo servidor no interrumpe a un agente.
+
+### 2026-11-17 — Progreso del asistente y marca en textos (`claude/zots-loading-screen-orca-names-ae9160`)
+
+**Qué cambió**
+
+- Asistente de servidor: arriba dice "Paso X de N: <paso>" con el tiempo que lleva, una barra, qué está haciendo el paso actual y una consola con la salida real. En Windows, mientras corre el script elevado, main lee su transcript (`zotz-node-setup.log`) cada segundo (`zotz-node-setup-log-progress.ts`): los pasos que faltan quedan pendientes en vez de todos girando, y la instalación de OpenSSH (5–15 min) dice que tarda.
+- El progreso por IPC ahora es `{ steps, output }`; las fases que no son el script escriben líneas con el mismo formato (`== paso ==`, `paso -> done: …`).
+- Firewall (`zotz-node-setup.ps1`): limitar a la tailnet la regla Allow de `zotz.exe` fallaba en la MSI ("Aplazar a usuario" solo se puede usar…), porque las reglas que crea el aviso de Windows traen `EdgeTraversalPolicy DeferToUser`. Ahora se cambia a `Block` en la misma llamada (`Set-NetFirewallRule`); el tráfico de Tailscale no usa edge traversal.
+- "Orca" → "Zotz" en todos los textos de la interfaz y los menús sin tocar los JSON de upstream: `zotz-brand-copy.ts` se aplica a los catálogos al cargarlos (renderer y main) y a los textos por defecto de `t()`, antes de interpolar. Se conservan "Orca Mobile" / "app móvil de Orca" (la app oficial) y el namespace `zotz.*`. Los tests de upstream lo apagan con `zotz-vitest-upstream-brand-copy.ts`.
+
+**Sorpresas / pendientes**
+
+- Siguen en inglés con "Orca" los mensajes de error armados en main sin `t()` (instalador del CLI, orcad administrado, pairing). Son poco visibles; cambiarlos es editar código de upstream.
+- No se pudo abrir la app Electron en la MSI desde el worktree (node-pty no compila sin VS C++); se verificó con capturas de fixtures y con el log real de una configuración en curso.

@@ -25813,7 +25813,7 @@
     "machineMode": {
       "autostartRemoveFailed": "Could not remove the sign-in task: {{detail}}",
       "autostartRemoved": "Zotz no longer starts at sign-in.",
-      "pairedDevicesKeepAccess": "Paired computers and phones can still connect until you revoke them in Settings → Remote Orca Servers.",
+      "pairedDevicesKeepAccess": "Paired computers and phones can still connect until you revoke them in Settings → Remote Zotz Servers.",
       "back": "Back",
       "change": "Change",
       "description": "You can change this later in Settings → General.",
@@ -25839,7 +25839,9 @@
         "declined": "Administrator permission was declined.",
         "devBuild": "Skipped in development builds.",
         "installing": "Installing Tailscale…",
-        "waitingForLogin": "Waiting for you to log in to Tailscale…"
+        "waitingForLogin": "Waiting for you to log in to Tailscale…",
+        "waitingForAdmin": "Accept the administrator prompt from Windows. It may be behind the Zotz window.",
+        "installingSsh": "Installing OpenSSH Server through Windows Update. This usually takes 5 to 15 minutes."
       },
       "done": "Done",
       "link": {
@@ -25868,7 +25870,25 @@
         "tailscale": "Tailscale connected",
         "windowsUpdate": "No automatic restarts while signed in"
       },
-      "title": "Set up this computer as a remote server"
+      "title": "Set up this computer as a remote server",
+      "hint": {
+        "tailscale": "Checking that Tailscale is installed and signed in; its address becomes the access link.",
+        "power": "Turning off sleep and hibernation while plugged in, and making the lid do nothing.",
+        "windowsUpdate": "Setting active hours so Windows Update never restarts the computer while you are signed in.",
+        "ssh": "Enabling the SSH server with key sign-in only. Windows downloads it the first time, so it can take a while; do not close Zotz.",
+        "firewall": "Opening the Zotz and SSH ports only to devices on your Tailscale network.",
+        "autostart": "Registering a task that opens Zotz at sign-in and restarts it if it stops.",
+        "keepAwake": "Keeping the computer awake while Zotz runs.",
+        "networkExposure": "Opening the Zotz server to remote connections on your Tailscale address.",
+        "autologon": "Automatic sign-in is configured by hand with Sysinternals Autologon."
+      },
+      "progress": {
+        "finished": "Setup finished",
+        "finishedWithErrors": "Finished with errors",
+        "step": "Step {{current}} of {{total}}: {{title}}",
+        "preparing": "Preparing…",
+        "output": "Setup output"
+      }
     }
   }
 }

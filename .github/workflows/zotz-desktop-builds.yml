@@ -22,17 +22,19 @@ jobs:
   version:
     if: github.repository == 'HugoRodriguezDEV/zotz'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     outputs:
       version: ${{ steps.compute.outputs.version }}
       tag: ${{ steps.compute.outputs.tag }}
       base: ${{ steps.compute.outputs.base }}
       build: ${{ steps.compute.outputs.build }}
     steps:
+      # Full history: the Orca base is the newest Orca release whose cut is merged into this commit.
       - name: Checkout
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       # An Orca sync must not point the updater back at stablyai/orca.
       - name: Check the updater reads Zotz releases
