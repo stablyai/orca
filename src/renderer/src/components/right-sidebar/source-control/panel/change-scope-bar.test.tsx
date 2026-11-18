@@ -64,7 +64,7 @@ afterEach(cleanup)
 
 function renderBar({
   summary = READY,
-  history = { status: 'ready', result: PAGE } as GitHistoryPanelState,
+  history = { status: 'ready', result: PAGE },
   initialScope = ALL_CHANGES_SCOPE
 }: {
   summary?: GitBranchCompareSummary | null

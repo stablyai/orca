@@ -89,12 +89,16 @@ export function SourceControlChangeScopeMenuContent({
   return (
     <DropdownMenuContent
       align="start"
+      density="compact"
       className="w-[min(340px,calc(100vw-16px))]"
       data-testid="source-control-change-scope-menu"
       onOpenAutoFocus={(event) => {
         // Start on the checked scope, like a native select.
-        const content = event.currentTarget as HTMLElement | null
-        const checked = content?.querySelector<HTMLElement>('[aria-checked="true"]')
+        const content = event.currentTarget
+        const checked =
+          content instanceof HTMLElement
+            ? content.querySelector<HTMLElement>('[aria-checked="true"]')
+            : null
         if (checked) {
           event.preventDefault()
           checked.focus()
@@ -103,7 +107,7 @@ export function SourceControlChangeScopeMenuContent({
     >
       {baseRef ? (
         <>
-          <DropdownMenuItem onSelect={onChangeBaseRef} className="text-xs">
+          <DropdownMenuItem onSelect={onChangeBaseRef}>
             <span className="min-w-0 flex-1 truncate">
               {t(
                 'auto.components.right.sidebar.SourceControl.scopeCompareTo',
@@ -198,7 +202,7 @@ export function SourceControlChangeScopeMenuContent({
             )}
           </span>
           <DropdownMenuItem
-            className="h-5 shrink-0 px-1.5 py-0 text-xs"
+            className="shrink-0"
             onSelect={(event) => {
               // Retry in place; closing the menu would hide the result it fetches.
               event.preventDefault()
@@ -232,7 +236,7 @@ export function SourceControlChangeScopeMenuContent({
         </div>
       ) : null}
       <DropdownMenuSeparator />
-      <DropdownMenuItem disabled={!graphSupported} onSelect={onOpenGitGraph} className="text-xs">
+      <DropdownMenuItem disabled={!graphSupported} onSelect={onOpenGitGraph}>
         <GitGraph className="size-3.5 text-muted-foreground" />
         {t(
           'auto.components.right.sidebar.SourceControl.scopeOlderHistory',
