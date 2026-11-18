@@ -1,4 +1,11 @@
-import { useCallback, useRef, type RefObject, type Dispatch, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  type RefObject,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { ReadState } from '../../session/terminal/read/native-chat-live-session-contract'
@@ -61,15 +68,10 @@ export function useNativeChatOlderHistory({
   } | null>(null)
   // Latest held base, advanced synchronously by applied pages so a retained callback cannot reuse its stale cursor.
   const heldRef = useRef(read)
-  // A render that skipped a queued page still carries the older read; only a new read or paging generation resets the ref.
-  const renderedRef = useRef({ read, olderHistoryGeneration })
-  if (
-    renderedRef.current.read !== read ||
-    renderedRef.current.olderHistoryGeneration !== olderHistoryGeneration
-  ) {
-    renderedRef.current = { read, olderHistoryGeneration }
+  // Only a committed new read or paging generation resets it; a render that skipped a queued page leaves it alone.
+  useLayoutEffect(() => {
     heldRef.current = read
-  }
+  }, [read, olderHistoryGeneration])
   return useCallback((): Promise<NativeChatOlderPageResult> => {
     // A callback from before a trim, snapshot or rebind holds a base that has since moved.
     if (transcriptEpochRef.current !== olderHistoryGeneration) {

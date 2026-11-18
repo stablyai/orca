@@ -30,7 +30,7 @@ export type NativeChatReadSessionArgs = {
 }
 
 const isTranscriptCursor = (value: unknown): value is number =>
-  Number.isSafeInteger(value) && (value as number) >= 0
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 
 async function readSession(args: NativeChatReadSessionArgs) {
   const { agent, sessionId } = args
