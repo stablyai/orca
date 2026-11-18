@@ -12,7 +12,10 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../../../shared/native-chat/input/native-chat-session-options'
-import { NativeChatComposerPlanChip, useNativeChatPlanMode } from './NativeChatComposerPlanChip'
+import {
+  NativeChatComposerInteractionModePicker,
+  useNativeChatInteractionMode
+} from './NativeChatComposerInteractionModePicker'
 import {
   NativeChatComposerToolbar,
   type NativeChatComposerControl
@@ -103,11 +106,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   const t = useTranslate()
   useUiLanguageRevision()
   const roomReplies = useContext(NativeChatRoomContext)?.replies
-  const mode = useNativeChatPlanMode({
-    surface: sessionOptionsSurface,
-    snapshot: sessionOptionsSnapshot,
-    focusComposer
-  })
+  const mode = useNativeChatInteractionMode(sessionOptionsSurface, sessionOptionsSnapshot)
   // Like Enter, a typed draft sends while the agent works; Esc still stops.
   const stops = isWorking && !hasDraft
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
@@ -211,11 +210,16 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     ...(mode
       ? [
           {
-            id: 'plan',
+            id: 'interaction-mode',
             priority: 4,
-            content: <NativeChatComposerPlanChip control={mode} />,
-            overflow: (close: () => void) => (
-              <NativeChatComposerPlanChip control={mode} onExit={close} />
+            content: (
+              <NativeChatComposerInteractionModePicker
+                control={mode}
+                focusComposer={focusComposer}
+              />
+            ),
+            overflow: (close: (alwaysFocusComposer?: boolean) => void) => (
+              <NativeChatComposerInteractionModePicker control={mode} onPick={() => close(false)} />
             )
           }
         ]

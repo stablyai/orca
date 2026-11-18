@@ -1134,8 +1134,7 @@
     },
     "native-chat": {
       "composer": {
-        "planMode": "계획",
-        "exitPlanMode": "계획 모드 종료"
+        "planMode": "계획"
       },
       "goal": {
         "sentAsGoal": "목표로 보냄"

@@ -19846,8 +19846,7 @@
         "imageUnavailable": "プレビューを利用できません",
         "sessionAttachmentsStarting": "{{agent}} のチャットを起動中です。開くまで待ってから、ファイルを再度添付してください。",
         "sessionAttachmentsFailed": "{{agent}} チャットを開けませんでした。チャットで [再試行] を使用して、ファイルを再度添付してください。",
-        "moreControls": "その他のチャット操作",
-        "exitPlanMode": "プランモードを終了"
+        "moreControls": "その他のチャット操作"
       },
       "tool": {
         "result": "結果",

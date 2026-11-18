@@ -1216,8 +1216,7 @@
     },
     "native-chat": {
       "composer": {
-        "planMode": "План",
-        "exitPlanMode": "Выйти из режима планирования"
+        "planMode": "План"
       },
       "goal": {
         "sentAsGoal": "Отправлено как цель"

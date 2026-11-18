@@ -31,7 +31,6 @@ import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-s
 import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
 import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
-import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
 import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
@@ -304,17 +303,24 @@ export function MobileNativeChatComposer({
                   {...sessionOptions}
                   sendInFlight={sending || isAttaching}
                   presentation={picker}
-                  onNavigate={(page) => setPicker((current) => current && { ...current, page })}
+                  onNavigate={(page, expected) =>
+                    setPicker((current) =>
+                      current && (expected === undefined || current === expected)
+                        ? { ...current, page }
+                        : current
+                    )
+                  }
                   onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
                   onDrawerAfterClose={() => {
-                    if (picker?.refocus) {
-                      fieldRef.current?.focus()
+                    if (picker?.page === null) {
+                      if (picker.refocus) {
+                        fieldRef.current?.focus()
+                      }
+                      setPicker((current) => (current === picker ? null : current))
                     }
-                    setPicker(null)
                   }}
                 />
               ) : null}
-              <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
               {goal.chip}
             </MobileNativeChatDictationLeading>
             {onMicPress ? (

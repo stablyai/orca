@@ -8,6 +8,9 @@ import {
 // English pieces for the session option pickers; desktop translates each one, mobile shows them as is.
 export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   model: 'Model',
+  interactionMode: 'Mode',
+  buildMode: 'Build',
+  planMode: 'Plan',
   effort: 'Effort',
   fastMode: 'Fast mode',
   speed: 'Speed',
@@ -93,6 +96,8 @@ export function nativeChatSessionOptionLabel(
   switch (descriptor.id) {
     case 'model':
       return say('model')
+    case 'interactionMode':
+      return say('interactionMode')
     case 'effort':
       return say('effort')
     case 'fastMode':
@@ -114,6 +119,14 @@ export function nativeChatSessionChoiceLabel(
   // `default` is only Standard inside a speed choice; other selects may use the value.
   if (optionId === 'serviceTier' && choice.value === 'default') {
     return say('standard')
+  }
+  if (optionId === 'interactionMode') {
+    if (choice.value === 'default') {
+      return say('buildMode')
+    }
+    if (choice.value === 'plan') {
+      return say('planMode')
+    }
   }
   const id = levelId(LEVEL_IDS, choice.value)
   return id ? say(id) : choice.label

@@ -1134,8 +1134,7 @@
     },
     "native-chat": {
       "composer": {
-        "planMode": "計畫",
-        "exitPlanMode": "結束計畫模式"
+        "planMode": "計畫"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"

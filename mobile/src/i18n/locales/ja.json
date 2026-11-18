@@ -1134,8 +1134,7 @@
     },
     "native-chat": {
       "composer": {
-        "planMode": "プラン",
-        "exitPlanMode": "プランモードを終了"
+        "planMode": "プラン"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"

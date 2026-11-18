@@ -1,13 +1,19 @@
 import type { ReactElement, ReactNode } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View, type PressableProps } from 'react-native'
 import { ShieldAlert, type LucideIcon } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
-import { LIST_ROW_PADDING, ListRow } from '../../../../components/list/ListGroup'
 import {
+  LIST_ROW_PADDING,
+  ListGroup,
+  ListRow,
+  SectionHeader
+} from '../../../../components/list/ListGroup'
+import {
+  isReadOnlySessionOptionValue,
   sessionOptionValueMarker,
   type SessionOptionDescriptor,
   type SessionOptionValue
@@ -24,6 +30,10 @@ import {
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
+import {
+  mobileDeferredPermissionSummary,
+  mobileSessionOptionSummaryValue
+} from './mobile-native-chat-session-option-labels'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   useMobileColorScheme()
@@ -38,6 +48,7 @@ export function ModelPill({
   leading,
   accessibleName,
   disabled,
+  onPointerDown,
   onPress
 }: {
   primary: string
@@ -48,6 +59,7 @@ export function ModelPill({
   leading?: LucideIcon
   accessibleName: string
   disabled: boolean
+  onPointerDown?: PressableProps['onPointerDown']
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -59,6 +71,7 @@ export function ModelPill({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       style={({ pressed }) => [styles.pill, pressed && !disabled && styles.pressed]}
+      onPointerDown={onPointerDown}
       onPress={onPress}
       disabled={disabled}
       hitSlop={6}
@@ -299,3 +312,67 @@ const styles = themedStyleSheet(() => ({
     maxWidth: 180
   }
 }))
+
+export function SessionOptionSummaryRows({
+  descriptors,
+  permission,
+  permissionColor,
+  locked,
+  onNavigate,
+  onSetOption
+}: {
+  descriptors: readonly SessionOptionDescriptor[]
+  permission: SessionOptionDescriptor | undefined
+  permissionColor: string | undefined
+  locked: (descriptor: SessionOptionDescriptor) => boolean
+  onNavigate: (page: string) => void
+  onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
+}): React.JSX.Element | null {
+  const t = useMobileTranslation()
+  if (descriptors.length === 0) {
+    return null
+  }
+  return (
+    <>
+      <SectionHeader title={t('chat.sessionOptionPickers.optionsSection', 'Options')} />
+      <ListGroup>
+        {descriptors.flatMap((descriptor) => {
+          const isPermission = descriptor === permission
+          const deferred = isPermission ? mobileDeferredPermissionSummary(descriptor) : null
+          const disabled = locked(descriptor) || !descriptor.settable
+          if (showsSessionOptionAsSwitch(descriptor)) {
+            return descriptorRowElements(
+              {
+                descriptor,
+                disabled,
+                onSetOption: (value) => onSetOption(descriptor, value),
+                onInvokeAction: () => onNavigate(descriptor.id)
+              },
+              t
+            )
+          }
+          return [
+            <SessionOptionSummaryRow
+              key={descriptor.id}
+              label={
+                isPermission
+                  ? t('chat.sessionOptionPickers.permissions', 'Permissions')
+                  : nativeChatSessionOptionLabel(descriptor, say)
+              }
+              value={deferred?.saved ?? mobileSessionOptionSummaryValue(descriptor)}
+              subtitle={deferred?.timing}
+              accessibleValue={deferred?.full}
+              valueColor={isPermission ? permissionColor : undefined}
+              disabled={disabled}
+              onPress={
+                isReadOnlySessionOptionValue(descriptor)
+                  ? undefined
+                  : () => onNavigate(descriptor.id)
+              }
+            />
+          ]
+        })}
+      </ListGroup>
+    </>
+  )
+}

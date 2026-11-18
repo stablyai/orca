@@ -3,14 +3,17 @@ import { Ellipsis } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNativeChatPickerFocusReturn } from '../focus/native-chat-picker-focus-return'
+import {
+  isNativeChatComposerEditorFocused,
+  useNativeChatPickerFocusReturn
+} from '../focus/native-chat-picker-focus-return'
 
 export type NativeChatComposerControl = {
   id: string
   content: ReactNode
   /** Lower priorities give way first; absent pins a control beside Send. */
   priority?: number
-  overflow?: (close: () => void) => ReactNode
+  overflow?: (close: (alwaysFocusComposer?: boolean) => void) => ReactNode
 }
 
 type Layout = { compact: boolean; hidden: string[]; terminal: boolean }
@@ -33,6 +36,8 @@ export function NativeChatComposerToolbar({
   const [layout, setLayout] = useState<Layout>({ compact: false, hidden: [], terminal: false })
   const [open, setOpen] = useState(false)
   const menuControls = useRef<string[]>([])
+  const pointerStartedInEditor = useRef(false)
+  const openedFromEditor = useRef(false)
   const focusReturn = useNativeChatPickerFocusReturn(focusComposer, true)
   const controls = [...left, ...right]
   const measure = useEffectEvent(() => {
@@ -205,6 +210,15 @@ export function NativeChatComposerToolbar({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
+                onPointerDown={(event) => {
+                  pointerStartedInEditor.current = isNativeChatComposerEditorFocused(
+                    event.currentTarget
+                  )
+                }}
+                onClick={(event) => {
+                  openedFromEditor.current = event.detail > 0 && pointerStartedInEditor.current
+                  pointerStartedInEditor.current = false
+                }}
                 aria-label={t('components.native-chat.composer.moreControls', 'More chat controls')}
               >
                 <Ellipsis className="size-4" />
@@ -223,8 +237,10 @@ export function NativeChatComposerToolbar({
                 .filter((item) => layout.hidden.includes(item.id))
                 .map((item) => (
                   <div key={item.id} className="flex items-center">
-                    {item.overflow?.(() => {
-                      focusReturn.notePick()
+                    {item.overflow?.((alwaysFocusComposer = true) => {
+                      if (alwaysFocusComposer || openedFromEditor.current) {
+                        focusReturn.notePick()
+                      }
                       menuControls.current = []
                       setOpen(false)
                     }) ?? item.content}
