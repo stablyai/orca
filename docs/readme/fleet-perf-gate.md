@@ -1,8 +1,5 @@
 # Fleet perf gate
 
-> [!IMPORTANT]
-> **Manual only, never in CI.** Someone starts it by hand on a QA machine. It refuses to start when `CI` or `GITHUB_ACTIONS` is `true` unless you pass `--allow-ci`. A repository guard (`.github/scripts/check-manual-only-perf-runs.mjs`) fails the PR if a workflow, composite action or package script invokes it.
-
 A real-app OLD vs NEW check at fleet scale (~1,900 workspaces, ~1,800 chat tabs, synthetic). It exists because some regressions only show when every workspace pays: an idle desktop that sends itself 143 tab-update frames per second looks fine with 10 workspaces.
 
 ```sh

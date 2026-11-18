@@ -21,7 +21,6 @@ export function parseArgs(argv) {
     scenarios: null,
     force: false,
     pathsOnly: false,
-    allowCi: false,
     out: null
   }
   for (let index = 0; index < argv.length; index += 1) {
@@ -46,7 +45,6 @@ export function parseArgs(argv) {
       '--out': () => (options.out = path.resolve(value())),
       '--force': () => (options.force = true),
       '--paths-only': () => (options.pathsOnly = true),
-      '--allow-ci': () => (options.allowCi = true),
       '--old-app': packagedAppUnsupported,
       '--new-app': packagedAppUnsupported,
       '--': () => {}
@@ -55,16 +53,6 @@ export function parseArgs(argv) {
       throw new Error(`unknown argument ${arg}`)
     }
     setters[arg]()
-  }
-  // Manual only: two full app builds and ~35 minutes of a 1,900-workspace fleet is far too heavy for CI.
-  const onCi = ['CI', 'GITHUB_ACTIONS'].filter((name) =>
-    ['true', '1'].includes(process.env[name] ?? '')
-  )
-  if (onCi.length > 0 && !options.allowCi) {
-    throw new Error(
-      `refusing to run in CI (${onCi.map((name) => `${name}=${process.env[name]}`).join(', ')}): the fleet gate is manual only. ` +
-        'Run it by hand on a QA machine, or pass --allow-ci if you really mean to run it here.'
-    )
   }
   for (const [flag, ms] of [
     ['--settle-ms', options.settleMs],
