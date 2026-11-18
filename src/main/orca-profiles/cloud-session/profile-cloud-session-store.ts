@@ -13,7 +13,6 @@ import type {
 } from '../../../shared/orca-profiles/orca-profiles'
 import { getOrcaProfileDirectory } from '../profile-storage-paths'
 import { allowsPlaintextOrcaCloudSession } from '../cloud-auth/profile-cloud-auth-config'
-import * as supersededRemoval from './profile-cloud-session-superseded-removal'
 
 export type OrcaCloudSession = {
   accessToken: string
@@ -163,7 +162,6 @@ function writeOrcaCloudSession(
       ciphertext: secrets.encryptString(JSON.stringify(session)).toString('base64')
     }
     writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), encrypted)
-    supersededRemoval.noteDurableSave(cacheKey, { profileId, userDataPath, session })
     rememberMemorySession(cacheKey, { session, persistence: 'encrypted' })
     return 'encrypted'
   }
@@ -176,14 +174,12 @@ function writeOrcaCloudSession(
       session
     }
     writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), plaintext)
-    supersededRemoval.noteDurableSave(cacheKey, { profileId, userDataPath, session })
     rememberMemorySession(cacheKey, { session, persistence: 'dev-plaintext' })
     return 'dev-plaintext'
   }
 
-  // A new sign-in or rotation supersedes the old disk session; reads prefer memory, so removal can finish later.
-  const path = getOrcaCloudSessionPath(profileId, userDataPath)
-  supersededRemoval.remove(cacheKey, path, { profileId, userDataPath, session }, unsavedRotations)
+  // A new sign-in or rotation supersedes the old disk session, even when the new tokens stay in memory.
+  rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
   rememberMemorySession(cacheKey, { session, persistence: 'memory-only' })
   return 'memory-only'
 }
@@ -325,7 +321,6 @@ export function readOrcaCloudSession(
 export function clearOrcaCloudSession(profileId: string, userDataPath: string): void {
   const key = orcaCloudSessionKey(profileId, userDataPath)
   unsavedRotations.delete(key)
-  supersededRemoval.forget(key)
   memorySessions.delete(key)
   rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
 }

@@ -99,9 +99,7 @@ describe('Orca cloud session store', () => {
         spentOnFailure: true
       })
     ).toBe('memory-only')
-    await vi.waitFor(() =>
-      expect(existsSync(store.getOrcaCloudSessionPath('local-default', userDataPath))).toBe(false)
-    )
+    expect(existsSync(store.getOrcaCloudSessionPath('local-default', userDataPath))).toBe(false)
     const restarted = await loadSessionStore()
     expect(restarted.readOrcaCloudSession('local-default', userDataPath)).toEqual({
       status: 'missing',
