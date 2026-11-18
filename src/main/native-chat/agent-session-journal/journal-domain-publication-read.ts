@@ -56,7 +56,7 @@ export function readJournalDomainPublication(
       ]
       const rows = db
         .prepare(`SELECT item.item_id,item.wire_version,item.wire_json,
-          ${boundedStoredJsonSql('item.payload_json', 'payload_json')} FROM json_each(?) wanted
+          ${boundedStoredJsonSql('item.payload_json', 'payload_json', { shortenColumn: 'item.payload_json' })} FROM json_each(?) wanted
         CROSS JOIN journal_items item INDEXED BY journal_items_visible_position
         WHERE item.session_id=? AND item.epoch=? AND item.hidden=0 AND item.sequence=wanted.value
         ORDER BY item.sequence,item.sequence_index,item.ordinal`)
