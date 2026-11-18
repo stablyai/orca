@@ -117,6 +117,11 @@ export class TerminalCommandPaint {
         this.startedAt = at
         this.startSeen = true
         this.startFollowsFinishInRead = finishEnd !== -1
+        // Why identity too: a report from the last command can share this read's millisecond.
+        if (finishEnd === -1) {
+          this.retiredTitleAt = reports.lastOscTitleAt ?? null
+          this.retiredStatus = reports.lastExplicitAgentStatus ?? null
+        }
       }
       this.betweenCommands = false
       this.repaintRequestable = false
@@ -198,6 +203,11 @@ export class TerminalCommandPaint {
     this.composers = null
     this.repaintRequestable = false
     this.restoredReportAt = null
+  }
+
+  /** A command finished or started since the reattach fence: the program it hid may be gone. */
+  hasBoundarySinceReattach(): boolean {
+    return this.reattach === 'armed' && (this.startSeen || this.betweenCommands)
   }
 
   /** A reattach fence with no command boundary since: the program it hid is still the one running. */
@@ -332,6 +342,10 @@ export function isCurrentCommandStatus(
     !paint ||
     (paint.isCurrentStatus(titleObservedAt) && !paint.isRetired({ titleAt: record.lastOscTitleAt }))
   )
+}
+
+export function hasCommandBoundarySinceReattach(record: TerminalCommandPaintRecord): boolean {
+  return record.commandPaint?.hasBoundarySinceReattach() ?? false
 }
 
 export function isShellInFront(record: TerminalCommandPaintRecord): boolean {

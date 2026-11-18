@@ -1,5 +1,5 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
-// v60 accepts `requestRepaint`, which redraws a reattached program without sending it input.
+// v60 accepts `requestRepaint`, which asks a reattached program to redraw without sending it input.
 // v59 lets the signed macOS host start native provider owners whose pipes stay with the app;
 // it skips v58, which ad hoc builds of an earlier host route used.
 // v57 starts a session's output sequence at its first attach, so a Windows restore snapshot no longer lands 20 chars past the stream.

@@ -1,5 +1,4 @@
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
-import { isPagerProcess } from '../../../../shared/agent-status/process/pager-process-detection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -181,12 +180,13 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       this.armRecheck(entry, verdict)
-      if (verdict.kind === 'working') {
-        return
-      }
-      // Why from the wait: a reattached pane's screen counts only once its program repaints it.
+      // Why from the wait, working included: a reattached pane's restored status or screen counts
+      // only once its program repaints it.
       if (ptyId) {
         this.deps.requestReattachedRepaint?.(ptyId)
+      }
+      if (verdict.kind === 'working') {
+        return
       }
       // Working output can quote dialog source; do not screen-probe it for startup blockers.
       if (entry.screenReadInFlight) {
@@ -285,12 +285,8 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       this.quietForegroundByPtyId.set(ptyId, { ...read, process, pending: false })
-      if (process !== null && isPagerProcess(process) && this.entries.has(entry)) {
-        const resample = this.sample(entry)
-        if (resample.verdict.kind === 'ready-weak' && resample.isQuiet('closed')) {
-          this.settle(entry, resample.ready())
-        }
-      }
+      // Why not settle here: the next tick reads the cached pager through the weak-ready path,
+      // which checks the rendered screen for a blocker first.
     } finally {
       entry.foregroundPollInFlight = false
     }

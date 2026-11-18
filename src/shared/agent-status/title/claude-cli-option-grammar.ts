@@ -175,7 +175,15 @@ export const ROOT_OPTIONS = optionTable(
   {
     '--input-format': ['text', 'stream-json'],
     '--output-format': ['text', 'json', 'stream-json'],
-    '--permission-mode': ['acceptEdits', 'auto', 'bypassPermissions', 'manual', 'dontAsk', 'plan'],
+    '--permission-mode': [
+      'acceptEdits',
+      'auto',
+      'bypassPermissions',
+      'default',
+      'manual',
+      'dontAsk',
+      'plan'
+    ],
     '--permission-prompts': ['host', 'none'],
     '--prompt-suggestions': ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'],
     '--system-prompt-snapshot': ['on', 'off']
@@ -243,6 +251,8 @@ export const NON_SESSION_SUBCOMMANDS: ReadonlySet<string> = new Set([
   'plugin',
   'plugins',
   'purge',
+  'rc',
+  'remote-control',
   'respawn',
   'rm',
   'setup-token',

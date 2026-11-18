@@ -106,4 +106,12 @@ describe('the command an agent report speaks for', () => {
     Object.assign(record, { lastOscTitleAt: 8 })
     expect(isCurrentCommandStatus(record, 6_000)).toBe(true)
   })
+
+  it("retires the last command's title at a start in its own read, even in the same millisecond", () => {
+    const record: TerminalCommandPaintRecord = { lastOscTitleAt: 3 }
+    observeTerminalCommandPaint(record, START, START, 1_000)
+    expect(isCurrentCommandStatus(record, 1_000)).toBe(false)
+    Object.assign(record, { lastOscTitleAt: 4 })
+    expect(isCurrentCommandStatus(record, 1_000)).toBe(true)
+  })
 })

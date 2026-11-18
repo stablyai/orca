@@ -18,6 +18,7 @@ import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
 import {
   admitRestoredTerminalReport,
+  hasCommandBoundarySinceReattach,
   hasTerminalCommandPainted,
   takeReattachedRepaintRequest
 } from '../input/terminal-command-paint'
@@ -262,7 +263,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       pty.incarnationId === incarnationId &&
       this.getPtyLifecycleGeneration(ptyId) === generation &&
       pty.connected &&
-      !pty.lastAgentStatusObservedLive
+      !pty.lastAgentStatusObservedLive &&
+      !hasCommandBoundarySinceReattach(pty)
     const paneKeys = [...this.collectAgentStatusPaneKeysForPty(ptyId)]
     void Promise.all([
       this.ptyForegroundAgent.identifyForeground(ptyId),
