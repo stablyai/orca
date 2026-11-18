@@ -29033,7 +29033,8 @@
       "continuesTip": "Continues automatically at {{time}}",
       "hitTip": "{{agent}} hit its usage limit · resets {{time}}",
       "continuesShort": "Continues {{time}}",
-      "hitShort": "Hit limit"
+      "hitShort": "Hit limit",
+      "stoppedCount": "{{count}} stopped"
     }
   },
   "plugins": {

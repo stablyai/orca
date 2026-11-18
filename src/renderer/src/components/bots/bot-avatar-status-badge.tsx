@@ -63,10 +63,13 @@ export function BotAvatarStatusBadge({
   const t = useTranslate()
   const anchor = 'absolute right-[3px] bottom-[3px] flex size-0 items-center justify-center'
   if (stopTip) {
+    const stopLabel = isUnread
+      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: stopTip })
+      : stopTip
     return (
       <span data-worktree-card-status-slot="" className={anchor}>
         <StateIndicatorTooltip label={stopTip}>
-          <span role="img" aria-label={stopTip} className="relative flex size-3 shrink-0">
+          <span role="img" aria-label={stopLabel} className="relative flex size-3 shrink-0">
             <span
               className="flex size-3 items-center justify-center"
               style={isUnread ? UNREAD_BITE : undefined}

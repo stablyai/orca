@@ -4,6 +4,7 @@ import { botTarget } from '@/lib/bot-hosts'
 import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { useNow } from '@/lib/window-activity/use-now'
+import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotWaits, useListedBotItemsNeedingOwner } from '@/lib/bot-catalog'
@@ -100,6 +101,8 @@ export function useBotRowLine(
   const workers = useMemo(() => countLiveBotWorkspaces(workerStatuses), [workerStatuses])
   const now = useNow(60_000)
   const rows = useMemo(() => buildWorktreeAgentRows({ tabs: [], entries, now }), [entries, now])
+  // Its home's own status also reads terminal pane titles, which `rows` (built without tabs) misses.
+  const homeStatus = useWorktreeActivityStatus(folderWorkspaceKey(home.id))
   // The panel, tab badge or toggle's count when one is mounted for the bot; else the rows' own asks
   // plus the items its host's list counted. Neither starts a read.
   const published = usePublishedBotNeedsYou(bot)
@@ -107,6 +110,8 @@ export function useBotRowLine(
   // Any of its own rows or workers working or waiting: the line is theirs, not the stop's.
   const busy = useMemo(
     () =>
+      homeStatus === 'working' ||
+      homeStatus === 'permission' ||
       workers.working > 0 ||
       workers.permission > 0 ||
       rows.some(
@@ -114,7 +119,7 @@ export function useBotRowLine(
           row.rowSource !== 'subagent' &&
           (row.state === 'working' || row.state === 'blocked' || row.state === 'waiting')
       ),
-    [rows, workers]
+    [homeStatus, rows, workers]
   )
   const hasNeedsYou = useMemo(
     () =>
@@ -140,7 +145,7 @@ export function useBotRowLine(
     now
   })
   const limit: BotRowLimit | null =
-    stop && !busy
+    stop && !busy && !(line && LIVE_LINES.has(line.kind))
       ? {
           place:
             stop.sessionId === bot.chatSessionId ? t('bots.chats.home', 'Home Chat') : stop.name,
@@ -149,6 +154,15 @@ export function useBotRowLine(
       : null
   return { line, limit, now, needsYou: hasNeedsYou }
 }
+
+/** Lines about live work or the owner, which a stop never covers; a past activity or a wait can be. */
+const LIVE_LINES: ReadonlySet<BotRowLine['kind']> = new Set([
+  'paused',
+  'reading',
+  'replying',
+  'needYouElsewhere',
+  'workingElsewhere'
+])
 
 /** How long ago the line's activity was, shown on the row's first line. */
 export function botRowLineAge(line: BotRowLine | null, now: number): string | null {

@@ -131,6 +131,9 @@ function ChatRowMeta({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | n
           <span className={cn(META, 'text-status-warning-text')}>
             <UsageLimitStopMark stop={stopped[0]!} />
             <span aria-hidden>{stopped.length}</span>
+            <span className="sr-only">
+              {t('bots.usageLimit.stoppedCount', '{{count}} stopped', { count: stopped.length })}
+            </span>
           </span>
         ) : null}
         {waiting > 0 ? (

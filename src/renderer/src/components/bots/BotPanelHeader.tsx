@@ -96,7 +96,10 @@ function BotNowLine({
   needsYou: number
 }): React.JSX.Element {
   // Paused and an asking chat's words still come first; its count is the Items tab's.
-  const { line, limit, now } = useBotRowLine(bot, home, needsYou)
+  const rowLine = useBotRowLine(bot, home, needsYou)
+  const { line, now } = rowLine
+  // A running automation is live work: its line beats another session's stop, as its mark does.
+  const limit = quiet.running === null ? rowLine.limit : null
   if (line || limit) {
     return <BotRowLineText line={line} limit={limit} now={now} />
   }
