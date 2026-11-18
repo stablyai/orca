@@ -88,9 +88,9 @@ function sourceReceipt(
 }
 
 /**
- * Whether the original is still as a saved receipt recorded it, compared by meaning. A receipt
- * saved before WAL identity was kept records a nonempty WAL by its size alone, so the fields
- * added since are compared only when it has them: a newer receipt shape is never a write.
+ * Whether the original is provably still as a saved receipt recorded it, compared by meaning: a
+ * newer receipt shape is never a write. A receipt saved before WAL identity was kept records a
+ * nonempty WAL by its size alone, and reused WAL frames can keep that size, so it proves nothing.
  */
 export function sameJournalLegacySource(
   saved: string | undefined,
@@ -110,9 +110,16 @@ export function sameJournalLegacySource(
   }
   const { wal, ...file } = current
   const { wal: storedWal, ...storedFile } = stored
-  const walFields =
-    wal.kind === 'nonempty' && !('ino' in storedWal) ? { kind: wal.kind, size: wal.size } : wal
-  return sameJson(storedFile, file) && sameJson(storedWal, walFields)
+  return sameJson(withoutDevice(storedFile), withoutDevice(file)) && sameJson(storedWal, wal)
+}
+
+/** A device number can change at reboot or remount; the inode and times still name the file. */
+function withoutDevice(file: Record<string, unknown>): Record<string, unknown> {
+  if (!isRecord(file.main)) {
+    return file
+  }
+  const { dev: _dev, ...main } = file.main
+  return { ...file, main }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
