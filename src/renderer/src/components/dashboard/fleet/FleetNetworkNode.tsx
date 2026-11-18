@@ -7,22 +7,25 @@ import {
   dashboardCardDisplayState,
   type DashboardCard
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
-import { DashboardHostBadge } from '../board/DashboardHostBadge'
 import {
   dashboardCardAgeLabel,
   dashboardCardSurfaceClass
 } from '../board/dashboard-card-presentation'
+import { FleetNodeLocation } from './FleetNodeLocation'
 import { fleetCardTitle } from './fleet-card-title'
+import type { FleetProject } from './fleet-view-model'
 
 export type FleetCardOpener = (card: DashboardCard) => void
 
 export function FleetNetworkNode({
   card,
+  project,
   now,
   onOpenCard,
   maxWidthPx
 }: {
   card: DashboardCard
+  project: FleetProject
   now: number
   onOpenCard: FleetCardOpener
   maxWidthPx?: number
@@ -57,12 +60,7 @@ export function FleetNetworkNode({
         </span>
       ) : null}
       <span className="flex w-full min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
-        <span className="truncate">{card.worktreeName}</span>
-        <DashboardHostBadge
-          hostKind={card.hostKind}
-          executionHostId={card.executionHostId}
-          hostLabel={card.hostLabel}
-        />
+        <FleetNodeLocation card={card} project={project} />
         {ageLabel ? <span className="ml-auto shrink-0 pl-1 tabular-nums">{ageLabel}</span> : null}
       </span>
     </button>

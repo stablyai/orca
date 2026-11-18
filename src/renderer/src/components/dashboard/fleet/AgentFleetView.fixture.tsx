@@ -11,7 +11,7 @@ import { buildFleetMockSnapshot, FLEET_MOCK_NOW } from './fleet-snapshot-fixture
 const WIDE = 1240
 const NARROW = 520
 const ENGLISH = { settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' as const } }
-const { cards } = buildFleetMockSnapshot(FLEET_MOCK_NOW)
+const { cards, repoIconsByRepoId } = buildFleetMockSnapshot(FLEET_MOCK_NOW)
 
 function fleetFixture(width: number, fixtureCards: readonly DashboardCard[]) {
   return defineFixture({
@@ -21,6 +21,7 @@ function fleetFixture(width: number, fixtureCards: readonly DashboardCard[]) {
       <AgentFleetView
         cards={fixtureCards}
         buckets={DASHBOARD_BUCKET_ORDER}
+        repoIconsByRepoId={repoIconsByRepoId}
         now={FLEET_MOCK_NOW}
         onOpenCard={() => {}}
       />

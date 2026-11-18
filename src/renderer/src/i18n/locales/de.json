@@ -21127,12 +21127,11 @@
       },
       "summary": {
         "agents": "Agenten",
+        "projects": "Projekte",
         "teams": "Teams"
       },
-      "team": {
-        "members_one": "{{count}} Agent",
-        "members_other": "{{count}} Agenten"
-      }
+      "agentCount_one": "{{count}} Agent",
+      "agentCount_other": "{{count}} Agenten"
     }
   },
   "dashboard": {

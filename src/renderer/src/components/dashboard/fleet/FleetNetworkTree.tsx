@@ -1,7 +1,7 @@
 import { cn } from '@/lib/class-names'
 import { FleetNetworkNode, type FleetCardOpener } from './FleetNetworkNode'
 import { FLEET_TREE_BRANCH_GUTTER_PX, FLEET_TREE_NODE_MAX_WIDTH_PX } from './fleet-team-fold'
-import type { FleetNode } from './fleet-view-model'
+import type { FleetNode, FleetProject } from './fleet-view-model'
 
 const CHILD_LIST_CLASS = cn(
   'relative flex self-stretch pt-4',
@@ -20,10 +20,12 @@ const BRANCH_CLASS = cn(
 
 function FleetNetworkBranch({
   node,
+  project,
   now,
   onOpenCard
 }: {
   node: FleetNode
+  project: FleetProject
   now: number
   onOpenCard: FleetCardOpener
 }): React.JSX.Element {
@@ -34,6 +36,7 @@ function FleetNetworkBranch({
     >
       <FleetNetworkNode
         card={node.card}
+        project={project}
         now={now}
         onOpenCard={onOpenCard}
         maxWidthPx={FLEET_TREE_NODE_MAX_WIDTH_PX}
@@ -44,6 +47,7 @@ function FleetNetworkBranch({
             <FleetNetworkBranch
               key={child.card.paneKey}
               node={child}
+              project={project}
               now={now}
               onOpenCard={onOpenCard}
             />
@@ -56,16 +60,18 @@ function FleetNetworkBranch({
 
 export function FleetNetworkTree({
   root,
+  project,
   now,
   onOpenCard
 }: {
   root: FleetNode
+  project: FleetProject
   now: number
   onOpenCard: FleetCardOpener
 }): React.JSX.Element {
   return (
     <ul className="flex">
-      <FleetNetworkBranch node={root} now={now} onOpenCard={onOpenCard} />
+      <FleetNetworkBranch node={root} project={project} now={now} onOpenCard={onOpenCard} />
     </ul>
   )
 }

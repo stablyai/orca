@@ -20974,13 +20974,12 @@
       },
       "summary": {
         "agents": "Agentes",
+        "projects": "Proyectos",
         "teams": "Equipos"
       },
-      "team": {
-        "members_one": "{{count}} agente",
-        "members_many": "{{count}} agentes",
-        "members_other": "{{count}} agentes"
-      }
+      "agentCount_one": "{{count}} agente",
+      "agentCount_many": "{{count}} agentes",
+      "agentCount_other": "{{count}} agentes"
     }
   },
   "dashboard": {

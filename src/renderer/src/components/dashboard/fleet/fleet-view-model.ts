@@ -1,7 +1,11 @@
 import type {
   DashboardBucket,
-  DashboardCard
+  DashboardCard,
+  DashboardCardHostKind,
+  DashboardCardWorkspaceKind
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { compareNumericLocaleText } from '../../../../../shared/i18n/locale-text-collators'
 import { buildAgentRowLineageTree } from '../rows/agent-row-lineage-model'
 
 export type FleetBucketCounts = Record<DashboardBucket, number>
@@ -15,16 +19,39 @@ export type FleetNode = {
 
 export type FleetTeam = { root: FleetNode; size: number; counts: FleetBucketCounts }
 
-export type FleetView = {
-  summary: FleetBucketCounts & { agents: number; teams: number }
+type FleetHost = Pick<DashboardCard, 'hostKind' | 'executionHostId'>
+
+export type FleetProject = {
+  key: string
+  repoId: string
+  repoName: string
+  hostKind?: DashboardCardHostKind
+  executionHostId?: ExecutionHostId
+  hostLabel?: string
+  workspaceKind: DashboardCardWorkspaceKind
+  counts: FleetBucketCounts
+  agents: number
   teams: FleetTeam[]
   solo: DashboardCard[]
+}
+
+export type FleetView = {
+  summary: FleetBucketCounts & { agents: number; teams: number; projects: number }
+  projects: FleetProject[]
 }
 
 type FleetLineageRow = {
   paneKey: string
   card: DashboardCard
   entry: { orchestration?: { parentPaneKey: string } }
+}
+
+export function fleetHostKey(host: FleetHost): string {
+  return host.executionHostId ?? host.hostKind ?? 'local'
+}
+
+export function fleetProjectKey(card: FleetHost & Pick<DashboardCard, 'repoId'>): string {
+  return JSON.stringify([fleetHostKey(card), card.repoId])
 }
 
 function emptyCounts(): FleetBucketCounts {
@@ -41,6 +68,48 @@ function collectCards(node: FleetNode, into: DashboardCard[]): DashboardCard[] {
     collectCards(child, into)
   }
   return into
+}
+
+function countBuckets(cards: readonly DashboardCard[]): FleetBucketCounts {
+  const counts = emptyCounts()
+  for (const card of cards) {
+    counts[card.bucket] += 1
+  }
+  return counts
+}
+
+type RankedTeam = { team: FleetTeam; activity: number }
+
+type ProjectGroup = {
+  anchor: DashboardCard
+  teams: RankedTeam[]
+  solo: DashboardCard[]
+  cards: DashboardCard[]
+}
+
+function toProject(key: string, group: ProjectGroup): FleetProject {
+  const { anchor } = group
+  return {
+    key,
+    repoId: anchor.repoId,
+    repoName: anchor.repoName,
+    hostKind: anchor.hostKind,
+    executionHostId: anchor.executionHostId,
+    hostLabel: anchor.hostLabel,
+    workspaceKind: anchor.workspaceKind ?? 'worktree',
+    counts: countBuckets(group.cards),
+    agents: group.cards.length,
+    teams: group.teams.sort((a, b) => b.activity - a.activity).map(({ team }) => team),
+    solo: group.solo.sort((a, b) => lastActivity(b) - lastActivity(a))
+  }
+}
+
+function compareProjects(a: FleetProject, b: FleetProject): number {
+  return (
+    compareNumericLocaleText(a.repoName, b.repoName) ||
+    compareNumericLocaleText(a.hostLabel ?? '', b.hostLabel ?? '') ||
+    compareNumericLocaleText(a.key, b.key)
+  )
 }
 
 export function buildFleetView(cards: readonly DashboardCard[]): FleetView {
@@ -60,30 +129,32 @@ export function buildFleetView(cards: readonly DashboardCard[]): FleetView {
     return { card: row.card, depth, leafCount, children }
   }
 
-  const ranked: { team: FleetTeam; activity: number }[] = []
-  const solo: DashboardCard[] = []
+  const groups = new Map<string, ProjectGroup>()
   for (const row of rootRows) {
+    const key = fleetProjectKey(row.card)
+    let group = groups.get(key)
+    if (!group) {
+      group = { anchor: row.card, teams: [], solo: [], cards: [] }
+      groups.set(key, group)
+    }
     const root = toNode(row, 0)
     if (root.children.length === 0) {
-      solo.push(row.card)
+      group.solo.push(row.card)
+      group.cards.push(row.card)
       continue
     }
     const members = collectCards(root, [])
-    const counts = emptyCounts()
-    for (const card of members) {
-      counts[card.bucket] += 1
-    }
-    ranked.push({
-      team: { root, size: members.length, counts },
+    group.cards.push(...members)
+    group.teams.push({
+      team: { root, size: members.length, counts: countBuckets(members) },
       activity: Math.max(...members.map(lastActivity))
     })
   }
-  ranked.sort((a, b) => b.activity - a.activity)
-  solo.sort((a, b) => lastActivity(b) - lastActivity(a))
 
-  const summary = { ...emptyCounts(), agents: cards.length, teams: ranked.length }
-  for (const card of cards) {
-    summary[card.bucket] += 1
+  const projects = [...groups].map(([key, group]) => toProject(key, group)).sort(compareProjects)
+  const teams = projects.reduce((total, project) => total + project.teams.length, 0)
+  return {
+    summary: { ...countBuckets(cards), agents: cards.length, teams, projects: projects.length },
+    projects
   }
-  return { summary, teams: ranked.map(({ team }) => team), solo }
 }

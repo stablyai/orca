@@ -20807,11 +20807,10 @@
       },
       "summary": {
         "agents": "代理程式",
+        "projects": "專案",
         "teams": "團隊"
       },
-      "team": {
-        "members_other": "{{count}} 個代理程式"
-      }
+      "agentCount_other": "{{count}} 個代理程式"
     }
   },
   "dashboard": {

@@ -2694,10 +2694,8 @@
       "subagents_other": "{{count}} subagents"
     },
     "fleet": {
-      "team": {
-        "members_one": "{{count}} agent",
-        "members_other": "{{count}} agents"
-      }
+      "agentCount_one": "{{count}} agent",
+      "agentCount_other": "{{count}} agents"
     }
   },
   "editor": {

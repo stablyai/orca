@@ -298,6 +298,7 @@ export function AgentKanbanBoard({
             <AgentFleetView
               cards={filteredCards}
               buckets={visibleBuckets}
+              repoIconsByRepoId={snapshot.repoIconsByRepoId}
               now={now}
               onOpenCard={handleOpenTerminal}
               className="mx-auto w-full max-w-[1280px]"

@@ -22160,11 +22160,10 @@
       },
       "summary": {
         "agents": "智能体",
+        "projects": "项目",
         "teams": "团队"
       },
-      "team": {
-        "members_other": "{{count}} 个智能体"
-      }
+      "agentCount_other": "{{count}} 个智能体"
     }
   },
   "dashboard": {

@@ -6,22 +6,23 @@ import type {
   DashboardBucket,
   DashboardCard
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
-import { FleetNetworkNode, type FleetCardOpener } from './FleetNetworkNode'
-import { FleetSoloHeader } from './FleetSoloHeader'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
+import type { FleetCardOpener } from './FleetNetworkNode'
+import { FleetProjectSection } from './FleetProjectSection'
 import { FleetSummaryBand } from './FleetSummaryBand'
-import { FLEET_SECTION_CLASS, FleetTeamSection } from './FleetTeamSection'
-import { fleetTeamLayout } from './fleet-team-fold'
 import { buildFleetView } from './fleet-view-model'
 
 export function AgentFleetView({
   cards,
   buckets,
+  repoIconsByRepoId,
   now,
   onOpenCard,
   className
 }: {
   cards: readonly DashboardCard[]
   buckets: readonly DashboardBucket[]
+  repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
   onOpenCard: FleetCardOpener
   className?: string
@@ -30,6 +31,17 @@ export function AgentFleetView({
   const view = useMemo(() => buildFleetView(cards), [cards])
   const [width, setWidth] = useState<number | null>(null)
   const measureRef = useMeasuredWidth(setWidth)
+  const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(() => new Set())
+  const setProjectOpen = (key: string, open: boolean): void =>
+    setCollapsedKeys((previous) => {
+      const next = new Set(previous)
+      if (open) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
   return (
     <div ref={measureRef} className={cn('@container flex flex-col gap-3', className)}>
       <FleetSummaryBand summary={view.summary} buckets={buckets} />
@@ -40,25 +52,18 @@ export function AgentFleetView({
       ) : null}
       {width === null
         ? null
-        : view.teams.map((team) => (
-            <FleetTeamSection
-              key={team.root.card.paneKey}
-              team={team}
-              layout={fleetTeamLayout(team.root.leafCount, width)}
+        : view.projects.map((project) => (
+            <FleetProjectSection
+              key={project.key}
+              project={project}
+              repoIcon={repoIconsByRepoId?.[project.repoId]}
+              open={!collapsedKeys.has(project.key)}
+              onOpenChange={(open) => setProjectOpen(project.key, open)}
+              width={width}
               now={now}
               onOpenCard={onOpenCard}
             />
           ))}
-      {view.solo.length > 0 ? (
-        <section className={FLEET_SECTION_CLASS}>
-          <FleetSoloHeader count={view.solo.length} />
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2 p-3">
-            {view.solo.map((card) => (
-              <FleetNetworkNode key={card.paneKey} card={card} now={now} onOpenCard={onOpenCard} />
-            ))}
-          </div>
-        </section>
-      ) : null}
     </div>
   )
 }

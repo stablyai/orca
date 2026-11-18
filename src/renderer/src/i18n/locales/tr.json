@@ -21269,12 +21269,11 @@
       },
       "summary": {
         "agents": "Ajanlar",
+        "projects": "Projeler",
         "teams": "Takımlar"
       },
-      "team": {
-        "members_one": "{{count}} ajan",
-        "members_other": "{{count}} ajan"
-      }
+      "agentCount_one": "{{count}} ajan",
+      "agentCount_other": "{{count}} ajan"
     }
   },
   "dashboard": {

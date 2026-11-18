@@ -21810,14 +21810,13 @@
       },
       "summary": {
         "agents": "Агенты",
+        "projects": "Проекты",
         "teams": "Команды"
       },
-      "team": {
-        "members_one": "{{count}} агент",
-        "members_few": "{{count}} агента",
-        "members_many": "{{count}} агентов",
-        "members_other": "{{count}} агента"
-      }
+      "agentCount_one": "{{count}} агент",
+      "agentCount_few": "{{count}} агента",
+      "agentCount_many": "{{count}} агентов",
+      "agentCount_other": "{{count}} агента"
     }
   },
   "dashboard": {

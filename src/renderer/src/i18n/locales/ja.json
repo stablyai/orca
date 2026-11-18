@@ -21763,11 +21763,10 @@
       },
       "summary": {
         "agents": "Agent",
+        "projects": "プロジェクト",
         "teams": "チーム"
       },
-      "team": {
-        "members_other": "{{count}} 個の Agent"
-      }
+      "agentCount_other": "{{count}} 個の Agent"
     }
   },
   "dashboard": {

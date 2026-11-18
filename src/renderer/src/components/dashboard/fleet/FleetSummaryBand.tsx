@@ -1,4 +1,4 @@
-import { Bot, Network } from 'lucide-react'
+import { Bot, FolderGit2, Network } from 'lucide-react'
 import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { useTranslate } from '@/i18n/use-translate'
 import type { DashboardBucket } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
@@ -24,6 +24,12 @@ export function FleetSummaryBand({
       icon: <Bot className="size-3" aria-hidden />
     },
     {
+      key: 'projects',
+      label: t('dashboardPopout.fleet.summary.projects', 'Projects'),
+      value: summary.projects,
+      icon: <FolderGit2 className="size-3" aria-hidden />
+    },
+    {
       key: 'teams',
       label: t('dashboardPopout.fleet.summary.teams', 'Teams'),
       value: summary.teams,
@@ -37,7 +43,7 @@ export function FleetSummaryBand({
     }))
   ]
   return (
-    <div className="grid auto-cols-[minmax(0,1fr)] grid-flow-col gap-2 @max-[40rem]:grid-flow-row @max-[40rem]:grid-cols-3">
+    <div className="grid auto-cols-[minmax(0,1fr)] grid-flow-col gap-2 @max-[40rem]:grid-flow-row @max-[40rem]:grid-cols-4">
       {tiles.map((tile) => (
         <div
           key={tile.key}

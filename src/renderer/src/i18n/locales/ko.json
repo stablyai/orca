@@ -20388,11 +20388,10 @@
       },
       "summary": {
         "agents": "에이전트",
+        "projects": "프로젝트",
         "teams": "팀"
       },
-      "team": {
-        "members_other": "에이전트 {{count}}개"
-      }
+      "agentCount_other": "에이전트 {{count}}개"
     }
   },
   "dashboard": {
