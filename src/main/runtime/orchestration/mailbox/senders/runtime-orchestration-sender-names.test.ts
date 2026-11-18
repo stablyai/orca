@@ -265,20 +265,25 @@ it("names a run's mail by its coordinator chat only under the binding it was sen
   })
 })
 
-it("names a paired server's worker by the Dispatch its report names, as a local worker", () => {
+it("never names a sender unknown here by another Run's server task its report claims", () => {
   const run = db.createRun({
     objective: 'coordinate',
     coordinatorHandle: null,
     coordinatorPaneKey: null,
     coordinatorOrcaSessionId: CHAT
   })
-  const task = db.createTask({ runId: run.id, spec: 'Verify on Windows' })
+  const other = db.createRun({
+    objective: 'other',
+    coordinatorHandle: 'term_other',
+    coordinatorPaneKey: null
+  })
+  const task = db.createTask({ runId: other.id, spec: 'Verify on Windows' })
   db.db
     .prepare(
       `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent)
        VALUES ('ctx_remote', 'peerconv_1', ?, 'env_windows', ?, 'claude')`
     )
-    .run(run.id, task.id)
+    .run(other.id, task.id)
   const sender = structuredMailSource({
     db,
     mailboxHandle: `run:${run.id}`,
@@ -286,8 +291,8 @@ it("names a paired server's worker by the Dispatch its report names, as a local 
     senderSnapshot: (party, reported) => names().snapshotOf(party, reported),
     batch: [
       {
-        id: 'msg_remote',
-        from_handle: 'term_on_windows',
+        id: 'msg_claim',
+        from_handle: 'term_unknown_here',
         run_id: run.id,
         type: 'worker_done',
         payload: JSON.stringify({ taskId: task.id, dispatchId: 'ctx_remote' }),
@@ -296,5 +301,6 @@ it("names a paired server's worker by the Dispatch its report names, as a local 
       }
     ]
   }).senders[0]
-  expect(sender).toMatchObject({ name: 'Verify on Windows', agent: 'claude' })
+  expect(sender).toMatchObject({ name: null })
+  expect(sender).not.toHaveProperty('agent')
 })

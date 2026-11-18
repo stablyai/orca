@@ -35,10 +35,19 @@ export function importedRemoteDispatchId(
   return row?.dispatch_id
 }
 
-/** A paired server's worker: its terminal is unknown here, so the Dispatch its mail names identifies it. */
+/** A paired server's worker, named only by a Dispatch the import recorded for this sender's own mail. */
 export function reportedRemoteDispatch(
   db: OrchestrationDb,
-  dispatchId: string | undefined
+  dispatchId: string | undefined,
+  senderAddress: string
 ): RemoteDispatchRow | null {
-  return (dispatchId ? getRemoteDispatch(db, dispatchId) : undefined) ?? null
+  const imported =
+    dispatchId !== undefined &&
+    db.db
+      .prepare(
+        `SELECT 1 FROM message_dispatch_provenance p JOIN messages m ON m.id = p.message_id
+         WHERE p.dispatch_id = ? AND m.from_handle = ? LIMIT 1`
+      )
+      .get(dispatchId, senderAddress) !== undefined
+  return (imported ? getRemoteDispatch(db, dispatchId) : undefined) ?? null
 }

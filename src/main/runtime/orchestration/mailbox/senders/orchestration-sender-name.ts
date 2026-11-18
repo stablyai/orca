@@ -189,7 +189,7 @@ export type SenderObservation = {
   chat: ReturnType<typeof structuredChatNaming>
   terminal: TerminalSenderNaming | null
   dispatch: DispatchContextRow | null
-  /** A paired server's worker has no terminal or Dispatch here: its report names the Dispatch it runs. */
+  /** A paired server's worker has no terminal or Dispatch here: its imported mail names the Dispatch it runs. */
   remoteDispatch: RemoteDispatchRow | null
 }
 
@@ -225,7 +225,9 @@ export function observeOrchestrationSender(
     get remoteDispatch() {
       if (remoteDispatch === undefined) {
         remoteDispatch =
-          db && !candidate && !this.dispatch ? reportedRemoteDispatch(db, reportedDispatchId) : null
+          db && !candidate && !this.dispatch
+            ? reportedRemoteDispatch(db, reportedDispatchId, party.address)
+            : null
       }
       return remoteDispatch
     },
