@@ -10,6 +10,11 @@ import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-local
 import { DEFAULT_UI_LOCALE } from './ui-locale'
 import type { PluginLanguagePackRegistration } from './plugins/artifacts/plugin-language-pack-artifact'
 import { replacePluginLanguagePackResources } from './plugins/plugin-language-pack-i18n-resources'
+import {
+  applyZotzBrandToCatalog,
+  applyZotzBrandToCopy,
+  isZotzCopyKey
+} from './zotz/zotz-brand-copy'
 
 export type OrcaI18n = {
   i18n: I18nInstance
@@ -62,7 +67,9 @@ export function createOrcaI18n(options: {
     load: 'currentOnly',
     // Serve eager English from resources while the backend lazily supplies other languages.
     partialBundledLanguages: true,
-    resources: { [DEFAULT_UI_LOCALE]: { translation: options.englishResources } },
+    resources: {
+      [DEFAULT_UI_LOCALE]: { translation: applyZotzBrandToCatalog(options.englishResources) }
+    },
     // An empty catalog value falls back to English instead of rendering blank.
     returnEmptyString: false,
     interpolation: { escapeValue: false },
@@ -82,7 +89,8 @@ export function createOrcaI18n(options: {
         ENGLISH_PLURAL_RULES.select(count) === 'one'
           ? one
           : fallback
-      const value = i18n.t(key, { defaultValue, ...rest })
+      const brandedDefault = isZotzCopyKey(key) ? defaultValue : applyZotzBrandToCopy(defaultValue)
+      const value = i18n.t(key, { defaultValue: brandedDefault, ...rest })
       return isPseudoLocalizationLocale(i18n.language) ? pseudoLocalizeString(value) : value
     },
     setPluginLanguagePacks: (packs) => {

@@ -1,5 +1,8 @@
 import { join } from 'node:path'
-import type { ZotzNodeSetupStepId } from '../../shared/zotz/zotz-node-setup-contract'
+import type {
+  ZotzNodeSetupStep,
+  ZotzNodeSetupStepId
+} from '../../shared/zotz/zotz-node-setup-contract'
 import { ZOTZ_TAILNET_RANGE } from '../../shared/zotz/zotz-node-setup-contract'
 import {
   encodeWindowsTaskXml,
@@ -10,6 +13,7 @@ import { renderZotzDesktopAutostart, ZOTZ_SERVER_TASK_PATH } from './zotz-deskto
 import type { ZotzNodeSetupEnvironment } from './zotz-node-setup-environment'
 import type { ZotzNodeSetupOutcome, ZotzNodeSetupPhase } from './zotz-node-setup-orchestrator'
 import { isJsonRecord, parseJsonRecord } from './zotz-json-record'
+import { nodeSetupTranscriptLines, parseNodeSetupLogProgress } from './zotz-node-setup-log-progress'
 import { runElevatedWindowsProcess } from './zotz-windows-elevation'
 
 export const WINDOWS_ELEVATED_STEPS = [
@@ -22,6 +26,7 @@ export const WINDOWS_ELEVATED_STEPS = [
 
 // Installing OpenSSH Server through Windows Update can take several minutes.
 const ELEVATED_SCRIPT_TIMEOUT_MS = 30 * 60_000
+const LOG_POLL_MS = 1_000
 
 type Outcomes = Partial<Record<ZotzNodeSetupStepId, ZotzNodeSetupOutcome>>
 
@@ -82,7 +87,8 @@ export function nodeSetupScriptArgs(input: {
 export function windowsElevatedPhase(environment: ZotzNodeSetupEnvironment): ZotzNodeSetupPhase {
   return {
     steps: WINDOWS_ELEVATED_STEPS,
-    run: async () => {
+    ownsOutput: true,
+    run: async (context) => {
       if (!environment.setupScriptPath) {
         return allSteps({
           status: 'failed',
@@ -107,6 +113,45 @@ export function windowsElevatedPhase(environment: ZotzNodeSetupEnvironment): Zot
       const resultPath = join(environment.userDataPath, 'zotz-node-setup-result.json')
       const logPath = join(environment.userDataPath, 'zotz-node-setup.log')
       await environment.removeFile(resultPath)
+      await environment.removeFile(logPath)
+      // Until the script logs its first step, the UAC prompt is what the user is waiting on.
+      context.publishSteps(
+        WINDOWS_ELEVATED_STEPS.map((id): ZotzNodeSetupStep =>
+          id === 'power'
+            ? { id, status: 'running', detail: 'waiting for administrator permission' }
+            : { id, status: 'pending' }
+        )
+      )
+      context.appendOutput(['Waiting for administrator permission (UAC)…'])
+      let lastPublished = ''
+      let shownLines = 0
+      const publishLogProgress = async (): Promise<void> => {
+        const log = await environment.readText(logPath)
+        if (!log) {
+          return
+        }
+        const lines = nodeSetupTranscriptLines(log)
+        if (lines.length > shownLines) {
+          context.appendOutput(lines.slice(shownLines))
+          shownLines = lines.length
+        }
+        const steps = parseNodeSetupLogProgress(log, WINDOWS_ELEVATED_STEPS)
+        if (steps.every((step) => step.status === 'pending')) {
+          return
+        }
+        const serialized = JSON.stringify(steps)
+        if (serialized !== lastPublished) {
+          lastPublished = serialized
+          context.publishSteps(steps)
+        }
+      }
+      let scriptFinished = false
+      const polling = (async () => {
+        while (!scriptFinished) {
+          await publishLogProgress().catch(() => {})
+          await environment.sleep(LOG_POLL_MS)
+        }
+      })()
       const elevation = await runElevatedWindowsProcess(
         environment.run,
         environment.env,
@@ -120,7 +165,11 @@ export function windowsElevatedPhase(environment: ZotzNodeSetupEnvironment): Zot
           taskXmlPath
         }),
         ELEVATED_SCRIPT_TIMEOUT_MS
-      )
+      ).finally(() => {
+        scriptFinished = true
+      })
+      await polling
+      await publishLogProgress().catch(() => {})
       if (!elevation.launched) {
         return allSteps({
           status: 'failed',

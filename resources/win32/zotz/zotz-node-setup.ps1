@@ -205,7 +205,9 @@ Invoke-Step 'firewall' {
             $addressFilter = $rule | Get-NetFirewallAddressFilter
             if (@($addressFilter.RemoteAddress) -contains 'Any') {
                 Write-Step "limiting allow rule '$($rule.DisplayName)' to $TailnetRange"
-                $addressFilter | Set-NetFirewallAddressFilter -RemoteAddress $TailnetRange
+                # The prompt's rules defer edge traversal to the user, which Windows rejects with a
+                # remote-address limit; tailnet traffic never needs edge traversal.
+                $rule | Set-NetFirewallRule -EdgeTraversalPolicy Block -RemoteAddress $TailnetRange
             }
         }
     }

@@ -97,7 +97,7 @@ describe('runZotzNodeSetup', () => {
         }
       }
     ]
-    const result = await runZotzNodeSetup(phases, (steps) => progress.push(steps))
+    const result = await runZotzNodeSetup(phases, (update) => progress.push(update.steps))
 
     expect(order).toEqual(['tailscale', 'system', 'rest'])
     expect(result.tailscaleIp).toBe('100.88.1.2')

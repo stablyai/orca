@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { isZotzServerAccessReady } from '../../../../shared/zotz/zotz-machine-mode'
 import type {
+  ZotzNodeSetupProgress,
   ZotzNodeSetupResult,
   ZotzNodeSetupStep
 } from '../../../../shared/zotz/zotz-node-setup-contract'
@@ -14,12 +15,13 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'
 import { ZotzAccessLink } from './ZotzAccessLink'
+import { ZotzServerSetupProgress } from './ZotzServerSetupProgress'
 import { zotzNodeSetupStepDetail, zotzNodeSetupStepTitle } from './zotz-node-setup-step-labels'
 
 type SetupState = 'intro' | 'running' | 'finished'
 
 async function runServerSetupWithProgress(
-  onProgress: (steps: ZotzNodeSetupStep[]) => void
+  onProgress: (progress: ZotzNodeSetupProgress) => void
 ): Promise<ZotzNodeSetupResult | Error> {
   const unsubscribe = window.api.zotzNode.onSetupProgress(onProgress)
   try {
@@ -45,6 +47,7 @@ export function ZotzServerSetupPanel({
   const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const [state, setState] = useState<SetupState>('intro')
   const [steps, setSteps] = useState<ZotzNodeSetupStep[]>([])
+  const [output, setOutput] = useState<string[]>([])
   const [result, setResult] = useState<ZotzNodeSetupResult | null>(null)
   const [setupError, setSetupError] = useState(false)
 
@@ -52,10 +55,12 @@ export function ZotzServerSetupPanel({
     setState('running')
     setResult(null)
     setSetupError(false)
+    setOutput([])
     onStart()
     const outcome = await runServerSetupWithProgress((next) => {
       if (mountedRef.current) {
-        setSteps(next)
+        setSteps(next.steps)
+        setOutput(next.output)
       }
     })
     if (outcome instanceof Error) {
@@ -102,6 +107,14 @@ export function ZotzServerSetupPanel({
           )}
         </p>
       </div>
+      {state !== 'intro' ? (
+        <ZotzServerSetupProgress
+          steps={steps}
+          output={output}
+          finished={state === 'finished'}
+          failed={failed}
+        />
+      ) : null}
       {steps.length > 0 ? (
         <ol className="space-y-1">
           {steps.map((step) => (
@@ -180,7 +193,13 @@ function StepRow({ step }: { step: ZotzNodeSetupStep }): React.JSX.Element {
   const detail = zotzNodeSetupStepDetail(step, t)
   const url = step.url
   return (
-    <li className="flex items-start gap-3 rounded-md px-2 py-2">
+    <li
+      className={cn(
+        'flex items-start gap-3 rounded-md px-2 py-2',
+        step.status === 'running' && 'bg-accent'
+      )}
+      aria-current={step.status === 'running' ? 'step' : undefined}
+    >
       <span className="mt-0.5 shrink-0">
         <StepIcon status={step.status} />
       </span>
