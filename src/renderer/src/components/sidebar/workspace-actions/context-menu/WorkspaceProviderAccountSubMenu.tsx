@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { UserRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { notifyWorkspaceAccountSettingsChanged } from '@/runtime/provider-accounts/observations/workspace-account-settings-changes'
@@ -60,8 +60,13 @@ export function WorkspaceProviderAccountSubMenu({
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   const targetKind = target?.kind
   const ownerKey = `${targetKind ?? 'none'}:${environmentId ?? ''}:${worktree.id}:${provider}`
-  const ownerRef = useRef(ownerKey)
-  ownerRef.current = ownerKey
+  const ownerRef = useRef<string | null>(ownerKey)
+  useLayoutEffect(() => {
+    ownerRef.current = ownerKey
+    return () => {
+      ownerRef.current = null
+    }
+  }, [ownerKey])
   const key = workspaceAccountKey(worktree.id)
 
   useEffect(() => {
