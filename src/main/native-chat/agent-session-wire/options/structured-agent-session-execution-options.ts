@@ -12,7 +12,7 @@ import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent
 
 /** Capture send-specific choices or saved defaults once under the acceptance lane. */
 export function captureStructuredExecutionOptions(
-  ctx: Pick<AgentSessionTurnContext, 'agents' | 'agent' | 'persistedOptions'>,
+  ctx: Pick<AgentSessionTurnContext, 'agents' | 'agent' | 'accountHome' | 'persistedOptions'>,
   supplied?: Readonly<Record<string, string>>,
   selection?: Readonly<Record<string, string>>
 ): { options: AgentSessionExecutionOptions } | { refusal: AgentSessionWireRefusal } {
@@ -29,7 +29,7 @@ export function captureStructuredExecutionOptions(
   if (
     candidate.fastMode === undefined &&
     unpickedFastModeIsOff(ctx.agent) &&
-    ctx.agents.definition(ctx.agent)?.restingOptions.acceptsKey('fastMode')
+    ctx.agents.definition(ctx.agent)?.restingOptions.acceptsKey('fastMode', ctx.accountHome)
   ) {
     candidate.fastMode = 'false'
   }
@@ -46,9 +46,9 @@ export function captureStructuredExecutionOptions(
   const refusal = structuredAgentSessionOptionOverridesRefusal(
     ctx.agents,
     ctx.agent,
-    Object.fromEntries(
-      Object.entries(options).filter(([key]) => !(ctx.agent === 'codex' && key === 'fastMode'))
-    )
+    options,
+    ctx.accountHome,
+    { allowLegacyCodexFastMode: true }
   )
   return refusal ? { refusal } : { options }
 }

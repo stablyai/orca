@@ -18,7 +18,10 @@ import {
 export async function applyAcpMessageOptions(
   session: AcpStructuredSession,
   options: AgentSessionExecutionOptions | undefined,
-  setOption: (key: 'model' | 'effort' | 'fastMode', value: string) => Promise<unknown>,
+  setOption: (
+    key: 'model' | 'effort' | 'fastMode' | 'interactionMode',
+    value: string
+  ) => Promise<unknown>,
   isCurrent: () => boolean,
   signal?: AbortSignal,
   /** The agent's own model command when its model option is absent or rejects the value. */
@@ -27,15 +30,21 @@ export async function applyAcpMessageOptions(
   if (!options) {
     return true
   }
-  for (const key of ['model', 'effort', 'fastMode'] as const) {
+  for (const key of ['model', 'effort', 'fastMode', 'interactionMode'] as const) {
     const value = options[key]
+    if (key === 'interactionMode' && value === 'plan' && !session.options.offersMode('plan')) {
+      throw new AgentSessionOptionRejectedError(
+        `${session.spec.agent} offers no session option named ${key}`
+      )
+    }
     if (
       value === undefined ||
       session.options.appliedInput.get(key) === value ||
       (key === 'fastMode'
         ? !session.options.write(key, value)
         : session.options.matchesNativeRestoredOption(key, value) ||
-          (key === 'effort' && !session.options.offersEffort(value)))
+          (key === 'effort' && !session.options.offersEffort(value)) ||
+          (key === 'interactionMode' && value !== 'plan' && !session.options.offersMode('plan')))
     ) {
       continue
     }

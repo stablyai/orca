@@ -11,6 +11,7 @@ export async function readAcpLiveOptions(
   const options = withLiveCatalogListing(session.options.read())
   return {
     ...options,
+    interactionModeSupported: session.options.offersMode('plan'),
     current: {
       ...options.current,
       reportedPermissionMode: session.options.reportedPermissionMode(permissionModes)

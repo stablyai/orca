@@ -40,9 +40,15 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
     ...(hostBackend && { runsHostProgram: (home) => hostBackend.pins(home) }),
     restingOptions: {
-      acceptsKey: (key) =>
-        isAcpStructuredOptionKey(key) ||
-        (spec.dialect.fastConfigId !== undefined && key === 'fastMode'),
+      acceptsKey: (key, accountHome) =>
+        key === 'interactionMode'
+          ? Boolean(
+              spec.supportsPlanMode ||
+              (spec.hostBackend?.spec.supportsPlanMode &&
+                (accountHome == null || spec.hostBackend.pins(accountHome)))
+            )
+          : isAcpStructuredOptionKey(key) ||
+            (spec.dialect.fastConfigId !== undefined && key === 'fastMode'),
       // Populate catalogs from live agents.
       fallbackModels: () => null,
       effortDefaultsToModel: false

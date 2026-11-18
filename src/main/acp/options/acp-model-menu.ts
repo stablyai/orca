@@ -1,4 +1,12 @@
-import { acpListedModels, acpSelectChoices } from './acp-select-choices'
+import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
+import {
+  acpEffortOption,
+  acpListedModels,
+  acpSelectChoices,
+  acpSelectOffers,
+  acpSelectOption,
+  type AcpSelectOption
+} from './acp-select-choices'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
@@ -6,6 +14,51 @@ import type { AgentSessionOptionsResult } from '../../../shared/agent-session/op
 import type { SessionConfigOption, SessionModelState } from '../generated/acp-protocol.generated'
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
+
+export type AcpOptionWrite =
+  | { method: 'config'; configId: string; value: string }
+  | { method: 'model'; modelId: string }
+
+function acpFastOption(
+  configOptions: readonly SessionConfigOption[],
+  fastConfigId: string | undefined
+): AcpSelectOption | null {
+  const option = fastConfigId ? configOptions.find((entry) => entry.id === fastConfigId) : undefined
+  return option?.type === 'select' ? option : null
+}
+
+export function buildAcpOptionWrite(input: {
+  key: string
+  value: string
+  configOptions: readonly SessionConfigOption[]
+  models: SessionModelState | null
+  fastConfigId: string | undefined
+  buildMode: string
+}): AcpOptionWrite | null {
+  const { key, value, configOptions, models, fastConfigId, buildMode } = input
+  if (key === 'fastMode') {
+    const fast = acpFastOption(configOptions, fastConfigId)
+    return fast ? { method: 'config', configId: fast.id, value } : null
+  }
+  if (key === 'model') {
+    const option = acpSelectOption(configOptions, 'model')
+    if (option) {
+      return { method: 'config', configId: option.id, value }
+    }
+    return models ? { method: 'model', modelId: value } : null
+  }
+  if (key === 'effort') {
+    const option = acpEffortOption(configOptions)
+    return option ? { method: 'config', configId: option.id, value } : null
+  }
+  if (key === 'interactionMode' && isAgentSessionInteractionMode(value)) {
+    const option = acpSelectOption(configOptions, 'mode')
+    return option && acpSelectOffers(option, 'plan')
+      ? { method: 'config', configId: option.id, value: value === 'plan' ? 'plan' : buildMode }
+      : null
+  }
+  return null
+}
 
 /** Native choices never establish an unobserved model's capability or configured default. */
 export function acpModelMenuModels(input: {
@@ -72,4 +125,43 @@ export function withFastModeOption<T extends Pick<AgentSessionOptionsResult, 'mo
       confirmed: [...(menu.current.confirmed ?? []), 'fastMode']
     }
   }
+}
+
+export function readAcpOptionsMenu(input: {
+  configOptions: readonly SessionConfigOption[]
+  models: SessionModelState | null
+  dialect: Pick<AcpDialect, 'modelEfforts' | 'familyEfforts' | 'fastConfigId'>
+  forkSupport: AgentSessionOptionsResult['forkSupport']
+}): Pick<AgentSessionOptionsResult, 'models' | 'current' | 'forkSupport' | 'fastModeSupport'> {
+  const modelOption = acpSelectOption(input.configOptions, 'model')
+  const effortOption = acpEffortOption(input.configOptions)
+  const modeOption = acpSelectOption(input.configOptions, 'mode')
+  const currentModel = (modelOption?.currentValue ?? input.models?.currentModelId) || undefined
+  const interactionMode = acpSelectOffers(modeOption, 'plan')
+    ? modeOption?.currentValue === 'plan'
+      ? ('plan' as const)
+      : ('default' as const)
+    : undefined
+  const fastOption = acpFastOption(input.configOptions, input.dialect.fastConfigId)
+  const menu = {
+    models: acpModelMenuModels({
+      dialect: input.dialect,
+      modelOption,
+      effortOption,
+      state: input.models,
+      currentModel
+    }),
+    forkSupport: input.forkSupport,
+    current: {
+      ...(currentModel ? { model: currentModel } : {}),
+      ...(effortOption ? { effort: effortOption.currentValue } : {}),
+      ...(interactionMode ? { interactionMode } : {}),
+      confirmed: [
+        ...(currentModel ? ['model'] : []),
+        ...(effortOption ? ['effort'] : []),
+        ...(interactionMode ? ['interactionMode'] : [])
+      ]
+    }
+  }
+  return withFastModeOption(menu, fastOption)
 }

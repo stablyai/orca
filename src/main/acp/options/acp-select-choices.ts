@@ -6,9 +6,19 @@ import {
   type SessionModelState
 } from '../generated/acp-protocol.generated'
 
-type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
+export type AcpSelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
-export function acpSelectChoices(option: SelectOption): SessionConfigSelectOption[] {
+export function acpSelectOption(
+  configOptions: readonly SessionConfigOption[],
+  category: string
+): AcpSelectOption | null {
+  const option = configOptions.find(
+    (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
+  )
+  return option?.type === 'select' ? option : null
+}
+
+export function acpSelectChoices(option: AcpSelectOption): SessionConfigSelectOption[] {
   const choices: SessionConfigSelectOption[] = []
   for (const entry of option.options) {
     const group = SessionConfigSelectGroupSchema.safeParse(entry)
@@ -26,7 +36,7 @@ export function acpSelectChoices(option: SelectOption): SessionConfigSelectOptio
 
 /** The model select's choices, or the legacy model list when the agent offers no select. */
 export function acpListedModels(
-  modelOption: SelectOption | null,
+  modelOption: AcpSelectOption | null,
   models: SessionModelState | null
 ): { id: string; label: string; description?: string }[] {
   return modelOption
@@ -42,9 +52,13 @@ export function acpListedModels(
       })) ?? [])
 }
 
+export function acpSelectOffers(option: AcpSelectOption | null, value: string): boolean {
+  return !!(option && acpSelectChoices(option).some((choice) => choice.value === value))
+}
+
 /** An agent may list an on/off thinking switch beside its effort levels; effort is the longer menu. */
-export function acpEffortOption(options: readonly SessionConfigOption[]): SelectOption | null {
-  let effort: SelectOption | null = null
+export function acpEffortOption(options: readonly SessionConfigOption[]): AcpSelectOption | null {
+  let effort: AcpSelectOption | null = null
   for (const option of options) {
     if (
       option.category === 'thought_level' &&

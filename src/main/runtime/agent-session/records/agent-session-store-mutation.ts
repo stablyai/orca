@@ -161,7 +161,7 @@ export function applyAgentSessionStoreMutation(
           const record = state.records.get(sessionId)
           const mode = facts.planMode
           if (
-            record?.provider === 'claude' &&
+            (record?.provider === 'claude' || record?.provider === 'antigravity') &&
             mode !== undefined &&
             (mode !== 'default' || record.options?.interactionMode === 'plan') &&
             record.options?.interactionMode !== mode

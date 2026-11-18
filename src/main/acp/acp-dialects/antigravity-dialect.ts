@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { AgentJournalApprovalSubject } from '../../../shared/agent-session/journal/agent-session-journal-approval-subject'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { AcpRpcError, acpErrorDataWords, type AcpAgentError } from '../transport/acp-errors'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
@@ -9,6 +11,7 @@ import {
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
+import { antigravityToolSubagents } from './antigravity-subagents'
 
 // The server's question forms open with only a count; each field's title is the real question.
 const QUESTION_FORM_MESSAGE = /^The agent has (?:a question|\d+ questions)\.$/
@@ -71,16 +74,66 @@ const securityWarningSchema = z.looseObject({
   })
 })
 
-// Risky Allow Always options carry warnings in option metadata.
-function warnedApproval(method: string, params: unknown): AcpRequestPresentation | undefined {
+const planFieldsSchema = z.looseObject({
+  plan: z.string().optional(),
+  Path: z.string().optional(),
+  Content: z.string().optional(),
+  Replacement: z.string().optional(),
+  ArtifactMetadata: z
+    .looseObject({
+      RequestFeedback: z.boolean().optional(),
+      Summary: z.string().optional()
+    })
+    .optional()
+})
+
+function isExitPlanModeTool(
+  name: string | null | undefined,
+  title: string | null | undefined
+): boolean {
+  return (
+    name === 'exit_plan_mode' || name === 'Run exit_plan_mode' || title === 'Run exit_plan_mode'
+  )
+}
+
+function planApprovalSubject(toolCall: ToolCallUpdate): AgentJournalApprovalSubject | undefined {
+  const parsed = planFieldsSchema.safeParse(toolCall.rawInput).data
+  if (!parsed) {
+    return undefined
+  }
+  if (isExitPlanModeTool(toolCall.name, toolCall.title)) {
+    const text = parsed.plan?.trim()
+    return text ? { kind: 'plan', text } : undefined
+  }
+  if (parsed.ArtifactMetadata?.RequestFeedback !== true) {
+    return undefined
+  }
+  const text =
+    parsed.Content?.trim() || parsed.Replacement?.trim() || parsed.ArtifactMetadata.Summary?.trim()
+  if (!text) {
+    return undefined
+  }
+  const filePath = parsed.Path?.trim()
+  return { kind: 'plan', text, ...(filePath ? { filePath } : {}) }
+}
+
+// Risky Allow Always options carry warnings in option metadata; plan gates carry plan subjects.
+function enrichedApproval(method: string, params: unknown): AcpRequestPresentation | undefined {
   const request =
     method === 'session/request_permission' ? readAcpPermissionRequest(params, () => {}) : null
-  const warning = request?.options
+  if (!request) {
+    return undefined
+  }
+  const warning = request.options
     .map((option) => securityWarningSchema.safeParse(option._meta).data?.['agy.security.warning'])
     .map((found) => found?.message?.trim() || found?.title?.trim())
     .find(Boolean)
-  return warning
-    ? acpPermissionPresentation(params, warning.slice(0, WARNING_MAX_CHARS))
+  const subject = planApprovalSubject(request.toolCall)
+  return warning || subject
+    ? acpPermissionPresentation(params, {
+        ...(warning ? { description: warning.slice(0, WARNING_MAX_CHARS) } : {}),
+        ...(subject ? { subject } : {})
+      })
     : undefined
 }
 
@@ -97,6 +150,7 @@ const commandFieldsSchema = z.looseObject({
   cwd: optionalText,
   combinedOutput: optionalText,
   combined_output: optionalText,
+  output: optionalText,
   exitCode: z.number().int().safe().optional(),
   exit_code: z.number().int().safe().optional()
 })
@@ -107,7 +161,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   const command = input?.CommandLine ?? input?.command_line ?? input?.commandLine
   const cwd =
     input?.Cwd ?? input?.WorkingDirectory ?? input?.working_dir ?? input?.workingDir ?? input?.cwd
-  const stdout = output?.combinedOutput ?? output?.combined_output
+  const stdout = output?.combinedOutput ?? output?.combined_output ?? output?.output
   const exitCode = output?.exitCode ?? output?.exit_code
   return {
     ...update,
@@ -186,19 +240,30 @@ export function antigravityModelChoices(
   return [...choices].map(([id, label]) => ({ id, label }))
 }
 
+function toolPlan(update: ToolCallUpdate, tool: AgentJournalToolCallItem): string | undefined {
+  if (update.status !== 'completed' || !isExitPlanModeTool(tool.name, update.title)) {
+    return undefined
+  }
+  return planFieldsSchema.safeParse(tool.input).data?.plan?.trim() || undefined
+}
+
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   // With forms, ask_question carries a write-in field per question; permissions cannot carry text.
   clientCapabilities: { elicitation: { form: {} } },
   request: (method, params) =>
     questionForm(method, params) ??
     questionRequest(method, params) ??
-    warnedApproval(method, params),
+    enrichedApproval(method, params),
   normalizeToolUpdate,
   promptErrorDetail,
+  toolPlan,
+  toolSubagents: antigravityToolSubagents,
   providerRetry: (text) => RETRY_NOTICE.exec(text)?.[1],
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
+  // Exact-match single-variant models (e.g. Orchestrator) expose no thinking-level menu.
+  modelEfforts: () => ({ efforts: [] }),
   familyEfforts
 }

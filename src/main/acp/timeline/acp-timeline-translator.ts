@@ -288,6 +288,7 @@ export class AcpTimelineTranslator {
 
   // Write failure reasons before ending the turn so their rows join it.
   private endTurn(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
+    this.subagents.endTurn(turn, ending.stopReason, ending.at)
     const events = this.prompts.endCompaction(turn, ending, this.failures) ?? [
       ...this.failures.ended(turn, ending),
       ...acpTurnEndEvents(this.options.sessionId, turn, ending)
@@ -314,16 +315,12 @@ export class AcpTimelineTranslator {
       this.end(this.activeTurn)
     }
     operation.open(turn)
-    if (turn === this.prompts.current?.turn) {
-      const events = this.prompts.start(turn, at)
-      // Late frames must not reopen or retarget this prompt.
-      this.started.set(turn, true)
-      this.activeTurn = turn
-      return events
-    }
+    // Late frames must not reopen or retarget this prompt.
     this.started.set(turn, true)
     this.activeTurn = turn
-    return [{ type: 'turn.open', turn, at }]
+    return turn === this.prompts.current?.turn
+      ? this.prompts.start(turn, at)
+      : [{ type: 'turn.open', turn, at }]
   }
 
   private end(turn: string): void {

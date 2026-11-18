@@ -215,7 +215,7 @@ export async function initializeAcpStructuredSession(
     // Fail startup rather than silently use a different permission mode.
     const wanted = acquire.permissionMode ?? 'ask'
     const requested = child.permissionModes?.[wanted]
-    if (requested === undefined) {
+    if (requested === undefined || (options.hasModeOption() && !options.offersMode(requested))) {
       throw new Error(`${agentName} on this host cannot run in the ${wanted} permission mode`)
     }
     const configId = options.modeConfigId()
@@ -226,6 +226,7 @@ export async function initializeAcpStructuredSession(
       }
       options.adoptConfigOptions(configOptions)
     })
+    options.adoptBuildMode(requested)
     assertStarting()
   }
   // A load restores the conversation's own model, so only a new session runs the launch choice.

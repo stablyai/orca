@@ -90,7 +90,27 @@ export function acpSessionUpdate(
       const tasks = (body ? (dialect.toolBackgroundTasks?.(update, body) ?? []) : []).filter(
         (task) => !subagents.has(task.taskId)
       )
-      return [...events, ...backgroundTasks.translate(tasks, join.join), ...subagentEvents]
+      const planText = body ? dialect.toolPlan?.(update, body)?.trim() : undefined
+      const planEvents: ProviderTimelineEvent[] = planText
+        ? [
+            {
+              type: 'item.update',
+              item: `plan-tool:${update.toolCallId}`,
+              body: {
+                kind: 'status',
+                presentation: 'plan-document',
+                text: planText
+              },
+              ...join
+            }
+          ]
+        : []
+      return [
+        ...events,
+        ...planEvents,
+        ...backgroundTasks.translate(tasks, join.join),
+        ...subagentEvents
+      ]
     }
     case 'plan':
       return [
