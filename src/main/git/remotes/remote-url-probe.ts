@@ -23,9 +23,16 @@ const sharedRemoteUrlReads = new AsyncLocalStorage<SharedRemoteUrlReads>()
 // A confirmed missing remote stays missing until the repo's Git config changes; the TTL covers global config the signature can't see.
 const MISSING_REMOTE_TTL_MS = 5 * 60_000
 const MISSING_REMOTE_MAX_ENTRIES = 500
-// One miss can race a `git remote add`; a second miss under the same signature confirms it.
-type MissingRemote = { error: unknown; signature: string; expiresAt: number; confirmed: boolean }
+// One miss can race a `git remote add`; a later miss that started after it was recorded, under the same signature, confirms it.
+type MissingRemote = {
+  error: unknown
+  signature: string
+  expiresAt: number
+  confirmed: boolean
+  recordedSeq: number
+}
 const missingRemotes = new Map<string, MissingRemote>()
+let missingRemoteSeq = 0
 
 /** @internal - exposed for tests only */
 export function _resetMissingRemoteCache(): void {
@@ -117,6 +124,7 @@ async function readUncachedRemoteUrl(
   if (missing) {
     throw missing.error
   }
+  const startedSeq = ++missingRemoteSeq
   try {
     const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
       cwd: context.repoPath,
@@ -137,7 +145,12 @@ async function readUncachedRemoteUrl(
           error,
           signature,
           expiresAt: Date.now() + MISSING_REMOTE_TTL_MS,
-          confirmed: previous?.signature === signature && previous.expiresAt > Date.now()
+          confirmed:
+            previous !== undefined &&
+            previous.signature === signature &&
+            previous.expiresAt > Date.now() &&
+            previous.recordedSeq < startedSeq,
+          recordedSeq: ++missingRemoteSeq
         })
       }
     }
@@ -146,6 +159,8 @@ async function readUncachedRemoteUrl(
 }
 
 function rememberMissingRemote(key: string, entry: MissingRemote): void {
+  // Re-insert so eviction drops the least recently refreshed entry.
+  missingRemotes.delete(key)
   missingRemotes.set(key, entry)
   while (missingRemotes.size > MISSING_REMOTE_MAX_ENTRIES) {
     const oldest = missingRemotes.keys().next()
