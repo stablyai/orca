@@ -44,6 +44,7 @@ import {
   CLAUDE_PROFILE_POINTER_ENV
 } from '../../../shared/agent-accounts/claude/claude-profile-routing'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/shell/launch/windows-terminal-shell'
+import { resolveNiubashShellPath } from '../../niubash'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-readiness/shell-ready'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
@@ -77,6 +78,7 @@ export function createPtyShellLaunchPlan(
   let validationCwd = spawnCwd
 
   if (process.platform === 'win32') {
+    shellPath = resolveNiubashShellPath(shellPath)
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
     const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellPath)
     const resolvedShellFamily: WindowsPowerShellShellFamily =

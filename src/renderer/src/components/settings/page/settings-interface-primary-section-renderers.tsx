@@ -36,6 +36,7 @@ export function renderTerminalSettingsSection(
           wslCapabilitiesLoading={terminal.windowsTerminalCapabilities.isLoading}
           pwshAvailable={terminal.windowsTerminalCapabilities.pwshAvailable}
           gitBashAvailable={terminal.windowsTerminalCapabilities.gitBashAvailable}
+          niubashAvailable={terminal.windowsTerminalCapabilities.niubashAvailable}
           isWindowsTerminalHost={terminal.isWindowsTerminalHost}
         />
       ) : null}

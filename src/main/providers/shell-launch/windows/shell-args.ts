@@ -1,5 +1,6 @@
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../../../pty/shell-startup/git-bash'
+import { isNiubashShell } from '../../../../shared/niubash-shell'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { toLinuxPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { msysDrivePathToWindows } from '../../../../shared/file-access/cross-platform-path'
@@ -130,6 +131,14 @@ export function resolveWindowsShellLaunchArgs(
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = msysDrivePathToWindows(cwd)
+
+  if (isNiubashShell(shellPath)) {
+    return {
+      shellArgs: ['-i'],
+      effectiveCwd: nativeCwd,
+      validationCwd: nativeCwd
+    }
+  }
 
   if (shellBasename === 'cmd.exe') {
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)

@@ -4,6 +4,7 @@ import { spawnProcess } from '@orca/process-host'
 import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import type { ShellHydrationFailureReason } from '../../../shared/shell/launch/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
+import { resolveNiubashProfileShell } from '../../niubash'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 import { bindShellProbeLifetime } from './shell-probe-lifetime'
@@ -56,7 +57,9 @@ export function resolveProfileLoadingShell(): string | null {
       return null
     }
     if (family === 'posix') {
-      return configuredWindowsGitBashPath
+      // Why: niu resolves like Git Bash for profile loading; when niu is missing the
+      // Git Bash path keeps PATH hydration working instead of skipping it.
+      return resolveNiubashProfileShell(configuredWindowsShell) ?? configuredWindowsGitBashPath
     }
     const basename = pathWin32.basename(configuredWindowsShell).toLowerCase()
     return basename === 'powershell.exe' || basename === 'pwsh.exe' ? configuredWindowsShell : null

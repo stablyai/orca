@@ -8,6 +8,7 @@ import { isPwshAvailableAsync } from '../../main/pty/shell-startup/pwsh'
 import { isWslAvailableAsync } from '../../main/wsl/discovery/wsl-availability'
 import { listWslDistrosAsync } from '../../main/wsl/discovery/distro-catalog'
 import { isGitBashAvailable } from '../../main/pty/shell-startup/git-bash'
+import { resolveNiubashPath } from '../../main/niubash'
 import { buildPosixCommandPathLookupScript } from '../../shared/shell/command-resolution/posix-command-path-lookup'
 import { runProcess } from '@orca/process-host'
 
@@ -115,6 +116,7 @@ export class PreflightHandler {
     wslDistros: string[]
     pwshAvailable: boolean
     gitBashAvailable: boolean
+    niubashAvailable?: boolean
     hostPlatform: NodeJS.Platform | null
   }> {
     const [wslAvailable, pwshAvailable, gitBashAvailable] = await Promise.all([
@@ -128,6 +130,7 @@ export class PreflightHandler {
       wslDistros,
       pwshAvailable,
       gitBashAvailable,
+      niubashAvailable: resolveNiubashPath() !== null,
       hostPlatform: process.platform
     }
   }

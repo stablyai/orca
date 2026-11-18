@@ -7,6 +7,7 @@ import {
 } from '../../shared/agent-launch/startup/setup-runner-command'
 import { scriptDeclaresPosixShell } from '../../shared/workspace-setup/setup-script-shebang'
 import { resolveWindowsShellStartupFamily } from '../../shared/shell/launch/windows-terminal-shell'
+import { isNiubashShell } from '../../shared/niubash-shell'
 import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { withRepositoryGitCause } from '../git/repository-git-cause'
@@ -148,7 +149,10 @@ async function createWorktreeRunnerScript(args: {
     for (const key of SETUP_RUNNER_PATH_ENV_KEYS) {
       const value = envVars[key]
       if (value) {
-        envVars[key] = nativeWindowsPathToPosixShellPath(value)
+        envVars[key] =
+          runnerShell.executable && isNiubashShell(runnerShell.executable)
+            ? value.replaceAll('\\', '/')
+            : nativeWindowsPathToPosixShellPath(value)
       }
     }
   }
@@ -213,6 +217,9 @@ export function resolveSetupRunnerShell(
       : 'powershell.exe'
   const shellBasename = configuredShell.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   const family = resolveWindowsShellStartupFamily(configuredShell)
+  if (isNiubashShell(configuredShell)) {
+    return { family: 'posix', executable: configuredShell }
+  }
   if (family === 'posix' && shellBasename !== 'wsl.exe' && shellBasename !== 'wsl') {
     // Match PTY Git Bash resolution; other bash flavors do not use the runner's MSYS /c/... paths.
     const resolveGitBashShellPath =

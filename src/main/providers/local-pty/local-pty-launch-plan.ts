@@ -1,6 +1,7 @@
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/shell/launch/windows-terminal-shell'
+import { resolveNiubashShellPath } from '../../niubash'
 import { resolveWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import { resolveUnixPaneShellPath } from '../../daemon/shell-readiness/shell-ready'
 import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
@@ -113,7 +114,7 @@ function createWindowsLocalPtyLaunchPlan(
     getOptions().getWindowsShell?.() ||
     process.env.COMSPEC ||
     'powershell.exe'
-  const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
+  const shellFamily = worktreeWslContext ? 'wsl.exe' : resolveNiubashShellPath(requestedShellFamily)
   if (!seed.launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
     seed.launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())
   }
