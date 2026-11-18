@@ -13,7 +13,8 @@ export const CONNECTOR_PROMPT_KINDS = ['approval', 'question'] as const
 // deliveries for pull requests its bots' owner opened. threadCatchUp: a start or send's context may
 // carry 'bot' and 'more' items. batchedSends: a conversation's sends queued behind its start or
 // send may come in the same poll, and the machine runs them with it as one turn. ownDmChats: a bot
-// start for a DM that ran in the bot's Chat opens the DM a chat of its own.
+// start for a DM that ran in the bot's Chat opens the DM a chat of its own. askerNote: Orca's lines on
+// where a bot was asked come as asker.note, apart from the asker's words.
 export const CONNECTOR_FEATURES = [
   'answer',
   'cancel',
@@ -25,7 +26,8 @@ export const CONNECTOR_FEATURES = [
   'prEvents',
   'threadCatchUp',
   'batchedSends',
-  'ownDmChats'
+  'ownDmChats',
+  'askerNote'
 ] as const
 
 // The cloud uses only what a machine lists; an entry it does not know is ignored, not refused.

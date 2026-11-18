@@ -13568,10 +13568,8 @@
             "f61af83316": "Ordner erstellen",
             "37c875d827": "Datei erstellen",
             "b3e288bf41": "„{{value0}}“ konnte nicht heruntergeladen werden.",
-            "f729bcd97d": "Der Ordner „{{value0}}“ konnte nicht heruntergeladen werden.",
             "1a3df04ae1": "Öffnen",
             "bce4d4e44f": "„{{value0}}“ heruntergeladen",
-            "a4029c996b": "Ordner „{{value0}}“ heruntergeladen",
             "e26010014a": "Durch .gitignore ignoriert",
             "a06551beee": "Enter",
             "66a29dde82": "Relativen Pfad kopieren",
@@ -17331,7 +17329,7 @@
             "734e4343ec": "Browser-Anmerkungen entfernen",
             "95af781091": "Feedback an einen Agenten senden",
             "ac39b9366b": "Senden",
-            "366bf5d62c": "Neuen Tab öffnen",
+            "366bf5d62c": "Neuer Tab",
             "781d6459ad": "Erneut versuchen",
             "2fdca7df09": "Ausblenden",
             "0f41bf80c7": "Im Standardbrowser öffnen",
@@ -19866,7 +19864,7 @@
       "rewind": {
         "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
         "historyNotPaginated": "Dieser ältere Codex-Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden. Einen neuen Chat starten, um „Bis hierher zurücksetzen“ zu verwenden.",
-        "busy": "Verfügbar, sobald der Agent inaktiv ist und im Chat keine Aktion mehr aussteht.",
+        "busy": "Verfügbar, wenn der Chat inaktiv ist",
         "staleEpoch": "Das Gespräch hat sich geändert. Die neuesten Nachrichten prüfen und erneut versuchen.",
         "invalidTarget": "Das Gespräch kann nicht zu dieser Nachricht zurückgesetzt werden. Es wurde nichts geändert.",
         "historyLimit": "Dieses Gespräch ist zu lang, um darin zurückzugehen. Es wurde nichts geändert.",
@@ -22206,9 +22204,7 @@
     "updateFailed": "Projektfeld konnte nicht aktualisiert werden"
   },
   "mediaPreview": {
-    "unavailable": "Diese Mediendatei kann nicht wiedergegeben werden. Die Datei ist möglicherweise nicht verfügbar oder verwendet einen nicht unterstützten Codec.",
-    "openFailed": "Diese Datei konnte nicht in der Standard-App geöffnet werden.",
-    "openDefault": "In Standard-App öffnen"
+    "unavailable": "Diese Mediendatei kann nicht wiedergegeben werden. Die Datei ist möglicherweise nicht verfügbar oder verwendet einen nicht unterstützten Codec."
   },
   "workspace": {
     "branchChoice": {

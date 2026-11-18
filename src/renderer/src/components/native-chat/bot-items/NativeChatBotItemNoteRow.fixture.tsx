@@ -288,6 +288,7 @@ const context: NativeChatTranscriptRowContext = {
   expandedTurnIds: new Set(),
   onToggleExpandedTurn: () => {},
   onScrollMessageToTop: () => {},
+  readerAtEnd: () => true,
   onRevealDiff: () => {}
 }
 

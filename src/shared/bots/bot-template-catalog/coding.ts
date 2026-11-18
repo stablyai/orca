@@ -75,7 +75,6 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       {
         id: 'weekly-check',
         when: 'Mondays at 9 AM',
-        short: 'Mon 9 AM',
         what: 'New advisories and major versions',
         rrule: '0 9 * * 1',
         prompt:
@@ -105,7 +104,6 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       {
         id: 'daily-list',
         when: 'Weekdays at 9 AM',
-        short: 'Weekdays 9 AM',
         what: 'Finished work waiting for review',
         rrule: '0 9 * * 1-5',
         prompt:
@@ -135,7 +133,6 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       {
         id: 'weekly-list',
         when: 'Fridays at 4 PM',
-        short: 'Fri 4 PM',
         what: 'Workspaces ready to remove',
         rrule: '0 16 * * 5',
         prompt:
@@ -165,7 +162,6 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       {
         id: 'weekly-review',
         when: 'Mondays at 9 AM',
-        short: 'Mon 9 AM',
         what: 'The week’s merged changes',
         rrule: '0 9 * * 1',
         prompt:

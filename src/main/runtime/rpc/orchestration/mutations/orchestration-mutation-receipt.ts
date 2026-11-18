@@ -12,7 +12,7 @@ const REPLAY_NUDGE_KEY = '__orcaReplayNudge'
 
 export type MutationReplayNudge =
   | { kind: 'messages'; targets: { to: string; type: string }[] }
-  | { kind: 'federation'; runId?: string }
+  | { kind: 'federation'; runId?: string; environmentId?: string }
 
 const CALLER_ORCA_SESSION_ID_KEY = '__orcaCallerOrcaSessionId'
 // A paired Orca's address names its conversation, so one Run's receipt never answers another's.
@@ -127,10 +127,20 @@ export function readMutationReplayNudge(receipt: unknown): MutationReplayNudge |
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }
-  const candidate = value as { kind?: unknown; targets?: unknown; runId?: unknown }
+  const candidate: {
+    kind?: unknown
+    targets?: unknown
+    runId?: unknown
+    environmentId?: unknown
+  } = value
   if (candidate.kind === 'federation') {
-    return candidate.runId === undefined || typeof candidate.runId === 'string'
-      ? { kind: 'federation', ...(candidate.runId ? { runId: candidate.runId } : {}) }
+    return (candidate.runId === undefined || typeof candidate.runId === 'string') &&
+      (candidate.environmentId === undefined || typeof candidate.environmentId === 'string')
+      ? {
+          kind: 'federation',
+          ...(candidate.runId ? { runId: candidate.runId } : {}),
+          ...(candidate.environmentId ? { environmentId: candidate.environmentId } : {})
+        }
       : undefined
   }
   if (candidate.kind !== 'messages' || !Array.isArray(candidate.targets)) {
