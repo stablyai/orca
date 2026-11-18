@@ -1,4 +1,9 @@
-import type { ManagedPane, ManagedPaneInternal, ScrollState } from '../pane-manager-types'
+import type { ManagedPane, ManagedPaneInternal } from '../pane-manager-types'
+import {
+  captureScrollState,
+  releaseScrollStateMarker,
+  type ScrollState
+} from '../terminal-scroll/pane-scroll-snapshot'
 import { isManagedPaneDisplayNone } from './pane-display-visibility'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import {
@@ -12,8 +17,6 @@ import {
   restoreTerminalStructuralScrollIntent
 } from '../terminal-scroll/terminal-scroll-intent'
 import {
-  captureScrollState,
-  releaseScrollStateMarker,
   restoreScrollStateAfterFit,
   resumePendingFitScrollRestoreAfterFit
 } from '../terminal-scroll/pane-scroll'

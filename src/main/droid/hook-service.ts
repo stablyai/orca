@@ -49,11 +49,7 @@ const DROID_EVENTS = [
     eventName: 'PostToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
   },
-  // PermissionRequest covers Edit approvals that have no PreToolUse riskLevel.
-  {
-    eventName: 'PermissionRequest',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
+  // Droid has no PermissionRequest hook event; approval waits come from PreToolUse and Notification.
   { eventName: 'Notification', definition: { hooks: [{ type: 'command', command: '' }] } }
 ] as const
 

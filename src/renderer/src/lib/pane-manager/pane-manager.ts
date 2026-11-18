@@ -63,17 +63,7 @@ import {
 import { collectPaneRenderingDiagnostics } from './terminal-rendering/pane-rendering-diagnostics'
 import { applyPaneLayoutGeometry } from './pane-layout/pane-layout-geometry-apply'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
-
-export type {
-  PaneManagerOptions,
-  PaneStyleOptions,
-  ManagedPane,
-  DropZone,
-  PaneExternalDropTarget,
-  PaneExternalDropResolver,
-  PaneExternalDropHandler
-} from './pane-manager-types'
+import { FIRST_PANE_ID } from '../../../../shared/workspace-layout/pane-key'
 
 export class PaneManager {
   private root: HTMLElement

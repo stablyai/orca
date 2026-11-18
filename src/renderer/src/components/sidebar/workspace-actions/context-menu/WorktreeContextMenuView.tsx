@@ -18,6 +18,9 @@ import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
+import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
+import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
+import { WslMoveFolderWorkspaceMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
 import {
   WorktreeCopySubMenu,
@@ -42,6 +45,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     deletingSubtree,
     developerMenuRevealed,
     effectiveSelectedWorktrees,
+    folderWorkspaceId,
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
     handleCloseTerminals,
@@ -51,6 +55,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleSleepSubtreeWithVm,
     handleTogglePin,
     handleToggleRead,
+    showsUnread,
     hasAnyContextLineage,
     isDeleting,
     isMultiContext,
@@ -135,13 +140,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           onClickCapture={suppressOpeningPointerEvent}
           onCloseAutoFocus={handleCloseAutoFocus}
         >
-          <DropdownMenuLabel>
-            <span className="block max-w-60 truncate">
-              {isMultiContext || !worktree.displayName
-                ? t('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')
-                : worktree.displayName}
-            </span>
-          </DropdownMenuLabel>
+          {/* Why: the highlighted card already names a single worktree. */}
+          {isMultiContext && (
+            <DropdownMenuLabel>
+              {t('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
+            </DropdownMenuLabel>
+          )}
           {!isMultiContext && <WorktreeWslHostStartMenuItem worktreeId={worktree.id} />}
           {isMultiContext ? (
             sleepItems
@@ -165,11 +169,14 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           )}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-              {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
-              {worktree.isUnread
+              {showsUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
+              {showsUnread
                 ? t('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
                 : t('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
             </DropdownMenuItem>
+          )}
+          {!isMultiContext && (
+            <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
           )}
           <WorktreeContextMenuDeleteItems model={model} />
           <DropdownMenuSeparator />
@@ -205,6 +212,10 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />
               <WorktreeProjectGroupSubMenu model={model} />
+              {folderWorkspaceId ? (
+                <WslMoveFolderWorkspaceMenuItem folderWorkspaceId={folderWorkspaceId} />
+              ) : null}
+              <WslMovedWorkspaceUseHereMenuItem worktree={worktree} />
             </>
           )}
           {isMultiContext && hasAnyContextLineage ? (

@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'

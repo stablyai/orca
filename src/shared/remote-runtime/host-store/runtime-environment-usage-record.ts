@@ -6,12 +6,10 @@ export function recordRuntimeEnvironmentUsage(
   selector: string,
   args: Parameters<typeof markEnvironmentUsed>[2] = {}
 ): void {
-  try {
-    markEnvironmentUsed(userDataPath, selector, args)
-  } catch (error) {
+  void markEnvironmentUsed(userDataPath, selector, args).catch((error: unknown) => {
     console.warn(
       `Skipped last-used bookkeeping for runtime environment ${selector}:`,
       error instanceof Error ? error.message : error
     )
-  }
+  })
 }

@@ -5,47 +5,56 @@ import { StarNagService } from '../star-nag/service'
 import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
+import {
+  DESKTOP_RPC_CALLER,
+  LOCAL_CLI_RPC_CALLER
+} from '../runtime/rpc/callers/rpc-caller-identity'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
 import { BrowserExpectedUrlMismatch } from '../../shared/browser/client-hosting/browser-expected-url'
 import { BrowserClientPageCommandError } from '../browser/client-pages/execution/browser-client-page-command-failure'
-import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagnostics'
-import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-realtime-scheduling-guard'
-import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
-import { handleGpuChildCrash } from './gpu-lifecycle'
-import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
+import { startPreGoneCrashSampling } from '../crash-reporting/process-exits/process-gone-diagnostics'
+import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-runtime/linux-realtime-scheduling-guard'
+import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flags'
+import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
+import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
+import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/history/index/codex-state-db-backfill-recovery'
+import { getOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
 import { shouldInstallManagedHooks } from './configure-process'
 import { mainProcessState as state } from './main-process-state'
 import { initializeMainProcessObservers } from './main-process-observers'
-import { installFirstWorkRenameHookSubscription } from './branch-rename-hook'
-import { initializeMainProcessAccountServices } from './main-process-account-services'
+import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
+import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
+import { initializeMainProcessAccountServices } from './agent-accounts/main-process-account-services'
 import {
   initializeMainProcessRuntime,
   configureRuntimeServices
-} from './main-process-runtime-service'
-import { initializeMainProcessAutomations } from './main-process-automations'
-import { initializeMainProcessPlugins } from './main-process-plugins'
+} from './runtime-startup/main-process-runtime-service'
+import { initializeMainProcessAutomations } from './runtime-startup/main-process-automations'
+import { initializeMainProcessPlugins } from './plugin-startup/main-process-plugins'
 import {
   collectWorktreeTrashSweepRoots,
   sweepStaleWorktreeTrash
 } from '../workspaces/removal/worktree-trash'
-import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
-import { runAfterFirstWindowShown } from './first-window-deferral'
+import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
+import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
+import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
-import { logStartupMilestone } from './startup-diagnostics'
-import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
-import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
-import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { logStartupMilestone } from './diagnostics/startup-diagnostics'
+import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/opencode-status-plugin-startup-refresh'
+import { pruneDesktopOrcadArtifactCache } from '../orcad/artifact-slots/orcad-artifact-cache-retention'
+import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
+import { reapLeftoverMacOSPermissionStatusHelpers } from '../computer/macos-permissions/macos-permission-status-leftover-reap'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
+import { startWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner-startup'
 
 // Headless serve has no first window; timer fallback must still sweep trash.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -58,13 +67,14 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Renderers fork from zygotes that exist already, so this must land before the first window.
   await refuseRealtimeSchedulingUnderZeroRtTime()
   // Load interrupted deletion records before listings so first paint shows Deleting.
-  await loadWorktreeRemovalRecordsForStore(store)
+  await prepareWorktreeRemovalsForStore(store)
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
   initializeMainProcessAutomations()
+  startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(runtime)
-  installFirstWorkRenameHookSubscription()
+  installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
   await initializeMainProcessPlugins(runtime)
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
@@ -88,7 +98,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       if (!response.ok) {
         const mismatch = BrowserExpectedUrlMismatch.safeParse(response.error.data)
         throw new BrowserClientPageCommandError(response.error.code, {
-          expectedUrlMismatch: mismatch.success ? mismatch.data : undefined
+          expectedUrlMismatch: mismatch.success ? mismatch.data : undefined,
+          detail: response.error.message
         })
       }
       return response.result
@@ -97,14 +108,19 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Only Orca-managed emulator helpers belong to workspaces; external serve-sim stays independent. macOS capability gates live in CLI/runtime.
   state.emulatorBridge = new EmulatorBridge()
   runtime.setEmulatorBridge(state.emulatorBridge)
+  let releaseProviderMaintenance: () => void
+  const providerMaintenanceReady = new Promise<void>((resolve) => {
+    releaseProviderMaintenance = resolve
+  })
   // Finish recorded deletes and old trash left across crashes; defer disk sweeps so they do not compete with first paint/catalog hydration.
   runAfterFirstWindowShown(() => {
+    releaseProviderMaintenance()
     void sweepStaleWorktreeTrash(
       collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
     ).catch((error) => {
       console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
     })
-    runtime.finishInterruptedWorktreeRemovals()
+    worktreeRemovalLifetime.resume(() => runtime.finishInterruptedWorktreeRemovals())
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   // Defer noncritical plugin-file refresh past first paint.
   runAfterFirstWindowShown(() => {
@@ -112,6 +128,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   runAfterFirstWindowShown(() => {
     new WslUsageReporter(store, app.getPath('userData')).start()
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // Suspended permission probes left by older builds hold LaunchServices slots until every app launch hangs.
+  runAfterFirstWindowShown(() => {
+    void reapLeftoverMacOSPermissionStatusHelpers()
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   runAfterFirstWindowShown(() => {
     void pruneDesktopOrcadArtifactCache(app.getPath('userData')).catch((error) => {
@@ -137,8 +157,12 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  // Wait for shell PATH before probing Codex; start reconciliation early so first launch can share it.
+  void providerMaintenanceReady.then(() =>
+    startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
+  )
+  // Register launch reconciliation now; defer background probes and scratch cleanup until first paint.
   startCodexHooks({
+    startAfter: providerMaintenanceReady,
     pathReady: app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve(),
     isEnabled: () => isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex'),
     resolveLaunchHome: () => {

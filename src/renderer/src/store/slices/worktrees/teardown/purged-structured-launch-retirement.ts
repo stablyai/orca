@@ -1,16 +1,16 @@
 import { markStructuredAgentSessionLaunchCancelledSilently } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../../types'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import {
   getStructuredAgentSessionLaunchOwner,
-  shouldRetainStructuredAgentSessionLaunchTab,
-  structuredLaunchStates
+  shouldRetainStructuredAgentSessionLaunchTab
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
+import { structuredLaunchStates } from '@/lib/agent-session/launch/structured-agent-session-launch-state-store'
+import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-staged-prompt'
 import { forgetUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
 import { readStructuredAgentLaunchRecords } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'

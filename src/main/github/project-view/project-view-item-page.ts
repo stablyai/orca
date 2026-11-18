@@ -1,16 +1,11 @@
 import type { OptionalProjectItemField } from './project-view-cache'
-import type { GitHubProjectOwnerType } from '../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
-import {
-  acquire,
-  extractExecError,
-  ghExecFileAsync,
-  noteRepositoryRateLimitSpend,
-  projectGhExecOptions,
-  projectHostAuthenticationError,
-  release,
-  repositoryRateLimitGuard
-} from './internals'
+import type { GitHubProjectOwnerType } from '../../../shared/github/projects/project-types'
+import type { GitHubProjectViewError } from '../../../shared/github/projects/project-result-types'
+import { acquire, release } from '../execution/github-operation-slots'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
+import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
+import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../api/rate-limit'
+import { projectGhExecOptions, projectHostAuthenticationError } from './project-host-execution'
 import {
   classifyProjectError,
   driftError,

@@ -2,7 +2,7 @@ import { copyFileSync, existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
-import { ORCAD_WINDOWS_SECURITY_FILENAME } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_WINDOWS_SECURITY_FILENAME } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { windowsSecurityAddonOutput } from '../../native-build/windows/build-windows-security-addon.mjs'
 
 const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.meta.url)(

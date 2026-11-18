@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
-import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/agent-status/structured-chat-slept-at'
+import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
 import { getWorkspaceDeleteLineage } from '../deletion/workspace-delete-lineage'
 
 type WorkspaceActivityMaps = {
@@ -13,7 +13,7 @@ type WorkspaceActivityMaps = {
   ptyIdsByTabId: Record<string, string[]>
   browserTabsByWorktree: Record<string, { id: string }[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
-  agentStatusByPaneKey: Record<string, { structuredHostOwned?: true }>
+  agentStatusByPaneKey: ReadonlyMap<string, { structuredHostOwned?: true }>
   structuredChatSleptAtByPaneKey: StructuredChatSleptAtByPaneKey
 }
 
@@ -35,7 +35,7 @@ export function hasSleepableWorkspaceActivity(
     (activity.unifiedTabsByWorktree[worktreeId] ?? []).some(
       (tab) =>
         isStructuredTab(tab) &&
-        (activity.agentStatusByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)]
+        (activity.agentStatusByPaneKey.get(structuredAgentSessionPaneKey(tab.id, tab.entityId))
           ?.structuredHostOwned === true ||
           activity.structuredChatSleptAtByPaneKey[
             structuredAgentSessionPaneKey(tab.id, tab.entityId)

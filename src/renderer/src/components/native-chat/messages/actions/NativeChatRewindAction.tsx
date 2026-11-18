@@ -1,5 +1,5 @@
 import { Undo2 } from 'lucide-react'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'

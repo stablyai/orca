@@ -13,17 +13,17 @@ export async function failureLeftByGit(
   error: unknown,
   cleanupPushTargetRemote: (() => Promise<void>) | undefined
 ): Promise<WorktreeRemovalFailure | undefined> {
-  if (!(await worktreeCheckoutExists(record.worktreePath))) {
-    return undefined
-  }
   const message = error instanceof Error ? error.message : String(error)
   const failure = {
     message: message.replace(
       / Close (?:that program|any program using it) and delete again\.$/,
       () =>
-        ` Close any program using it. You may need to delete the remaining folder at ${record.worktreePath} manually to finish removing this workspace.`
+        ` Close any program using it, then retry deletion. If you removed the folder at ${record.worktreePath} yourself, retry deletion to finish cleanup.`
     ),
     failedAt: Date.now()
+  }
+  if (!(await worktreeCheckoutExists(record.worktreePath))) {
+    return failure
   }
   try {
     const registered = await registeredRemovalCheckout(record)

@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type {
   NativeChatSessionOptionCopyId,
   NativeChatSessionOptionSay
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 
 // Literal English defaults: the localization gate only reads string literals at the call site.
 
@@ -13,6 +13,7 @@ const PIECES: Record<NativeChatSessionOptionCopyId, (values?: { value0: string }
   speed: () => translate('components.native-chat.composer.speed', 'Speed'),
   thinking: () => translate('components.native-chat.composer.thinking', 'Thinking'),
   standard: () => translate('components.native-chat.composer.optionValue.standard', 'Standard'),
+  none: () => translate('components.native-chat.composer.optionValue.none', 'None'),
   minimal: () => translate('components.native-chat.composer.optionValue.minimal', 'Minimal'),
   low: () => translate('components.native-chat.composer.optionValue.low', 'Low'),
   medium: () => translate('components.native-chat.composer.optionValue.medium', 'Medium'),

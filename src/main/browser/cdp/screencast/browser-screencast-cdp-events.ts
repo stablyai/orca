@@ -18,7 +18,7 @@ type BrowserScreencastMessageHandlerDeps = {
   isStopping: () => boolean
   queueFrame: (frame: PendingScreencastFrame) => void
   ackScreencastFrame: (sessionId: number | undefined) => void
-  scheduleNavigationFrameCapture: () => void
+  scheduleNavigationFrameCapture: (reason?: 'navigation' | 'viewport-recovery') => void
   clearNavigationCaptureTimer: () => void
   bumpSnapshotGeneration: () => void
   /** True while guest frames must be dropped pending re-emulation. */
@@ -108,7 +108,7 @@ export function createBrowserScreencastMessageHandler(
       if (!isLiveFrameCompatibleWithViewport(imageSize, options)) {
         // Tab switches and navigation can briefly stream the host surface instead of the client viewport.
         ackScreencastFrame(sessionId)
-        scheduleNavigationFrameCapture()
+        scheduleNavigationFrameCapture('viewport-recovery')
         return
       }
       bumpSnapshotGeneration()

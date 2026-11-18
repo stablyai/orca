@@ -1,14 +1,15 @@
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 import type {
   ClaudeStructuredLaunch,
   ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import { claudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import {
   claudeEffortLevel,
   restoredClaudeStructuredSessionOptions
 } from './claude-structured-options'
-import type { ClaudeCliFlagFact } from '../../claude-cli-flag-support'
+import type { ClaudeCliFlagFact } from '../../cli-capabilities/claude-cli-flag-support'
 
 /** Saved choices replace configured flags so the CLI receives each flag once. */
 function withoutConfiguredFlag(
@@ -88,6 +89,7 @@ export function adoptClaudeStructuredSpawnOptions(
     | 'appliedInputOptions'
     | 'cliFlag'
     | 'flagSettingsControl'
+    | 'promptSuggestionPause'
   >,
   spawn: ClaudeStructuredSpawnOptions
 ): void {
@@ -103,6 +105,9 @@ export function adoptClaudeStructuredSpawnOptions(
   session.fastModeAtStart = spawn.fastModeAtStart
   session.cliFlag = spawn.cliFlag
   session.flagSettingsControl = spawn.flagSettingsControl
+  session.promptSuggestionPause = spawn.sdkOptions.promptSuggestions
+    ? claudePromptSuggestionPause()
+    : undefined
   const fastMode = spawn.options.get('fastMode')
   if (fastMode !== undefined && !spawn.fastModeAtStart) {
     session.appliedInputOptions.set('fastMode', fastMode)

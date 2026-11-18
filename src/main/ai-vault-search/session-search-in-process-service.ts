@@ -1,10 +1,14 @@
 import type { AiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { sessionSearchDatabasePath } from './session-search-database-path'
-import type { SessionSearchIndexerOptions } from './session-search-indexer-options'
+import type { SessionSearchIndexerOptions } from './indexing/session-search-indexer-options'
 import { SessionSearchInstance } from './session-search-instance'
-import type { SessionSearchScanRoots } from './session-search-scan-roots'
+import type { SessionSearchScanRoots } from './discovery/session-search-scan-roots'
 import { setSessionSearchService } from './session-search-service-registry'
-import { sessionSearchSqliteAvailable } from './session-search-sqlite-support'
+import { isSqliteAvailable } from '../sqlite/sync-database'
+import {
+  installSessionSearchScopeCatalogSource,
+  type SessionSearchScopeCatalogSource
+} from './scope/session-search-scope-catalog'
 
 /** Own the index where the scanner cannot publish transcript reads; skip hosts without SQLite. */
 export function installInProcessSessionSearchService(args: {
@@ -12,9 +16,10 @@ export function installInProcessSessionSearchService(args: {
   roots: SessionSearchScanRoots
   resolveRoots?: SessionSearchIndexerOptions['resolveRoots']
   settings: AiVaultSearchSettings
+  getScopeCatalog: SessionSearchScopeCatalogSource
   onError?: (error: unknown) => void
 }): { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null {
-  if (!sessionSearchSqliteAvailable()) {
+  if (!isSqliteAvailable()) {
     return null
   }
   const instance = new SessionSearchInstance({
@@ -24,6 +29,7 @@ export function installInProcessSessionSearchService(args: {
     ...(args.onError ? { onError: args.onError } : {})
   })
   instance.apply(args.settings)
+  installSessionSearchScopeCatalogSource(args.getScopeCatalog)
   setSessionSearchService({
     search: (request, hostScope) => instance.search(request, hostScope),
     status: async () => instance.status(),
@@ -33,6 +39,7 @@ export function installInProcessSessionSearchService(args: {
     apply: (settings) => instance.apply(settings),
     dispose: () => {
       setSessionSearchService(null)
+      installSessionSearchScopeCatalogSource(null)
       instance.close()
     }
   }

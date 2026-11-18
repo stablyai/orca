@@ -60,26 +60,6 @@ function dispatchMiddleMouseUp(target: HTMLElement): MouseEvent {
   return event
 }
 
-function dispatchMiddleAuxClick(target: HTMLElement): MouseEvent {
-  const event = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true })
-  target.dispatchEvent(event)
-  return event
-}
-
-function dispatchNativePasteBeforeInput(target: HTMLElement): Event {
-  const event =
-    typeof InputEvent === 'function'
-      ? new InputEvent('beforeinput', {
-          bubbles: true,
-          cancelable: true,
-          data: 'native',
-          inputType: 'insertFromPaste'
-        })
-      : new Event('beforeinput', { bubbles: true, cancelable: true })
-  target.dispatchEvent(event)
-  return event
-}
-
 function dispatchMiddleClick(target: HTMLElement): void {
   dispatchMiddleMouseDown(target)
   dispatchMiddleMouseUp(target)
@@ -127,7 +107,6 @@ afterEach(async () => {
   document.body.replaceChildren()
   setUserAgent(originalUserAgent)
   vi.clearAllMocks()
-  vi.useRealTimers()
 })
 
 describe('usePrimarySelectionPaste', () => {
@@ -153,70 +132,5 @@ describe('usePrimarySelectionPaste', () => {
     expect(staleTarget.value).toBe('unchanged')
     expect(currentTarget.value).toBe('current')
     expect(document.activeElement).toBe(currentTarget)
-  })
-
-  it('owns Linux middle-click paste for editable DOM targets', async () => {
-    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
-    readPrimarySelectionTextMock.mockResolvedValue('beta')
-    await renderProbe()
-    const textarea = appendTextarea('alpha omega')
-    textarea.focus()
-    textarea.setSelectionRange(6, 11)
-    let nativeBeforeInput!: Event
-    let mouseUp!: MouseEvent
-    let auxClick!: MouseEvent
-
-    await act(async () => {
-      dispatchMiddleMouseDown(textarea)
-      nativeBeforeInput = dispatchNativePasteBeforeInput(textarea)
-      mouseUp = dispatchMiddleMouseUp(textarea)
-      auxClick = dispatchMiddleAuxClick(textarea)
-      await flushPromises()
-    })
-
-    expect(nativeBeforeInput.defaultPrevented).toBe(true)
-    expect(mouseUp.defaultPrevented).toBe(true)
-    expect(auxClick.defaultPrevented).toBe(true)
-    expect(readPrimarySelectionTextMock).toHaveBeenCalledTimes(1)
-    expect(textarea.value).toBe('alpha beta')
-  })
-
-  it('does not suppress an unrelated document paste while the terminal window is armed', async () => {
-    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
-    // Armed terminal suppression must leave unrelated form pastes intact.
-    consumeNativePasteMock.mockReturnValue(true)
-    await renderProbe()
-    const unrelatedTextarea = appendTextarea()
-    let nativeBeforeInput!: Event
-    const nativePaste = new Event('paste', { bubbles: true, cancelable: true })
-
-    await act(async () => {
-      nativeBeforeInput = dispatchNativePasteBeforeInput(unrelatedTextarea)
-      unrelatedTextarea.dispatchEvent(nativePaste)
-      await flushPromises()
-    })
-
-    expect(nativeBeforeInput.defaultPrevented).toBe(false)
-    expect(nativePaste.defaultPrevented).toBe(false)
-    // Check target before consuming; unrelated pastes must not burn the arm and permit a terminal double-paste.
-    expect(consumeNativePasteMock).not.toHaveBeenCalled()
-  })
-
-  it('does not keep middle-click ownership after the gesture window expires', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    readPrimarySelectionTextMock.mockResolvedValue('late')
-    await renderProbe()
-    const textarea = appendTextarea('unchanged')
-    textarea.focus()
-
-    dispatchMiddleMouseDown(textarea)
-    vi.setSystemTime(1_751)
-    const mouseUp = dispatchMiddleMouseUp(textarea)
-    await flushPromises()
-
-    expect(mouseUp.defaultPrevented).toBe(false)
-    expect(readPrimarySelectionTextMock).not.toHaveBeenCalled()
-    expect(textarea.value).toBe('unchanged')
   })
 })

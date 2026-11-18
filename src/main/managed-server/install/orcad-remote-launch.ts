@@ -3,7 +3,7 @@ import type { OrcadLaunchEnvEntry } from './orcad-host-transport'
 import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
@@ -13,7 +13,7 @@ import {
   type RemoteHostPlatform
 } from '../../ssh/remote-host/ssh-remote-platform'
 import { RELAY_REMOTE_DIR } from './remote-install-root'
-import { ORCAD_WSL_HOST_ENV } from '../../ipc/wsl-guest-windows-drive-path'
+import { ORCAD_WSL_HOST_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 import {
   assertPosixOrcadHost as assertPosixHost,
   ORCAD_LOG_FILENAME,
@@ -27,7 +27,7 @@ import {
 } from './orcad-remote-host-support'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
-import { ORCAD_STOP_REQUEST_FILENAME } from '../../../shared/orcad-stop-request'
+import { ORCAD_STOP_REQUEST_FILENAME } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { orcadWindowsSlotOpCommand } from './orcad-remote-windows-node'
 import {
   captureOrcadLaunchSshSessionCommand,
@@ -37,8 +37,8 @@ import {
 import {
   ORCAD_E2E_IDLE_TIMEOUT_ENV,
   readOrcadE2EIdleTimeoutMs
-} from '../../../shared/orcad-idle-exit'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/orcad-managed-launch-env'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-managed-launch-env'
 
 export type OrcadLaunchSpec = {
   remoteInstallDir: string

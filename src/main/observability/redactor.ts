@@ -1,10 +1,10 @@
+import { redactCredentialAssignments } from './credential-assignment-redaction'
+
 // Apply idempotent redaction at sink write, bundle collection and server ingest.
 // Server mode also strips product-telemetry identity keys.
 // Envelope bounds limit size; truncating attributes would lose diagnostic stack tails.
 
-// Word boundaries preserve FOO_SECRET matches; consume full Bearer/Token values.
-const LABELED_KV =
-  /\b(?:api[-_]?key|token|secret|password|bearer|authorization)\b\s*[:=]\s*(?:Bearer\s+\S+|Token\s+\S+|\S+)/gi
+const STANDALONE_BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi
 
 // Match specific providers first so sk-ant- retains its Anthropic tag.
 const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
@@ -23,8 +23,8 @@ const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
   { tag: 'slack-token', re: /xox[baprsoe]-[A-Za-z0-9-]{10,}/g },
   {
     tag: 'pem',
-    // Lazy matching redacts adjacent PEM blocks independently.
-    re: /-----BEGIN [A-Z ]+-----[\s\S]+?-----END [A-Z ]+-----/g
+    // Keep complete blocks independent and remove unfinished secret suffixes.
+    re: /-----BEGIN [A-Z ]+-----[\s\S]*?(?:-----END [A-Z ]+-----|(?![\s\S]))/g
   }
 ]
 
@@ -95,12 +95,13 @@ export function redactString(input: string): string {
   }
   let out = input
 
-  out = out.replace(LABELED_KV, '[redacted:labeled-kv]')
-
+  // Assignment rewrites can otherwise erase the markers identifying whole credentials.
   // Redaction tags are stable identifiers used by external NDJSON tools.
   for (const { tag, re } of PROVIDER_PATTERNS) {
     out = out.replace(re, `[redacted:${tag}]`)
   }
+
+  out = redactCredentialAssignments(out).replace(STANDALONE_BEARER, '[redacted:labeled-kv]')
 
   // Provider shapes run first to retain specific tags in URL userinfo.
   out = out.replace(URL_USERINFO, '$1[redacted]@')
@@ -284,4 +285,15 @@ export function redactSpan(span: RedactableSpan, mode: RedactorMode = 'client'):
     events: redactedEvents,
     exit
   }
+}
+
+/** Redacts the end of a longer text, which may begin inside a credential: drops the partial first
+ *  line and a key block cut from its BEGIN marker, which no pattern could recognise any more. */
+export function redactTextTail(tail: string): string {
+  const lines = tail.slice(tail.indexOf('\n') + 1 || tail.length)
+  const end = /-----END [A-Z ]+-----/.exec(lines)
+  const begin = lines.indexOf('-----BEGIN ')
+  return redactString(
+    end && (begin === -1 || begin > end.index) ? lines.slice(end.index + end[0].length) : lines
+  )
 }

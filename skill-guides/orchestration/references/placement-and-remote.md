@@ -15,13 +15,13 @@ when requesting a child of the current workspace.
 
 ```text
 # Child of the current worktree.
-ORCA orchestration worker-start --task <task_id> --worktree new-child --agent codex --setup run
+ORCA orchestration worker-start --task <task_id> --worktree new-child --agent <agent> --setup run
 
 # On a connected server, nested under your workspace; the Run stays on yours.
-ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-child --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-child --repo <exact_remote_repo_selector> --name <name> --agent <agent> --setup run
 
 # On a connected server, with no parent.
-ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent <agent> --setup run
 ```
 
 With `--on`, both `new-child` and `new-top-level` need `--repo` naming a
@@ -46,7 +46,7 @@ ORCA orchestration send --on <server> --to <term_…|orca_session_id:…> --subj
 ```
 
 Your own Orca carries the mail and keeps the conversation. Replies come back to
-your own `check`, and they wake you like local mail. The other agent answers
+your own mailbox and wake you like local mail. The other agent answers
 with a plain `reply --id <msg_id> --body <text>`; no flag is needed on either
 side. Mail from another server names its sender as `<sender> on <server name>`.
 

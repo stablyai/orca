@@ -1,3 +1,4 @@
+import { createStructuredSessionStatusBurst } from './structured-agent-session-status-burst'
 import { useEffect } from 'react'
 import { projectStatus } from './structured-agent-session-status-projection'
 import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -5,7 +6,7 @@ import { subscribeStructuredAgentLaunchStatus } from '@/lib/agent-session/launch
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { StructuredChatCompanionWrite } from '@/store/slices/agent-status/structured-chat-companion-writes'
+import type { StructuredChatCompanionWrite } from '@/store/slices/agent-status/structured-sessions/structured-chat-companion-writes'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   getStructuredAgentSessionStatusFeed,
@@ -16,7 +17,7 @@ import {
   getStructuredAgentSessionTabsInWorkspace,
   type StructuredTab
 } from './structured-agent-session-tabs'
-import { readTabMapChanges } from '@/store/keyed-record-change-reads'
+import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import {
   createTabOwnerCache,
   ownerInputChanged,
@@ -27,31 +28,10 @@ import {
   type HostGroup,
   type Member,
   type ProjectionInput,
-  sameSemanticTab
+  sameSemanticTab,
+  sameCapturedInput,
+  sameStatusInput
 } from './structured-agent-session-status-membership'
-
-/** Unchanged feed facts for an unchanged tab cannot change its projection or companions. */
-function sameCapturedInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
-  return (
-    previous !== undefined &&
-    sameSemanticTab(previous.tab, next.tab) &&
-    previous.summary === next.summary &&
-    previous.observation === next.observation &&
-    previous.failedAt === next.failedAt &&
-    previous.sleptAt === next.sleptAt &&
-    previous.directory === next.directory
-  )
-}
-
-function sameStatusInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
-  return (
-    previous !== undefined &&
-    sameSemanticTab(previous.tab, next.tab) &&
-    previous.summary === next.summary &&
-    previous.observation === next.observation &&
-    previous.failedAt === next.failedAt
-  )
-}
 
 function installStatusProjection(): () => void {
   const membership = createStructuredSessionMembership()
@@ -192,6 +172,19 @@ function installStatusProjection(): () => void {
       membership.settle(input.member)
     }
   }
+  const publish = (inputs: ProjectionInput[]): void => {
+    try {
+      project(inputs)
+    } catch (error) {
+      for (const input of inputs) {
+        if (current(input)) {
+          membership.owe(input.member)
+        }
+      }
+      throw error
+    }
+  }
+  const burst = createStructuredSessionStatusBurst(publish, enqueue)
   const activateGroups = (): void => {
     for (const [hostKey, group] of groups) {
       if (groups.get(hostKey) === group && group.members.size && !group.release) {
@@ -223,17 +216,25 @@ function installStatusProjection(): () => void {
         directory: member.hostKey === 'local' ? summary?.launchDirectory : undefined
       }
       // Launch ticks and full host ticks carry every member; skip the unchanged ones.
-      if (!sameCapturedInput(member.captured, input)) {
+      if (!sameCapturedInput(burst.peek(member) ?? member.captured, input)) {
         inputs.push(input)
-        membership.owe(member)
       } else {
         membership.settle(member)
       }
     }
     enqueue(
       () => {
-        activateGroups()
-        project(inputs)
+        try {
+          activateGroups()
+          burst.add(inputs.filter(current))
+        } catch (error) {
+          for (const input of inputs) {
+            if (current(input)) {
+              membership.owe(input.member)
+            }
+          }
+          throw error
+        }
       },
       inputs.map(({ member }) => ({ host: member.hostKey, paneKey: member.paneKey }))
     )
@@ -280,7 +281,11 @@ function installStatusProjection(): () => void {
   }
   const place = (state: AppState, tab: StructuredTab, paneKey: string, changed: Set<Member>) => {
     const { hostKey, group } = groupFor(state, tab)
+    const old = members.get(paneKey)
     const member = membership.place(tab, paneKey, hostKey, group)
+    if (old && members.get(paneKey) !== old) {
+      burst.forget(old)
+    }
     if (member) {
       changed.add(member)
     }
@@ -317,6 +322,7 @@ function installStatusProjection(): () => void {
       }
     }
     for (const member of retiring) {
+      burst.forget(member)
       membership.detach(member)
       retired.add(member)
     }
@@ -373,6 +379,7 @@ function installStatusProjection(): () => void {
   boundary(() => reconcile(false))
   return () => {
     disposed = true
+    burst.dispose()
     unsubscribeApp()
     unsubscribeLaunch()
     for (const group of groups.values()) {

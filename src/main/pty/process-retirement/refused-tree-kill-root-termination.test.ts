@@ -17,14 +17,14 @@ import {
   hasAppEnvironment,
   setAppEnvironment,
   type AppEnvironment
-} from '../../../shared/app-environment'
+} from '../../../shared/app-lifecycle/app-environment'
 import { installMainProcessTreeKillGate } from './own-chromium-tree-kill-guard'
 import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
-import { resetSelfInitiatedTreeKillLogForTest } from '../../crash-reporting/self-initiated-tree-kill-log'
+import { resetSelfInitiatedTreeKillLogForTest } from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot
-} from '../../crash-reporting/crash-breadcrumb-store'
+} from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { _resetTracerForTests, setActiveSink } from '../../observability/tracer'
 
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'

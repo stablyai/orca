@@ -1,4 +1,4 @@
-import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync-types'
+import type { CodexConfigSyncStatus } from '../../../../shared/agent-accounts/codex/codex-config-sync-types'
 
 // Bound retries to about five minutes: outlast antivirus/backups without polling permanently unreadable homes forever.
 const CODEX_CONFIG_SYNC_RETRY_MS = 30_000

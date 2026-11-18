@@ -1,10 +1,10 @@
 import '../../../../shared/git/admission/git-admission-state'
-import '../../../crash-reporting/main-process-lifecycle-identity'
+import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { join } from 'node:path'
 import {
   assertAgentSkillSharingAllowed,
   isAgentSkillSharingEnabled
-} from '../../../../shared/agent-skill-sharing-gate'
+} from '../../../../shared/skills/sharing/agent-skill-sharing-gate'
 import {
   AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_NOT_SHAREABLE_CODE,
@@ -12,10 +12,10 @@ import {
   AgentSkillSharingError,
   type AgentSkillShareOperation,
   type AgentSkillShareRequest
-} from '../../../../shared/agent-skill-sharing-contract'
-import type { DiscoveredSkill } from '../../../../shared/skills'
-import { SharingUnavailableOnHostError } from '../../../../shared/sharing-unavailable-on-host'
-import { SKILL_SHARE_NAME_TAKEN_ERROR } from '../../../../shared/skill-sharing-contract'
+} from '../../../../shared/skills/sharing/agent-skill-sharing-contract'
+import type { DiscoveredSkill } from '../../../../shared/skills/discovery/skills'
+import { SharingUnavailableOnHostError } from '../../../../shared/remote-runtime/host-status/sharing-unavailable-on-host'
+import { SKILL_SHARE_NAME_TAKEN_ERROR } from '../../../../shared/skills/sharing/skill-sharing-contract'
 import { selectDiscoveredSkills } from '../../../skills/sharing/agent-skill-selection'
 import { SkillSharePreparationService } from '../../../skills/sharing/skill-share-preparation'
 import { RuntimeSkillInstallQueries } from './runtime-skill-install-queries'
@@ -26,7 +26,7 @@ import type {
 import type {
   SkillCloudOptions,
   SkillCloudPublishRequest
-} from '../../../../shared/skill-cloud-contract'
+} from '../../../../shared/skills/sharing/skill-cloud-contract'
 import type { SkillCloudService } from '../../../skills/cloud/skill-cloud-package-service'
 
 export class RuntimeSkillCommands

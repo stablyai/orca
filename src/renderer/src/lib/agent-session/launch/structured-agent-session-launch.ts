@@ -7,33 +7,36 @@ import {
 import {
   discardStructuredAgentSessionChatSends,
   stageStructuredLaunchPrompt
-} from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
-import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
+} from '@/lib/agent-session/launch/structured-agent-session-staged-prompt'
+
 import {
   launchAndReconcile,
   reconcileUnknownLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import {
+  type StructuredPromptDeliveryResult,
   addStructuredLaunchCaller,
   launchPromptText,
   joinLaunchDelivery,
   promptOwner,
   createStructuredLaunchCallerGroup,
-  releaseStructuredLaunchCallerAfterUnknownOutcome
+  releaseStructuredLaunchCallerAfterUnknownOutcome,
+  type StructuredAgentLaunchOptions,
+  type StructuredLaunchCaller
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
-import type {
-  StructuredAgentLaunchOptions,
-  StructuredLaunchCaller
-} from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
+
 import {
   getStructuredAgentSessionLaunchLifecycle,
+  structuredLaunchIdentity
+} from './structured-agent-session-launch-registry'
+import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners,
   setStructuredLaunchState,
-  structuredLaunchIdentity
-} from './structured-agent-session-launch-registry'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+  type StructuredLaunchState
+} from './structured-agent-session-launch-state-store'
+
 import { markStructuredAgentSessionLaunchCancelled } from './structured-agent-session-launch-cancel'
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
 import { getJoinableStructuredLaunchState } from './structured-agent-session-launch-holders'
@@ -55,7 +58,7 @@ import {
 import { releaseStructuredLaunchSource } from './structured-agent-session-launch-source-handoff'
 import * as launchDraft from './structured-agent-session-launch-draft'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
 import { adoptPairedHostSeed } from './structured-agent-session-launch-host-seed'
 

@@ -10,19 +10,22 @@ import type {
   AutomationRun,
   AutomationRunOutputSnapshot
 } from '../../../shared/automations/history/automation-run'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { ProjectHostSetup } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { ProjectHostSetup } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automations/launch/automation-precheck'
 import { hasExtraAgentArgs } from '../../../shared/agent-launch/startup/automation-extra-agent-args'
 import { getAutomationLegacyRepoId } from '../../../shared/automations/history/automation-run-identity'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project/host-setup/project-host-setup-projection'
 import {
   type WorkspaceRunContext,
   buildTaskSourceContextFromRepo,
   buildWorkspaceRunContext
 } from '../../../shared/work-items/task-source-context'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 export function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {

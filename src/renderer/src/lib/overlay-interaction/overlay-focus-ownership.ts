@@ -1,4 +1,4 @@
-import { getVisibleOverlays, isVisibleOverlay } from '../visible-overlay'
+import { getVisibleOverlays, isVisibleOverlay } from './visible-overlay'
 
 const NON_OWNING_SURFACES =
   '[data-focus-behavior="page"], [data-focus-behavior="composer-suggestions"]'

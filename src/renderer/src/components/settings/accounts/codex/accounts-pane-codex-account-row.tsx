@@ -1,9 +1,10 @@
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
-import type { CodexRateLimitAccountsState } from '../../../../../../shared/managed-account-types'
+import type { CodexRateLimitAccountsState } from '../../../../../../shared/agent-accounts/managed-account-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getCodexAccountDisplayDetail } from '@/lib/provider-accounts/codex-account-display-label'
+import { getCodexAccountDisplayDetail } from '../../../../../../shared/agent-accounts/codex-account-display-label'
 import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
@@ -13,6 +14,9 @@ import {
 } from '../../../provider-accounts/provider-account-visibility'
 import { formatAccountTimestamp, getCodexAccountRuntimeLabel } from '../scope/accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
+import { getManagedAccountPrimaryLabel } from '../../../../../../shared/agent-accounts/managed-account-display-names'
+import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
+import { getObservedCodexAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
 
 export function renderCodexAccountRow(
   account: CodexRateLimitAccountsState['accounts'][number],
@@ -25,6 +29,7 @@ export function renderCodexAccountRow(
     accountRuntimeUnavailable,
     accountVisibilityOptions,
     activeCodexAccountId,
+    codexAccountPlans,
     codexAccounts,
     codexAction,
     codexRateLimits,
@@ -32,6 +37,7 @@ export function renderCodexAccountRow(
     isRemoteAccountScope,
     runCodexAccountAction,
     setRemoveCodexTarget,
+    setRenameTarget,
     accountOwner
   } = model
   const isActive = providerAccountIsActiveInView(
@@ -52,6 +58,11 @@ export function renderCodexAccountRow(
       })
   const needsReauthentication = Boolean(accountAuthWarning)
   const accountDetail = getCodexAccountDisplayDetail(account, codexAccounts.accounts)
+  const plan = getObservedCodexAccountPlan(
+    codexAccountPlans,
+    account,
+    getProviderAccountRuntime(account)
+  )
   const isReauthing = codexAction === `reauth:${account.id}`
   const isRemoving = codexAction === `remove:${account.id}`
   const isBusy = codexAction !== 'idle' || accountRuntimeUnavailable
@@ -86,7 +97,9 @@ export function renderCodexAccountRow(
           className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
         >
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-medium">{account.email}</span>
+            <span className="truncate text-sm font-medium">
+              {getManagedAccountPrimaryLabel(account)}
+            </span>
             <Badge
               variant="outline"
               className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
@@ -121,6 +134,18 @@ export function renderCodexAccountRow(
                 <span className="shrink-0 opacity-50">•</span>
               </>
             ) : null}
+            {plan ? (
+              <>
+                <span className="shrink-0">{plan}</span>
+                <span className="shrink-0 opacity-50">•</span>
+              </>
+            ) : null}
+            {account.displayName ? (
+              <>
+                <span className="min-w-0 truncate">{account.email}</span>
+                <span className="shrink-0 opacity-50">•</span>
+              </>
+            ) : null}
             {needsReauthentication ? (
               <span className="truncate">
                 {t(
@@ -138,6 +163,14 @@ export function renderCodexAccountRow(
 
         <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
           {/* Keep maintenance actions lighter so account selection remains primary in dense lists. */}
+          <AccountRenameButton
+            t={t}
+            disabled={isRemoving}
+            pending={model.renamingAccountKeys.has(`codex:${account.id}`)}
+            onRename={() =>
+              setRenameTarget(renameTargetFor('codex', account, getProviderAccountRuntime(account)))
+            }
+          />
           <Button
             variant="ghost"
             size="xs"
@@ -146,13 +179,15 @@ export function renderCodexAccountRow(
               void runCodexAccountAction(
                 `reauth:${account.id}`,
                 () =>
-                  window.api.codexAccounts.reauthenticate({
-                    accountId: account.id
-                  }),
+                  accountOwner.kind === 'environment'
+                    ? signInCodexAccountOnHost(accountOwner, account.id)
+                    : window.api.codexAccounts.reauthenticate({
+                        accountId: account.id
+                      }),
                 getProviderAccountRuntime(account)
               )
             }}
-            disabled={isRemoteAccountScope || isBusy}
+            disabled={isBusy}
             className="h-6 px-2 text-muted-foreground hover:text-foreground"
           >
             {isReauthing ? (

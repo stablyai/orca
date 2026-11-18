@@ -2,7 +2,7 @@ import type {
   NestedRepoScanResult,
   ProjectGroup,
   ProjectGroupImportMode
-} from '../../shared/project-group-types'
+} from '../../shared/project/groups/project-group-types'
 import {
   getRuntimePathBasename,
   isPathInsideOrEqual,
@@ -10,7 +10,7 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
-} from '../../shared/cross-platform-path'
+} from '../../shared/file-access/cross-platform-path'
 
 type CreateGroupInput = {
   name: string

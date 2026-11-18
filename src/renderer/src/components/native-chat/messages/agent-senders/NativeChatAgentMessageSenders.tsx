@@ -4,17 +4,17 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
-import { agentMessageSendersShown } from '../../../../../../shared/agent-session/agent-session-message-source'
+import { agentMessageSendersShown } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   AgentMessageSender,
   AgentMessageSource
-} from '../../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   unnamedSenderLabel,
   useAgentMessageSenderLabel
 } from './native-chat-agent-message-sender-label'
 import { useAgentMessageSenderOpens } from './native-chat-agent-message-sender-view'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Link a sender only where its one resolution can open something; otherwise a plain name. */
 export function NativeChatAgentMessageSenders({

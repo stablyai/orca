@@ -1,8 +1,8 @@
 import { usesLegacyE2EE } from '../runtime/rpc/server/pairing/device-sighting'
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
-import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import type { RuntimeAccessGrant } from '../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
-import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
+import type { RuntimePairingReach } from '../../shared/remote-runtime/pairing/runtime-pairing-reach'
 import type { DeviceEntry } from '../runtime/rpc/server/pairing/device-entry'
 import {
   requestMobilePairingOffer,

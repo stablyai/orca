@@ -2,7 +2,7 @@
  * Optional JSON-RPC error data is additive; older clients keep rendering error.message without negotiation.
  * repairable requires proof that rebuilding node-pty fixes the fault. Unverifiable probes must never trigger repair (#14830). */
 import { z } from 'zod'
-import '../../runtime-capability-degradation'
+import '../../remote-runtime/protocol/runtime-capability-degradation'
 
 const TerminalUnavailableHostSchema = z
   .object({

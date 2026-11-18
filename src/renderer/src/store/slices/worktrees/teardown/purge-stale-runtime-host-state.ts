@@ -2,16 +2,16 @@ import { beginEnclosingWorktreeRemoval } from '@/store/workspaces/selection/acti
 import type { WorktreePurgeTarget } from './worktree-purge-target'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   dropRuntimeHostedCatalogRows,
   isRemovedRuntimeHostId

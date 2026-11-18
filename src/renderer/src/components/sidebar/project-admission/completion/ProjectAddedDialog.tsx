@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 

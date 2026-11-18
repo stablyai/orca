@@ -48,6 +48,7 @@ export type RuntimeRepositoryCommandSurface = {
   listFolderWorkspaces: RuntimeProjectGroupController['listFolderWorkspaces']
   listVisibleProjectGroups: RuntimeProjectGroupController['listVisibleGroups']
   listVisibleFolderWorkspaces: RuntimeProjectGroupController['listVisibleFolderWorkspaces']
+  checkProjectGroupHooks: RuntimeProjectGroupController['checkGroupHooks']
   createProjectGroup: RuntimeProjectGroupController['createGroup']
   updateProjectGroup: RuntimeProjectGroupController['updateGroup']
   updateProjectGroups: RuntimeProjectGroupController['updateGroups']
@@ -63,13 +64,16 @@ export type RuntimeRepositoryCommandSurface = {
   isGitAvailable: RuntimeServerEnvironmentCommands['isGitAvailable']
   listSparsePresets: RuntimeRepositorySparsePresets['list']
   saveSparsePreset: RuntimeRepositorySparsePresets['save']
+  removeSparsePreset: RuntimeRepositorySparsePresets['remove']
   addRepo: RuntimeRepositoryRegistrationController['add']
   createRepo: RuntimeRepositoryRegistrationController['create']
+  getDefaultCreateProjectParent: RuntimeRepositoryRegistrationController['defaultCreateParent']
   cloneRepo: RuntimeRepositoryCloneController['clone']
   checkCloneTarget: RuntimeRepositoryCloneController['checkTarget']
   showRepo: RuntimeRepositorySettingsController['show']
   setRepoBaseRef: RuntimeRepositorySettingsController['setBaseRef']
   updateRepo: RuntimeRepositorySettingsController['update']
+  setRepoHidden: RuntimeRepositorySettingsController['setHidden']
   removeProject: RuntimeRepositorySettingsController['remove']
   reorderRepos: RuntimeRepositorySettingsController['reorder']
   getRepoBaseRefDefault: RuntimeRepositoryRefQueries['getDefault']
@@ -130,6 +134,7 @@ export function installRuntimeRepositoryCommandSurface(
     listFolderWorkspaces: groups.listFolderWorkspaces.bind(groups),
     listVisibleProjectGroups: groups.listVisibleGroups.bind(groups),
     listVisibleFolderWorkspaces: groups.listVisibleFolderWorkspaces.bind(groups),
+    checkProjectGroupHooks: groups.checkGroupHooks.bind(groups),
     createProjectGroup: groups.createGroup.bind(groups),
     updateProjectGroup: groups.updateGroup.bind(groups),
     updateProjectGroups: groups.updateGroups.bind(groups),
@@ -145,6 +150,7 @@ export function installRuntimeRepositoryCommandSurface(
     isGitAvailable: server.isGitAvailable.bind(server),
     listSparsePresets: sparse.list.bind(sparse),
     saveSparsePreset: sparse.save.bind(sparse),
+    removeSparsePreset: sparse.remove.bind(sparse),
     addRepo: async (...args: Parameters<typeof registrations.add>) => {
       const repo = await registrations.add(...args)
       void target.repositoryForkBackfill.enqueue([repo])
@@ -157,6 +163,7 @@ export function installRuntimeRepositoryCommandSurface(
       }
       return result
     },
+    getDefaultCreateProjectParent: registrations.defaultCreateParent.bind(registrations),
     cloneRepo: async (...args: Parameters<typeof clones.clone>) => {
       const repo = await clones.clone(...args)
       void target.repositoryForkBackfill.enqueue([repo])
@@ -166,6 +173,7 @@ export function installRuntimeRepositoryCommandSurface(
     showRepo: settings.show.bind(settings),
     setRepoBaseRef: settings.setBaseRef.bind(settings),
     updateRepo: settings.update.bind(settings),
+    setRepoHidden: settings.setHidden.bind(settings),
     removeProject: settings.remove.bind(settings),
     reorderRepos: settings.reorder.bind(settings),
     getRepoBaseRefDefault: refs.getDefault.bind(refs),

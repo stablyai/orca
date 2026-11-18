@@ -1,9 +1,7 @@
 import type { Terminal } from '@xterm/xterm'
-import type { ScrollState, TerminalScrollIntentTarget } from '../pane-manager-types'
-import {
-  captureLogicalLineAnchor,
-  resolveLogicalCellOffsetLine
-} from './terminal-reflow-scroll-anchor'
+import { releaseScrollStateMarker, type ScrollState } from './pane-scroll-snapshot'
+import type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
+import { resolveLogicalCellOffsetLine } from './terminal-reflow-scroll-anchor'
 import { forceTerminalViewportScrollbarSync } from './terminal-viewport-scrollbar-sync'
 
 const terminalOutputEpochs = new WeakMap<Terminal, number>()
@@ -55,35 +53,6 @@ export function cancelDeferredScrollRestore(terminal: TerminalScrollIntentTarget
   }
   releaseScrollStateMarker(pending.state)
   deferredScrollRestores.delete(terminal)
-}
-
-export function captureScrollState(terminal: Terminal): ScrollState {
-  const buf = terminal.buffer.active
-  const viewportY = buf.viewportY
-  const wasAtBottom = viewportY >= buf.baseY
-  const logicalAnchor =
-    !wasAtBottom && buf.type === 'normal'
-      ? captureLogicalLineAnchor(terminal, viewportY)
-      : undefined
-  const firstVisibleLineMarker =
-    !wasAtBottom && buf.type === 'normal'
-      ? terminal.registerMarker?.(viewportY - (buf.baseY + buf.cursorY))
-      : undefined
-  return {
-    bufferType: buf.type,
-    wasAtBottom,
-    viewportY,
-    baseY: buf.baseY,
-    // Continuation markers drift/disappear on reflow; anchor logical first rows, retaining physical markers for no-reflow ConPTY/cursor cases.
-    firstVisibleLineMarker,
-    firstVisibleLogicalLineMarker:
-      logicalAnchor?.lineY === viewportY
-        ? firstVisibleLineMarker
-        : logicalAnchor
-          ? terminal.registerMarker?.(logicalAnchor.lineY - (buf.baseY + buf.cursorY))
-          : undefined,
-    firstVisibleLogicalCellOffset: logicalAnchor?.cellOffset
-  }
 }
 
 export function restoreScrollState(terminal: Terminal, state: ScrollState): boolean {
@@ -301,14 +270,6 @@ function safeScrollCall(fn: () => void): boolean {
     }
     throw err
   }
-}
-
-export function releaseScrollStateMarker(state: ScrollState): void {
-  state.firstVisibleLineMarker?.dispose()
-  if (state.firstVisibleLogicalLineMarker !== state.firstVisibleLineMarker) {
-    state.firstVisibleLogicalLineMarker?.dispose()
-  }
-  state.firstVisibleLineMarker = state.firstVisibleLogicalLineMarker = undefined
 }
 
 function cancelPendingFitScrollRestore(terminal: TerminalScrollIntentTarget): void {

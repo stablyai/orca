@@ -1,0 +1,105 @@
+import type { RuntimeTerminalDriverState } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+
+const driverByBrowserPageId = new Map<string, RuntimeTerminalDriverState>()
+
+// Why: a shared instance keeps getDriverForBrowserPage referentially stable for useSyncExternalStore snapshots.
+export const IDLE_BROWSER_DRIVER: RuntimeTerminalDriverState = { kind: 'idle' }
+
+type BrowserDriverChangeEvent = {
+  browserPageId: string
+  driver: RuntimeTerminalDriverState
+}
+
+type BrowserDriverChangeListener = (event: BrowserDriverChangeEvent) => void
+const changeListeners = new Set<BrowserDriverChangeListener>()
+const snapshotListeners = new Set<() => void>()
+let version = 0
+
+export function onBrowserDriverChange(listener: BrowserDriverChangeListener): () => void {
+  changeListeners.add(listener)
+  return () => changeListeners.delete(listener)
+}
+
+export function subscribeBrowserDriverSnapshot(listener: () => void): () => void {
+  snapshotListeners.add(listener)
+  return () => {
+    snapshotListeners.delete(listener)
+  }
+}
+
+export function getBrowserDriverSnapshot(): number {
+  return version
+}
+
+function notifyChange(event: BrowserDriverChangeEvent): void {
+  version += 1
+  for (const listener of changeListeners) {
+    listener(event)
+  }
+  for (const listener of snapshotListeners) {
+    listener()
+  }
+}
+
+export function setDriverForBrowserPage(
+  browserPageId: string,
+  driver: RuntimeTerminalDriverState
+): void {
+  if (driver.kind === 'idle') {
+    driverByBrowserPageId.delete(browserPageId)
+  } else {
+    driverByBrowserPageId.set(browserPageId, driver)
+  }
+  notifyChange({ browserPageId, driver })
+}
+
+export function getDriverForBrowserPage(browserPageId: string): RuntimeTerminalDriverState {
+  return driverByBrowserPageId.get(browserPageId) ?? IDLE_BROWSER_DRIVER
+}
+
+export function isBrowserPageMobileDriven(browserPageId: string): boolean {
+  return driverByBrowserPageId.get(browserPageId)?.kind === 'mobile'
+}
+
+export function getAllMobileDrivenBrowserPageIds(): string[] {
+  return [...driverByBrowserPageId]
+    .filter(([, driver]) => driver.kind === 'mobile')
+    .map(([browserPageId]) => browserPageId)
+}
+
+export function hasMobileDriverForAnyBrowserPage(
+  browserPageIds: readonly (string | null | undefined)[]
+): boolean {
+  return browserPageIds.some((pageId) => Boolean(pageId && isBrowserPageMobileDriven(pageId)))
+}
+
+export function getBrowserMobileDrivenPageIds(
+  browserPageIds: readonly (string | null | undefined)[]
+): Set<string> {
+  const mobileDrivenPageIds = new Set<string>()
+  for (const pageId of browserPageIds) {
+    if (pageId && isBrowserPageMobileDriven(pageId)) {
+      mobileDrivenPageIds.add(pageId)
+    }
+  }
+  return mobileDrivenPageIds
+}
+
+export function hydrateBrowserDrivers(
+  drivers: { browserPageId: string; driver: RuntimeTerminalDriverState }[]
+): void {
+  const affectedPageIds = new Set(driverByBrowserPageId.keys())
+  driverByBrowserPageId.clear()
+
+  for (const { browserPageId, driver } of drivers) {
+    affectedPageIds.add(browserPageId)
+    if (driver.kind !== 'idle') {
+      driverByBrowserPageId.set(browserPageId, driver)
+    }
+  }
+
+  // Notify every known page after late hydration so mounted panes cannot retain stale desktop input ownership.
+  for (const browserPageId of affectedPageIds) {
+    notifyChange({ browserPageId, driver: getDriverForBrowserPage(browserPageId) })
+  }
+}

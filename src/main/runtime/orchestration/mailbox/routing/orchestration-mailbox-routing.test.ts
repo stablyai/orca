@@ -10,6 +10,7 @@ vi.mock('electron', () => ({
 
 import '../terminal-pointer/orchestration-mailbox-crash-recovery.spec'
 import './orchestration-mailbox-detached-routing.spec'
+import './orchestration-mailbox-direct-terminal-pointer.spec'
 import './orchestration-mailbox-filtered-waiters.spec'
 import './orchestration-mailbox-routing-races.spec'
 import '../terminal-pointer/orchestration-multi-run-coordinator-wake.spec'

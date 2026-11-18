@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
-import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -27,7 +27,7 @@ import {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 import { SessionSearchTipDialog } from './SessionSearchTipDialog'
 import { useSessionSearchTipSetup } from './use-session-search-tip-setup'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'

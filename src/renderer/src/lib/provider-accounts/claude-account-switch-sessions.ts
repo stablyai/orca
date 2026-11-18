@@ -1,9 +1,9 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
-import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/claude-account-switch-settings'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { INLINE_ACTION_CLASS_NAMES } from '@/components/ui/sonner'
 import { getClaudeAccountLabel } from './claude-account-label'
 import type { ClaudeHostFolders } from '../agent-session/accounts/claude/claude-pane-account-folder'
@@ -100,6 +100,8 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   target: CodexAccountSelectionTarget
   before: ClaudeAccountSnapshot
   after: ClaudeAccountSnapshot
+  /** Switched from a phone or the CLI, where no one can answer a dialog on this computer. */
+  madeElsewhere?: true
 }): Promise<'show-confirmation' | 'handled'> {
   const fromAccountId = claudeLaunchAccountId(args.before.state, args.before.accountId)
   const toAccountId = claudeLaunchAccountId(args.after.state, args.after.accountId)
@@ -126,6 +128,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   }
   let uncheckedCount = 0
   let sharedCount = 0
+  let strandedPtyIds: ReadonlySet<string> = new Set()
   const found = await findClaudeSwitchSessions({
     owner: args.owner,
     target: args.target,
@@ -141,6 +144,9 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     },
     onShared: (sessions) => {
       sharedCount = sessions.length
+    },
+    onStranded: (sessions) => {
+      strandedPtyIds = new Set(sessions.map((session) => session.ptyId))
     }
   }).catch((error: unknown) => {
     console.warn('[claude-account-switch] session scan failed:', error)
@@ -150,7 +156,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     return 'handled'
   }
   // Why re-read: the setting may change while the scan runs.
-  const policy = readPolicy()
+  const policy = readPolicy(args.madeElsewhere)
   if (policy === 'keep') {
     return 'show-confirmation'
   }
@@ -160,41 +166,49 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
       getClaudeAccountLabel(args.before.state, args.before.accountId)
     )
   }
-  // Why: other sessions are listed only alongside a move, so parallel-account users get no prompt.
-  if (!found || found.onAccount.length === 0) {
-    if (sharedCount > 0) {
-      warnSharedSessions(
-        sharedCount,
-        getClaudeAccountLabel(args.before.state, args.before.accountId)
-      )
-    }
-    return 'show-confirmation'
-  }
   const nextAccountLabel = getClaudeAccountLabel(args.after.state, args.after.accountId)
   const sessions: ClaudeAccountSwitchPromptSessions = {
-    ...found,
-    elsewhere: found.elsewhere.map((session) => ({
+    onAccount: found?.onAccount ?? [],
+    elsewhere: (found?.elsewhere ?? []).map((session) => ({
       ...session,
       accountLabel: getClaudeAccountLabel(args.after.state, session.accountId)
-    }))
+    })),
+    cantMove: found?.cantMove ?? []
   }
   const labels = {
     previousAccountLabel: getClaudeAccountLabel(args.before.state, args.before.accountId),
     nextAccountLabel
   }
-  if (policy === 'restart') {
-    queueClaudeRestarts(found.onAccount.map((candidate) => candidate.ptyId))
-    const others = found.elsewhere.length + found.cantMove.length
-    announceRestart(found.onAccount.length, nextAccountLabel, others, () => {
-      if (generation === switchGeneration) {
-        setPrompt({
-          id: generation,
-          review: true,
-          sessions: { ...sessions, onAccount: [] },
-          ...labels
+  const openReview = (reviewSessions = sessions): void => {
+    if (generation === switchGeneration) {
+      setPrompt({
+        id: generation,
+        review: true,
+        sessions: { ...reviewSessions, onAccount: [] },
+        ...labels
+      })
+    }
+  }
+  // Why: other sessions are listed only alongside a move, so parallel-account users get no prompt.
+  if (sessions.onAccount.length === 0) {
+    if (sharedCount > 0) {
+      warnSharedSessions(sharedCount, labels.previousAccountLabel)
+    }
+    if (strandedPtyIds.size > 0) {
+      warnStrandedSessions(strandedPtyIds.size, labels.previousAccountLabel, () =>
+        openReview({
+          onAccount: [],
+          elsewhere: [],
+          cantMove: sessions.cantMove.filter((session) => strandedPtyIds.has(session.ptyId))
         })
-      }
-    })
+      )
+    }
+    return 'show-confirmation'
+  }
+  if (policy === 'restart') {
+    queueClaudeRestarts(sessions.onAccount.map((candidate) => candidate.ptyId))
+    const others = sessions.elsewhere.length + sessions.cantMove.length
+    announceRestart(sessions.onAccount.length, nextAccountLabel, others, () => openReview())
     return 'handled'
   }
   setPrompt({ id: generation, sessions, ...labels })
@@ -253,6 +267,30 @@ function warnUncheckedSessions(count: number, previous: string): void {
   )
 }
 
+/** Why a toast: nothing else moved, so no dialog lists the Claude sessions Orca couldn't restart. */
+function warnStrandedSessions(count: number, previous: string, review: () => void): void {
+  toast.warning(
+    count === 1
+      ? translate(
+          'accounts.claude.switchSessions.strandedOne',
+          '1 Claude session may still be on {{previous}}. Restart it manually to switch.',
+          { previous }
+        )
+      : translate(
+          'accounts.claude.switchSessions.strandedOther',
+          '{{count}} Claude sessions may still be on {{previous}}. Restart them manually to switch.',
+          { count, previous }
+        ),
+    {
+      classNames: INLINE_ACTION_CLASS_NAMES,
+      action: {
+        label: translate('accounts.claude.switchSessions.review', 'Review'),
+        onClick: review
+      }
+    }
+  )
+}
+
 /** Why a toast: with nothing else to move, no dialog says why these sessions stayed. */
 function warnSharedSessions(count: number, previous: string): void {
   toast.warning(
@@ -270,8 +308,10 @@ function warnSharedSessions(count: number, previous: string): void {
   )
 }
 
-function readPolicy(): ClaudeAccountSwitchRunningSessions {
-  return useAppStore.getState().settings?.claudeAccountSwitchRunningSessions ?? 'ask'
+function readPolicy(madeElsewhere?: true): ClaudeAccountSwitchRunningSessions {
+  const policy = useAppStore.getState().settings?.claudeAccountSwitchRunningSessions ?? 'ask'
+  // Why: no one at the phone sees a dialog here.
+  return policy === 'ask' && madeElsewhere ? 'restart' : policy
 }
 
 export function resetClaudeAccountSwitchSessionsForTests(): void {

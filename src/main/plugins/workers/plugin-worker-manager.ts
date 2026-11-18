@@ -6,27 +6,31 @@ import {
   PluginSupervisor,
   type PluginRestartDecision,
   type PluginRunState
-} from './plugin-supervisor'
-import type { PluginWorkerHandle, PluginWorkerHostCallExecutor } from './plugin-host-process'
+} from './worker-supervision/plugin-supervisor'
+import type {
+  PluginWorkerHandle,
+  PluginWorkerHostCallExecutor
+} from './parent-process/plugin-host-process-types'
 import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
-import { PluginWorkerSlots } from './plugin-worker-slot-pool'
+import { PluginWorkerSlots } from './worker-supervision/plugin-worker-slot-pool'
 import {
   startPluginWorkerAttempt,
   type PluginWorkerAdmission,
   type PluginWorkerFactory,
   type PluginWorkerSpawnSpec,
   type StartedPluginWorker
-} from './plugin-worker-startup'
-import { runPluginWorkerRestartLoop } from './plugin-worker-restart-loop'
-import { pluginWorkerSpawnSpecsEqual } from './plugin-worker-spawn-spec'
+} from './worker-supervision/plugin-worker-startup'
+import { runPluginWorkerRestartLoop } from './worker-supervision/plugin-worker-restart-loop'
+import { pluginWorkerSpawnSpecsEqual } from './worker-admission/plugin-worker-spawn-spec'
 import {
   forgetPluginWorkerGenerationIfIdle,
   nextPluginWorkerGeneration
-} from './plugin-worker-generation-retention'
-import { finishPluginWorkerActivation, pluginWorkerErrorText } from './plugin-worker-lifecycle'
-import { PluginWorkerIdleClock } from './plugin-worker-idle-clock'
-
-export type { PluginWorkerFactory, PluginWorkerSpawnSpec } from './plugin-worker-startup'
+} from './worker-supervision/plugin-worker-generation-retention'
+import {
+  finishPluginWorkerActivation,
+  pluginWorkerErrorText
+} from './worker-supervision/plugin-worker-lifecycle'
+import { PluginWorkerIdleClock } from './worker-supervision/plugin-worker-idle-clock'
 
 export type PluginWorkerManagerOptions = {
   entryPath: string

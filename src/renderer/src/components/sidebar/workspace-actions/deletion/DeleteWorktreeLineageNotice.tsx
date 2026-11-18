@@ -1,14 +1,16 @@
 import { Workflow } from 'lucide-react'
 import { useMemo, type JSX } from 'react'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { useAppStore } from '@/store'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo
-} from '../../../../../../shared/project-section-grouping'
+} from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
+import { DeleteWorktreeLocalFilesHint } from './DeleteWorktreeLocalFilesHint'
+import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
 import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview
@@ -23,6 +25,7 @@ type DeleteWorktreeLineageNoticeProps = {
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
   dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
   changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
+  atRiskLocalFilesByIdentity?: ReadonlyMap<string, DeleteWorktreeLocalFilesState>
   preserveChildren: boolean
   canPreserveChildren: boolean
   disabled: boolean
@@ -36,6 +39,7 @@ export function DeleteWorktreeLineageNotice({
   dirtyChangeCountsByWorktreeId,
   dirtyChangePreviewsByWorktreeId,
   changeCheckStatesByWorktreeId,
+  atRiskLocalFilesByIdentity,
   preserveChildren,
   canPreserveChildren,
   disabled,
@@ -118,17 +122,22 @@ export function DeleteWorktreeLineageNotice({
                   </div>
                   <div className="truncate text-muted-foreground">{child.path}</div>
                   {!preserveChildren && (
-                    <DeleteWorktreeDirtyChangeHint
-                      checkState={changeCheckStatesByWorktreeId?.get(
-                        child.hostId ? getWorktreeHostIdentity(child) : child.id
-                      )}
-                      changeCount={dirtyChangeCountsByWorktreeId.get(
-                        child.hostId ? getWorktreeHostIdentity(child) : child.id
-                      )}
-                      preview={dirtyChangePreviewsByWorktreeId.get(
-                        child.hostId ? getWorktreeHostIdentity(child) : child.id
-                      )}
-                    />
+                    <>
+                      <DeleteWorktreeDirtyChangeHint
+                        checkState={changeCheckStatesByWorktreeId?.get(
+                          child.hostId ? getWorktreeHostIdentity(child) : child.id
+                        )}
+                        changeCount={dirtyChangeCountsByWorktreeId.get(
+                          child.hostId ? getWorktreeHostIdentity(child) : child.id
+                        )}
+                        preview={dirtyChangePreviewsByWorktreeId.get(
+                          child.hostId ? getWorktreeHostIdentity(child) : child.id
+                        )}
+                      />
+                      <DeleteWorktreeLocalFilesHint
+                        state={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(child))}
+                      />
+                    </>
                   )}
                 </div>
               ))}

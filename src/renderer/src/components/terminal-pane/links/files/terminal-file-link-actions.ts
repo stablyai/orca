@@ -23,6 +23,7 @@ import {
 } from '@/lib/files/os-open/local-path-open-guard'
 import '@/store/slices/editor/tabs/editor-open-target-group'
 import { canOpenLinkInSourceGroup } from '@/lib/links/placement/link-open-intent'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { FileOpenFailure } from './terminal-file-open-failure'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
@@ -81,7 +82,8 @@ export function buildFileLinkActions(
   column: number | null,
   deps: TerminalFileLinkActionDeps,
   sourceOwner: HttpLinkSourceOwner | undefined,
-  t: Translate = translate
+  t: Translate = translate,
+  options?: { directoryHint?: boolean }
 ): FileLinkActions {
   const mappedPath = mapTerminalFilePath(
     filePath,
@@ -99,6 +101,8 @@ export function buildFileLinkActions(
     fileContext
   )
   const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
+  // Hover is synchronous: avoid a stat per link, so only a trailing separator marks a folder.
+  const looksLikeFolder = options?.directoryHint === true || /[/\\]$/.test(mappedPath)
   const isMac = navigator.userAgent.includes('Mac')
 
   // Remote default-app opens download first because the OS can only launch local files.
@@ -120,18 +124,21 @@ export function buildFileLinkActions(
               openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
           }
         : null
-      : canOpenWithSystemDefault
-        ? {
-            label: t(
-              'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
-              'Open with default app'
-            ),
-            run: () =>
-              openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
-          }
-        : // Hover is synchronous: avoid a remote stat per link. Unmarked directories fail visibly during download.
-          /[/\\]$/.test(mappedPath)
-          ? null
+      : // Why: "Open folder" already opens it with the OS here, or reveals it remotely.
+        looksLikeFolder
+        ? null
+        : canOpenWithSystemDefault
+          ? {
+              label: t(
+                'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
+                'Open with default app'
+              ),
+              run: () =>
+                openDetectedFilePath(filePath, line, column, {
+                  ...deps,
+                  openWithSystemDefault: true
+                })
+            }
           : {
               label: t(
                 'auto.components.terminal.pane.TerminalLinkActionPopover.downloadOpenWithDefaultApp',
@@ -144,6 +151,14 @@ export function buildFileLinkActions(
                   openWithSystemDefault: true
                 })
             }
+  // Why: a paired web client has no local disk to save into.
+  const downloadRow =
+    systemDefaultRow && !canOpenWithSystemDefault && !isPairedWebClientWindow()
+      ? {
+          label: t('auto.components.terminal.pane.TerminalLinkActionPopover.download', 'Download…'),
+          run: () => openDetectedFilePath(filePath, line, column, { ...deps, downloadOnly: true })
+        }
+      : null
   // Omit remote reveal: rows have no disabled state and the file manager only shows local files.
   const revealOwner = getLocalPathOpenOwnerForRoute({
     runtimeEnvironmentId: deps.runtimeEnvironmentId
@@ -179,7 +194,7 @@ export function buildFileLinkActions(
             })
         }
       : null
-  const secondaryActions = [openInGroupRow, revealRow].filter((row) => row !== null)
+  const secondaryActions = [downloadRow, openInGroupRow, revealRow].filter((row) => row !== null)
   const rows =
     !worktreeRoot && canOpenWithSystemDefault && isHtmlFilePath(mappedPath)
       ? buildHttpLinkActions(
@@ -196,7 +211,15 @@ export function buildFileLinkActions(
                   'auto.components.terminal.pane.TerminalLinkActionPopover.switchWorkspace',
                   'Switch workspace'
                 )
-              : t('auto.components.terminal.pane.TerminalLinkActionPopover.openFile', 'Open file'),
+              : looksLikeFolder
+                ? t(
+                    'auto.components.terminal.pane.TerminalLinkActionPopover.openFolder',
+                    'Open folder'
+                  )
+                : t(
+                    'auto.components.terminal.pane.TerminalLinkActionPopover.openFile',
+                    'Open file'
+                  ),
             run: () => openDetectedFilePath(filePath, line, column, deps)
           },
           ...(systemDefaultRow ? { alternate: systemDefaultRow } : {})

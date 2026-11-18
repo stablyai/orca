@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, type HostInstance } from 'react-native'
 import {
   CalendarClock,
   ChevronLeft,
@@ -9,13 +9,13 @@ import {
   SquareTerminal,
   UserCircle
 } from 'lucide-react-native'
-import type { ActionSheetAction } from '../components/ActionSheetModal'
+import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet-actions'
 import { NavBar, NavBarSubtitleText } from '../components/nav-bar/NavBar'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
-import { StatusDot } from '../components/StatusDot'
+import { StatusDot } from '../components/feedback/StatusDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useRefreshHint } from '../query/refresh-hint'
 import { colors, pressedStyle } from '../theme/mobile-theme'
@@ -95,7 +95,7 @@ export function HostScreenHeader({
     onHideSidebar,
     router
   } = controller
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
   const disconnected = connState !== 'connected'

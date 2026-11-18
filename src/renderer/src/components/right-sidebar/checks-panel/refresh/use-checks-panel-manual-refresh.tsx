@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store/index'
 import { buildGitHubPRRefreshStateClearToken } from '@/store/github/refresh/pr-refresh-state'
@@ -14,7 +14,7 @@ import {
 import { checksPanelAsyncResultKey } from './checks-panel-async-result-key'
 import { recordChecksPanelPRRefreshBreadcrumb } from './checks-panel-pr-refresh-breadcrumb'
 import { getHostedReviewManualRefreshError } from '../../hosted-review/provider-actions/github-refresh-error-copy'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import {
   checksPanelManualRefreshProvider,
   refreshChecksPanelHostedReview,

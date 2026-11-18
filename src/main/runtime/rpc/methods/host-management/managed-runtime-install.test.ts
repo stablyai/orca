@@ -14,7 +14,8 @@ vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => host.dataDirectory
 }))
 vi.mock('../../../agent-session/launch/structured-agent-launch-support', () => ({
-  resolveHostStructuredAgentLaunchEnvironment: async () => ({ PATH: '' })
+  resolveHostStructuredAgentLaunchEnvironment: async () => ({ PATH: '' }),
+  structuredAgentHostAlternativeReady: async () => false
 }))
 // The download never answers until its cancel.
 vi.mock('../../../../network/http-client', () => ({

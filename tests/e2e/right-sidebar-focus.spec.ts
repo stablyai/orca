@@ -1,19 +1,20 @@
-import { test, expect } from './helpers/orca-app'
-import { pressShortcut } from './helpers/shortcuts'
-import { ensureTerminalVisible } from './helpers/store'
+import { expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { pressShortcut } from './desktop/renderer-probes/shortcuts'
+import { ensureTerminalVisible } from './desktop/renderer-probes/store'
+import { expectTerminalAccessibilityText } from './terminal/input/terminal-accessibility-tree'
+import { resolveActiveTabId } from './terminal/layout/terminal-pane-identity'
 import {
-  expectTerminalAccessibilityText,
-  resolveActiveTabId,
   splitActiveTerminalPane,
   waitForActiveTerminalManager,
   waitForPaneCount
-} from './helpers/terminal'
+} from './terminal/layout/terminal-pane-operations'
 import {
   createMarkdownFixture,
   getActiveWorktreeContext,
   openMarkdownFixture,
   waitForRichMarkdownEditor
-} from './helpers/markdown-editor-fixture'
+} from './editor/markdown/markdown-editor-fixture'
 
 test.beforeEach(async ({ orcaPage }) => {
   await orcaPage.setViewportSize({ width: 1440, height: 900 })
