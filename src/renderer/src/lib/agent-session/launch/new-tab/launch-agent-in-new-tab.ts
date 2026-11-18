@@ -194,7 +194,6 @@ function openAgentInNewTab(
       groupId,
       cwd: initialCwd,
       ...(trustWorktreeId ? { trustWorktreeId } : {}),
-      buildStartup,
       sessionOptions,
       omitEffort,
       prompt: trimmedPrompt,

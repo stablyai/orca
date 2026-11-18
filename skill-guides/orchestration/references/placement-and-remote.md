@@ -42,8 +42,11 @@ To message an agent that already runs on a paired server, send with `--on`,
 using the same server names as `worker-start --on`:
 
 ```bash
-ORCA orchestration send --on <server> --to <term_…|orca_session_id:…> --subject "<text>" --body "<text>"
+ORCA orchestration send --on <server> --to <term_…|orca_session_id:…|bot:<name>> --type status|handoff|question --subject "<text>" --body "<text>"
 ```
+
+A bot there takes `--chat <id|new>` and `--item <n>` as it does on its own
+computer, and treats the request as its owner's.
 
 Your own Orca carries the mail and keeps the conversation. Replies come back to
 your own mailbox and wake you like local mail. The other agent answers

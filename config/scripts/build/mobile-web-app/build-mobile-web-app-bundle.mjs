@@ -291,6 +291,8 @@ export function mobileWebAppBuildOptions(
     // Pinned rather than defaulted, so the entry is found by name and not by elimination.
     entryNames: ENTRY_CHUNK_NAME,
     target: ['es2022'],
+    // Keep ESM tree shaking when a dependency also requires the same package.
+    mainFields: ['browser', 'module', 'main'],
     charset: 'utf8',
     legalComments: 'none',
     // Omit maps carrying absolute checkout paths; keep unhashed/unwritten metafile for output/import classification.

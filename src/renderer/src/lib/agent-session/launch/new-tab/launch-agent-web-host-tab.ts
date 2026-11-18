@@ -1,4 +1,3 @@
-import { agentTabLaunchStore } from './launch-agent-execution-context'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -6,10 +5,8 @@ import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-la
 import { sourceControlActionAgentArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { readLaunchPermissionChoice } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { resolveHostAgentStartupShell } from '../../../../../../shared/shell/launch/windows-terminal-shell'
-import type { AgentLaunchChoices } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
-import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   AgentLaunchOmitEffortUnsupportedError,
   agentSessionCreateCapabilities
@@ -48,7 +45,6 @@ export async function launchAgentInWebHostTab(args: {
   groupId?: string
   cwd?: string | null
   trustWorktreeId?: string
-  buildStartup: (choices: AgentLaunchChoices | undefined) => LaunchAgentStartupPromptPlan
   /** Explicit Default effort; only a host advertising its composition receives it. */
   omitEffort?: true
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
@@ -218,12 +214,8 @@ export async function launchAgentInWebHostTab(args: {
               isFollowupPath: TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
             })
           } else {
-            // Why: unavailable host recipes retain the existing no-refusal compatibility launch.
-            const preferences = await ensureAgentLaunchPreferences(
-              agentTabLaunchStore(useAppStore.getState(), args),
-              { kind: 'git-worktree', worktreeId }
-            )
-            startup = args.buildStartup(preferences.agentLaunchChoices)
+            // Why: this desktop's launch settings must never build a command the paired host runs (#38866).
+            throw new Error(failureMessage)
           }
         } catch (error) {
           legacyPreparationCancelled = error instanceof Error && error.name === 'AbortError'

@@ -8,7 +8,11 @@ import {
   hostRefusesOtherRuntimeWorkspace,
   loadMobileAgentLaunchContext
 } from '../../../session/agent-launch/mobile-new-tab-agent-loader'
-import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
+import {
+  hostOpensChatsWithoutCli,
+  resolveMobileSourceControlLaunchAgent
+} from './mobile-source-control-launch-agent'
+import { readMobileRegisteredAgents } from '../../../session/native-chat/agent-session/use-mobile-registered-agent'
 import { projectSourceControlActionLaunch } from '../../../../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { translate } from '../../../i18n/mobile-i18n'
 import { readAgentLaunchNotice } from '../../../session/agent-launch/agent-launch-request'
@@ -66,20 +70,27 @@ export async function launchAgentWithPrompt(args: {
       kind: 'not-started',
       message: translate(
         'session.prAiTriageLaunch.updateRequired',
-        'Update Orca on your computer to start an agent from your phone.'
+        'Update Orca on this host to start an agent from your phone.'
       )
     }
   }
   let resolved
   try {
-    resolved = resolveMobileSourceControlLaunchAgent(
-      await loadMobileAgentLaunchContext({
-        client: args.client,
-        worktreeId: args.worktreeId,
-        hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
-      }),
-      args.actionId
-    )
+    const hostCapabilities = args.hostCapabilities ?? []
+    const contextRequest = loadMobileAgentLaunchContext({
+      client: args.client,
+      worktreeId: args.worktreeId,
+      hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
+    })
+    // Only a chat host can open an agent without a CLI; read alongside detection.
+    const registeredAgents = hostOpensChatsWithoutCli(hostCapabilities)
+      ? readMobileRegisteredAgents(args.client)
+      : null
+    const context = await contextRequest
+    resolved = resolveMobileSourceControlLaunchAgent(context, args.actionId, {
+      hostCapabilities,
+      registeredAgents: await registeredAgents
+    })
   } catch (error) {
     const message = error instanceof Error ? error.message.trim() : ''
     return {
@@ -114,7 +125,12 @@ export async function launchAgentWithPrompt(args: {
     ...(projection.sessionOptions ? { chatOptions: projection.sessionOptions } : {}),
     agentArgs: projection.agentArgs,
     ...(projection.omitEffort ? { omitEffort: projection.omitEffort } : {}),
-    surface: projection.requestedSurface,
+    // Without a CLI only a chat can run, so ask for one: the host refuses it rather than start a terminal.
+    surface: resolved.chatOnly ? 'chat' : projection.requestedSurface,
+    // A saved Chat is a preference: the host opens a chat where one can run, as desktop does.
+    ...(!resolved.chatOnly && projection.preferredSurface === 'chat'
+      ? { nativeChatDefault: true }
+      : {}),
     prompt: { text, delivery: 'submit' },
     launchSource: args.launchSource
   })
@@ -131,7 +147,7 @@ export async function launchAgentWithPrompt(args: {
         kind: 'not-started',
         message: translate(
           'session.prAiTriageLaunch.updateRequired',
-          'Update Orca on your computer to start an agent from your phone.'
+          'Update Orca on this host to start an agent from your phone.'
         )
       }
     case 'failed':

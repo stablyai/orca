@@ -180,6 +180,7 @@ export function dispatcher(
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
+    bots: { list: () => [] },
     ...runtimeCalls,
     ...runtimeOverrides
   }

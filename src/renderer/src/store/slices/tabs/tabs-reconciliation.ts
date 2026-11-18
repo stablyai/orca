@@ -1,6 +1,9 @@
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { AppState } from '../../types'
-import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import {
+  TAB_CONTENT_TRAITS,
+  type Tab
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { ensureWorktreeGroup, updateGroup } from './tab-group-state'
 import { sanitizeRecentTabIds } from './tab-selection-history'
@@ -125,10 +128,9 @@ export function projectWorktreeTabModelReconciliation(
     if (tab.contentType === 'browser') {
       return liveBrowserIds.has(tab.entityId)
     }
-    if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
-      return true
-    }
-    return liveEditorIds.has(tab.entityId)
+    return (
+      TAB_CONTENT_TRAITS[tab.contentType].renderableWithoutRecord || liveEditorIds.has(tab.entityId)
+    )
   }
 
   const renderableTabs = reconciledUnifiedTabs.filter(isRenderableTab)

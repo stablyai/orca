@@ -12,6 +12,11 @@ export const AWAKE_CLOCK_SLEEP_GAP_MS = 3 * AWAKE_CLOCK_HEARTBEAT_MS
  *  the automation scheduler reads every tick only while an automation is enabled. */
 export const AWAKE_CLOCK_IDLE_MS = 15 * 60_000
 
+/** How long the machine must stay awake after a wake before scheduled work starts. A dark wake
+ *  (macOS maintenance or Power Nap) lasts seconds, so work never starts inside one only to be
+ *  frozen when the machine sleeps again. */
+export const WAKE_SETTLE_MS = 2 * 60_000
+
 /** Uninterrupted running while still marked suspended after which a resume event was evidently
  *  lost. Dark wakes run for seconds, so this never ends a real suspension early. */
 const LOST_RESUME_MS = 2 * 60_000

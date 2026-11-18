@@ -22,6 +22,7 @@ import {
   openBrowserUrlOnClient
 } from '../../runtime/browser/client-pages/browser-client-page-opening'
 import { opensOnPairedDesktop } from '../../runtime/browser/client-pages/server-agent-tab-placement'
+import { cloneBrowserClientPage } from '../../runtime/browser/client-pages/browser-client-page-clone'
 import {
   BrowserClientPageQueries,
   yieldClientPageSelection,
@@ -42,7 +43,13 @@ const LOGICAL_TAB_QUERIES = [
   'browserTabSwitch'
 ] as const
 
-export function orcadClientPageCommand<K extends 'browserTabCreate' | 'browserOpenUrlOnClient'>(
+export function orcadClientPageCommand<
+  K extends
+    | 'browserTabCreate'
+    | 'browserOpenUrlOnClient'
+    | 'browserTabProfileShow'
+    | 'browserTabProfileClone'
+>(
   host: RuntimeBrowserCommandHost,
   name: K,
   forward: Forward,
@@ -95,6 +102,51 @@ export function orcadClientPageCommand(
         ? findListedBrowserTab((await logicalTabs().browserTabList({ worktree })).tabs, page)
         : (await logicalTabs().browserTabCurrent({ worktree })).tab
       return readBrowserTabAnnotations(host, tab)
+    }
+  }
+  if (name === 'browserTabProfileShow') {
+    return async (...args: Parameters<RuntimeBrowserCommands['browserTabProfileShow']>) => {
+      if (!host.getRuntimeBrowserPageRegistry().getPage(args[0].page)) {
+        return forward(args)
+      }
+      const { tab } = await logicalTabs().browserTabShow(args[0])
+      return {
+        browserPageId: tab.browserPageId,
+        worktreeId: tab.worktreeId ?? null,
+        profileId: tab.profileId ?? null,
+        profileLabel: tab.profileLabel ?? null
+      }
+    }
+  }
+  if (name === 'browserTabProfileClone') {
+    return async (...args: Parameters<RuntimeBrowserCommands['browserTabProfileClone']>) => {
+      const params = args[0]
+      const pages = host.getRuntimeBrowserPageRegistry()
+      const workspaceId = params.worktree
+        ? (await host.resolveBrowserWorkspace(params.worktree)).id
+        : undefined
+      const source = params.page
+        ? pages.getPage(params.page)
+        : workspaceId !== undefined
+          ? pages.listPages(workspaceId).find((page) => page.active)
+          : undefined
+      if (!source) {
+        return forward(args)
+      }
+      if (workspaceId !== undefined && source.workspaceId !== workspaceId) {
+        throw new BrowserError(
+          'browser_tab_not_found',
+          `Browser page ${source.browserPageId} was not found in this worktree`
+        )
+      }
+      const profile = orcadProfileLabel(orcadBrowserProfileId(params.profileId))
+      const created = await cloneBrowserClientPage(host, source, profile.id)
+      return {
+        browserPageId: created.browserPageId,
+        sourceBrowserPageId: source.browserPageId,
+        profileId: profile.id,
+        profileLabel: profile.label
+      }
     }
   }
   const query = LOGICAL_TAB_QUERIES.find((candidate) => candidate === name)

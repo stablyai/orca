@@ -163,6 +163,7 @@ export function ActivityThreadHoverCardSummary({
           <div className="max-h-36 overflow-y-auto break-words rounded-md border border-border/40 bg-accent/40 p-2 text-[11.5px] leading-relaxed text-foreground/80 scrollbar-sleek">
             <CommentMarkdown
               content={thread.responsePreview}
+              singleTildeStrikethrough={false}
               className="text-[11.5px] leading-relaxed [&_*]:!m-0 [&_*]:!p-0"
             />
           </div>

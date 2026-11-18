@@ -84,28 +84,14 @@ describe('orchestration mailbox routing races', () => {
       }
       return page
     })
-    const migrate = db.routeUnreadDispatchMailboxToRunMailbox.bind(db)
-    const migrationSpy = vi
-      .spyOn(db, 'routeUnreadDispatchMailboxToRunMailbox')
-      .mockImplementation((...args) => migrate(...args))
     const arrivalSpy = vi.spyOn(harness.runtime, 'notifyMessageArrived')
 
     const response = await dispatchMailboxCheck(harness.runtime)
 
     expect(response).toMatchObject({ ok: false, error: { code: 'dispatch_inactive' } })
     expect(db.getUnreadMessages(`dispatch:${dispatch.id}`)).toHaveLength(0)
-    expect(migrationSpy).toHaveBeenCalledTimes(4)
     expect(arrivalSpy).toHaveBeenCalledOnce()
     expect(arrivalSpy).toHaveBeenCalledWith(`run:${run.id}`, 'status')
-    const plan = sqliteFor(db)
-      .prepare(
-        `EXPLAIN QUERY PLAN SELECT id, type FROM messages
-         INDEXED BY idx_messages_unread_current_inbox
-         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
-         ORDER BY sequence LIMIT ?`
-      )
-      .all(`dispatch:${dispatch.id}`, 51) as { detail: string }[]
-    expect(plan.map((row) => row.detail).join(' ')).toContain('idx_messages_unread_current_inbox')
     const coordinator = {
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,

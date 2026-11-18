@@ -10,9 +10,9 @@ import { areTaskSourceContextsEqual } from '../../../../../../shared/work-items/
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import {
-  deriveWorktreeCardPrDisplay,
-  getWorktreeReviewCacheKeys
-} from '../review/worktree-card-pr-derivation'
+  getWorktreeCardReviewCacheKeys,
+  resolveWorktreeCardReview
+} from '../review/worktree-card-review-resolution'
 import type { WorktreeCardProps } from '../controller/worktree-card-model'
 import type { useWorktreeCardFoundation } from '../controller/use-worktree-card-foundation'
 import { useTranslate } from '@/i18n/use-translate'
@@ -47,7 +47,11 @@ export function useWorktreeCardReviewDetails({
   const folderMetaRowContent = newCardStyle
     ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
     : isFolder
-  const { hostedReviewCacheKey, prCacheKey } = getWorktreeReviewCacheKeys(worktree, repo, settings)
+  const { hostedReviewCacheKey, prCacheKey } = getWorktreeCardReviewCacheKeys(
+    worktree,
+    repo,
+    settings
+  )
   const issueCacheKey =
     repo && worktree.linkedIssue
       ? getIssueCacheKey(
@@ -94,17 +98,15 @@ export function useWorktreeCardReviewDetails({
       : undefined
   )
 
-  const linkedGitHubPR = worktree.linkedPR ?? null
-  const linkedGitLabMR = worktree.linkedGitLabMR ?? null
-  const linkedBitbucketPR = worktree.linkedBitbucketPR ?? null
-  const linkedAzureDevOpsPR = worktree.linkedAzureDevOpsPR ?? null
-  const linkedGiteaPR = worktree.linkedGiteaPR ?? null
-  const { prDisplay, cachedBranchFallbackGitHubPRNumber } = deriveWorktreeCardPrDisplay(
-    worktree,
-    hostedReviewEntry,
-    prCacheEntry,
-    t
-  )
+  const {
+    linkedGitHubPR,
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR,
+    cachedBranchFallbackGitHubPRNumber,
+    prDisplay
+  } = resolveWorktreeCardReview(worktree, hostedReviewEntry, prCacheEntry, t)
 
   return {
     detachedHeadDisplay,

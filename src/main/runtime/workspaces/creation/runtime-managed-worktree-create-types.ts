@@ -122,6 +122,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
     cwdParentAmbiguous?: true
     noParent?: boolean
     callerTerminalHandle?: string
+    /** The creating agent session's Orca id; only the host that runs it can resolve it. */
+    callerAgentSessionId?: string
     comment?: string
     orchestrationContext?: {
       parentWorktreeId?: string

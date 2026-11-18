@@ -15,8 +15,22 @@ import {
   type WorkerSendLedgerEntry
 } from './worker-send-ledger'
 import type { WorkerThreadRole } from './worker-thread-roles'
+import {
+  journalReaderRequestData,
+  onJournalReaderRequest,
+  readJournalReaderRequests,
+  type JournalReaderRunningRequest
+} from '../native-chat/agent-session-journal/journal-sql-reader-requests'
 import { observeWorkerThreads } from './worker-thread-spawn'
 import { noteMainCageHeap } from '../crash-reporting/memory/main-heap-allocation-profile'
+import {
+  readWorkerHeap,
+  WORKER_HEAP_BREADCRUMB_BYTES,
+  WORKER_HEAP_BREADCRUMB_MIN_INTERVAL_MS,
+  WORKER_HEAP_PRESSURED_BYTES,
+  WORKER_HEAP_PRESSURED_SAMPLE_INTERVAL_MS,
+  WORKER_HEAP_SAMPLE_INTERVAL_MS
+} from './worker-heap-sample'
 
 /**
  * The main thread and every worker share one V8 pointer cage (~3.25 GB measured on Electron 43):
@@ -24,14 +38,7 @@ import { noteMainCageHeap } from '../crash-reporting/memory/main-heap-allocation
  * goes into the crash report's annotations, and a breadcrumb names the largest isolates once the
  * total is high, so the next such crash names the isolate that grew.
  */
-const SAMPLE_INTERVAL_MS = 60_000
-const PRESSURED_SAMPLE_INTERVAL_MS = 10_000
-const PRESSURED_BYTES = 2 ** 30
-const BREADCRUMB_BYTES = 1.5 * 2 ** 30
-const BREADCRUMB_MIN_INTERVAL_MS = 10 * 60_000
 const REPORTED_WORKERS = 4
-/** A worker blocked in native code (SQLite) answers only when it returns to JS. */
-const WORKER_HEAP_READ_TIMEOUT_MS = 2_000
 /** Electron truncates crash annotation values past this many bytes. */
 const ANNOTATION_MAX_LENGTH = 127
 const MB = 2 ** 20
@@ -42,13 +49,18 @@ type WorkerHeap = { entry: LiveWorker; heap: number }
 export function installWorkerThreadDiagnostics(): void {
   const live = new Set<LiveWorker>()
   let largeSendLogSet = false
+  onJournalReaderRequest(annotateReaderRequest)
   let sampling: ReturnType<typeof setTimeout> | undefined
   const schedule = (delayMs: number): void => {
     sampling = setTimeout(() => {
       void sampleHeaps(live)
         .catch(() => 0)
         .then((total) =>
-          schedule(total >= PRESSURED_BYTES ? PRESSURED_SAMPLE_INTERVAL_MS : SAMPLE_INTERVAL_MS)
+          schedule(
+            total >= WORKER_HEAP_PRESSURED_BYTES
+              ? WORKER_HEAP_PRESSURED_SAMPLE_INTERVAL_MS
+              : WORKER_HEAP_SAMPLE_INTERVAL_MS
+          )
         )
     }, delayMs)
     sampling.unref?.()
@@ -69,11 +81,14 @@ export function installWorkerThreadDiagnostics(): void {
           role,
           code: typeof error?.code === 'string' ? error.code : null,
           ...(ledger ? ledgerData('', ledger) : {}),
+          ...journalReaderRequestData(
+            readJournalReaderRequests().filter((request) => request.threadId === entry.threadId)
+          ),
           mainHeapMB: Math.round(getHeapStatistics().total_heap_size / MB)
         })
       })
       if (!sampling) {
-        schedule(SAMPLE_INTERVAL_MS)
+        schedule(WORKER_HEAP_SAMPLE_INTERVAL_MS)
       }
     }
   })
@@ -90,9 +105,7 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
   const heaps: WorkerHeap[] = await Promise.all(
     [...live].map(async (entry) => ({
       entry,
-      heap: await workerHeap(entry.worker).catch(
-        () => (ledger.get(entry.threadId)?.heapUsedMB ?? 0) * MB
-      )
+      heap: (await readWorkerHeap(entry.worker, ledger.get(entry.threadId))).bytes ?? 0
     }))
   )
   heaps.sort((a, b) => b.heap - a.heap)
@@ -101,13 +114,14 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
   const total = heaps.reduce((sum, { heap }) => sum + heap, mainHeap)
   annotateCrashReport(mainHeap, total, heaps, ledger)
   noteMainCageHeap(total, mainHeap)
-  if (total >= BREADCRUMB_BYTES) {
+  if (total >= WORKER_HEAP_BREADCRUMB_BYTES) {
     const data: CrashReportBreadcrumbData = {
       totalHeapMB: Math.round(total / MB),
       mainHeapMB: Math.round(mainHeap / MB),
       ...mainHeapSpaces(),
       workers: heaps.length
     }
+    Object.assign(data, journalReaderRequestData(readJournalReaderRequests()))
     heaps.slice(0, REPORTED_WORKERS).forEach(({ entry, heap }, index) => {
       const slot = ledger.get(entry.threadId)
       Object.assign(data, {
@@ -120,7 +134,7 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
       name: 'worker_heap_pressure',
       data,
       coalesceKey: 'worker_heap_pressure',
-      minIntervalMs: BREADCRUMB_MIN_INTERVAL_MS
+      minIntervalMs: WORKER_HEAP_BREADCRUMB_MIN_INTERVAL_MS
     })
   }
   return total
@@ -180,20 +194,21 @@ function workerAnnotation(sample: WorkerHeap, slot: WorkerSendLedgerEntry | unde
   return `${heap} last=${slot.lastKind}/${slot.lastItems}/${lastKB}KB max=${slot.maxKind}/${maxKB}KB`
 }
 
-function workerHeap(worker: Worker): Promise<number> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error('worker heap read timed out')),
-      WORKER_HEAP_READ_TIMEOUT_MS
-    )
-  })
-  return Promise.race([
-    Promise.resolve()
-      .then(() => worker.getHeapStatistics())
-      .then((stats) => stats.total_heap_size),
-    timeout
-  ]).finally(() => clearTimeout(timer))
+/** Written before the reader gets the request, so an abort mid-read still names it. */
+function annotateReaderRequest(reader: number, request: JournalReaderRunningRequest | null): void {
+  const key = `orca-reader-${reader}`
+  try {
+    if (request) {
+      const value =
+        `${request.operation} chat=${request.chat ?? '-'} queued=${request.queued} ` +
+        `tid=${request.threadId ?? '-'} at=${new Date(request.startedAt).toISOString()}`
+      crashReporter.addExtraParameter(key, value.slice(0, ANNOTATION_MAX_LENGTH))
+    } else {
+      crashReporter.removeExtraParameter(key)
+    }
+  } catch {
+    // Crash reporting may be off; diagnostics only.
+  }
 }
 
 function ledgerData(prefix: string, slot: WorkerSendLedgerEntry): CrashReportBreadcrumbData {

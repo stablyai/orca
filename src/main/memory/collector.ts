@@ -1,6 +1,3 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-import os from 'node:os'
 import { getAppEnvironment, type AppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import type {
   AppMemory,
@@ -11,18 +8,11 @@ import type {
 } from '../../shared/diagnostics/process-stats-types'
 import { ORPHAN_WORKTREE_ID } from '../../shared/terminal/pty/orphan-worktree-id'
 import { listRegisteredPtys } from './pty-registry'
-import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
 import { collectHostMemory } from './host-memory'
-import { getProcessMemoryMetric } from './process-memory-metric'
-import { readDarwinProcessFootprints } from './darwin-process-footprint'
 import { getLocalDaemonPid } from './local-daemon-pid'
-import {
-  buildProcessIndex,
-  collectSubtree,
-  parsePsOutput,
-  type ProcIndex,
-  type ProcRow
-} from './process-index'
+import { enumerateHostProcesses } from './host-process-index'
+import { claimPtyProcessTrees } from './pty-process-trees'
+import type { ProcIndex } from './process-index'
 import {
   createEmptyWorktreeMemoryBucket,
   pushAppMemoryHistory,
@@ -60,38 +50,6 @@ export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise
       inflight = null
     })
   return inflight
-}
-
-const execFileAsync = promisify(execFile)
-const PS_EXEC_TIMEOUT_MS = 5_000
-const PS_MAX_BUFFER = 10 * 1024 * 1024
-
-async function enumerateProcesses(): Promise<ProcIndex> {
-  const platform = os.platform()
-  const [rows, footprints] = await Promise.all([
-    platform === 'win32' ? enumerateWindows() : enumerateUnix(),
-    platform === 'darwin' ? readDarwinProcessFootprints() : Promise.resolve(null)
-  ])
-  return buildProcessIndex(rows, footprints, getProcessMemoryMetric(platform))
-}
-
-async function enumerateUnix(): Promise<ProcRow[]> {
-  // Force dot decimals: parseFloat silently truncates locale-formatted comma values.
-  try {
-    const { stdout } = await execFileAsync('ps', ['-eo', 'pid=,ppid=,pcpu=,rss='], {
-      maxBuffer: PS_MAX_BUFFER,
-      timeout: PS_EXEC_TIMEOUT_MS,
-      env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
-    })
-    return parsePsOutput(stdout)
-  } catch (err) {
-    console.warn('[memory] ps enumeration failed', err)
-    return []
-  }
-}
-
-async function enumerateWindows(): Promise<ProcRow[]> {
-  return enumerateWindowsProcessResources()
 }
 
 type AppBucketsRaw = Omit<AppMemory, 'history'>
@@ -162,12 +120,9 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
 }
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
-  const [processIndex, host] = await Promise.all([enumerateProcesses(), collectHostMemory()])
+  const [processIndex, host] = await Promise.all([enumerateHostProcesses(), collectHostMemory()])
   const appBuckets = bucketElectronMetrics(processIndex)
-  const ptys = listRegisteredPtys()
-
-  // Attribute overlapping PTY trees once, in registration order.
-  const claimed = new Set<number>()
+  const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys())
 
   const orphan = createEmptyWorktreeMemoryBucket(
     ORPHAN_WORKTREE_ID,
@@ -177,25 +132,14 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   )
   const worktreeBuckets = new Map<string, WorktreeMemoryBucket>()
 
-  for (const pty of ptys) {
+  for (const { pty, rows } of ptyTrees) {
     let sessionCpu = 0
     let sessionMemory = 0
     let sessionPrivateMemory = 0
-
-    if (pty.pid != null) {
-      for (const pid of collectSubtree(processIndex, pty.pid, claimed)) {
-        if (claimed.has(pid)) {
-          continue
-        }
-        const row = processIndex.byPid.get(pid)
-        if (!row) {
-          continue
-        }
-        claimed.add(pid)
-        sessionCpu += row.cpu
-        sessionMemory += row.memory
-        sessionPrivateMemory += clampMemoryMetric(row.privateMemory)
-      }
+    for (const row of rows) {
+      sessionCpu += row.cpu
+      sessionMemory += row.memory
+      sessionPrivateMemory += clampMemoryMetric(row.privateMemory)
     }
 
     const session: SessionMemory = {
