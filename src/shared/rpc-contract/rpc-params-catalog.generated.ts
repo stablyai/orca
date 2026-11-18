@@ -88,7 +88,8 @@ import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
   AntigravityChatSignInCompleteParams,
-  AntigravityChatSignInFlowParams
+  AntigravityChatSignInFlowParams,
+  AntigravityChatSignInStartParams
 } from './accounts/antigravity-accounts-params'
 import {
   UsageCredentialApiKeyParams,
@@ -1036,7 +1037,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.antigravityChatAuthGet': null,
   'accounts.antigravityChatSignInCancel': AntigravityChatSignInFlowParams,
   'accounts.antigravityChatSignInComplete': AntigravityChatSignInCompleteParams,
-  'accounts.antigravityChatSignInStart': null,
+  'accounts.antigravityChatSignInStart': AntigravityChatSignInStartParams,
   'accounts.antigravityChatSignInSubscribe': null,
   'accounts.antigravityList': AntigravityAccountTargetParams,
   'accounts.antigravityRemove': AntigravityAccountMutationParams,
