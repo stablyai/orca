@@ -253,6 +253,25 @@ it.each(['retained', 'evicted'] as const)(
   }
 )
 
+it('shows hookless Claude work once its resumed session has started', async () => {
+  const working = `\x1b]7501;app=claude-code:state=working\x1b\\`
+  server.setHookRootEvidenceReader(async () => ({ verdict: 'root' }))
+  await agentHook('claude', 'UserPromptSubmit', 4001)
+  await agentHook('claude', 'Stop', 4001)
+  await sleepPane('claude', 'pty-1', 4001)
+  server.retireSleepingPaneOnSpawn(PANE, {
+    agentType: 'claude',
+    providerSession: { key: 'session_id', id: 'claude-session' }
+  })
+  // Startup restates work before SessionStart; that is not a new turn.
+  ingestProgramStatusOsc(server, working)
+  expect(read()).toMatchObject({ state: 'done' })
+  await agentHook('claude', 'SessionStart', 4002, 'resume')
+  // A hookless command such as /compact after startup is real work.
+  ingestProgramStatusOsc(server, working)
+  expect(read()).toMatchObject({ state: 'working' })
+})
+
 it.each(['claude', 'codex'] as const)(
   'keeps a %s that never had a turn through sleep',
   async (agent) => {

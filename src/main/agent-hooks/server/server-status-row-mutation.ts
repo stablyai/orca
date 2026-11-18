@@ -16,10 +16,17 @@ export abstract class AgentHookServerStatusRowMutation extends AgentHookServerSt
     before: EnrichedAgentHookEventPayload | undefined,
     origin: AgentStatusObservationOrigin
   ): EnrichedAgentHookEventPayload | null | undefined {
-    const resumed = previous && resumedAcceptedTurn(previous, incoming, origin)
-    if (!resumed) {
+    const accepted = previous && resumedAcceptedTurn(previous, incoming, origin)
+    if (!accepted) {
       return null
     }
+    // The CLI's own session start ends its startup; later terminal reports are new work.
+    const resumed =
+      origin === 'hook' &&
+      incoming.payload.sessionBoundary === true &&
+      accepted.observation?.origin === 'launch'
+        ? { ...accepted, observation: this.stampObservation(accepted, 'hook', Date.now()) }
+        : accepted
     if (!this.writeLegacyStatusRow(resumed)) {
       return undefined
     }
