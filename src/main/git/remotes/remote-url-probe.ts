@@ -20,10 +20,10 @@ type SharedRemoteUrlReads = { open: boolean; reads: Map<string, Promise<string>>
 
 const sharedRemoteUrlReads = new AsyncLocalStorage<SharedRemoteUrlReads>()
 
-// A confirmed missing remote stays missing until the repo's Git config changes; the TTL covers config the signature can't see.
+// A confirmed missing remote stays missing until the repo's Git config changes; the TTL covers global config the signature can't see.
 const MISSING_REMOTE_TTL_MS = 5 * 60_000
 const MISSING_REMOTE_MAX_ENTRIES = 500
-type MissingRemote = { error: unknown; signature: string | undefined; expiresAt: number }
+type MissingRemote = { error: unknown; signature: string; expiresAt: number }
 const missingRemotes = new Map<string, MissingRemote>()
 
 /** @internal - exposed for tests only */
@@ -69,24 +69,53 @@ export async function readRemoteUrl(
   return read
 }
 
+function missingRemoteKey(context: RemoteUrlProbeContext, remoteName: string): string {
+  return [context.wslDistro ?? '', context.repoPath, remoteName].join('\0')
+}
+
+function readConfigSignature(context: RemoteUrlProbeContext): Promise<string | undefined> {
+  return readLocalGitConfigSignature({
+    repoPath: context.repoPath,
+    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+  })
+}
+
+/** The remembered "No such remote" error while the repo's Git config is unchanged, else undefined. */
+async function currentMissingRemote(
+  context: RemoteUrlProbeContext,
+  remoteName: string
+): Promise<MissingRemote | undefined> {
+  const key = missingRemoteKey(context, remoteName)
+  const missing = missingRemotes.get(key)
+  if (!missing) {
+    return undefined
+  }
+  if (
+    missing.expiresAt > Date.now() &&
+    missing.signature === (await readConfigSignature(context))
+  ) {
+    return missing
+  }
+  missingRemotes.delete(key)
+  return undefined
+}
+
+/** True when Git already confirmed this local remote is missing and the repo's config hasn't changed since. */
+export async function isRemoteKnownMissing(
+  context: RemoteUrlProbeContext,
+  remoteName: string
+): Promise<boolean> {
+  return !context.connectionId && (await currentMissingRemote(context, remoteName)) !== undefined
+}
+
 async function readUncachedRemoteUrl(
   context: RemoteUrlProbeContext,
   remoteName: string
 ): Promise<string> {
-  const key = [context.wslDistro ?? '', context.repoPath, remoteName].join('\0')
-  const signature = await readLocalGitConfigSignature({
-    repoPath: context.repoPath,
-    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
-  })
-  const missing = missingRemotes.get(key)
-  if (
-    missing &&
-    missing.expiresAt > Date.now() &&
-    (missing.signature === undefined || missing.signature === signature)
-  ) {
+  const missing = await currentMissingRemote(context, remoteName)
+  if (missing) {
     throw missing.error
   }
-  missingRemotes.delete(key)
   try {
     const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
       cwd: context.repoPath,
@@ -97,11 +126,15 @@ async function readUncachedRemoteUrl(
     return stdout
   } catch (error) {
     if (isStableMissingGitRemoteError(error)) {
-      rememberMissingRemote(key, {
-        error,
-        signature,
-        expiresAt: Date.now() + MISSING_REMOTE_TTL_MS
-      })
+      const signature = await readConfigSignature(context)
+      // Without a signature (WSL, unreadable config) a later `git remote add` can't be noticed, so don't remember.
+      if (signature !== undefined) {
+        rememberMissingRemote(missingRemoteKey(context, remoteName), {
+          error,
+          signature,
+          expiresAt: Date.now() + MISSING_REMOTE_TTL_MS
+        })
+      }
     }
     throw error
   }

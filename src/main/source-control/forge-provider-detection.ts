@@ -1,7 +1,5 @@
 import type { HostedReviewProvider } from '../../shared/source-control/hosted-review/hosted-review-contracts'
-import { readRemoteUrl, withSharedRemoteUrlReads } from '../git/remotes/remote-url-probe'
-import { isStableMissingGitRemoteError } from '../git/remotes/stable-missing-git-remote-error'
-import { parseGitLabProjectRefCandidate } from '../gitlab/projects/project-ref-parser'
+import { isRemoteKnownMissing, withSharedRemoteUrlReads } from '../git/remotes/remote-url-probe'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { getHostedReviewLocalGitOptions } from './hosted-review-git-options'
 import {
@@ -16,18 +14,10 @@ export async function getForgeProviderForRepository(
 ): Promise<ForgeProvider | null> {
   // Every provider probes the same remote; one detection pass reads it once.
   return withSharedRemoteUrlReads(async () => {
-    const origin = await readOrigin(context)
-    // A repo without an origin has no forge to ask, so no provider CLI or API probe should run.
-    if (origin === 'missing') {
-      return null
-    }
+    // GitLab only resolves origin, and its check starts by asking glab for signed-in hosts.
+    const skipGitLab = await isOriginKnownMissing(context)
     for (const provider of FORGE_PROVIDERS) {
-      // The GitLab check asks glab for its signed-in hosts; skip it when origin can't be GitLab.
-      if (
-        provider.id === 'gitlab' &&
-        typeof origin === 'string' &&
-        parseGitLabProjectRefCandidate(origin) === null
-      ) {
+      if (provider.id === 'gitlab' && skipGitLab) {
         continue
       }
       if (await provider.resolveRepository(context)) {
@@ -38,26 +28,17 @@ export async function getForgeProviderForRepository(
   })
 }
 
-/** Origin's URL, 'missing' when Git confirms there is none, or 'unknown' (SSH or a failed read). */
-async function readOrigin(
-  context: ForgeProviderRepositoryContext
-): Promise<string | 'missing' | 'unknown'> {
+function isOriginKnownMissing(context: ForgeProviderRepositoryContext): Promise<boolean> {
   const { wslDistro, admissionTier } = getHostedReviewLocalGitOptions(context)
-  try {
-    const url = await readRemoteUrl(
-      {
-        repoPath: context.repoPath,
-        connectionId: hostedReviewSshConnectionId(context.executionHostId),
-        ...(wslDistro ? { wslDistro } : {}),
-        ...(admissionTier ? { admissionTier } : {})
-      },
-      'origin'
-    )
-    return url ?? 'unknown'
-  } catch (error) {
-    // Unknown failures stay with the providers, which decide whether to retry or report.
-    return isStableMissingGitRemoteError(error) ? 'missing' : 'unknown'
-  }
+  return isRemoteKnownMissing(
+    {
+      repoPath: context.repoPath,
+      connectionId: hostedReviewSshConnectionId(context.executionHostId),
+      ...(wslDistro ? { wslDistro } : {}),
+      ...(admissionTier ? { admissionTier } : {})
+    },
+    'origin'
+  )
 }
 
 export async function detectHostedReviewProvider(
