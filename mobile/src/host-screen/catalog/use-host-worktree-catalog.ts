@@ -235,7 +235,8 @@ export function useHostWorktreeCatalog(args: {
       // Also drops a previous host's rows when the sidebar switches to one with none stored.
       setServerWorkspaces(NO_SERVER_WORKSPACES)
     }
-  }, [relays, relaysRuledOut, servers.data])
+    // An unchanged reply keeps its reference, but still confirms which slept rows woke.
+  }, [relays, relaysRuledOut, servers.data, servers.dataUpdatedAt])
 
   const fetchWorktrees = useCallback(
     async (options: { allowDuringModal?: boolean } = {}) => {

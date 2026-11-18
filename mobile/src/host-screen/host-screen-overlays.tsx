@@ -159,7 +159,9 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                         // Like desktop, greyed out with nothing to sleep; older hosts omit the fact.
                         disabled:
                           actionTarget.hasHostSidebarActivity === false ||
-                          actionServer.routeHost === null,
+                          (actionServer.server !== null &&
+                            (actionServer.routeHost === null ||
+                              actionServer.server.state !== 'connected')),
                         onPress: () => {
                           actions.putWorktreeToSleep(actionTarget)
                           state.setActionTarget(null)
