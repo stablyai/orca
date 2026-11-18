@@ -167,6 +167,7 @@ overrides:
   katex@>=0.11.0 <0.18.2: 0.18.10
 
 patchedDependencies:
+  '@xterm/addon-search@0.17.0-beta.330': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-webgl@0.20.0-beta.329': 950cfe01a8340b07dc7510a2909f32d9c449542e225cff6f031490b8689c6b8c
   braces@3.0.3: c07bb14cec04bc891e1fe529720444cc9729a25117f9aaf24253cfe3132a34fd
   deepmerge@4.3.1: 5371a4fe16a3e7446d4718575820cf706b1ccafa19d2f5eeea9225df692f07b5
@@ -201,6 +202,9 @@ importers:
       '@tanstack/react-query':
         specifier: 5.107.1
         version: 5.107.1(@types/react@19.2.18)(react@19.3.0)
+      '@xterm/addon-search':
+        specifier: 0.17.0-beta.330
+        version: 0.17.0-beta.330(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.336)
       '@xterm/addon-unicode11':
         specifier: 0.10.0-beta.330
         version: 0.10.0-beta.330(@xterm/xterm@6.1.0-beta.336)
@@ -2814,6 +2818,11 @@ packages:
   '@xmldom/xmldom@0.9.12':
     resolution: {integrity: sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A==}
     engines: {node: '>=14.6'}
+
+  '@xterm/addon-search@0.17.0-beta.330':
+    resolution: {integrity: sha512-uyJ/NXcgN7BrKsMRdb1DarDTkZBOTEcwTgXlRw5fsnW1eMaygXvZiE1d8assEM1aW+vMXZynDl8KVpYcAOp0Tw==}
+    peerDependencies:
+      '@xterm/xterm': ^6.1.0-beta.336
 
   '@xterm/addon-unicode11@0.10.0-beta.330':
     resolution: {integrity: sha512-Tc9R1oYVYvTAUNIsHzcis1J51reG4CHQIYeXiAS+YRMsJe9nnnR2tIW/RHh7MZiMza1w7toAp1SKH+97WgnDaQ==}
@@ -9430,6 +9439,10 @@ snapshots:
   '@xmldom/xmldom@0.8.15': {}
 
   '@xmldom/xmldom@0.9.12': {}
+
+  '@xterm/addon-search@0.17.0-beta.330(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.336)':
+    dependencies:
+      '@xterm/xterm': 6.1.0-beta.336
 
   '@xterm/addon-unicode11@0.10.0-beta.330(@xterm/xterm@6.1.0-beta.336)':
     dependencies:

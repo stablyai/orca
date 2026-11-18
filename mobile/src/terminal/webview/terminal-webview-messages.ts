@@ -4,6 +4,8 @@ import type { TerminalOscLinkRange } from '../../../../src/shared/terminal/links
 
 export type TerminalFrame = { width: number; height: number }
 
+export type TerminalFindDirection = 'next' | 'previous'
+
 export type TerminalWebViewCommand =
   | { type: 'set-interaction-active'; active: boolean }
   | { type: 'ping'; id?: number }
@@ -33,4 +35,12 @@ export type TerminalWebViewCommand =
   | { type: 'reset-zoom'; id?: number }
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
+  | {
+      type: 'find'
+      id?: number
+      query: string
+      direction: TerminalFindDirection
+      incremental: boolean
+    }
+  | { type: 'clear-find'; id?: number }
   | { type: 'set-theme'; id?: number; terminalTheme?: RuntimeMobileTerminalTheme }

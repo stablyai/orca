@@ -2346,7 +2346,8 @@
       "fileExplorer": "Explorateur de fichiers",
       "sourceControl": "Contrôle de code source",
       "newTab": "Nouvel onglet",
-      "quickCommands": "Commandes rapides"
+      "quickCommands": "Commandes rapides",
+      "findInTerminal": "Rechercher dans le terminal"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historique des agents",
@@ -2851,6 +2852,13 @@
     "structuredOpen": {
       "worktreeDeleted": "Le worktree a été supprimé.",
       "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
+    },
+    "terminalFind": {
+      "placeholder": "Rechercher dans le terminal",
+      "noResults": "Aucun résultat",
+      "previous": "Résultat précédent",
+      "next": "Résultat suivant",
+      "close": "Fermer la recherche"
     },
     "nativeChatView": {
       "linkedMessageMissing": "Ce message est introuvable."

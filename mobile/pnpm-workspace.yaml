@@ -12,6 +12,8 @@ overrides:
 
 patchedDependencies:
   sprintf-js@1.1.3: patches/sprintf-js@1.1.3.patch
+  # The desktop patch, shared so phone and desktop search scan the same way.
+  '@xterm/addon-search@0.17.0-beta.330': ../config/patches/@xterm__addon-search@0.17.0-beta.330.patch
   '@xterm/addon-webgl@0.20.0-beta.329': patches/@xterm__addon-webgl@0.20.0-beta.329.patch
   braces@3.0.3: patches/braces@3.0.3.patch
   react-native-webview@14.0.1: patches/react-native-webview@14.0.1.patch

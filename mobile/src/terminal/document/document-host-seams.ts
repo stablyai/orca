@@ -4,6 +4,7 @@ import {
   type TerminalFontStyle
 } from '../preferences/terminal-font-style'
 import type {
+  TerminalDocumentSearchAddon,
   TerminalDocumentTerminal,
   TerminalDocumentWebglAddon
 } from './document-terminal-shape'
@@ -43,6 +44,7 @@ export type TerminalDocumentHostSeams = {
   postToHost: (message: Record<string, unknown>) => void
   createTerminal: (options: Record<string, unknown>) => TerminalDocumentTerminal
   createUnicode11Addon: () => TerminalDocumentWebglAddon | null
+  createSearchAddon: () => TerminalDocumentSearchAddon | null
   createWebglAddon: () => TerminalDocumentWebglAddon | null
   installErrorReporter: (report: TerminalDocumentErrorReporter) => () => void
   capturedEngineErrors: () => string[]
@@ -70,6 +72,7 @@ declare global {
   interface Window {
     ReactNativeWebView?: { postMessage: (message: string) => void }
     Unicode11Addon?: { Unicode11Addon: new () => TerminalDocumentWebglAddon }
+    SearchAddon?: { SearchAddon?: new () => TerminalDocumentSearchAddon }
     WebglAddon?: { WebglAddon?: new () => TerminalDocumentWebglAddon }
     Terminal?: unknown
     // Native shell capture starts before engine loading, so it can report failures that precede document startup.
@@ -94,6 +97,12 @@ export function createEngineTerminal(options: Record<string, unknown>) {
 export function createEngineUnicode11Addon() {
   return window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon
     ? new window.Unicode11Addon.Unicode11Addon()
+    : null
+}
+
+export function createEngineSearchAddon() {
+  return window.SearchAddon && window.SearchAddon.SearchAddon
+    ? new window.SearchAddon.SearchAddon()
     : null
 }
 
