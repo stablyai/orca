@@ -23536,6 +23536,7 @@
       "install": "Install {{agent}}",
       "installManaged": "Install Orca's copy",
       "installed": "Installed",
+      "installedByOrca": "Installed by Orca · {{version}}",
       "notInstalled": "Not installed.",
       "progress": "{{agent}} download",
       "readFailed": "Could not check {{agent}} on this host. Retrying.",
