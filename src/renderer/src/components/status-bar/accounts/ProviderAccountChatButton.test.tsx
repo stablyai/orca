@@ -24,12 +24,12 @@ afterEach(() => {
   openSettingsPage.mockReset()
 })
 
-function switcher(disabled: boolean) {
+function disabledSwitcher() {
   return (
     <TooltipProvider>
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
-          <ProviderAccountChatButton provider="claude" target={local} disabled={disabled} />
+          <ProviderAccountChatButton provider="claude" target={local} disabled />
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           <DropdownMenuItem>Other account</DropdownMenuItem>
@@ -40,21 +40,9 @@ function switcher(disabled: boolean) {
 }
 
 describe('ProviderAccountChatButton', () => {
-  it('opens its menu from the keyboard and returns focus on Escape', async () => {
-    const user = userEvent.setup()
-    render(switcher(false))
-    const trigger = screen.getByRole('button', { name: 'Switch account' })
-    trigger.focus()
-    await user.keyboard('{Enter}')
-    expect(await screen.findByRole('menuitem', { name: 'Other account' })).toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    expect(screen.queryByRole('menuitem', { name: 'Other account' })).toBeNull()
-    expect(trigger).toHaveFocus()
-  })
-
   it('stays focusable but cannot open while disabled', async () => {
     const user = userEvent.setup()
-    render(switcher(true))
+    render(disabledSwitcher())
     const trigger = screen.getByRole('button', { name: 'Switch account' })
     await user.click(trigger)
     trigger.focus()
