@@ -1,7 +1,13 @@
-import { app } from 'electron'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { CoalescingFileWriter } from '../../../filesystem/coalescing-file-writer'
+import {
+  durableWriteTempPath,
+  removeStaleDurableWriteTempFiles,
+  writeFileDurable
+} from '../../../filesystem/durable-file-write'
 import { getBrowserExtensionProfileDataDirectory } from './browser-extension-profile-data-directory'
 
 const STATE_FILE_NAME = 'profile-state.json'
@@ -54,7 +60,12 @@ export function emptyBrowserExtensionProfileState(): BrowserExtensionProfileStat
 export class BrowserExtensionProfileStateStore {
   private cache: StateFile | null = null
   private timer: NodeJS.Timeout | null = null
-  private dirty = false
+  private readonly writer = new CoalescingFileWriter<string>((payload) => this.commit(payload))
+  // Compared with the newest queued payload, not the landed one, so a revert behind a pending
+  // write is still saved.
+  private lastQueued: string | undefined
+  private staleTempsSwept = false
+  private closed = false
   /** Bumped by every change, so hot paths can cache what they derive from the state. */
   revision = 0
 
@@ -75,18 +86,28 @@ export class BrowserExtensionProfileStateStore {
     change: (state: BrowserExtensionProfileState) => BrowserExtensionProfileState
   ): BrowserExtensionProfileState {
     const file = this.load()
+    const existing = file[profileId]?.[extensionId]
     const next = change(this.read(profileId, extensionId))
+    // Compared as saved; a missing record is still stored, since its presence is state too.
+    if (existing && JSON.stringify(existing) === JSON.stringify(next)) {
+      return existing
+    }
     file[profileId] = { ...file[profileId], [extensionId]: next }
     this.schedulePersist()
     return next
   }
 
   forgetExtension(extensionId: string): void {
-    const file = this.load()
-    for (const byExtension of Object.values(file)) {
-      delete byExtension[extensionId]
+    let forgot = false
+    for (const byExtension of Object.values(this.load())) {
+      if (extensionId in byExtension) {
+        delete byExtension[extensionId]
+        forgot = true
+      }
     }
-    this.schedulePersist()
+    if (forgot) {
+      this.schedulePersist()
+    }
   }
 
   forgetProfileExtension(profileId: string, extensionId: string): void {
@@ -110,41 +131,62 @@ export class BrowserExtensionProfileStateStore {
   }
 
   forgetProfile(profileId: string): void {
-    delete this.load()[profileId]
-    this.schedulePersist()
+    const file = this.load()
+    if (profileId in file) {
+      delete file[profileId]
+      this.schedulePersist()
+    }
   }
 
-  // Why write-temp-then-rename: a crash mid-write must not lose every profile's state.
-  flush(): void {
+  /** Queues the current state now instead of after the debounce; the write runs off the main thread. */
+  saveNow(): void {
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
     }
-    if (!this.cache || !this.dirty) {
+    if (!this.cache) {
       return
     }
-    mkdirSync(this.rootDirectory, { recursive: true })
-    const target = join(this.rootDirectory, STATE_FILE_NAME)
-    writeFileSync(`${target}.tmp`, JSON.stringify(this.cache))
-    renameSync(`${target}.tmp`, target)
-    this.dirty = false
+    const payload = JSON.stringify(this.cache)
+    if (payload === this.lastQueued) {
+      return
+    }
+    this.lastQueued = payload
+    this.writer.save(payload)
+  }
+
+  /** Final save on quit; later changes stay in memory only. A failing save gets one more try. */
+  close(): Promise<void> {
+    this.saveNow()
+    this.closed = true
+    return this.writer.settled()
   }
 
   // Why debounce: extensions create menus item by item at startup.
   private schedulePersist(): void {
     this.revision++
-    this.dirty = true
-    if (this.timer) {
+    if (this.timer || this.closed) {
       return
     }
-    this.timer = setTimeout(() => {
-      this.timer = null
-      try {
-        this.flush()
-      } catch (error) {
-        console.warn('[browser-extensions] Could not save extension state:', error)
+    this.timer = setTimeout(() => this.saveNow(), PERSIST_DELAY_MS)
+  }
+
+  // Why write-temp-then-rename: a crash mid-write must not lose every profile's state.
+  private async commit(payload: string): Promise<boolean> {
+    const target = join(this.rootDirectory, STATE_FILE_NAME)
+    try {
+      await mkdir(this.rootDirectory, { recursive: true })
+      if (!this.staleTempsSwept) {
+        this.staleTempsSwept = true
+        // Temps a crashed run left; this process's own are still in use.
+        await removeStaleDurableWriteTempFiles(target)
       }
-    }, PERSIST_DELAY_MS)
+      await writeFileDurable(durableWriteTempPath(target), target, payload)
+      return true
+    } catch (error) {
+      console.warn('[browser-extensions] Could not save extension state:', error)
+      return false
+    }
   }
 
   private load(): StateFile {
@@ -179,12 +221,20 @@ export class BrowserExtensionProfileStateStore {
 }
 
 let stateStore: BrowserExtensionProfileStateStore | null = null
+let quitClosing = false
 
 export function getBrowserExtensionProfileStateStore(): BrowserExtensionProfileStateStore {
   if (!stateStore) {
-    const store = new BrowserExtensionProfileStateStore(getBrowserExtensionProfileDataDirectory())
-    app.on('will-quit', () => store.flush())
-    stateStore = store
+    stateStore = new BrowserExtensionProfileStateStore(getBrowserExtensionProfileDataDirectory())
+    if (quitClosing) {
+      void stateStore.close()
+    }
   }
   return stateStore
+}
+
+/** Final save on quit; never rejects. */
+export function closeBrowserExtensionProfileStateStore(): Promise<void> {
+  quitClosing = true
+  return stateStore?.close() ?? Promise.resolve()
 }

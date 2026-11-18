@@ -240,6 +240,6 @@ async function removeUninstalledData(
       states.update(profileId, id, (state) => ({ ...state, removalGeneration: generation }))
     }
   }
-  states.flush()
+  states.saveNow()
   return stale
 }
