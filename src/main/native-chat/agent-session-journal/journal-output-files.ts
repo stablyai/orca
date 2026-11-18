@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { closeSync, fsyncSync, mkdirSync, openSync, rmSync, statSync, writeSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type Database from '../../sqlite/sync-database'
 import type {
   AgentJournalBoundedPayload,
@@ -157,20 +157,29 @@ function savedJournalOutputFile(root: string, digest: string, bytes: number): st
 
 /**
  * An existing file may be one whose publication failed before it was made durable, so it is
- * synced, with every folder down to it, before a row names it.
+ * synced, with its folders, before a row names it. Windows flushes only a writable handle.
  */
 function adoptJournalOutputFile(root: string, digest: string): void {
   const path = journalOutputFilePath(root, digest)
-  const fd = openSync(path, 'r')
+  const fd = openSync(path, 'r+')
   try {
     fsyncSync(fd)
   } finally {
     closeSync(fd)
   }
-  for (let folder = dirname(path); folder.startsWith(root); folder = dirname(folder)) {
+  syncOutputFolders(root, path)
+}
+
+/**
+ * Every folder from a file's shard up to the state directory, synced after each publication or
+ * adoption: one created by an earlier failed attempt is otherwise never made durable.
+ */
+function syncOutputFolders(root: string, path: string): void {
+  const top = resolve(root)
+  for (let folder = resolve(dirname(path)); ; folder = dirname(folder)) {
     syncDirectory(folder)
-    if (folder === root) {
-      break
+    if (folder === top || dirname(folder) === folder) {
+      return
     }
   }
 }
@@ -182,7 +191,7 @@ function adoptJournalOutputFile(root: string, digest: string): void {
  */
 function saveJournalOutputFile(root: string, text: string): string {
   const staging = join(root, DIRECTORY, STAGING)
-  durableDirectory(staging)
+  mkdirSync(staging, { recursive: true, mode: 0o700 })
   const temporary = join(staging, `${randomUUID()}.part`)
   try {
     const hash = createHash('sha256')
@@ -212,9 +221,9 @@ function saveJournalOutputFile(root: string, text: string): string {
     if (fileSize(path) === bytes) {
       adoptJournalOutputFile(root, digest)
     } else {
-      durableDirectory(dirname(path))
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
       renameFileWithWindowsRetry(temporary, path)
-      syncDirectory(dirname(path))
+      syncOutputFolders(root, path)
     }
     return digest
   } finally {
@@ -227,19 +236,6 @@ function fileSize(path: string): number {
     return statSync(path).size
   } catch {
     return -1
-  }
-}
-
-/**
- * Creates a folder and every missing one above it; each new folder is durable only once the
- * folder holding it is synced, up to the first that already existed.
- */
-function durableDirectory(path: string): void {
-  const created = mkdirSync(path, { recursive: true, mode: 0o700 })
-  for (let folder = created && path; folder;) {
-    const parent = dirname(folder)
-    syncDirectory(parent)
-    folder = folder === created || parent === folder ? undefined : parent
   }
 }
 
