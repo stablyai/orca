@@ -74,7 +74,7 @@ export async function mergePR(
         prNumber,
         method,
         mergeAction: mergeMetadata.mergeQueueRequired === true ? 'merge_queue' : 'direct_merge',
-        headSha: expectedHeadSha ?? restData.headRefOid,
+        headSha: restData.headRefOid,
         ghOptions
       })
       return result

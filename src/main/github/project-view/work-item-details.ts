@@ -2,6 +2,7 @@ import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../attachments/
 import { assertPositiveInt, validateSlugArgs } from './project-argument-validation'
 import { projectGhExecOptions } from './project-host-execution'
 import { runGraphql } from './project-graphql'
+import { normalizePRCheckHeadSha } from '../../../shared/github/checks/pr-check-head'
 import type { PRComment } from '../../../shared/github/comments/comment-types'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../shared/github/work-items/work-item-types'
@@ -161,6 +162,7 @@ function mapWorkItemDetails(
       })
     }
   }
+  const headSha = args.type === 'pr' ? normalizePRCheckHeadSha(raw.headRefOid) : undefined
   const state: 'open' | 'closed' | 'merged' | 'draft' =
     args.type === 'pr'
       ? raw.isDraft
@@ -194,6 +196,6 @@ function mapWorkItemDetails(
     comments,
     participants,
     assignees,
-    ...(args.type === 'pr' && typeof raw.headRefOid === 'string' ? { headSha: raw.headRefOid } : {})
+    ...(headSha ? { headSha } : {})
   }
 }

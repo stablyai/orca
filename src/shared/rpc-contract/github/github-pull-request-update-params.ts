@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
+import { FullGitObjectId } from '../source-control/git-params'
 
 export const UpdatePrTitle = RepoSelector.extend({
   prNumber: z.number().int().positive(),
@@ -22,9 +23,7 @@ export const MergePr = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   method: z.enum(['merge', 'squash', 'rebase']).optional(),
   prRepo: SlugRepo.nullable().optional(),
-  expectedHeadSha: z
-    .string()
-    .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, 'Invalid expected head SHA')
+  expectedHeadSha: FullGitObjectId.transform((sha) => sha.toLowerCase())
     .nullable()
     .optional()
 })

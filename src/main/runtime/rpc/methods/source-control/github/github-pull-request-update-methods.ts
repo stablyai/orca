@@ -43,7 +43,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
         params.prNumber,
         params.method,
         params.prRepo ?? null,
-        params.expectedHeadSha ?? null
+        params.expectedHeadSha
       )
   }),
   defineMethod({
