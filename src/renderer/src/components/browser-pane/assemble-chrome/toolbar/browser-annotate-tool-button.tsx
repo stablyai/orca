@@ -82,21 +82,24 @@ export function BrowserAnnotateToolMenuItems({
   markup,
   onDraw
 }: {
-  tools: BrowserChromeElementTools
+  /** Null where the page can't run the element picker; only Draw is offered. */
+  tools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   onDraw?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <>
-      <MenuToolRow
-        icon={Crosshair}
-        label={t('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element')}
-        shortcut={tools.grabShortcutLabel}
-        checked={tools.activeIntent === 'copy'}
-        disabled={tools.disabled}
-        onSelect={() => tools.onStartIntent('copy')}
-      />
+      {tools ? (
+        <MenuToolRow
+          icon={Crosshair}
+          label={t('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element')}
+          shortcut={tools.grabShortcutLabel}
+          checked={tools.activeIntent === 'copy'}
+          disabled={tools.disabled}
+          onSelect={() => tools.onStartIntent('copy')}
+        />
+      ) : null}
       <MenuToolRow
         icon={PenTool}
         label={t('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot')}

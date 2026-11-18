@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { JiraIssue } from '../../../../../src/shared/jira/jira-types'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
-import { fetchJiraIssueDetail } from './mobile-jira-task-source'
+import { fetchJiraIssueDetail, fetchJiraTaskIssues } from './mobile-jira-task-source'
 
 const issue: JiraIssue = {
   id: '1',
@@ -39,5 +39,36 @@ describe('mobile Jira task requests', () => {
         fetchJiraIssueDetail({ sendRequest }, { key: issue.key, siteId: issue.siteId })
       ).resolves.toEqual({ issue, comments: [] })
     }
+  })
+
+  it('searches typed text as a key or words, and retries rejected JQL as text, like desktop', async () => {
+    const sentJql: string[] = []
+    const sendRequest = vi.fn(async (_method: string, params?: unknown) => {
+      const jql = params && typeof params === 'object' && 'jql' in params ? String(params.jql) : ''
+      sentJql.push(jql)
+      if (jql === 'status = Doen') {
+        return {
+          id: 'jira-test',
+          ok: false as const,
+          error: { code: 'runtime_error', message: "Error 400: The value 'Doen' does not exist" }
+        }
+      }
+      return { id: 'jira-test', ok: true as const, result: jql.startsWith('text') ? [issue] : [] }
+    })
+    const search = (query: string) =>
+      fetchJiraTaskIssues({ sendRequest }, { query, filter: 'assigned', siteId: null })
+    await expect(search('proj-12')).resolves.toEqual({ issues: [issue], jqlRejection: null })
+    await expect(search('login bug')).resolves.toEqual({ issues: [issue], jqlRejection: null })
+    await expect(search('status = Doen')).resolves.toEqual({
+      issues: [issue],
+      jqlRejection: { reason: "The value 'Doen' does not exist", likelyTypo: true }
+    })
+    expect(sentJql).toEqual([
+      'key = "PROJ-12"',
+      'text ~ "proj 12*"',
+      'text ~ "login bug*"',
+      'status = Doen',
+      'text ~ "status = doen*"'
+    ])
   })
 })

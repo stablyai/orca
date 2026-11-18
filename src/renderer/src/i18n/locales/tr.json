@@ -2104,6 +2104,10 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Bağlı sorun",
         "listeningPort": "Dinlenen port"
+      },
+      "projectHostSetupOptions": {
+        "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
+        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
       }
     },
     "hooks": {
@@ -5695,8 +5699,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Kapat",
           "64c71cf7b9": "Orca bu makineye henüz hiç beceri yüklemedi.",
-          "0900db719a": "- bağlantı kesildi",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Bu bilgisayar",
           "3677ae58e7": "Orca'nın bir bağlantıdan yüklediği beceriler. Yeniden yükleyin, önceki bir sürüme dönün veya kaldırın.",
           "44d118a8f7": "Orca tarafından yüklendi",
@@ -5730,8 +5732,6 @@
           "a4dfd33095": "Tek çalışma alanı",
           "c779621aa0": "Genel beceriler",
           "63cc9e31fe": "Hedef",
-          "85d85880df": "· SSH",
-          "71eefd7660": "- bağlantı kesildi",
           "0785d0a503": "- güncelleme gerekli",
           "8562dd1e6e": "Bu bilgisayar",
           "b8a0b706ad": "Makine"
@@ -6349,6 +6349,8 @@
           "removeDescriptionSsh": "Bu işlem yalnızca {{name}} öğesini Orca'dan kaldırır. Dosyaları {{host}} üzerinde kalır, geri almak için o SSH sunucusunu yeniden ekleyin.",
           "removeDescriptionLocal": "Bu işlem yalnızca {{name}} öğesini Orca'dan kaldırır. Hâlâ diskinizde bulunur.",
           "removeDescriptionVmRecipe": "Bu işlem {{name}} öğesini Orca'dan kaldırır. Ortamın ve dosyalarının kalıcı olarak silinip silinmeyeceğini VM tarifi belirler.",
+          "linkedWorkspaceWarning_one": "Bu projedeki {{count}} çalışma alanı da Orca'dan kaldırılacak.",
+          "linkedWorkspaceWarning_other": "Bu projedeki {{count}} çalışma alanı da Orca'dan kaldırılacak.",
           "openTerminalWarning_one": "Bu projedeki {{count}} açık terminal kapatılacak.",
           "openTerminalWarning_other": "Bu projedeki {{count}} açık terminal kapatılacak."
         },
