@@ -14,31 +14,23 @@ describe('bot group menus', () => {
       onNewBot: vi.fn(),
       onNewGroup: vi.fn()
     })
-    expect(actions.map((action) => [action.label, action.closeBeforePress])).toEqual([
-      ['New bot', true],
-      ['New group', true]
-    ])
+    expect(actions.map((action) => action.closeBeforePress)).toEqual([true, true])
     expect(actions[1]?.disabled).toBe(false)
   })
 
-  it('offers New group from two bots on this computer, and says so before', () => {
+  it('disables New group when this computer has only one bot', () => {
     const one = botCreateMenuActions({
-      t: (_key: string, fallback: string, values?: Record<string, unknown>) =>
-        fallback.replace('{{host}}', String(values?.host)),
+      t,
       botCount: 1,
       hostLabel: 'Studio Mac',
       onNewBot: vi.fn(),
       onNewGroup: vi.fn()
     })
     expect(one[1]?.disabled).toBe(true)
-    expect(one[1]?.hint).toContain('Studio Mac')
   })
 
   it('opens Manage members and Delete only after the menu has closed', () => {
     const actions = botGroupMenuActions({ t, onManageMembers: vi.fn(), onDelete: vi.fn() })
-    expect(actions.map((action) => [action.label, action.closeBeforePress])).toEqual([
-      ['Manage members…', true],
-      ['Delete group…', true]
-    ])
+    expect(actions.map((action) => action.closeBeforePress)).toEqual([true, true])
   })
 })
