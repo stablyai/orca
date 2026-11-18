@@ -218,7 +218,7 @@ function useNativeChatInstall(
   const environmentId = input.target.kind === 'environment' ? input.target.environmentId : null
   const command = agentSessionInstallCommand(
     input.agent,
-    useAppStore((s) =>
+    useAppStoreWithChannels((s) =>
       environmentId ? runtimeHostPlatform(s, environmentId) : getRendererAppPlatform()
     )
   )

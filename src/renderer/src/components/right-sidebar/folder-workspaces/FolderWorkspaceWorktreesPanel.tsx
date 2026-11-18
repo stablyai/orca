@@ -1,10 +1,11 @@
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
-import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { FolderWorkspaceEmptyState } from './folder-workspace-empty-state'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const t = useTranslate()
@@ -12,7 +13,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
-  const childrenByParentIdentity = useAppStore(selectSidebarChildrenByParentIdentity)
+  const childrenByParentIdentity = useAppStoreWithChannels(selectSidebarChildrenByParentIdentity)
 
   const { folderWorkspace, childWorktrees, lineageChildrenByParentIdentity } =
     getAttachedWorktreesForFolderWorkspace({

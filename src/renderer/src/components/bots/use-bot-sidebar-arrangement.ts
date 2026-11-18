@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useWorktreeActivityStatuses } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-statuses'
 import { useOrderHeldWhileEngaged } from '@/components/sidebar/worktree-list/listing/use-order-hold'
@@ -14,6 +13,8 @@ import { arrangeBotSidebarEntries } from '../../../../shared/bots/bot-sidebar-vi
 import type { BotSidebarEntry } from '../../../../shared/bots/bot-sidebar-entries'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Each home's own status and its workers' (their root workspaces), in `homes` order. */
 export function useBotHomeWorkers(homes: readonly FolderWorkspace[]): {
@@ -21,7 +22,7 @@ export function useBotHomeWorkers(homes: readonly FolderWorkspace[]): {
   workers: Worktree[]
   workerStatuses: WorktreeStatus[]
 }[] {
-  const childrenByParent = useAppStore(selectSidebarChildrenByParentIdentity)
+  const childrenByParent = useAppStoreWithChannels(selectSidebarChildrenByParentIdentity)
   const workersByHome = useMemo(
     () =>
       homes.map(

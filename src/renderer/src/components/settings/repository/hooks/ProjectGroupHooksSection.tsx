@@ -12,7 +12,6 @@ import { getFolderSourceRepos } from '../../../../../../shared/folder-workspaces
 import { projectGroupSetupExample } from '../../../../../../shared/project/groups/project-group-setup-example'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
-import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { useShallow } from 'zustand/react/shallow'
 import { getFolderWorkspaceAgentLaunchFact } from '@/components/sidebar/workspace-creation/folder/folder-workspace-agent-startup'
@@ -22,6 +21,8 @@ import type {
   ProjectGroupHookSupport,
   ProjectGroupSettingsEntry
 } from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function ProjectGroupHooksSection({
   group
@@ -67,7 +68,7 @@ function GroupHooksEditor({
   const owner = projectGroupHookOwner(
     inspection ? { ...group, hookSettings: inspection.hookSettings } : group
   )
-  const [repos, groups, platform] = useAppStore(
+  const [repos, groups, platform] = useAppStoreWithChannels(
     useShallow((state) => {
       const facts = getFolderWorkspaceAgentLaunchFact(state, group)
       return [

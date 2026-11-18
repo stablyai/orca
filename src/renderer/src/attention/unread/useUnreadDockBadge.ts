@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import { createUnreadBadgeCountSelector } from '@/attention/unread/unread-badge-count-selector'
-import { useAppStore } from '@/store/index'
 import { selectFloatingWorkspaceHasUnread } from '@/store/workspaces/floating/floating-workspace-unread-selector'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function setUnreadDockBadgeCountBestEffort(count: number): void {
   const setBadge = window.api?.app?.setUnreadDockBadgeCount
@@ -22,7 +23,7 @@ export function useUnreadDockBadge(
 ): typeof clearUnreadDockBadgeCount {
   // Select the badge integer so title frames neither rescan nor rerender the App root.
   const selectUnreadBadgeCount = useMemo(() => createUnreadBadgeCountSelector(), [])
-  const unreadWorkspaceCount = useAppStore(selectUnreadBadgeCount)
+  const unreadWorkspaceCount = useAppStoreWithChannels(selectUnreadBadgeCount)
   // Why: the floating terminal has no workspace flag, so it counts exactly while its launcher shows the dot.
   const floatingTerminalHasUnread = useAppStore(
     (s) => s.settings?.floatingTerminalEnabled === true && selectFloatingWorkspaceHasUnread(s)

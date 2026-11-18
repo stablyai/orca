@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
-import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { getBotHomes, getBotListedWorktreeIdentities } from '../../../../shared/bots/bot-homes'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const NONE: ReadonlySet<string> = new Set()
 const NO_CHILDREN: ReadonlyMap<string, readonly Worktree[]> = new Map()
@@ -16,7 +17,7 @@ export function useBotListedWorktreeIdentities(): ReadonlySet<string> {
   const bots = useBots(hideBotCreated && botsEnabled)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   // With no bot to list, Projects skip the sidebar-wide children projection.
-  const childrenByParent = useAppStore((s) =>
+  const childrenByParent = useAppStoreWithChannels((s) =>
     bots.length === 0 ? NO_CHILDREN : selectSidebarChildrenByParentIdentity(s)
   )
   return useMemo(

@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -26,6 +25,8 @@ import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getDropFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
 
@@ -42,7 +43,7 @@ export function useWorktreeLineageDropCommit(args: {
 }) {
   const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups, keepsFolderParent } = args
   const worktrees = useAllWorktrees()
-  const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const parentIdentities = useAppStoreWithChannels(selectSidebarLineageParentIdentities)
   const folderParentOf = useCallback(
     (identity: string) => {
       const parent = parentIdentities?.get(identity)
