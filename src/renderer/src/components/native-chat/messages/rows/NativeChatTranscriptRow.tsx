@@ -23,7 +23,9 @@ import { NativeChatForkContext } from '../actions/native-chat-fork-context'
 import { nativeChatSlotOffersFork } from '../actions/native-chat-side-chat-fork-point'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { NativeChatNewRowsMarker } from '../../viewport/new-rows/NativeChatNewRowsMarker'
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { useNativeChatSlackMirrorPost } from '../../slack-mirror/NativeChatSlackMirrorPost'
+import { slackMirrorPostLine } from '../../../../../../shared/connectors/slack-mirror-post-line'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/native-chat-new-rows-marker'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
@@ -61,21 +63,51 @@ export type NativeChatTranscriptRowContext = {
 function newRowsMarkerSpacing(
   place: NativeChatNewRowsMarkerState['place'],
   slot: Extract<NativeChatTranscriptSlot, { kind: 'message' }>,
-  deliveryNotice: NativeChatDeliveryNotice | undefined
+  deliveryNotice: NativeChatDeliveryNotice | undefined,
+  slackPostLineDraws: boolean
 ): string {
   if (place === 'above-row') {
     // A turn with no prompt opens on its bar, which needs the deeper trim too.
     return slot.statusAbove && slot.status ? '-mb-3' : '-mb-1.5'
   }
-  // Only where the hover row is drawn: a time or a copy button; an image-only prompt with no time has none.
+  // Only where the hover row is drawn last: a time or a copy button (an image-only prompt with no
+  // time has none), and no delivery or Slack post line drawn under it.
   const afterHoverMeta =
     slot.drawsMessage &&
     !slot.receipt &&
+    !slot.itemNotes &&
     slot.message.role === 'user' &&
     !slot.message.from &&
     deliveryNotice === undefined &&
+    !slackPostLineDraws &&
     (slot.message.timestamp !== null || deriveNativeChatRowContent(slot.message.blocks).hasText)
   return cn('-mb-3', afterHoverMeta && '-mt-6')
+}
+
+/** Reads the row's Slack post only where the line draws, so other rows don't follow its posts. */
+function NativeChatRowNewRowsMarker({
+  marker,
+  slot,
+  deliveryNotice,
+  readerAtEnd,
+  onReveal
+}: {
+  marker: NativeChatNewRowsMarkerState
+  slot: Extract<NativeChatTranscriptSlot, { kind: 'message' }>
+  deliveryNotice: NativeChatDeliveryNotice | undefined
+  readerAtEnd: () => boolean
+  onReveal: (element: HTMLElement) => void
+}): React.JSX.Element {
+  const slackPostLineDraws =
+    slackMirrorPostLine(useNativeChatSlackMirrorPost(slot.message.id)) !== null
+  return (
+    <NativeChatNewRowsMarker
+      marker={marker}
+      readerAtEnd={readerAtEnd}
+      onReveal={onReveal}
+      className={newRowsMarkerSpacing(marker.place, slot, deliveryNotice, slackPostLineDraws)}
+    />
+  )
 }
 
 /** Wrap message, status and rollup for one virtualized measurement; internal spacing is the row’s, inter-row gaps the window’s. */
@@ -113,11 +145,12 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const marker = newRowsMarker ? (
-    <NativeChatNewRowsMarker
+    <NativeChatRowNewRowsMarker
       marker={newRowsMarker}
+      slot={slot}
+      deliveryNotice={deliveryNotice}
       readerAtEnd={context.readerAtEnd}
       onReveal={context.onScrollMessageToTop}
-      className={newRowsMarkerSpacing(newRowsMarker.place, slot, deliveryNotice)}
     />
   ) : null
   // A settling quiet turn's bar fades alone, or with its whole row when nothing else draws in it.

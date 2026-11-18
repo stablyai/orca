@@ -11,6 +11,10 @@ import {
 } from './NativeChatTranscriptRow'
 import type { NativeChatMessageSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/native-chat-new-rows-marker'
+import {
+  NativeChatSlackMirrorContext,
+  type NativeChatSlackMirror
+} from '../../slack-mirror/native-chat-slack-mirror'
 
 vi.mock('./NativeChatMessageRow', () => ({
   MessageRow: () => <div data-testid="message" />
@@ -28,6 +32,7 @@ const context: NativeChatTranscriptRowContext = {
   expandedTurnIds: new Set(),
   onToggleExpandedTurn: vi.fn(),
   onScrollMessageToTop: vi.fn(),
+  readerAtEnd: () => true,
   onRevealDiff: vi.fn()
 }
 
@@ -66,6 +71,17 @@ function rowBox(view: ReturnType<typeof render>): HTMLElement {
     throw new Error('The row drew nothing')
   }
   return box
+}
+
+/** A bot chat's Slack thread holding the prompt's post in each state; the row reads only its posts. */
+function slackMirrorWith(state: 'posting' | 'failed' | 'posted'): NativeChatSlackMirror {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row reads only link.mirrorPosts.
+  return { link: { mirrorPosts: { ask: { state, at: 1 } } } } as unknown as NativeChatSlackMirror
+}
+const slackMirrors = {
+  posting: slackMirrorWith('posting'),
+  failed: slackMirrorWith('failed'),
+  posted: slackMirrorWith('posted')
 }
 
 describe('NativeChatTranscriptRow New line spacing', () => {
@@ -158,5 +174,38 @@ describe('NativeChatTranscriptRow New line spacing', () => {
     for (const name of lacks) {
       expect(classes).not.toContain(name)
     }
+  })
+
+  it("skips the pull-up while a Slack post line draws under the bubble's hover row", () => {
+    const lineFor = (state: keyof typeof slackMirrors): string[] => {
+      const view = render(
+        <NativeChatSlackMirrorContext.Provider value={slackMirrors[state]}>
+          <NativeChatTranscriptRow
+            slot={user()}
+            context={context}
+            newRowsMarker={marker('above-turn-bar')}
+          />
+        </NativeChatSlackMirrorContext.Provider>
+      )
+      const classes = view.getByRole('separator').className.split(' ')
+      cleanup()
+      return classes
+    }
+    expect(lineFor('posting')).not.toContain('-mt-6')
+    expect(lineFor('failed')).not.toContain('-mt-6')
+    // Once posted, nothing draws under the hover row.
+    expect(lineFor('posted')).toContain('-mt-6')
+  })
+
+  it('skips the pull-up when the row draws item notes instead of the bubble', () => {
+    const row = user()
+    const view = render(
+      <NativeChatTranscriptRow
+        slot={{ ...row, itemNotes: [row.message] }}
+        context={context}
+        newRowsMarker={marker('above-turn-bar')}
+      />
+    )
+    expect(view.getByRole('separator').className.split(' ')).not.toContain('-mt-6')
   })
 })
