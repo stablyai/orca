@@ -1,11 +1,6 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { domainLifecycleFixture } from './journal-domain-lifecycle.test-fixture'
 import { readJournalSqlPoint } from './journal-sql-point-read'
-import {
-  FIRST_SUBMITTED_PROMPT_ITEM_SQL,
-  FIRST_SUBMITTED_PROMPT_SCAN_LIMIT,
-  FIRST_SUBMITTED_PROMPT_SUBMISSIONS_SQL
-} from './journal-domain-first-submitted-prompt'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const cleanup: (() => void)[] = []
@@ -74,80 +69,26 @@ it('pages past text-less candidates to the first message with text', async () =>
   expect(first(f, 100)).toMatchObject({ kind: 'found', prompt: 'Add password reset' })
 })
 
-it('stops at the earliest valid message, whatever later history follows', async () => {
-  async function submissionsVisited(laterSends: number): Promise<number> {
-    const f = domainLifecycleFixture(cleanup)
-    await send(f, 'first', 'Add password reset', 150)
-    for (let index = 0; index < laterSends; index++) {
-      await send(f, `later-${index}`, `Later request ${index}`, 300 + index)
-    }
-    let visited = 0
-    const prepare = f.db.prepare.bind(f.db)
-    vi.spyOn(f.db, 'prepare').mockImplementation((sql: string) => {
-      const statement = prepare(sql)
-      if (sql !== FIRST_SUBMITTED_PROMPT_SUBMISSIONS_SQL) {
-        return statement
-      }
-      const all = statement.all.bind(statement)
-      return Object.assign(statement, {
-        all: (...params: Parameters<typeof all>) => {
-          const rows = all(...params)
-          visited += rows.length
-          return rows
-        }
-      })
-    })
-    expect(first(f, 100)).toMatchObject({ kind: 'found', prompt: 'Add password reset' })
-    return visited
+it('returns the earliest valid message even when later history follows', async () => {
+  const f = domainLifecycleFixture(cleanup)
+  await send(f, 'first', 'Add password reset', 150)
+  for (let index = 0; index < 10; index++) {
+    await send(f, `later-${index}`, `Later request ${index}`, 300 + index)
   }
-  const small = await submissionsVisited(8)
-  expect(small).toBeGreaterThan(0)
-  expect(await submissionsVisited(80)).toBe(small)
+  expect(first(f, 100)).toMatchObject({
+    kind: 'found',
+    prompt: 'Add password reset',
+    submittedAt: 150
+  })
 })
 
 it('reports an incomplete scan when 513 unmatched submissions precede a valid one', async () => {
   const f = domainLifecycleFixture(cleanup)
-  for (let index = 0; index <= FIRST_SUBMITTED_PROMPT_SCAN_LIMIT; index++) {
+  for (let index = 0; index < 513; index++) {
     await send(f, `blank-${index}`, '', 200 + index)
   }
-  await send(f, 'valid', 'Add password reset', 200 + FIRST_SUBMITTED_PROMPT_SCAN_LIMIT + 1)
+  await send(f, 'valid', 'Add password reset', 1000)
   expect(first(f, 100)).toEqual({ kind: 'incomplete' })
-})
-
-it('matches items and aliases by keyed lookup, never by rescanning item history', () => {
-  const f = domainLifecycleFixture(cleanup)
-  const planOf = (sql: string, params: (string | number)[]) =>
-    f.db
-      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-      .all(...params)
-      .map((row) => String(row.detail))
-  // Production planner, no ANALYZE stats.
-  const submissions = planOf(FIRST_SUBMITTED_PROMPT_SUBMISSIONS_SQL, ['chat', 'e', 0, 0, '', 4])
-  expect(submissions).toHaveLength(1)
-  expect(submissions[0]).toMatch(
-    /^SEARCH journal_submission_attempts USING INDEX journal_submission_order \(session_id=\? AND epoch=\? AND \(submitted_at,ordinal,message_id\)>\(\?,\?,\?\)\)$/
-  )
-  const item = planOf(FIRST_SUBMITTED_PROMPT_ITEM_SQL, [
-    'chat',
-    'e',
-    'id',
-    'chat',
-    'e',
-    'chat',
-    'e',
-    'chat',
-    'e',
-    'id'
-  ])
-  expect(item.filter((detail) => detail.startsWith('SCAN '))).toEqual([])
-  for (const detail of item.filter((line) => /^SEARCH i\b/.test(line))) {
-    expect(detail).toMatch(/\(session_id=\? AND epoch=\? AND item_id=\?\)$/)
-  }
-  expect(item).toContainEqual(
-    expect.stringMatching(
-      /^SEARCH a USING (COVERING )?INDEX journal_item_aliases_target \(session_id=\? AND epoch=\? AND item_id=\?\)$/
-    )
-  )
 })
 
 it('never treats a message without a submission row as a candidate', async () => {

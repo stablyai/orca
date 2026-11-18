@@ -8,7 +8,7 @@ export type JournalFirstSubmittedPrompt =
   /** The scan bound was reached before a qualifying message: not proof that none exists. */
   | { kind: 'incomplete' }
 
-export const FIRST_SUBMITTED_PROMPT_SCAN_LIMIT = 512
+const FIRST_SUBMITTED_PROMPT_SCAN_LIMIT = 512
 // Small first pages keep an early answer from reading ahead; doubling keeps long text-less runs cheap.
 const FIRST_SUBMISSION_PAGE = 4
 const MAX_SUBMISSION_PAGE = 64
@@ -17,14 +17,14 @@ const USER_ITEM = `i.hidden=0 AND i.root=1 AND i.kind='message' AND i.message_ro
   AND i.command_entry=0`
 
 /** This session's live submissions in time order from a cursor: a range seek on journal_submission_order. */
-export const FIRST_SUBMITTED_PROMPT_SUBMISSIONS_SQL = `SELECT item_id, submitted_at, ordinal, message_id
+const FIRST_SUBMITTED_PROMPT_SUBMISSIONS_SQL = `SELECT item_id, submitted_at, ordinal, message_id
 FROM journal_submission_attempts INDEXED BY journal_submission_order
 WHERE session_id=? AND epoch=? AND current=1 AND request_failure=0
   AND (submitted_at, ordinal, message_id) > (?, ?, ?)
 ORDER BY submitted_at, ordinal, message_id LIMIT ?`
 
 /** The user item one submission names, directly or through a provider alias: keyed lookups only. */
-export const FIRST_SUBMITTED_PROMPT_ITEM_SQL = `SELECT i.payload_json AS payload_json,
+const FIRST_SUBMITTED_PROMPT_ITEM_SQL = `SELECT i.payload_json AS payload_json,
   i.sequence AS sequence, i.sequence_index AS sequence_index, i.ordinal AS ordinal
 FROM journal_items i
 WHERE i.session_id=? AND i.epoch=? AND i.item_id=? AND ${USER_ITEM}
