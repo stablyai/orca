@@ -38,6 +38,31 @@ Desde ahí, las siguientes llegan solas.
 
 ## Construir desde el código (opcional)
 
+Solo para desarrollar Zotz o probar cambios antes de publicarlos. **El Zotz instalado no necesita nada de esto**: el instalador ya trae compilados los módulos nativos.
+
+### Preparar la máquina (una vez)
+
+`config/scripts/development/setup/zotz-windows-dev-setup.ps1` revisa e instala lo que falte:
+
+| Herramienta                       | Para qué                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------ |
+| Node 24                           | El repo lo exige (`engines`).                                                  |
+| pnpm, vía corepack                | Fija la versión de `package.json`.                                             |
+| Python 3                          | Lo usa `node-gyp`.                                                             |
+| Visual Studio Build Tools con C++ | Compilar `node-pty` y los módulos nativos de Windows. Unos 6–8 GB, sin el IDE. |
+| Rust                              | Solo para el lanzador de la CLI de Windows (`pnpm build:win`).                 |
+
+Al final corre `pnpm install` y comprueba que los módulos nativos compilan. Es idempotente: lo que ya está no se toca. `winget` pide permiso de administrador cuando instala.
+
+```powershell
+# Solo revisar, sin instalar nada:
+powershell -NoProfile -ExecutionPolicy Bypass -File config\scripts\development\setup\zotz-windows-dev-setup.ps1 -CheckOnly
+# Revisar e instalar lo que falte:
+powershell -NoProfile -ExecutionPolicy Bypass -File config\scripts\development\setup\zotz-windows-dev-setup.ps1
+```
+
+### Construir
+
 Para probar un cambio sin pasar por un release, en PowerShell dentro del clon:
 
 ```powershell
@@ -49,7 +74,6 @@ corepack pnpm build:win
 
 - `build:win` deja el instalador NSIS en `dist\`. Una build local conserva la versión de Orca (`1.4.214`), así que el actualizador le ofrecerá el siguiente release de Zotz.
 - `corepack pnpm build:unpack` deja la app desempaquetada en `dist\win-unpacked\` para probar sin instalar.
-- Construir en Windows necesita Visual Studio con "Desktop development with C++" (módulos nativos).
 
 ## Cómo se publica (CI)
 
