@@ -2,6 +2,7 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspec
 import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
+import { createSetupWaitGate } from '../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../../input/paste/terminal-pty-paste-writer'
 import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
@@ -17,12 +18,15 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       : null
     : null
   const startupSource = session.paneStartup?.resumeSource
-  const startupDraftReadyScanner = session.ownsStartupDraftPaste
-    ? createDraftPasteReadyScanner(
-        session.startupDraftAgentConfig?.draftPasteReadySignal ??
-          'render-quiet-after-bracketed-paste'
-      )
+  const createStartupDraftReadyScanner = (): ReturnType<typeof createDraftPasteReadyScanner> =>
+    createDraftPasteReadyScanner(
+      session.startupDraftAgentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
+    )
+  let startupDraftReadyScanner = session.ownsStartupDraftPaste
+    ? createStartupDraftReadyScanner()
     : null
+  // A wait-for-setup pane's Setup time does not count toward the draft deadline.
+  const setupWaitGate = createSetupWaitGate()
   let startupDraftReadinessArmed = false
   let startupDraftPasteSettled = !session.ownsStartupDraftPaste
   let startupDraftPasteInFlight = false
@@ -154,7 +158,16 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     if (!startupDraftReadyScanner || !startupDraftReadinessArmed || startupDraftPasteSettled) {
       return
     }
-    const scanned = startupDraftReadyScanner.observe(data)
+    const gated = setupWaitGate.observe(data)
+    if (gated.phase) {
+      // Output before Setup ended was the wrapper's, so the scan and timers start over.
+      startupDraftReadyScanner = createStartupDraftReadyScanner()
+      clearStartupDraftPasteTimers()
+      if (gated.phase === 'ended') {
+        armStartupDraftHardTimer()
+      }
+    }
+    const scanned = startupDraftReadyScanner.observe(gated.output)
     if (scanned.ready) {
       sendStartupDraftPaste()
       return
