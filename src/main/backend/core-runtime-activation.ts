@@ -164,10 +164,13 @@ export async function activateBackendRuntime(
   const { createOrcadPairedEnvironmentOptions } =
     await import('../orcad/host-runtime/orcad-paired-environment-options')
   const pairedEnvironments = createOrcadPairedEnvironmentOptions()
-  const { compactOrchestrationDbBeforeOpen } =
+  const { compactOrchestrationDbAtQuit } =
     await import('../runtime/orchestration/db/maintenance/orchestration-db-compaction')
-  // Before the runtime can open the file: VACUUM needs it to itself.
-  await compactOrchestrationDbBeforeOpen()
+  let compactionOwner: InstanceType<typeof OrcaRuntimeService> | undefined
+  // Registered before the runtime's own cleanups, so it runs after them; skipped when any of them failed.
+  registerCleanup(({ failed }) =>
+    failed ? undefined : compactOrchestrationDbAtQuit(compactionOwner)
+  )
   const runtime = new OrcaRuntimeService(profileStore, stats, {
     legacyStructuredSessionTabIds: chatJournal.open.legacySessionTabIds,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
@@ -198,6 +201,7 @@ export async function activateBackendRuntime(
       }
     }
   })
+  compactionOwner = runtime
   profileShutdown.paneGrids = runtime
   runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
 

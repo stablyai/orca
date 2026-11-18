@@ -1,23 +1,33 @@
 import { open, statfs } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
-import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
-import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
-import { orchestrationDbFile } from '../orchestration-db-file'
+import { spawnProcess } from '@orca/process-host'
 
 const MIB = 1024 * 1024
 const MIN_FREE_BYTES = 32 * MIB
 const MIN_FREE_FRACTION = 0.25
-// Launch waits for the rewrite; this keeps it within seconds on slow disks and well inside remote readiness deadlines.
-const MAX_LIVE_BYTES = 512 * MIB
+// Quit waits at most QUIT_BUDGET_MS; larger files rarely finish inside it.
+const MAX_LIVE_BYTES = 256 * MIB
+const QUIT_BUDGET_MS = 2_000
+const EXIT_GRACE_MS = 500
+
+/** Work another agent or process may still finish; compaction waits for a quit with none. */
+export const ACTIVE_ORCHESTRATION_WORK_SQL = `SELECT
+  EXISTS(SELECT 1 FROM dispatch_contexts WHERE status IN ('pending', 'dispatched'))
+  OR EXISTS(SELECT 1 FROM worker_dispatches
+    WHERE state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned'))
+  OR EXISTS(SELECT 1 FROM worker_terminal_resources
+    WHERE release_state IN ('requested', 'releasing', 'unknown')) AS active`
 
 type PageCounts = { pageSize: number; pages: number; freePages: number }
 
 export type OrchestrationDbCompaction =
   | { kind: 'not-needed' }
+  | { kind: 'active' }
   | { kind: 'too-large'; liveBytes: number }
   | { kind: 'low-disk'; neededBytes: number; availableBytes: number }
   | { kind: 'busy' }
+  | { kind: 'timed-out'; ms: number }
   | { kind: 'compacted'; beforeBytes: number; afterBytes: number; ms: number }
   | { kind: 'failed'; error: string }
 
@@ -26,13 +36,14 @@ function isCompactionWarranted({ pageSize, pages, freePages }: PageCounts): bool
   return freePages * pageSize >= MIN_FREE_BYTES && freePages >= pages * MIN_FREE_FRACTION
 }
 
-// Evaluated source, as the checkpoint worker. Decides on SQLite's own counts (WAL included), under an exclusive lock.
-const compactionWorkerSource = `
-const { workerData, parentPort } = require('node:worker_threads');
+// Run as a node child, not a worker thread: only a process can be stopped in the middle of a VACUUM.
+// Decides on SQLite's own counts (WAL included), under an exclusive lock, and prints one JSON line.
+const compactionChildSource = `
 const { DatabaseSync } = require('node:sqlite');
 const { statfsSync } = require('node:fs');
 const { dirname } = require('node:path');
-const w = workerData;
+const w = JSON.parse(process.env.ORCA_ORCHESTRATION_COMPACTION);
+const report = (result) => process.stdout.write(JSON.stringify(result) + '\\n');
 const available = (dir) => {
   try {
     const disk = statfsSync(dir);
@@ -46,7 +57,7 @@ let db;
 try {
   db = new DatabaseSync(w.filename);
   const pragma = (name) => Object.values(db.prepare('PRAGMA ' + name).get())[0];
-  // Fails at once if any other connection, in any process, has the file open; retried next launch.
+  // Fails at once if any other connection, in any process, has the file open.
   db.exec('PRAGMA busy_timeout = 0; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT');
   const pageSize = pragma('page_size');
   const pages = pragma('page_count');
@@ -56,18 +67,21 @@ try {
   const warranted =
     freePages * pageSize >= w.minFreeBytes && freePages >= pages * w.minFreeFraction;
   if (pragma('auto_vacuum') !== 0 || !warranted) {
-    parentPort.postMessage({ kind: 'not-needed' });
+    report({ kind: 'not-needed' });
+  } else if (db.prepare(w.activeWorkSql).get().active) {
+    // Rechecked under the lock: another process may have started work since the runtime looked.
+    report({ kind: 'active' });
   } else if (liveBytes > w.maxLiveBytes) {
-    parentPort.postMessage({ kind: 'too-large', liveBytes });
+    report({ kind: 'too-large', liveBytes });
   } else {
     // VACUUM builds the copy in the temp directory, then writes it through the WAL beside the file.
     const neededBytes = 2 * fileBytes;
     const availableBytes = available(dirname(w.filename));
     if (availableBytes < neededBytes || available(w.tempDir) < liveBytes) {
-      parentPort.postMessage({ kind: 'low-disk', neededBytes, availableBytes });
+      report({ kind: 'low-disk', neededBytes, availableBytes });
     } else {
       db.exec('PRAGMA auto_vacuum = INCREMENTAL; VACUUM; PRAGMA wal_checkpoint(TRUNCATE)');
-      parentPort.postMessage({
+      report({
         kind: 'compacted',
         beforeBytes: fileBytes,
         afterBytes: pragma('page_count') * pageSize,
@@ -77,9 +91,7 @@ try {
   }
 } catch (error) {
   const code = (error && error.errcode) & 0xff;
-  parentPort.postMessage(
-    code === 5 || code === 6 ? { kind: 'busy' } : { kind: 'failed', error: String(error) }
-  );
+  report(code === 5 || code === 6 ? { kind: 'busy' } : { kind: 'failed', error: String(error) });
 } finally {
   db?.close();
 }
@@ -128,20 +140,32 @@ async function readHeaderCounts(filename: string): Promise<PageCounts | null> {
   }
 }
 
+function readChildResult(output: string): OrchestrationDbCompaction | null {
+  try {
+    const parsed: unknown = JSON.parse(output.trim().split('\n').at(-1) ?? '')
+    return typeof parsed === 'object' && parsed !== null && 'kind' in parsed
+      ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: written by compactionChildSource above.
+        (parsed as OrchestrationDbCompaction)
+      : null
+  } catch {
+    return null
+  }
+}
+
 /**
- * One VACUUM of an orchestration database made before incremental auto-vacuum, so it can return
- * pages from then on. Runs before anything opens the file, on a worker thread; a busy file is
- * left for the next launch, and the switched file never qualifies again.
+ * One VACUUM of an orchestration database made before incremental auto-vacuum, so it can return pages from
+ * then on. The caller must hold no connection to the file. Stopped at `budgetMs`, which rolls it back; a busy,
+ * active or stopped file is left for a later quit, and the switched file never qualifies again.
  */
-export async function compactOrchestrationDbOnce(
-  filename: string
+export async function compactOrchestrationDb(
+  filename: string,
+  budgetMs = QUIT_BUDGET_MS
 ): Promise<OrchestrationDbCompaction> {
-  // A cheap first look, so ordinary launches start no worker; the worker decides on SQLite's own view.
+  // A cheap first look, so ordinary quits start no process; the child decides on SQLite's own view.
   const counts = await readHeaderCounts(filename)
   if (!counts || !isCompactionWarranted(counts)) {
     return { kind: 'not-needed' }
   }
-  // Checked here too, so a file that can't compact starts no worker on every launch.
   const liveBytes = (counts.pages - counts.freePages) * counts.pageSize
   if (liveBytes > MAX_LIVE_BYTES) {
     return { kind: 'too-large', liveBytes }
@@ -151,44 +175,77 @@ export async function compactOrchestrationDbOnce(
   if (availableBytes < neededBytes || (await availableBytesIn(sqliteTempDir())) < liveBytes) {
     return { kind: 'low-disk', neededBytes, availableBytes }
   }
+  const started = performance.now()
   return new Promise((resolve) => {
-    let worker: ReturnType<typeof spawnWorkerThread>
+    let child: ReturnType<typeof spawnProcess>
     try {
-      worker = spawnWorkerThread(compactionWorkerSource, {
-        name: 'orca-orchestration-compaction',
-        eval: true,
-        workerData: {
-          filename,
-          tempDir: sqliteTempDir(),
-          minFreeBytes: MIN_FREE_BYTES,
-          minFreeFraction: MIN_FREE_FRACTION,
-          maxLiveBytes: MAX_LIVE_BYTES
-        }
+      child = spawnProcess({
+        program: process.execPath,
+        args: ['-e', compactionChildSource],
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: '1',
+          ORCA_ORCHESTRATION_COMPACTION: JSON.stringify({
+            filename,
+            tempDir: sqliteTempDir(),
+            minFreeBytes: MIN_FREE_BYTES,
+            minFreeFraction: MIN_FREE_FRACTION,
+            maxLiveBytes: MAX_LIVE_BYTES,
+            activeWorkSql: ACTIVE_ORCHESTRATION_WORK_SQL
+          })
+        },
+        stdio: 'pipe'
       })
     } catch (error) {
       resolve({ kind: 'failed', error: String(error) })
       return
     }
-    let result: OrchestrationDbCompaction = {
-      kind: 'failed',
-      error: 'worker exited without a result'
+    let output = ''
+    let timedOut = false
+    child.stdout?.on('data', (chunk: Buffer) => {
+      output += chunk.toString()
+    })
+    let grace: NodeJS.Timeout | undefined
+    const finish = (result: OrchestrationDbCompaction): void => {
+      clearTimeout(budget)
+      clearTimeout(grace)
+      resolve(result)
     }
-    worker.once('message', (message: OrchestrationDbCompaction) => {
-      result = message
-    })
-    worker.once('error', (error) => {
-      result = { kind: 'failed', error: String(error) }
-    })
-    // Only after exit has the worker closed the file, so the runtime can open it.
-    worker.once('exit', () => resolve(result))
+    // Killing it rolls the VACUUM back; quit then waits briefly for the lock to drop, never longer.
+    const budget = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+      grace = setTimeout(
+        () => finish({ kind: 'timed-out', ms: Math.round(performance.now() - started) }),
+        EXIT_GRACE_MS
+      )
+    }, budgetMs)
+    child.once('error', (error) => finish({ kind: 'failed', error: String(error) }))
+    child.once('close', () =>
+      finish(
+        timedOut
+          ? { kind: 'timed-out', ms: Math.round(performance.now() - started) }
+          : (readChildResult(output) ?? { kind: 'failed', error: 'no result from compaction' })
+      )
+    )
   })
 }
 
-export async function compactOrchestrationDbBeforeOpen(): Promise<void> {
+export type OrchestrationDbQuitOwner = {
+  /** Closes the runtime's connection when no orchestration work is in flight; the file, or null to skip. */
+  closeOrchestrationDbForQuit(): string | null
+}
+
+/** Last step of a clean quit, after every other teardown settled: nothing can open the file again. */
+export async function compactOrchestrationDbAtQuit(
+  owner: OrchestrationDbQuitOwner | null | undefined
+): Promise<void> {
   try {
-    const result = await compactOrchestrationDbOnce(
-      orchestrationDbFile(getAppEnvironment().getPath('userData'))
-    )
+    const filename = owner?.closeOrchestrationDbForQuit()
+    if (!filename) {
+      return
+    }
+    const result = await compactOrchestrationDb(filename)
     if (result.kind === 'failed') {
       console.warn('[orchestration] database compaction failed', result.error)
     } else if (result.kind !== 'not-needed') {

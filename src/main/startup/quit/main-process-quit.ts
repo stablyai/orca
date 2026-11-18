@@ -28,6 +28,7 @@ import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
 import { isQuittingForUpdate } from '../../updater/updater-service'
+import { compactOrchestrationDbAtQuit } from '../../runtime/orchestration/db/maintenance/orchestration-db-compaction'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-supervisor-install-park'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
@@ -286,6 +287,7 @@ function installWillQuitHandler(): void {
       { name: 'state', promise: storeFlush }
     ]
     const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
+    let teardownSettledCleanly = false
     settleTeardownWithinDeadline([
       ...teardowns,
       { name: 'environment-store', promise: teardownSettlement.then(closeEnvironmentStore) }
@@ -294,6 +296,7 @@ function installWillQuitHandler(): void {
         if (pendingTeardowns.length > 0) {
           console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
         }
+        teardownSettledCleanly = pendingTeardowns.length === 0
       })
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())
@@ -302,6 +305,12 @@ function installWillQuitHandler(): void {
       })
       // Last before quitting, so it saves every extension write accepted during teardown.
       .then(() => closeBrowserExtensionProfileDocumentStores())
+      // After everything else: nothing can reach the orchestration database again. Bounded to a few seconds.
+      .then(() =>
+        teardownSettledCleanly && !updateQuitInProgress && !isDevParentShutdownRequested()
+          ? compactOrchestrationDbAtQuit(state.runtime)
+          : undefined
+      )
       .then(() => {
         daemonDisconnectDone = true
         app.quit()
