@@ -27,9 +27,12 @@ export async function compareJournalLegacyChatsWhenIdle(
         return
       }
       const result = await compareOnce(readers, compare.sessionId, stopped, report)
-      // No original, stopping, or this file failing: no other chat would fare better this launch.
-      if (!result) {
+      // No original, stopping, or this file's storage failing: no other chat would fare better.
+      if (result === null) {
         return
+      }
+      if (result === 'pending') {
+        continue
       }
       if ('error' in result || result.revision === compare.revision) {
         await writer.maintain({ kind: 'legacy-compare-settle', ...compare, ...result })
@@ -40,7 +43,8 @@ export async function compareJournalLegacyChatsWhenIdle(
 }
 
 /**
- * This file's own failures, contention and stopping leave the compare for the next launch. A reader
+ * This file's own failures, contention and stopping leave the compare for the next launch; damage
+ * here may be this chat's alone, so only it stays pending. A reader
  * that exits gets one retry, since another request may have taken it down; a second exit is this
  * chat's, absorbed with its error so it never reruns into the same crash.
  */
@@ -49,14 +53,17 @@ async function compareOnce(
   sessionId: string,
   stopped: () => boolean,
   report: (error: unknown, sessionId: string) => void
-): Promise<Awaited<ReturnType<JournalSqlReaderPool['compareLegacyChat']>>> {
+): Promise<Awaited<ReturnType<JournalSqlReaderPool['compareLegacyChat']>> | 'pending'> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await readers.compareLegacyChat(sessionId)
     } catch (error) {
       report(error, sessionId)
-      if (stopped() || isSqliteStorageFailure(error) || isSqliteCorruption(error)) {
+      if (stopped() || isSqliteStorageFailure(error)) {
         return null
+      }
+      if (isSqliteCorruption(error)) {
+        return 'pending'
       }
       if (attempt > 0) {
         return { error: error instanceof Error ? error.message : String(error) }

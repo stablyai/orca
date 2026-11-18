@@ -49,12 +49,45 @@ it('absorbs a chat whose compare took its reader down twice instead of retrying 
   expect(await runWith([exited()], true)).toEqual([])
 })
 
-it("leaves a compare pending when this file's own storage is damaged", async () => {
+it("leaves only the damaged chat's compare pending when this file's storage is damaged", async () => {
   const corrupt = Object.assign(new Error('database disk image is malformed'), {
     code: 'ERR_SQLITE_ERROR',
     errcode: 11
   })
-  expect(await runWith([corrupt])).toEqual([])
+  const settled: JournalSqlMaintenance[] = []
+  let pages = 0
+  await compareJournalLegacyChatsWhenIdle(
+    {
+      maintain: async (operation) => {
+        settled.push(operation)
+        return null
+      }
+    },
+    {
+      database: async () => ({
+        kind: 'legacy-compares',
+        compares:
+          pages++ === 0
+            ? [
+                { sessionId: 'damaged', revision: 'r1' },
+                { sessionId: 'healthy', revision: 'r1' }
+              ]
+            : []
+      }),
+      compareLegacyChat: async (sessionId) => {
+        if (sessionId === 'damaged') {
+          throw corrupt
+        }
+        return { revision: 'r1', held: true }
+      }
+    },
+    async () => true,
+    () => false,
+    () => {}
+  )
+  expect(settled).toEqual([
+    { kind: 'legacy-compare-settle', sessionId: 'healthy', revision: 'r1', held: true }
+  ])
 })
 
 it('stops at a missing original instead of asking about every chat awaiting a compare', async () => {
