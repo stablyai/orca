@@ -32,6 +32,8 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'journal-sql-reader-entry': resolve(
     'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts'
   ),
+  // Chat reader threads run here so their heaps stay out of main's V8 cage.
+  'utility-worker-host-entry': resolve('src/main/utility-worker-host/utility-worker-host-entry.ts'),
   'journal-sql-worker-entry': resolve(
     'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts'
   ),

@@ -49,12 +49,7 @@ function setup(): void {
       call: async ({ method }: { method: string }) => ({
         id: 'fixture',
         ok: true,
-        result:
-          method === 'workspaceCleanup.report'
-            ? report
-            : method === 'workspaceCleanup.codexHistoryDiskUsage'
-              ? { bytes: 53_500_000_000, rollouts: 41_905, complete: true }
-              : { evaluatedAt: 0, rows: [] }
+        result: method === 'workspaceCleanup.report' ? report : { evaluatedAt: 0, rows: [] }
       })
     }
   })
@@ -73,22 +68,9 @@ function Pane(): React.JSX.Element {
   )
 }
 
-export const chatHistoryOff = defineFixture({
+export const withActivity = defineFixture({
   width: 760,
   store: { settings },
   setup,
   render: () => <Pane />
-})
-
-export const chatHistoryConfirm = defineFixture({
-  width: 760,
-  store: { settings },
-  setup,
-  render: () => <Pane />,
-  interact: async (frame) => {
-    const toggle = frame.querySelector<HTMLElement>(
-      '[role="switch"][aria-label="Delete chat history with the workspace"]'
-    )
-    toggle?.click()
-  }
 })

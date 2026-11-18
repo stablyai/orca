@@ -51,7 +51,10 @@ export function RepositoryWindowsRuntimeSection({
 }: RepositoryWindowsRuntimeSectionProps): React.JSX.Element | null {
   const t = useTranslate()
   // Owner decision: for a WSL project with a host, the runtime toggle becomes "Move project".
-  const wslMoveDistro = useWslMoveTargetForRepo(repo)
+  // A mapped-drive project keeps its runtime toggle; its move is on the project menu. Swapping the
+  // toggle out once the drive lookup answers would make the setting jump.
+  const resolvedMoveTarget = useWslMoveTargetForRepo(repo)
+  const wslMoveDistro = resolvedMoveTarget?.viaMappedDrive ? null : resolvedMoveTarget?.distro
   // D1c ships with WSL hosts; serve-only, a live block or the setting off hide its offers, as main
   // refuses them. A project already on Git for Windows still shows that state.
   const d1cAvailable = useWslHostsAcceptNewWork()
