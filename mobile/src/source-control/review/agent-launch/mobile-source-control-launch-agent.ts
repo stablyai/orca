@@ -9,7 +9,20 @@ import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
 } from '../../../../../src/shared/source-control/ai/source-control-launch-agent-selection'
-import { filterEnabledTuiAgents } from '../../../../../src/shared/agent-launch/catalog/tui-agent-selection'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled
+} from '../../../../../src/shared/agent-launch/catalog/tui-agent-selection'
+import { resolveSourceControlActionPreferredSurface } from '../../../../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import {
+  nativeChatPreferenceFor,
+  type NativeChatDefaultSettings
+} from '../../../../../src/shared/agent-launch/choices/structured-native-chat-launch-route'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import {
+  registeredAgentChatInstallable,
+  type AgentSessionRegisteredAgent
+} from '../../../../../src/shared/agent-session/agent-discovery/agent-session-registered-agents'
 import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent as isMobileTuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { translate } from '../../../i18n/mobile-i18n'
@@ -22,20 +35,37 @@ export type MobileSourceControlLaunchAgent =
 type LaunchAgentSettings = Pick<
   GlobalSettings,
   'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent' | 'disabledTuiAgents'
->
+> & { nativeChatDefaults?: NativeChatDefaultSettings | null }
+
+/** What the host says about running agents as chats; absent facts open nothing as a chat. */
+export type MobileLaunchChatHost = {
+  hostCapabilities: readonly string[]
+  registeredAgents: readonly AgentSessionRegisteredAgent[] | null | undefined
+}
 
 export function resolveMobileSourceControlLaunchAgent(
   context: MobileAgentLaunchContext,
-  actionId: SourceControlLaunchActionId | null
+  actionId: SourceControlLaunchActionId | null,
+  chatHost?: MobileLaunchChatHost
 ): MobileSourceControlLaunchAgent {
   const settings = readLaunchAgentSettings(context.settings)
   const detectedAgents = context.detectedAgents.filter(isMobileTuiAgent)
   const recipe = actionId ? readSavedRecipe(settings, context.repo, actionId) : null
   const savedAgent = readSourceControlLaunchRecipeAgentId(recipe)
+  // As desktop: an agent without a CLI is usable when the host opens it as a chat it installs itself.
+  const opensAsChat = (agent: TuiAgent): boolean =>
+    !!chatHost &&
+    chatHost.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) &&
+    // SSH workspaces run agents in terminals only.
+    !context.repo?.connectionId &&
+    ((recipe !== null && resolveSourceControlActionPreferredSurface(recipe, agent) === 'chat') ||
+      nativeChatPreferenceFor(settings?.nativeChatDefaults, agent)) &&
+    registeredAgentChatInstallable(chatHost.registeredAgents, agent, chatHost.hostCapabilities)
   // No pre-launch dialog can show a substitution; fail an unavailable saved agent instead of silently swapping it.
   if (
     savedAgent &&
-    !filterEnabledTuiAgents(detectedAgents, settings?.disabledTuiAgents).includes(savedAgent)
+    !filterEnabledTuiAgents(detectedAgents, settings?.disabledTuiAgents).includes(savedAgent) &&
+    !(isTuiAgentEnabled(savedAgent, settings?.disabledTuiAgents) && opensAsChat(savedAgent))
   ) {
     return {
       kind: 'unavailable',
@@ -49,7 +79,8 @@ export function resolveMobileSourceControlLaunchAgent(
     savedAgent,
     defaultAgent: settings?.defaultTuiAgent,
     detectedAgents,
-    disabledAgents: settings?.disabledTuiAgents
+    disabledAgents: settings?.disabledTuiAgents,
+    chosenOpensAsChat: opensAsChat
   })
   return agent
     ? { kind: 'agent', agent, recipe }

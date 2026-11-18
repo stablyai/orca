@@ -5,6 +5,8 @@ import { useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../../navigation/route-param-reader'
 import { agentLaunchContextOf, useMobileAgentLaunchQueries } from './mobile-agent-launch-queries'
 import { resolveMobileSourceControlLaunchAgent } from '../../source-control/review/agent-launch/mobile-source-control-launch-agent'
+import { useMobileRegisteredAgents } from '../native-chat/agent-session/use-mobile-registered-agent'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 
 // The agent a Fix button would start, by the same resolution the launch uses, so it can say "Fix with Claude".
 export function useMobileLaunchAgentLabel(args: {
@@ -24,11 +26,18 @@ export function useMobileLaunchAgentLabel(args: {
       enabled
     })
   )
+  const registeredAgents = useMobileRegisteredAgents(
+    client,
+    enabled && hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+  )
   if (!actionId || !context) {
     return null
   }
   // An unknown agent keeps the generic label; the launch itself reports the real failure.
-  const agent = resolveMobileSourceControlLaunchAgent(context, actionId)
+  const agent = resolveMobileSourceControlLaunchAgent(context, actionId, {
+    hostCapabilities,
+    registeredAgents
+  })
   return agent.kind === 'agent' ? MOBILE_TUI_AGENT_LABELS[agent.agent] : null
 }
 
