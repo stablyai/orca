@@ -11,6 +11,9 @@ type PendingCleanup = {
   isRegistered: (info: EmulatorSessionInfo) => boolean
   includeOrphaned: boolean
   shutdownDevice: boolean
+  releaseOnShutdownFailure: boolean
+  force: boolean
+  validators: (() => void)[]
   waiters: { resolve: () => void; reject: (error: unknown) => void }[]
 }
 
@@ -36,13 +39,13 @@ export class EmulatorStartLeaseRegistry {
             return
           }
           released = true
-          if (options.cleanupIfUnused) {
-            this.addPendingCleanup(backend, info, isRegistered, {
-              includeOrphaned: true,
-              shutdownDevice: true
-            })
-          }
-          await this.release(backend)
+          const completion = options.cleanupIfUnused
+            ? this.queueCleanup(backend, info, isRegistered, {
+                includeOrphaned: true,
+                shutdownDevice: true
+              })
+            : undefined
+          await this.release(backend, completion)
         }
       }
     } catch (error) {
@@ -55,7 +58,30 @@ export class EmulatorStartLeaseRegistry {
     backend: EmulatorBackend,
     info: EmulatorSessionInfo,
     isRegistered: (info: EmulatorSessionInfo) => boolean,
-    options: { includeOrphaned?: boolean; shutdownDevice?: boolean } = {}
+    options: {
+      includeOrphaned?: boolean
+      shutdownDevice?: boolean
+      releaseOnShutdownFailure?: boolean
+      force?: boolean
+      validate?: () => void
+    } = {}
+  ): Promise<void> {
+    const completion = this.queueCleanup(backend, info, isRegistered, options)
+    await this.drainCleanup(backend)
+    await completion
+  }
+
+  private queueCleanup(
+    backend: EmulatorBackend,
+    info: EmulatorSessionInfo,
+    isRegistered: (info: EmulatorSessionInfo) => boolean,
+    options: {
+      includeOrphaned?: boolean
+      shutdownDevice?: boolean
+      releaseOnShutdownFailure?: boolean
+      force?: boolean
+      validate?: () => void
+    }
   ): Promise<void> {
     let resolve!: () => void
     let reject!: (error: unknown) => void
@@ -65,16 +91,16 @@ export class EmulatorStartLeaseRegistry {
     })
     void completion.catch(() => {})
     this.addPendingCleanup(backend, info, isRegistered, options, { resolve, reject })
-    await this.drainCleanup(backend).catch(() => {})
-    await completion
+    return completion
   }
 
-  private async release(backend: EmulatorBackend): Promise<void> {
+  private async release(backend: EmulatorBackend, ownCleanup?: Promise<void>): Promise<void> {
     const remaining = this.decrement(backend)
     if (remaining > 0) {
       return
     }
     await this.drainCleanup(backend)
+    await ownCleanup
   }
 
   private async drainCleanup(backend: EmulatorBackend): Promise<void> {
@@ -87,15 +113,28 @@ export class EmulatorStartLeaseRegistry {
     if (!pending) {
       return
     }
-    const cleanup = Promise.allSettled(
+    const cleanup = Promise.all(
       [...pending.values()].map(
-        async ({ info, isRegistered, includeOrphaned, shutdownDevice, waiters }) => {
+        async ({
+          info,
+          isRegistered,
+          includeOrphaned,
+          shutdownDevice,
+          releaseOnShutdownFailure,
+          force,
+          validators,
+          waiters
+        }) => {
           try {
-            if (!isRegistered(info)) {
+            for (const validate of validators) {
+              validate()
+            }
+            if (force || !isRegistered(info)) {
               await backend.stopHelperForDevice(info.deviceUdid, {
                 helperPid: info.helperPid,
                 includeOrphaned,
-                shutdownDevice
+                shutdownDevice,
+                releaseOnShutdownFailure
               })
             }
             for (const waiter of waiters) {
@@ -105,17 +144,11 @@ export class EmulatorStartLeaseRegistry {
             for (const waiter of waiters) {
               waiter.reject(error)
             }
-            throw error
           }
         }
       )
     )
-      .then((results) => {
-        const failure = results.find((result) => result.status === 'rejected')
-        if (failure?.status === 'rejected') {
-          throw failure.reason
-        }
-      })
+      .then(() => {})
       .finally(() => this.cleanupByBackend.delete(backend))
     this.cleanupByBackend.set(backend, cleanup)
     await cleanup
@@ -125,16 +158,33 @@ export class EmulatorStartLeaseRegistry {
     backend: EmulatorBackend,
     info: EmulatorSessionInfo,
     isRegistered: (info: EmulatorSessionInfo) => boolean,
-    options: { includeOrphaned?: boolean; shutdownDevice?: boolean },
+    options: {
+      includeOrphaned?: boolean
+      shutdownDevice?: boolean
+      releaseOnShutdownFailure?: boolean
+      force?: boolean
+      validate?: () => void
+    },
     waiter?: { resolve: () => void; reject: (error: unknown) => void }
   ): void {
     const pending = this.pendingCleanupByBackend.get(backend) ?? new Map()
     const existing = pending.get(info.deviceUdid)
     pending.set(info.deviceUdid, {
-      info,
+      info: existing?.force ? existing.info : info,
       isRegistered,
+      force: options.force === true || existing?.force === true,
+      validators: [
+        ...(existing?.validators ?? []),
+        ...(options.validate ? [options.validate] : [])
+      ],
+      releaseOnShutdownFailure:
+        options.releaseOnShutdownFailure === true || existing?.releaseOnShutdownFailure === true,
       includeOrphaned: options.includeOrphaned === true || existing?.includeOrphaned === true,
-      shutdownDevice: options.shutdownDevice === true || existing?.shutdownDevice === true,
+      shutdownDevice: existing?.force
+        ? existing.shutdownDevice
+        : options.force
+          ? options.shutdownDevice === true
+          : options.shutdownDevice === true || existing?.shutdownDevice === true,
       waiters: [...(existing?.waiters ?? []), ...(waiter ? [waiter] : [])]
     })
     this.pendingCleanupByBackend.set(backend, pending)

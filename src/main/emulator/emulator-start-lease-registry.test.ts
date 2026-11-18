@@ -120,6 +120,63 @@ describe('EmulatorStartLeaseRegistry', () => {
     )
   })
 
+  it('preserves a forced stop when a conditional detach is queued later', async () => {
+    const { backend, stopHelperForDevice } = makeBackend()
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'device', () => true)
+    const forced = registry.cleanupWhenIdle(backend, lease.info, () => false, { force: true })
+    const conditional = registry.cleanupWhenIdle(backend, lease.info, () => true, {
+      shutdownDevice: true
+    })
+    await lease.release()
+    await Promise.all([forced, conditional])
+    expect(stopHelperForDevice).toHaveBeenCalledWith(
+      'emulator-5554',
+      expect.objectContaining({ shutdownDevice: false })
+    )
+  })
+
+  it('rejects a forced stop whose captured generation changed while a claim was in flight', async () => {
+    const { backend, stopHelperForDevice } = makeBackend()
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'device', () => false)
+    let current = true
+    const forced = registry.cleanupWhenIdle(backend, lease.info, () => false, {
+      force: true,
+      validate: () => {
+        if (!current) {
+          throw new Error('changed')
+        }
+      }
+    })
+    const result = forced.then(
+      () => 'stopped',
+      (error: Error) => error.message
+    )
+    current = false
+    await lease.release()
+    expect(await result).toBe('changed')
+    expect(stopHelperForDevice).not.toHaveBeenCalled()
+  })
+
+  it('does not send a deferred cleanup failure to an unrelated lease', async () => {
+    const { backend, stopHelperForDevice } = makeBackend()
+    const registry = new EmulatorStartLeaseRegistry()
+    const unrelated = await registry.acquire(backend, 'device-b', () => false)
+    stopHelperForDevice.mockRejectedValueOnce(new Error('cleanup A failed'))
+    const cleanupA = registry.cleanupWhenIdle(
+      backend,
+      { ...unrelated.info, deviceUdid: 'device-a' },
+      () => false
+    )
+    const resultA = cleanupA.then(
+      () => 'ok',
+      (error: Error) => error.message
+    )
+    await expect(unrelated.release()).resolves.toBeUndefined()
+    expect(await resultA).toBe('cleanup A failed')
+  })
+
   it('reports a deferred stop failure to the workspace waiting for cleanup', async () => {
     const { backend, stopHelperForDevice } = makeBackend()
     const registry = new EmulatorStartLeaseRegistry()

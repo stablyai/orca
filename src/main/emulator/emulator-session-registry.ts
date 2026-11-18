@@ -1,4 +1,3 @@
-import type { EmulatorBridge } from './emulator-bridge'
 import type {
   EmulatorActiveSession,
   EmulatorBackendKind,
@@ -34,7 +33,7 @@ export class EmulatorSessionRegistry {
     const affected = replaced
       ? [...this.activeByWorktree].filter(([, activeKey]) => activeKey === key).map(([id]) => id)
       : []
-    this.sessions.set(key, {
+    const next: EmulatorSessionState = {
       deviceUdid: info.deviceUdid,
       wsUrl: info.wsUrl,
       streamUrl: info.streamUrl,
@@ -45,7 +44,17 @@ export class EmulatorSessionRegistry {
       // Preserve iOS defaults for callers predating multiple backends.
       backend: info.backend ?? options.backend ?? 'ios',
       streamCodec: info.streamCodec ?? 'mjpeg'
-    })
+    }
+    if (
+      !previous ||
+      replaced ||
+      previous.managed !== next.managed ||
+      previous.backend !== next.backend ||
+      previous.streamCodec !== next.streamCodec ||
+      previous.axUrl !== next.axUrl
+    ) {
+      this.sessions.set(key, next)
+    }
     this.activeByWorktree.set(worktreeId, key)
     return affected
   }
@@ -99,6 +108,18 @@ export class EmulatorSessionRegistry {
     return toSessionInfo(session)
   }
 
+  generationForDevice(deviceUdid: string): object | undefined {
+    return this.sessions.get(deviceUdid)
+  }
+
+  isCurrentOwner(worktreeId: string, deviceUdid: string, generation: object | undefined): boolean {
+    return (
+      !!generation &&
+      this.activeByWorktree.get(worktreeId) === deviceUdid &&
+      this.sessions.get(deviceUdid) === generation
+    )
+  }
+
   hasActiveWorktreeForSession(key: string): boolean {
     return [...this.activeByWorktree.values()].some((activeKey) => activeKey === key)
   }
@@ -125,6 +146,12 @@ export class EmulatorSessionRegistry {
 
   listSessions(): EmulatorSessionState[] {
     return [...this.sessions.values()]
+  }
+
+  clearIfUnchanged(key: string, session: EmulatorSessionState | undefined): void {
+    if (session && this.sessions.get(key) === session) {
+      this.clearSessionAndWorktrees(key)
+    }
   }
 
   clearSessionAndWorktrees(key: string): void {
@@ -175,12 +202,4 @@ function toSessionInfo(session: EmulatorSessionState): EmulatorSessionInfo {
     streamCodec: session.streamCodec,
     backend: session.backend
   }
-}
-
-export async function shouldShutdownOnSwitch(
-  bridge: EmulatorBridge,
-  worktreeId: string
-): Promise<boolean> {
-  const active = bridge.getActiveForWorktree(worktreeId)
-  return active?.backend !== 'android' && !!(await bridge.getReusableActiveForWorktree(worktreeId))
 }

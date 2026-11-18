@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { ServeSimOwnedSessions } from './serve-sim-owned-session'
 import { execServeSimCommand } from './serve-sim-execution'
+import { SimulatorShutdownError } from './simctl-simulator-devices'
+import { simulatorOwnershipRoot } from './serve-sim-owned-process'
 
 const A = 'A0000000-0000-0000-0000-000000000001'
 const B = 'B0000000-0000-0000-0000-000000000002'
@@ -26,7 +28,7 @@ describe('owned iOS helper sessions', () => {
     `
     )
     writeFileSync(join(dir, 'package.json'), '{"type":"module"}')
-    const sessions = new ServeSimOwnedSessions()
+    const sessions = new ServeSimOwnedSessions(() => join(dir, 'claims'))
     const executable = {
       command: process.execPath,
       baseArgs: [join(dir, 'serve-sim.js')],
@@ -49,6 +51,25 @@ describe('owned iOS helper sessions', () => {
           async () => true
         )
       ])
+      const accountRoot = simulatorOwnershipRoot()
+      const differentEnvironment = mkdtempSync(join(tmpdir(), 'orca-other-profile-'))
+      try {
+        vi.stubEnv('TMPDIR', differentEnvironment)
+        vi.stubEnv('HOME', differentEnvironment)
+        expect(simulatorOwnershipRoot()).toBe(accountRoot)
+        const otherRuntime = new ServeSimOwnedSessions(() => join(dir, 'claims'))
+        await expect(
+          otherRuntime.start(
+            A,
+            executable,
+            async () => {},
+            async () => true
+          )
+        ).rejects.toThrow('claimed')
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(differentEnvironment, { recursive: true, force: true })
+      }
       expect(first.streamUrl).not.toEqual(second.streamUrl)
       expect(await (await fetch(first.streamUrl)).text()).toBe(A)
       expect(await (await fetch(second.streamUrl)).text()).toBe(B)
@@ -83,7 +104,7 @@ describe('owned iOS helper sessions', () => {
         async () => true
       )
       await expect(sessions.stop(A, first.helperPid)).rejects.toThrow('helper changed')
-      const foreign = new ServeSimOwnedSessions()
+      const foreign = new ServeSimOwnedSessions(() => join(dir, 'claims'))
       let finishShutdown: (() => void) | undefined
       const stopping = sessions.stop(
         A,
@@ -114,7 +135,41 @@ describe('owned iOS helper sessions', () => {
       await expect(sessions.stop(A, replacement.helperPid, shutdown)).rejects.toThrow('No owned')
       expect(shutdown).not.toHaveBeenCalled()
       expect(foreign.owns(newer)).toBe(true)
-      await foreign.stop(A, newer.helperPid)
+      await expect(
+        foreign.stop(
+          A,
+          newer.helperPid,
+          async () => {
+            throw new SimulatorShutdownError('timeout', false)
+          },
+          true
+        )
+      ).rejects.toThrow('timeout')
+      await expect(
+        sessions.start(
+          A,
+          executable,
+          async () => {},
+          async () => true
+        )
+      ).rejects.toThrow('claimed')
+      await expect(
+        foreign.stop(
+          A,
+          newer.helperPid,
+          async () => {
+            throw new SimulatorShutdownError('simctl failed', true)
+          },
+          true
+        )
+      ).rejects.toThrow('simctl failed')
+      const afterTeardown = await sessions.start(
+        A,
+        executable,
+        async () => {},
+        async () => true
+      )
+      await sessions.stop(A, afterTeardown.helperPid)
     } finally {
       if (first && sessions.owns(first)) {
         await sessions.stop(A, first.helperPid)
@@ -135,7 +190,7 @@ describe('owned iOS helper sessions', () => {
     }`
     )
     writeFileSync(join(dir, 'package.json'), '{"type":"module"}')
-    const sessions = new ServeSimOwnedSessions()
+    const sessions = new ServeSimOwnedSessions(() => join(dir, 'claims'))
     const executable = {
       command: process.execPath,
       baseArgs: [join(dir, 'serve-sim.js')],

@@ -4,7 +4,8 @@ import type { EmulatorActiveSession, EmulatorSessionInfo } from './emulator-type
 import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
-import { EmulatorSessionRegistry, shouldShutdownOnSwitch } from './emulator-session-registry'
+import { EmulatorSessionRegistry } from './emulator-session-registry'
+import { destroySessions, stopForSwitch, stopTargetSession } from './emulator-session-cleanup'
 import {
   EmulatorStartLeaseRegistry,
   type EmulatorStartLease
@@ -63,6 +64,18 @@ export class EmulatorBridge {
     return this.sessionRegistry.registerActive(worktreeId, info, options)
   }
 
+  emulatorGeneration(deviceUdid: string): object | undefined {
+    return this.sessionRegistry.generationForDevice(deviceUdid)
+  }
+
+  isCurrentEmulatorOwner(
+    worktreeId: string,
+    deviceUdid: string,
+    generation: object | undefined
+  ): boolean {
+    return this.sessionRegistry.isCurrentOwner(worktreeId, deviceUdid, generation)
+  }
+
   unregisterActiveEmulator(worktreeId: string): void {
     this.sessionRegistry.unregisterWorktree(worktreeId)
   }
@@ -72,9 +85,17 @@ export class EmulatorBridge {
   }
 
   // Keep slow-booting Android devices alive across switches for fast reattachment.
-  async stopActiveForSwitch(worktreeId: string): Promise<string | null> {
-    const shutdownDevice = await shouldShutdownOnSwitch(this, worktreeId)
-    return this.stopActiveForWorktreeInternal(worktreeId, { shutdownDevice })
+  async stopActiveForSwitch(
+    worktreeId: string,
+    assertCurrent?: () => void
+  ): Promise<string | null> {
+    return stopForSwitch(
+      this,
+      this.sessionRegistry,
+      worktreeId,
+      (shutdownDevice) => this.stopActiveForWorktreeInternal(worktreeId, { shutdownDevice }),
+      assertCurrent
+    )
   }
 
   async getReusableActiveForWorktree(
@@ -261,13 +282,7 @@ export class EmulatorBridge {
     if (!device && worktreeId) {
       return (await this.stopActiveForWorktree(worktreeId, { shutdownDevice: shutdown })) ?? udid
     }
-    const info = this.sessionRegistry.sessionInfoOrTarget(udid)
-    await this.startLeases.cleanupWhenIdle(backend, info, () => false, {
-      includeOrphaned: true,
-      shutdownDevice: shutdown
-    })
-    this.sessionRegistry.clearSessionAndWorktrees(udid)
-    return udid
+    return stopTargetSession(this.sessionRegistry, this.startLeases, backend, udid, shutdown)
   }
 
   hasLiveManagedSessions(): Promise<boolean> {
@@ -275,25 +290,9 @@ export class EmulatorBridge {
   }
 
   async destroyAllSessions(): Promise<void> {
-    const promises: Promise<unknown>[] = []
-    for (const session of this.sessionRegistry.listSessions()) {
-      if (!session.managed) {
-        continue
-      }
-      const backend = this.backendForKind(session.backend)
-      if (!backend) {
-        continue
-      }
-      promises.push(
-        this.startLeases
-          .cleanupWhenIdle(backend, this.sessionRegistry.toSessionInfo(session), () => false, {
-            shutdownDevice: true
-          })
-          .catch(() => {})
-      )
-    }
-    await Promise.allSettled(promises)
-    this.sessionRegistry.clear()
+    await destroySessions(this.sessionRegistry, this.startLeases, (kind) =>
+      this.backendForKind(kind)
+    )
   }
 
   private async resolveTarget(

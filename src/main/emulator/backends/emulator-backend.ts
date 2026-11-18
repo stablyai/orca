@@ -60,7 +60,12 @@ export type EmulatorBackend = {
   // Stop the helper for a device without powering it off.
   stopHelperForDevice(
     deviceId: string,
-    options?: { helperPid?: number; includeOrphaned?: boolean; shutdownDevice?: boolean }
+    options?: {
+      helperPid?: number
+      includeOrphaned?: boolean
+      shutdownDevice?: boolean
+      releaseOnShutdownFailure?: boolean
+    }
   ): Promise<void>
   shutdownDevice(deviceId: string): Promise<void>
   isSessionReusable(info: EmulatorSessionInfo): Promise<boolean>

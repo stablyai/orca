@@ -7,6 +7,8 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { EmulatorError } from './emulator-errors'
 import { SERVE_SIM_OWNED_SERVER } from './serve-sim-owned-server'
+import { simulatorOwnershipRoot, stopOwnedSimulatorChild } from './serve-sim-owned-process'
+import { SimulatorShutdownError } from './simctl-simulator-devices'
 import { getServeSimEnv, type ServeSimExecutable } from './serve-sim-execution'
 import type { EmulatorSessionInfo } from './emulator-types'
 
@@ -20,6 +22,8 @@ type OwnedSession = {
 }
 
 export class ServeSimOwnedSessions {
+  constructor(private readonly ownershipRoot: () => string = simulatorOwnershipRoot) {}
+
   private readonly sessions = new Map<string, OwnedSession>()
   private readonly starting = new Map<string, Promise<EmulatorSessionInfo>>()
 
@@ -75,7 +79,7 @@ export class ServeSimOwnedSessions {
     if (!entry) {
       throw new EmulatorError('emulator_helper_failed', 'Cannot locate serve-sim middleware.')
     }
-    const lockRoot = join(tmpdir(), 'orca-simulator-ownership')
+    const lockRoot = this.ownershipRoot()
     mkdirSync(lockRoot, { recursive: true })
     const lock = join(lockRoot, udid.toUpperCase())
     try {
@@ -185,7 +189,7 @@ export class ServeSimOwnedSessions {
     } catch (error) {
       if (child && child.pid && child.exitCode === null && child.signalCode === null) {
         try {
-          await this.stopChild(child)
+          await stopOwnedSimulatorChild(child)
         } catch (stopError) {
           const root = stateRoot
           child.once('exit', () => {
@@ -241,7 +245,12 @@ export class ServeSimOwnedSessions {
     return session.stateRoot
   }
 
-  async stop(udid: string, helperPid?: number, shutdown?: () => Promise<void>): Promise<void> {
+  async stop(
+    udid: string,
+    helperPid?: number,
+    shutdown?: () => Promise<void>,
+    releaseOnShutdownFailure = false
+  ): Promise<void> {
     const session = this.sessions.get(udid)
     if (!session) {
       if (helperPid !== undefined && !shutdown) {
@@ -260,10 +269,17 @@ export class ServeSimOwnedSessions {
     }
     session.stopping = true
     session.stopInProgress = true
+    let stopped = false
+    let shutdownSettled = false
     try {
-      await this.stopChild(session.child)
+      await stopOwnedSimulatorChild(session.child)
+      stopped = true
       if (shutdown) {
-        await shutdown()
+        try {
+          await shutdown()
+        } finally {
+          shutdownSettled = true
+        }
       }
       rmSync(session.stateRoot, { recursive: true, force: true })
       rmSync(session.lock, { recursive: true, force: true })
@@ -271,32 +287,24 @@ export class ServeSimOwnedSessions {
         this.sessions.delete(udid)
       }
     } catch (error) {
-      if (session.child.exitCode === null && session.child.signalCode === null) {
+      if (
+        releaseOnShutdownFailure &&
+        stopped &&
+        shutdownSettled &&
+        error instanceof SimulatorShutdownError &&
+        error.completed
+      ) {
+        rmSync(session.stateRoot, { recursive: true, force: true })
+        rmSync(session.lock, { recursive: true, force: true })
+        if (this.sessions.get(udid) === session) {
+          this.sessions.delete(udid)
+        }
+      } else if (session.child.exitCode === null && session.child.signalCode === null) {
         session.stopping = false
       }
       throw error
     } finally {
       session.stopInProgress = false
     }
-  }
-
-  private async stopChild(child: ChildProcess): Promise<void> {
-    if (child.exitCode !== null || child.signalCode !== null) {
-      return
-    }
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error('Simulator helper did not exit; ownership retained.')),
-        5_000
-      )
-      child.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-      if (!child.kill()) {
-        clearTimeout(timer)
-        reject(new Error('Could not stop simulator helper; ownership retained.'))
-      }
-    })
   }
 }

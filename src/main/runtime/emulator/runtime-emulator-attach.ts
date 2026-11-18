@@ -137,7 +137,7 @@ export class RuntimeEmulatorAttach {
           this.notify(worktreeId, reusable, params.focus)
           return { attached: true, info: reusable }
         }
-        await bridge.stopActiveForSwitch(worktreeId)
+        await bridge.stopActiveForSwitch(worktreeId, assertCurrent)
         assertCurrent()
       }
       const lease = await bridge.acquireHelperForDevice(device)
@@ -162,15 +162,19 @@ export class RuntimeEmulatorAttach {
       const affected = worktreeId
         ? bridge.registerActiveEmulator(worktreeId, info, { managed: true })
         : []
-      await lease.release()
-      assertCurrent()
-      remember()
+      const generation = bridge.emulatorGeneration(info.deviceUdid)
       for (const owner of affected ?? []) {
-        if (owner !== worktreeId) {
+        if (
+          owner !== worktreeId &&
+          bridge.isCurrentEmulatorOwner(owner, info.deviceUdid, generation)
+        ) {
           this.notify(owner, info)
         }
       }
-      if (worktreeId) {
+      await lease.release()
+      assertCurrent()
+      remember()
+      if (worktreeId && bridge.isCurrentEmulatorOwner(worktreeId, info.deviceUdid, generation)) {
         this.notify(worktreeId, info, params.focus)
       }
       return { attached: true, info }

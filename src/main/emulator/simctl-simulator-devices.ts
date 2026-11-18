@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import type { ExecFileException } from 'node:child_process'
 import { platform } from 'node:os'
-import { EmulatorError } from './emulator-errors'
+import { EmulatorError, type EmulatorErrorCode } from './emulator-errors'
 import { emulatorFailureText } from '../../shared/emulator/emulator-failure-copy'
 
 export type SimulatorDevice = {
@@ -165,6 +165,16 @@ export async function ensureSimulatorBooted(udid: string): Promise<void> {
   }
 }
 
+export class SimulatorShutdownError extends EmulatorError {
+  constructor(
+    message: string,
+    readonly completed: boolean,
+    code: EmulatorErrorCode = 'emulator_error'
+  ) {
+    super(code, message)
+  }
+}
+
 export async function shutdownSimulatorDevice(udid: string): Promise<void> {
   if (platform() !== 'darwin') {
     throw new EmulatorError('emulator_not_macos', emulatorFailureText('requiresMacosXcode'))
@@ -186,7 +196,14 @@ export async function shutdownSimulatorDevice(udid: string): Promise<void> {
           resolve()
           return
         }
-        reject(mapSimctlError(error, stderr))
+        const mapped = mapSimctlError(error, stderr)
+        reject(
+          new SimulatorShutdownError(
+            mapped.message,
+            typeof error.code === 'number' && !error.killed && !error.signal,
+            mapped.code
+          )
+        )
       }
     )
   })

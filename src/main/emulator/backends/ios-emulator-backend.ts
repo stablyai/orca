@@ -213,12 +213,18 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async stopHelperForDevice(
     deviceId: string,
-    options: { helperPid?: number; includeOrphaned?: boolean; shutdownDevice?: boolean } = {}
+    options: {
+      helperPid?: number
+      includeOrphaned?: boolean
+      shutdownDevice?: boolean
+      releaseOnShutdownFailure?: boolean
+    } = {}
   ): Promise<void> {
     await this.sessions.stop(
       deviceId,
       options.helperPid,
-      options.shutdownDevice ? () => this.shutdownDevice(deviceId) : undefined
+      options.shutdownDevice ? () => this.shutdownDevice(deviceId) : undefined,
+      options.releaseOnShutdownFailure
     )
   }
 
