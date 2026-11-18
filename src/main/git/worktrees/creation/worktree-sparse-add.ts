@@ -40,8 +40,8 @@ export async function addSparseWorktree(
     const longPathArgs = windowsLongPathGitArgs(worktreePath)
     const [checkoutWorkersArgs] = await Promise.all([
       checkoutWorkersGitArgs(worktreePath, options),
-      // Why: the first init in a repo writes the shared .git/config, which a concurrent create may hold.
-      gitConfigWrite(['sparse-checkout', 'init', '--cone'], worktreePath, options)
+      // Why: init is a multi-step config migration that skips itself once begun, so it is never retried.
+      gitExecFileAsync(['sparse-checkout', 'init', '--cone'], gitExecOptions(worktreePath, options))
     ])
     await retryOnGitLockContention(() =>
       gitExecFileAsync([...longPathArgs, 'sparse-checkout', 'set', '--', ...directories], {
