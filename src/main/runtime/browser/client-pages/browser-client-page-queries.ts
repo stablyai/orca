@@ -1,3 +1,4 @@
+import { activeRpcBrowserPagePicker } from '../../../browser/agent-browser/session-routing/person-pick-hold'
 import { BrowserError } from '../../../browser/browser-error'
 import type {
   BrowserTabInfo,
@@ -102,7 +103,7 @@ export class BrowserClientPageQueries {
     const pages = this.host.getRuntimeBrowserPageRegistry()
     const page = selected ? pages.getPage(selected.browserPageId) : undefined
     if (page) {
-      pages.activatePage(page.browserPageId, page.placement)
+      pages.activatePage(page.browserPageId, page.placement, activeRpcBrowserPagePicker())
       await publishSwitchedBrowserSessionTab(this.host, {
         placementKind: 'client',
         browserPageId: page.browserPageId,
