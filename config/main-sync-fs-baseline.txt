@@ -461,7 +461,7 @@
 7 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 1 src/main/runtime/client/navigation/desktop-chat-creation-history.ts
 9 src/main/runtime/host-instance-identity.ts
-4 src/main/runtime/hosts/platform-probe/host-descriptor.ts
+3 src/main/runtime/hosts/platform-probe/host-descriptor.ts
 2 src/main/runtime/mobile-cloud-relay/pairing/relay-revoke-outbox.ts
 5 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-preference.ts
 1 src/main/runtime/orchestration/db/runtime-orchestration-database-access.ts

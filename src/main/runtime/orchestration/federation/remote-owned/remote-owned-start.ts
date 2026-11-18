@@ -21,6 +21,7 @@ import {
 import { refuseTaskOfClosedPairing } from '../../db/remote-owned/remote-placement-hold'
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
+import { resolveCrossMachineChildParent } from '../cross-machine-child-parent'
 import { remoteForwardKey } from './remote-forward-caller'
 import { errorData, inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 
@@ -90,6 +91,11 @@ export async function startRemoteOwnedWorker(
   )
   const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
+  // This caller's workspace is here, so a server's new-child nests under it across machines.
+  const crossStoreParent =
+    params.worktree === 'new-child'
+      ? await resolveCrossMachineChildParent(runtime, params.from, ctx.orchestrationCaller)
+      : undefined
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
@@ -138,7 +144,8 @@ export async function startRemoteOwnedWorker(
         ...(params.retryOf
           ? { task: task.id }
           : { spec: task.spec, ...(task.task_title ? { taskTitle: task.task_title } : {}) }),
-        adoptTaskId: task.id
+        adoptTaskId: task.id,
+        ...(crossStoreParent ? { crossStoreParent } : {})
       },
       timeoutMs: budgets.attachDeadlineMs,
       requestId: forward.key,
