@@ -1,5 +1,6 @@
 import { AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-restart-continue-timeout'
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
+import { AGENT_SESSION_RECAP_TIMEOUT_MS } from '../../../../../shared/agent-session/conversation-context/agent-session-recap-timeout'
 
 export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
   ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
@@ -10,5 +11,6 @@ export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, num
   ['agentSession.sleepWorkspace', 120_000],
   // A cold Codex read or a Claude sign-in finish (exchange, reconnect, re-read) can run long.
   ['agentSession.mcp', 90_000],
-  ['agentSession.restartContinue', AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS]
+  ['agentSession.restartContinue', AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS],
+  ['agentSession.recap', AGENT_SESSION_RECAP_TIMEOUT_MS]
 ])

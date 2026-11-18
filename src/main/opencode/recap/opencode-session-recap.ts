@@ -11,6 +11,8 @@ import { createOpenCodeTextTaskHttp } from '../text-tasks/opencode-text-task-htt
 import { waitForProcessExitUntil } from '../../provider-process/provider-process-exit-deadline'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { AGENT_SESSION_RECAP_TIMEOUT_MS } from '../../../shared/agent-session/conversation-context/agent-session-recap-timeout'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { writeStructuredAgentSessionOrcaNote } from '../../native-chat/agent-session-wire/structured-agent-session-orca-note'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
 
@@ -79,7 +81,8 @@ async function closeServer(child: ChildProcess, exited: Promise<void>): Promise<
   if (child.exitCode === null && child.signalCode === null) {
     child.kill()
   }
-  await exited.catch(() => {})
+  // A killed child still owes its close; bound the reap so a wedged exit can't stall the request.
+  await waitForProcessExitUntil(exited, SERVER_CLOSE_GRACE_MS)
 }
 
 function spawnServer(binary: string, env: NodeJS.ProcessEnv, signal: AbortSignal): ChildProcess {
@@ -89,7 +92,9 @@ function spawnServer(binary: string, env: NodeJS.ProcessEnv, signal: AbortSignal
     env,
     stdio: ['pipe', 'pipe', 'ignore']
   })
-  signal.addEventListener('abort', () => child.kill(), { once: true })
+  const kill = () => child.kill()
+  signal.addEventListener('abort', kill, { once: true })
+  child.once('close', () => signal.removeEventListener('abort', kill))
   return child
 }
 
@@ -103,14 +108,18 @@ async function generateOnPrivateServer(input: {
   const env = { ...input.env, OPENCODE_PASSWORD: password }
   let lastError: unknown
   for (const binary of input.binaries) {
-    const signal = AbortSignal.any([input.signal, AbortSignal.timeout(SERVER_READY_TIMEOUT_MS)])
-    const child = spawnServer(binary, env, signal)
+    // The deadline covers the readiness read only; a ready child lives for the whole
+    // generate below, so it is never wired to `ready`.
+    const ready = AbortSignal.timeout(SERVER_READY_TIMEOUT_MS)
+    const child = spawnServer(binary, env, input.signal)
     const exited = new Promise<void>((resolve) => child.once('close', () => resolve()))
     // Any readiness failure (absent binary, timeout, early exit) tries the next binary.
-    const url = await readServerUrl(child, signal).catch((error: unknown) => {
-      lastError = error
-      return null
-    })
+    const url = await readServerUrl(child, AbortSignal.any([input.signal, ready])).catch(
+      (error: unknown) => {
+        lastError = error
+        return null
+      }
+    )
     if (url === null) {
       await closeServer(child, exited)
       continue
@@ -146,13 +155,12 @@ export async function recapStructuredOpenCodeSession(
   if (!record) {
     throw new OpenCodeRecapError('This chat is no longer available')
   }
-  const binaries = [
-    record.provider,
-    record.provider === 'opencode2' ? 'opencode' : 'opencode2'
-  ].filter((name) => name === 'opencode' || name === 'opencode2')
-  if (binaries.length === 0) {
+  if (record.provider !== 'opencode2' && record.provider !== 'opencode') {
     throw new OpenCodeRecapError('/recap is available for OpenCode chats')
   }
+  // The provider's own name first; the sibling binary may be the same release under another alias.
+  const binaries =
+    record.provider === 'opencode2' ? ['opencode2', 'opencode'] : ['opencode', 'opencode2']
   const nativeId = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle.nativeId
   if (!nativeId) {
     throw new OpenCodeRecapError('Nothing to recap yet')
@@ -165,15 +173,28 @@ export async function recapStructuredOpenCodeSession(
           managedAccounts: getManagedDataAccountService(),
           baseEnvironment: process.env
         })
+  // One deadline bounds generation, shutdown and the note append, so the request's own
+  // timeout never fires over a stored note the caller was told failed.
+  const deadline = AbortSignal.timeout(AGENT_SESSION_RECAP_TIMEOUT_MS - 6_000)
   const text = await generateOnPrivateServer({
     binaries,
     env,
     sessionId: nativeId,
-    signal: AbortSignal.timeout(120_000)
+    signal: deadline
   })
-  await writeStructuredAgentSessionOrcaNote(host, sessionId, `recap:${randomUUID()}`, {
+  // The append can't take the signal, so an abandoned wait reconciles its real settlement:
+  // a note that stored anyway still reports success, a lost note reports its own error.
+  const appended = writeStructuredAgentSessionOrcaNote(host, sessionId, `recap:${randomUUID()}`, {
     kind: 'status',
     text
   })
+  try {
+    await waitForPromiseWithSignal(appended, deadline)
+  } catch (error) {
+    if (!deadline.aborted) {
+      throw error
+    }
+    await appended
+  }
   return { text }
 }
