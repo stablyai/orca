@@ -1,4 +1,4 @@
-import React, { useCallback, useId, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -40,7 +40,24 @@ export function SidebarNameDialog({
   const [submitting, setSubmitting] = useState(false)
   const [previousOpenState, setPreviousOpenState] = useState({ open, initialName })
   const mountedRef = useRef(true)
+  const sessionRef = useRef(0)
   const trimmedName = name.trim()
+
+  useEffect(() => {
+    if (!open) {
+      sessionRef.current += 1
+    }
+  }, [open])
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
+        sessionRef.current += 1
+      }
+      onOpenChange(nextOpen)
+    },
+    [onOpenChange]
+  )
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
     // Track content attachment so late saves cannot update closed dialog state.
@@ -67,24 +84,25 @@ export function SidebarNameDialog({
       if (!trimmedName || submitting) {
         return
       }
+      const session = sessionRef.current
       setSubmitting(true)
       try {
         await onSubmit(trimmedName)
-        if (mountedRef.current) {
-          onOpenChange(false)
+        if (mountedRef.current && sessionRef.current === session) {
+          handleOpenChange(false)
         }
       } catch (error) {
         console.error('Failed to save sidebar name:', error)
-        if (mountedRef.current) {
+        if (mountedRef.current && sessionRef.current === session) {
           setSubmitting(false)
         }
       }
     },
-    [onOpenChange, onSubmit, submitting, trimmedName]
+    [handleOpenChange, onSubmit, submitting, trimmedName]
   )
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         ref={handleDialogContentRef}
         className="max-w-sm sm:max-w-sm"
@@ -118,7 +136,7 @@ export function SidebarNameDialog({
               variant="outline"
               size="sm"
               className="text-xs"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
             >
               {t('auto.components.sidebar.ProjectGroupNameDialog.d99a034073', 'Cancel')}
             </Button>
