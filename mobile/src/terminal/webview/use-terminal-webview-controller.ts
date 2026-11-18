@@ -217,7 +217,7 @@ export function useTerminalWebViewController(
     armWebReadyWatchdog()
   }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
 
-  useTerminalDocumentSettingsSync(postMessage, terminalTheme, hostSettings)
+  const hostSettingsRef = useTerminalDocumentSettingsSync(postMessage, terminalTheme, hostSettings)
 
   // The document ignores a repeat of what it already shows, so one effect can resend both.
   useEffect(() => {
@@ -264,7 +264,7 @@ export function useTerminalWebViewController(
           oscLinks,
           kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(kittyFlags),
           terminalTheme,
-          ...hostSettings,
+          ...hostSettingsRef.current,
           fontScale: textScale,
           fontStyle,
           preserveScroll,
@@ -309,7 +309,7 @@ export function useTerminalWebViewController(
       promises,
       sendToDocument,
       terminalTheme,
-      hostSettings,
+      hostSettingsRef,
       textScale,
       fontStyle,
       writeCoalescer
