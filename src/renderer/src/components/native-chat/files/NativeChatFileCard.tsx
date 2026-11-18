@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
 import { cn } from '@/lib/class-names'
 import { ChangedFileOpenIcon, type FileOpenGlyph } from '@/lib/files/open/ChangedFileOpenIcon'
 

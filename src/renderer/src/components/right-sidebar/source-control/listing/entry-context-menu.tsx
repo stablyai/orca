@@ -167,7 +167,8 @@ export function SourceControlEntryContextMenu({
         </ContextMenuItem>
         <ContextMenuSeparator />
         <OpenInContextSubmenu
-          path={absolutePath}
+          // A deleted entry has no file for another app to open.
+          path={hasWorkingTreeFile ? absolutePath : undefined}
           workspaceId={currentWorktreeId}
           owner={revealOwner}
         />
