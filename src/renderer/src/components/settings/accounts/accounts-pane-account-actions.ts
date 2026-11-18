@@ -181,7 +181,7 @@ export function createClaudeAccountActionRunner(
     const previousActiveAccountId = getProviderAccountActiveIdForView(claudeAccounts, actionRuntime)
     setClaudeAction(action)
     try {
-      const next = await operation()
+      const { runningSessions, ...next } = await operation()
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
@@ -211,7 +211,8 @@ export function createClaudeAccountActionRunner(
           owner: accountOwner,
           target: actionRuntime,
           before: { state: claudeAccounts, accountId: previousActiveAccountId },
-          after: { state: next, accountId: nextActiveAccountId }
+          after: { state: next, accountId: nextActiveAccountId },
+          ...(runningSessions ? { hostMove: runningSessions } : {})
         }).then((outcome) => {
           if (outcome === 'show-confirmation') {
             showUpdatedToast()
