@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   readClaudeOAuthCredentials,
@@ -5,11 +6,19 @@ import {
   resolveClaudeOAuthCredentialReadOptions
 } from './claude-oauth-credentials'
 import { fetchClaudeOAuthUsage } from './claude-oauth-usage-request'
+import { readClaudeSettingsProxy } from './claude-settings-proxy'
 import { classifyClaudeOAuthUsageError } from './claude-usage-error-classification'
 import { OAuthUsageError } from './claude-oauth-usage-error'
 import type { ClaudeRateLimitFetchOptions } from './claude-usage-fetch-options'
 import { abortedClaudeRateLimitResult, makeClaudeUsageResult } from './claude-usage-result'
 import { CLAUDE_PROFILE_MISSING_MESSAGE } from '../../../../shared/agent-accounts/claude/claude-profile-routing'
+import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import {
+  readUserClaudeConfigDir,
+  resolveClaudeDefaultHome
+} from '../../../claude-accounts/profiles/claude-profile-paths'
 
 /** Usage observes the account; only a user-started Claude process may refresh its login. */
 export async function fetchActiveClaudeRateLimits(
@@ -60,7 +69,11 @@ export async function fetchActiveClaudeRateLimits(
     )
   }
   try {
-    const usage = await fetchClaudeOAuthUsage(credentials.token, options?.signal)
+    const usage = await fetchClaudeOAuthUsage(
+      credentials.token,
+      options?.signal,
+      await readAccountProxy(options?.authPreparation)
+    )
     // Name the login a reading came from so its plan never follows another account's reading.
     return usage.status === 'ok'
       ? {
@@ -103,6 +116,21 @@ export async function fetchActiveClaudeRateLimits(
       }
     )
   }
+}
+
+/** The proxy this account's own Claude uses, from the same config folder its login is read from. */
+async function readAccountProxy(
+  authPreparation: ClaudeRuntimeAuthPreparation | undefined
+): Promise<NetworkProxySettings | null> {
+  // A WSL guest's proxy address may not resolve from the Windows host.
+  if (authPreparation?.runtime === 'wsl') {
+    return null
+  }
+  const configDir =
+    authPreparation?.configDir ??
+    getClaudeProfileRouter()?.systemDefaultHome() ??
+    resolveClaudeDefaultHome(homedir(), readUserClaudeConfigDir(process.env))
+  return readClaudeSettingsProxy(configDir)
 }
 
 // Mirrors Claude Code's own refreshability check; anything else needs a new sign-in.
