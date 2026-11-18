@@ -108,4 +108,4 @@
 4 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
 24 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 5 src/main/sqlite/sync-database.ts
-14 src/main/sqlite/versioned-cache-database.ts
+13 src/main/sqlite/versioned-cache-database.ts

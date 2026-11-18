@@ -34,15 +34,13 @@ function cachePath(): string {
 
 describe('RowCacheWalCheckpoints', () => {
   it('hands checkpoints back to the cache connection when the worker fails', () => {
-    const pragmas: string[] = []
-    const original = SyncDatabase.prototype.pragma
-    vi.spyOn(SyncDatabase.prototype, 'pragma').mockImplementation(function (
-      this: SyncDatabase,
-      sql,
-      options
-    ) {
-      pragmas.push(sql)
-      return original.call(this, sql, options)
+    const opens: string[] = []
+    const original = SyncDatabase.prototype.exec
+    vi.spyOn(SyncDatabase.prototype, 'exec').mockImplementation(function (this: SyncDatabase, sql) {
+      if (sql.includes('journal_size_limit')) {
+        opens.push(sql)
+      }
+      return original.call(this, sql)
     })
     const worker = new FakeWorker()
     const path = cachePath()
@@ -53,14 +51,17 @@ describe('RowCacheWalCheckpoints', () => {
 
     cache.write([{ key: 'a', json: '"1"' }])
     // The commit leaves its checkpoint to the worker instead of running one itself.
-    expect(pragmas).toContain('wal_autocheckpoint = 0')
+    expect(opens).toHaveLength(1)
+    expect(opens[0]).toContain('wal_autocheckpoint = 0')
     expect(worker.posted).toEqual([{ id: expect.any(Number), path, force: false }])
 
     worker.emit('error', new Error('worker crashed'))
-    expect(pragmas.at(-1)).toBe('wal_autocheckpoint = 1000')
-    // A failed worker is never used again; later commits checkpoint on their own.
+    // A failed worker is never used again: the cache reopens with SQLite's own checkpointing.
     cache.write([{ key: 'b', json: '"2"' }])
+    expect(opens).toHaveLength(2)
+    expect(opens[1]).not.toContain('wal_autocheckpoint')
     expect(worker.posted).toHaveLength(1)
+    expect(cache.load(() => null)).toMatchObject({ kind: 'rows', rows: [{ key: 'b' }] })
     cache.close()
   })
 

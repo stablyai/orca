@@ -304,30 +304,28 @@ export class KeyedJsonRowCache {
     if (this.db) {
       return this.db
     }
-    const db = openVersionedCacheDatabase(this.path, {
-      version: this.options.schemaVersion,
-      // The caller's budget covers opening too: schema setup writes, so it can meet the lock.
-      busyTimeoutMs,
-      removal: 'fail-fast',
-      beforeRemove: () => this.walCheckpoints.assertRemovable(this.path),
-      // Rows can hold prompts, PR titles and notification ids; keep them user-only.
-      directoryMode: 0o700,
-      sql: SCHEMA_SQL
-    })
-    hardenSqliteDatabaseFiles(this.path)
-    this.db = db
-    const autoCheckpoint = Number(db.pragma('wal_autocheckpoint', { simple: true }))
-    this.walRegistration = this.walCheckpoints.attach(this.path, () => {
-      // Only a live registration is restored, and closeDatabase detaches before it drops `db`.
-      try {
-        db.pragma(`wal_autocheckpoint = ${autoCheckpoint}`)
-      } catch {
-        // A failing handle is rebuilt or closed by its next operation.
-      }
-    })
-    if (this.walRegistration !== null) {
-      db.pragma('wal_autocheckpoint = 0')
+    // Handing checkpoints back closes the connection; the next operation reopens it checkpointing.
+    const registration = this.walCheckpoints.attach(this.path, () => this.closeDatabase())
+    let db: SyncDatabase
+    try {
+      db = openVersionedCacheDatabase(this.path, {
+        version: this.options.schemaVersion,
+        // The caller's budget covers opening too: schema setup writes, so it can meet the lock.
+        busyTimeoutMs,
+        removal: 'fail-fast',
+        beforeRemove: () => this.walCheckpoints.assertRemovable(this.path),
+        // Rows can hold prompts, PR titles and notification ids; keep them user-only.
+        directoryMode: 0o700,
+        sql: SCHEMA_SQL,
+        walAutocheckpoint: registration === null ? undefined : 0
+      })
+    } catch (error) {
+      this.walCheckpoints.detach(registration)
+      throw error
     }
+    this.db = db
+    this.walRegistration = registration
+    hardenSqliteDatabaseFiles(this.path)
     // A fresh connection cannot vouch for a baseline read through an earlier one.
     this.dataVersion = undefined
     this.stored = new Map()

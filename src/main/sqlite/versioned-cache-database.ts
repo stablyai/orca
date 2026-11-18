@@ -21,6 +21,8 @@ export type VersionedCacheDatabaseSchema = {
   removal?: CacheDatabaseRemoval
   // Throws when the file can't be removed yet (another thread still holds it).
   beforeRemove?: () => void
+  // 0 when another thread checkpoints this connection's WAL; SQLite's default otherwise.
+  walAutocheckpoint?: number
 }
 
 export type CacheDatabaseRemoval = 'retry' | 'fail-fast'
@@ -91,8 +93,9 @@ function openWithPragmas(
   path: string,
   {
     pageSize,
-    busyTimeoutMs = 5000
-  }: Pick<VersionedCacheDatabaseSchema, 'pageSize' | 'busyTimeoutMs'>
+    busyTimeoutMs = 5000,
+    walAutocheckpoint
+  }: Pick<VersionedCacheDatabaseSchema, 'pageSize' | 'busyTimeoutMs' | 'walAutocheckpoint'>
 ): SyncDatabase {
   const db = new SyncDatabase(path)
   try {
@@ -105,8 +108,9 @@ function openWithPragmas(
     db.pragma('auto_vacuum = INCREMENTAL')
     // WAL readers see committed state while writers publish atomically.
     db.pragma('journal_mode = WAL')
-    db.pragma('synchronous = NORMAL')
-    db.pragma('journal_size_limit = 8388608')
+    const autoCheckpoint =
+      walAutocheckpoint === undefined ? '' : ` PRAGMA wal_autocheckpoint = ${walAutocheckpoint};`
+    db.exec(`PRAGMA synchronous = NORMAL; PRAGMA journal_size_limit = 8388608;${autoCheckpoint}`)
     return db
   } catch (error) {
     db?.close()
