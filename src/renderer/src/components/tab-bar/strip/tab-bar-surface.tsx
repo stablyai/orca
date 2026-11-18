@@ -34,8 +34,7 @@ import type { BotGroup } from '../../../../../shared/bots/bot-group'
 import { BotGroupNewThreadMenuItems } from '../../bots/BotGroupNewThreadMenuItems'
 import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
-import { useAppStore } from '../../../store'
-import { selectClientHostedBrowserRow } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
+import { activateTabStripEntry } from './tab-strip-entry-activation'
 import { buildTabDropIndicators } from '../model/tab-bar-item-model'
 import type { TabStripCondense } from './use-tab-strip-condense'
 import { TabStripDensityContext } from './tab-strip-density-context'
@@ -133,28 +132,6 @@ export function renderTabBarSurface(
     hiddenIds.size === 0
       ? allClientHostedBrowserRows
       : allClientHostedBrowserRows.filter((row) => !hiddenIds.has(row.browserPageId))
-  const activateEntry = (entry: TabStripEntry): void => {
-    if (entry.kind === 'paired') {
-      useAppStore.getState().focusGroup(worktreeId, resolvedGroupId)
-      selectClientHostedBrowserRow({
-        worktreeId,
-        browserPageId: entry.row.browserPageId,
-        groupId: resolvedGroupId,
-        groupActiveTabIdAtSelection: props.groupActiveTabId ?? null
-      })
-      return
-    }
-    const { item } = entry
-    if (item.type === 'terminal') {
-      itemActions.activateTerminal(item.id)
-    } else if (item.type === 'browser') {
-      itemActions.activateBrowserTab(item.id)
-    } else if (item.type === 'agent-session' || item.type === 'room') {
-      itemActions.activateAgentSession(item.id)
-    } else {
-      itemActions.activateFile(item.id)
-    }
-  }
   const {
     tabStripRef,
     tabStripOverflowState,
@@ -296,7 +273,15 @@ export function renderTabBarSurface(
             worktreeId={worktreeId}
             groupId={resolvedGroupId}
             surface={condense.surface}
-            onSelect={activateEntry}
+            onSelect={(entry) =>
+              activateTabStripEntry({
+                entry,
+                worktreeId,
+                groupId: resolvedGroupId,
+                groupActiveTabId: props.groupActiveTabId ?? null,
+                itemActions
+              })
+            }
           />
         ) : null}
         {newTabButtonFolded ? null : (
