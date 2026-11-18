@@ -153,6 +153,10 @@ export class UtilityWorkerHost {
     }
     const worker = host.workers.get(event.id)
     if (!worker) {
+      // No one will consume it, so its relay charge goes back at once.
+      if (event.type === 'message' && event.seq !== undefined && !event.more) {
+        this.send(host, { type: 'ack', seq: event.seq })
+      }
       return
     }
     // A worker that dies unasked before saying anything could not load here; run it in-process.

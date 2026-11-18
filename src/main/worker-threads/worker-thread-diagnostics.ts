@@ -125,7 +125,7 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
     }
     Object.assign(data, journalReaderRequestData(readJournalReaderRequests()))
     heaps.slice(0, REPORTED_WORKERS).forEach(({ entry, heap }, index) => {
-      const slot = ledger.get(entry.threadId)
+      const slot = sent.get(entry.threadId)
       Object.assign(data, {
         [`w${index}_role`]: entry.role,
         [`w${index}_heapMB`]: Math.round(heap / MB),
