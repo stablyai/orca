@@ -99,6 +99,15 @@ public enum SyntheticMouseClickDelivery {
         }
     }
 
+    /// For a target that never took focus: a click goes to the topmost window at the point, focused or not. A target that
+    /// is gone while another window is hit counts as dismissed, so a final press that closes it is not a failure; an empty
+    /// hit test while it is still on screen proves nothing, so it is unavailable.
+    public static func topmostObservation(hit: RecipientObservation, target: Recipient, targetOnScreen: Bool) -> RecipientObservation {
+        guard hit != .focused(target) else { return hit }
+        if !targetOnScreen { return .dismissed }
+        return hit == .dismissed ? .unavailable : hit
+    }
+
     public static func uniqueWindowCandidate<Candidate>(
         from candidates: [Candidate],
         matching predicate: (Candidate) -> Bool

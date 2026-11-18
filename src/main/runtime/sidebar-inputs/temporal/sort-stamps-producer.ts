@@ -1,4 +1,7 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type {
   AgentPhase,
@@ -83,6 +86,11 @@ export class SortStampsProducer {
   noteTerminalStarted(worktreeId: string, hostId: ExecutionHostId | undefined): void {
     const sshHostId = parseExecutionHostId(hostId)?.kind === 'ssh' ? (hostId ?? null) : null
     this.stamp({ worktreeId, sshHostId }, { kind: 'terminal-started' })
+  }
+
+  /** News outside any pane, as a member's reply in a group room: stamped and raised as a bell is. */
+  noteWorkspaceNews(worktreeId: string): void {
+    this.stamp({ worktreeId, sshHostId: null }, { kind: 'bell' })
   }
 
   /** A record write may have moved an unread flag; a Done beside a Working pane re-tiers on it. */

@@ -10,14 +10,12 @@ import {
   type FileLinkActions,
   type TerminalFileLinkActionDeps
 } from '@/components/terminal-pane/links/files/terminal-file-link-actions'
-import { routeNativeChatHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { useAppStore } from '../../../../store/index'
 import { resolveNativeChatFileLink, type NativeChatResolvedFileLink } from './native-chat-file-link'
 import type { NativeChatFileLinkContext } from './native-chat-file-link-context'
-import {
-  canNativeChatOpenOwnedBrowser,
-  resolveNativeChatHttpLinkSourceOwner
-} from './native-chat-http-link-source-owner'
+import { resolveNativeChatHttpLinkSourceOwner } from './native-chat-http-link-source-owner'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { openNativeChatWebLink } from './native-chat-web-link-actions'
 import { showFileLinkOpenFailureToast } from '@/lib/files/open/file-link-open-failure-toast'
 import type { Translate } from '@/i18n/use-translate'
@@ -32,7 +30,7 @@ export function resolveNativeChatHttpLinkRouting(
     destinations: httpLinkActionDestinationsFor(
       state.settings,
       sourceOwner,
-      canNativeChatOpenOwnedBrowser(state, worktreeId, sourceOwner)
+      canOpenRemoteLinkInWorkspaceBrowser(state, worktreeId, sourceOwner)
     )
   }
 }

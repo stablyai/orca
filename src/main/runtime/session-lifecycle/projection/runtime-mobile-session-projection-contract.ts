@@ -11,7 +11,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedTab
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import type {
   RuntimeLeafRecord,
@@ -20,6 +20,7 @@ import type {
 import type { TitleDisplayClear } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 
 export type RuntimeMobileSessionProjectionHost = {
+  getRendererStatus?(paneKey: string): { row: AgentStatusEntry | undefined } | undefined
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   leaves: ReadonlyMap<string, RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>

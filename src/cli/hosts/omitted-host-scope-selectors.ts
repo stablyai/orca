@@ -2,7 +2,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId,
   type ParsedExecutionHost
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import type { RuntimeListingHostScope } from '../../shared/execution-host/runtime-listing-host-scope'
 import { findEnvironmentByName } from './host-selector-alternatives'
 

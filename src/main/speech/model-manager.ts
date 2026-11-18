@@ -14,7 +14,7 @@ import {
 import { SpeechModelDownloadTransport } from './speech-model-download-transport'
 import { hasSpeechModelFiles } from './speech-model-files'
 import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { removeModelDownloadStaging } from './speech-model-download-cleanup'
 import { previousSpeechModelDir, swapInSpeechModelDir } from './speech-model-dir-swap'
 

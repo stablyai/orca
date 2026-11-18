@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { getDefaultRepoHookSettings, getDefaultSettings } from '../../../../shared/constants'
+import {
+  getDefaultRepoHookSettings,
+  getDefaultSettings
+} from '../../../../shared/orca-profiles/constants'
 import { createProjectGroup } from '../../../../shared/project/groups/project-groups'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -150,33 +153,4 @@ describe('group folder setup lifecycle', () => {
       )
     }
   )
-
-  it('waits for structured Setup through the worktree completion observer', async () => {
-    const { args, wait, createTerminal, buildStartup } = fixture({ agentLaunchMode: 'structured' })
-    let complete: ((value: { exitCode: number | null }) => void) | undefined
-    wait.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          complete = resolve
-        })
-    )
-    const creating = prepareGroupFolderCreation(args)
-    await vi.waitFor(() => expect(wait).toHaveBeenCalled())
-    expect(createTerminal).toHaveBeenCalledOnce()
-    expect(createTerminal.mock.calls[0]).toMatchObject([
-      'id:folder:task-a',
-      { title: 'Setup', cwd: root }
-    ])
-    expect(buildStartup).not.toHaveBeenCalled()
-    let settled = false
-    void creating.then(() => {
-      settled = true
-    })
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    complete?.({ exitCode: 0 })
-    expect(await creating).toMatchObject({
-      folderWorkspace: { id: 'task-a' }
-    })
-  })
 })

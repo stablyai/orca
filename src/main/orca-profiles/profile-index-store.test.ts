@@ -17,7 +17,7 @@ import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type OrcaProfileIndex
-} from '../../shared/orca-profiles'
+} from '../../shared/orca-profiles/orca-profiles'
 
 const testState = { dir: '' }
 
@@ -129,6 +129,17 @@ describe('profile index store', () => {
 
     expect(existsSync(activeProfile.dataFile)).toBe(false)
     expect(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8')).toContain('legacy')
+  })
+
+  it('supersedes a sign-in still in flight before the switch is published', async () => {
+    const { createLocalOrcaProfile, setActiveOrcaProfile } = await loadProfileIndexStore()
+    const attempts = await import('./cloud-auth/profile-cloud-connect-attempts')
+    const created = createLocalOrcaProfile({ name: 'Work' })
+    const attempt = attempts.beginCloudConnectAttempt()
+
+    setActiveOrcaProfile(created.profile.id)
+
+    expect(attempts.isCloudConnectAttemptSuperseded(attempt)).toBe(true)
   })
 
   const posixIt = process.platform === 'win32' ? it.skip : it

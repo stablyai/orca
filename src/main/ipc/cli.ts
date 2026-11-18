@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { CliInstallStatus } from '../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
 import { resolveAppImageCacheKey } from '../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import { CliInstaller } from '../cli/cli-installer'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
@@ -94,6 +94,17 @@ async function hydrateLocalShellPathForCli(force = false): Promise<void> {
   }
 }
 
+/** Status without the stale-AppImage repair, which would re-register the command. */
+export async function readLocalCliInstallStatus(): Promise<CliInstallStatus> {
+  await hydrateLocalShellPathForCli()
+  return new CliInstaller().getStatus()
+}
+
+export async function removeLocalCliRegistration(): Promise<CliInstallStatus> {
+  await hydrateLocalShellPathForCli()
+  return runLocalCliRegistrationOperation(() => new CliInstaller().remove())
+}
+
 export function registerCliHandlers(): void {
   let staleAppImageRepairAttempt: {
     promise: Promise<CliInstallStatus | null>
@@ -143,10 +154,7 @@ export function registerCliHandlers(): void {
     return runLocalCliRegistrationOperation(() => new CliInstaller().install())
   })
 
-  ipcMain.handle('cli:remove', async (): Promise<CliInstallStatus> => {
-    await hydrateLocalShellPathForCli()
-    return runLocalCliRegistrationOperation(() => new CliInstaller().remove())
-  })
+  ipcMain.handle('cli:remove', removeLocalCliRegistration)
 
   ipcMain.handle(
     'cli:getWslInstallStatus',

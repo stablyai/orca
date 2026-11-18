@@ -1,4 +1,4 @@
-import { asyncQuestionSourceScope as questionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
+import { useMobileStructuredAsyncQuestions } from './use-mobile-structured-async-questions'
 import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -8,10 +8,7 @@ import {
   runningStructuredAgentSessionTurnId,
   structuredAgentSessionQueueSendsNext
 } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
-import {
-  actionableStructuredApproval,
-  actionableStructuredQuestion
-} from '../input/prompts/mobile-structured-actionable-prompt'
+import { mobileStructuredLinkedPrompts } from '../input/prompts/mobile-structured-linked-prompts'
 import {
   projectStructuredPermission,
   projectStructuredQuestion
@@ -20,20 +17,17 @@ import type {
   MobileStructuredAgentSessionArgs,
   StructuredMobileSession
 } from './mobile-structured-agent-session-contract'
-import type { MobileNativeChatVisualSource } from '../visual/mobile-native-chat-visual-read'
+import { useMobileNativeChatVisualSource } from '../visual/mobile-native-chat-visual-read'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredStopPress } from '../composer/delivery/use-mobile-structured-stop-press'
-import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
+import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-execution'
 import { useMobileStructuredPromptResponses } from '../input/prompts/use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
 import { useHostModelCatalogCache } from '../input/session-options/mobile-host-model-catalog-query'
 import { useMobileStructuredCommandController } from '../composer/commands/use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from '../input/session-options/use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion/use-mobile-structured-agent-turn-timing'
-import {
-  pendingStructuredPromptIdentity,
-  useMobileStructuredRequestCancel
-} from './mobile-structured-agent-session-cancel'
+import { useMobileStructuredRequestCancel } from './mobile-structured-agent-session-cancel'
 import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import { useMobileStructuredSendWithOutcome } from '../composer/delivery/use-mobile-structured-send-with-outcome'
 import { useMobileStructuredQueuedMessageControls } from '../input/queued-messages/use-mobile-structured-queued-message-controls'
@@ -50,6 +44,7 @@ import {
   useMobileStructuredThreadGoalSend
 } from '../input/tasks/use-mobile-structured-thread-goal'
 import { useMobileStructuredTranscript } from '../transcript/ingestion/use-mobile-structured-transcript'
+import { useMobileStructuredMcpPanel } from '../mcp/use-mobile-structured-mcp-panel'
 import { useMobileStructuredAgentRewind } from './use-mobile-structured-agent-rewind'
 import { useMobileNativeChatUsageLimit } from '../status/use-mobile-native-chat-usage-limit'
 
@@ -72,9 +67,7 @@ export function useMobileStructuredAgentSession(
   } = args
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
-  const commandsWait = queueCapable && hostSupport?.queuedCommands === true
   const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
-  const hostStopsConversation = hostSupport?.conversationStop ?? null
   const sessionKey = structuredChatTranscriptIdentity(sourceIdentity, agent, sessionId)
   const commandPendingRef = useRef(false)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
@@ -110,10 +103,17 @@ export function useMobileStructuredAgentSession(
     unloadedTurnRevisions: state.unloadedTurnRevisions,
     hostSupport
   })
-  const sendController = useMobileStructuredCommandController(options)
   const { contextUsageSupport, ...optionFields } = options
 
+  const { status, epoch } = state
+  const linked = useMemo(
+    () => mobileStructuredLinkedPrompts(state, args.itemLink, sessionId),
+    [state, args.itemLink, sessionId]
+  )
+  const { approvalPrompt, questionPrompt } = linked
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
+    approvalItemId: approvalPrompt?.itemId,
+    questionItemId: questionPrompt?.itemId,
     stateRef,
     mutate,
     questionAnswersSupported: hostSupport?.questionAnswers ?? null,
@@ -153,7 +153,7 @@ export function useMobileStructuredAgentSession(
     sessionKey,
     turnId,
     isWorking,
-    stopsConversation: hostStopsConversation === true
+    stopsConversation: hostSupport?.conversationStop === true
   })
   const turnIndicator = useMobileStructuredTurnIndicator({
     state,
@@ -173,8 +173,9 @@ export function useMobileStructuredAgentSession(
     workingStartedAt: turnTiming.workingStartedAt,
     working: isWorking || queueSendsNext,
     mutate,
-    commands: sendController
+    commands: useMobileStructuredCommandController(options)
   })
+  const mcp = useMobileStructuredMcpPanel(args, sessionKey, goal.commands)
   const sendWithOutcomeUngated = useMobileStructuredSendWithOutcome({
     agent,
     client,
@@ -182,26 +183,20 @@ export function useMobileStructuredAgentSession(
     enabled,
     queueCapable,
     queueFollowUps,
-    commandsWait,
+    commandsWait: queueCapable && hostSupport?.queuedCommands === true,
     stateRef,
     stopping: turnIndicator.stopping,
     ...sends,
     commandPending: commandPendingRef,
     onClearSent: transcript.onClearSent,
     sendsOut,
-    controller: goal.commands,
+    controller: mcp.commands,
     sessionCommands: args.sessionCommands,
     onSendError,
     queueSendsNext,
     sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
-  const { items, currentRequests, actionablePromptIds, status, epoch } = state
-  // Prefer host actionability: ended-agent prompts must receive no answer.
-  const [approvalPrompt, questionPrompt] = useMemo(() => {
-    const prompts = { items, currentRequests, actionablePromptIds }
-    return [actionableStructuredApproval(prompts), actionableStructuredQuestion(prompts)] as const
-  }, [items, currentRequests, actionablePromptIds])
   const commandRefusalCauses = useMemo(
     () => ({
       working: turnId !== null || queueSendsNext,
@@ -257,15 +252,14 @@ export function useMobileStructuredAgentSession(
 
   return {
     ...optionFields,
+    journal: { items: state.items, submissions: state.submissions },
     contextUsage: useMobileStructuredContextUsage(state.items, contextUsageSupport, state.epoch),
-    visualSource: useMemo<MobileNativeChatVisualSource | null>(
-      () => (client && sessionId ? { client, sessionId } : null),
-      [client, sessionId]
-    ),
-    asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
+    visualSource: useMobileNativeChatVisualSource(client, sessionId),
+    ...useMobileStructuredAsyncQuestions(args, epoch),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     submissions: state.submissions,
     session: {
+      itemNavigation: savedAt === null ? linked.navigation : null,
       messages,
       status,
       // A stored copy can't answer "is this ask still open?" until a live frame confirms it.
@@ -289,7 +283,7 @@ export function useMobileStructuredAgentSession(
     holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
-      requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
+      requestCancel(prompt ?? linked.promptIdentity),
     receipts,
     actionablePromptIds: state.actionablePromptIds,
     permission: projectStructuredPermission(approvalPrompt),
@@ -304,6 +298,7 @@ export function useMobileStructuredAgentSession(
       isWorking || queueSendsNext
     ),
     threadGoal: goal.threadGoal,
+    mcpPanel: mcp.mcpPanel,
     rewind,
     usageLimit
   }

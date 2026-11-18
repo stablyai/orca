@@ -6,8 +6,8 @@ import {
   getWorkspaceSourceProvider,
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../../../shared/new-workspace/workspace-source'
-import '../../../../../../shared/cross-platform-path'
-import '../../../../../../shared/execution-host'
+import '../../../../../../shared/file-access/cross-platform-path'
+import '../../../../../../shared/execution-host/execution-host'
 import '../../../../../../shared/project/groups/project-groups'
 import '../../../../../../shared/repository/repo-kind'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'

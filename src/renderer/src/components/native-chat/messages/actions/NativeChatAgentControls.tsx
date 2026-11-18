@@ -3,7 +3,7 @@ import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from '../rows/NativeChatMessageTimestamp'
-import { withoutNativeChatVisualDirectiveLines } from '../../../../../../shared/native-chat/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 
 export function NativeChatAgentControls({
   markdown,
@@ -21,8 +21,9 @@ export function NativeChatAgentControls({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    // Row chrome, not transcript: find skips it.
-    <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
+    // Row chrome, not transcript: find skips it. The row owns a minimum gap above it, so every answer
+    // gets at least this much: it collapses with the last block's bottom margin, and a larger one wins.
+    <div data-native-chat-find-skip className={cn('mt-3 flex items-center gap-1', className)}>
       {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. An image-only
           response has nothing to copy, so it has no Copy. */}
       {markdown.length > 0 ? (

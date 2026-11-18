@@ -6,7 +6,7 @@ import { lookupBackoffDelayMs } from '../../../source-control/hosted-review-refr
 import {
   getPRAutoRefreshCadence,
   type PRAutoRefreshCadence
-} from '../../../../shared/review-refresh-policy'
+} from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   aliasFromCandidate,
   refreshIntervalForCandidate,

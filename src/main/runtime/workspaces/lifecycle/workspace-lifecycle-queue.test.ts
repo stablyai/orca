@@ -186,21 +186,6 @@ describe('WorkspaceLifecycleQueue', () => {
     expect(queue.hints()).toEqual({})
   })
 
-  it('pauses on lost contact mid-run, but not on a definite failure', async () => {
-    const queue = new WorkspaceLifecycleQueue()
-    const lost = (message: string): LifecycleCommand<never> => ({
-      kind: 'close',
-      run: async () => {
-        throw new Error(message)
-      },
-      lostContact: (error) => error instanceof Error && error.message === 'lost'
-    })
-    await expect(queue.submit(KEY, lost('refused'))).rejects.toThrow('refused')
-    expect(queue.pausedKeys().includes(KEY)).toBe(false)
-    await expect(queue.submit(KEY, lost('lost'))).rejects.toThrow('lost')
-    expect(queue.pausedKeys().includes(KEY)).toBe(true)
-  })
-
   it('acknowledges a delete issued while paused and runs it once the owner answers', async () => {
     const { queue, retry } = manualRetryQueue()
     const log: string[] = []

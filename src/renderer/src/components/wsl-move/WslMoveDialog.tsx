@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import {
   cancelWslMove,
   wslMoveDialogLocked,
@@ -33,8 +33,8 @@ import {
 import { adoptWslMoveProgress } from './wsl-move-run-adoption'
 import { closeWslMoveDialog, reloadAfterWslMove } from './wsl-move-dialog-close'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
-import { useWslHostsEnabled } from '../sidebar/use-wsl-hosts-enabled'
-import { useConfirmationDialog } from '../confirmation-dialog-context'
+import { useWslHostsEnabled } from '../../runtime/hosts/wsl/use-wsl-hosts-enabled'
+import { useConfirmationDialog } from '../dismiss/confirmation/confirmation-dialog-context'
 import { useWslMoveQuitGuard } from './use-wsl-move-quit-guard'
 import { WslMovePreviewBody, wslMoveNotMovingLines } from './WslMovePreviewBody'
 import { WslMoveProgressBody } from './WslMoveProgressBody'

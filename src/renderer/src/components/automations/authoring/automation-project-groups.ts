@@ -1,7 +1,7 @@
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { getProjectIdentityKey } from '../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 

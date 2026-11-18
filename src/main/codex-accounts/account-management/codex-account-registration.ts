@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
@@ -100,7 +100,8 @@ export class CodexAccountRegistration {
 
   async reauthenticate(
     accountId: string,
-    options?: CodexAccountReauthenticateOptions
+    options?: CodexAccountReauthenticateOptions,
+    login: (managedHomePath: string) => Promise<void> = this.dependencies.login
   ): Promise<CodexRateLimitAccountsState> {
     const account = this.dependencies.selection.requireAccount(accountId)
     const managedHomePath =
@@ -119,7 +120,7 @@ export class CodexAccountRegistration {
       undefined,
       account.id
     )
-    await this.loginThroughStagingHome(managedHomePath, account.id)
+    await this.loginThroughStagingHome(managedHomePath, account.id, login)
     const identity = await this.dependencies.readIdentityFromHome(managedHomePath, account.id)
     if (!identity.email) {
       throw new Error('Codex login completed, but Orca could not resolve the account email.')
@@ -147,7 +148,7 @@ export class CodexAccountRegistration {
     )
 
     // Restore this runtime's selection while retaining current validation of other runtimes.
-    this.dependencies.store.updateSettings({
+    this.dependencies.selection.saveSettings({
       codexManagedAccounts: updatedAccounts,
       activeCodexManagedAccountId: activeSelection.host,
       activeCodexManagedAccountIdsByRuntime: activeSelection
@@ -161,7 +162,11 @@ export class CodexAccountRegistration {
   }
 
   // `codex login` revokes and deletes the home's current auth first, so only a finished login may replace it (#10795).
-  private async loginThroughStagingHome(managedHomePath: string, accountId: string): Promise<void> {
+  private async loginThroughStagingHome(
+    managedHomePath: string,
+    accountId: string,
+    login: (managedHomePath: string) => Promise<void>
+  ): Promise<void> {
     const stagingHomePath = join(managedHomePath, REAUTH_STAGING_DIR_NAME)
     removeStagingHome(stagingHomePath)
     mkdirSync(stagingHomePath, { recursive: true })
@@ -174,7 +179,7 @@ export class CodexAccountRegistration {
       }
     }
     try {
-      await this.dependencies.login(stagingHomePath)
+      await login(stagingHomePath)
       await this.dependencies.managedHomes.importAuthFromHome(
         stagingHomePath,
         managedHomePath,
@@ -232,7 +237,7 @@ export class CodexAccountRegistration {
     const settings = this.dependencies.store.getSettings()
     const selection = normalizeCodexRuntimeSelection(settings)
     const targetSelection = getCodexSelectionTargetForAccount(account)
-    this.dependencies.store.updateSettings({
+    this.dependencies.selection.saveSettings({
       codexManagedAccounts: [...settings.codexManagedAccounts, account],
       activeCodexManagedAccountId: targetSelection.runtime === 'host' ? account.id : selection.host,
       activeCodexManagedAccountIdsByRuntime: setSelectedCodexAccountIdForTarget(
@@ -247,7 +252,7 @@ export class CodexAccountRegistration {
       this.dependencies.runtimeHome.syncForCurrentSelection(targetSelection)
     } catch (error) {
       // Restore settings before caller cleanup removes the failed account's home.
-      this.dependencies.store.updateSettings({
+      this.dependencies.selection.saveSettings({
         codexManagedAccounts: settings.codexManagedAccounts,
         activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
         activeCodexManagedAccountIdsByRuntime: settings.activeCodexManagedAccountIdsByRuntime

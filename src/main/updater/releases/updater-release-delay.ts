@@ -1,6 +1,6 @@
 import { compareVersions } from './updater-fallback'
-import { updateDelayDaysToMs } from '../../../shared/update-delay'
-import type { DelayedUpdate } from '../../../shared/update-status-types'
+import { updateDelayDaysToMs } from '../../../shared/updater/update-delay'
+import type { DelayedUpdate } from '../../../shared/updater/update-status-types'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from '../lifecycle/updater-state'
 
 // Absorbs clock skew between this host and GitHub's feed timestamps.

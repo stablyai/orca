@@ -3,6 +3,7 @@ import {
   toSecureCertificateEndpoint
 } from '../../../../../shared/browser/navigation/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-main-frame-navigation'
+import { readGuestNavigationState } from '../../navigation/browser-guest-navigation-state'
 import { watchDecisionBlockedMainFrames } from '../../../sessions/requests/browser-session-request-decisions'
 import {
   BrowserManagerGuestPopupPolicy,
@@ -39,7 +40,13 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (!normalizeBrowserNavigationUrl(url)) {
         // Initial-src validation does not cover later navigations.
         event.preventDefault()
-        this.requestExternalAppLaunch(guest, url, () => initiatingFrameUrl(event.initiator))
+        this.requestExternalAppLaunch(
+          guest,
+          url,
+          () => initiatingFrameUrl(event.initiator),
+          // A null initiator is a browser-started load, e.g. a typed URL that redirects.
+          Boolean(event.initiator)
+        )
         return false
       }
       return true
@@ -145,6 +152,12 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     }
 
     let publishedUrl: string | null = null
+    // pushState with an unchanged address still adds a history entry the Back button must see.
+    let publishedHistory = ''
+    const readHistory = (): string => {
+      const history = readGuestNavigationState(guest)
+      return `${history.canGoBack}|${history.canGoForward}`
+    }
 
     const didNavigateHandler = (_event: Electron.Event, url: string): void => {
       // A redirect can still land on another origin.
@@ -152,6 +165,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         this.remoteTabFaviconUrlByGuestId.delete(guest.id)
       }
       publishedUrl = guest.getURL()
+      publishedHistory = readHistory()
       this.pendingNavigationByGuestId.delete(guest.id)
       // Committing makes the hidden error obsolete; a later abort must not restore it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
@@ -170,9 +184,11 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         return
       }
       const address = guest.getURL()
+      const history = readHistory()
       // replaceState reports here even when the address stays the same.
-      if (address !== publishedUrl) {
+      if (address !== publishedUrl || history !== publishedHistory) {
         publishedUrl = address
+        publishedHistory = history
         this.notifyBrowserGuestStateChanged(guest.id)
       }
     }

@@ -1,3 +1,4 @@
+import type { HostedProviderRequest } from './daemon-provider-process-protocol'
 import type { TerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
@@ -21,7 +22,7 @@ import type { PtyStartupIngressIntent } from '../../../shared/terminal/pty/ingre
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../shared/agent-session/agent-session-host-authority'
+} from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type * as HistorySeedProtocol from '../history/seed-transfer/terminal-history-seed-transfer-protocol'
 import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
 import type { TerminalSnapshot } from './terminal-snapshot'
@@ -240,6 +241,7 @@ export type TakePendingOutputResult = {
 }
 
 export type DaemonRequest =
+  | HostedProviderRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest

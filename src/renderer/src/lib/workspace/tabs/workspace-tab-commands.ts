@@ -1,19 +1,22 @@
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
-import { toVisibleTabType, type Tab } from '../../../../../shared/tab-types'
+import {
+  toVisibleTabType,
+  type Tab
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store/index'
 import {
   guardPinnedTabClose,
   resolvePinnedTabLabel
 } from '@/store/slices/tabs/closing/pinned-tab-close-guard'
-import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
+import { createWorkspaceTabCloseCommands } from '@/lib/workspace/tabs/close/workspace-tab-close-commands'
 import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
-import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
+import { captureWorkspaceEmptiedReaction } from '@/lib/workspace/tabs/close/workspace-emptied-reaction'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
-} from '@/hooks/ipc-tab-switch'
+} from '@/lib/workspace/tabs/ipc-tab-switch'
 import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import {
@@ -24,9 +27,10 @@ import {
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/workspace/floating-workspace-open-intent'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
-import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
-import { reorderTabInGroup } from '@/components/tab-group/tab-group-layout-owner-commands'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { isBotChatTab } from '@/components/bots/bot-workspace'
+import { getActiveTabNavOrder } from '@/lib/workspace/tabs/order/group-tab-order'
+import { reorderTabInGroup } from '@/runtime/workspace-layout/commands/tab-group-layout-owner-commands'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }
@@ -198,6 +202,9 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     const tab = target.tab
     if (command.context === 'terminal' && tab.contentType === 'terminal') {
       return false
+    }
+    if (isBotChatTab(tab)) {
+      return true
     }
     const commands = createWorkspaceTabCloseCommands({
       worktreeId: target.worktreeId,

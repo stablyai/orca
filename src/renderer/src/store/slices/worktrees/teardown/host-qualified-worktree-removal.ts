@@ -4,7 +4,7 @@ import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/cre
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getWorktreeOperationOwnerHostIds,
   resolveWorktreeOperationRoute,

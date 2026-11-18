@@ -3,7 +3,7 @@ import type { JournalSendAdmission } from './journal-send-admission'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
+import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import type {
   AgentJournalEpochReason,
   JournalEpochRow,
@@ -112,6 +112,7 @@ export type JournalWriterInputOperation =
   | { kind: 'queue-hold'; messageIds: readonly string[]; reason: QueuedMessageHoldReason }
   | { kind: 'queue-withdraw'; messageIds: readonly string[] }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }
+  | { kind: 'queue-steer'; messageId: string }
   | { kind: 'queue-reopen-mark'; fence: number; since?: number }
   | { kind: 'pending-unknown'; fence: number; reason?: string }
   | { kind: 'pending-reject'; fence: number; rejection: AgentJournalDispatchRejection }

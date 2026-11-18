@@ -26,7 +26,6 @@ export const UNIT_SETUP_FILES = [
 
 export const UNIT_EXCLUDE = [
   ...defaultExclude,
-  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
   'src/main/daemon/pty-subprocess/testing/node-pty-fd-leak.test.ts',
   'src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts',
@@ -39,13 +38,9 @@ export const UNIT_EXCLUDE = [
   'src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts',
   'src/main/startup/shell-environment/shell-probe-terminal-detach.live-shell.test.ts',
   'src/main/startup/shell-environment/shell-probe-lifetime.live-shell.test.ts',
-  'src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts',
   'src/shared/shell/wsl/fish-wsl-cwd-report.node-pty.test.ts',
   'src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts',
-  'src/shared/shell/launch/startup-shell-portability.live-shell.test.ts',
-  'src/shared/shell/command-resolution/posix-command-path-lookup.test.ts',
-  'tests/e2e/relay-region-correction.unit.test.ts',
   'src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts',
   // Electron probes with in-process deadlines; the package job runs them serially.
   'src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts',

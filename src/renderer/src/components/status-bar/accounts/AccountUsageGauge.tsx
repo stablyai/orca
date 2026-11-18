@@ -5,7 +5,7 @@ import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usa
 import { useTranslate } from '@/i18n/use-translate'
 import { getTightestUsageSection, usedSections } from '../usage/usage-headline-sections'
 import { getUsageRosterRowState } from '../usage/usage-roster-row-state'
-import { isClaudeUsageWaitingForClaude } from '../usage/usage-error-copy'
+import { isClaudeUsageWaitingForClaude } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { formatUsagePercentageLabel } from '../usage/usage-percentage-label'
 import { UsageBar, UsageValue } from '../usage/usage-meter'
 
@@ -73,9 +73,11 @@ export function AccountUsageGauge({
       aria-label={formatUsagePercentageLabel(headline.window.usedPercent, display, t)}
       className={`flex items-center justify-end gap-2 ${isFetching ? 'animate-pulse motion-reduce:animate-none' : ''}`}
     >
+      {/* Why health: account rows only render inside a provider's details card. */}
       <UsageBar
         usedPercent={headline.window.usedPercent}
         display={display}
+        tone="health"
         className="h-[5px] w-[30px] shrink-0"
       />
       <UsageValue

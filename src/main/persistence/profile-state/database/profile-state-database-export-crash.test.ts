@@ -12,7 +12,7 @@ import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from './profile-state-database'
-import { profileStateDatabaseFile } from '../../../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../../../shared/orca-profiles/profile-state-storage-paths'
 import { writeProfileStateDatabaseSnapshotAsync } from './profile-state-database-snapshot'
 
 const temporaryDirectories: string[] = []

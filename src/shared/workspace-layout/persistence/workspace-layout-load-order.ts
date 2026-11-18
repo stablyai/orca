@@ -1,6 +1,6 @@
 // Legacy order precedence: owning group tab order, tab-bar sortOrder, row sortOrder, then creation time. Do not merge disagreeing orders.
 
-import type { TabGroup } from '../../tab-types'
+import type { TabGroup } from '../tab-groups/tab-types'
 import type { LayoutGroup } from '../workspace-layout-model'
 import { rootGroupSeed } from './workspace-layout-minted-ids'
 import { resolveTabGroupOwners } from '../tab-groups/tab-group-owners'

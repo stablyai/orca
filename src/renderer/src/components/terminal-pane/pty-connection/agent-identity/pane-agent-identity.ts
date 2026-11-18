@@ -1,6 +1,6 @@
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '@/store/index'
 import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
@@ -11,7 +11,7 @@ import { createTerminalCommandLifecycle } from '../../emulation/commands/termina
 import { createPaneForegroundAgentTracker } from './foreground-process/pane-foreground-agent-tracker'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
-import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
+import { dispatchTerminalCommandFinishedEvent } from '@/lib/terminal/output/terminal-command-finished-event'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   isTuiAgent,

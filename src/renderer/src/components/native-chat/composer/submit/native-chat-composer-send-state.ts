@@ -21,6 +21,8 @@ export type NativeChatComposerSendState = {
   alternateSend: NativeChatFollowUpBehavior | undefined
   /** Cmd/Ctrl+Enter on an empty composer sends the head queued card now: into the running turn, or with none running (a paused queue after Stop), as its own. */
   chordSteersHead: boolean
+  /** The agent's guess at the next prompt, shown in place of the placeholder of an empty, idle composer. */
+  promptSuggestion: string | undefined
 }
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
@@ -35,7 +37,13 @@ export function nativeChatComposerSendState(
     structuredTransport:
       | Pick<
           NativeChatStructuredComposerTransport,
-          'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp' | 'optionSnapshot'
+          | 'sendOut'
+          | 'sendBlockedReason'
+          | 'threadGoal'
+          | 'sendFollowUp'
+          | 'optionSnapshot'
+          | 'mcpPanel'
+          | 'promptSuggestion'
         >
       | undefined
     editSession: { canSave: boolean } | undefined
@@ -45,13 +53,19 @@ export function nativeChatComposerSendState(
     orcaCommand?: boolean
     /** Goal mode submits the draft as an objective, which starts work. */
     goalMode?: boolean
+    /** A picked bot chat that can't take the message, or isn't checked yet: Send waits. */
+    mentionHold?: boolean
   },
   t?: Translate
 ): NativeChatComposerSendState {
   const { structuredTransport: transport } = input
   const imageBlock = nativeChatImageSendBlock(input.imageAttachments, t)
   const localHold =
-    input.pastedTextSaving || input.disabled || transport?.sendOut === true || imageBlock.holdsSend
+    input.pastedTextSaving ||
+    input.disabled ||
+    transport?.sendOut === true ||
+    imageBlock.holdsSend ||
+    input.mentionHold === true
   const hostHold = transport?.sendBlockedReason !== undefined
   const sendHeld = localHold || hostHold
   // Like Enter, a held host still takes commands that start no turn.
@@ -65,9 +79,10 @@ export function nativeChatComposerSendState(
         input.draft,
         transport.threadGoal !== undefined,
         input.agent,
-        transport.optionSnapshot
+        transport.optionSnapshot,
+        transport.mcpPanel !== undefined
       ) &&
-      !structuredAgentSessionCommandChangesConversation(input.draft))
+      !structuredAgentSessionCommandChangesConversation(input.draft, input.agent))
   const draftHeld = localHold || (hostHold && !runsWhileHostHolds)
   const hasDraft = input.draft.trim() !== '' || input.imageAttachments.length > 0
   // Like Enter, a typed draft sends while the agent works; only an empty one offers Stop.
@@ -96,6 +111,18 @@ export function nativeChatComposerSendState(
     alternateSend,
     // Never where the chord queues, or a second press would steer the card the first one just queued.
     chordSteersHead:
-      input.messageDelivery && !input.editSession && (alternateSend === 'steer' || !input.isWorking)
+      input.messageDelivery &&
+      !input.editSession &&
+      (alternateSend === 'steer' || !input.isWorking),
+    promptSuggestion:
+      input.draft === '' &&
+      input.imageAttachments.length === 0 &&
+      !input.isWorking &&
+      !input.disabled &&
+      transport?.sendOut !== true &&
+      !input.editSession &&
+      input.goalMode !== true
+        ? (transport?.promptSuggestion?.text ?? undefined)
+        : undefined
   }
 }

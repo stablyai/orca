@@ -11,6 +11,7 @@ import type { JournalRow } from './durable-rows/journal-row-schema'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import { openJournalDatabase, runJournalTransaction } from './database/journal-database'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
 import { prepareJournalDomainImport } from './journal-domain-import'
 import {
   finishJournalDomainImport,
@@ -220,6 +221,7 @@ function fixture(rows: JournalRow[]) {
   const db = new Database(':memory:')
   cleanup.push(db)
   migrateJournalDomainSchema(db)
+  db.exec(JOURNAL_ASYNC_QUESTION_INDEXES)
   runJournalTransaction(db, () => {
     for (const page of imported.pages) {
       insertJournalDomainImportPage(db, target, page)
@@ -379,6 +381,54 @@ it('reads imported attention, live execution ownership and aliased legacy opener
   })
   expect(cleared.state.summary.latestPrompt).toBe('Go')
   expect(cleared.indicators.firstInputSubmissionKey).toBeNull()
+})
+
+it('waits on the user for a Codex async question after its turn ends, until their next message', () => {
+  const item = (
+    itemId: string,
+    body: Extract<JournalRow, { kind: 'item' }>['body']
+  ): JournalRow => ({
+    ...base,
+    kind: 'item',
+    itemId,
+    revision: 1,
+    body
+  })
+  const asked = [
+    item('ask', message('Pick a color')),
+    item('turn', { kind: 'turn', turnId: 'turn', state: 'completed', userItemId: 'ask' }),
+    item('question', {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'request_user_input_async',
+          callId: 'call',
+          input: { questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }] }
+        }
+      ]
+    }),
+    item('after', {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Waiting for your answer.' }]
+    })
+  ]
+  const waiting = readJournalSqlStatusState(fixture(asked).context())
+  expect(waiting.summary).toMatchObject({ status: 'idle', openAsyncQuestion: 'question' })
+  expect(waiting.pendingPromptIds).toEqual([])
+  const notice = item('notice', {
+    ...message('Coordinator: status?'),
+    from: { kind: 'agent', senders: [], orchestration: null }
+  })
+  const noticed = readJournalSqlStatusState(fixture([...asked, notice]).context())
+  expect(noticed.summary.openAsyncQuestion).toBe('question')
+  const answered = readJournalSqlStatusState(
+    fixture([...asked, notice, item('answer', message('Blue'))]).context()
+  )
+  expect(answered.summary.status).toBe('idle')
+  expect(answered.summary.openAsyncQuestion).toBeUndefined()
 })
 
 it('keeps every outstanding input across finite pages and retains end evidence after its source item is removed', () => {
