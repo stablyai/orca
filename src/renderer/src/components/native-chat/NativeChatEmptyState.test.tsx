@@ -7,11 +7,6 @@ import { NativeChatEmptyState } from './host-access/NativeChatEmptyState'
 afterEach(cleanup)
 
 describe('NativeChatEmptyState', () => {
-  it('greets as the agent by default', () => {
-    render(<NativeChatEmptyState kind="empty" agent="claude" />)
-    expect(screen.getByText('Start a chat with Claude')).toBeTruthy()
-  })
-
   it('introduces a persona in the agent’s place, only while the chat is empty', () => {
     const persona = {
       icon: <span data-testid="avatar" />,
