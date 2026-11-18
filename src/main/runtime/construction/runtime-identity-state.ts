@@ -70,7 +70,7 @@ import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
 import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender-associations'
 
-import { RuntimeConstructionServices } from './runtime-construction-services'
+import { RuntimeBotConstructionHooks } from './runtime-bot-construction-hooks'
 
 export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
 
@@ -86,11 +86,10 @@ export type MobileSessionTabSubscription = {
   acceptsWorktree?: (worktree: string) => boolean
 }
 
-export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
+export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHooks {
   protected getLeafKey(tabId: string, leafId: string): string {
     return `${tabId}::${leafId}`
   }
-
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
   protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract terminalHandleAccess(): TerminalHandleAccess

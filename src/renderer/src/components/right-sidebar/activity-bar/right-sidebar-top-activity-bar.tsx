@@ -13,6 +13,7 @@ import {
   TopActivityOverflowMenu,
   type ActivityBarItem
 } from './activity-bar-buttons'
+import type { TopActivityBarLayout } from './activity-bar-overflow'
 
 import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
 import {
@@ -34,7 +35,7 @@ export function RightSidebarTopActivityBar({
 }: {
   hasDesktopWindowChrome: boolean
   topActivityStripRef: (node: HTMLDivElement | null) => void
-  topActivityLayout: { visibleItems: ActivityBarItem[]; overflowItems: ActivityBarItem[] }
+  topActivityLayout: TopActivityBarLayout<ActivityBarItem>
   effectiveTab: ActiveRightSidebarTab
   onSelectTab: (tab: ActiveRightSidebarTab) => void
   checksStatus: CheckStatus | null
@@ -43,6 +44,18 @@ export function RightSidebarTopActivityBar({
   onChangeActivityBarPosition: (pos: ActivityBarPosition) => void
 }): React.JSX.Element {
   const contextPlugin = useActivityBarContextPlugin()
+  const pillGap = topActivityLayout.visibleItems.some((item) => item.labeledTab) && 'gap-0.5'
+  const tabs = topActivityLayout.visibleItems.map((item) => (
+    <ActivityBarButton
+      key={item.id}
+      item={item}
+      active={effectiveTab === item.id}
+      onClick={() => onSelectTab(item.id)}
+      layout="top"
+      statusIndicator={item.id === 'checks' ? checksStatus : null}
+      compact={topActivityLayout.compactIds.has(item.id)}
+    />
+  ))
   return (
     <ContextMenu>
       <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
@@ -59,18 +72,7 @@ export function RightSidebarTopActivityBar({
               >
                 <div className={cn('flex min-w-0 shrink', RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)}>
                   {/* Use More for overflow because this narrow titlebar also holds close/window controls. */}
-                  <div className="flex min-w-0 shrink">
-                    {topActivityLayout.visibleItems.map((item) => (
-                      <ActivityBarButton
-                        key={item.id}
-                        item={item}
-                        active={effectiveTab === item.id}
-                        onClick={() => onSelectTab(item.id)}
-                        layout="top"
-                        statusIndicator={item.id === 'checks' ? checksStatus : null}
-                      />
-                    ))}
-                  </div>
+                  <div className={cn('flex min-w-0 shrink items-center', pillGap)}>{tabs}</div>
                   {topActivityLayout.overflowItems.length > 0 && (
                     <TopActivityOverflowMenu
                       items={topActivityLayout.overflowItems}
@@ -117,18 +119,7 @@ export function RightSidebarTopActivityBar({
               className={RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME}
             >
               {/* Keep navigation in the body so custom desktop titlebars remain visually native and uncrowded. */}
-              <div className="flex min-w-0 flex-1 shrink">
-                {topActivityLayout.visibleItems.map((item) => (
-                  <ActivityBarButton
-                    key={item.id}
-                    item={item}
-                    active={effectiveTab === item.id}
-                    onClick={() => onSelectTab(item.id)}
-                    layout="top"
-                    statusIndicator={item.id === 'checks' ? checksStatus : null}
-                  />
-                ))}
-              </div>
+              <div className={cn('flex min-w-0 flex-1 shrink items-center', pillGap)}>{tabs}</div>
               {topActivityLayout.overflowItems.length > 0 && (
                 <TopActivityOverflowMenu
                   items={topActivityLayout.overflowItems}

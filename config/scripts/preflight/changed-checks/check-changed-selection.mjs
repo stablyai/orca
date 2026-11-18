@@ -281,6 +281,10 @@ const TYPECHECK_INPUTS = [
   },
   { config: 'config/tsconfig.tc.cli.json', inputs: ['src/cli/', 'src/shared/', 'src/main/'] },
   {
+    config: 'config/tsconfig.tc.bot-evals.json',
+    inputs: ['src/cli/', 'src/shared/', 'src/main/', 'cloud/packages/connector-contract/']
+  },
+  {
     config: 'src/packages/process-host/tsconfig.test.json',
     inputs: ['src/packages/process-host/']
   }

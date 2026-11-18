@@ -46,7 +46,6 @@ export type ContextualTourStep = {
   fallbackCopy?: string
   preferredPlacement?: ContextualTourStepPlacement
   targetPulse?: boolean
-  hidePrimaryAction?: boolean
   control?: ContextualTourStepControl
   primaryAction?: ContextualTourStepAction
   secondaryAction?: ContextualTourStepAction
@@ -125,8 +124,7 @@ export const CONTEXTUAL_TOURS = [
         body: 'Each worktree gets its own branch, so parallel work stays separate.',
         targetSelector: '[data-contextual-tour-target="workspace-create-control"]',
         preferredPlacement: 'right',
-        targetPulse: true,
-        hidePrimaryAction: true
+        targetPulse: true
       }
     ]
   },

@@ -50,14 +50,16 @@ async function readCappedBody(response: Response): Promise<Uint8Array | null> {
   return Buffer.concat(chunks)
 }
 
-/** Fetch HTTPS without cookies, at most three HTTPS redirects and 64KiB under one deadline. Failure returns null for fallback, without retry. */
+/** Fetch HTTPS without cookies, at most three HTTPS redirects and 64KiB under one deadline. Failure returns null for fallback, without retry. `allows` vets every hop. */
 export async function fetchRemoteRepoIcon(
   rawUrl: string,
   fetch: RepoIconFetch,
-  timeoutMs = REPO_ICON_FETCH_TIMEOUT_MS
+  timeoutMs = REPO_ICON_FETCH_TIMEOUT_MS,
+  allows: (url: URL) => boolean = () => true
 ): Promise<FetchedRepoIcon | null> {
   const signal = AbortSignal.timeout(timeoutMs)
-  let url = httpsUrl(rawUrl)
+  const allowed = (url: URL | null): URL | null => (url && allows(url) ? url : null)
+  let url = allowed(httpsUrl(rawUrl))
   try {
     for (let redirects = 0; url; redirects += 1) {
       const response = await fetch(url.href, { redirect: 'manual', credentials: 'omit', signal })
@@ -72,7 +74,10 @@ export async function fetchRemoteRepoIcon(
       }
       const location = response.headers.get('location')
       await discardBody(response)
-      url = location && redirects < REPO_ICON_FETCH_MAX_REDIRECTS ? httpsUrl(location, url) : null
+      url =
+        location && redirects < REPO_ICON_FETCH_MAX_REDIRECTS
+          ? allowed(httpsUrl(location, url))
+          : null
     }
     return null
   } catch {

@@ -4,6 +4,8 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 const NODE_RUNTIME_INCLUDE = [
   // Exercises a real peer reset through Node's native Socket.setTypeOfService.
   'src/main/network/best-effort-socket-type-of-service.test.ts',
+  // The Node host closes only its own copy of a shared socket; Bun's destroy shuts it down.
+  'src/main/provider-process/hosted-provider-launch.integration.test.ts',
   // Relays nested worker_threads through Node's serializer, as Electron's utility process does.
   'src/main/utility-worker-host/utility-worker-host.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
@@ -18,6 +20,8 @@ const NODE_RUNTIME_INCLUDE = [
   // The forced-probe handoff race opens only under V8's promise scheduling, which Electron main uses.
   'src/main/github/api/rate-limit.test.ts',
   // Electron main bridges streams with Node's implementation.
+  // The relay's backpressure rides on Node's fetch; Bun's fetch reads a body ahead of its reader.
+  'src/main/bots/tool-relay/bot-tool-relay.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',

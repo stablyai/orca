@@ -15,6 +15,8 @@ export const MobileHomeActiveAgents = memo(function MobileHomeActiveAgents(props
   rows: readonly AgentListRow[]
   hosts: readonly HostProfile[]
   now: number
+  /** No section sits above it. */
+  first: boolean
   onSeeAll: () => void
 }) {
   const t = useMobileTranslation()
@@ -28,7 +30,7 @@ export const MobileHomeActiveAgents = memo(function MobileHomeActiveAgents(props
         count={props.rows.length}
         aside={t('home.activeAgents.seeAll', 'See all agents')}
         onAsidePress={props.onSeeAll}
-        first
+        first={props.first}
       />
       <MobileAgentListRows
         rows={props.rows.slice(0, ACTIVE_ROWS_SHOWN)}

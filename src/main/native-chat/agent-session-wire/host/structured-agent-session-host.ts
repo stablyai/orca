@@ -130,7 +130,8 @@ export class StructuredAgentSessionHost {
       // In-flight starts count as execution before a child is indexed.
       deliveryActive: (id) => this.runtimeState.hasDeliveryWork(id),
       closeStatus: (sessionId, options) => this.clientDelivery.closeSession(sessionId, options),
-      childWorkOpen: this.clientDelivery.childWorkOpen
+      childWorkOpen: this.clientDelivery.childWorkOpen,
+      viewed: (sessionId) => this.clientDelivery.subscribers.subscriberCount(sessionId) > 0
     })
     this.continuationContext = contextReader(deps, this.lifetime.conversation)
     this.usageLimitContinue = usageLimit.start(this.mutationContext(), this, this.clientDelivery)
@@ -183,16 +184,11 @@ export class StructuredAgentSessionHost {
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
   close: typeof this.lifetime.close = (...args) => this.lifetime.close(...args)
 
+  /** Stop a finished background run's agent now, as the idle sweep would; viewed or owed work keeps it. */
+  releaseIdleSession = (sessionId: string) => this.lifetime.idleSweep.release(sessionId)
+
   /** Stop hidden children too, using one bounded host snapshot. */
-  sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => ({
-    deps: this.deps,
-    tasks: this.tasks,
-    lifetime: this.lifetime,
-    sessions: this.sessions,
-    conversationDelivery: this.conversationDelivery,
-    runtimeState: this.runtimeState,
-    clientDelivery: this.clientDelivery
-  }))
+  sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => this.collaborators())
 
   serializeCreateIntent = this.tasks.serializeCreateIntent.bind(this.tasks)
 
@@ -297,9 +293,13 @@ export class StructuredAgentSessionHost {
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
+  /** Opens the conversation at rest, starting no agent; Orca's own notes write through it. */
+  conversation = (sessionId: string) => this.lifetime.conversation(sessionId)
   observeConversationPublications = this.sessions.observeConversationPublications
   forkBoundary: BackgroundTasks['forkBoundary'] = (...a) => this.backgroundTasks.forkBoundary(...a)
   savedContent = (sessionId: string) => this.backgroundTasks.savedContent(sessionId)
+  /** A conversation's bounded journal reads, opened at rest. */
+  journalReads = async (id: string) => (await this.conversation(id)).journal.reads
   historyItem = (id: string, itemId: string) => this.backgroundTasks.historyItem(id, itemId)
   conversationOutline = (sessionId: string) => this.backgroundTasks.conversationOutline(sessionId)
   namingPrompt = this.reads.namingPrompt
@@ -311,17 +311,14 @@ export class StructuredAgentSessionHost {
   holdMailSources = this.reads.holdMailSources
   wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
 
-  private readonly startJournal = structuredAgentStartJournal(
-    () => this.deps,
-    (sessionId) => this.lifetime.conversation(sessionId)
-  )
+  private readonly startJournal = structuredAgentStartJournal(() => this.deps, this.conversation)
   captureAgentStartDestination = this.startJournal.captureAgentStartDestination
   appendAgentStart = this.startJournal.appendAgentStart
 
   currentWork = this.clientDelivery.readCurrentWork
   currentWorkAtRest = this.reads.currentWorkAtRest
-  readCurrentRequests: BackgroundTasks['currentRequests'] = (...args) =>
-    this.backgroundTasks.currentRequests(...args)
+  readCurrentRequests: BackgroundTasks['currentRequests'] = (...a) =>
+    this.backgroundTasks.currentRequests(...a)
 
   observeJournalPublications = this.clientDelivery.observeJournalPublications
 
@@ -341,13 +338,18 @@ export class StructuredAgentSessionHost {
 
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary
+  publishedWork = this.clientDelivery.readPublishedWork
 
-  collaboratorsForTests = () => ({
-    sessions: this.sessions,
-    subscribers: this.clientDelivery.subscribers,
-    runtimeState: this.runtimeState,
-    conversationDelivery: this.conversationDelivery,
+  private collaborators = () => ({
+    deps: this.deps,
+    tasks: this.tasks,
     lifetime: this.lifetime,
+    sessions: this.sessions,
+    conversationDelivery: this.conversationDelivery,
+    runtimeState: this.runtimeState,
+    clientDelivery: this.clientDelivery,
+    subscribers: this.clientDelivery.subscribers,
     serialize: this.serialize
   })
+  collaboratorsForTests = this.collaborators
 }

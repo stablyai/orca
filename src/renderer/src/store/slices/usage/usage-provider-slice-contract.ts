@@ -23,6 +23,7 @@ import type {
   MuseUsageSnapshot
 } from '../../../../../shared/agent-usage/analytics/muse-usage-types'
 import type { UsageSnapshot, UsageProviderTypes, UsageFailure } from './usage-provider-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type UsageData<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
   failure: UsageFailure | null
@@ -74,7 +75,7 @@ export type UsageProviderConfig<
   name: Name
   initialScope: T['scope']
   initialRange: T['range']
-  getApi: () => UsageApi<T>
+  getApi: (host: RuntimeClientTarget) => UsageApi<T>
   hasCachedData: (scanState: T['snapshot']['scanState']) => boolean
 }
 export type ClaudeUsageTypes = UsageProviderTypes<

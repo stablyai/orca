@@ -1174,6 +1174,9 @@
       "composer": {
         "planMode": "Planifier",
         "exitPlanMode": "Quitter le mode plan"
+      },
+      "goal": {
+        "sentAsGoal": "Envoyé comme objectif"
       }
     }
   },
@@ -2713,7 +2716,7 @@
       "disconnected": "Échec du collage (déconnexion)",
       "imageTooLarge": "Image trop volumineuse pour être collée",
       "pasteFailed": "Échec du collage",
-      "pasteTooLarge": "Contenu à coller trop volumineux (max. 256 Kio)",
+      "pasteTooLarge": "Le collage est trop volumineux.",
       "terminalChanged": "Collage annulé (changement de terminal)"
     },
     "worktreeLabel": {
@@ -2843,6 +2846,9 @@
     "structuredOpen": {
       "worktreeDeleted": "Le worktree a été supprimé.",
       "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "Ce message est introuvable."
     }
   },
   "settings": {
@@ -4441,6 +4447,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Jumeler un ordinateur",
+      "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur.",
+      "pairAction": "Jumeler un ordinateur",
+      "openFailed": "Impossible d’ouvrir ce lien",
+      "ambiguous": "Ce bot se trouve sur {{names}}. Ouvrez la conversation dans Orca sur l’ordinateur de votre choix.",
+      "computer": "votre ordinateur",
+      "updateNeeded": "Mettez Orca à jour sur {{names}} pour ouvrir ce lien.",
+      "unreachable": "Impossible de joindre {{names}}. Vérifiez qu’Orca est ouvert sur l’un d’eux, puis réessayez.",
+      "missing": "Aucun de vos ordinateurs jumelés ne possède ce bot.",
+      "offline": "{{name}} est hors ligne. Rouvrez le lien quand cet ordinateur sera de nouveau connecté.",
+      "chatOpenFailed": "{{name}} n’a pas pu ouvrir cette conversation. Réessayez le lien.",
+      "unreachableSingle": "Impossible de joindre {{name}}. Vérifiez qu’Orca y est ouvert, puis réessayez.",
+      "workspaceDeleted": "L’espace de travail de cette conversation a été supprimé sur {{name}}."
     }
   }
 }

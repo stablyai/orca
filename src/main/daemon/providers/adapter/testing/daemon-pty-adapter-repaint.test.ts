@@ -54,7 +54,7 @@ describe.skipIf(process.platform === 'win32')('DaemonPtyAdapter.requestRepaint',
   })
 
   it('asks nothing of a daemon that predates the request', async () => {
-    const adapter = await start(57)
+    const adapter = await start(59)
     const { id } = await adapter.spawn({ cols: 80, rows: 24 })
     const resize = vi.mocked(subprocess.resize)
     resize.mockClear()
