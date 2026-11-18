@@ -66,12 +66,17 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     ptyId: string,
     agent: TuiAgent
   ): Promise<LaunchedAgentForeground> {
-    if (pty && !pty.connectionId && !this.ptyController?.supportsForegroundObservation?.(ptyId)) {
-      // Why not the launched-agent read: on an old owner it lists every session to find one root PID.
-      const root = pty.adoptedRootProcess
-      return root && root.incarnationId === pty.incarnationId
-        ? readAdoptedRootAgentForeground(this.ptyController, root.pid, ptyId, agent)
-        : Promise.resolve('unknown')
+    const root = pty?.adoptedRootProcess
+    // Why the discovered root on an old local owner: its launched-agent read lists every session to
+    // find one root PID. Before discovery stores it (attach can come first), that read still runs.
+    if (
+      pty &&
+      root &&
+      root.incarnationId === pty.incarnationId &&
+      !pty.connectionId &&
+      !this.ptyController?.supportsForegroundObservation?.(ptyId)
+    ) {
+      return readAdoptedRootAgentForeground(this.ptyController, root.pid, ptyId, agent)
     }
     return readExactAgentForeground(this, this.ptyController, ptyId, agent)
   }
