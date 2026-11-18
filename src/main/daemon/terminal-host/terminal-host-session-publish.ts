@@ -220,18 +220,21 @@ export async function spawnAndPublishSession(
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
+  // Locals, not opts: a closure here shares this scope with session-lifetime callbacks, so reading opts would pin the request.
+  const submissionSessionId = opts.sessionId
+  const orcaBuiltLine = opts.launchAgent !== undefined
   const buildSubmission = (command: string): string => {
     staging.current = stageStartupCommand({
       command,
       shellPath: subprocess.shellPath,
-      orcaBuiltLine: opts.launchAgent !== undefined
+      orcaBuiltLine
     })
     const notice = startupStagingFailureNotice(staging.current)
     if (notice) {
       session.startupIngress.accept(notice)
       try {
         deps.reportReadinessEvent?.('startup-command-stage-failed', {
-          sessionId: opts.sessionId,
+          sessionId: submissionSessionId,
           reason: staging.current.failure
         })
       } catch {
