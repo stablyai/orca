@@ -1989,7 +1989,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Projektverzeichnis nicht festgelegt"
+        "locationNotSet": "Projektverzeichnis nicht festgelegt",
+        "hostLocalGitProject": "Kein passendes Git-Remote für dieses Projekt",
+        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",

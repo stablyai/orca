@@ -1496,6 +1496,10 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Issue vinculado",
         "listeningPort": "Puerto en escucha"
+      },
+      "projectHostSetupOptions": {
+        "hostLocalGitProject": "Este proyecto no tiene remoto de Git coincidente",
+        "hostLocalFolderProject": "Los proyectos de carpeta no pueden vincularse a otros hosts"
       }
     },
     "hooks": {

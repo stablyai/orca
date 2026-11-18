@@ -3105,7 +3105,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Local do projeto não definido"
+        "locationNotSet": "Local do projeto não definido",
+        "hostLocalGitProject": "Este projeto não tem um remoto Git correspondente",
+        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Atualize o servidor para ver as portas nos hosts SSH dele.",
