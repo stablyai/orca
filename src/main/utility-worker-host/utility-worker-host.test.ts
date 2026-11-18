@@ -147,10 +147,11 @@ function silentUtilityProcess(): EventEmitter & { postMessage(): void; kill(): v
 
 /** A ready host that does nothing on its own; the test speaks for it on the ports it receives. */
 function scriptedUtilityProcess(): EventEmitter & { ports: { raw: MessagePort }[] } {
+  const received: { raw: MessagePort }[] = []
   const child = Object.assign(new EventEmitter(), {
     stderr: null,
-    ports: [] as { raw: MessagePort }[],
-    postMessage: (_data: unknown, ports: { raw: MessagePort }[] = []) => child.ports.push(...ports),
+    ports: received,
+    postMessage: (_data: unknown, ports: { raw: MessagePort }[] = []) => received.push(...ports),
     kill: () => true
   })
   queueMicrotask(() => child.emit('message', { type: 'ready' }))
