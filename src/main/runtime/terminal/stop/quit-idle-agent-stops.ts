@@ -4,6 +4,7 @@ import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lif
 import { completedAgentTurnAllowsStop } from '../../../../shared/agent-session/lifecycle/stopping/completed-agent-turn-stop'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 
 export type QuitStopTarget = {
   ptyId: string
@@ -15,6 +16,9 @@ export type QuitStopTarget = {
 // Agents whose hooks hold the status working while a background shell, monitor or cron runs; others
 // report done over a running job, and stopping them would kill it.
 const AGENTS_REPORTING_BACKGROUND_WORK = new Set(['claude'])
+
+// Checkpoints run one at a time in the daemon adapter, so more stops in flight only queue work.
+const QUIT_STOP_CONCURRENCY = 4
 
 /** Typing from the turn's start on may be a queued or unsent draft (with no turn start, any typing
  *  may be); any write after the turn ended, Orca's own deliveries included, may start the next turn. */
@@ -118,25 +122,42 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
     if (!stopAndWait) {
       return []
     }
-    const stopped = await Promise.all(
-      targets.map(async ({ ptyId, incarnationId, inputAt }) => {
-        // A write since selection (a delivered turn, a paired client) may have started work.
-        if (this.terminalRunFacts.readLastInputAt(ptyId) !== inputAt) {
-          return []
+    const pending = [...targets]
+    const stopped: string[] = []
+    // Admit a few at a time and none past the deadline: each stop queues a final history checkpoint
+    // that runs even after its caller gave up, ahead of the disconnect checkpoint for survivors.
+    const admitUntilDeadline = async (): Promise<void> => {
+      for (let next = pending.shift(); next && Date.now() < deadlineMs; next = pending.shift()) {
+        if (await this.stopQuitTarget(stopAndWait, next, deadlineMs)) {
+          stopped.push(next.ptyId)
         }
-        // Reversible: the exit must not retire the saved conversation the next launch resumes.
-        const settleStop = this.intentionalPtyStops.mark(ptyId, 'reversible', incarnationId)
-        let done = false
-        try {
-          done = await stopAndWait(ptyId, { keepHistory: true, deadlineMs })
-        } catch (error) {
-          console.warn('[quit] Idle agent stayed running:', ptyId, error)
-        } finally {
-          settleStop(done)
-        }
-        return done ? [ptyId] : []
-      })
+      }
+    }
+    await Promise.all(
+      Array.from({ length: Math.min(QUIT_STOP_CONCURRENCY, pending.length) }, admitUntilDeadline)
     )
-    return stopped.flat()
+    return stopped
+  }
+
+  private async stopQuitTarget(
+    stopAndWait: NonNullable<RuntimePtyController['stopAndWait']>,
+    { ptyId, incarnationId, inputAt }: QuitStopTarget,
+    deadlineMs: number
+  ): Promise<boolean> {
+    // A write since selection (a delivered turn, a paired client) may have started work.
+    if (this.terminalRunFacts.readLastInputAt(ptyId) !== inputAt) {
+      return false
+    }
+    // Reversible: the exit must not retire the saved conversation the next launch resumes.
+    const settleStop = this.intentionalPtyStops.mark(ptyId, 'reversible', incarnationId)
+    let done = false
+    try {
+      done = await stopAndWait(ptyId, { keepHistory: true, deadlineMs })
+    } catch (error) {
+      console.warn('[quit] Idle agent stayed running:', ptyId, error)
+    } finally {
+      settleStop(done)
+    }
+    return done
   }
 }

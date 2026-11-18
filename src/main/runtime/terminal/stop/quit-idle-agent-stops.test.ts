@@ -129,3 +129,44 @@ describe('quit stops idle agents', () => {
     )
   })
 })
+
+describe('quit admits idle-agent stops within its deadline', () => {
+  it.each([100, 1_000])(
+    'starts no more stops after the deadline with %i targets',
+    async (count) => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(1_000)
+      try {
+        const fixture = makeRuntimeStoreWithWorkspaceSession(
+          makeWorkspaceSessionWithHeadlessTerminal()
+        )
+        const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {})
+        // Every stop's history checkpoint outlasts the shared deadline.
+        const stopAndWait = vi.fn(async () => {
+          await Promise.resolve()
+          vi.setSystemTime(10_000)
+          return false
+        })
+        runtime.setPtyController({
+          write: () => true,
+          kill: () => false,
+          stopAndWait,
+          getForegroundProcess: async () => null,
+          listProcesses: async () => []
+        })
+        const targets = Array.from({ length: count }, (_, index) => ({
+          ptyId: `pty-${index}`,
+          incarnationId: null,
+          inputAt: null
+        }))
+
+        const stopped = await runtime.stopIdleAgentTerminalsForQuit(targets, 5_000)
+
+        expect(stopped).toEqual([])
+        expect(stopAndWait).toHaveBeenCalledTimes(4)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+})
