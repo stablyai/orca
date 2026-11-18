@@ -198,6 +198,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     if (providerSequence.generation === 'reset') {
       this.advancePtyLifecycleGeneration(ptyId)
       this.providerSequenceAnchorRevisions.delete(ptyId)
+      this.gapRecoveryAwaitingStamp.delete(ptyId)
       // Why: daemon respawn/cold restore starts a new absolute domain. Old
       // emulator state cannot remain authoritative over the replacement.
       if (replacesExistingRuntimeGeneration) {

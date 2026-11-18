@@ -49,13 +49,19 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     }
     // Kept until the PTY exits: replacing the model must not erase a reader's evidence.
     this.ptyGapCounts.set(ptyId, (this.ptyGapCounts.get(ptyId) ?? 0) + 1)
+    if (!this.providerSequenceAnchorRevisions.has(ptyId)) {
+      // No stamp places a provider snapshot in this stream: start over from the kept output, as before
+      // recovery existed. The stream's first stamp starts recovery.
+      this.gapRecoveryAwaitingStamp.add(ptyId)
+      this.disposeHeadlessTerminal(ptyId)
+      return
+    }
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const gapEnd = this.getPtyOutputSequence(ptyId)
     state.writeChain = state.writeChain
       .then(async () => {
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
-        // Without recovery, RIS too: the screen restarts from the kept output, as a fresh model would.
-        await state.emulator.write(state.gapReseedAbandoned ? '\x18\x1bc' : '\x18')
+        await state.emulator.write('\x18')
         // Here, in stream order: chunks queued before the gap finished their carries already.
         resetFreebuffTerminalStatusAfterGap(
           state.emulator,
@@ -71,16 +77,18 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       restartGapJournalAfterGap(state.gapReseed, gapEnd)
       return
     }
-    if (!state.gapReseedAbandoned) {
-      this.startGapRecovery(ptyId, state)
-    }
+    this.startGapRecovery(ptyId, state)
   }
 
   protected override onProviderSequenceAnchored(ptyId: string): void {
-    const state = this.headlessTerminals.get(ptyId)
-    if (state?.gapReseedAbandoned && !state.gapReseed) {
-      state.gapReseedAbandoned = undefined
-      this.startGapRecovery(ptyId, state)
+    if (
+      this.gapRecoveryAwaitingStamp.delete(ptyId) &&
+      this.ptysById.get(ptyId)?.connected !== false
+    ) {
+      const state = this.getOrCreateHeadlessTerminal(ptyId)
+      if (!state.gapReseed) {
+        this.startGapRecovery(ptyId, state)
+      }
     }
   }
 
@@ -130,11 +138,6 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     recovery: GapRecovery
   ): Promise<void> {
     for (let attempt = 0; this.isGapRecovering(ptyId, state, recovery); attempt++) {
-      if (!this.providerSequenceAnchorRevisions.has(ptyId)) {
-        // Without a stamp nothing places a snapshot in this stream; its first stamp restarts recovery.
-        this.abandonGapRecovery(ptyId, state, recovery)
-        return
-      }
       if (attempt === GAP_RESEED_WARN_AFTER_ATTEMPTS) {
         console.warn('[terminal] dropped-output recovery still waiting for a current snapshot', {
           ptyIdSuffix: ptyId.slice(-10),
@@ -261,7 +264,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (!this.isGapRecovering(ptyId, state, recovery) || recovery.gaps !== gaps) {
         return 'failed'
       }
-      this.finishGapRecovery(ptyId, state, { rebuilt: true })
+      this.finishGapRecovery(ptyId, state)
       return 'rebuilt'
     })
     state.writeChain = step.then(
@@ -271,18 +274,12 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     return step
   }
 
-  private finishGapRecovery(
-    ptyId: string,
-    state: RuntimeHeadlessTerminal,
-    { rebuilt }: { rebuilt: boolean }
-  ): void {
+  private finishGapRecovery(ptyId: string, state: RuntimeHeadlessTerminal): void {
     const contextChangePending = state.gapReseed?.contextChangePending === true
     state.gapReseed = undefined
+    state.historyFromProvider = true
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
-    if (rebuilt) {
-      state.historyFromProvider = true
-    }
     // No new text: observers confirm candidates that arrived while untrusted, with their own arrival times.
     this.observeHeadlessChunk(ptyId, state, '', Date.now())
     if (contextChangePending) {
@@ -293,29 +290,6 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         }
       }, 0).unref?.()
     }
-  }
-
-  /** As before recovery existed, until a stamp arrives: the screen restarts from the output after the gap. */
-  private abandonGapRecovery(
-    ptyId: string,
-    state: RuntimeHeadlessTerminal,
-    recovery: GapRecovery
-  ): void {
-    state.writeChain = state.writeChain
-      .then(async () => {
-        if (!this.isGapRecovering(ptyId, state, recovery)) {
-          return
-        }
-        if (this.providerSequenceAnchorRevisions.has(ptyId)) {
-          // Stamped while this step waited in the chain.
-          void this.runGapRecovery(ptyId, state, recovery)
-          return
-        }
-        state.gapReseedAbandoned = true
-        await state.emulator.write('\x18\x1bc')
-        this.finishGapRecovery(ptyId, state, { rebuilt: false })
-      })
-      .catch(() => {})
   }
 
   /** A retired model's recovery leaves the capture line at once instead of holding it until a slot frees. */
