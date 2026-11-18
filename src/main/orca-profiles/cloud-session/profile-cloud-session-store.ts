@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getSecretStore, type SecretStore } from '../../../shared/secure-storage/secret-store'
 import {
@@ -178,8 +179,8 @@ function writeOrcaCloudSession(
     return 'dev-plaintext'
   }
 
-  // A new sign-in or rotation supersedes the old disk session, even when the new tokens stay in memory.
-  rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
+  // A new sign-in or rotation supersedes the old disk session; reads prefer memory, so removal can finish later.
+  void rm(getOrcaCloudSessionPath(profileId, userDataPath), { force: true }).catch(() => {})
   rememberMemorySession(cacheKey, { session, persistence: 'memory-only' })
   return 'memory-only'
 }
