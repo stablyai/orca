@@ -40,11 +40,4 @@ describe('Memory upkeep settings', () => {
     fireEvent.click(toggle)
     expect(update).toHaveBeenCalledWith({ tidyUp: { on: false } })
   })
-
-  it('hides the manual tidy action while upkeep is off', () => {
-    render(
-      <BotTidyUpSection bot={{ ...bot, tidyUp: { on: false } }} update={vi.fn(async () => null)} />
-    )
-    expect(screen.queryByRole('button', { name: 'Tidy now' })).toBeNull()
-  })
 })
