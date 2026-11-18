@@ -463,6 +463,7 @@
 6 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 2 src/main/pty/shell-startup/zsh-wrapper-dir-ownership.ts
 1 src/main/qoder/workspace-trust.ts
+1 src/main/qwen-code/workspace-trust.ts # Qwen fresh-launch trust (#43989): sync read-modify-write like qoder/workspace-trust.ts so concurrent launches and the sync Qwen hook install cannot lose entries
 4 src/main/rate-limits/providers/cursor/cursor-auth.ts
 2 src/main/rate-limits/providers/grok/grok-auth.ts
 2 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
@@ -550,7 +551,6 @@
 1 src/main/windows/windows-administrator-restart.ts
 1 src/main/windows/windows-command-paths.ts
 1 src/main/windows/windows-process-table.ts
-1 src/main/worker-thread-child-process/worker-thread-child-process.ts
 2 src/main/worker-threads/forked-child-entry-path.ts
 3 src/main/worker-threads/worker-large-send-log.ts
 4 src/main/workspace-hooks/hooks.ts

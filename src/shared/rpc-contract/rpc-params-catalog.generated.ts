@@ -35,6 +35,7 @@ import { BrowserClientPageMetadataParams } from '../browser/client-hosting/brows
 import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
   DesktopBrowserBridgeAttachParams,
+  DesktopBrowserBridgeResultChunkParams,
   DesktopBrowserBridgeResultParams
 } from '../browser/client-hosting/desktop-browser-bridge-protocol'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
@@ -951,7 +952,9 @@ import {
   WebhooksList
 } from './webhooks-params'
 import {
+  WorkspaceCleanupCodexHistoryDiskUsageParams,
   WorkspaceCleanupPreviewParams,
+  WorkspaceCleanupReleaseCodexHistoryDiskUsageParams,
   WorkspaceCleanupReportUnsavedEditorsParams,
   WorkspaceCleanupRunNowParams
 } from './workspace-cleanup/workspace-cleanup-runner-params'
@@ -1424,6 +1427,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
+  'desktopBrowserBridge.resultChunk': DesktopBrowserBridgeResultChunkParams,
   'diagnostics.memory': null,
   'emulator.attach': AttachParamsOfEmulatorParams,
   'emulator.availability': EmulatorAvailabilityParams,
@@ -2091,7 +2095,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'webhooks.rotate': WebhookRotate,
   'webhooks.sample': WebhookSample,
   'webhooks.secret': WebhookSecret,
+  'workspaceCleanup.codexHistoryDiskUsage': WorkspaceCleanupCodexHistoryDiskUsageParams,
   'workspaceCleanup.preview': WorkspaceCleanupPreviewParams,
+  'workspaceCleanup.releaseCodexHistoryDiskUsage':
+    WorkspaceCleanupReleaseCodexHistoryDiskUsageParams,
   'workspaceCleanup.report': null,
   'workspaceCleanup.reportUnsavedEditors': WorkspaceCleanupReportUnsavedEditorsParams,
   'workspaceCleanup.runNow': WorkspaceCleanupRunNowParams,

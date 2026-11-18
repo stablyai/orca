@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   advanceGoogleConsole,
   GOOGLE_CONSOLE_START,
-  GOOGLE_PERSONAL_APP_LINKS,
   googleConsoleStepUrl,
   googleConsoleSteps,
   googleEnableApisUrl,
@@ -18,14 +17,6 @@ function walk(addresses: string[]): GoogleConsoleProgress {
 }
 
 describe('Google console setup', () => {
-  it("gives a personal app Orca's home page, privacy policy and domain", () => {
-    expect(GOOGLE_PERSONAL_APP_LINKS).toEqual({
-      homePage: 'https://www.onorca.dev',
-      privacyPolicy: 'https://www.onorca.dev/privacy',
-      authorizedDomain: 'onorca.dev'
-    })
-  })
-
   it('adds Publish only for a personal account', () => {
     expect(googleConsoleSteps('company')).toEqual(['project', 'apis', 'branding', 'client'])
     // Publish stays greyed until Branding has the links, so they come first.

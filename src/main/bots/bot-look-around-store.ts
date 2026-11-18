@@ -33,7 +33,8 @@ const RunSchema = z.object({
   endedAt: z.number().optional(),
   error: z.string().optional(),
   alerted: z.literal(true).optional(),
-  asleep: z.literal(true).optional()
+  asleep: z.literal(true).optional(),
+  usageLimited: z.object({ resetsAt: z.number().optional() }).optional()
 })
 
 const BotLookSchema = z.object({

@@ -11,7 +11,7 @@ import { selectFocusedTab } from '@/lib/focused-chat-workers'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotItem, BotItemEvent, BotItemStatus } from '../../../../../shared/bots/bot-items'
+import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
 import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import {
@@ -137,7 +137,6 @@ export function BotItemBody({
     isWorking: false,
     isVisible: true
   })
-  const unseen = useUnseenEventCount(view.events, showJump)
   // Comment and description links open as in chat, from the bot's folder; the panel has no tab of
   // its own, so opens place beside the bot workspace's focused tab, as a click in that chat would.
   const sourceTabId = useAppStore(
@@ -246,13 +245,12 @@ export function BotItemBody({
                       </section>
                     </div>
                   </div>
-                  <NativeChatJumpToLatest
-                    visible={unseen > 0}
-                    onJump={jumpToLatest}
-                    label={t('bots.items.view.newEvents', '{{count}} new', {
-                      count: unseen
-                    })}
+                  {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-linear-to-b from-transparent to-sidebar"
                   />
+                  <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
                 </div>
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>
@@ -280,16 +278,6 @@ export function BotItemBody({
       {snoozing.dialog}
     </div>
   )
-}
-
-/** Events added after the newest one seen at the bottom; zero while the list follows its end. */
-function useUnseenEventCount(events: readonly BotItemEvent[], detached: boolean): number {
-  const newest = events.at(-1)?.id ?? null
-  const [seen, setSeen] = useState(newest)
-  if (!detached && seen !== newest) {
-    setSeen(newest)
-  }
-  return detached ? events.length - 1 - events.findIndex((event) => event.id === seen) : 0
 }
 
 function CloseNote({ item }: { item: BotItem }): React.JSX.Element | null {

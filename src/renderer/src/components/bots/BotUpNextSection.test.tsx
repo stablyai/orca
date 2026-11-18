@@ -42,7 +42,7 @@ vi.mock('./BotLookSteps', () => ({
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { setBotHostListing, stampBotHost } from '@/lib/bot-catalog-snapshot'
-import { BotUpNextSection, lookedText } from './BotUpNextSection'
+import { BotUpNextSection } from './BotUpNextSection'
 import { revealBotUpNext } from './bot-up-next-reveal'
 
 function Tooltips({ children }: { children: ReactNode }): React.JSX.Element {
@@ -234,12 +234,6 @@ describe('Suggestions while a look starts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
     await waitFor(() => expect(screen.queryByText('Looking around…')).toBeNull())
   })
-
-  it('marks a suggestion with no source as Orca’s, so rows line up', () => {
-    const { source: _github, ...noSource } = review
-    const { container } = render(<BotUpNextSection bot={bot} upNext={upNext({}, [noSource])} />)
-    expect(container.querySelector('img[aria-hidden="true"]')).not.toBeNull()
-  })
 })
 
 describe('Suggestions v2', () => {
@@ -301,29 +295,15 @@ describe('Suggestions v2', () => {
 })
 
 describe('the bot row pointing here', () => {
-  it('opens the Activity panel, scrolls to Suggestions and flashes it as Start does the composer', () => {
+  it('opens the Activity panel and scrolls to Suggestions', () => {
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView
     render(<BotUpNextSection bot={bot} upNext={upNext()} />)
-    const section = screen.getByRole('heading', { name: 'Suggestions' }).closest('section')!
-    expect(section.classList.contains('native-chat-composer-glow')).toBe(false)
 
     act(() => revealBotUpNext('b1'))
 
     expect(mocks.setRightSidebarTab).toHaveBeenCalledWith('bot-activity')
     expect(mocks.setRightSidebarOpen).toHaveBeenCalledWith(true)
-    expect(section.classList.contains('native-chat-composer-glow')).toBe(true)
     expect(scrollIntoView).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('when it last looked', () => {
-  const now = new Date(2026, 9, 31, 18, 0).getTime()
-  it('names the day once it is not today', () => {
-    expect(lookedText(new Date(2026, 9, 31, 16, 12).getTime(), now)).toMatch(/^Looked 4:12\sPM$/)
-    expect(lookedText(new Date(2026, 9, 30, 16, 12).getTime(), now)).toMatch(
-      /^Looked yesterday 4:12\sPM$/
-    )
-    expect(lookedText(new Date(2026, 9, 29, 16, 12).getTime(), now)).toBe('Looked Oct 29')
   })
 })

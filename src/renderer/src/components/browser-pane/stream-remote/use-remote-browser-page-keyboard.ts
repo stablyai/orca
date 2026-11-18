@@ -32,18 +32,25 @@ import type {
   RemoteBrowserPaneNotice,
   RemoteBrowserRuntimeTarget
 } from './remote-browser-page-input-model'
+import type { BrowserPageEditCommand } from '../assemble-chrome/context-menu/browser-page-context-menu-items'
 
 type CopyWrite = { text: string }
 
 type RemoteKeyboardInput =
   | { method: 'browser.keypress'; key: string }
-  | { method: 'browser.keyboardInsertText'; text: string; copyWriteAtPaste: CopyWrite | null }
+  | {
+      method: 'browser.keyboardInsertText'
+      /** Null reads this machine's clipboard in turn, as a menu Paste has no paste event. */
+      text: string | null
+      copyWriteAtPaste: CopyWrite | null
+    }
   | {
       method: 'clipboardCommand'
       command: RemoteBrowserClipboardCommand
-      chord: RemoteBrowserClipboardChord
+      chord: RemoteBrowserClipboardChord | null
       fallbackKey: string
     }
+  | { method: 'execCommand'; command: 'undo' | 'redo' | 'selectAll' }
 
 export function useRemoteBrowserPageKeyboard({
   runtimeTarget,
@@ -68,6 +75,7 @@ export function useRemoteBrowserPageKeyboard({
 }): {
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  runRemoteEditCommand: (command: BrowserPageEditCommand) => void
 } {
   const t = useTranslate()
   const lastCopyWriteRef = useRef<CopyWrite | null>(null)
@@ -140,7 +148,7 @@ export function useRemoteBrowserPageKeyboard({
           const pasteText =
             lastCopyWrite && lastCopyWrite !== input.copyWriteAtPaste
               ? lastCopyWrite.text
-              : input.text
+              : (input.text ?? (await window.api.ui.readClipboardText()))
           await assertClipboardTextWithinLimitWithYield(pasteText)
           // Why chunks: one request carrying a large paste would exceed the runtime socket's frame cap.
           for (const text of iterateBrowserTextInsertionChunks(pasteText)) {
@@ -157,6 +165,11 @@ export function useRemoteBrowserPageKeyboard({
           return
         }
         if (!isCurrentRemoteOperationToken(operationToken)) {
+          return
+        }
+        if (input.method === 'execCommand') {
+          const expression = buildRemoteExecCommandExpression(input.command)
+          await callRuntimeRpc(target, 'browser.eval', { ...params, expression }, rpcOptions)
           return
         }
         const key =
@@ -241,5 +254,45 @@ export function useRemoteBrowserPageKeyboard({
     }
   }
 
-  return { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste }
+  // The context menu's edit items: copy, cut and paste use this machine's clipboard, as the keys do.
+  const runRemoteEditCommand = (command: BrowserPageEditCommand): void => {
+    if (command === 'copy' || command === 'cut') {
+      const key = command === 'copy' ? 'c' : 'x'
+      enqueueRemoteKeyboardInput({
+        method: 'clipboardCommand',
+        command,
+        chord: null,
+        fallbackKey: `${getShortcutPlatform() === 'darwin' ? 'Meta' : 'Control'}+${key}`
+      })
+      return
+    }
+    if (command === 'paste' || command === 'pasteAndMatchStyle') {
+      enqueueRemoteKeyboardInput({
+        method: 'browser.keyboardInsertText',
+        text: null,
+        copyWriteAtPaste: lastCopyWriteRef.current
+      })
+      return
+    }
+    enqueueRemoteKeyboardInput({ method: 'execCommand', command })
+  }
+
+  return { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste, runRemoteEditCommand }
+}
+
+/** Runs an edit command in the focused document, reaching into same-origin frames like a native edit does. */
+function buildRemoteExecCommandExpression(command: 'undo' | 'redo' | 'selectAll'): string {
+  return `(() => {
+    let doc = document;
+    while (doc.activeElement && doc.activeElement.contentDocument) {
+      doc = doc.activeElement.contentDocument;
+    }
+    const field = doc.activeElement;
+    // Why: a programmatically focused field may not hold the frame selection that execCommand selects in.
+    if (${JSON.stringify(command)} === 'selectAll' && field && typeof field.select === 'function') {
+      field.select();
+      return;
+    }
+    doc.execCommand(${JSON.stringify(command)});
+  })()`
 }

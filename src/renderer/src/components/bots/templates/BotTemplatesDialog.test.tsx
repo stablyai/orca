@@ -82,6 +82,26 @@ describe('BotTemplatesDialog', () => {
     expect(useAppStore.getState().activeView).toBe('tasks')
   })
 
+  it('filters by category and keeps the search when changing categories', () => {
+    openBotTemplates()
+    renderDialog()
+    const coding = screen.getByRole('radio', { name: 'Coding' })
+    const releaseNotes = { name: /^Release notes/ }
+
+    fireEvent.click(coding)
+    expect(screen.getByRole('radio', { name: 'Coding', checked: true })).toBe(coding)
+    expect(screen.getByRole('option', { name: /^Dependency updates/ })).toBeTruthy()
+    expect(screen.queryByRole('option', releaseNotes)).toBeNull()
+
+    const search = screen.getByRole('textbox', { name: 'Search templates' })
+    fireEvent.change(search, { target: { value: 'release notes' } })
+    expect(screen.queryByRole('listbox')).toBeNull()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'All' }))
+    expect(screen.getByRole('option', releaseNotes)).toBeTruthy()
+    expect(screen.queryByRole('option', { name: /^Dependency updates/ })).toBeNull()
+  })
+
   it('keeps the detail header and Use template… out of the part that scrolls', () => {
     openBotTemplates('ci-failures')
     renderDialog()

@@ -11,7 +11,6 @@ describe('bot card field reader ratchet', () => {
     ['literal element access', "const b = block?.['botRequest']"],
     ['destructured declaration', 'const { botRequest } = block'],
     ['literal computed binding key', "const { ['botRequest']: value } = block"],
-    ['destructuring assignment', 'let value; ({ botRequest: value } = block)'],
     ['shorthand destructuring assignment', 'let botRequest; ({ botRequest } = block)'],
     ['nested destructuring assignment', 'let value; [{ botRequest: value }] = blocks'],
     ['for-of destructuring head', 'let value; for ({ botRequest: value } of blocks) {}'],

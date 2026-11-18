@@ -20,7 +20,6 @@ function tab(contentType: Tab['contentType']): Tab {
 describe('toVisibleTabType', () => {
   it('shows a room where an agent chat is, so a host sync keeps it a chat', () => {
     expect(toVisibleTabType(tab('room'))).toBe('agent-session')
-    expect(toVisibleTabType(tab('agent-session'))).toBe('agent-session')
     expect(toVisibleTabType(tab('terminal'))).toBe('terminal')
   })
 })

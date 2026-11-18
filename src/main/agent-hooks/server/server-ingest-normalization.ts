@@ -165,11 +165,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
     if (!paneKey) {
-      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+      return { event: normalizeHookPayload(this.state, source, body, this.env, { isReplay }) }
     }
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const event = normalizeHookPayload(this.state, source, body, this.env, { isReplay })
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
@@ -203,6 +203,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
           hookEventName: normalized.event.hookEventName,
           isReplay: normalized.event.isReplay,
           hasExplicitPrompt: normalized.event.hasExplicitPrompt,
+          opensTurn: normalized.event.opensTurn,
           launchToken: normalized.event.launchToken
         })
       : 'suppress'
