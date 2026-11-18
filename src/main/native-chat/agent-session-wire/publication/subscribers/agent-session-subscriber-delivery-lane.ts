@@ -5,8 +5,8 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import {
   ChatRetainedBytesRefused,
   claimSharedLiveText,
-  noteChatRetainedBytesRefused,
-  serializedBytesOf
+  heldBytesOf,
+  noteChatRetainedBytesRefused
 } from '../../../retention/chat-path-retained-bytes'
 
 /** Reads every row after the subscriber's cursor when it runs, so a later one covers an earlier one. */
@@ -31,14 +31,8 @@ type LaneEntry =
   | { kind: 'ordered'; since: number; run: () => Promise<unknown> }
   | { kind: 'catch-up'; since: number; catchUp: SubscriberCatchUp }
   | { kind: 'background-tasks'; since: number; fence: number }
-  | {
-      kind: 'live-text'
-      since: number
-      liveText: SubscriberLiveText
-      /** Charged only while it waits behind other work; 0 when it starts at once. */
-      bytes: number
-      release: () => void
-    }
+  /** Charged only while it waits behind other work; one that starts at once releases nothing. */
+  | { kind: 'live-text'; since: number; liveText: SubscriberLiveText; release: () => void }
 
 export type SubscriberDeliveryLaneRunners = {
   catchUp: (catchUp: SubscriberCatchUp) => Promise<unknown>
@@ -65,6 +59,9 @@ export type SubscriberDeliveryRetention = {
  * transport retains at most the active delivery, one catch-up, one background refresh and the
  * latest live text per run of ordered work, never every superseded snapshot.
  */
+/** Lanes whose waiting live text holds a charge; read only when the budget refuses one. */
+const charged = new Set<SubscriberDeliveryLane>()
+
 export class SubscriberDeliveryLane {
   private readonly pending: LaneEntry[] = []
   private active: LaneEntry | undefined
@@ -118,23 +115,51 @@ export class SubscriberDeliveryLane {
     }
     const since = replaced?.since ?? this.runners.now()
     if (this.idle) {
-      this.add({ kind: 'live-text', since, liveText, bytes: 0, release: () => {} })
+      this.add({ kind: 'live-text', since, liveText, release: () => {} })
       return
     }
-    const release = claimSharedLiveText(liveText.items)
-    if (!release) {
-      // Over the chat budget: the client resumes from its cursor and reads the text again.
-      noteChatRetainedBytesRefused()
-      this.runners.failed(new ChatRetainedBytesRefused('subscriber live text'))
+    const claim = this.claimLiveText(liveText.items, since)
+    if (!claim) {
+      // The client resumes from its cursor and reads the text again.
+      this.refuse()
       return
     }
-    this.add({
-      kind: 'live-text',
-      since,
-      liveText,
-      bytes: serializedBytesOf(liveText.items),
-      release
-    })
+    charged.add(this)
+    const release = (): void => {
+      charged.delete(this)
+      claim()
+    }
+    this.add({ kind: 'live-text', since, liveText, release })
+  }
+
+  /** Over the budget, the longest-waiting holder ends first: a stalled stream gives way, not a new one. */
+  private claimLiveText(items: object, since: number): (() => void) | null {
+    let claim = claimSharedLiveText(items)
+    while (!claim) {
+      let oldest: SubscriberDeliveryLane | undefined
+      for (const lane of charged) {
+        if (lane !== this && (!oldest || lane.waitingSince() < oldest.waitingSince())) {
+          oldest = lane
+        }
+      }
+      if (!oldest || oldest.waitingSince() >= since) {
+        return null
+      }
+      oldest.refuse()
+      claim = claimSharedLiveText(items)
+    }
+    return claim
+  }
+
+  private waitingSince(): number {
+    const entry = this.pending.find((pending) => pending.kind === 'live-text')
+    return entry?.since ?? Infinity
+  }
+
+  private refuse(): void {
+    noteChatRetainedBytesRefused()
+    this.runners.failed(new ChatRetainedBytesRefused('subscriber live text'))
+    this.clear()
   }
 
   /** Releases waiting work and withdraws queued reads; the active delivery gets no more frames. */
@@ -148,12 +173,14 @@ export class SubscriberDeliveryLane {
     this.stop.abort()
   }
 
-  retention(now: number): SubscriberDeliveryRetention {
+  /** `counted` spans one sample: subscribers of one chat share each snapshot, counted once. */
+  retention(now: number, counted: Set<object>): SubscriberDeliveryRetention {
     const entries = this.active ? [this.active, ...this.pending] : this.pending
     let liveTextBytes = 0
     for (const entry of entries) {
-      if (entry.kind === 'live-text') {
-        liveTextBytes += entry.bytes
+      if (entry.kind === 'live-text' && !counted.has(entry.liveText.items)) {
+        counted.add(entry.liveText.items)
+        liveTextBytes += heldBytesOf(entry.liveText.items)
       }
     }
     const oldest = entries.reduce((since, entry) => Math.min(since, entry.since), now)

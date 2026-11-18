@@ -64,8 +64,8 @@ export class AgentSessionSubscribers {
   }
 
   /** What waits behind each subscriber's active delivery, for memory diagnostics. */
-  retention(): SubscriberDeliveryRetention[] {
-    return this.lanes.retention(this.bySession, this.now())
+  retention(counted: Set<object>): SubscriberDeliveryRetention[] {
+    return this.lanes.retention(this.bySession, this.now(), counted)
   }
 
   subscriberCount(sessionId: string): number {

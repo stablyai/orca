@@ -32,11 +32,6 @@ export class JournalSqlOwner {
     }
   >()
   private nextId = 0
-  /** Writes waiting on the writer; each is posted at once, so main keeps only its callbacks, no bytes. */
-  private readonly stopObserving = observeRetainedBytes('writes', () => ({
-    bytes: 0,
-    items: this.pending.size
-  }))
   private failure: Error | undefined
   private closing = false
   private didExit = false
@@ -62,11 +57,16 @@ export class JournalSqlOwner {
       workerData: { filename, stateDirectory },
       execArgv: []
     })
+    // Writes waiting on the writer; each is posted at once, so main keeps only its callbacks.
+    const stopObserving = observeRetainedBytes('writes', () => ({
+      bytes: 0,
+      items: this.pending.size
+    }))
     this.worker.on('message', (response: JournalSqlResponse) => this.receive(response))
     this.worker.on('error', (error) => this.fail(error))
     this.worker.once('exit', (code) => {
       this.didExit = true
-      this.stopObserving()
+      stopObserving()
       this.exited.resolve()
       if (!this.closing || this.pending.size > 0) {
         this.fail(new Error(`journal SQL owner exited (${code})`))

@@ -101,14 +101,15 @@ export class SubscriberLanes {
   /** Busy lanes of every live subscriber. */
   retention(
     bySession: ReadonlyMap<string, ReadonlyMap<string, Subscriber>>,
-    now: number
+    now: number,
+    counted: Set<object>
   ): SubscriberDeliveryRetention[] {
     const retained: SubscriberDeliveryRetention[] = []
     for (const session of bySession.values()) {
       for (const subscriber of session.values()) {
         const lane = this.lanes.get(subscriber)
         if (lane && !lane.idle) {
-          retained.push(lane.retention(now))
+          retained.push(lane.retention(now, counted))
         }
       }
     }

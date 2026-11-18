@@ -18,15 +18,39 @@ export const chatLiveTextRetainedBytes = createRetainedBytesBudget({
 
 observeRetainedBytes('live', chatLiveTextRetainedBytes.reading)
 
+/** A rough per-value cost on top of string characters; keeps tiny values from counting as free. */
+const VALUE_BYTES = 16
 const sizes = new WeakMap<object, number>()
 
-/** Exact serialized size, measured once per immutable payload however many holders share it. */
-export function serializedBytesOf(payload: object): number {
-  let bytes = sizes.get(payload)
-  if (bytes === undefined) {
-    bytes = Buffer.byteLength(JSON.stringify(payload) ?? '')
-    sizes.set(payload, bytes)
+/**
+ * What a payload holds on the heap, from above for its strings: two bytes per character, plus a
+ * fixed cost per value. One visit per value and no serialization, so a growing reply costs its
+ * value count, not its text length; measured once per payload however many holders share it.
+ */
+export function heldBytesOf(payload: object): number {
+  const cached = sizes.get(payload)
+  if (cached !== undefined) {
+    return cached
   }
+  let bytes = 0
+  const stack: unknown[] = [payload]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    bytes += VALUE_BYTES
+    if (typeof value === 'string') {
+      bytes += value.length * 2
+    } else if (Array.isArray(value)) {
+      for (const child of value) {
+        stack.push(child)
+      }
+    } else if (value && typeof value === 'object') {
+      for (const key in value) {
+        bytes += key.length * 2
+        stack.push(Reflect.get(value, key))
+      }
+    }
+  }
+  sizes.set(payload, bytes)
   return bytes
 }
 
@@ -39,7 +63,7 @@ const shared = new WeakMap<object, { holders: number; release: () => void }>()
 export function claimSharedLiveText(payload: object): (() => void) | null {
   let claim = shared.get(payload)
   if (!claim) {
-    const release = chatLiveTextRetainedBytes.claim(serializedBytesOf(payload))
+    const release = chatLiveTextRetainedBytes.claim(heldBytesOf(payload))
     if (!release) {
       return null
     }

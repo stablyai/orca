@@ -26,25 +26,25 @@ async function collect(): Promise<void> {
   }
 }
 
-async function blockedSubscriber() {
+async function blockedSubscriber(sessionId = SESSION, now = (): number => Date.now()) {
   const journal = await journals.open({
     identity: {
-      sessionId: SESSION,
+      sessionId,
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'claude',
       providerHandle: claudeProviderHandle('provider-1', null)
     },
-    stateDirectory: join(fixture.root, 'chat')
+    stateDirectory: join(fixture.root, sessionId)
   })
-  const subscribers = new AgentSessionSubscribers()
+  const subscribers = new AgentSessionSubscribers({ now })
   const ends: unknown[] = []
   const transport = Promise.withResolvers<void>()
   let blocked = false
   const events: AgentSessionSubscribeEvent[] = []
   const close = subscribers.open({
     id: 'pane',
-    sessionId: SESSION,
+    sessionId,
     journal,
     fence: 1,
     emit: (event) => events.push(event),
@@ -76,7 +76,7 @@ async function blockedSubscriber() {
       }
     ]
     snapshots.push(new WeakRef(items))
-    subscribers.publishLiveText(SESSION, journal, 1, items)
+    subscribers.publishLiveText(sessionId, journal, 1, items)
   }
   const alive = async (): Promise<number> => {
     await collect()
@@ -130,5 +130,29 @@ it('ends the stream instead of holding live text past the chat budget', async ()
   } finally {
     others?.()
     pane.release()
+  }
+})
+
+it('ends the longest-waiting holder, not a newer stream, when the chat budget is full', async () => {
+  let clock = 0
+  const stalled = await blockedSubscriber('stalled-session', () => clock)
+  const fresh = await blockedSubscriber('fresh-session', () => clock)
+  stalled.publish(0)
+  await Promise.resolve()
+  stalled.publish(1)
+  clock = 1_000
+  fresh.publish(0)
+  await Promise.resolve()
+  const others = chatLiveTextRetainedBytes.claim(
+    CHAT_LIVE_TEXT_RETAINED_BYTES - chatLiveTextRetainedBytes.reading().bytes
+  )
+  try {
+    fresh.publish(1)
+    expect(stalled.ends).toHaveLength(1)
+    expect(fresh.ends).toHaveLength(0)
+  } finally {
+    others?.()
+    stalled.release()
+    fresh.release()
   }
 })
