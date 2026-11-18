@@ -10,6 +10,7 @@ import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/bro
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
 import type { GrabModeHook } from '../annotate/grab/useGrabMode'
+import type { BrowserAnnotationsClearRequest } from '../annotate/delivery/use-browser-page-annotation-send'
 import type { BrowserOverlayViewport, OverlayRectSource } from './browser-annotation-geometry'
 
 export type BrowserTabPageState = Partial<
@@ -146,7 +147,8 @@ export type BrowserPageAnnotationTrayProps = {
   handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
   handleCopyBrowserAnnotations: () => void
   browserAnnotationsCopied: boolean
-  handleClearBrowserAnnotations: () => void
+  createBrowserAnnotationsClearRequest: () => BrowserAnnotationsClearRequest
+  sendableAnnotationCount: number
   handleDeleteBrowserAnnotation: (annotationId: string) => void
   handleUpdateBrowserAnnotation: (
     annotationId: string,

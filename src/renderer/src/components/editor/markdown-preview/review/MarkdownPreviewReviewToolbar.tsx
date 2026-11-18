@@ -1,6 +1,11 @@
-import { Check, Copy, MessageSquare } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { NotesSendMenu } from '../../review-note-delivery/NotesSendMenu'
+import {
+  diffNotesClearRequest,
+  NotesMenuCopyClearItems,
+  useClearNotesConfirm
+} from '../../review-note-delivery/notes-copy-clear'
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
 import type { MarkdownPreviewReviewActions } from './use-markdown-preview-review-actions'
 
@@ -16,7 +21,6 @@ export function MarkdownPreviewReviewToolbar({
   const t = useTranslate()
   const {
     markdownReviewNotes,
-    reviewNotesCopied,
     commentOwner,
     notesKnown,
     sourceWorktree,
@@ -24,6 +28,7 @@ export function MarkdownPreviewReviewToolbar({
     clearDeliveredDiffComments
   } = foundation
   const { scrollToReviewNote, handleCopyMarkdownReviewNotes } = reviewActions
+  const clearConfirm = useClearNotesConfirm()
 
   return (
     <div className="markdown-review-toolbar">
@@ -45,17 +50,6 @@ export function MarkdownPreviewReviewToolbar({
       >
         <MessageSquare className="size-3.5" />
         <span>{t('auto.components.editor.MarkdownPreview.322afab6ff', 'Review notes')}</span>
-        <span className="markdown-review-count">{markdownReviewNotes.length}</span>
-      </button>
-      <button
-        type="button"
-        className="markdown-review-icon-button"
-        onClick={() => void handleCopyMarkdownReviewNotes()}
-        disabled={markdownReviewNotes.length === 0}
-        title={t('auto.components.editor.MarkdownPreview.bb629de58a', 'Copy notes for agent')}
-        aria-label={t('auto.components.editor.MarkdownPreview.bb629de58a', 'Copy notes for agent')}
-      >
-        {reviewNotesCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       </button>
       {sourceWorktree ? (
         <NotesSendMenu
@@ -65,12 +59,25 @@ export function MarkdownPreviewReviewToolbar({
           groupId={sourceWorktree.id}
           modeIdParts={['markdown-notes', sourceWorktree.id, filePath, 'preview-toolbar']}
           scopes={unsentMarkdownReviewScope}
-          triggerClassName="markdown-review-icon-button"
+          batchTrigger={{}}
+          menuFooter={
+            commentOwner ? (
+              <NotesMenuCopyClearItems
+                onCopy={() => void handleCopyMarkdownReviewNotes()}
+                onClear={() =>
+                  clearConfirm.requestClear(
+                    diffNotesClearRequest(commentOwner, markdownReviewNotes, filePath)
+                  )
+                }
+              />
+            ) : null
+          }
           onDelivered={(notes) =>
             void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
           }
         />
       ) : null}
+      {clearConfirm.dialog}
     </div>
   )
 }

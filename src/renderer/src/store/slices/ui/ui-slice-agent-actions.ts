@@ -8,7 +8,11 @@ import {
   runningAgentSendTargetAgentType
 } from '../../../lib/agent-session/messaging/running-agent-targets'
 import { translate } from '@/i18n/i18n'
+import { activeAgentNotesSendFailureMessage } from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
 import { createUiActivityActions } from './ui-slice-activity-actions'
+import { selectKnownWorktreeById } from '../../workspaces/selection/known-worktree-selection'
+import { combinedUncommittedDiffId } from '../editor/git/open-combined-diff'
+import { editorOpenOwner } from '../editor/git/editor-open-owner'
 
 let agentSendTargetModeInstanceCounter = 0
 
@@ -96,8 +100,22 @@ export function createUiAgentActions(
       ) {
         return false
       }
-      get().setRightSidebarTab('source-control')
-      get().setRightSidebarOpen(true)
+      // The Changes tab's Send notes button answers the request once its toolbar is showing.
+      const worktree = selectKnownWorktreeById(get(), worktreeId)
+      if (!worktree) {
+        return false
+      }
+      // Reuse an open Changes tab as it is: reopening would replace its entry snapshots and comparison.
+      const changesId = combinedUncommittedDiffId(worktreeId, editorOpenOwner(get(), worktreeId))
+      const changesTab = get().openFiles.some((file) => file.id === changesId)
+        ? (get().unifiedTabsByWorktree[worktreeId] ?? []).find((tab) => tab.entityId === changesId)
+        : undefined
+      if (changesTab) {
+        get().activateTab(changesTab.id, { worktreeId })
+        get().setActiveFile(changesId, worktreeId)
+      } else {
+        get().openAllDiffs(worktreeId, worktree.path)
+      }
       const nonce = (get().diffNotesSendMenuOpenRequest?.nonce ?? 0) + 1
       set({ diffNotesSendMenuOpenRequest: { worktreeId, nonce, issuedAt: Date.now() } })
       return true
@@ -127,6 +145,10 @@ export function createUiAgentActions(
       if (!mode || mode.status === 'sending' || !mode.prompt.trim()) {
         return false
       }
+      if (mode.canSendPrompt && !mode.canSendPrompt()) {
+        get().closeAgentSendPopoverTargetMode(mode.id, mode.instanceId)
+        return false
+      }
 
       const target = resolveRunningAgentSendTarget(get(), mode.worktreeId, paneKey)
       if (
@@ -154,21 +176,31 @@ export function createUiAgentActions(
 
       const agentType = runningAgentSendTargetAgentType(target)
       const label = formatAgentTypeLabel(agentType)
-      const [, { activeAgentNotesSendFailureMessage }, { sendMessageToAgent }] = await Promise.all([
-        import('@/lib/agent-session/messaging/terminal/active-agent-note-send'),
-        import('@/lib/agent-session/messaging/terminal/active-agent-note-send-result'),
-        import('@/lib/agent-session/messaging/agent-message-send')
-      ])
-      const sending = sendMessageToAgent({
-        worktreeId: mode.worktreeId,
-        prompt: mode.prompt,
-        target: runningAgentMessageTarget(target)
-      }).catch(() => {
-        console.error('Failed to send notes to sidebar agent target:', {
-          code: 'runtime-unverifiable'
+      // Reserve the captured notes before loading the delivery code.
+      const sending = Promise.resolve()
+        .then(async () => {
+          const [, { sendMessageToAgent }] = await Promise.all([
+            import('@/lib/agent-session/messaging/terminal/active-agent-note-send'),
+            import('@/lib/agent-session/messaging/agent-message-send')
+          ])
+          return sendMessageToAgent({
+            worktreeId: mode.worktreeId,
+            prompt: mode.prompt,
+            target: runningAgentMessageTarget(target)
+          })
         })
-        return { status: 'status-unavailable' as const, code: 'runtime-unverifiable' as const }
-      })
+        .catch(() => {
+          console.error('Failed to send notes to sidebar agent target:', {
+            code: 'runtime-unverifiable'
+          })
+          return { status: 'status-unavailable' as const, code: 'runtime-unverifiable' as const }
+        })
+        .then((sendResult) => {
+          if (sendResult.status === 'sent') {
+            mode.onPromptDelivered?.()
+          }
+          return sendResult
+        })
       mode.onPromptHandedOff?.(sending)
       const result = await sending
 
@@ -209,7 +241,6 @@ export function createUiAgentActions(
       }
 
       // Completed-send delivery/telemetry/toast outlive the picker; only closing it is scoped to this instance.
-      mode.onPromptDelivered?.()
       const [{ toast }, { track }] = await Promise.all([
         import('sonner'),
         import('@/diagnostics/telemetry/telemetry')

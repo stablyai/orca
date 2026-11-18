@@ -1,3 +1,4 @@
+// @protected-copy scope=file
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
@@ -13,6 +14,11 @@ import {
   useNotesInFlightVersion
 } from '@/components/notes/delivery/notes-send-in-flight'
 import { recomputeOn } from '@/lib/recompute-on'
+
+export type BrowserAnnotationsClearRequest = {
+  description: string
+  clear: () => Promise<boolean>
+}
 
 export function useBrowserPageAnnotationSend({
   browserTabId,
@@ -32,6 +38,9 @@ export function useBrowserPageAnnotationSend({
   handleAnnotationTraySendOpenChange: (open: boolean) => void
   handleCopyBrowserAnnotations: () => void
   handleClearBrowserAnnotations: () => void
+  /** Clear for the annotations on the page right now; ones added before the confirm stay. */
+  createBrowserAnnotationsClearRequest: () => BrowserAnnotationsClearRequest
+  sendableAnnotationCount: number
   handleDeleteBrowserAnnotation: (annotationId: string) => void
   handleUpdateBrowserAnnotation: (
     annotationId: string,
@@ -135,6 +144,26 @@ export function useBrowserPageAnnotationSend({
     recordFeatureInteraction('browser-annotations')
     clearBrowserPageAnnotations(browserTabId)
   }, [browserTabId, clearBrowserPageAnnotations, recordFeatureInteraction])
+
+  const createBrowserAnnotationsClearRequest = useCallback((): BrowserAnnotationsClearRequest => {
+    const ids = new Set(browserAnnotationsRef.current.map((annotation) => annotation.id))
+    return {
+      description: translate(
+        'components.notes.sendButton.clearPageNotes',
+        'Clear {{count}} notes from this page?',
+        { count: ids.size, defaultValue_one: 'Clear {{count}} note from this page?' }
+      ),
+      clear: async () => {
+        // Match by id on the current list, so an annotation edited since is still cleared.
+        removeDeliveredBrowserPageAnnotations(
+          browserTabId,
+          browserAnnotationsRef.current.filter((annotation) => ids.has(annotation.id))
+        )
+        recordFeatureInteraction('browser-annotations')
+        return true
+      }
+    }
+  }, [browserTabId, recordFeatureInteraction, removeDeliveredBrowserPageAnnotations])
 
   const openAnnotationSendTargetMode = useCallback(
     (modeId: string, prompt: string): void => {
@@ -252,6 +281,8 @@ export function useBrowserPageAnnotationSend({
     handleAnnotationTraySendOpenChange,
     handleCopyBrowserAnnotations,
     handleClearBrowserAnnotations,
+    createBrowserAnnotationsClearRequest,
+    sendableAnnotationCount: sendableAnnotations.length,
     handleDeleteBrowserAnnotation,
     handleUpdateBrowserAnnotation,
     handleBrowserAnnotationsSentToAgent,

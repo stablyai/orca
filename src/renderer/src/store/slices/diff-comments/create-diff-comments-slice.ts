@@ -4,7 +4,6 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
-import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   enqueueDiffCommentPersist,
   mutateDiffComments,
@@ -30,20 +29,11 @@ export type DiffCommentsSlice = {
     sentAt?: number
   ) => Promise<boolean>
   deleteDiffComment: (owner: DiffCommentOwner, commentId: string) => Promise<void>
-  clearDiffComments: (
+  /** Removes the listed notes that still exist; notes added since the list was taken stay. */
+  deleteDiffCommentsByIds: (
     owner: DiffCommentOwner,
-    options?: DiffCommentsClearOptions
+    commentIds: readonly string[]
   ) => Promise<boolean>
-  clearDiffCommentsForFile: (
-    owner: DiffCommentOwner,
-    filePath: string,
-    options?: DiffCommentsClearOptions
-  ) => Promise<boolean>
-}
-
-export type DiffCommentsClearOptions = {
-  // Why: markdown notes hidden by the Markdown Review Notes setting must survive a clear the user can't see them in.
-  keepMarkdownNotes?: boolean
 }
 
 export type DiffCommentDeliverySnapshot = Pick<
@@ -252,44 +242,20 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
   },
 
-  clearDiffComments: async (owner, options) => {
+  deleteDiffCommentsByIds: async (owner, commentIds) => {
     if (!readOwnedDiffComments(get(), owner)) {
       return false
     }
-    const worktreeId = owner.worktreeId
+    const ids = new Set(commentIds)
     const result = mutateDiffComments(set, owner, (existing) => {
-      const next = options?.keepMarkdownNotes ? existing.filter(isMarkdownComment) : []
+      const next = existing.filter((c) => !ids.has(c.id))
       return next.length === existing.length ? null : next
     })
     if (!result) {
       return true
     }
     try {
-      await enqueueDiffCommentPersist(set, worktreeId, get, result)
-      return true
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      return false
-    }
-  },
-
-  clearDiffCommentsForFile: async (owner, filePath, options) => {
-    if (!readOwnedDiffComments(get(), owner)) {
-      return false
-    }
-    const worktreeId = owner.worktreeId
-    const result = mutateDiffComments(set, owner, (existing) => {
-      const next = existing.filter(
-        (c) =>
-          c.filePath !== filePath || (options?.keepMarkdownNotes === true && isMarkdownComment(c))
-      )
-      return next.length === existing.length ? null : next
-    })
-    if (!result) {
-      return true
-    }
-    try {
-      await enqueueDiffCommentPersist(set, worktreeId, get, result)
+      await enqueueDiffCommentPersist(set, owner.worktreeId, get, result)
       return true
     } catch (err) {
       console.error('Failed to persist diff comments:', err)

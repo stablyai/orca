@@ -15020,7 +15020,6 @@
                 "failingCount_other": "{{count}} 个失败",
                 "pendingCount_other": "{{count}} 个等待中",
                 "unresolvedCount_other": "{{count}} 个未解决",
-                "sendQueuedCommentsToAi_other": "发送 {{count}} 条排队评论给 AI",
                 "conflictsBlockThisMr": "冲突阻止了此 MR",
                 "conflictsBlockThisPr": "冲突阻止了此 PR",
                 "copyComment": "复制评论",
@@ -17042,10 +17041,6 @@
           "39b6b9e4e4": "已提交到分支"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "发送",
-          "84898c548d": "清除",
-          "88b70d0ef5": "复制",
-          "bb84b4c374": "AI 笔记",
           "948a5fd6c8": "清除笔记",
           "0f806a2ab1": "取消",
           "b6c3b84476": "显示文件树",
@@ -17055,7 +17050,6 @@
           "820ec01f24": "冲突文件单独评审",
           "fd8892b120": "没有显示任何变化",
           "eb5f40e49c": "此差异视图排除了未解决的冲突，因为普通的双向差异管道不是冲突安全的",
-          "45cf23b418": "无法清除笔记",
           "ec5053c7f5": "并排",
           "f786fd54e1": "内联",
           "ea08dae15b": "全部折叠",
@@ -17070,13 +17064,9 @@
           "noExtension": "（无扩展名）",
           "diffLoadTimedOut": "差异加载未完成",
           "diffLoadFailed": "无法加载差异",
-          "moreNotesInSourceControl_other": "源代码控制中还有 {{count}} 条笔记",
-          "clearNotesConfirm_other": "清除此工作树中的 {{count}} 条笔记？",
           "changedFilesVs_other": "相比 {{baseRef}}，有 {{count}} 个文件更改",
           "changedFilesIn_other": "{{compareRef}} 中有 {{count}} 个已更改文件",
           "changedFiles_other": "{{count}} 个已更改文件",
-          "showAiNotes_other": "显示 {{count}} 条 AI 笔记",
-          "send": "发送",
           "openDiff": "打开差异",
           "openInEditor": "在编辑器中打开",
           "skippedConflictsExcluded": "{{count}} 个未解决的冲突已被排除在此差异视图之外"
@@ -17272,7 +17262,6 @@
           "b1bfc04034": "选定的文本",
           "f37b98999e": "此注",
           "2b2b31382c": "前言",
-          "bb629de58a": "复制备注给代理",
           "322afab6ff": "复习笔记",
           "0f9969a159": "跳转到第一个评论笔记",
           "12052c639c": "关闭搜索",
@@ -17345,7 +17334,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "发送笔记",
-          "433928cd9f": "将 {{value0}} 发送给代理",
           "thisNote": "这条笔记",
           "noteAlreadySent": "笔记已发送",
           "sendNotesToAgent": "将笔记发送给智能体",
@@ -17431,8 +17419,6 @@
           "3ababd949d": "复习笔记"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "复制备注给代理",
-          "a807596997": "复制笔记",
           "8aaf2c4c69": "显示评论笔记",
           "af02dc2456": "隐藏评论注释"
         },
@@ -18310,8 +18296,6 @@
             "b472c5fe03": "添加浏览器注释",
             "b5ba6085de": "疑问",
             "143204e423": "改变",
-            "d51ef37351": "复制",
-            "6f4ab3592b": "已复制",
             "168350ae6a": "单击或悬停一个元素，然后按 C 进行复制或按 S 进行屏幕截图",
             "777b5bc4ec": "单击一个元素可为代理添加反馈",
             "b733a91bd9": "为所选元素添加反馈",
@@ -23521,6 +23505,19 @@
         "address": "地址",
         "finish": "完成",
         "pasteLanded": "登录后，请粘贴最终跳转到的页面地址"
+      }
+    },
+    "notes": {
+      "sendButton": {
+        "sending": "正在发送…",
+        "sendShort": "发送 {{count}} 条",
+        "clearNotes": "清除备注…",
+        "sendCommentsToAgent_other": "将 {{count}} 条评论发送给智能体",
+        "sendNotes_other": "发送 {{count}} 条备注",
+        "sendComments_other": "发送 {{count}} 条评论",
+        "clearPageNotes_other": "清除此页面中的 {{count}} 条备注？",
+        "copyNotes": "复制备注",
+        "sendNotesToAgent_other": "将 {{count}} 条备注发送给智能体"
       }
     }
   },

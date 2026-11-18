@@ -61,6 +61,7 @@ export type AgentSendPopoverTargetMode = {
   sendingPaneKey?: string
   error?: string
   onPromptDelivered?: () => void
+  canSendPrompt?: () => boolean
   /** Told the send's own result the moment the prompt is handed to an agent. */
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
@@ -73,6 +74,7 @@ export type OpenAgentSendPopoverTargetModeArgs = {
   label: string
   launchSource: LaunchSource
   onPromptDelivered?: () => void
+  canSendPrompt?: () => boolean
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 

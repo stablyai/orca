@@ -15910,8 +15910,6 @@
                 "pendingCount_other": "{{count}} pending",
                 "unresolvedCount_one": "{{count}} unresolved",
                 "unresolvedCount_other": "{{count}} unresolved",
-                "sendQueuedCommentsToAi_one": "Send {{count}} queued comment to AI",
-                "sendQueuedCommentsToAi_other": "Send {{count}} queued comments to AI",
                 "conflictsBlockThisMr": "Conflicts block this MR",
                 "conflictsBlockThisPr": "Conflicts block this PR",
                 "copyComment": "Copy comment",
@@ -17952,10 +17950,6 @@
           "39b6b9e4e4": "Committed on Branch"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Sent",
-          "84898c548d": "Clear",
-          "88b70d0ef5": "Copy",
-          "bb84b4c374": "AI notes",
           "948a5fd6c8": "Clear Notes",
           "0f806a2ab1": "Cancel",
           "b6c3b84476": "Show file tree",
@@ -17965,7 +17959,6 @@
           "820ec01f24": "Conflicted files are reviewed separately",
           "fd8892b120": "No changes to display",
           "eb5f40e49c": "This diff view excludes unresolved conflicts because the normal two-way diff pipeline is not conflict-safe.",
-          "45cf23b418": "Failed to clear notes.",
           "ec5053c7f5": "Side by Side",
           "f786fd54e1": "Inline",
           "ea08dae15b": "Collapse All",
@@ -17980,19 +17973,12 @@
           "noExtension": "(no extension)",
           "diffLoadTimedOut": "Diff did not finish loading.",
           "diffLoadFailed": "Unable to load diff.",
-          "moreNotesInSourceControl_one": "{{count}} more note in Source Control",
-          "moreNotesInSourceControl_other": "{{count}} more notes in Source Control",
-          "clearNotesConfirm_one": "Clear {{count}} note from this worktree?",
-          "clearNotesConfirm_other": "Clear {{count}} notes from this worktree?",
           "changedFilesVs_one": "{{count}} changed file vs {{baseRef}}",
           "changedFilesVs_other": "{{count}} changed files vs {{baseRef}}",
           "changedFilesIn_one": "{{count}} changed file in {{compareRef}}",
           "changedFilesIn_other": "{{count}} changed files in {{compareRef}}",
           "changedFiles_one": "{{count}} changed file",
           "changedFiles_other": "{{count}} changed files",
-          "showAiNotes_one": "Show {{count}} AI note",
-          "showAiNotes_other": "Show {{count}} AI notes",
-          "send": "Send",
           "openDiff": "Open diff",
           "openInEditor": "Open in editor",
           "skippedConflictsExcluded": "{{count}} unresolved conflicts were excluded from this diff view."
@@ -18194,7 +18180,6 @@
           "b1bfc04034": "Selected text",
           "f37b98999e": "This note",
           "2b2b31382c": "Front Matter",
-          "bb629de58a": "Copy notes for agent",
           "322afab6ff": "Review notes",
           "0f9969a159": "Jump to first review note",
           "12052c639c": "Close search",
@@ -18267,7 +18252,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Send notes",
-          "433928cd9f": "Send {{value0}} to an agent",
           "thisNote": "This note",
           "noteAlreadySent": "Note already sent",
           "sendNotesToAgent": "Send notes to an agent",
@@ -18356,8 +18340,6 @@
           "3ababd949d": "Review notes"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Copy notes for agent",
-          "a807596997": "Copied notes",
           "8aaf2c4c69": "Show review notes",
           "af02dc2456": "Hide review notes"
         },
@@ -19237,8 +19219,6 @@
             "b5ba6085de": "Question",
             "143204e423": "Change",
             "b71dc3d930": "Reconnect",
-            "d51ef37351": "Copy",
-            "6f4ab3592b": "Copied",
             "168350ae6a": "Click or hover an element, then press C to copy or S to screenshot.",
             "777b5bc4ec": "Click an element to add feedback for the agent.",
             "b733a91bd9": "Add feedback for the selected element.",
@@ -24559,6 +24539,24 @@
         "disconnectedHostLine": "{{host}} isn’t connected. Its files stay on the host.",
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
+      }
+    },
+    "notes": {
+      "sendButton": {
+        "sendCommentsToAgent_one": "Send {{count}} comment to an agent",
+        "clearPageNotes_one": "Clear {{count}} note from this page?",
+        "sendShort": "Send {{count}}",
+        "clearNotes": "Clear notes…",
+        "sending": "Sending…",
+        "sendCommentsToAgent_other": "Send {{count}} comments to an agent",
+        "sendNotes_other": "Send {{count}} notes",
+        "sendNotesToAgent_one": "Send {{count}} note to an agent",
+        "sendNotes_one": "Send {{count}} note",
+        "sendComments_other": "Send {{count}} comments",
+        "sendComments_one": "Send {{count}} comment",
+        "copyNotes": "Copy notes",
+        "clearPageNotes_other": "Clear {{count}} notes from this page?",
+        "sendNotesToAgent_other": "Send {{count}} notes to an agent"
       }
     }
   },

@@ -14885,8 +14885,6 @@
                 "pendingCount_other": "{{count}}개 대기 중",
                 "unresolvedCount_one": "{{count}}개 미해결",
                 "unresolvedCount_other": "{{count}}개 미해결",
-                "sendQueuedCommentsToAi_one": "대기 중인 댓글 {{count}}개를 AI에 보내기",
-                "sendQueuedCommentsToAi_other": "대기 중인 댓글 {{count}}개를 AI로 보내기",
                 "conflictsBlockThisMr": "충돌로 인해 이 MR이 차단됨",
                 "conflictsBlockThisPr": "충돌로 인해 이 PR이 차단됨",
                 "copyComment": "댓글 복사",
@@ -16928,10 +16926,6 @@
           "39b6b9e4e4": "브랜치에 커밋됨"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "전송됨",
-          "84898c548d": "지우기",
-          "88b70d0ef5": "복사",
-          "bb84b4c374": "AI 노트",
           "948a5fd6c8": "메모 지우기",
           "0f806a2ab1": "취소",
           "b6c3b84476": "파일 트리 표시",
@@ -16941,7 +16935,6 @@
           "820ec01f24": "충돌하는 파일은 별도로 리뷰됩니다.",
           "fd8892b120": "표시할 변경사항이 없습니다.",
           "eb5f40e49c": "일반적인 양방향 diff 파이프라인은 충돌로부터 안전하지 않기 때문에 이 diff 보기는 해결되지 않은 충돌을 제외합니다.",
-          "45cf23b418": "메모를 지우지 못했습니다.",
           "ec5053c7f5": "나란히",
           "f786fd54e1": "인라인",
           "ea08dae15b": "모두 축소",
@@ -16956,19 +16949,12 @@
           "noExtension": "(확장자 없음)",
           "diffLoadTimedOut": "차이점 로드를 완료하지 못했습니다.",
           "diffLoadFailed": "차이점을 로드할 수 없습니다.",
-          "moreNotesInSourceControl_one": "소스 제어에 메모 {{count}}개 더 있음",
-          "moreNotesInSourceControl_other": "소스 제어에 메모 {{count}}개 더 있음",
-          "clearNotesConfirm_one": "이 워크트리의 메모 {{count}}개를 지울까요?",
-          "clearNotesConfirm_other": "이 워크트리에서 메모 {{count}}개를 지울까요?",
           "changedFilesVs_one": "{{baseRef}} 대비 변경된 파일 {{count}}개",
           "changedFilesVs_other": "{{baseRef}} 대비 변경된 파일 {{count}}개",
           "changedFilesIn_one": "{{compareRef}}에서 변경된 파일 {{count}}개",
           "changedFilesIn_other": "{{compareRef}}에서 변경된 파일 {{count}}개",
           "changedFiles_one": "변경된 파일 {{count}}개",
           "changedFiles_other": "변경된 파일 {{count}}개",
-          "showAiNotes_one": "AI 메모 {{count}}개 표시",
-          "showAiNotes_other": "AI 노트 {{count}}개 표시",
-          "send": "보내기",
           "openDiff": "차이점 열기",
           "openInEditor": "편집기에서 열기",
           "skippedConflictsExcluded": "미해결 충돌 {{count}}개가 이 차이점 보기에서 제외되었습니다."
@@ -17167,7 +17153,6 @@
           "b1bfc04034": "선택한 텍스트",
           "f37b98999e": "이 메모",
           "2b2b31382c": "머리말",
-          "bb629de58a": "에이전트용 메모 복사",
           "322afab6ff": "리뷰 노트",
           "0f9969a159": "첫 번째 리뷰 노트로 이동",
           "12052c639c": "검색 닫기",
@@ -17240,7 +17225,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "메모 보내기",
-          "433928cd9f": "에이전트에게 {{value0}} 보내기",
           "thisNote": "이 메모",
           "noteAlreadySent": "이미 보낸 메모",
           "sendNotesToAgent": "에이전트에게 메모 보내기",
@@ -17326,8 +17310,6 @@
           "3ababd949d": "리뷰 노트"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "에이전트용 메모 복사",
-          "a807596997": "메모 복사됨",
           "8aaf2c4c69": "리뷰 메모 표시",
           "af02dc2456": "리뷰 메모 숨기기"
         },
@@ -18212,8 +18194,6 @@
             "b472c5fe03": "브라우저 주석 추가",
             "b5ba6085de": "질문",
             "143204e423": "변경",
-            "d51ef37351": "복사",
-            "6f4ab3592b": "복사됨",
             "168350ae6a": "요소를 클릭하거나 마우스로 가리킨 다음 C를 눌러 복사하거나 S를 눌러 스크린샷을 찍습니다.",
             "777b5bc4ec": "에이전트에게 보낼 피드백을 추가하려면 요소를 클릭하세요.",
             "b733a91bd9": "선택한 요소에 대한 피드백을 추가합니다.",
@@ -23539,6 +23519,19 @@
       "dialog": {
         "cancel": "취소",
         "tryAgain": "다시 시도"
+      }
+    },
+    "notes": {
+      "sendButton": {
+        "sending": "전송 중…",
+        "sendShort": "{{count}}개 보내기",
+        "clearNotes": "메모 지우기…",
+        "sendCommentsToAgent_other": "에이전트에게 댓글 {{count}}개 보내기",
+        "sendNotes_other": "메모 {{count}}개 보내기",
+        "sendComments_other": "댓글 {{count}}개 보내기",
+        "clearPageNotes_other": "이 페이지에서 메모 {{count}}개를 지울까요?",
+        "copyNotes": "메모 복사",
+        "sendNotesToAgent_other": "에이전트에게 메모 {{count}}개 보내기"
       }
     }
   },
