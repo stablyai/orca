@@ -221,27 +221,36 @@ export function releaseDeadWorkerTerminalInTransaction(
   return database.getWorkerTerminalResource(params.resourceId) ?? resource
 }
 
-/** Terminal (not chat) workers older builds settled without releasing their row; these pin their Run. */
+/**
+ * The next `limit` never-requested resources after `afterRowid`, each marked whether it is a terminal (not chat)
+ * worker an older build settled without releasing, which pins its Run. Pages rows examined, not rows matched,
+ * so rows that never qualify cost a bounded page instead of a scan of everything after them.
+ */
 export function listSettledWorkerTerminalsStillOwned(
   this: OrchestrationDb,
   afterRowid: number,
   limit: number,
   updatedBefore: string
-): (WorkerTerminalResourceRow & { row_id: number })[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: res.* plus its rowid.
+): (WorkerTerminalResourceRow & { row_id: number; eligible: number })[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: res.* plus its rowid and a 0/1 flag.
   return this.db
     .prepare(
-      `SELECT res.rowid AS row_id, res.* FROM worker_terminal_resources res
-        JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
-        WHERE res.rowid > ? AND w.state IN ('succeeded', 'failed', 'stopped', 'abandoned')
-          AND res.ownership_state = 'owned' AND res.release_state = 'not_requested'
-          AND res.process_incarnation IS NOT NULL AND res.updated_at < ?
-          AND res.terminal_handle NOT LIKE 'structworker\\_%' ESCAPE '\\'
-          -- Only minted ptyId:<uuid> identities can be judged; legacy fences never leave this list.
-          AND res.process_incarnation LIKE '%:________-____-____-____-____________'
+      `SELECT res.rowid AS row_id, res.*,
+          (w.state IN ('succeeded', 'failed', 'stopped', 'abandoned')
+            AND res.ownership_state = 'owned'
+            AND res.process_incarnation IS NOT NULL AND res.updated_at < ?
+            AND res.terminal_handle NOT LIKE 'structworker\\_%' ESCAPE '\\'
+            -- Only minted ptyId:<uuid> identities can be judged; legacy fences never qualify.
+            AND res.process_incarnation LIKE '%:________-____-____-____-____________') IS 1 AS eligible
+        FROM worker_terminal_resources res
+        LEFT JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
+        WHERE res.release_state = 'not_requested' AND res.rowid > ?
         ORDER BY res.rowid LIMIT ?`
     )
-    .all(afterRowid, updatedBefore, limit) as (WorkerTerminalResourceRow & { row_id: number })[]
+    .all(updatedBefore, afterRowid, limit) as (WorkerTerminalResourceRow & {
+    row_id: number
+    eligible: number
+  })[]
 }
 
 export type WorkerTerminalReleaseMethods = {

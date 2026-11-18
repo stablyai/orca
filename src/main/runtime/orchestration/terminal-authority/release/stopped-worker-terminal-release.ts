@@ -8,7 +8,7 @@ import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestratio
 import type { OrchestrationDb } from '../../db/orchestration-db'
 
 const PAGE_ROWS = 50
-// Candidates judged per sweep; the rest wait for the next one.
+// Rows examined per sweep, qualifying or not; the rest wait for the next one.
 const MAX_ROWS_PER_SWEEP = 1000
 
 const activeSweeps = new WeakMap<WorkerTerminalReleaseRuntime, Promise<void>>()
@@ -59,21 +59,18 @@ async function releaseExitedWorkerTerminals(
   // Every row is listed before any host is: a process alive when its row was read is in the listing.
   const candidates: { resource: WorkerTerminalResourceRow; processIncarnation: string }[] = []
   let after = sweepCursors.get(db) ?? 0
-  for (;;) {
+  for (let examined = 0; examined < MAX_ROWS_PER_SWEEP; examined += PAGE_ROWS) {
     const page = db.listSettledWorkerTerminalsStillOwned(after, PAGE_ROWS, fence)
     for (const resource of page) {
       after = resource.row_id
       // A legacy runtime:pty:generation fence never appears in a list, so absence proves nothing.
       const processIncarnation = resource.process_incarnation
-      if (processIncarnation && isMintedPtyIncarnation(processIncarnation)) {
+      if (resource.eligible && processIncarnation && isMintedPtyIncarnation(processIncarnation)) {
         candidates.push({ resource, processIncarnation })
       }
     }
     if (page.length < PAGE_ROWS) {
       after = 0
-      break
-    }
-    if (candidates.length >= MAX_ROWS_PER_SWEEP) {
       break
     }
   }
