@@ -31,6 +31,8 @@ export class RuntimeHostStatusOwner {
   private persistent: boolean
   private attempt = 0
   private retry: ReturnType<typeof setTimeout> | null = null
+  /** Until this time a failed verdict stands; only a forced or reconnecting refresh probes sooner. */
+  private failedUntil = 0
   private request: AbortController | null = null
   private readonly waiters = new Set<Waiter>()
   private response: RuntimeHostStatusResponse = runtimeHostStatusFailure(
@@ -75,7 +77,14 @@ export class RuntimeHostStatusOwner {
   }
 
   refresh(
-    options: { timeoutMs?: number; observeOnly?: true; reconnect?: true; signal?: AbortSignal } = {}
+    options: {
+      timeoutMs?: number
+      observeOnly?: true
+      reconnect?: true
+      /** A user-requested check: probe now despite a recent failure, without reconnect side effects. */
+      force?: true
+      signal?: AbortSignal
+    } = {}
   ): Promise<RuntimeHostStatusResponse> {
     if (options.signal?.aborted) {
       return Promise.reject(options.signal.reason)
@@ -88,9 +97,21 @@ export class RuntimeHostStatusOwner {
     }
     if (options.reconnect) {
       this.attempt = 0
+      this.failedUntil = 0
       this.update({ verification: 'checking' })
     }
     if (this.snapshot.verification === 'blocked') {
+      return Promise.resolve(this.response)
+    }
+    // Why: background callers retrying a down host would otherwise each restart verification,
+    // publishing checking/unavailable far faster than the backoff schedule.
+    if (
+      !options.force &&
+      !this.request &&
+      this.snapshot.verification === 'unavailable' &&
+      Date.now() < this.failedUntil
+    ) {
+      this.armRetry()
       return Promise.resolve(this.response)
     }
     const result = new Promise<RuntimeHostStatusResponse>((resolve, reject) => {
@@ -141,6 +162,10 @@ export class RuntimeHostStatusOwner {
     this.update({ transport, ...(remoteControl !== undefined ? { remoteControl } : {}) })
     if (transport === previous) {
       return
+    }
+    // A failure seen before the transport became ready says nothing about it; other edges keep the backoff.
+    if (transport === 'ready') {
+      this.failedUntil = 0
     }
     if (previous === 'ready') {
       this.retireRequest()
@@ -218,6 +243,7 @@ export class RuntimeHostStatusOwner {
     this.response = response
     if (response.ok) {
       this.attempt = 0
+      this.failedUntil = 0
       this.update({ status: response.result, checkedAt: Date.now(), verification: 'verified' })
       this.persistent = this.options.verified(response, this.active)
     } else {
@@ -233,19 +259,27 @@ export class RuntimeHostStatusOwner {
   }
 
   private scheduleRetry(): void {
-    if (
-      !this.active ||
-      this.disposed ||
-      this.snapshot.verification === 'blocked' ||
-      (this.persistent && this.snapshot.transport !== 'ready')
-    ) {
+    if (this.disposed || this.snapshot.verification === 'blocked') {
       return
     }
-    const delay = RETRY_DELAYS_MS[Math.min(this.attempt++, RETRY_DELAYS_MS.length - 1)]
-    this.retry = setTimeout(() => {
-      this.retry = null
-      this.startRequest()
-    }, delay)
+    // Only a retry the owner will run escalates the schedule; passive failures hold the first step.
+    const willRetry = this.active && !(this.persistent && this.snapshot.transport !== 'ready')
+    const attempt = willRetry ? this.attempt++ : this.attempt
+    this.failedUntil = Date.now() + RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]
+    this.armRetry()
+  }
+
+  private armRetry(): void {
+    if (this.retry || !this.active || (this.persistent && this.snapshot.transport !== 'ready')) {
+      return
+    }
+    this.retry = setTimeout(
+      () => {
+        this.retry = null
+        this.startRequest()
+      },
+      Math.max(0, this.failedUntil - Date.now())
+    )
   }
 
   private settleWaiters(): void {

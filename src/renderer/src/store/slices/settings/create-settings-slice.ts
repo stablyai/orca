@@ -166,7 +166,8 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
   }
   const response = await window.api.runtimeEnvironments.getStatus({
     selector: environmentId,
-    timeoutMs: 15_000
+    timeoutMs: 15_000,
+    force: true
   })
   const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
   assertRuntimeStatusCompatible(status)

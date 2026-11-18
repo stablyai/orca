@@ -1,5 +1,5 @@
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { knownUnreachableRuntimeHostError } from '@/runtime/hosts/connections/runtime-host-connection-state'
@@ -91,6 +91,8 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabMRInvolvement,
     selectedReposKey
   )
+  // A nonce bump is the user's Refresh or Retry; filter, view and repo changes stay passive.
+  const lastRefreshNonceRef = useRef(gitlabRefreshNonce)
   // Fetch issues and MRs separately so a failure stays scoped to its tab.
   useEffect(() => {
     if (taskSource !== 'gitlab') {
@@ -178,7 +180,9 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 }
               })
           }
-    recheckUnreachableTaskSourceHosts()
+    const userRefresh = gitlabRefreshNonce !== lastRefreshNonceRef.current
+    lastRefreshNonceRef.current = gitlabRefreshNonce
+    recheckUnreachableTaskSourceHosts(userRefresh ? { force: true } : undefined)
     const isOnUnreachableHost = (repo: Repo): boolean => {
       const hostId = getTaskPageRepoSourceContext(repo, 'gitlab')?.hostId
       return hostId !== undefined && unreachableTaskSourceHostIds.has(hostId)
