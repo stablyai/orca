@@ -75,6 +75,14 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     }
   }
 
+  protected override onProviderSequenceAnchored(ptyId: string): void {
+    const state = this.headlessTerminals.get(ptyId)
+    if (state?.gapReseedAbandoned && !state.gapReseed) {
+      state.gapReseedAbandoned = undefined
+      this.startGapRecovery(ptyId, state)
+    }
+  }
+
   /** Execution-context correction mid-recovery waits for the rebuild: swapping the model then would strand its observers. */
   protected override replaceHeadlessTerminalAfterExecutionContextChange(
     ptyId: string,
@@ -121,18 +129,16 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     recovery: GapRecovery
   ): Promise<void> {
     for (let attempt = 0; this.isGapRecovering(ptyId, state, recovery); attempt++) {
+      if (!this.providerSequenceAnchorRevisions.has(ptyId)) {
+        // Without a stamp nothing places a snapshot in this stream; its first stamp restarts recovery.
+        this.abandonGapRecovery(ptyId, state, recovery)
+        return
+      }
       if (attempt === GAP_RESEED_WARN_AFTER_ATTEMPTS) {
-        const anchored = this.providerSequenceAnchorRevisions.has(ptyId)
         console.warn('[terminal] dropped-output recovery still waiting for a current snapshot', {
           ptyIdSuffix: ptyId.slice(-10),
-          attempts: attempt,
-          anchored
+          attempts: attempt
         })
-        if (!anchored) {
-          // No stamped frame to line the provider's seq up with this stream: retrying cannot prove a screen.
-          this.abandonGapRecovery(ptyId, state, recovery)
-          return
-        }
       }
       // Back off so a slow daemon or a sustained storm cannot loop captures; the screen stays untrusted meanwhile.
       const backoff =
@@ -171,20 +177,20 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     state.gapReseedLastCaptureAt = Date.now()
     // Journal before asking, so whatever the snapshot misses after its seq is here.
     startGapJournal(recovery, this.getPtyOutputSequence(ptyId))
-    // The snapshot's seq is mapped through the offset as it lands; one that moved meanwhile cannot place it.
-    const anchorRevision = this.providerSequenceAnchorRevisions.get(ptyId)
+    // The snapshot's seq is mapped through the offset as it lands; one that moves before the repaint cannot place it.
+    const revision = this.providerSequenceAnchorRevisions.get(ptyId)
     // Screen only: a storm repeats this, and history readers go to the provider instead.
     const { snapshot } = await this.awaitProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
       { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS, fresh: true }
     )
-    if (!snapshot || this.providerSequenceAnchorRevisions.get(ptyId) !== anchorRevision) {
+    if (!snapshot) {
       return false
     }
     const deadline = Date.now() + GAP_RESEED_CAPTURE_TIMEOUT_MS
     for (;;) {
-      const result = await this.rebuildScreenAfterGap(ptyId, state, recovery, snapshot)
+      const result = await this.rebuildScreenAfterGap(ptyId, state, recovery, snapshot, revision)
       if (result !== 'behind') {
         return result === 'rebuilt'
       }
@@ -201,14 +207,18 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     ptyId: string,
     state: RuntimeHeadlessTerminal,
     recovery: GapRecovery,
-    snapshot: PtyProviderBufferSnapshot
+    snapshot: PtyProviderBufferSnapshot,
+    anchorRevision: number | undefined
   ): Promise<RebuildResult> {
     const step = state.writeChain.then(async (): Promise<RebuildResult> => {
       if (!this.isGapRecovering(ptyId, state, recovery)) {
         return 'failed'
       }
-      // An overflowed or invalidated journal cannot rebuild however long output takes to catch up.
-      if (recovery.journal === null) {
+      // An overflowed or invalidated journal, or a moved anchor, cannot rebuild however long output takes to catch up.
+      if (
+        recovery.journal === null ||
+        this.providerSequenceAnchorRevisions.get(ptyId) !== anchorRevision
+      ) {
         return 'failed'
       }
       const parsedTo = state.outputSequence
@@ -284,7 +294,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     }
   }
 
-  /** Back to the live parse as it was before recovery existed; readers and reveal still prefer the provider's screen. */
+  /** Back to the live parse as it was before recovery existed until a stamp arrives; readers and reveal prefer the provider's screen. */
   private abandonGapRecovery(
     ptyId: string,
     state: RuntimeHeadlessTerminal,
@@ -292,10 +302,16 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   ): void {
     state.writeChain = state.writeChain
       .then(() => {
-        if (this.isGapRecovering(ptyId, state, recovery)) {
-          state.gapReseedAbandoned = true
-          this.finishGapRecovery(ptyId, state, { rebuilt: false })
+        if (!this.isGapRecovering(ptyId, state, recovery)) {
+          return
         }
+        if (this.providerSequenceAnchorRevisions.has(ptyId)) {
+          // Stamped while this step waited in the chain.
+          void this.runGapRecovery(ptyId, state, recovery)
+          return
+        }
+        state.gapReseedAbandoned = true
+        this.finishGapRecovery(ptyId, state, { rebuilt: false })
       })
       .catch(() => {})
   }

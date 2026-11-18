@@ -17,6 +17,12 @@ function createRuntime() {
   return runtime
 }
 
+// A daemon stream that has stamped its position since attach, at zero offset.
+function anchorStream(runtime: OrcaRuntimeService, ptyId: string): void {
+  runtime.synchronizePtyOutputSequenceFromProvider(ptyId, { value: 0, generation: 'continued' })
+  runtime.anchorProviderSequence(ptyId, 0, 0)
+}
+
 async function replay(
   snapshot: { data: string; pendingEscapeTailAnsi?: string } | null,
   suffix: string
@@ -100,6 +106,7 @@ it('rebuilds the screen from a provider snapshot plus the output after it, cutti
       })
   })
   try {
+    anchorStream(runtime, 'pty-gap')
     runtime.onPtyData('pty-gap', 'stale\r\n', 1)
     runtime.notePtyDataGap('pty-gap', 9)
     await vi.waitFor(() => assert(capture.land))
@@ -146,6 +153,7 @@ it('recaptures when output arrived during a capture whose seq cannot place it', 
   })
   vi.useFakeTimers({ toFake: ['setTimeout'] })
   try {
+    anchorStream(runtime, 'pty-stale')
     runtime.onPtyData('pty-stale', 'stale\r\n', 1)
     runtime.notePtyDataGap('pty-stale', 9)
     // Captures are paced a second apart.
@@ -213,7 +221,7 @@ it('places a snapshot by the stream stamps when a reattach left this count ahead
   }
 })
 
-it('returns to the live screen when an unstamped stream never lines up with the provider', async () => {
+it('keeps the live screen until the stream is stamped, then rebuilds from the provider', async () => {
   const runtime = createRuntime()
   runtime.setPtyController({
     write: () => true,
@@ -221,22 +229,33 @@ it('returns to the live screen when an unstamped stream never lines up with the 
     getForegroundProcess: async () => null,
     getSize: () => grid,
     serializeProviderBuffer: async () => ({
-      data: '\x1b[H\x1b[2Jprovider',
+      data: '\x1b[H\x1b[2Jprovider\r\nok',
       ...grid,
-      seq: 3,
+      seq: 17,
       source: 'headless' as const
     })
   })
-  vi.useFakeTimers({ toFake: ['setTimeout'] })
   try {
     runtime.onPtyData('pty-unstamped', 'live\r\n', 1)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-unstamped',
+      { value: 6, generation: 'continued' },
+      6
+    )
     runtime.notePtyDataGap('pty-unstamped', 9)
-    await vi.advanceTimersByTimeAsync(60_000)
-    vi.useRealTimers()
-    const snapshot = await headlessOf(runtime).serializeHeadlessTerminalBuffer('pty-unstamped')
-    expect(await replay(snapshot, '')).toEqual(['live'])
+    const live = await vi.waitFor(async () => {
+      const screen = await headlessOf(runtime).serializeHeadlessTerminalBuffer('pty-unstamped')
+      assert(screen)
+      return screen
+    })
+    expect(await replay(live, '')).toEqual(['live'])
+
+    stamped(runtime, 'pty-unstamped', 'ok', 17)
+    await vi.waitFor(async () => {
+      const screen = await headlessOf(runtime).serializeHeadlessTerminalBuffer('pty-unstamped')
+      expect(await replay(screen, '')).toEqual(['provider', 'ok'])
+    })
   } finally {
-    vi.useRealTimers()
     await runtime.onPtyExit('pty-unstamped', 0)
   }
 })

@@ -156,13 +156,19 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       ptyId,
       offset === previous ? (revision ?? 0) : (revision ?? 0) + 1
     )
-    if (offset !== previous && revision === undefined) {
-      console.warn('[terminal] provider stream position re-anchored', {
-        ptyId,
-        drift: offset - previous
-      })
+    if (revision === undefined) {
+      if (offset !== previous) {
+        console.warn('[terminal] provider stream position re-anchored', {
+          ptyId,
+          drift: offset - previous
+        })
+      }
+      this.onProviderSequenceAnchored(ptyId)
     }
   }
+
+  /** The stream's first stamp since sync: from here a provider snapshot can be placed in it. */
+  protected onProviderSequenceAnchored(_ptyId: string): void {}
 
   synchronizePtyOutputSequenceFromProvider(
     ptyId: string,

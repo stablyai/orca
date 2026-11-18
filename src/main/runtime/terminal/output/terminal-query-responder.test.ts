@@ -406,6 +406,12 @@ describe('dropped output', () => {
         })
     })
     markHiddenRendererPty('pty-gap')
+    // A stamped daemon stream: recovery places snapshots only in one.
+    runtime.synchronizePtyOutputSequenceFromProvider('pty-gap', {
+      value: 0,
+      generation: 'continued'
+    })
+    runtime.anchorProviderSequence('pty-gap', 0, 0)
     runtime.onPtyData('pty-gap', 'before\r\n', 1)
     runtime.notePtyDataGap('pty-gap', 4)
     await vi.waitFor(() => expect(land).toBeDefined())
