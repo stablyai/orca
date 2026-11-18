@@ -26,11 +26,14 @@ import { latestAgentCliRelease } from './agent-cli-latest-release'
 const CODEX_UPDATE_COMMAND_SINCE = '0.126.0'
 const UPDATE_TIMEOUT_MS = 10 * 60_000
 const UPDATE_OUTPUT_BYTES = 64 * 1024
+// An unread version (e.g. a slow first start) is asked again after this, not on every check.
+const UNREAD_RETRY_MS = 10 * 60_000
 
-const versions = new Map<string, { stamp: string; version: string }>()
+const versions = new Map<string, { stamp: string; version: string | null; at: number }>()
+const checks = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdate | null>>()
 const runs = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdateRunResult>>()
 
-/** Runs --version only when the installed file changed since the last read. */
+/** Runs --version only when the installed file changed, or an unread one is due again. */
 async function installedVersion(
   agent: AgentCliUpdateAgent,
   cli: OwnAgentCli
@@ -42,17 +45,14 @@ async function installedVersion(
     env: cli.env
   })
   const known = versions.get(cli.program)
-  if (known?.stamp === stamp) {
+  if (known?.stamp === stamp && (known.version || Date.now() - known.at < UNREAD_RETRY_MS)) {
     return known.version
   }
   const { version } =
     agent === 'codex'
       ? await readAgentCliVersion(input, parseCodexCliVersion)
       : await readAgentCliVersion(input)
-  // An unread version (e.g. a slow first start) is asked again next time.
-  if (version) {
-    versions.set(cli.program, { stamp, version })
-  }
+  versions.set(cli.program, { stamp, version, at: Date.now() })
   return version
 }
 
@@ -110,12 +110,20 @@ export async function checkAgentCliUpdates(
     isTuiAgentEnabled(agent, settings.disabledTuiAgents)
   )
   const updates = await Promise.all(
-    agents.map((agent) =>
-      readAgentCliUpdate(agent, settings).catch((error: unknown) => {
-        console.warn(`[agent-cli-update] ${agent} not checked:`, error)
-        return null
-      })
-    )
+    agents.map((agent) => {
+      // Clients asking at once share one read.
+      let check = checks.get(agent)
+      if (!check) {
+        check = readAgentCliUpdate(agent, settings)
+          .catch((error: unknown) => {
+            console.warn(`[agent-cli-update] ${agent} not checked:`, error)
+            return null
+          })
+          .finally(() => checks.delete(agent))
+        checks.set(agent, check)
+      }
+      return check
+    })
   )
   return updates.filter((update) => update !== null)
 }

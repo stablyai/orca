@@ -12,6 +12,8 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 // Above the host's own ten-minute limit, so its answer always arrives.
 const RUN_TIMEOUT_MS = 11 * 60_000
+// Chat starts come in bursts; one ask per host in this window is enough.
+const CHECK_INTERVAL_MS = 10 * 60_000
 
 export type AgentCliUpdateRun = { phase: 'running' } | { phase: 'failed'; output: string }
 
@@ -32,6 +34,23 @@ export function agentCliUpdateHostTarget(key: string): RuntimeClientTarget {
 
 const EMPTY_HOST: AgentCliUpdateHost = { updates: [], runs: {} }
 const checks = new Map<string, Promise<void>>()
+const checkedAt = new Map<string, number>()
+
+function sameUpdates(a: readonly AgentCliUpdate[], b: readonly AgentCliUpdate[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((update, index) => {
+      const other = b[index]
+      return (
+        other?.agent === update.agent &&
+        other.installedVersion === update.installedVersion &&
+        other.latestVersion === update.latestVersion &&
+        other.command === update.command &&
+        other.runnable === update.runnable
+      )
+    })
+  )
+}
 
 export type AgentCliUpdatesSlice = {
   agentCliUpdates: ReadonlyMap<string, AgentCliUpdateHost>
@@ -51,16 +70,8 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       next.set(key, write(state.agentCliUpdates.get(key) ?? EMPTY_HOST))
       return { agentCliUpdates: next }
     })
-  const writeRun = (key: string, agent: AgentCliUpdateAgent, run: AgentCliUpdateRun | null) =>
-    writeHost(key, (host) => {
-      const runs = { ...host.runs }
-      if (run) {
-        runs[agent] = run
-      } else {
-        delete runs[agent]
-      }
-      return { ...host, runs }
-    })
+  const writeRun = (key: string, agent: AgentCliUpdateAgent, run: AgentCliUpdateRun) =>
+    writeHost(key, (host) => ({ ...host, runs: { ...host.runs, [agent]: run } }))
   const hostAnswers = (target: RuntimeClientTarget): boolean =>
     target.kind === 'local' ||
     lastVerifiedRuntimeStatus(
@@ -72,13 +83,20 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
 
     checkAgentCliUpdates: (target) => {
       const key = agentCliUpdateHostKey(target)
-      if (!hostAnswers(target)) {
-        return Promise.resolve()
+      const last = checkedAt.get(key)
+      if (!hostAnswers(target) || (last !== undefined && Date.now() - last < CHECK_INTERVAL_MS)) {
+        return checks.get(key) ?? Promise.resolve()
       }
       let check = checks.get(key)
       if (!check) {
+        checkedAt.set(key, Date.now())
         check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check')
-          .then(({ updates }) => writeHost(key, (host) => ({ ...host, updates })))
+          .then(({ updates }) => {
+            // An unchanged answer leaves the store alone, so the status bar doesn't re-render.
+            if (!sameUpdates(get().agentCliUpdates.get(key)?.updates ?? [], updates)) {
+              writeHost(key, (host) => ({ ...host, updates }))
+            }
+          })
           .catch((error: unknown) => {
             console.warn('[agent-cli-update] check failed:', error)
           })

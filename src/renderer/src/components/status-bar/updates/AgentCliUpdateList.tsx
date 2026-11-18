@@ -154,14 +154,21 @@ export function AgentCliUpdateList({
   onUpdateAll: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const startable = groups.flatMap((group) => group.rows).filter(agentCliUpdateStartable)
+  const rows = groups.flatMap((group) => group.rows)
+  const startable = rows.filter(agentCliUpdateStartable)
   return (
     <div className="flex flex-col p-1">
-      {groups.map((group, index) => (
+      <div className="px-2 pt-1.5 pb-1 text-2xs font-medium text-muted-foreground">
+        {t('agentCliUpdate.heading', '{{count}} CLI updates available', {
+          count: rows.length,
+          defaultValue_one: '{{count}} CLI update available'
+        })}
+      </div>
+      {groups.map((group) => (
         <div key={group.hostKey}>
-          <div className="px-2 pt-1.5 pb-1 text-2xs font-medium text-muted-foreground">
-            {group.label ?? (index === 0 ? t('agentCliUpdate.heading', 'Updates') : null)}
-          </div>
+          {group.label ? (
+            <div className="px-2 pt-1.5 pb-1 text-2xs text-muted-foreground">{group.label}</div>
+          ) : null}
           {group.rows.map((row) => (
             <AgentCliUpdateListRow key={row.agent} row={row} onUpdate={onUpdate} />
           ))}
@@ -170,8 +177,8 @@ export function AgentCliUpdateList({
       {startable.length > 1 ? (
         <>
           <Separator className="my-1" />
-          <div className="p-1">
-            <Button type="button" size="sm" className="w-full" onClick={onUpdateAll}>
+          <div className="flex justify-end px-1 pb-0.5">
+            <Button type="button" variant="outline" size="xs" onClick={onUpdateAll}>
               {t('agentCliUpdate.updateAll', 'Update all')}
             </Button>
           </div>

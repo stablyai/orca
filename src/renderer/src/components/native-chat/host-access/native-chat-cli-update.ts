@@ -30,12 +30,12 @@ export function useNativeChatCliUpdate(
   return useMemo(() => (supported ? { update, run, start } : null), [supported, update, run, start])
 }
 
-/** Update for a CLI too old to chat; the setup's update retries the chat once current. */
+/** Update for a CLI too old to chat, an inline action like Retry; once current, the chat retries. */
 export function nativeChatCliUpdateAction(
   tooOld: boolean,
   setup: NativeChatHostSetup | null | undefined,
   t: Translate = translate
-): { label: string; primary: true; disabled: boolean; onClick: () => void } | undefined {
+): { label: string; disabled: boolean; onClick: () => void } | undefined {
   const update = setup?.update
   if (!tooOld || !update) {
     return undefined
@@ -47,7 +47,6 @@ export function nativeChatCliUpdateAction(
       : update.run?.phase === 'failed'
         ? t('agentCliUpdate.tryAgain', 'Try again')
         : t('agentCliUpdate.update', 'Update'),
-    primary: true,
     disabled: running,
     onClick: () => void update.start()
   }

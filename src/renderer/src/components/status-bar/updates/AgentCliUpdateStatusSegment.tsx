@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentCliUpdateHostTarget } from '@/store/slices/runtime-host-updates/agent-cli-updates'
 import {
@@ -15,6 +16,21 @@ import {
 } from './AgentCliUpdateList'
 
 const LOCAL_TARGET = { kind: 'local' } as const
+const NO_HOST_NAMES: Readonly<Record<string, string>> = Object.freeze({})
+
+/** Names of paired servers with listed updates; the shared empty value keeps the always-mounted bar still. */
+function remoteHostNames(state: AppState): Readonly<Record<string, string>> {
+  const keys = [...state.agentCliUpdates.keys()].filter((key) => key !== '')
+  if (keys.length === 0) {
+    return NO_HOST_NAMES
+  }
+  return Object.fromEntries(
+    keys.map((key) => [
+      key,
+      state.runtimeEnvironments.find((environment) => environment.id === key)?.name ?? key
+    ])
+  )
+}
 
 function runRow(row: AgentCliUpdateRow): void {
   void useAppStore.getState().runAgentCliUpdate(agentCliUpdateHostTarget(row.hostKey), row.agent)
@@ -28,13 +44,7 @@ export function AgentCliUpdateStatusSegment({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const hosts = useAppStore((s) => s.agentCliUpdates)
-  const hostNames = useAppStore(
-    useShallow((s) =>
-      Object.fromEntries(
-        s.runtimeEnvironments.map((environment) => [environment.id, environment.name])
-      )
-    )
-  )
+  const hostNames = useAppStore(useShallow(remoteHostNames))
   const checkAgentCliUpdates = useAppStore((s) => s.checkAgentCliUpdates)
   // This computer is checked at launch; other hosts when a chat starts there.
   useEffect(() => {
