@@ -333,6 +333,37 @@ describe("a bot's memory history", () => {
     expect((await read).map((row) => row.change.added[0]?.line)).toEqual(['- after'])
   })
 
+  it('says a row was undone without waiting on a stalled disk once the bot was read', async () => {
+    const stored = new Map<string, string>()
+    let stall = false
+    const never = new Promise<never>(() => {})
+    const io = {
+      read: async (botId: string) => (stall ? await never : (stored.get(botId) ?? null)),
+      write: async (botId: string, text: string | null) =>
+        void (text === null ? stored.delete(botId) : stored.set(botId, text)),
+      bots: async () => []
+    }
+    const history = createBotMemoryHistory(io)
+    await history.append('bot-1', { kind: 'owner' }, botMemoryChange('', '- tidied\n'))
+    const [tidied] = await history.list('bot-1')
+    stall = true
+    void history.append('bot-1', { kind: 'undo', of: tidied.id }, botMemoryChange('- tidied\n', ''))
+
+    expect(await history.undone('bot-1', tidied.id)).toBe(true)
+    expect(await history.undone('bot-1', 'another-row')).toBe(false)
+  })
+
+  it('forgets what was undone when the bot is removed', async () => {
+    const { history, forget } = bot(OLD)
+    await forget('owner fact')
+    const [forgot] = await history.list('bot-1')
+    await history.append('bot-1', { kind: 'undo', of: forgot.id }, botMemoryChange('', '- x\n'))
+    expect(await history.undone('bot-1', forgot.id)).toBe(true)
+
+    await history.removed('bot-1')
+    expect(await history.undone('bot-1', forgot.id)).toBe(false)
+  })
+
   it('creates MEMORY.md for a change when the file is missing', async () => {
     const { read, record, remove, rows } = bot(OLD)
     remove()

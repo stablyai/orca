@@ -10,7 +10,6 @@ import {
   failedLooksInARow,
   LOOK_FAILURES_TO_TURN_OFF
 } from '../../../bots/bot-look-around-failures'
-import type { BotMemoryRecord } from '../../../bots/bot-memory-record'
 import { tidyUpState } from '../../../bots/bot-memory-tidy-up'
 import { runtimeTidyUpRunner } from '../../../bots/bot-memory-tidy-up-runtime'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
@@ -24,61 +23,15 @@ function botById(context: RpcContext, botId: string) {
   return bot
 }
 
-// Whether a summary row was undone, read from history. Reads at the same time share one check, and a
-// view waits for it at most this long: behind a stalled disk a poll answers "not undone" instead of
-// piling up, and the next read after the check lands starts a fresh one.
-const UNDONE_CHECK_WAIT_MS = 2_000
-const undoneChecks = new Map<string, Promise<boolean>>()
-
-const undoneIn = (memory: Pick<BotMemoryRecord, 'history'>, botId: string, rowId: string) =>
-  memory
-    .history(botId)
-    .then((rows) => rows.some((row) => row.by.kind === 'undo' && row.by.of === rowId))
-
-async function undoneCheck(
-  memory: Pick<BotMemoryRecord, 'history'>,
-  botId: string,
-  rowId: string,
-  fresh: boolean
-): Promise<boolean> {
-  if (fresh) {
-    // Read behind the Undo's own row, so its answer can't be an earlier check's.
-    return await undoneIn(memory, botId, rowId)
-  }
-  const key = `${botId}\u0000${rowId}`
-  let check = undoneChecks.get(key)
-  if (!check) {
-    check = undoneIn(memory, botId, rowId).finally(() => undoneChecks.delete(key))
-    // A view that stopped waiting no longer observes it.
-    check.catch(() => {})
-    undoneChecks.set(key, check)
-  }
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      check,
-      new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), UNDONE_CHECK_WAIT_MS)
-      })
-    ])
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-export async function botTidyUpView(
-  context: RpcContext,
-  botId: string,
-  options: { fresh?: boolean } = {}
-): Promise<BotTidyUpView> {
+export async function botTidyUpView(context: RpcContext, botId: string): Promise<BotTidyUpView> {
   const bot = botById(context, botId)
   const { runtime } = context
   const setting = botTidyUp(bot)
   const state = tidyUpState(runtime.lookAround.get(bot.id))
   const lastRun = state.runs.at(-1)
   const rowId = state.last?.rowId
-  const undone =
-    rowId != null && (await undoneCheck(runtime.bots.memory, bot.id, rowId, options.fresh === true))
+  // History keeps which rows were undone, so a poll doesn't wait on the disk past the bot's first read.
+  const undone = rowId != null && (await runtime.bots.memory.undone(bot.id, rowId))
   return {
     setting,
     last: state.last ? { ...state.last, undone } : null,
@@ -126,7 +79,7 @@ export const BOT_TIDY_UP_METHODS = [
         botHomeFolder(bot),
         params.rowId
       )
-      return { undone, tidyUp: await botTidyUpView(context, bot.id, { fresh: true }) }
+      return { undone, tidyUp: await botTidyUpView(context, bot.id) }
     }
   })
 ]

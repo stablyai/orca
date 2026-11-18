@@ -38,8 +38,17 @@ export function useBotTidyUp(bot: BotRef): BotTidyUpControls {
   const { hostId, id: botId } = bot
   const [view, setView] = useState<BotTidyUpView | null>(null)
   const reads = useRef(0)
+  // One read at a time: a poll or change while one is out asks for one more after it, never a pile.
+  const reading = useRef(false)
+  const readAgain = useRef(false)
+  const latestLoad = useRef<() => Promise<void>>(async () => {})
 
   const load = useCallback(async (): Promise<void> => {
+    if (reading.current) {
+      readAgain.current = true
+      return
+    }
+    reading.current = true
     // Only the latest read lands, so an older one finishing late cannot overwrite it.
     const read = ++reads.current
     try {
@@ -53,10 +62,17 @@ export function useBotTidyUp(bot: BotRef): BotTidyUpControls {
       }
     } catch (error) {
       console.error('Failed to read Tidy-up:', error)
+    } finally {
+      reading.current = false
+      if (readAgain.current) {
+        readAgain.current = false
+        void latestLoad.current()
+      }
     }
   }, [botId, hostId])
 
   useEffect(() => {
+    latestLoad.current = load
     void load()
     return onBotsChanged(() => void load(), hostId, { botId, kinds: BOT_VIEW_KINDS })
   }, [load, hostId, botId])
@@ -87,6 +103,8 @@ export function useBotTidyUp(bot: BotRef): BotTidyUpControls {
           'bots.tidyUp.undo',
           { botId, rowId }
         )
+        // Newer than any read still out: none of them may replace it.
+        reads.current += 1
         setView(tidyUp)
         if (!undone) {
           toast.message(
