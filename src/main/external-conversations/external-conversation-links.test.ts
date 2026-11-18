@@ -144,15 +144,16 @@ describe('external conversation links in a legacy profile', () => {
       // An unstamped legacy row reads as every host's; the canonical SSH row is the host's own.
       worktreeMeta: { [WORKTREE]: { externalConversations: [link(FIRST_PANE)] } },
       worktreeMetaByIdentity: {
-        [canonicalWorktreeIdentity({ executionHostId: sshHost, instanceId })]: {
-          instanceId,
-          hostId: sshHost,
-          externalConversations: [remoteLink]
-        }
+        [canonicalWorktreeIdentity({ worktreeId: WORKTREE, executionHostId: sshHost, instanceId })]:
+          {
+            instanceId,
+            hostId: sshHost,
+            externalConversations: [remoteLink]
+          }
       },
       worktreeIdentityAliases: {
         [composeWorktreeHostIdentity(sshHost, WORKTREE)]: [
-          canonicalWorktreeIdentity({ executionHostId: sshHost, instanceId })
+          canonicalWorktreeIdentity({ worktreeId: WORKTREE, executionHostId: sshHost, instanceId })
         ]
       }
     })
@@ -172,7 +173,7 @@ describe('external conversation links in a legacy profile', () => {
   it('drops a link a refused metadata write moved by stamping its legacy row', () => {
     const sshHost = 'ssh:conn-1'
     const keys = ['instance-1', 'instance-2'].map((instanceId) =>
-      canonicalWorktreeIdentity({ executionHostId: sshHost, instanceId })
+      canonicalWorktreeIdentity({ worktreeId: WORKTREE, executionHostId: sshHost, instanceId })
     )
     writeDataFile({
       schemaVersion: 1,
