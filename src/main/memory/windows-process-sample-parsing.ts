@@ -26,6 +26,7 @@ export type WindowsProcessResourceRow = {
   /** Committed bytes, including paged-out memory; absent when unavailable. */
   privateMemory?: number
   name?: string
+  startTicks?: bigint
 }
 
 export type WindowsCpuTimes = {
@@ -62,13 +63,15 @@ export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessS
     }
     const privateMemory = parseCimPageFileBytes(fields[6])
     const name = executableBasename(fields[7])
+    const startTicks = parseUnsignedBigInt(fields[5])
     rows.push({
       pid,
       ppid,
       cpu: 0,
       memory: Number.isFinite(memory) && memory > 0 ? memory : 0,
       ...(privateMemory === null ? {} : { privateMemory }),
-      ...(name ? { name } : {})
+      ...(name ? { name } : {}),
+      ...(startTicks ? { startTicks } : {})
     })
 
     const kernelTicks = parseUnsignedBigInt(fields[3])

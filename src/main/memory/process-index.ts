@@ -15,6 +15,8 @@ export type ProcRow = {
   privateMemory?: number
   /** Executable basename; never a path or command line. */
   name?: string
+  /** Creation time in 100 ns ticks (Windows CIM only); orders a parent before its children. */
+  startTicks?: bigint
 }
 
 export type ProcIndex = {
