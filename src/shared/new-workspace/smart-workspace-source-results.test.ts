@@ -198,6 +198,16 @@ describe('Branch intent resolution (#18701)', () => {
     ).toBeNull()
     expect(
       findSmartWorkspaceBranchIntentRef(
+        'feat',
+        [
+          branch('refs/remotes/team/origin/feature', 'feature'),
+          branch('refs/remotes/team/upstream/feature', 'feature')
+        ],
+        LIMIT
+      )
+    ).toBeNull()
+    expect(
+      findSmartWorkspaceBranchIntentRef(
         'feature',
         [
           branch('refs/remotes/origin/feature', 'feature'),

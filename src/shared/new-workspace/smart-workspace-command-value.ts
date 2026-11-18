@@ -96,8 +96,16 @@ export function findSmartWorkspaceBranchIntentRef(
     }
     const remotes = new Set(
       matches.flatMap((ref) => {
-        const remote = /^refs\/remotes\/([^/]+)\//.exec(ref.refName)?.[1]
-        return remote ? [remote] : []
+        const prefix = 'refs/remotes/'
+        if (!ref.refName.startsWith(prefix)) {
+          return []
+        }
+        const rest = ref.refName.slice(prefix.length)
+        const suffix = `/${ref.localBranchName}`
+        if (rest.endsWith(suffix) && rest.length > suffix.length) {
+          return [rest.slice(0, -suffix.length)]
+        }
+        return [ref.refName]
       })
     )
     return remotes.size <= 1 ? matches[0].refName : null
