@@ -19476,7 +19476,8 @@
         "chat": {
           "label": "チャット UI",
           "description": "Agent がチャットで返信し、メッセージや差分がレンダリングされて表示されます。",
-          "terminalFallback": "チャットに対応していない Agent や、このコンピューターで SSH または WSL 経由で開いたフォルダーは、引き続きターミナルで開きます。",
+          "recommended": "おすすめ",
+          "terminalFallback": "チャット非対応の Agent はターミナルで開きます。",
           "noneDetected": "検出された Agent はいずれもチャット UI に対応していません。"
         },
         "terminal": {

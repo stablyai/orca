@@ -18235,7 +18235,7 @@
             "4a9568f773": "Back",
             "4f86e2a10b": "Skip tour",
             "d974f32a83": "Dismiss tour",
-            "complete": "Done"
+            "complete": "Finish"
           },
           "ContextualTourProgressDots": {
             "dcd6e6b03e": "Step {{value0}} of {{value1}}",
@@ -20512,7 +20512,8 @@
         "chat": {
           "label": "Chat UI",
           "description": "Agents reply in a chat, with rendered messages and diffs.",
-          "terminalFallback": "Agents without chat support and folders opened through SSH or WSL on this computer still open in a terminal.",
+          "recommended": "Recommended",
+          "terminalFallback": "Agents without chat support fall back to a terminal.",
           "noneDetected": "None of your detected agents work in Chat UI."
         },
         "terminal": {

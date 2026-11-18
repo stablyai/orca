@@ -21147,7 +21147,8 @@
         "chat": {
           "label": "聊天界面",
           "description": "智能体在聊天中回复，消息和差异会渲染显示",
-          "terminalFallback": "不支持聊天的智能体，以及在此计算机上通过 SSH 或 WSL 打开的文件夹，仍会在终端中打开",
+          "recommended": "推荐",
+          "terminalFallback": "不支持聊天的 Agent 会改用终端打开。",
           "noneDetected": "已检测的智能体都不支持聊天界面"
         },
         "terminal": {

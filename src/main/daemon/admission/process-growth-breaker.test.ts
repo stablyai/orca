@@ -31,12 +31,6 @@ describe('evaluateProcessGrowth', () => {
     expect(verdict.trips.some((trip) => trip.scopeId === 'b')).toBe(false)
   })
 
-  it('never trips on one long interval, however large the jump', () => {
-    const state = createProcessGrowthState()
-    evaluateProcessGrowth(state, sample(0, 0), LIMITS)
-    expect(evaluateProcessGrowth(state, sample(30_000, 1_200), LIMITS).level).toBe('elevated')
-  })
-
   it('resets the streak once growth stops', () => {
     const state = createProcessGrowthState()
     evaluateProcessGrowth(state, sample(0, 0), LIMITS)

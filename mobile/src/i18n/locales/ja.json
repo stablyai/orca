@@ -2639,7 +2639,7 @@
       "disconnected": "貼り付けに失敗しました（接続が切れています）。",
       "imageTooLarge": "画像が大きすぎるため貼り付けできません。",
       "pasteFailed": "貼り付けに失敗しました。",
-      "pasteTooLarge": "貼り付けるデータが大きすぎます（最大 256 KiB）。",
+      "pasteTooLarge": "貼り付け内容が大きすぎます。",
       "terminalChanged": "貼り付けをキャンセルしました（ターミナルが変更されました）。"
     },
     "worktreeLabel": {

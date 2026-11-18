@@ -3084,7 +3084,7 @@
       "disconnected": "Falha ao colar (sem conexão)",
       "imageTooLarge": "Imagem grande demais para colar",
       "pasteFailed": "Falha ao colar",
-      "pasteTooLarge": "Colagem grande demais (máx. 256 KiB)",
+      "pasteTooLarge": "A colagem é muito grande.",
       "terminalChanged": "Colagem cancelada (o terminal mudou)"
     },
     "worktreeLabel": {

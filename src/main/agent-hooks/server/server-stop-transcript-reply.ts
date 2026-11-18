@@ -49,6 +49,20 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     return enriched
   }
 
+  /** Spool replay applies with its recorded receipt, then follows up on a Stop's reply the same way. */
+  protected applyReplayedHookAndReply(
+    event: AgentHookEventPayload,
+    normalized: NormalizedLocalHook,
+    receivedAt: number
+  ): EnrichedAgentHookEventPayload | undefined {
+    const rowBefore = this.state.lastStatusByPaneKey.get(event.paneKey)
+    const enriched = this.applyObservedLocalHook(event, normalized.onAccepted, receivedAt)
+    if (enriched) {
+      this.followStopReply(rowBefore, enriched, normalized.stopTranscriptPath)
+    }
+    return enriched
+  }
+
   /** After every applied live hook: it ends the pane's pending read, or starts one for its Stop. */
   protected followStopReply(
     rowBefore: AgentHookEventPayload | undefined,

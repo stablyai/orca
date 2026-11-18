@@ -2639,7 +2639,7 @@
       "disconnected": "붙여넣기 실패 (연결 끊김)",
       "imageTooLarge": "이미지가 너무 커서 붙여넣을 수 없습니다.",
       "pasteFailed": "붙여넣기 실패",
-      "pasteTooLarge": "붙여넣을 내용이 너무 큼 (최대 256 KiB)",
+      "pasteTooLarge": "붙여넣기 내용이 너무 큽니다.",
       "terminalChanged": "붙여넣기 취소됨 (터미널 변경됨)"
     },
     "worktreeLabel": {
