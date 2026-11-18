@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 /** Delay the loading animation so fast initial reads paint no cue. */
 export function NativeChatLoadingCue(): React.JSX.Element {

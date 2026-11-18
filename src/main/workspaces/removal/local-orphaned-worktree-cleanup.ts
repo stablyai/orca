@@ -2,7 +2,7 @@ import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
+  toLocalWorktreeRuntimePaths
 } from './local-worktree-filesystem'
 import {
   canSafelyRemoveOrphanedWorktreeDirectory,
@@ -10,7 +10,7 @@ import {
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from './worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 
 export async function cleanupLocalOrphanedWorktreeDirectory(
   repoPath: string,
@@ -21,10 +21,14 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
 ): Promise<void> {
   throwIfSignalAborted(signal)
   const access = getLocalWorktreePathAccess(options)
-  const runtimePath = toLocalWorktreeRuntimePath(path, options)
+  const [runtimePath, runtimeRepoPath] = await toLocalWorktreeRuntimePaths(
+    [path, repoPath],
+    options,
+    signal
+  )
   const safe = await canSafelyRemoveOrphanedWorktreeDirectory(
     runtimePath,
-    toLocalWorktreeRuntimePath(repoPath, options),
+    runtimeRepoPath,
     CLIENT_REMOVAL_HOME,
     access
   )

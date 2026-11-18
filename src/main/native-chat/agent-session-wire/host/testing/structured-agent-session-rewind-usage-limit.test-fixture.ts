@@ -1,10 +1,8 @@
 import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { journalSqlReads } from '../../../agent-session-journal/journal-sql-reads'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
-import {
-  openTestAgentSessionRecordStore,
-  withTestAgentSessionDatabase
-} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { expect, vi } from 'vitest'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
@@ -12,7 +10,7 @@ import {
   hostTestOperationId,
   hostTestMessage
 } from './structured-agent-session-host-test-data.test-fixture'
-import { latestNativeChatUsageLimitCut } from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { latestNativeChatUsageLimitCut } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'

@@ -7,11 +7,12 @@ import {
 } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
 import {
   isOrcaSessionId,
+  type OrcaSessionId,
   parseOrcaSessionAddress
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type {
@@ -31,6 +32,8 @@ import { conversationRecordReader } from '../../../orchestration/addressing/sess
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredWorkerHostScope } from '../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import { BOT_ITEM_WRITE_METHOD_NAMES } from '../../../../../shared/bots/bot-items'
+import { CONNECTOR_POST_METHOD_NAMES } from '../../../../../shared/connector-action-contract'
 import type { RpcRequest } from '../../core'
 import type { OrchestrationCallerField } from '../../methods/orchestration/access/orchestration-method-access'
 
@@ -56,11 +59,22 @@ const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
   'orchestration.callerShow'
 ])
 
+/** Non-orchestration methods whose authority depends on the calling session, so it is verified for them too. */
+const SESSION_CALLER_METHODS: ReadonlySet<string> = new Set([
+  'automation.create',
+  'automation.update',
+  ...BOT_ITEM_WRITE_METHOD_NAMES,
+  ...CONNECTOR_POST_METHOD_NAMES
+])
+
 /** Detect session evidence or a declared session caller synchronously so terminal calls avoid another async hop. */
 export function needsOrchestrationCallerResolution(
   request: RpcRequest,
   callerField: OrchestrationCallerField | undefined
 ): boolean {
+  if (SESSION_CALLER_METHODS.has(request.method)) {
+    return request.orchestrationCompatibilityEvidence?.agentSessionId !== undefined
+  }
   if (!request.method.startsWith('orchestration.')) {
     return false
   }
@@ -108,16 +122,7 @@ export async function resolveOrchestrationSessionCaller(
       `This command ran in ${evidence.host.kind === 'ssh' ? 'an SSH' : 'a WSL'} environment, and an Orca session ID identifies a caller only on the host that runs that session.`
     )
   }
-  if (typeof claimed !== 'string' || !isOrcaSessionId(claimed)) {
-    throw new OrchestrationError(
-      CODES.unknown,
-      'The caller named an ID that is not an Orca session ID. No effects were applied.',
-      NO_EFFECTS
-    )
-  }
-  const sessionId = claimed
-  const record = await readSessionRecord(runtime, sessionId)
-  assertSessionCanAct(sessionId, record, request.method)
+  const { sessionId, record } = await readActingSessionRecord(runtime, claimed, request.method)
   const db = runtime.getOrchestrationDb()
   const caller: OrchestrationSessionCaller = Object.freeze({
     ...resolveOrcaSessionParty(sessionId, db),
@@ -135,8 +140,35 @@ export async function resolveOrchestrationSessionCaller(
   }
 }
 
+/** The record of the session an id names, refused unless that session runs on this host and may act now. */
+export async function readActingSessionRecord(
+  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
+  claimed: unknown,
+  method: string
+): Promise<{ sessionId: OrcaSessionId; record: AgentSessionRecord }> {
+  if (typeof claimed !== 'string' || !isOrcaSessionId(claimed)) {
+    throw new OrchestrationError(
+      CODES.unknown,
+      'The caller named an ID that is not an Orca session ID. No effects were applied.',
+      NO_EFFECTS
+    )
+  }
+  const record = await readSessionRecord(runtime, claimed)
+  assertSessionCanAct(claimed, record, method)
+  return { sessionId: claimed, record }
+}
+
+/** The workspace an acting session runs in, refused like readActingSessionRecord. */
+export async function readActingSessionWorkspaceKey(
+  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
+  sessionId: string,
+  method: string
+): Promise<string> {
+  return (await readActingSessionRecord(runtime, sessionId, method)).record.location.workspaceId
+}
+
 async function readSessionRecord(
-  runtime: OrcaRuntimeService,
+  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
   sessionId: string
 ): Promise<AgentSessionRecord> {
   let store: AgentSessionRecordStore | null

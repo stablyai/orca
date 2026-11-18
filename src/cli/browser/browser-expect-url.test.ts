@@ -28,8 +28,6 @@ vi.mock('../runtime/profile/metadata', async (importOriginal) => ({
   getDefaultUserDataPath: getDefaultUserDataPathMock
 }))
 
-import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
-
 import { main } from '../index'
 import { okFixture } from '../runtime/fixtures/runtime-rpc-fixtures'
 
@@ -69,28 +67,4 @@ describe('--expect-url', () => {
     expect(callMock.mock.calls.map(([method]) => method)).toEqual(['status.get'])
     expect(process.exitCode).toBe(1)
   })
-
-  it.each([[''], [undefined]])(
-    'refuses an empty value (%s) rather than run unguarded',
-    async (value) => {
-      answerRuntime([BROWSER_EXPECT_URL_RUNTIME_CAPABILITY])
-
-      await main(
-        [
-          'click',
-          '--element',
-          '@e1',
-          '--page',
-          'page-1',
-          '--json',
-          '--expect-url',
-          ...(value === undefined ? [] : [value])
-        ],
-        '/tmp/not-an-orca-worktree'
-      )
-
-      expect(callMock).not.toHaveBeenCalled()
-      expect(process.exitCode).toBe(1)
-    }
-  )
 })

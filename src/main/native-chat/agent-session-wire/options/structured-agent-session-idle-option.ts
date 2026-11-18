@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'

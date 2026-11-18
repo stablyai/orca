@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react'
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 
 /** How close to its target a jump counts as arrived: sub-pixel and zoom rounding. */
 export const ALIGN_ARRIVED_PX = 2

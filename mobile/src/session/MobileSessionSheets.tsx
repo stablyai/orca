@@ -6,12 +6,12 @@ import { Copy, FileText, RefreshCw } from 'lucide-react-native'
 import { MobileSessionTerminalLayoutSheet } from '../terminal/session/pane-layout/MobileSessionTerminalLayoutSheet'
 import { QuickCommandsSheet } from '../terminal/quick-commands/QuickCommandsSheet'
 import { triggerSuccess, triggerError } from '../platform/haptics/haptics'
-import { ActionSheetModal } from '../components/ActionSheetModal'
-import { TextInputModal } from '../components/TextInputModal'
+import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
+import { TextInputModal } from '../components/sheets/TextInputModal'
 import { MobileTerminalRenameModal } from '../terminal/session/tab-actions/MobileTerminalRenameModal'
-import { ConfirmModal } from '../components/ConfirmModal'
-import { CustomKeyModal } from '../components/CustomKeyModal'
-import { MobileDictationSetupSheet } from '../components/MobileDictationSetupSheet'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
+import { CustomKeyModal } from '../terminal/shortcuts/settings/CustomKeyModal'
+import { MobileDictationSetupSheet } from '../dictation/setup/MobileDictationSetupSheet'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './tabs/MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from '../terminal/session/tab-actions/mobile-terminal-action-sheet-actions'
@@ -19,7 +19,9 @@ import { isTerminalPhoneDisplayMode } from '../terminal/session/pane-layout/term
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
+import { MobileSessionBotSheet } from './MobileSessionBotSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
+import { MobileSessionTextSizeSheet } from './MobileSessionTextSizeSheet'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
@@ -93,17 +95,20 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     closeWithBulkActions,
     createTabAgentStatusRow,
     createTabAgentOptions,
+    createTabAgentSurfaceChoice,
     sendDiffNotesAgentActions
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
   return (
     <>
+      <MobileSessionBotSheet controller={controller} />
       <MobileSessionTerminalLayoutSheet
         controller={controller}
         visible={showTerminalLayout}
         onClose={() => setShowTerminalLayout(false)}
       />
+      <MobileSessionTextSizeSheet controller={controller} />
       <QuickCommandsSheet
         visible={showQuickCommands && quickCommandsSupported === true}
         onClose={() => setShowQuickCommands(false)}
@@ -121,21 +126,25 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         visible={showCreateTabDrawer}
         workspaceName={worktreeName}
         agentOptions={createTabAgentOptions}
+        surfaceChoice={createTabAgentSurfaceChoice}
         agentStatusRow={createTabAgentStatusRow}
+        leadingAgentActions={controller.createTabLeadingAgentActions}
         // Why: browser/markdown creation resolve a real worktree on the host
         // (browser.tabCreate, files.createFile); the floating sentinel is
         // terminal-only over RPC, so those options hide there.
         canCreateBrowser={!isFloatingWorkspaceRoute}
         canCreateMarkdownNote={!isFloatingWorkspaceRoute && onPairedHost}
         onClose={() => setShowCreateTabDrawer(false)}
-        onCreateAgent={(agent) => void handleCreateTerminal(agent)}
+        onCreateAgent={(agent, nativeChatDefault) =>
+          void handleCreateTerminal(agent, undefined, nativeChatDefault)
+        }
         onCreateTerminal={() => void handleCreateTerminal()}
         onCreateBrowser={() => {
           if (browserScreencastSupported !== true) {
             showToast(
               t(
-                'session.sheets.browserUpdateRequired',
-                'Desktop update required for mobile browser streaming'
+                'session.sheets.browserStreamingUnavailable',
+                "This host can't stream browser tabs"
               ),
               1600
             )

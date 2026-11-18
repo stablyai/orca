@@ -8,7 +8,7 @@ import type { CodexThreadItem } from '../items/codex-thread-item-identity'
 import {
   codexSubagentPathLabel,
   codexSubagentPathSegments
-} from '../../../../shared/codex-agent-path'
+} from '../../../../shared/agent-hook-listener/providers/codex/codex-agent-path'
 
 export const CODEX_SUBAGENT_ITEM_TYPE = 'subAgentActivity'
 export const CODEX_TOKEN_USAGE_METHOD = 'thread/tokenUsage/updated'

@@ -1,4 +1,3 @@
-import '../../../../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type {
   KeybindingInput,
@@ -9,6 +8,7 @@ import type {
 } from '../../../../../../shared/keybindings/types'
 import {
   encodeModifyOtherKeysEnter,
+  encodeTerminalCtrlEnter,
   encodeTerminalShiftEnter,
   TERMINAL_CTRL_BACKSPACE_INPUT
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
@@ -57,6 +57,7 @@ export type TerminalShortcutAction =
   | { type: 'toggleExpandActivePane' }
   | { type: 'setTitle' }
   | { type: 'clearPaneTitle' }
+  | { type: 'copySessionId' }
   | { type: 'closeActivePane' }
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
@@ -113,6 +114,10 @@ export function resolveTerminalShortcutAction(
 
   if (matches('terminal.copySelection')) {
     return { type: 'copySelection' }
+  }
+
+  if (matches('terminal.copySessionId')) {
+    return { type: 'copySessionId' }
   }
 
   if (!event.repeat) {
@@ -213,7 +218,7 @@ export function resolveTerminalShortcutAction(
       hasCtrlEnterCsiUAuthority?.() === true
     return {
       type: 'sendInput',
-      data: canSendCsiU ? '\x1b[13;5u' : '\r'
+      data: encodeTerminalCtrlEnter(canSendCsiU)
     }
   }
 

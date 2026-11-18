@@ -1,7 +1,7 @@
 import { access, realpath, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { basename, delimiter, isAbsolute, resolve } from 'node:path'
-import { getExecutableNames } from '../../../shared/node-cli-command-resolution'
+import { getExecutableNames } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { agentModelCatalogScriptEntry } from './agent-model-catalog-script-entry'
 
 async function fileStamp(path: string): Promise<unknown> {

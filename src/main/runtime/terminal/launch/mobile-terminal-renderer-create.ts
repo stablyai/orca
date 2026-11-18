@@ -3,7 +3,7 @@ import type { MobileTerminalCommandOptions, MobileTerminalCommand } from './mobi
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import type { IpcMainEvent } from 'electron'
@@ -17,6 +17,7 @@ import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution
 import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
 import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
+import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
 
 export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
   protected abstract resolveMobileSessionTerminalCommand(
@@ -236,6 +237,8 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         })
         if (this.isReadyMobileTerminalSurface(surface)) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          // The window spawned it outside this RPC, so the runtime's spawn point never saw the caller.
+          noteCallerOpenedTerminal(surface.tab.terminal)
           return surface
         }
         const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
@@ -245,6 +248,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }).catch(() => null)
         if (readySurface) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          noteCallerOpenedTerminal(readySurface.tab.terminal)
           return readySurface
         }
         if (opts.signal?.aborted) {

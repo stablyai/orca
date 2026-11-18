@@ -22,7 +22,7 @@ import {
   type OrcaProfileIndex,
   type OrcaProfileListState,
   type OrcaProfileSummary
-} from '../../shared/orca-profiles'
+} from '../../shared/orca-profiles/orca-profiles'
 import {
   getOrcaProfileDataFile,
   getOrcaProfileDirectory,
@@ -32,6 +32,7 @@ import {
   getProfileUserDataPath
 } from './profile-storage-paths'
 import { copyLegacyStateToProfile } from './storage/profile-legacy-state-import'
+import { supersedeCloudConnectAttempts } from './cloud-auth/profile-cloud-connect-attempts'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/database/profile-state-authority-marker'
 import { profileStateDatabaseBackups } from '../persistence/profile-state/backup/profile-state-backup-path'
@@ -292,6 +293,8 @@ export function setActiveOrcaProfile(
     profiles
   }
   mkdirSync(getOrcaProfileDirectory(profileId, userDataPath), { recursive: true })
+  // A sign-in still in flight belongs to the profile being left.
+  supersedeCloudConnectAttempts()
   writeProfileIndex(getOrcaProfileIndexPath(userDataPath), nextIndex)
   return {
     activeProfileId: nextIndex.activeProfileId,

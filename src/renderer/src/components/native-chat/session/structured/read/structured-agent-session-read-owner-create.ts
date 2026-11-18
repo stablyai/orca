@@ -5,10 +5,11 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction
-} from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+} from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
+import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
 import { createStructuredAgentSessionReadActivity } from './structured-agent-session-read-activity'
 import { createStructuredAgentSessionOlderPageLoader } from './structured-agent-session-older-page-loader'
@@ -141,6 +142,7 @@ export function createReadOwner(
       apply({ type: 'loading' })
     }
     const transport = startStructuredAgentSessionReadTransport({
+      showsPromptSuggestions: nativeChatShowsPromptSuggestions(effects.getState().settings),
       subscribeRetryNow: effects.subscribeRetryNow,
       applyRequests: apply,
       applyEvent: (event, options) => {
@@ -179,9 +181,10 @@ export function createReadOwner(
   }
 
   let owner: StructuredAgentSessionReadOwner
+  let retained = 0
   const deleteIfUnused = (): void => {
     const subscriptions = activations.size + listeners.size + commandListeners.size
-    if (subscriptions === 0 && !activity.retained()) {
+    if (subscriptions === 0 && retained === 0 && !activity.retained()) {
       forgetStructuredReadOwner(key, owner)
     }
   }
@@ -197,6 +200,18 @@ export function createReadOwner(
     }
   }
   owner = {
+    retain: () => {
+      adoptStructuredReadOwner(key, owner)
+      retained++
+      let released = false
+      return () => {
+        if (!released) {
+          released = true
+          retained--
+          deleteIfUnused()
+        }
+      }
+    },
     trackSend: activity.trackSend,
     admit: activity.admit,
     publishCreated: (page) => {

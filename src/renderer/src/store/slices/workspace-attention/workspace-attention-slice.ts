@@ -27,9 +27,9 @@ import {
   type HostScopedWorktreeKey
 } from '../../../../../shared/worktree/host-qualified-identity'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
-import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
+import { getAgentPaneExecutionHost } from '../agent-status/pane-authority/agent-pane-execution-host'
 import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
-import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isTabOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 import { getTerminalTabOwnerWorktreeId } from '../../terminals/ownership/terminal-tab-owner-index'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
@@ -239,8 +239,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
           .map((tab) => [tab.entityId, tab.executionHostId])
       )
       const hostPaneKeys = [...paneKeys].filter((paneKey) => {
-        const retained = state.retainedAgentsByPaneKey[paneKey]
-        const entry = state.agentStatusByPaneKey[paneKey] ?? retained?.entry
+        const entry = state.agentStatusByPaneKey.get(paneKey)
         const tabId = paneKeyTabId(paneKey)
         const tab = tabId ? tabsById.get(tabId) : undefined
         return isExecutionHostForWorktree(
@@ -251,7 +250,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
             state,
             paneKey,
             entry,
-            tab?.ptyId ?? retained?.tab.ptyId,
+            tab?.ptyId,
             tabId ? stampedHosts.get(tabId) : undefined
           )
         )

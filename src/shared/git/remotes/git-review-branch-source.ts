@@ -9,6 +9,8 @@ export type GitReviewBranchSource = {
   remoteName: string
   urls: string[]
   branchName: string
+  /** A constrained publish destination; null leaves discovery usable without claiming a push head. */
+  pushBranchName?: string | null
   trackedBranchName?: string
   trackedUrls?: string[]
 }
@@ -83,7 +85,8 @@ export async function readGitReviewBranchSources(
       }
     }
   }
-  const normalizeRemote = (remote: string): string => remoteIdentities.get(remote) ?? remote
+  const normalizeRemote = (remote: string): string =>
+    remote === '.' ? remote : (remoteIdentities.get(remote) ?? remote)
   const expandedUrls = new Map<string, string[]>()
   const urlsFor = (remote: string): string[] => {
     const cached = expandedUrls.get(remote)
@@ -126,6 +129,27 @@ export async function readGitReviewBranchSources(
         throw new Error('Review push destination is ambiguous')
       }
       const branchName = destinations.values().next().value ?? branch
+      let pushBranchName: string | null =
+        localTracking ||
+        (destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing'))
+          ? null
+          : branchName
+      const fetchRemote =
+        trackedRemote ??
+        (remotes.has('origin')
+          ? 'origin'
+          : remotes.size === 1
+            ? remotes.keys().next().value
+            : undefined)
+      if (
+        specs.length === 0 &&
+        (!trackedRemote || !get(`branch.${branch}.merge`)) &&
+        (((get('push.default') ?? 'simple') === 'simple' && remote === fetchRemote) ||
+          get('push.default') === 'upstream') &&
+        !/^(true|yes|on|1)$/i.test(get('push.autosetupremote') ?? '')
+      ) {
+        pushBranchName = null
+      }
       if (destinations.size === 0) {
         if (!localTracking && remote === trackedRemote) {
           const merge = get(`branch.${branch}.merge`)
@@ -139,10 +163,17 @@ export async function readGitReviewBranchSources(
           ) {
             trackedBranchName = tracked
           }
-          if (get('push.default') === 'upstream' && !merge) {
-            throw new Error('Review upstream is unavailable')
+          if ((get('push.default') ?? 'simple') === 'simple' && tracked && tracked !== branch) {
+            pushBranchName = null
+          }
+          if (specs.length === 0 && get('push.default') === 'upstream') {
+            if (!merge) {
+              throw new Error('Review upstream is unavailable')
+            }
+            pushBranchName = tracked ?? null
           }
         } else if (
+          specs.length === 0 &&
           get('push.default') === 'upstream' &&
           explicitRemote &&
           remote !== trackedRemote
@@ -154,6 +185,7 @@ export async function readGitReviewBranchSources(
         remoteName: remote,
         urls: urlsFor(remote),
         branchName,
+        ...(pushBranchName !== branchName ? { pushBranchName } : {}),
         ...(trackedBranchName
           ? { trackedBranchName, trackedUrls: remotes.get(remote)?.fetch ?? [remote] }
           : {})

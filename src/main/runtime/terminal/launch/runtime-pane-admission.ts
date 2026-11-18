@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type {
   TerminalPaneAdmission,
@@ -19,6 +19,7 @@ import {
   type PaneResumeOutcomes,
   type PaneStartStatuses
 } from '../surface/pane-start-statuses'
+import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
 
 type Spawn = NonNullable<RuntimePtyController['spawn']>
 type PaneStartStatusSink = Pick<PaneStartStatuses, 'set' | 'clear'>
@@ -184,6 +185,7 @@ export async function spawnInAdmittedPane(
       )
     }
     admittedAs = admitted
+    noteCallerOpenedTerminal(spawnArgs.preAllocatedHandle)
     // SAFETY: Callers require spawn; a lost capability during admission keeps the original failure.
     return controller.spawn!(spawnArgs)
   }

@@ -1,8 +1,9 @@
 import { senderDispatchLaunch } from './sender-dispatch-launch'
+import { agentSessionRecordShownName } from '../../../agent-session/records/agent-session-record-shown-name'
 import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { crewDisplayName } from '../../crew/crew-rules'
-import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
-import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import {
   getAgentRowConversationName,
   type ConversationNameTab
@@ -10,8 +11,11 @@ import {
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import { structuredChatDisplayName } from '../../../../../shared/structured-chat-row-name'
-import type { Tab } from '../../../../../shared/tab-types'
+import { structuredChatDisplayName } from '../../../../../shared/agent-session/view/structured-chat-row-name'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { Bot } from '../../../../../shared/bot-types'
+import { homeBotName } from '../../../../bots/bot-session-tabs'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -162,6 +166,19 @@ export type SenderNamingSources = {
   terminal: (handle: string) => TerminalSenderNaming | null
   generatedTitlesEnabled: boolean
   dispatchLaunch?: (dispatch: DispatchContextRow) => AgentType | null
+  /** Its settings and bots: a bot's home names every chat there by the bot. */
+  store: SenderNamingStore | null | undefined
+}
+
+/** The host store a sender is named from: its settings and its bots. */
+export type SenderNamingStore = {
+  getSettings?: () => Partial<Pick<GlobalSettings, 'tabAutoGenerateTitle' | 'botsEnabled'>>
+  getBots?: () => readonly Pick<Bot, 'name' | 'folderWorkspaceId'>[]
+}
+
+/** The person's "generate tab titles" setting, which decides whether a generated title names a tab. */
+export function readGeneratedTitlesEnabled(store: SenderNamingStore | null | undefined): boolean {
+  return store?.getSettings?.()?.tabAutoGenerateTitle === true
 }
 
 type Party = AgentMessageSender['party']
@@ -279,8 +296,8 @@ export function orchestrationSenderAgent(
 /** A chat's own name (the person's rename, else its saved name) and the label its tab falls back to. */
 export function structuredChatNaming(
   sessionId: string,
-  sources: Pick<SenderNamingSources, 'records' | 'chatTab'>
-): { ownName: string | null; fallback: string; agent: AgentType } | null {
+  sources: Pick<SenderNamingSources, 'records' | 'chatTab' | 'store'>
+): { ownName: string | null; fallback: string; agent: AgentType; bot: boolean } | null {
   const running = resolveLineageRunningSession(sources.records, sessionId)
   const record = running.kind === 'here' ? running.record : null
   if (!record) {
@@ -288,8 +305,10 @@ export function structuredChatNaming(
   }
   const tab = sources.chatTab(record.location.workspaceId, record.sessionId)
   const fallback = tab?.label.trim() || defaultAgentChatLabel(record.provider)
-  const ownName = structuredChatDisplayName(tab?.customLabel, record.conversationName, '') || null
-  return { ownName, fallback, agent: record.provider }
+  const shownName = sources.records ? agentSessionRecordShownName(sources.records, record) : null
+  const botName = homeBotName(sources.store, record.location.workspaceId)
+  const ownName = botName || structuredChatDisplayName(tab?.customLabel, shownName, '') || null
+  return { ownName, fallback, agent: record.provider, bot: Boolean(botName) }
 }
 
 /** Only the sender's own dispatch: a report's payload is the sender's to write. */

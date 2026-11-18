@@ -9,6 +9,11 @@ type CaptureOptions = {
   env?: NodeJS.ProcessEnv
   encoding?: string | null
   maxBuffer: number
+  ownedPosixGroup?: boolean
+  errorCommand?: string
+  onOverflow?: (error: Error) => void
+  onError?: (error: Error) => void
+  onCapture?: (read: () => { stdout: string | Buffer; stderr: string | Buffer }) => void
 }
 type CaptureCallback = (
   error: Error | null,
@@ -28,7 +33,8 @@ export function workerExecFile(
       program: command,
       args,
       cwd: options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd,
-      env: options.env
+      env: options.env,
+      ...(options.ownedPosixGroup ? { terminationBarrier: true as const } : {})
     })
   )
 }
@@ -47,18 +53,20 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
   const child = launch()
   const stdout = createOutputSink(options.maxBuffer)
   const stderr = createOutputSink(options.maxBuffer)
+  const read = (): { stdout: string | Buffer; stderr: string | Buffer } => ({
+    stdout: encoding === 'buffer' ? stdout.buffer() : stdout.buffer().toString(encoding),
+    stderr: encoding === 'buffer' ? stderr.buffer() : stderr.buffer().toString(encoding)
+  })
+  options.onCapture?.(read)
   let completed = false
   let overflowError: Error | null = null
-  const finish = (error: Error | null): void => {
+  const finish = (error: Error | null, captured?: ReturnType<typeof read>): void => {
     if (completed) {
       return
     }
     completed = true
-    callback(
-      error,
-      encoding === 'buffer' ? stdout.buffer() : stdout.buffer().toString(encoding),
-      encoding === 'buffer' ? stderr.buffer() : stderr.buffer().toString(encoding)
-    )
+    const output = captured ?? read()
+    callback(error, output.stdout, output.stderr)
   }
   const collect = (sink: typeof stdout, chunk: Buffer): void => {
     if (completed) {
@@ -70,22 +78,42 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
         code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
         killed: true
       })
-      child.kill()
+      if (options.onOverflow) {
+        const output = read()
+        Object.assign(overflowError, output)
+        options.onOverflow(overflowError)
+        finish(overflowError, output)
+      } else {
+        child.kill()
+      }
     }
   }
+  child.stdout?.on('error', () => {})
+  child.stderr?.on('error', () => {})
   child.stdout?.on('data', (chunk: Buffer) => collect(stdout, chunk))
   child.stderr?.on('data', (chunk: Buffer) => collect(stderr, chunk))
-  child.once('error', finish)
+  child.once('error', (error: Error) => {
+    options.onError?.(error)
+    finish(error)
+  })
   child.once('close', (code: number | null, signal: NodeJS.Signals | null) => {
     finish(
       overflowError ??
         (code === 0
           ? null
-          : Object.assign(new Error(stderr.text().trim() || `${command} exited with ${code}`), {
-              code,
-              signal,
-              killed: signal !== null
-            }))
+          : Object.assign(
+              new Error(
+                options.errorCommand
+                  ? `Command failed: ${options.errorCommand}\n${stderr.text()}`
+                  : stderr.text().trim() || `${command} exited with ${code}`
+              ),
+              {
+                code,
+                signal,
+                killed: signal !== null,
+                ...(options.errorCommand ? { cmd: options.errorCommand } : {})
+              }
+            ))
     )
   })
   return child

@@ -23,10 +23,10 @@ import { useHostQueries, useHostQuery } from '../../query/host-query'
 import { hostQueryKey, hostScopeKey } from '../../query/host-query-key'
 import { hostScreenState } from '../../query/host-query-screen-state'
 import { useForceReconnect } from '../../transport/connection/host-client-hooks'
-import { useWorkspaceClient } from '../../worktree/use-workspace-client'
+import { useWorkspaceClient } from '../../worktree/execution-hosts/use-workspace-client'
 import { connectionRetryAction } from '../../transport/connection/connection-retry-action'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import { getWorktreeLabel } from '../../worktree/worktree-label'
+import { getWorktreeLabel } from '../../worktree/row-presentation/worktree-label'
 import type { DirectoryCache, DirectoryState, FileExplorerRow } from './file-tree'
 import { spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -43,7 +43,7 @@ import {
   MobileNoMatchState,
   MobileOfflineState,
   MobileStateView
-} from '../../components/MobileStateView'
+} from '../../components/feedback/MobileStateView'
 import { BottomSearchBar } from '../../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
@@ -129,8 +129,8 @@ function folderState(read: FolderRead, connState: ConnectionState): DirectorySta
         entries: [],
         error:
           connState === 'connected'
-            ? translate('files.fileExplorerPanel.connecting', 'Connecting to desktop...')
-            : translate('files.fileExplorerPanel.waiting', 'Waiting for desktop...')
+            ? translate('common.connectingToHost', 'Connecting to host…')
+            : translate('common.waitingForHost', 'Waiting for host…')
       }
   }
 }
@@ -140,11 +140,13 @@ export function MobileFileExplorerPanel(props: {
   worktreeId: string
   name?: string
   embedded?: boolean
+  /** Inside a panel that names it already (a bot's Files tab): no bar of its own. */
+  headerless?: boolean
   onRequestClose?: () => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { hostId, worktreeId, name, embedded, onRequestClose } = props
+  const { hostId, worktreeId, name, embedded, headerless, onRequestClose } = props
   const router = useWorkspaceRouteHandoff()
   const executionHost = useWorkspaceExecutionHost()
   const { client, state: connState } = useWorkspaceClient(hostId)
@@ -371,10 +373,10 @@ export function MobileFileExplorerPanel(props: {
   // The embedded dock owns insets and layout; only the full-screen variant needs SafeAreaView and header chrome.
   return (
     <View
-      style={styles.container}
+      style={[styles.container, headerless && styles.onSheet]}
       onLayout={({ nativeEvent }) => setPanelWidth(nativeEvent.layout.width)}
     >
-      {embedded ? (
+      {headerless ? null : embedded ? (
         <View style={styles.header}>{headerBar}</View>
       ) : (
         <SafeAreaView style={styles.header} edges={['top']}>

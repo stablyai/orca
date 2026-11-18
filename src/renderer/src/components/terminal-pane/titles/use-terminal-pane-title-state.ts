@@ -26,8 +26,8 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
   paneTitlesRef.current = paneTitles
   const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
   const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
-  const remotePaneLayoutPusherRef = useRef<RemotePaneLayoutPusher | null>(null)
-  remotePaneLayoutPusherRef.current ??= createRemotePaneLayoutPusher()
+  const [remotePaneLayoutPusher] = useState(createRemotePaneLayoutPusher)
+  const remotePaneLayoutPusherRef = useRef<RemotePaneLayoutPusher | null>(remotePaneLayoutPusher)
   const [paneTitleOverlayRects, setPaneTitleOverlayRects] = useState<
     Record<number, PaneTitleOverlayRect>
   >({})

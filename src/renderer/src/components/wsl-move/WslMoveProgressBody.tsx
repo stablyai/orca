@@ -4,7 +4,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import type {
   WslMoveProgressEvent,
   WslMoveProgressStep

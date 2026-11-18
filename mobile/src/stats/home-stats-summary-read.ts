@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import * as z from 'zod'
+import { salvagedOptional } from '../../../src/shared/validation/zod-salvage'
 import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from '../host-screen/catalog/host-list-queries'
 import { defineHostQuery } from '../query/host-query'
 import { hostQueryKey } from '../query/host-query-key'

@@ -13,12 +13,12 @@ import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-jo
 import {
   orchestrationMailNotice,
   type AgentMessageSource
-} from '../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
-} from '../../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 
 /** A recorded send made again: under the same id when it was never admitted, or under a new one
  *  after a proven rejection and a later turn or /clear. */
@@ -228,6 +228,19 @@ export function settleStructuredMailAttempt(
   const release = () => {
     decision.released = db.releaseStructuredMailSend(row)
   }
+  // A pointer or in-doubt send left the mail unread: hold it while custody is unreadable, and tell
+  // its owner now when the chat lost the mailbox and can no longer `check` it.
+  const retireUnconsumed = () => {
+    if (owed === 'unavailable') {
+      decision.outstanding = true
+      return
+    }
+    retire(false)
+    if (owed === 'stale') {
+      db.markAsUndelivered([row.message_id])
+      decision.released = true
+    }
+  }
   switch (state.kind) {
     case 'accepted': {
       const message = db.getMessageById(row.message_id)
@@ -235,15 +248,19 @@ export function settleStructuredMailAttempt(
         reconcileLifecycleMessage(db, message)
       }
       const corrected = db.getMessageById(row.message_id)
-      retire(
-        !!corrected &&
-          !corrected.read &&
-          structuredMailWasDeliveredWhole(row, corrected, observation)
-      )
+      if (
+        corrected &&
+        !corrected.read &&
+        structuredMailWasDeliveredWhole(row, corrected, observation)
+      ) {
+        retire(true)
+        break
+      }
+      retireUnconsumed()
       break
     }
     case 'unknown':
-      retire(false)
+      retireUnconsumed()
       break
     case 'refused':
       release()

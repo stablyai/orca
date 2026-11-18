@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Copy } from 'lucide-react-native'
-import { ActionSheetModal, type ActionSheetAction } from '../../components/ActionSheetModal'
+import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'

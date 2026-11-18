@@ -1,5 +1,5 @@
 import { uptime } from 'node:os'
-import type { OrcadUnexpectedExit } from '../../../shared/orcad-unexpected-exit'
+import type { OrcadUnexpectedExit } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-unexpected-exit'
 import type { OrcadLockRecord } from '../instance-lock/orcad-instance-lock-record'
 
 /** A reclaimed orcad lock from this boot means that run died; without boot evidence a reboot cannot be ruled out. */

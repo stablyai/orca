@@ -1,13 +1,13 @@
 import { useFocusEffect } from 'expo-router'
 import { useCallback } from 'react'
 import { AppState } from 'react-native'
-import { setForegroundTimer } from '../mobile-web-shell/foreground-timer'
+import { setForegroundTimer } from '../mobile-web-shell/session/foreground-timer'
 import {
   enterHomeSparePage,
   homeSpareRefillWaitMs,
   leaveHomeSparePage,
   prepareHomeSparePage
-} from '../mobile-web-shell/home-spare-page'
+} from '../mobile-web-shell/page-document/home-spare-page'
 import { processGenerationStore } from '../mobile-web-shell/generations/process-generation-store'
 
 // Past Home's first paint and its first reads, so the boot never competes with them.

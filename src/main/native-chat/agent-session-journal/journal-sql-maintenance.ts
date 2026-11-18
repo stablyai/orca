@@ -1,4 +1,3 @@
-import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
 import { rekeyWslDriveUncChats } from '../../wsl/filesystem/wsl-drive-unc-chat-rekey'
 import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'
 import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
@@ -18,28 +17,41 @@ import {
   type JournalDomainMaintenance,
   type JournalDomainMaintenanceResult
 } from './journal-domain-maintenance'
+import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
 import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
 import {
   discardJournalDomainImportPage,
   type JournalDomainImportDiscard
 } from './journal-domain-import-discard'
+import { discardForgottenJournalChatPage } from './journal-forgotten-chats'
 import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
+import { storedAgentSessionBackground } from '../../runtime/agent-session/records/agent-session-tab-table'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
+import {
+  fillJournalConnectorReplies,
+  sentJournalConnectorReplies
+} from './connector-replies/journal-connector-replies'
+import type {
+  JournalConnectorReplyFill,
+  JournalConnectorReplyKey
+} from '../../../shared/agent-session/journal/journal-connector-reply'
+
+/** Operations the background pass runs a bounded page at a time. */
+export type JournalPagedMaintenanceKind =
+  | 'event-tail-prune'
+  | 'domain-retired-prune'
+  | 'page-reclaim'
+  | 'chat-discard'
+  | 'stored-output-compaction'
 
 export type JournalSqlMaintenance =
-  | { kind: 'legacy-retirement-state' }
-  | {
-      kind: 'legacy-retirement-save'
-      value: string
-      durable: boolean
-      destination?: LegacyDestinationIdentity
-    }
   | { kind: 'records-install' }
   | { kind: 'wsl-workspace-rekey'; worktreeIds: readonly (readonly [string, string])[] }
   | JournalForkStageOperation
   | { kind: 'outline-cache'; cache: JournalOutlineCache }
   | { kind: 'projection-state'; sessionId: string }
   | { kind: 'import-discard'; sessionId: string }
+  | { kind: 'chat-discard'; sessionId: string }
   | {
       kind: 'import-page'
       target: Pick<JournalDomainImportHeader, 'sessionId' | 'epoch'>
@@ -48,17 +60,20 @@ export type JournalSqlMaintenance =
   | { kind: 'import-finish'; header: JournalDomainImportHeader }
   | JournalDomainMaintenance
   | { kind: 'event-tail-prune'; now: number }
+  // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
+  | { kind: 'connector-replies-fill'; fills: readonly JournalConnectorReplyFill[]; now: number }
+  | { kind: 'connector-replies-sent'; keys: readonly JournalConnectorReplyKey[]; now: number }
 
 export type JournalSqlProjectionState = JournalDomainImportState
 
 export type JournalSqlMaintenanceResult =
-  | { kind: 'legacy-retirement-state'; receipt: string | null; retirement: string | null }
   | { kind: 'records'; records: JournalSqlStoredRecords }
   | JournalForkStageResult
   | JournalSqlProjectionState
   | JournalSqlEventTailResult
   | JournalDomainMaintenanceResult
   | JournalDomainImportDiscard
+  | ReturnType<typeof discardForgottenJournalChatPage>
   | boolean
   | string
   | null
@@ -68,32 +83,17 @@ export function applyJournalSqlMaintenance(
   operation: JournalSqlMaintenance
 ): JournalSqlMaintenanceResult {
   switch (operation.kind) {
-    case 'legacy-retirement-state': {
-      const value = (key: string) =>
-        db
-          .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
-          .get(key)
-          ?.value?.toString() ?? null
-      return {
-        kind: 'legacy-retirement-state',
-        receipt: value('journal.legacy-source-copy.v1'),
-        retirement: value('journal.legacy-retirement.v1')
-      }
-    }
-    case 'legacy-retirement-save':
-      db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
-        'journal.legacy-retirement.v1',
-        operation.value
-      )
-      return true
-
     case 'wsl-workspace-rekey':
       return rekeyWslDriveUncChats(db, operation.worktreeIds)
     case 'records-install': {
       const records = installAgentSessionStoreRows(db)
       return {
         kind: 'records',
-        records: { ...records, sessionTabs: records.sessionTabs?.entries() ?? null }
+        records: {
+          ...records,
+          sessionTabs: records.sessionTabs?.entries() ?? null,
+          backgroundSessions: storedAgentSessionBackground(records.sessionTabs)
+        }
       }
     }
     case 'fork-source-hold':
@@ -108,6 +108,13 @@ export function applyJournalSqlMaintenance(
       return journalDomainImportState(db, operation.sessionId)
     case 'import-discard':
       return discardJournalDomainImportPage(db, operation.sessionId)
+    case 'chat-discard':
+      return discardForgottenJournalChatPage(db, operation.sessionId)
+    case 'connector-replies-fill':
+      return fillJournalConnectorReplies(db, operation.fills, operation.now) > 0
+    case 'connector-replies-sent':
+      sentJournalConnectorReplies(db, operation.keys, operation.now)
+      return true
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':
@@ -122,5 +129,7 @@ export function applyJournalSqlMaintenance(
       return completeJournalDomainCompaction(db, operation.now)
     case 'event-tail-prune':
       return pruneJournalSqlEventTail(db, operation.now)
+    case 'stored-output-compaction':
+      return compactJournalStoredOutputPage(db)
   }
 }

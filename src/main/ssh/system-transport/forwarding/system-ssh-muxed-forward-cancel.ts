@@ -2,7 +2,7 @@
 import { runProcess } from '@orca/process-host'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from '../system-ssh-args'
 import { findSystemSsh } from '../system-ssh-binary'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 
 const SYSTEM_SSH_MUXED_FORWARD_CANCEL_TIMEOUT_MS = 5_000
 

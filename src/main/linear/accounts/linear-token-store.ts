@@ -24,7 +24,9 @@ import {
 } from './linear-workspace-registry'
 import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
 import { readCredentialFileProtection } from '../../credentials/credential-file-protection'
-import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
+import { clearWorkspaceLogin, readWorkspaceLogin } from './linear-login-store'
+import { refreshLinearLogin, refreshLinearLoginIfDue } from './linear-login-refresh'
+import type { SecretAtRestProtection } from '../../../shared/secure-storage/secret-at-rest-protection'
 
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
   ensureOrcaDir()
@@ -45,11 +47,44 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
   return workspaceTokenFileCache.read(workspaceId, options.force === true)
 }
 
+// How Orca calls Linear for a workspace: its API key, else the login Connect Linear saved.
+// A login also carries how to swap in a fresh token when Linear refuses the one it holds.
+export type LinearCredential =
+  | { apiKey: string }
+  | { accessToken: string; reauthorize: () => Promise<string | null> }
+
+export function loadCredential(workspaceId: string): LinearCredential | null {
+  const apiKey = loadToken({ force: true, workspaceId })
+  if (apiKey) {
+    return { apiKey }
+  }
+  const login = readWorkspaceLogin(workspaceId)
+  if (!login) {
+    return null
+  }
+  refreshLinearLoginIfDue(workspaceId, login)
+  let current = login.accessToken
+  const reauthorize = async (): Promise<string | null> => {
+    // Another call may already have refreshed it; refresh only a token that is still the refused one.
+    if (readWorkspaceLogin(workspaceId)?.accessToken === current) {
+      await refreshLinearLogin(workspaceId, undefined, true)
+    }
+    const next = readWorkspaceLogin(workspaceId)?.accessToken
+    if (!next || next === current) {
+      return null
+    }
+    current = next
+    return `Bearer ${next}`
+  }
+  return { accessToken: login.accessToken, reauthorize }
+}
+
 export function getWorkspaceTokenProtection(workspaceId: string): SecretAtRestProtection | null {
   return readCredentialFileProtection(getWorkspaceTokenPath(workspaceId))
 }
 
 export function clearTokenFile(workspaceId: string): void {
+  clearWorkspaceLogin(workspaceId)
   workspaceTokenFileCache.forget(workspaceId)
   try {
     unlinkSync(getWorkspaceTokenPath(workspaceId))

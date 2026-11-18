@@ -6,12 +6,15 @@ import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-clien
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
-import { orderDeleteWorktreeStatusHydrationTargets } from './delete-worktree-dirty-change-counts'
+import {
+  getTrustedStoreGitStatus,
+  orderDeleteWorktreeStatusHydrationTargets
+} from './delete-worktree-dirty-change-counts'
 
 /** Routes a delete target's git reads to its owning host; null when no host can serve it. */
 export function resolveDeleteTargetGitContext(
@@ -69,7 +72,6 @@ export function useDeleteWorktreeStatusHydration({
     statuses: Map<string, GitStatusResult['entries'] | null>
   }>({ generation: '', statuses: new Map() })
   const startChecks = useEffectEvent((signal: AbortSignal) => {
-    const gitStatusByWorktree = useAppStore.getState().gitStatusByWorktree
     const currentState = useAppStore.getState()
     const targets = orderDeleteWorktreeStatusHydrationTargets({
       targets: deleteTargets.filter(
@@ -89,7 +91,7 @@ export function useDeleteWorktreeStatusHydration({
             entries
           )
         }))
-      const existingStatus = target.hostId ? undefined : gitStatusByWorktree[target.id]
+      const existingStatus = getTrustedStoreGitStatus(target, currentState)
       if (existingStatus) {
         publish(existingStatus)
         continue
@@ -106,7 +108,8 @@ export function useDeleteWorktreeStatusHydration({
       })
         .then((status) => {
           if (!signal.aborted) {
-            publish(status.entries)
+            // Why: a failed read resolves with empty entries and readError; empty would read as clean.
+            publish(status.readError === undefined ? status.entries : null)
           }
         })
         .catch(() => {

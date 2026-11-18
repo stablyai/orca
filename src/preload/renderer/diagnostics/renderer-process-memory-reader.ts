@@ -1,4 +1,4 @@
-import type { RendererProcessMemory } from '../../../shared/renderer-process-memory'
+import type { RendererProcessMemory } from '../../../shared/crash-reporting/renderer-process-memory'
 
 type ProcessMemorySource = Pick<NodeJS.Process, 'getProcessMemoryInfo'>
 

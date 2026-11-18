@@ -3,7 +3,7 @@ import { expect, type MockInstance } from 'vitest'
 import type { createOrchestrationRpcHarness } from './rpc-test-harness'
 import type { QueuedMessageTestRig } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { projectStructuredAgentStartItem } from '../../../../../shared/structured-agent-start-projection'
+import { projectStructuredAgentStartItem } from '../../../../../shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { projectStructuredAgentSessionStatusSummary } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   type AgentJournalSnapshot,
@@ -45,6 +45,7 @@ export async function verifyWorkerStartCardScenario(input: {
   if (card.body.kind !== 'agent-start') {
     throw new Error('missing start body')
   }
+  expect(card.body.worker.agent).toBe('codex')
   if (federated) {
     expect(card.body.worker.party.address).toBe(`dispatch:${card.body.dispatchId}`)
   }

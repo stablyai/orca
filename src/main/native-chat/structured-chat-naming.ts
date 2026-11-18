@@ -2,7 +2,7 @@ import type {
   StructuredChatNameGeneration,
   StructuredChatNamingDeps
 } from './conversation-naming/structured-chat-naming-types'
-import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
+import { chatNamingFailure } from '../../shared/text-generation/chat-naming-failure-copy'
 import {
   createStructuredChatNamingWork,
   type NamingRequest
@@ -15,7 +15,7 @@ import {
   conversationNameSeed
 } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { hasStructuredChatPromptText } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
-import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
+import { sliceAtCodeUnitLimit } from '../../shared/text/surrogate-safe-text-slice'
 import {
   formatAgentGenerationFailureOutputForDisplay,
   type AgentGenerationFailureOutput
@@ -243,9 +243,8 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       return
     }
     try {
-      const store = deps.getStore()
-      const record = store?.getRecord(summary.sessionId)
-      if (!store || !record || attempted.get(summary.sessionId) === contextId(record)) {
+      const record = deps.getStore()?.getRecord(summary.sessionId)
+      if (!record || attempted.get(summary.sessionId) === contextId(record)) {
         return
       }
       attempted.set(summary.sessionId, contextId(record))
@@ -264,9 +263,8 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       return output ? formatAgentGenerationFailureOutputForDisplay(output) : null
     },
     regenerate: (sessionId) => {
-      const store = deps.getStore()
-      const record = store?.getRecord(sessionId)
-      if (!store || !record) {
+      const record = deps.getStore()?.getRecord(sessionId)
+      if (!record) {
         return false
       }
       work.run(record, false)
@@ -286,6 +284,10 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       refresh(record.location.workspaceId, sessionId)
       if (applied) {
         onApplied?.(record)
+      }
+      // A released name is earned back from the chat's content, as any chat's is.
+      if (applied && write === 'release' && deps.getSettings().nativeChatAutoName !== false) {
+        work.run(record, false)
       }
       return { name: record.conversationName ?? null, applied }
     }

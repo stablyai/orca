@@ -77,6 +77,16 @@ function maintain(
   return runJournalTransaction(db, () => applyJournalSqlMaintenance(db, operation))
 }
 
+/** Discards an unready import page by page until none remain, as the conversion does. */
+function discardImport(db: Database.Database, sessionId: string): void {
+  for (;;) {
+    const page = maintain(db, { kind: 'import-discard', sessionId })
+    if (!page || typeof page !== 'object' || !('more' in page) || !page.more) {
+      return
+    }
+  }
+}
+
 function domainRows(db: Database.Database) {
   return {
     items: db
@@ -206,7 +216,7 @@ it('imports settlement identity order and live lifecycle facts, discarding both 
   expect(
     db.prepare("SELECT lifecycle_state FROM journal_items WHERE item_id='reasoning'").get()
   ).toEqual({ lifecycle_state: 'running' })
-  maintain(db, { kind: 'import-discard', sessionId: 'session' })
+  discardImport(db, 'session')
   expect(db.prepare('SELECT settlement_id FROM journal_settlements').all()).toEqual([])
   expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([])
   const resumed = prepareJournalDomainImport(reader, 'session')!

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { OrcadManagedRuntimeStatus } from '../../../../shared/orcad-managed-runtime'
+import type { OrcadManagedRuntimeStatus } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { createManagedOrcadEnvironment } from '../../../managed-server/lifecycle/orcad-runtime-deployment'
 import { getManagedOrcadRuntimeStatus } from '../../../managed-server/lifecycle/orcad-runtime-status'
 

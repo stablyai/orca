@@ -16,7 +16,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import {
   getShownWorkspaceViewSections,
   type WorkspaceViewOptionKey,
@@ -25,8 +25,8 @@ import {
 import { getHostContextLabel } from '../../../../src/shared/worktree/row-display/host-context-labels'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { resolveWorktreeHostId } from '../../worktree/worktree-host-context-labels'
-import { withServerHosts } from '../../worktree/server-workspaces'
+import { resolveWorktreeHostId } from '../../worktree/row-presentation/worktree-host-context-labels'
+import { withServerHosts } from '../../worktree/execution-hosts/server-workspaces'
 import { hostScreenStyles as styles } from '../host-screen-styles'
 import type { HostScreenController } from '../use-host-screen-controller'
 import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
@@ -152,8 +152,8 @@ function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'setti
       <ActivityIndicator size="small" color={colors.textMuted} />
       <Text style={styles.filterModalSubtitle}>
         {stale
-          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the desktop')
-          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the desktop')}
+          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the host')
+          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the host')}
       </Text>
     </View>
   )

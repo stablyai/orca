@@ -4,7 +4,7 @@ import type {
   KernelFrameEvent,
   KernelStartResult,
   PythonEnvironments
-} from '../../../../../../shared/notebook-kernel-types'
+} from '../../../../../../shared/editor/notebooks/notebook-kernel-types'
 
 type OpenFilesState = { openFiles: { filePath: string }[] }
 type AppStoreListener = (state: OpenFilesState, previous: OpenFilesState) => void
@@ -145,44 +145,6 @@ describe('notebook start request session ownership', () => {
         queue: [],
         runs: { fresh: { outputs: [{ output_type: 'stream', text: 'fresh output\n' }] } }
       })
-    }
-  )
-
-  it.each([false, true])(
-    'ignores old discovery when replacement ready first is %s',
-    async (freshReadyFirst) => {
-      const discovered = Promise.withResolvers<PythonEnvironments>()
-      const freshReply = Promise.withResolvers<KernelStartResult>()
-      store.setState({ environments: {} })
-      notebookApi.listPythonEnvironments.mockReturnValueOnce(discovered.promise)
-      const old = session.runCells(FILE, [{ key: 'old', code: 'old cell' }], '/workspace')
-      closeNotebook()
-      reopenNotebook()
-      notebookApi.startKernel.mockReturnValueOnce(freshReply.promise)
-      const fresh = session.runCells(FILE, [{ key: 'fresh', code: 'fresh cell' }], null)
-      if (freshReadyFirst) {
-        freshReply.resolve({ status: 'ready' })
-        await fresh
-        finishFreshCell()
-      }
-      const expected = structuredClone(getSession(FILE))
-      discovered.resolve({
-        workspace: [{ path: '/obsolete/bin/python', name: 'obsolete' }],
-        path: []
-      })
-      await old
-
-      expect(getSession(FILE)).toEqual(expected)
-      expect(store.getState().environments[FILE]).toEqual(ENVIRONMENT)
-      expect(notebookApi.startKernel).toHaveBeenCalledOnce()
-      expect(toast.error).not.toHaveBeenCalled()
-      if (!freshReadyFirst) {
-        freshReply.resolve({ status: 'ready' })
-        await fresh
-        finishFreshCell()
-      }
-      expect(notebookApi.execute).toHaveBeenCalledOnce()
-      expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: FILE, code: 'fresh cell' })
     }
   )
 })

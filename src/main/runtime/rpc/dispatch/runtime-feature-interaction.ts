@@ -1,5 +1,5 @@
-import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
-import { isBrowserPaneUiRuntimeRpcParams } from '../../../../shared/runtime-rpc-feature-interaction-source'
+import type { FeatureInteractionId } from '../../../../shared/feature-education/interactions/feature-interaction-catalog'
+import { isBrowserPaneUiRuntimeRpcParams } from '../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 export function getRuntimeFeatureInteractionId(

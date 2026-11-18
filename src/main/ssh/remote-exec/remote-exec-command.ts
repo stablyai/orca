@@ -13,7 +13,7 @@ import {
   redactRelayInstallMarkerTokens
 } from '../../managed-server/install/remote-install-marker'
 import type { SystemSshCommandChannel } from '../system-transport/system-ssh-command'
-import { buildPosixStdoutFence } from '../../../shared/posix-stdout-fence'
+import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
 
 const EXEC_TIMEOUT_MS = 30_000
 const COMMAND_CLOSE_GRACE_MS = 5_000

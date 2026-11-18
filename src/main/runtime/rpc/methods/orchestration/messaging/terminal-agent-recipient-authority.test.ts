@@ -3,7 +3,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../../shared/orca-session-address'
+} from '../../../../../../shared/agent-session/identity/orca-session-address'
 
 const identity = vi.hoisted(() => ({
   terminalAgentPlaces: vi.fn<(id: string) => Promise<{ paneKey: string }[] | null>>(),

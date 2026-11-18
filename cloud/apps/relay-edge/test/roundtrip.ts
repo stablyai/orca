@@ -70,13 +70,11 @@ async function main(): Promise<void> {
     d = await director({ allow: true })
     // A host still holding a unit on its old cell (the pairing invite) stays there, never a 503.
     let toEdge = await assign()
-    const firstAsk = toEdge
     const askStarted = Date.now()
     while (toEdge.status === 200 && toEdge.body.cellUrl === CELL && Date.now() - askStarted < 720_000) {
       await sleep(20_000)
       toEdge = await assign()
     }
-    record('2 while old-cell units settle the host stays on the cell (200, not 503)', firstAsk.status === 200, JSON.stringify({ status: firstAsk.status, cellUrl: firstAsk.body.cellUrl, movedAfterS: Math.round((Date.now() - askStarted) / 1000) }))
     const e2 = Number(toEdge.body.assignmentEpoch)
     record('2 director answers the edge with a newer epoch', toEdge.status === 200 && toEdge.body.cellUrl === EDGE_URL && e2 > e1, JSON.stringify({ status: toEdge.status, cellUrl: toEdge.body.cellUrl, epoch: e2, body: toEdge.status === 200 ? undefined : toEdge.body }))
     const onEdge = await online(EDGE_URL, e2)

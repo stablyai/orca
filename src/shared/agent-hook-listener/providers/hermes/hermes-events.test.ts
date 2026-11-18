@@ -1,55 +1,66 @@
 import { describe, expect, it } from 'vitest'
-import { createHookListenerState, type HookListenerState } from '../../listener-state'
-import { normalizeHermesEvent } from './hermes-events'
+import { createHookListenerState } from '../../listener-state'
+import { normalizeAndAccept } from '../../normalization/agent-hook-listener-test-harness'
+
+// Shapes follow Orca's managed Hermes plugin: it forwards no platform on tool hooks or on_session_end.
+function event(
+  name: string,
+  sessionId: string,
+  extra: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return { hook_event_name: name, cwd: '/tmp/ws', session_id: sessionId, ...extra }
+}
+
+function hermesListener() {
+  const state = createHookListenerState()
+  return (payload: Record<string, unknown>) =>
+    normalizeAndAccept(state, 'hermes', payload)?.payload ?? null
+}
+
+const root = { platform: 'cli' }
+const child = { platform: 'subagent' }
 
 describe('normalizeHermesEvent', () => {
-  // Sequences captured from real Hermes sessions (session ids shortened).
-  const event = (state: HookListenerState, name: string, payload: Record<string, unknown>) =>
-    normalizeHermesEvent(state, name, '', 'pane-1', payload)
+  it('keeps delegate_task children from finishing or reopening the root turn', () => {
+    const send = hermesListener()
 
-  it('ignores review-fork tool hooks after the turn ended until the next turn starts', () => {
-    const state = createHookListenerState()
-    const parent = { session_id: 'local-parent' }
-    const memory = { ...parent, tool_name: 'memory' }
-    event(state, 'pre_llm_call', parent)
-    event(state, 'post_llm_call', parent)
-    event(state, 'on_session_end', parent)
-    expect(event(state, 'pre_tool_call', memory)).toBeNull()
-    expect(event(state, 'post_tool_call', memory)).toBeNull()
-    expect(event(state, 'pre_approval_request', { command: 'rm' })).toMatchObject({
-      state: 'waiting'
-    })
+    send(event('on_session_start', 'root', root))
+    expect(send(event('pre_llm_call', 'root', { ...root, user_message: 'delegate' }))?.state).toBe(
+      'working'
+    )
+    send(event('pre_tool_call', 'root', { tool_name: 'delegate_task' }))
 
-    event(state, 'pre_llm_call', parent)
-    expect(event(state, 'pre_tool_call', { ...parent, tool_name: 'terminal' })).toMatchObject({
-      state: 'working',
-      toolName: 'terminal'
-    })
+    expect(send(event('on_session_start', 'child', child))).toBeNull()
+    expect(send(event('pre_llm_call', 'child', { ...child, user_message: 'subtask' }))).toBeNull()
+    expect(send(event('pre_tool_call', 'child', { tool_name: 'terminal' }))?.state).toBe('working')
+    expect(send(event('post_llm_call', 'child', child))).toBeNull()
+    expect(send(event('on_session_end', 'child'))).toBeNull()
+
+    const rootDone = send(event('post_llm_call', 'root', root))
+    expect(rootDone?.state).toBe('done')
+    expect(rootDone?.prompt).toBe('delegate')
+
+    // Background children outlive the root turn; their chatter must not reopen it.
+    expect(send(event('pre_tool_call', 'child', { tool_name: 'terminal' }))).toBeNull()
+    expect(send(event('pre_llm_call', 'child', child))).toBeNull()
+
+    expect(send(event('pre_llm_call', 'root', { ...root, user_message: 'next' }))?.state).toBe(
+      'working'
+    )
+    // A child remembered from the earlier turn still cannot end the newer one.
+    expect(send(event('on_session_end', 'child'))).toBeNull()
+    expect(send(event('post_llm_call', 'root', root))?.state).toBe('done')
+    expect(send(event('on_session_end', 'root'))?.state).toBe('done')
   })
 
-  it('treats a rotated-id turn after an interrupted one as the pane turn, not a child', () => {
-    const state = createHookListenerState()
-    event(state, 'pre_llm_call', { session_id: 'local-parent' })
-    const rotated = { session_id: 'local-compressed' }
-    event(state, 'pre_llm_call', rotated)
-    event(state, 'post_llm_call', rotated)
-    expect(event(state, 'pre_tool_call', { ...rotated, tool_name: 'memory' })).toBeNull()
-  })
+  it('keeps a child that ends before its first llm call from closing the root turn', () => {
+    const send = hermesListener()
 
-  it("keeps admitting the parent's tools after a delegate_task child's turn ends", () => {
-    const state = createHookListenerState()
-    const parent = { session_id: 'local-parent' }
-    const child = { session_id: '20261024_child', platform: 'subagent' }
-    event(state, 'pre_llm_call', parent)
-    event(state, 'pre_tool_call', { ...parent, tool_name: 'delegate_task' })
-    event(state, 'post_tool_call', { ...parent, tool_name: 'delegate_task' })
-    event(state, 'on_session_start', child)
-    event(state, 'pre_llm_call', child)
-    event(state, 'post_llm_call', child)
-    event(state, 'on_session_end', child)
-    expect(event(state, 'pre_tool_call', { ...parent, tool_name: 'read_file' })).toMatchObject({
-      state: 'working',
-      toolName: 'read_file'
-    })
+    send(event('pre_llm_call', 'root', { ...root, user_message: 'delegate' }))
+    expect(send(event('on_session_start', 'child', child))).toBeNull()
+    expect(send(event('on_session_end', 'child'))).toBeNull()
+
+    expect(send(event('pre_tool_call', 'root', { tool_name: 'terminal' }))?.state).toBe('working')
+    expect(send(event('post_llm_call', 'root', root))?.state).toBe('done')
   })
 })

@@ -13,7 +13,7 @@ import type {
   StructuredAgentLaunchHooks
 } from './launch/continuation/structured-agent-launch-settlement'
 import { useAppStore } from '@/store/index'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   beginHostAdmittedStructuredLaunch,
   type DeclinedStructuredLaunchTerminalOptions,
@@ -24,7 +24,7 @@ import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   openTerminalForDeclinedChat,
   openDeclinedTerminal,

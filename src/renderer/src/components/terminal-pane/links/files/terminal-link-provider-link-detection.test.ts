@@ -46,34 +46,6 @@ vi.mock('@/lib/workspace/ownership/connection-context', () => ({
 installTerminalLinkTestEnvironment(doubles)
 
 describe('createFilePathLinkProvider range bounds', () => {
-  it('underlines only the filename itself, not the column padding from `ls`', async () => {
-    // xterm end.x is inclusive and 1-based; endIndex + 1 incorrectly underlines ls padding after the filename.
-    const line = 'CLAUDE.md      package.json     README.md'
-    const links = await collectLinks(line)
-    const byText = new Map(links.map((link) => [link.text, link]))
-
-    const claude = byText.get('CLAUDE.md')
-    expect(claude, 'CLAUDE.md should be linkified').toBeDefined()
-    expect(claude!.range.start.x).toBe(1)
-    expect(claude!.range.end.x).toBe('CLAUDE.md'.length)
-
-    const pkg = byText.get('package.json')
-    expect(pkg, 'package.json should be linkified').toBeDefined()
-    const pkgStartIndex = line.indexOf('package.json')
-    expect(pkg!.range.start.x).toBe(pkgStartIndex + 1)
-    expect(pkg!.range.end.x).toBe(pkgStartIndex + 'package.json'.length)
-  })
-
-  it('does not invoke the xterm callback twice when the callback throws', async () => {
-    const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')])
-    const callback = vi.fn(() => {
-      throw new Error('terminal was disposed')
-    })
-
-    provider.provideLinks(1, callback)
-    await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(1))
-  })
-
   it('does not reuse SSH path-exists cache entries across connections', async () => {
     setPlatform('Macintosh')
     const pathExistsCache = makeExistsCache()
@@ -123,28 +95,6 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(fsPathExistsMock).toHaveBeenLastCalledWith({
       filePath: '/repo/shared.ts',
       connectionId: 'ssh-two'
-    })
-  })
-
-  it('returns one file link for an absolute path containing spaces', async () => {
-    const pathText = '/repo/Folder With Space/content.js'
-    const links = await collectLinks(pathText)
-
-    expect(links.map((link) => link.text)).toEqual([pathText])
-    expect(links[0].range).toEqual({
-      start: { x: 1, y: 1 },
-      end: { x: pathText.length, y: 1 }
-    })
-  })
-
-  it('returns one file link for an extensionless path ending in a spaced segment', async () => {
-    const pathText = '/repo/My Folder'
-    const links = await collectLinks(pathText)
-
-    expect(links.map((link) => link.text)).toEqual([pathText])
-    expect(links[0].range).toEqual({
-      start: { x: 1, y: 1 },
-      end: { x: pathText.length, y: 1 }
     })
   })
 

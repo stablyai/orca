@@ -1,4 +1,7 @@
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  isWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../shared/workspace/identity/workspace-scope'
 import { getOptionalStringFlag } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
@@ -40,7 +43,7 @@ export async function resolveCreateParentSelector(
   cwd: string,
   client: RuntimeClient
 ): Promise<CreateParentSelector> {
-  const parentEnvironment = resolveParentEnvironment(flags, client)
+  const parentEnvironment = await resolveParentEnvironment(flags, client)
   const rawParentWorktree = getOptionalStringFlag(flags, 'parent-worktree')
   if (!rawParentWorktree) {
     return {}

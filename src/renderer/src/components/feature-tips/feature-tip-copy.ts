@@ -1,4 +1,4 @@
-import type { FeatureTip, FeatureTipId } from '../../../../shared/feature-tips'
+import type { FeatureTip, FeatureTipId } from '../../../../shared/feature-education/feature-tips'
 import { translate } from '@/i18n/i18n'
 
 const FEATURE_TIP_COPY: Record<
@@ -19,6 +19,16 @@ const FEATURE_TIP_COPY: Record<
         'Agents can now open as a chat, with rich messages, visuals and images.'
       ),
     ctaLabel: () => translate('featureTips.chatUiHere.cta', 'Use Chat UI')
+  },
+  'bots-teammate': {
+    eyebrow: () => translate('featureTips.eyebrowNew', 'New'),
+    title: () => translate('featureTips.botsTeammate.title', 'Your AI teammate'),
+    description: () =>
+      translate(
+        'featureTips.botsTeammate.description',
+        'It works where your team works, takes on tasks from anyone, and sees them through. It remembers everything you teach it.'
+      ),
+    ctaLabel: () => translate('featureTips.botsTeammate.cta', 'Create your first bot')
   },
   'agent-session-search': {
     eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.1fcdfc5fe8', 'New'),

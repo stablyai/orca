@@ -1,4 +1,9 @@
-import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from '../tab-types'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode,
+  WorkspaceVisibleTabType
+} from '../workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 
 export type WorkspaceSessionTerminalTabCloseResult = {

@@ -1,9 +1,12 @@
-import type { ExternalWorktreeVisibility, Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
+import type {
+  ExternalWorktreeVisibility,
+  Repo,
+  WorktreeVisibilityDefaults
+} from '../../../../../../shared/repository/repo-types'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/external-worktree-visibility'
+} from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
 import {
   effectiveBuiltInWorktreeSourceVisibility,
   effectiveCustomWorktreeSourceVisibility,

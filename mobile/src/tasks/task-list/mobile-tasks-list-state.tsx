@@ -1,12 +1,15 @@
 import { CircleAlert, Inbox } from 'lucide-react-native'
 import { StyleSheet, View } from 'react-native'
-import { HostOfflineBanner, useHostOfflineBanner } from '../../components/HostOfflineBanner'
+import {
+  HostOfflineBanner,
+  useHostOfflineBanner
+} from '../../components/host-connection/HostOfflineBanner'
 import {
   MobileLoadErrorState,
   MobileNoMatchState,
   MobileOfflineState,
   MobileStateView
-} from '../../components/MobileStateView'
+} from '../../components/feedback/MobileStateView'
 import { useForceReconnect } from '../../transport/connection/host-client-hooks'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
 import { useHostDisplay } from '../../host-descriptors/use-host-display'
@@ -86,10 +89,10 @@ export function renderMobileTasksSupportState(
     return (
       <MobileStateView
         icon={CircleAlert}
-        title={translate('tasks.listSurface.updateDesktopTitle', 'Update Orca desktop')}
+        title={translate('tasks.listSurface.updateDesktopTitle', 'Update Orca on this host')}
         message={translate(
           'tasks.listSurface.updateDesktopMessage',
-          'This mobile Tasks view needs a newer desktop runtime.'
+          'This mobile Tasks view needs a newer Orca on this host.'
         )}
         bottomInset={bottomBarHeight}
       />

@@ -12,7 +12,7 @@ import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
 } from '../images/rich-markdown-image-context'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { notifyStaleViewEditRejected } from '../../save/flush/editor-stale-view-edit'
 

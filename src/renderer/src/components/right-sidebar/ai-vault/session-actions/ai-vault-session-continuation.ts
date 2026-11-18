@@ -7,7 +7,7 @@ import {
   AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS,
   isAiVaultDatabaseAgent
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
-import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 
 export function canContinueAiVaultSessionInNewSession(
   session: AiVaultSession,

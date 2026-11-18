@@ -77,6 +77,8 @@ const STATIC_TITLE_COPY = {
   'tab.closeAll': () => translate('keybindings.title.tabCloseAll', 'Close all editor tabs'),
   'tab.rename': () => translate('keybindings.title.tabRename', 'Rename active tab'),
   'tab.reopenClosed': () => translate('keybindings.title.tabReopenClosed', 'Reopen closed tab'),
+  'tab.moveLeft': () => translate('keybindings.title.tabMoveLeft', 'Move active tab left'),
+  'tab.moveRight': () => translate('keybindings.title.tabMoveRight', 'Move active tab right'),
   'tab.nextSameType': () => translate('keybindings.title.tabNextSameType', 'Next tab (same type)'),
   'tab.previousSameType': () =>
     translate('keybindings.title.tabPreviousSameType', 'Previous tab (same type)'),
@@ -108,6 +110,8 @@ const STATIC_TITLE_COPY = {
   'editor.markdownPreview': () =>
     translate('keybindings.title.e25a3e5f9a', 'Show Markdown preview'),
   'editor.toggleWordWrap': () => translate('keybindings.title.2f207aa199', 'Toggle word wrap'),
+  'editor.toggleChangesView': () =>
+    translate('keybindings.title.editorToggleChangesView', 'Toggle changes view'),
   'editor.copyContext': () => translate('keybindings.title.258e7f75ec', 'Copy context'),
   'editor.previousChange': () => translate('keybindings.title.324e886c0f', 'Go to previous change'),
   'editor.nextChange': () => translate('keybindings.title.7055c70bdb', 'Go to next change'),
@@ -139,11 +143,14 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.terminalExpandPane', 'Expand / collapse pane'),
   'terminal.setTitle': () => translate('keybindings.title.128cce6e6d', 'Set title…'),
   'chat.find': () => translate('keybindings.title.chatFind', 'Find in chat'),
+  'botItem.back': () => translate('keybindings.title.botItemBack', 'Back to items'),
   'terminal.toggleNativeChat': () =>
     translate('keybindings.title.terminalToggleNativeChat', 'Switch between Chat UI and terminal'),
   'sidebar.childWorkspaces.toggle': () =>
     translate('keybindings.title.8788e3be3a', 'Toggle child workspaces'),
   'terminal.clearPaneTitle': () => translate('keybindings.title.d286d1ab85', 'Clear pane title'),
+  'terminal.copySessionId': () =>
+    translate('keybindings.title.terminalCopySessionId', 'Copy Session ID'),
   'terminal.closePane': () => translate('keybindings.title.terminalClosePane', 'Close active pane'),
   'terminal.splitRight': () =>
     translate('keybindings.title.terminalSplitRight', 'Split terminal right'),
@@ -167,6 +174,7 @@ const GROUP_COPY = {
   Settings: () => translate('keybindings.group.settings', 'Settings'),
   'Terminal Panes': () => translate('keybindings.group.3492a954c8', 'Terminal panes'),
   Chat: () => translate('keybindings.group.chat', 'Chat'),
+  Bots: () => translate('keybindings.group.bots', 'Bots'),
   Agents: () => translate('keybindings.group.agents', 'Agents')
 } satisfies Record<string, () => string>
 

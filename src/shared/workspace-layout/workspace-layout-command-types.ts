@@ -1,11 +1,12 @@
 // Pure commands change layout only; runtime owns catalog/path/host-support/liveness refusals requiring external facts.
 
+import type { DrawnTabPlacement } from './workspace-layout-tab-placement'
 import type { LayoutClientVisibility } from './client-views/workspace-layout-client-visibility'
 import type { LiveTerminalAdoption } from './commands/workspace-layout-terminal-adoption'
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
-import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
+import type { TabContentType, TabGroupLayoutNode } from './tab-groups/tab-types'
 import type {
   TerminalGrid,
   TerminalPaneLayoutNode,
@@ -134,7 +135,10 @@ export type LayoutCommand =
       tabId?: string
       /** Main-only opens may derive file ID; wire commands must still provide it. */
       fileId?: string
-      contentType: Exclude<TabContentType, 'terminal' | 'browser' | 'agent-session' | 'simulator'>
+      contentType: Exclude<
+        TabContentType,
+        'terminal' | 'browser' | 'agent-session' | 'simulator' | 'room'
+      >
       /** Present for edit-mode files, which are restored after restart. */
       file?: LayoutEditorFile
       /** What the tab shows beyond its file; not saved. */
@@ -222,6 +226,8 @@ export type LayoutCommand =
       initial?: InitialSurfaceReason
       split?: NewGroupSplit
     })
+  /** A bot group's room; `botGroupId` is the tab's entity: the group's id, or a thread's. */
+  | (On & DrawnTabPlacement & { type: 'openRoomTab'; tabId?: string; botGroupId: string })
   | (On & { type: 'startPane'; paneKey: string })
   | (On & { type: 'restartPane'; paneKey: string })
   | (On & {

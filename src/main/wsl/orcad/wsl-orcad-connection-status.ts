@@ -1,11 +1,19 @@
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
-import type { WslHostConnectIntent, WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
-import type { WslHostCopyParams } from '../../../shared/wsl-host-failure-copy'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import type {
+  WslHostConnectIntent,
+  WslHostDeferredUpdate
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type { WslHostCopyParams } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import type { WslLivenessUnverifiableReason } from './wsl-orcad-liveness-verdict'
+import type { InstallLockWait } from '../../managed-server/install/remote-install-lock'
 
 /** C7 publishes terminal verdicts proven by the distro; null leaves ownership to orcad, whose reconnect census reports surviving daemon sessions. */
 export type WslOrcadConnectionStatus =
-  | { state: 'connecting' }
+  | {
+      state: 'connecting'
+      /** Another install holds this server version's install lock. */
+      installLockWait?: InstallLockWait
+    }
   | { state: 'ready'; census: OrcadTerminalCensus | null }
   | {
       state: 'reconnecting'
@@ -39,6 +47,10 @@ export type WslOrcadConnectionStatus =
       deferredUpdate?: WslHostDeferredUpdate
     }
   | { state: 'closed' }
+
+export function wslConnectingStatus(wait: InstallLockWait | null): WslOrcadConnectionStatus {
+  return wait ? { state: 'connecting', installLockWait: wait } : { state: 'connecting' }
+}
 
 /** What a user-initiated connect asks of the host's update. */
 export type WslOrcadConnectIntent = {

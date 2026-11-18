@@ -16,7 +16,7 @@ import { sendRemoteRuntimeRequestOnSocket } from '../../../../../shared/remote-r
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   type DelegatedMobileDeviceSyncResult
-} from '../../../../../shared/delegated-mobile-device-contract'
+} from '../../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,
@@ -24,7 +24,7 @@ import {
   waitForWsClose
 } from '../runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
-import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../../construction/test-context/runtime-store-partial-fixture'
 
 vi.mock('../../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()

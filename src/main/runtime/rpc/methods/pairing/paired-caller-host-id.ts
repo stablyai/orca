@@ -3,8 +3,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { Repo } from '../../../../../shared/repo-types'
+} from '../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { splitWorktreeId } from '../../../../../shared/worktree/id'
 
 /** Maps a paired client's runtime-local host spelling to this host's repo spelling. */

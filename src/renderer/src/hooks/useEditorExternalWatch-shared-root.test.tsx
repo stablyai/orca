@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type * as WatchTargets from './editor-external-watch-targets'
+import type * as WatchTargets from '../components/editor/external-changes/watching/editor-external-watch-targets'
 
 type TestWatchTarget = {
   worktreeId: string
@@ -37,17 +37,20 @@ vi.mock('@/store', () => ({
     }
   )
 }))
-vi.mock('./editor-external-watch-targets', async (importOriginal) => ({
-  ...(await importOriginal<typeof WatchTargets>()),
-  selectEditorExternalWatchTargets: () => ({
-    targets: [...harness.targets],
-    targetsKey: harness.targets.map(harness.keyOf).join('|'),
-    unwatchedTargetKeys: new Set(harness.unwatched.map(harness.keyOf)),
-    unwatchedTargetsKey: harness.unwatched.map(harness.keyOf).join('|')
-  }),
-  getEditorExternalWatchTargetKey: harness.keyOf
-}))
-vi.mock('./editor-runtime-file-watch', () => ({
+vi.mock(
+  '../components/editor/external-changes/watching/editor-external-watch-targets',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WatchTargets>()),
+    selectEditorExternalWatchTargets: () => ({
+      targets: [...harness.targets],
+      targetsKey: harness.targets.map(harness.keyOf).join('|'),
+      unwatchedTargetKeys: new Set(harness.unwatched.map(harness.keyOf)),
+      unwatchedTargetsKey: harness.unwatched.map(harness.keyOf).join('|')
+    }),
+    getEditorExternalWatchTargetKey: harness.keyOf
+  })
+)
+vi.mock('../components/editor/external-changes/watching/editor-runtime-file-watch', () => ({
   // Why: a shared runtime watch that is already ready reports it synchronously during subscribe.
   subscribeEditorRuntimeFileWatch: (
     _target: unknown,

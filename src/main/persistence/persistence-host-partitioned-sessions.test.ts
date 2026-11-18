@@ -1,4 +1,4 @@
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import { toSshExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import {
   closeTestStores,
@@ -14,9 +14,9 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
-import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../shared/orca-profiles/constants'
 
-import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

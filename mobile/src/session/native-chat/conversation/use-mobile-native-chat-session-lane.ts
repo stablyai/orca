@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import type { MobileSessionItemLink } from '../../mobile-session-item-target'
 import type { MobileComposerWriter } from '../composer/drafts/mobile-native-chat-draft-store'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { StructuredAgentSessionHostSupport } from '../agent-session/mobile-structured-agent-session-host-support'
@@ -24,8 +25,10 @@ export function useMobileNativeChatSessionLane({
   connState,
   onSendError,
   onQueuedEditNotice,
-  onActionResolved
+  onActionResolved,
+  itemLink
 }: {
+  itemLink?: MobileSessionItemLink
   client: RpcClient | null
   pairedHostClient: RpcClient | null
   hostId: string
@@ -68,6 +71,7 @@ export function useMobileNativeChatSessionLane({
     transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)
   })
   const structuredSession = useMobileStructuredAgentSession({
+    itemLink,
     client,
     hostId,
     pairedHostClient,
