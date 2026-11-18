@@ -7,6 +7,7 @@ import { cn } from '@/lib/class-names'
 export function AccountSwitchRowItem({
   label,
   detail,
+  multilineDetail = false,
   active,
   children,
   action,
@@ -16,6 +17,7 @@ export function AccountSwitchRowItem({
   label: string
   /** Secondary line, e.g. workspace or the ID that tells same-email accounts apart. */
   detail?: string | null
+  multilineDetail?: boolean
   active: boolean
   /** Usage shown in the fixed-width right column so rows line up. */
   children?: React.ReactNode
@@ -45,7 +47,14 @@ export function AccountSwitchRowItem({
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate">{label}</span>
           {detail ? (
-            <span className="truncate text-2xs text-muted-foreground">{detail}</span>
+            <span
+              className={cn(
+                'text-2xs text-muted-foreground',
+                multilineDetail ? 'whitespace-pre-line break-words' : 'truncate'
+              )}
+            >
+              {detail}
+            </span>
           ) : null}
         </span>
         {children ? <div className="w-1/2 max-w-48 shrink-0 text-xs">{children}</div> : null}

@@ -38,6 +38,14 @@ export function claudeStateFile(
   userHome = homedir(),
   exists: (path: string) => boolean = existsSync
 ): string {
+  return resolveStateFile(configDir, userHome, exists)
+}
+
+function resolveStateFile(
+  configDir: string | undefined,
+  userHome: string,
+  exists: (path: string) => boolean
+): string {
   return resolveClaudeGlobalConfigFile({
     env: { CLAUDE_CONFIG_DIR: configDir },
     homeDir: userHome,
@@ -51,10 +59,10 @@ export async function claudeStateFileAsync(
   configDir: string | undefined,
   userHome = homedir()
 ): Promise<string> {
-  const legacy = claudeStateFile(configDir, userHome, () => true)
+  const legacy = resolveStateFile(configDir, userHome, () => true)
   return (await stat(legacy).catch(() => null))
     ? legacy
-    : claudeStateFile(configDir, userHome, () => false)
+    : resolveStateFile(configDir, userHome, () => false)
 }
 
 // Cache large, frequently rewritten state files across account-list refreshes.

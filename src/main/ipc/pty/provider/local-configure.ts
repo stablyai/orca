@@ -1,3 +1,5 @@
+import { prepareWorkspaceShellAccount } from '../host-env/workspace-shell-account-preparation'
+import { getClaudeWorkspaceProfiles } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -57,11 +59,26 @@ export function configureLocalPtyProvider(args: {
       ctx?.isWsl === true
         ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
         : { runtime: 'host' }
+    const workspaceClaude =
+      !ctx?.launchAgent || ctx.launchAgent === 'claude'
+        ? await prepareWorkspaceShellAccount('claude', baseEnv, !ctx?.launchAgent, async () =>
+            getClaudeWorkspaceProfiles()?.resolve(ctx?.worktreeId, codexSelectionTarget, true)
+          )
+        : null
+    if (workspaceClaude) {
+      Object.assign(baseEnv, workspaceClaude.envPatch)
+    }
     const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
       codexSelectionTarget,
       ctx?.codexHomePathOverride
         ? ctx.codexHomePathOverride.value
-        : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv)) ?? null)
+        : ((await prepareWorkspaceShellAccount('codex', baseEnv, !ctx?.launchAgent, async () =>
+            getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+              workspaceId:
+                !ctx?.launchAgent || ctx.launchAgent === 'codex' ? ctx?.worktreeId : undefined,
+              launchesCodex: ctx?.launchAgent === 'codex'
+            })
+          )) ?? null)
     )
     const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
     const ptySettings = getSettings?.()

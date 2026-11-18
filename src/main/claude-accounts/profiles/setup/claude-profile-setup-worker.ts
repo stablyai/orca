@@ -9,6 +9,7 @@ import type { ClaudeProfileDescriptor } from '../claude-profile-paths'
 import type { ClaudeProfileSetupReport } from './claude-profile-setup'
 
 export type ClaudeProfileSetupJob = {
+  privateHistory?: boolean
   dataRoot: string
   profile: ClaudeProfileDescriptor
   userHome: string
@@ -34,9 +35,10 @@ export function runClaudeProfileSetupInWorker(
   return new Promise((resolve, reject) => {
     const worker = spawnWorkerThread(path, { name: 'orca-claude-profile-setup', workerData: job })
     // Bound the wait for launches blocked on this setup.
+    let failure: Error | undefined
     const timer = setTimeout(() => {
-      reject(new Error('Claude account setup timed out'))
-      void worker.terminate()
+      failure = new Error('Claude account setup timed out')
+      void worker.terminate().catch(reject)
     }, timeoutMs)
     let result:
       | { ok: true; report: ClaudeProfileSetupReport }
@@ -45,13 +47,21 @@ export function runClaudeProfileSetupInWorker(
     worker.once('message', (message) => {
       result = message
     })
-    worker.once('error', reject)
+    worker.once('error', (error) => {
+      failure = error
+    })
     worker.once('exit', (code) => {
       clearTimeout(timer)
-      if (result?.ok) {
+      if (failure) {
+        reject(failure)
+      } else if (result?.ok && code === 0) {
         resolve(result.report)
       } else {
-        reject(new Error(result?.error ?? `Claude account setup worker exited (${code})`))
+        reject(
+          new Error(
+            result && !result.ok ? result.error : `Claude account setup worker exited (${code})`
+          )
+        )
       }
     })
   })

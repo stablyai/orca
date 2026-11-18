@@ -1,5 +1,6 @@
 // What a paired client reads and may write of this host's settings.
 
+import type { WorkspaceAccountAssignment } from '../../../../shared/agent-accounts/workspace-account-binding'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { VoiceSettings } from '../../../../shared/speech/speech-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -17,6 +18,8 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
   | 'codexShareHistoryAcrossAccounts'
+  | 'codexWorkspaceAccounts'
+  | 'claudeWorkspaceAccounts'
   | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
@@ -70,6 +73,8 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
 export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
+  | 'codexWorkspaceAccounts'
+  | 'claudeWorkspaceAccounts'
   | 'claudeSubagentNavigationEnabled'
   | 'botsEnabled'
   | 'defaultTuiAgent'
@@ -98,4 +103,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'prAutoRefresh'
   | 'newTabMenuLayout'
   | 'floatingTerminalNewTabMenuLayout'
->
+> & {
+  codexWorkspaceAccount?: WorkspaceAccountAssignment
+  claudeWorkspaceAccount?: WorkspaceAccountAssignment
+}

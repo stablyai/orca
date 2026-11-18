@@ -1,8 +1,15 @@
+import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { existsSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { shareClaudeProfileHistory } from './claude-profile-history'
 import {
+  CLAUDE_PRIVATE_HISTORY_MARKER,
+  isolateClaudeProfileHistory
+} from './claude-profile-private-history'
+import { join } from 'node:path'
+import {
   claudeProfileMarkerPath,
+  resolveClaudeDefaultHome,
   prepareClaudeProfileDirectory,
   type ClaudeProfileDescriptor
 } from '../claude-profile-paths'
@@ -25,6 +32,7 @@ export async function provisionClaudeAccountProfile(args: {
   userHome: string
   /** The user's own CLAUDE_CONFIG_DIR; defaults to `~/.claude`. */
   userConfigDir?: string
+  privateHistory?: boolean
   /** Runs after settings are copied so hook entries survive; null disables installation. */
   installHooks: ((target: { configDir: string }) => AgentHookInstallStatus) | null
   platform?: NodeJS.Platform
@@ -50,8 +58,16 @@ export async function provisionClaudeAccountProfile(args: {
   const firstSetup = !existsSync(claudeProfileMarkerPath(args.profile))
   const home = args.profile.home
   const shared = { profileHome: home, userHome: args.userHome, userConfigDir: args.userConfigDir }
+  const privateHistory =
+    args.privateHistory || Boolean(await lstatIfPresent(join(home, CLAUDE_PRIVATE_HISTORY_MARKER)))
+  if (privateHistory) {
+    await isolateClaudeProfileHistory(
+      home,
+      resolveClaudeDefaultHome(args.userHome, args.userConfigDir)
+    )
+  }
   for (const step of [
-    () => shareClaudeProfileHistory({ ...shared, platform }),
+    ...(!privateHistory ? [() => shareClaudeProfileHistory({ ...shared, platform })] : []),
     () => provisionClaudeProfile({ ...shared, platform, firstSetup })
   ]) {
     try {
