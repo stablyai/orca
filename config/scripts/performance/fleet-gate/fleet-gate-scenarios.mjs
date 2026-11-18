@@ -209,7 +209,7 @@ async function clearPathTo(page, id) {
       layer?.querySelector('button[aria-label^="Dismiss"]') ?? layer?.querySelector('button')
     if (dismiss) {
       dismiss.click()
-      return 'tip'
+      return { path: 'tip' }
     }
     const surface = target
       ? document.querySelector(
@@ -218,10 +218,12 @@ async function clearPathTo(page, id) {
       : null
     const box = surface?.getBoundingClientRect()
     if (!box) {
-      return 'clear'
+      return { path: 'clear' }
     }
-    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
-    return hit && surface.contains(hit) ? 'clear' : 'covered'
+    const x = box.left + box.width / 2
+    const y = box.top + box.height / 2
+    const hit = document.elementFromPoint(x, y)
+    return hit && surface.contains(hit) ? { path: 'clear', x, y } : { path: 'covered' }
   }, id)
 }
 
@@ -247,7 +249,7 @@ async function dismissOverlays(page) {
           getComputedStyle(element).position === 'fixed' && element.getClientRects().length > 0
       )
     )
-    const tipClosed = (await clearPathTo(page, null)) === 'tip'
+    const tipClosed = (await clearPathTo(page, null)).path === 'tip'
     if (!blocked && !notice && !tipClosed) {
       return
     }
@@ -302,22 +304,24 @@ async function switchWorkspaces({ page, windowMs }) {
     let landed = false
     let mark = Date.now()
     // Tips and notices appear after a delay, so check before every click, not just the first.
+    let spot = null
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const path = await clearPathTo(page, id)
-      if (path === 'clear') {
+      spot = await clearPathTo(page, id)
+      if (spot.path === 'clear') {
         break
       }
-      if (path === 'covered') {
+      if (spot.path === 'covered') {
         await page.keyboard.press('Escape')
       }
       await sleep(100)
     }
     mark = lap('clear', mark)
     try {
-      await page
-        .locator(`[data-worktree-id="${id}"] [data-worktree-card-surface]`)
-        .first()
-        .click({ timeout: 5_000 })
+      if (spot.path !== 'clear' || spot.x === undefined) {
+        throw new Error(`card ${spot.path === 'covered' ? 'covered' : 'not on screen'}`)
+      }
+      // A raw pointer click at the hit-tested centre: locator.click's actionability waits cost ~2 s per click here.
+      await page.mouse.click(spot.x, spot.y)
       mark = lap('click', mark)
       landed = await page
         .waitForFunction((target) => window.__store.getState().activeWorktreeId === target, id, {
@@ -332,7 +336,7 @@ async function switchWorkspaces({ page, windowMs }) {
       const lines = String(error?.message ?? error).split('\n')
       firstError ??= (
         lines.find((line) =>
-          /intercepts|not visible|not stable|outside of the viewport|detached/.test(line)
+          /intercepts|not visible|not stable|outside of the viewport|detached|^card /.test(line)
         ) ?? lines[0]
       )
         .trim()

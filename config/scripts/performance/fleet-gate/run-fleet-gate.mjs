@@ -398,7 +398,7 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
   const { app, page, close } = await launchCopy({ buildDir, runDir, userDataDir, label, outDir })
   try {
     const probeState = await installMainProbeIn(app)
-    if (probeState !== 'installed') {
+    if (probeState === 'installed-without-invoke') {
       result.notes.push(`main probe ${probeState}: R→M counts only send(), not invoke()`)
     }
     const renderer = await installRendererProbe(page)
