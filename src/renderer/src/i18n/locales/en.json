@@ -603,7 +603,8 @@
     },
     "diffTooLarge": {
       "title": "File too large to diff",
-      "detail": "One version of this file is over 10 MB, so Orca doesn’t load it for a text diff."
+      "detail": "One version of this file is over 10 MB, so Orca doesn’t load it for a text diff.",
+      "connectionDetail": "This diff is too large to open over a remote connection."
     },
     "pdfExport": {
       "errors": {

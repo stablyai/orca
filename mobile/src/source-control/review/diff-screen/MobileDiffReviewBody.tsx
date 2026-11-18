@@ -1,3 +1,4 @@
+import { View } from 'react-native'
 import { FileText, ListChecks } from 'lucide-react-native'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import {
@@ -8,6 +9,8 @@ import {
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileDiffReviewLines, type LineRange } from './MobileDiffReviewLines'
+import { MobilePanZoomImage } from '../../../files/media/presentation/MobilePanZoomImage'
+import { filePreviewStyles } from '../../../files/preview/mobile-file-preview-styles'
 import type {
   ReviewDiffState,
   ReviewScreenState
@@ -117,6 +120,19 @@ export function MobileDiffReviewBody({
       <MobileOfflineState onReconnect={onRetry} />
     ) : (
       <MobileLoadErrorState error={diffState.message} onRetry={onRetry} />
+    )
+  }
+  if (diffState.kind === 'image') {
+    // Same view as the file tab: the image after the change, or the deleted one.
+    return (
+      <View style={filePreviewStyles.imageContainer}>
+        <MobilePanZoomImage
+          uri={diffState.dataUri}
+          label={t('files.filePreviewBody.imageLabel', '{{title}} image', {
+            title: currentItem?.filePath ?? ''
+          })}
+        />
+      </View>
     )
   }
   if (diffState.kind !== 'ready') {
