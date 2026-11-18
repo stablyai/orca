@@ -20546,7 +20546,8 @@
         "chat": {
           "label": "Interface de chat",
           "description": "Os agentes respondem em um chat, com mensagens e diffs formatados.",
-          "terminalFallback": "Agentes sem suporte de chat e pastas abertas por SSH ou WSL neste computador ainda abrem em um terminal.",
+          "recommended": "Recomendado",
+          "terminalFallback": "Agentes sem suporte de chat abrem em um terminal.",
           "noneDetected": "Nenhum dos agentes detectados funciona na interface de chat."
         },
         "terminal": {
