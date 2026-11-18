@@ -1,4 +1,5 @@
 import { RuntimeAgentStatusSources } from './runtime-agent-status-sources'
+import type { ClaudeAccountSelectedHandler } from '../../../shared/agent-accounts/managed-account-types'
 
 import type * as Calls from './runtime-host-service-calls'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
@@ -244,7 +245,13 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
 
   protected ptyControllerInventoryGenerationByProvider = new Map<string, number>()
 
-  protected readonly accounts = new RuntimeAccountController(() => this.notifier)
+  protected readonly accounts = new RuntimeAccountController((change) =>
+    this.onClaudeAccountSelected(change)
+  )
+
+  protected abstract onClaudeAccountSelected(
+    ...change: Parameters<ClaudeAccountSelectedHandler>
+  ): ReturnType<ClaudeAccountSelectedHandler>
 
   protected readonly mobileSpeech = new RuntimeMobileSpeechCatalog(() => this.store)
 

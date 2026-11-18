@@ -32,6 +32,8 @@ export type ManagedRuntimeInstallState = {
   installedVersion: string | null
   /** False with an installed version: an update is available. */
   installedCurrent: boolean
+  /** Orca keeps its copy on the latest release by itself, so clients never prompt to update it. */
+  updatesAutomatically?: true
   /** The pinned release's folder is there but not whole; Install repairs it. */
   damaged?: boolean
   /** Orca's copy is there to remove, whole or damaged; absent from a host without Remove. */

@@ -1,15 +1,20 @@
+import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
+import { isConversationReport } from './external-conversation-turn-opener'
 import { z } from 'zod'
 import {
   CONNECTOR_SOURCES,
+  SLACK_MIRROR_BLOCKS,
+  SLACK_MIRROR_POST_STATES,
+  conversationPlaceText,
+  type ChatMailPlace,
   type ExternalConversationLink
 } from '../../shared/connectors/external-conversation-link'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host/execution-host'
-import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import { NATIVE_CHAT_AGENTS } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { AgentPaneWorkspace } from '../agent-hooks/observations/agent-transition-detector'
@@ -22,8 +27,8 @@ import {
   savedWorkspaceCatalog,
   WORKTREE_METADATA_DOMAINS
 } from '../persistence/profile-save-domains'
-import { CONNECTOR_AGENTS } from './connector-agents'
 import type { ConversationKey } from './external-conversation-types'
+import { revokeAgentSessionPublicationFences } from '../runtime/agent-session/agent-session-publication-fence'
 
 type LinkRecord = { externalConversations?: unknown }
 
@@ -40,24 +45,52 @@ export type ExternalConversationLinkStore = WorkspaceRecordStore<
   onStateWritten?: (listener: (dirtyDomains: readonly string[] | undefined) => void) => unknown
 }
 
-export type LinkedConversation = { workspace: AgentPaneWorkspace; link: ExternalConversationLink }
+export type LinkedConversation<L extends ExternalConversationLink = ExternalConversationLink> = {
+  workspace: AgentPaneWorkspace
+  link: L
+}
 
+// A terminal pane's link from an older Orca has no session and is skipped.
 const ExternalConversationLinkSchema = z.object({
   source: z.enum(CONNECTOR_SOURCES),
   externalId: z.string(),
+  sessionId: z.string().min(1),
+  agent: z.enum(NATIVE_CHAT_AGENTS),
   paneKey: z.string(),
-  agent: z.enum(CONNECTOR_AGENTS),
-  // A malformed provider session prevents reopening, but must not discard a usable link.
-  providerSession: z
-    .unknown()
-    .transform((raw) => normalizeAgentProviderSession(raw) ?? undefined)
-    .optional(),
-  captureHostId: z
-    .unknown()
-    .transform(
-      (raw) => (typeof raw === 'string' ? normalizeExecutionHostId(raw) : null) ?? undefined
+  bot: z.object({ kind: z.enum(['bot', 'bot-chat']), botId: z.string().min(1) }).optional(),
+  title: z.string().optional(),
+  place: z.string().optional(),
+  lastTurn: z.enum(['conversation', 'orca']).optional(),
+  adoptedTurn: z.object({ itemId: z.string().min(1), at: z.number().positive() }).optional(),
+  seenAt: z.number().nullable().optional(),
+  // Mirror facts read loosely: a malformed one is dropped alone, never the link.
+  opener: z
+    .object({
+      role: z.enum(['owner', 'member']),
+      name: z.string().max(200).optional(),
+      dm: z.literal(true).optional()
+    })
+    .optional()
+    .catch(undefined),
+  mirror: z.boolean().optional().catch(undefined),
+  mirrorBlocked: z.enum(SLACK_MIRROR_BLOCKS).optional().catch(undefined),
+  mirrorPosts: z
+    .record(
+      z.string(),
+      z.object({
+        state: z.enum(SLACK_MIRROR_POST_STATES),
+        at: z.number(),
+        error: z.string().max(64).optional()
+      })
     )
-    .optional(),
+    .optional()
+    .catch(undefined),
+  mirrorChosen: z.literal(true).optional().catch(undefined),
+  mirrorExternal: z.boolean().optional().catch(undefined),
+  mirrorHeld: z
+    .array(z.object({ event: z.unknown(), waiting: z.array(z.string()) }))
+    .optional()
+    .catch(undefined),
   createdAt: z.number()
 })
 
@@ -70,7 +103,7 @@ export function readLinks(
   return linksOf(record?.externalConversations)
 }
 
-function linksOf(value: unknown): ExternalConversationLink[] {
+export function linksOf(value: unknown): ExternalConversationLink[] {
   const entries: unknown[] = Array.isArray(value) ? value : []
   return entries.flatMap((entry) => {
     const parsed = ExternalConversationLinkSchema.safeParse(entry)
@@ -78,21 +111,56 @@ function linksOf(value: unknown): ExternalConversationLink[] {
   })
 }
 
-function sameConversation(link: ExternalConversationLink, key: ConversationKey): boolean {
+export function sameConversation(link: ExternalConversationLink, key: ConversationKey): boolean {
   return link.source === key.source && link.externalId === key.externalId
 }
 
+/** A pane answers one conversation, so linking it takes it from any earlier one (e.g. a bot's Chat). */
 export function writeLink(
   store: ExternalConversationLinkStore,
   workspace: AgentPaneWorkspace,
   link: ExternalConversationLink
 ): void {
-  const others = readLinks(store, workspace).filter((existing) => !sameConversation(existing, link))
+  const prior = readLinks(store, workspace)
+  const others = prior.filter(
+    (existing) => !sameConversation(existing, link) && existing.paneKey !== link.paneKey
+  )
+  const replaced = prior.filter(
+    (existing) => sameConversation(existing, link) || existing.paneKey === link.paneKey
+  )
+  const before = replaced[0]
+  if (
+    replaced.length !== 1 ||
+    !before ||
+    before.sessionId !== link.sessionId ||
+    before.bot?.botId !== link.bot?.botId ||
+    !sameConversation(before, link)
+  ) {
+    revokeAgentSessionPublicationFences(
+      [link, ...replaced].map((key) => JSON.stringify(['conversation', key.source, key.externalId]))
+    )
+  }
   writeWorkspaceRecord(store, workspace, { externalConversations: [...others, link] })
   // The record writer refuses ambiguous hosts; verify that the link actually persisted.
   if (!readLinks(store, workspace).some((current) => current.paneKey === link.paneKey)) {
     throw new Error('external_conversation_link_unwritten')
   }
+}
+
+/** Drops a conversation's link, as when its chat is gone; null when there was none. */
+export function removeLink(
+  store: ExternalConversationLinkStore,
+  key: ConversationKey
+): LinkedConversation | null {
+  const linked = findLink(store, key)
+  if (linked) {
+    revokeAgentSessionPublicationFences([
+      JSON.stringify(['conversation', key.source, key.externalId])
+    ])
+    const kept = readLinks(store, linked.workspace).filter((link) => !sameConversation(link, key))
+    writeWorkspaceRecord(store, linked.workspace, { externalConversations: kept })
+  }
+  return linked
 }
 
 /** Read canonical rows on every host; the locator map can hide same-path workspaces on other hosts. */
@@ -114,6 +182,21 @@ export function* allLinks(store: ExternalConversationLinkStore): Generator<Linke
       yield { workspace: { worktreeId: folderWorkspaceKey(folder.id), sshHostId: null }, link }
     }
   }
+}
+
+/** The conversation a chat is bound to, as its bot reads it, and whether its answer to this mail
+ *  lands there (only mail finishing its ask does); null for an unlinked chat or a bot's own Chat. */
+export function chatMailPlace(
+  store: ExternalConversationLinkStore,
+  sessionId: string,
+  from: AgentMessageSource
+): ChatMailPlace | null {
+  const linked = [...allLinks(store)].find(({ link }) => link.sessionId === sessionId)
+  if (!linked || linked.link.bot?.kind === 'bot-chat') {
+    return null
+  }
+  const mail = { kind: 'message' as const, role: 'user' as const, blocks: [], from }
+  return { place: conversationPlaceText(linked.link), answersThere: isConversationReport(mail) }
 }
 
 type LinkIndex = {
@@ -200,6 +283,17 @@ export function findLinkForPane(
   paneKey: string
 ): LinkedConversation | null {
   return linkIndex(store).byPane.get(paneKey) ?? null
+}
+
+export function findConversationChat(
+  store: ExternalConversationLinkStore,
+  key: ConversationKey,
+  botId?: string
+): { worktreeId: string; sessionId: string } | null {
+  const linked = findLink(store, key)
+  return linked && (!botId || linked.link.bot?.botId === botId)
+    ? { worktreeId: linked.workspace.worktreeId, sessionId: linked.link.sessionId }
+    : null
 }
 
 export function requireLink(

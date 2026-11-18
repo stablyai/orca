@@ -1,5 +1,7 @@
 // Loaded on first host install: the host, router and every provider adapter stay out of startup.
 
+import { writeStructuredAgentSessionOrcaNote } from '../../../native-chat/agent-session-wire/structured-agent-session-orca-note'
+import { readTurnEndedItems } from '../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import { bindAtRestCommandContexts } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-router'
@@ -77,6 +79,9 @@ export async function installOnJournal(
     journalDatabase,
     claimKeyId: deps.claimKeyId,
     usageLimitAutoContinue: deps.usageLimitAutoContinue,
+    ...(deps.assertQueuedMessageAllowed
+      ? { assertQueuedMessageAllowed: deps.assertQueuedMessageAllowed }
+      : {}),
     ...(deps.idleSweep ? { idleSweep: deps.idleSweep } : {}),
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
@@ -89,11 +94,16 @@ export async function installOnJournal(
     ...(deps.conversationNaming
       ? { conversationNaming: withProviderNaming(deps.conversationNaming, nameProvider) }
       : {}),
+    ...(deps.turnContext ? { turnContext: deps.turnContext } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
+    ...(deps.quietTurnEnd ? { quietTurnEnd: deps.quietTurnEnd } : {}),
+    ...(deps.isBotHome ? { isBotHome: deps.isBotHome } : {}),
     ...(deps.queuedAgentMessageOwed ? { queuedAgentMessageOwed: deps.queuedAgentMessageOwed } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
+    ...(deps.onMessageAdmitted ? { onMessageAdmitted: deps.onMessageAdmitted } : {}),
     ...(deps.launchAccountHome ? { launchAccountHome: deps.launchAccountHome } : {}),
+    ...(deps.launchTools ? { launchTools: deps.launchTools } : {}),
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(catalogOwner.modelCatalog ? { modelCatalog: catalogOwner.modelCatalog } : {})
   })
@@ -112,6 +122,27 @@ export async function installOnJournal(
         delivery.deliver(event, installed.readStatusSummary(sessionId))
       },
       onState: delivery.reconcile
+    })
+  }
+  const turnEnded = deps.turnContext?.turnEnded
+  if (turnEnded) {
+    const installed = host
+    installed.subscribeTurnCompletions({
+      id: 'host-turn-context',
+      emit: (event) => {
+        if (event.type === 'completion') {
+          const { sessionId, turnId, outcome } = event.completion
+          turnEnded(
+            sessionId,
+            turnId,
+            async (since) =>
+              readTurnEndedItems(await installed.journalReads(sessionId), turnId, since),
+            (clientMessageId, body) =>
+              writeStructuredAgentSessionOrcaNote(installed, sessionId, clientMessageId, body),
+            { outcome }
+          )
+        }
+      }
     })
   }
   let turnAttention:

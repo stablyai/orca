@@ -1,3 +1,4 @@
+import { logActiveWorkspaceChanges } from './active-workspace-change-log'
 import { withAgentStatusOwnership } from './slices/agent-status/status-ownership/agent-status-ownership-boundary'
 import { withBrowserInitializationPresentations } from './slices/browser/hosts/browser-initialization-presentation-store'
 import { registerTerminalNoticeShutdownReader } from '@/components/terminal-pane/pty-transport/delivery/pty-notice-exit'
@@ -232,6 +233,9 @@ registerRendererMemoryProfileContributor('storeKB', () =>
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
   const testWindow = window as unknown as Record<string, unknown>
   testWindow.__store = useAppStore
+  if (import.meta.env.DEV) {
+    logActiveWorkspaceChanges(useAppStore)
+  }
   if (e2eConfig.exposeStore) {
     testWindow.__webRuntimeSessionE2E = {
       createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>
