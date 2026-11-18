@@ -48,9 +48,14 @@ parentPort.on('message', ({ id, path, force }) => {
     const before = frames.get();
     const pending = before.log - before.checkpointed;
     if (pending >= ${CHECKPOINT_FRAMES} || (force && pending > 0)) {
-      db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get();
+      const state = db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get();
       const after = frames.get();
-      catchUp = after.log > after.checkpointed && (!force || after.checkpointed > before.checkpointed);
+      // A smaller backfill count means a commit already restarted the WAL: nothing is owed.
+      const restarted = after.checkpointed < state.checkpointed;
+      const progressed = state.checkpointed > before.checkpointed;
+      catchUp = !restarted && after.log > after.checkpointed && (!force || progressed);
+    } else if (force) {
+      catchUp = false;
     }
     ok = true;
   } catch {

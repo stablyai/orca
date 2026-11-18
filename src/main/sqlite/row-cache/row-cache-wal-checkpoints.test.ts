@@ -54,7 +54,7 @@ describe('RowCacheWalCheckpoints', () => {
     cache.write([{ key: 'a', json: '"1"' }])
     // The commit leaves its checkpoint to the worker instead of running one itself.
     expect(pragmas).toContain('wal_autocheckpoint = 0')
-    expect(worker.posted).toEqual([{ id: expect.any(Number), path }])
+    expect(worker.posted).toEqual([{ id: expect.any(Number), path, force: false }])
 
     worker.emit('error', new Error('worker crashed'))
     expect(pragmas.at(-1)).toBe('wal_autocheckpoint = 1000')
