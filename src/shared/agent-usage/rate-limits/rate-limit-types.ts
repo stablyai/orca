@@ -78,6 +78,8 @@ export type UsageReadingAccount = {
 }
 
 export type UsageRateLimitMetadata = {
+  /** Renderer-only: account whose usage this view requested, including unavailable readings. */
+  contextAccountId?: string
   source?: UsageRateLimitSource
   attemptedSources?: UsageRateLimitSource[]
   failureKind?: UsageRateLimitFailureKind
@@ -220,6 +222,9 @@ export type RateLimitState = {
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
   inactiveCodexAccounts: InactiveAccountUsage[]
+  /** Workspace bindings on the host that owns this snapshot. Older hosts omit them. */
+  codexWorkspaceAccounts?: Record<string, string>
+  claudeWorkspaceAccounts?: Record<string, string>
   /** Saved Antigravity accounts; agy has one shared login, so only the active one is ever read. */
   antigravityAccounts: AntigravityAccountUsage[]
 }

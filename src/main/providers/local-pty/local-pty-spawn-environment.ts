@@ -43,6 +43,7 @@ export function buildLocalPtySpawnEnvironment(args: {
     explicitEnv: spawn.env ?? {},
     command: spawn.command,
     launchAgent: spawn.launchAgent,
+    worktreeId: spawn.worktreeId,
     codexHomePathOverride: spawn.codexHomePathOverride,
     cwd: plan.cwd,
     shellPath: plan.shellPath,
