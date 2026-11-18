@@ -8,6 +8,7 @@ import { NativeChatHostSetupContext } from '../../host-access/native-chat-host-s
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 import { projectStructuredItemsToNativeChat } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { agentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { latestNativeChatSucceededTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-setup-failure-resolution'
 
@@ -24,8 +25,7 @@ function signInFailure(itemId: string, turnSequence: number): AgentJournalRender
     body: {
       kind: 'status',
       tone: 'error',
-      text: `Sign in to Pi (${itemId}).`,
-      failure: agentSessionFailureFact('notSignedIn')
+      ...agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), { surface: 'row' })
     }
   }
 }
