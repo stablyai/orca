@@ -10,7 +10,7 @@ export type ReadState =
   | { phase: 'loading' }
   /** Awaiting an unpublished transcript is unsettled; the empty list is not real history yet. */
   | { phase: 'awaiting' }
-  | { phase: 'ready'; messages: NativeChatMessage[] }
+  | { phase: 'ready'; messages: NativeChatMessage[]; prependRevision?: number }
   | { phase: 'error'; error: string }
 
 /** loading/awaiting have no settled history; errors remain distinct so their surface stays visible. */
@@ -30,6 +30,8 @@ export type NativeChatLiveSession = NativeChatSession & {
   loadingEarlier: boolean
   /** Reset paging failures when source/snapshot replacement starts a new generation. */
   olderHistoryGeneration: number
+  /** Changes only when an older prefix is admitted; body revisions and head trims do not anchor. */
+  prependRevision?: number
   /** Resolve after page publication; concurrent calls share the in-flight read. */
   loadEarlier: () => Promise<NativeChatOlderPageResult>
   /** A parked view keeps shared history until it returns or unmounts. */

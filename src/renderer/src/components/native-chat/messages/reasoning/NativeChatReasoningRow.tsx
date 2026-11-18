@@ -52,7 +52,10 @@ export function NativeChatReasoningRow({
   )
 
   return (
-    <div className="min-w-0 text-sm text-chat-foreground-faint">
+    <div
+      data-native-chat-content-anchor={`thought:${message.id}`}
+      className="min-w-0 text-sm text-chat-foreground-faint"
+    >
       <Collapsible open={disclosure.open} onOpenChange={disclosure.setOpen}>
         <CollapsibleTrigger asChild>
           <button

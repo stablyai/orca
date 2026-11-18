@@ -56,6 +56,7 @@ export function NativeChatToolRun({
   trailing,
   disclosureId,
   asides,
+  sourceKeys,
   runtimeContext
 }: {
   blocks: NativeChatBlock[]
@@ -80,6 +81,7 @@ export function NativeChatToolRun({
   /** Remember disclosure by message id outside the windowed row’s lifetime. */
   disclosureId?: string
   asides?: NativeChatToolRunAsides
+  sourceKeys?: ReadonlyMap<NativeChatBlock, string>
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -235,6 +237,7 @@ export function NativeChatToolRun({
           blocks={blocks}
           headerBlocks={headerBlocks}
           asides={asides}
+          sourceKeys={sourceKeys}
           previousTodoWrite={previousTodoWrite}
           previousUpdatePlan={previousUpdatePlan}
           revealedDiff={revealedDiff}

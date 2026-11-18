@@ -3,7 +3,7 @@ import {
   nativeChatMarkdownImageSources,
   nativeChatVisualMarkdownImageSources
 } from '../../markdown/native-chat-markdown-image-sources'
-import { useContext, useMemo, useState } from 'react'
+import { useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
@@ -92,28 +92,38 @@ export function useNativeChatTranscriptSlots({
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
   const [leavingTurnKeys, setLeavingTurnKeys] = useState(NO_LEAVING_TURNS)
-  const { slots, forkPoint, quietTurnKeys } = useMemo(
+  const previousWorkRunOwners = useRef<ReadonlyMap<string, string>>(new Map())
+  const {
+    slots,
+    forkPoint,
+    quietTurnKeys,
+    owners: workRunOwners
+  } = useMemo(
     () =>
-      buildNativeChatTranscript({
-        imageSources,
-        messages,
-        unresolvedRowIds,
-        typography,
-        turnKeys,
-        liveTurnKey,
-        receipts,
-        turnStatuses,
-        turnDiffs,
-        openedPullRequests,
-        expandedTurnKeys,
-        isWorking,
-        lifecycleWorking,
-        subagentHeads,
-        liveReasoningId,
-        forkOffer,
-        workers,
-        leavingTurnKeys
-      }),
+      buildNativeChatTranscript(
+        {
+          imageSources,
+          messages,
+          unresolvedRowIds,
+          typography,
+          turnKeys,
+          liveTurnKey,
+          receipts,
+          turnStatuses,
+          turnDiffs,
+          openedPullRequests,
+          expandedTurnKeys,
+          isWorking,
+          lifecycleWorking,
+          subagentHeads,
+          liveReasoningId,
+          forkOffer,
+          workers,
+          leavingTurnKeys
+        },
+        undefined,
+        previousWorkRunOwners.current
+      ),
     [
       leavingTurnKeys,
       workers,
@@ -142,5 +152,8 @@ export function useNativeChatTranscriptSlots({
     leaving: leavingTurnKeys,
     setLeaving: setLeavingTurnKeys
   })
+  useLayoutEffect(() => {
+    previousWorkRunOwners.current = workRunOwners
+  }, [workRunOwners])
   return { slots, forkPoint, liveLine }
 }

@@ -12,6 +12,10 @@ import {
   type NativeChatTimedRow
 } from '../../conversation/slots/native-chat-timed-rows'
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
+import {
+  NativeChatPrependSnapshot,
+  type NativeChatPrependAnchor
+} from './NativeChatPrependSnapshot'
 import type { NativeChatNewRowsMarkerState } from '../new-rows/native-chat-new-rows-marker'
 import {
   NativeChatReplyRevealsContext,
@@ -25,6 +29,7 @@ export function NativeChatTranscriptItems({
   loadedMessageIds,
   context,
   window,
+  anchor,
   newRowsMarker
 }: {
   slots: readonly NativeChatTranscriptSlot[]
@@ -33,6 +38,8 @@ export function NativeChatTranscriptItems({
   loadedMessageIds: ReadonlySet<string>
   context: NativeChatTranscriptRowContext
   window: NativeChatTranscriptWindow
+  /** Holds the reader's content in place when an older page is drawn above it. */
+  anchor: NativeChatPrependAnchor
   newRowsMarker?: NativeChatNewRowsMarkerState
 }): React.JSX.Element {
   const rowKeys = useMemo(() => slots.map(nativeChatSlotKey), [slots])
@@ -44,56 +51,59 @@ export function NativeChatTranscriptItems({
   )
   return (
     <NativeChatReplyRevealsContext.Provider value={replyReveals}>
-      <div ref={window.sizerRef} data-native-chat-window className="relative w-full">
-        {window.virtualItems.map((item, position) => {
-          const slot = slots[item.index]
-          if (!slot) {
-            return null
-          }
-          const previousEnd = window.virtualItems[position - 1]?.end ?? window.scrollMargin
-          const leavesWhole = nativeChatSlotLeavesWhole(slot)
-          return (
-            <Fragment key={item.key}>
-              <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
-              {/* A leaving row's negative top margin passes through to close the gap before it. */}
-              <div
-                data-index={item.index}
-                ref={window.measureRow}
-                className={leavesWhole ? 'w-full' : 'flow-root w-full'}
-              >
-                <NativeChatTranscriptRow
-                  slot={slot}
-                  context={rowContext}
-                  newRowsMarker={
-                    rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
-                  }
-                  newRowsMarkerBelow={
-                    newRowsMarker?.place === 'above-row' &&
-                    rowKeys[item.index + 1] === newRowsMarker.key
-                  }
-                  joinsNotesAbove={nativeChatSlotJoinsNotesAbove({
-                    slot,
-                    previous: slots[item.index - 1],
-                    timedRowsAfter: placed?.afterMessage,
-                    markerKey: newRowsMarker?.key,
-                    leavesWhole
-                  })}
-                />
-              </div>
-            </Fragment>
-          )
-        })}
-        <div
-          aria-hidden
-          style={{
-            height: Math.max(
-              0,
-              window.totalSize -
-                ((window.virtualItems.at(-1)?.end ?? window.scrollMargin) - window.scrollMargin)
+      <NativeChatPrependSnapshot anchor={anchor} window={window}>
+        <div ref={window.sizerRef} data-native-chat-window className="relative w-full">
+          {window.virtualItems.map((item, position) => {
+            const slot = slots[item.index]
+            if (!slot) {
+              return null
+            }
+            const previousEnd = window.virtualItems[position - 1]?.end ?? window.scrollMargin
+            const leavesWhole = nativeChatSlotLeavesWhole(slot)
+            return (
+              <Fragment key={item.key}>
+                <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
+                {/* A leaving row's negative top margin passes through to close the gap before it. */}
+                <div
+                  data-index={item.index}
+                  data-native-chat-row-key={rowKeys[item.index]}
+                  ref={window.measureRow}
+                  className={leavesWhole ? 'w-full' : 'flow-root w-full'}
+                >
+                  <NativeChatTranscriptRow
+                    slot={slot}
+                    context={rowContext}
+                    newRowsMarker={
+                      rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
+                    }
+                    newRowsMarkerBelow={
+                      newRowsMarker?.place === 'above-row' &&
+                      rowKeys[item.index + 1] === newRowsMarker.key
+                    }
+                    joinsNotesAbove={nativeChatSlotJoinsNotesAbove({
+                      slot,
+                      previous: slots[item.index - 1],
+                      timedRowsAfter: placed?.afterMessage,
+                      markerKey: newRowsMarker?.key,
+                      leavesWhole
+                    })}
+                  />
+                </div>
+              </Fragment>
             )
-          }}
-        />
-      </div>
+          })}
+          <div
+            aria-hidden
+            style={{
+              height: Math.max(
+                0,
+                window.totalSize -
+                  ((window.virtualItems.at(-1)?.end ?? window.scrollMargin) - window.scrollMargin)
+              )
+            }}
+          />
+        </div>
+      </NativeChatPrependSnapshot>
       {placed?.unplaced.map(({ key, node }) => (
         <div key={key}>{node}</div>
       ))}

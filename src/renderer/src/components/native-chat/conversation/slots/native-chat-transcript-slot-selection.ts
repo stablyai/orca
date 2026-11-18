@@ -8,7 +8,7 @@ import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 export function nativeChatSlotKey(slot: NativeChatTranscriptSlot): string {
   switch (slot.kind) {
     case 'message':
-      return slot.message.id
+      return slot.presentationKey ?? slot.message.id
     case 'subagent':
       return `subagent-head:${slot.agentId}`
   }

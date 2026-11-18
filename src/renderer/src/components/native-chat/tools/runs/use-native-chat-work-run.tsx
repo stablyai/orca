@@ -13,6 +13,7 @@ import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
 export type NativeChatWorkRun = {
+  sourceKeys: ReadonlyMap<NativeChatBlock, string>
   /** Every member's tool blocks, in order: the run's one block list. */
   blocks: NativeChatBlock[]
   /** The thoughts, among the calls they came between. */
@@ -35,7 +36,7 @@ export function useNativeChatWorkRun(
     if (!members) {
       return undefined
     }
-    const { blocks, thoughtsBefore, thoughtsAfter } = nativeChatWorkRunEntries(members)
+    const { blocks, sourceKeys, thoughtsBefore, thoughtsAfter } = nativeChatWorkRunEntries(members)
     const thought = (message: NativeChatMessage): React.JSX.Element => (
       // Keyed by the thought, so it stays mounted as calls arrive after it.
       <NativeChatReasoningRow
@@ -51,6 +52,7 @@ export function useNativeChatWorkRun(
     }
     return {
       blocks,
+      sourceKeys,
       asides: { before, after: thoughtsAfter.map(thought) }
     }
   }, [members, activeTurnIsWorking])

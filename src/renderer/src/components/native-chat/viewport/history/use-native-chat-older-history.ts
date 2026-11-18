@@ -22,6 +22,29 @@ import {
 
 const USER_PAGING = { wakeWslDistro: true } as const
 
+/** A full reread counts as a prepend only when it brings rows before the held head (by source
+ *  position; ZCode has none, so by the held head reappearing later in the reread). */
+function nextPrependRevision(
+  agent: AgentType,
+  held: ReadState,
+  messages: readonly NativeChatMessage[]
+): number {
+  const previous = held.phase === 'ready' ? (held.prependRevision ?? 0) : 0
+  const head = held.phase === 'ready' ? held.messages[0] : undefined
+  const first = messages[0]
+  if (!head || !first) {
+    return previous
+  }
+  const headOrder = agent === 'zcode' ? undefined : (head.transcriptOrder ?? head.transcriptOffset)
+  const firstOrder =
+    agent === 'zcode' ? undefined : (first.transcriptOrder ?? first.transcriptOffset)
+  const prepended =
+    headOrder !== undefined && firstOrder !== undefined
+      ? firstOrder < headOrder
+      : messages.findIndex((message) => message.id === head.id) > 0
+  return previous + (prepended ? 1 : 0)
+}
+
 export function useNativeChatOlderHistory({
   agent,
   sessionId,
@@ -110,7 +133,11 @@ export function useNativeChatOlderHistory({
           }
           limitRef.current = nextLimit
           // Replace the ordered base tail to prepend history; preserve separate live appends.
-          heldRef.current = { phase: 'ready', messages: result.messages }
+          heldRef.current = {
+            phase: 'ready',
+            messages: result.messages,
+            prependRevision: nextPrependRevision(agent, heldRef.current, result.messages)
+          }
           setRead(heldRef.current)
           transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
           const more = hasMoreNativeChatHistory(result.messages.length, nextLimit)
@@ -146,7 +173,11 @@ export function useNativeChatOlderHistory({
           const page = result.messages
           // Keep every source row; the assembler resolves shared ids exactly as a full reread would.
           // A rewrite racing this page is corrected by the replacement frame that follows it.
-          heldRef.current = { phase: 'ready', messages: [...page, ...held.messages] }
+          heldRef.current = {
+            phase: 'ready',
+            messages: [...page, ...held.messages],
+            prependRevision: (held.prependRevision ?? 0) + (page.length > 0 ? 1 : 0)
+          }
           setRead(heldRef.current)
           limitRef.current = Math.max(limitRef.current, held.messages.length + page.length)
           const more = result.hasMore ?? page.length >= NATIVE_CHAT_PAGE

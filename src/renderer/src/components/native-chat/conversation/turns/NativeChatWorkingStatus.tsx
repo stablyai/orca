@@ -52,6 +52,7 @@ export function NativeChatWorkingStatus({
   workedSeconds,
   verdict,
   expanded = false,
+  contentAnchor,
   onToggleExpanded,
   actions
 }: {
@@ -61,6 +62,7 @@ export function NativeChatWorkingStatus({
   workedSeconds?: number | null
   verdict?: AgentTurnOutcome
   expanded?: boolean
+  contentAnchor?: string
   onToggleExpanded?: () => void
   /** Controls at the line's end; the rule under the status spans them too. */
   actions?: ReactNode
@@ -116,6 +118,7 @@ export function NativeChatWorkingStatus({
       <button
         type="button"
         data-native-chat-turn-status="settled"
+        data-native-chat-content-anchor={contentAnchor}
         className={cn(
           className,
           'w-full text-left hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
@@ -130,6 +133,7 @@ export function NativeChatWorkingStatus({
       <div
         className={className}
         data-native-chat-turn-status={active ? 'active' : 'settled'}
+        data-native-chat-content-anchor={contentAnchor}
         // Once settled, screen readers read the visible "Worked for…" text instead.
         aria-label={
           active

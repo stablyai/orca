@@ -16,6 +16,10 @@ import {
   useNativeChatViewportAlign,
   type NativeChatAlignEdge
 } from './use-native-chat-viewport-align'
+import {
+  useNativeChatContentAnchor,
+  type NativeChatContentAnchor
+} from './use-native-chat-content-anchor'
 import { useNativeChatRetiredMeasurements } from './use-native-chat-retired-measurements'
 
 /** Overscan by row because chat rows vary widely in height and rendering cost. */
@@ -25,7 +29,7 @@ const FALLBACK_ROW_PX = 48
 /** Past this gap the DOM's offset is a write the virtualizer has yet to hear of. */
 const UNSEEN_SCROLL_PX = 1
 
-export type NativeChatTranscriptWindow = {
+export type NativeChatTranscriptWindow = NativeChatContentAnchor & {
   virtualItems: VirtualItem[]
   totalSize: number
   scrollMargin: number
@@ -302,19 +306,22 @@ export function useNativeChatTranscriptWindow({
     }
   }, [isAlignHeld, reconcileReaderScroll])
 
-  return {
-    virtualItems: virtualizer.getVirtualItems(),
-    totalSize: virtualizer.getTotalSize(),
-    scrollMargin,
-    sizerRef,
-    measureRow: virtualizer.measureElement,
-    alignToViewportTop,
-    isAlignPending,
-    cancelAlign,
-    releaseEndPin,
-    scrollToEnd,
-    restoreScrollOffset,
-    consumeProgrammaticScroll,
-    reconcileReaderScroll
-  }
+  return useNativeChatContentAnchor(
+    { scrollRef, isVisible, virtualizer, isAlignHeld },
+    {
+      virtualItems: virtualizer.getVirtualItems(),
+      totalSize: virtualizer.getTotalSize(),
+      scrollMargin,
+      sizerRef,
+      measureRow: virtualizer.measureElement,
+      alignToViewportTop,
+      isAlignPending,
+      cancelAlign,
+      releaseEndPin,
+      scrollToEnd,
+      restoreScrollOffset,
+      consumeProgrammaticScroll,
+      reconcileReaderScroll
+    }
+  )
 }

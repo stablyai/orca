@@ -97,6 +97,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const bar = status ? (
     <NativeChatWorkingStatus
       bot={context.turnBot}
+      contentAnchor={turnKey === undefined ? undefined : `turn:${turnKey}`}
       startedAt={status.startedAt}
       workedSeconds={status.workedSeconds}
       verdict={status.verdict}
@@ -191,6 +192,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
               : undefined
           }
           workRun={workRun}
+          workRunDisclosureId={slot.presentationKey}
         />
       )}
       {newRowsMarker?.place === 'above-turn-bar' ? marker : null}

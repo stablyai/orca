@@ -1,3 +1,4 @@
+import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 // Combine calls/thoughts after slot selection so every intervening visible row ends the run.
 
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
@@ -62,11 +63,24 @@ function workRunSlot(
   }
 }
 
+const NO_PREVIOUS_OWNERS: ReadonlyMap<string, string> = new Map()
+
 export function nativeChatTranscriptWorkRuns(
   slots: readonly NativeChatTranscriptSlot[],
-  typography?: NativeChatRowTypography
-): NativeChatTranscriptSlot[] {
-  const rows = slots.map(workRunRow)
+  typography?: NativeChatRowTypography,
+  previousOwners: ReadonlyMap<string, string> = NO_PREVIOUS_OWNERS
+): { slots: NativeChatTranscriptSlot[]; owners: ReadonlyMap<string, string> } {
+  const previousKeys = new Set(previousOwners.values())
+  const reserved = new Set<string>()
+  const rows = slots.map((slot) => {
+    if (previousKeys.size > 0) {
+      const key = nativeChatSlotKey(slot)
+      if (previousKeys.has(key)) {
+        reserved.add(key)
+      }
+    }
+    return workRunRow(slot)
+  })
   const runAt = new Map<number, NativeChatMessageSlot[]>()
   const joined = new Set<number>()
   for (const span of nativeChatWorkRunSpans(rows)) {
@@ -82,13 +96,36 @@ export function nativeChatTranscriptWorkRuns(
     }
   }
   const result: NativeChatTranscriptSlot[] = []
-  for (const [index, slot] of slots.entries()) {
-    const members = runAt.get(index)
-    if (members) {
-      result.push(workRunSlot(members, rows[index]?.member === 'lead', typography))
-    } else if (!joined.has(index)) {
-      result.push(slot)
+  const claimed = new Set<string>()
+  const owners = new Map<string, string>()
+  for (const [index, source] of slots.entries()) {
+    if (joined.has(index)) {
+      continue
     }
+    const members = runAt.get(index)
+    const slot = members ? workRunSlot(members, rows[index]?.member === 'lead', typography) : source
+    if (slot.kind !== 'message' || rows[index]?.member === null) {
+      result.push(slot)
+      continue
+    }
+    const messages = slot.workRun ?? [slot.message]
+    let key = slot.message.id
+    for (const member of messages) {
+      const previous = previousOwners.get(member.id)
+      if (
+        previous !== undefined &&
+        !claimed.has(previous) &&
+        (!reserved.has(previous) || messages.some((message) => message.id === previous))
+      ) {
+        key = previous
+        break
+      }
+    }
+    claimed.add(key)
+    for (const member of messages) {
+      owners.set(member.id, key)
+    }
+    result.push(key === slot.message.id ? slot : { ...slot, presentationKey: key })
   }
-  return result
+  return { slots: result, owners }
 }

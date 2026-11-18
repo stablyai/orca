@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatOlderHistoryAutoload } from './use-native-chat-older-history-autoload'
@@ -27,13 +27,28 @@ export function NativeChatOlderHistoryRow({
   loadingEarlier: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  // The scroller that keyboard focus returns to when the focused manual button goes away.
+  const focusOwner = useRef<HTMLElement | null>(null)
+  const restoreFocus = useCallback(() => {
+    const scroller = focusOwner.current
+    focusOwner.current = null
+    scroller?.focus({ preventScroll: true })
+  }, [])
+  const failed = olderHistory.loadFailed && !loadingEarlier
+  // Auto-loading and the failure row both replace the manual button.
+  useLayoutEffect(() => {
+    if (olderHistory.isAutoLoadEnabled || failed) {
+      restoreFocus()
+    }
+    return restoreFocus
+  }, [failed, olderHistory.isAutoLoadEnabled, restoreFocus])
   return (
     // Stay out of flow so adding or removing the history row cannot shift the transcript.
     <div
       ref={olderHistory.sentinelRef}
       className="absolute inset-x-0 top-0 flex h-10 items-center justify-center"
     >
-      {olderHistory.loadFailed && !loadingEarlier ? (
+      {failed ? (
         <span className="flex max-w-full min-w-0 items-center gap-2 px-3 text-xs">
           <span role="alert" className="min-w-0 truncate text-destructive">
             {t('components.native-chat.loadEarlierFailed', "Couldn't load earlier messages.")}
@@ -55,8 +70,15 @@ export function NativeChatOlderHistoryRow({
         <Button
           variant="ghost"
           size="xs"
-          onClick={olderHistory.loadEarlierManually}
-          disabled={loadingEarlier}
+          onClick={loadingEarlier ? undefined : olderHistory.loadEarlierManually}
+          aria-disabled={loadingEarlier}
+          aria-busy={loadingEarlier}
+          onFocus={(event) => {
+            focusOwner.current = event.currentTarget.closest('[data-native-chat-scroll]')
+          }}
+          onBlur={() => {
+            focusOwner.current = null
+          }}
         >
           {loadingEarlier
             ? t('components.native-chat.loadingEarlier', 'Loading…')

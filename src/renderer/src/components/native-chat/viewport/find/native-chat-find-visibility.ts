@@ -26,6 +26,8 @@ function outside(rect: Box, box: Box): boolean {
 }
 
 export type NativeChatFindGeometry = {
+  /** An anchor can be partly visible inside a tall row, but cannot sit outside a nested clip. */
+  intersectsView: (element: Element) => boolean
   /** Fully inside the transcript's view and every scroll box around it, and not under the bar. */
   inView: (match: Range, bar: Box | null) => boolean
   /** Cut off by a box that cannot scroll (a folded prompt, a truncated label): never shown. */
@@ -61,6 +63,15 @@ export function nativeChatFindGeometry(transcript: Element): NativeChatFindGeome
   const clipsOfMatch = (match: Range): readonly Clip[] =>
     clipsOf(match.startContainer.parentElement)
   return {
+    intersectsView: (element) => {
+      const rect = element.getBoundingClientRect()
+      return (
+        overlaps(rect, transcript.getBoundingClientRect()) &&
+        clipsOf(element.parentElement).every((clip) =>
+          overlaps(rect, clip.element.getBoundingClientRect())
+        )
+      )
+    },
     inView: (match, bar) => {
       const rect = match.getBoundingClientRect()
       return (

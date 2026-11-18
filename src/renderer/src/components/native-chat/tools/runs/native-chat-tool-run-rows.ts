@@ -14,7 +14,7 @@ import {
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 
 /** One drawn row of an opened run. `focusable`: it renders a control, so keyboard order can land on it. */
-export type NativeChatToolRunRow =
+export type NativeChatToolRunRow = { contentAnchor?: string } & (
   | { kind: 'aside'; key: string; focusable: boolean; element: React.JSX.Element }
   | { kind: 'tasks'; key: string; focusable: boolean; taskList: NativeChatTaskListRow }
   | {
@@ -32,6 +32,7 @@ export type NativeChatToolRunRow =
       result: NativeChatToolResultBlock | undefined
       lineIdentity: string
     }
+)
 
 /** A thought with no words draws nothing, so keyboard order cannot land on it. */
 function asideDrawsControl(element: React.JSX.Element): boolean {
@@ -50,12 +51,14 @@ export function buildNativeChatToolRunRows({
   blocks,
   headerBlocks,
   asides,
+  sourceKeys,
   previousTodoWrite,
   previousUpdatePlan
 }: {
   blocks: NativeChatBlock[]
   headerBlocks: NativeChatBlock[]
   asides?: NativeChatToolRunAsides
+  sourceKeys?: ReadonlyMap<NativeChatBlock, string>
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock
 }): NativeChatToolRunRow[] {
@@ -78,13 +81,16 @@ export function buildNativeChatToolRunRows({
     }
   }
   for (const [blockIndex, block] of headerBlocks.entries()) {
+    const sourceKey = sourceKeys?.get(block)
+    const contentAnchor = sourceKey === undefined ? undefined : `tool:${sourceKey}`
     pushAsides(asides?.before.get(block))
     const taskList = taskLists.rows.get(block)
     if (taskList) {
       // Only an update shows its "Full task list" trigger; a first list has no control.
       rows.push({
         kind: 'tasks',
-        key: `tasks:${blockIndex}`,
+        contentAnchor,
+        key: sourceKey ? `tasks:${sourceKey}` : `tasks:${blockIndex}`,
         focusable: taskList.previous !== undefined,
         taskList
       })
@@ -97,7 +103,8 @@ export function buildNativeChatToolRunRows({
     if (edit) {
       rows.push({
         kind: 'edit',
-        key: `edit:${edit.key}`,
+        contentAnchor,
+        key: sourceKey ? `edit:${sourceKey}` : `edit:${edit.key}`,
         focusable: true,
         editKey: edit.key,
         files: edit.files
@@ -108,14 +115,15 @@ export function buildNativeChatToolRunRows({
     if (consumedResults.has(block) || pairedResults.has(block)) {
       continue
     }
-    const lineIdentity = nativeChatToolLineIdentity(block, seen)
+    const lineIdentity = sourceKey ?? nativeChatToolLineIdentity(block, seen)
     rows.push({
       kind: 'line',
-      key: lineIdentity,
+      contentAnchor,
+      key: sourceKey ? `line:${sourceKey}` : lineIdentity,
       focusable: true,
       block,
       result: block.type === 'tool-call' ? resultByCall.get(block) : undefined,
-      lineIdentity
+      lineIdentity: sourceKey ?? lineIdentity
     })
   }
   pushAsides(asides?.after)

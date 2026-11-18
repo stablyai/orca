@@ -6,7 +6,7 @@ import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNew
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { withoutPullRequestEventRows } from '../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
   nativeChatShowsCiResultLines,
@@ -33,6 +33,7 @@ import { splitNativeChatSlotsWaitingBehindLiveTurn } from './conversation/slots/
 import { useNativeChatTranscriptSlots } from './conversation/slots/use-native-chat-transcript-slots'
 import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-rows'
 import { useNativeChatTranscriptWindow } from './viewport/virtualization/use-native-chat-transcript-window'
+import { useNativeChatHistoryPublication } from './viewport/history/use-native-chat-history-publication'
 import { useNativeChatHistoryRetention } from './viewport/history/use-native-chat-history-retention'
 import { useNativeChatSubagentScope } from './subagents/use-native-chat-subagent-scope'
 import type { NativeChatSubagentView } from './subagents/native-chat-open-subagent'
@@ -48,13 +49,12 @@ import { useNativeChatOlderHistoryAutoload } from './viewport/history/use-native
 import { NativeChatOlderHistoryRow } from './viewport/history/NativeChatOlderHistoryRow'
 import { useNativeChatMessageRail } from './viewport/rail/use-native-chat-message-rail'
 import { NativeChatMessageRail } from './viewport/rail/NativeChatMessageRail'
-import { useNativeChatRailWake } from './viewport/rail/use-native-chat-rail-wake'
 import type { NativeChatRailOutlineEntry } from './viewport/rail/native-chat-message-rail-items'
 import {
   useNativeChatNavigation,
   useNativeChatNavigationRequest
 } from './viewport/navigation/use-native-chat-transcript-navigation'
-import { useNativeChatReaderScrollInput } from './viewport/scroll/native-chat-reader-scroll-input'
+import { useNativeChatTranscriptReaderInput } from './viewport/scroll/use-native-chat-transcript-reader-input'
 import { useNativeChatMessageListHandle } from './messages/actions/use-native-chat-reveal-latest'
 
 import type {
@@ -144,7 +144,7 @@ export function NativeChatMessageList({
     setExpandedTurnIds((current) => toggleNativeChatExpandedKey(current, turnKey))
   }, [])
 
-  const { hasMore, loadingEarlier, loadEarlier } = session
+  const { loadEarlier } = session
   const historyRetention = useNativeChatHistoryRetention({
     ...session,
     isVisible,
@@ -170,8 +170,6 @@ export function NativeChatMessageList({
   })
   const { agentId: subagentId, messages, turnRows, working, rowsInOrder } = scope
   useRereadWorkersOnNewRows(journalItems?.length ?? 0)
-  // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
-  const showOlderHistory = hasMore && session.readPhase === 'ready' && scope.pagesHistory
   const loadedMessageIds = useMemo(() => new Set(messages.map(({ id }) => id)), [messages])
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(messages), [messages])
   const { liveTurnKey } = turnRows
@@ -234,7 +232,7 @@ export function NativeChatMessageList({
   const { slots: allSlots, liveLine } = transcript
   useNativeChatSideChatForkPointReport(transcript.forkPoint)
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
-  const { slots, waitingSlots } = useMemo(
+  const { slots: drawnSlots, waitingSlots } = useMemo(
     () =>
       splitNativeChatSlotsWaitingBehindLiveTurn(
         allSlots,
@@ -245,6 +243,14 @@ export function NativeChatMessageList({
       ),
     [allSlots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
   )
+  const history = useNativeChatHistoryPublication({
+    slots: drawnSlots,
+    session,
+    pagesHistory: scope.pagesHistory,
+    isVisible,
+    scrollRef
+  })
+  const { slots, loadingEarlier, showOlderHistory } = history
   const navigationRequest = useNativeChatNavigationRequest(slots)
   const newRows = useNativeChatNewRowsMarker(
     slots,
@@ -276,9 +282,12 @@ export function NativeChatMessageList({
     onLeaveEnd: historyRetention.leaveEnd,
     onReturnToEnd: historyRetention.returnToEnd
   })
-  const { showJump, onScroll, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
+  // After the scroll owner's own layout work, so a restored offset is corrected rather than undone.
+  useLayoutEffect(() => {
+    transcriptWindow.reconcileContent()
+  })
+  const { showJump, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
     transcriptScroll
-  const { recordReaderScroll } = transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
     historyKey: `${session.agent}:${session.sessionId ?? ''}:${session.olderHistoryGeneration}`,
@@ -319,25 +328,10 @@ export function NativeChatMessageList({
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
-  const { railRef, wake: wakeRail, sustain: sustainRail } = useNativeChatRailWake()
-  const onTranscriptScroll = useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      onScroll(event)
-      sustainRail()
-    },
-    [onScroll, sustainRail]
-  )
-  const onReaderScroll = useCallback(() => {
-    beginNavigation()
-    recordReaderScroll()
-    wakeRail()
-  }, [beginNavigation, recordReaderScroll, wakeRail])
-  const readerInput = useNativeChatReaderScrollInput(scrollRef, {
-    onReaderScroll,
-    onTakeScroll: transcriptWindow.cancelAlign,
-    onReaderAct: transcriptWindow.releaseEndPin,
-    onLeaveEnd: readerLeavesEnd,
-    onScrollGesture: transcriptScroll.forwardedGesture
+  const readerInput = useNativeChatTranscriptReaderInput(scrollRef, {
+    transcriptScroll,
+    transcriptWindow,
+    beginNavigation
   })
   useNativeChatMessageListHandle(ref, {
     readerAtEnd,
@@ -374,7 +368,7 @@ export function NativeChatMessageList({
           {scope.bar}
           <NativeChatTranscriptViewport
             scrollRef={scrollRef}
-            scrollerProps={{ onScroll: onTranscriptScroll, ...readerInput.scrollerProps }}
+            scrollerProps={readerInput.scrollerProps}
             forwardedGesture={readerInput.forwardedGesture}
             showJump={showJump}
             onJump={jumpToLatest}
@@ -383,7 +377,7 @@ export function NativeChatMessageList({
               <>
                 <NativeChatMessageRail
                   rail={rail}
-                  railRef={railRef}
+                  railRef={readerInput.railRef}
                   scrollRef={scrollRef}
                   onSelect={navigation.selectRailItem}
                   onReaderScroll={readerInput.railWheel}
@@ -408,6 +402,7 @@ export function NativeChatMessageList({
                   loadedMessageIds={loadedMessageIds}
                   context={rowContext}
                   window={transcriptWindow}
+                  anchor={history.anchor}
                   newRowsMarker={newRows.marker}
                 />
                 {liveLine ? (

@@ -96,7 +96,25 @@ export function nativeChatWorkRunSpans(rows: readonly NativeChatWorkRunRow[]): n
   return spans
 }
 
+const blockSourceKeys = new WeakMap<NativeChatMessage, ReadonlyMap<NativeChatBlock, string>>()
+
+/** Message-local provenance survives a row joining a run, including anonymous calls/results. */
+export function nativeChatMessageBlockSourceKeys(
+  message: NativeChatMessage
+): ReadonlyMap<NativeChatBlock, string> {
+  const cached = blockSourceKeys.get(message)
+  if (cached) {
+    return cached
+  }
+  const keys = new Map(
+    message.blocks.map((block, index) => [block, `${message.id}:${index}`] as const)
+  )
+  blockSourceKeys.set(message, keys)
+  return keys
+}
+
 export type NativeChatWorkRunEntries = {
+  sourceKeys: Map<NativeChatBlock, string>
   /** Every member's tool blocks, in order: the run's one block list. */
   blocks: NativeChatBlock[]
   /** Thoughts drawn just before a block, keyed by that block. */
@@ -109,6 +127,7 @@ export function nativeChatWorkRunEntries(
   members: readonly NativeChatMessage[]
 ): NativeChatWorkRunEntries {
   const blocks: NativeChatBlock[] = []
+  const sourceKeys = new Map<NativeChatBlock, string>()
   const thoughtsBefore = new Map<NativeChatBlock, NativeChatMessage[]>()
   let waiting: NativeChatMessage[] = []
   for (const message of members) {
@@ -125,8 +144,11 @@ export function nativeChatWorkRunEntries(
       waiting = []
     }
     blocks.push(...tools)
+    for (const [block, key] of nativeChatMessageBlockSourceKeys(message)) {
+      sourceKeys.set(block, key)
+    }
   }
-  return { blocks, thoughtsBefore, thoughtsAfter: waiting }
+  return { blocks, sourceKeys, thoughtsBefore, thoughtsAfter: waiting }
 }
 
 /** Map message-local diff target indexes into the run’s combined edit numbering. */

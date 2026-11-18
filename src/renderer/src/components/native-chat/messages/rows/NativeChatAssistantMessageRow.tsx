@@ -1,3 +1,4 @@
+import { nativeChatMessageBlockSourceKeys } from '../../../../../../shared/native-chat/transcript/folding/native-chat-work-run'
 import { useContext } from 'react'
 import { cn } from '@/lib/class-names'
 import { quietBotAnswer } from '../../../../../../shared/bot-quiet-result'
@@ -93,6 +94,7 @@ export function NativeChatAssistantMessageRow({
   return (
     <div
       ref={rowRef}
+      data-native-chat-content-anchor={`message:${message.id}`}
       // The context menu offers Copy message only where the row's controls offer Copy.
       data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
@@ -179,8 +181,9 @@ function toolRunProps(
     expandSignal: props.expandSignal,
     activeTurnIsWorking: props.activeTurnIsWorking,
     trailing: props.trailingRun,
-    disclosureId: props.message.id,
+    disclosureId: props.workRunDisclosureId ?? props.message.id,
     asides: run?.asides,
+    sourceKeys: run?.sourceKeys ?? nativeChatMessageBlockSourceKeys(props.message),
     runtimeContext: props.runtimeContext
   }
 }

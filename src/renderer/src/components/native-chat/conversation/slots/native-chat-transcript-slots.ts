@@ -63,6 +63,8 @@ export type NativeChatSubagentHeadSlot = {
 
 export type NativeChatMessageSlot = {
   kind: 'message'
+  /** Keep the existing row/disclosure owner when an older prefix extends a work run. */
+  presentationKey?: string
   message: NativeChatMessage
   turnKey: string | undefined
   /** The row's own turn is the one still running, so its tools stay live. */
@@ -123,9 +125,9 @@ export function buildNativeChatTranscriptSlots(
 /** The transcript's slots and, when asked (`forkOffer`), where a side chat forks. */
 export function buildNativeChatTranscript(
   input: NativeChatTranscriptSlotsInput,
-  t?: Translate
-): {
-  slots: NativeChatTranscriptSlot[]
+  t?: Translate,
+  previousWorkRunOwners?: ReadonlyMap<string, string>
+): ReturnType<typeof nativeChatTranscriptWorkRuns> & {
   forkPoint: NativeChatSideChatForkPoint | null
   /** Settled quiet turns, drawn or still fading out. */
   quietTurnKeys: ReadonlySet<string>
@@ -263,10 +265,8 @@ export function buildNativeChatTranscript(
     }
   }
   pushHeadsBefore(undefined)
-  const drawn = nativeChatBotItemNoteClusters(
-    nativeChatTranscriptWorkRuns(slots, typography),
-    typography
-  )
+  const workRuns = nativeChatTranscriptWorkRuns(slots, typography, previousWorkRunOwners)
+  const drawn = nativeChatBotItemNoteClusters(workRuns.slots, typography)
   // One action holder per turn: its last drawn response with words, else (when folding hid them)
   // its last drawn image response. Tools and thoughts never hold them.
   const lastWordsByTurn = new Map<string, NativeChatMessageSlot>()
@@ -335,6 +335,7 @@ export function buildNativeChatTranscript(
   return {
     slots: drawn,
     quietTurnKeys: leaving.turns.size ? new Set([...quiet.turns, ...leaving.turns]) : quiet.turns,
+    owners: workRuns.owners,
     forkPoint: forkOffer
       ? nativeChatSideChatForkPoint(newestOffered, isWorking || lifecycleWorking)
       : null

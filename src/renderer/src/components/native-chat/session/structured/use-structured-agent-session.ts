@@ -268,6 +268,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     railOutline: transportEnabled ? railOutline : null,
     loadingOlder: transportEnabled && loadingOlder,
     olderHistoryGeneration,
+    prependRevision: state.prependRevision,
     initialHistoryAutoLoad,
     loadOlder,
     retainHistory,

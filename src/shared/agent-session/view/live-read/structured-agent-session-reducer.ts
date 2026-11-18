@@ -74,6 +74,8 @@ export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   /** All-agent memory ceiling grows with paging too. */
   retainedItemCap: number
   hasOlder: boolean
+  /** Historical prefix admissions, independent of streamed row/body revisions. */
+  prependRevision?: number
   status: 'idle' | 'loading' | 'ready' | 'error'
   /** The failed read's own text, for logs; a surface words `readRefusal` instead. */
   error?: string
@@ -185,9 +187,12 @@ export function reduceStructuredAgentSession(
       return state
     }
     const items = mergeItems(state.items, action.page.items, action.page.removedItemIds)
+    // Only a page that adds rows above the old head is a prepend; a refreshed overlap is not.
+    const prepended = items[0] !== undefined && (!head || items[0].sequence < head.sequence)
     return {
       ...state,
       items,
+      prependRevision: (state.prependRevision ?? 0) + Number(prepended),
       retainedOwnItemLimit: Math.max(state.retainedOwnItemLimit, ownItemCount(items)),
       retainedItemCap: Math.max(state.retainedItemCap, items.length),
       subagentRoster: foldStructuredAgentSubagentRosterPage(state.subagentRoster, action.page),

@@ -21,6 +21,7 @@ export function NativeChatToolRunMemberList({
   onRevealDiff,
   disclosureId,
   asides,
+  sourceKeys,
   followKey,
   startsAtEnd,
   memoryKey
@@ -30,6 +31,7 @@ export function NativeChatToolRunMemberList({
   headerBlocks: NativeChatBlock[]
   /** Rows the transcript draws among the calls, such as the thoughts between them. */
   asides?: NativeChatToolRunAsides
+  sourceKeys?: ReadonlyMap<NativeChatBlock, string>
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock
   revealedDiff?: NativeChatDiffReveal
@@ -46,10 +48,11 @@ export function NativeChatToolRunMemberList({
         blocks,
         headerBlocks,
         asides,
+        sourceKeys,
         previousTodoWrite,
         previousUpdatePlan
       }),
-    [asides, blocks, headerBlocks, previousTodoWrite, previousUpdatePlan]
+    [asides, blocks, headerBlocks, sourceKeys, previousTodoWrite, previousUpdatePlan]
   )
 
   const renderRow = useCallback(
@@ -69,7 +72,7 @@ export function NativeChatToolRunMemberList({
         case 'edit':
           return row.files.map((file, fileIndex) => (
             <NativeChatDiffCard
-              key={`${row.editKey}:${fileIndex}`}
+              key={`${row.key}:${fileIndex}`}
               file={file}
               revealSignal={
                 revealedDiff?.editKey === row.editKey && revealedDiff.fileIndex === fileIndex
@@ -80,7 +83,7 @@ export function NativeChatToolRunMemberList({
               disclosureKey={
                 disclosureId === undefined
                   ? undefined
-                  : `diff:${disclosureId}:${row.editKey}:${fileIndex}`
+                  : `diff:${disclosureId}:${row.key}:${fileIndex}`
               }
             />
           ))
@@ -106,7 +109,11 @@ export function NativeChatToolRunMemberList({
       followKey={followKey}
       startsAtEnd={startsAtEnd}
       memoryKey={memoryKey}
-      revealRowKey={revealedDiff ? `edit:${revealedDiff.editKey}` : undefined}
+      revealRowKey={
+        revealedDiff
+          ? rows.find((row) => row.kind === 'edit' && row.editKey === revealedDiff.editKey)?.key
+          : undefined
+      }
     />
   )
 }

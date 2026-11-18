@@ -81,7 +81,12 @@ const WindowRows = memo(function WindowRows({
         {start > previousEnd + 0.5 ? (
           <div aria-hidden style={{ height: start - previousEnd }} />
         ) : null}
-        <div ref={measureRow} data-index={index} data-native-chat-tool-run-row={row.key}>
+        <div
+          ref={measureRow}
+          data-index={index}
+          data-native-chat-tool-run-row={row.key}
+          data-native-chat-content-anchor={row.contentAnchor}
+        >
           <WindowRow row={row} renderRow={renderRow} />
         </div>
       </Fragment>
