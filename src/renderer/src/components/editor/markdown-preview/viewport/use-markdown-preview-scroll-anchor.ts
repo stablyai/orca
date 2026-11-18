@@ -21,77 +21,142 @@ export const markdownPreviewScrollAnchorKey = (block: MarkdownPreviewBlock): str
     ? `source:${block.sourceLine}:${block.sourceColumn}`
     : `index:${block.index}`
 
+function longestIncreasingAnchorPairs(
+  pairs: readonly (readonly [number, number])[]
+): (readonly [number, number])[] {
+  if (pairs.length === 0) {
+    return []
+  }
+  const tailPairIndexes: number[] = []
+  const predecessor = Array.from({ length: pairs.length }, () => -1)
+  for (let i = 0; i < pairs.length; i += 1) {
+    const nextIndex = pairs[i][1]
+    let low = 0
+    let high = tailPairIndexes.length
+    while (low < high) {
+      const mid = (low + high) >> 1
+      if (pairs[tailPairIndexes[mid]][1] < nextIndex) {
+        low = mid + 1
+      } else {
+        high = mid
+      }
+    }
+    if (low > 0) {
+      predecessor[i] = tailPairIndexes[low - 1]
+    }
+    tailPairIndexes[low] = i
+  }
+  const result: (readonly [number, number])[] = []
+  let cursor = tailPairIndexes.at(-1) ?? -1
+  while (cursor !== -1) {
+    result.push(pairs[cursor])
+    cursor = predecessor[cursor]
+  }
+  result.reverse()
+  return result
+}
+
 /** Re-point an anchor at its block after a re-parse when its source position moved; source lines shift on edits above. */
 function followMarkdownPreviewAnchor(
   anchor: NonNullable<VirtualizedScrollAnchor>,
   previous: readonly MarkdownPreviewBlock[],
   next: readonly MarkdownPreviewBlock[]
 ): NonNullable<VirtualizedScrollAnchor> {
-  const same = (previousIndex: number, nextIndex: number): boolean =>
-    previous[previousIndex].contentSignature === next[nextIndex].contentSignature
-  let start = 0
-  while (start < previous.length && start < next.length && same(start, start)) {
-    start += 1
-  }
-  let end = 0
-  while (
-    end < previous.length - start &&
-    end < next.length - start &&
-    same(previous.length - 1 - end, next.length - 1 - end)
-  ) {
-    end += 1
+  const mappedNextIndex = Array.from<number | null>({ length: previous.length }).fill(null)
+  // Align bijective 1-to-1 anchors first (Patience LIS) so duplicated runs only align cleanly between verified borders.
+  const queue: [number, number, number, number, number][] = [
+    [0, previous.length, 0, next.length, 0]
+  ]
+  for (;;) {
+    const range = queue.pop()
+    if (!range) {
+      break
+    }
+    const [pStart, pEnd, nStart, nEnd, depth] = range
+    if (pStart >= pEnd || nStart >= nEnd) {
+      continue
+    }
+    let anchors: (readonly [number, number])[] = []
+    if (depth < 8) {
+      const prevSeen = new Map<string, number | null>()
+      for (let i = pStart; i < pEnd; i += 1) {
+        const signature = previous[i].contentSignature
+        prevSeen.set(signature, prevSeen.has(signature) ? null : i)
+      }
+      const nextSeen = new Map<string, number | null>()
+      for (let j = nStart; j < nEnd; j += 1) {
+        const signature = next[j].contentSignature
+        nextSeen.set(signature, nextSeen.has(signature) ? null : j)
+      }
+      const uniquePairs: (readonly [number, number])[] = []
+      for (let i = pStart; i < pEnd; i += 1) {
+        const signature = previous[i].contentSignature
+        if (prevSeen.get(signature) === i) {
+          const matchedNextIndex = nextSeen.get(signature) ?? null
+          if (matchedNextIndex !== null) {
+            uniquePairs.push([i, matchedNextIndex])
+          }
+        }
+      }
+      anchors = longestIncreasingAnchorPairs(uniquePairs)
+    }
+    if (anchors.length > 0) {
+      let prevCursor = pStart
+      let nextCursor = nStart
+      for (const [prevAnchor, nextAnchor] of anchors) {
+        mappedNextIndex[prevAnchor] = nextAnchor
+        queue.push([prevCursor, prevAnchor, nextCursor, nextAnchor, depth + 1])
+        prevCursor = prevAnchor + 1
+        nextCursor = nextAnchor + 1
+      }
+      queue.push([prevCursor, pEnd, nextCursor, nEnd, depth + 1])
+      continue
+    }
+    let prefix = 0
+    while (
+      pStart + prefix < pEnd &&
+      nStart + prefix < nEnd &&
+      previous[pStart + prefix].contentSignature === next[nStart + prefix].contentSignature
+    ) {
+      prefix += 1
+    }
+    let suffix = 0
+    while (
+      suffix < pEnd - pStart - prefix &&
+      suffix < nEnd - nStart - prefix &&
+      previous[pEnd - 1 - suffix].contentSignature === next[nEnd - 1 - suffix].contentSignature
+    ) {
+      suffix += 1
+    }
+    const ambiguousMiddleSignatures = new Set<string>()
+    for (let i = pStart + prefix; i < pEnd - suffix; i += 1) {
+      ambiguousMiddleSignatures.add(previous[i].contentSignature)
+    }
+    for (let j = nStart + prefix; j < nEnd - suffix; j += 1) {
+      ambiguousMiddleSignatures.add(next[j].contentSignature)
+    }
+    for (let k = 0; k < prefix; k += 1) {
+      if (!ambiguousMiddleSignatures.has(previous[pStart + k].contentSignature)) {
+        mappedNextIndex[pStart + k] = nStart + k
+      }
+    }
+    for (let k = 0; k < suffix; k += 1) {
+      if (!ambiguousMiddleSignatures.has(previous[pEnd - 1 - k].contentSignature)) {
+        mappedNextIndex[pEnd - 1 - k] = nEnd - 1 - k
+      }
+    }
   }
   const previousIndexByKey = new Map(
     previous.map((block, index) => [markdownPreviewScrollAnchorKey(block), index])
   )
-  const nextIndexByKey = new Map(
-    next.map((block, index) => [markdownPreviewScrollAnchorKey(block), index])
-  )
-  // Inside the edited span a block follows only when its text occurs once on each side.
-  const previousSpanCounts = new Map<string, number>()
-  for (let index = start; index < previous.length - end; index += 1) {
-    const signature = previous[index].contentSignature
-    previousSpanCounts.set(signature, (previousSpanCounts.get(signature) ?? 0) + 1)
-  }
-  const nextSpanIndexes = new Map<string, number | null>()
-  for (let index = start; index < next.length - end; index += 1) {
-    const signature = next[index].contentSignature
-    nextSpanIndexes.set(signature, nextSpanIndexes.has(signature) ? null : index)
-  }
-  const nextIndexOf = (index: number): number | null => {
-    if (index < start) {
-      return index
-    }
-    if (index >= previous.length - end) {
-      return index + next.length - previous.length
-    }
-    const signature = previous[index].contentSignature
-    return previousSpanCounts.get(signature) === 1 ? (nextSpanIndexes.get(signature) ?? null) : null
-  }
-  // Keep same-key matches unless another prefix/suffix-matched block already claimed that position.
+  // Keep the original key when no unambiguous match exists; ambiguous duplicates fall back safely.
   const follow = (key: string): string => {
     const index = previousIndexByKey.get(key)
-    const nextIndex = index === undefined ? null : nextIndexOf(index)
-    if (index === undefined || nextIndex === null) {
+    if (index === undefined) {
       return key
     }
-    const sameKeyNextIndex = nextIndexByKey.get(key)
-    const sameKeyOwnerIndex =
-      sameKeyNextIndex === undefined
-        ? null
-        : sameKeyNextIndex < start
-          ? sameKeyNextIndex
-          : sameKeyNextIndex >= next.length - end
-            ? sameKeyNextIndex - (next.length - previous.length)
-            : null
-    if (
-      sameKeyNextIndex !== undefined &&
-      next[sameKeyNextIndex].contentSignature === previous[index].contentSignature &&
-      (sameKeyOwnerIndex === null || sameKeyOwnerIndex === index)
-    ) {
-      return key
-    }
-    return markdownPreviewScrollAnchorKey(next[nextIndex])
+    const nextIndex = mappedNextIndex[index]
+    return nextIndex === null ? key : markdownPreviewScrollAnchorKey(next[nextIndex])
   }
   return { ...anchor, key: follow(anchor.key), fallbackKeys: anchor.fallbackKeys?.map(follow) }
 }

@@ -197,7 +197,7 @@ describe('markdown preview scroll anchor', () => {
       'A changed.\n\nRead **this.**\n\nRead this.\n\nT.\n'
     ).document.blocks
     const shiftedBlocks = parseMarkdownPreviewDocument(
-      'X.\n\nA changed.\n\nRead this.\n\nRead **this.**\n\nT.\n'
+      'X.\n\nA changed.\n\nRead **this.**\n\nRead this.\n\nT.\n'
     ).document.blocks
 
     const { rerender } = renderHook(
@@ -217,7 +217,7 @@ describe('markdown preview scroll anchor', () => {
     expect(element.scrollTop).toBe(112)
 
     rerender({ blocks: shiftedBlocks, revision: 3 })
-    expect(element.scrollTop).toBe(312)
+    expect(element.scrollTop).toBe(212)
   })
 
   it('keeps an unmoved plain block when an identical duplicate is inserted below after an edit above', () => {
@@ -247,6 +247,35 @@ describe('markdown preview scroll anchor', () => {
 
     rerender({ blocks: shiftedBlocks, revision: 3 })
     expect(element.scrollTop).toBe(212)
+  })
+
+  it('keeps the second duplicate block unmoved when a third copy is added after an edit above, then follows when shifted', () => {
+    const element = createScrollContainer()
+    const scrollCacheKey = nextScrollCacheKey()
+    const initialBlocks = parseMarkdownPreviewDocument('A.\n\nB.\n\nB.\n\nT.\n').document.blocks
+    const thirdCopyBlocks = parseMarkdownPreviewDocument('A changed.\n\nB.\n\nB.\n\nB.\n\nT.\n')
+      .document.blocks
+    const shiftedBlocks = parseMarkdownPreviewDocument('X.\n\nA changed.\n\nB.\n\nB.\n\nB.\n\nT.\n')
+      .document.blocks
+
+    const { rerender } = renderHook(
+      ({ blocks, revision }: { blocks: MarkdownPreviewBlock[]; revision: number }) =>
+        useScrollAnchorHarness({ blocks, scrollCacheKey, revision, element }),
+      {
+        initialProps: { blocks: initialBlocks, revision: 1 }
+      }
+    )
+
+    act(() => {
+      element.scrollTop = 212
+      element.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+    })
+
+    rerender({ blocks: thirdCopyBlocks, revision: 2 })
+    expect(element.scrollTop).toBe(212)
+
+    rerender({ blocks: shiftedBlocks, revision: 3 })
+    expect(element.scrollTop).toBe(312)
   })
 
   it('follows the anchored block across unmount and remount after an edit above it', () => {
