@@ -231,6 +231,9 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
+      if (matchAppShortcut('sidebar.hosts.cycle') && handlers.get('sidebar.hosts.cycle')?.()) {
+        return
+      }
       if (
         input.key !== 'Dead' &&
         matchAppShortcut('view.plugins') &&

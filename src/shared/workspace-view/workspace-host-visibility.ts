@@ -69,6 +69,27 @@ export function toggleVisibleHostRow(
   return getCheckedHostRows(rows, [...next]).length === rows.length ? null : [...next]
 }
 
+/** All hosts → each row alone in picker order → All hosts; a multi-row or stale selection resets to All hosts. */
+export function cycleVisibleHostRow(
+  hosts: readonly MergedExecutionHost[],
+  visibleHostIds: readonly ExecutionHostId[] | null
+): ExecutionHostId[] | null | undefined {
+  const rows = pickerExecutionHosts(hosts)
+  const checkedRows = visibleHostIds ? getCheckedHostRows(rows, visibleHostIds) : rows
+  const showsAll = checkedRows.length === rows.length
+  if (rows.length < 2) {
+    return showsAll ? undefined : null
+  }
+  if (showsAll) {
+    return expandEquivalentExecutionHostIds(hosts, [rows[0].id])
+  }
+  if (checkedRows.length !== 1) {
+    return null
+  }
+  const nextRow = rows[rows.indexOf(checkedRows[0]) + 1]
+  return nextRow ? expandEquivalentExecutionHostIds(hosts, [nextRow.id]) : null
+}
+
 /** "All hosts": shows every host, or when it already does, narrows to the first row. */
 export function toggleAllVisibleHosts(
   hosts: readonly MergedExecutionHost[],
