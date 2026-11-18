@@ -1,10 +1,10 @@
 // Fetch outlines only for visible panes with unloaded history and host support; key stale requests by epoch to avoid streaming churn, retry with backoff and fall back to loaded rows.
 
 import { useEffect, useState } from 'react'
-import type { AgentSessionConversationOutline } from '../../../../../../shared/agent-session/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../../../shared/agent-session/view/messages/agent-session-conversation-outline'
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { agentSessionContextFloorSequence } from '../../../../../../shared/agent-session/agent-session-context-clear'
-import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+import { agentSessionContextFloorSequence } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
+import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/native-chat/journal/structured-agent-session-journal-reads'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'

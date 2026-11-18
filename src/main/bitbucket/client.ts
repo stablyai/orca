@@ -133,7 +133,7 @@ async function getBuildStatus(
     return { status: 'neutral' }
   }
   const data = await requestJson<{ values?: RawBitbucketBuildStatus[]; next?: string }>(
-    `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses/build`,
+    `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses`,
     { searchParams: { pagelen: '100' } }
   )
   const statuses = data?.values ?? []

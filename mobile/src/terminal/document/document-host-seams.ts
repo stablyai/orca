@@ -1,3 +1,8 @@
+import {
+  DEFAULT_TERMINAL_FONT_STYLE,
+  readTerminalFontStyle,
+  type TerminalFontStyle
+} from '../preferences/terminal-font-style'
 import type {
   TerminalDocumentSearchAddon,
   TerminalDocumentTerminal,
@@ -29,7 +34,11 @@ export type TerminalDocumentErrorReporter = (
 
 export type TerminalDocumentHostFrame = string | Record<string, unknown> | undefined
 
-export type TerminalDocumentStart = { textScale: number; shown: boolean }
+export type TerminalDocumentStart = {
+  textScale: number
+  fontStyle?: TerminalFontStyle
+  shown: boolean
+}
 
 export type TerminalDocumentHostSeams = {
   postToHost: (message: Record<string, unknown>) => void
@@ -69,6 +78,7 @@ declare global {
     // Native shell capture starts before engine loading, so it can report failures that precede document startup.
     __engineErrors?: string[]
     __orcaTerminalTextScale?: unknown
+    __orcaTerminalFontStyle?: unknown
     __orcaTerminalShown?: unknown
   }
   const Terminal: new (options: Record<string, unknown>) => TerminalDocumentTerminal
@@ -143,6 +153,7 @@ export function windowStart(): TerminalDocumentStart {
   const scale = window.__orcaTerminalTextScale
   return {
     textScale: typeof scale === 'number' && scale > 0 ? scale : 1,
+    fontStyle: readTerminalFontStyle(window.__orcaTerminalFontStyle, DEFAULT_TERMINAL_FONT_STYLE),
     shown: window.__orcaTerminalShown !== false
   }
 }

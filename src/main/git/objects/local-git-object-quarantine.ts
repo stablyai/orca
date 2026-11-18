@@ -1,4 +1,4 @@
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import {
   createGitObjectQuarantine,
@@ -6,7 +6,8 @@ import {
   pathApiForGitPath,
   type GitObjectsDirectory
 } from '../../../shared/git/objects/git-object-quarantine'
-import { toLinuxPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
+import { resolveWslGuestPath } from '../../wsl/filesystem/wsl-guest-drive-path'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { usesHostGitForWslLinkedWorktree } from '../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import { readRepoCommonDirFromGit } from '../worktrees/catalog/worktree-list-reader'
@@ -17,16 +18,19 @@ export type LocalGitObjectQuarantine = {
 }
 
 /** `objects/` in Git's spelling and, for WSL Git, translated to one the main process can open. */
-export function localGitObjectsDirectory(
+export async function localGitObjectsDirectory(
   commonDir: string,
-  wslDistro: string | undefined
-): GitObjectsDirectory {
+  wslDistro: string | undefined,
+  signal?: AbortSignal
+): Promise<GitObjectsDirectory> {
   const hostCommonDir =
     wslDistro && !isWindowsAbsolutePathLike(commonDir)
       ? toWindowsWslPath(commonDir, wslDistro)
       : commonDir
-  // Why: Git < 2.31 prints a relative common dir, resolved against a `C:\` repo path; WSL Git needs `/mnt/c`.
-  const gitCommonDir = wslDistro ? toLinuxPath(commonDir) : commonDir
+  // Why: Git < 2.31 prints a relative common dir, resolved against a `C:\` repo path; WSL Git needs its mount.
+  const gitCommonDir = wslDistro
+    ? await resolveWslGuestPath(wslDistro, commonDir, signal)
+    : commonDir
   return {
     hostPath: pathApiForGitPath(hostCommonDir).join(hostCommonDir, 'objects'),
     gitPath: pathApiForGitPath(gitCommonDir).join(gitCommonDir, 'objects')
@@ -77,7 +81,10 @@ export function createLocalGitObjectQuarantine(
     if (!commonDir || usesHostGitForWslLinkedWorktree(repoPath, options.wslDistro)) {
       return undefined
     }
-    return { ...localGitObjectsDirectory(commonDir, wslDistro), ...inherited }
+    return {
+      ...(await localGitObjectsDirectory(commonDir, wslDistro, options.signal)),
+      ...inherited
+    }
   })
   return {
     run: (command) =>

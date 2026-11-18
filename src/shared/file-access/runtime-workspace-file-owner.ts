@@ -1,5 +1,5 @@
-import type { ExecutionHostId } from '../execution-host'
-import { normalizeRuntimePathForComparison, relativePathInsideRoot } from '../cross-platform-path'
+import type { ExecutionHostId } from '../execution-host/execution-host'
+import { normalizeRuntimePathForComparison, relativePathInsideRoot } from './cross-platform-path'
 
 export type RuntimeWorkspaceFileRoot = {
   workspaceId: string

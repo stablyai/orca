@@ -19,21 +19,22 @@ import { ProviderIcon } from './provider-usage-panel'
 import { USAGE_WARNING_PERCENT } from './usage-health-tone'
 import { UsageBar } from './usage-meter'
 import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
-import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
+import { getOwnerNotSetUpLabelParts } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
 import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
   isClaudeUsageWaitingForClaude
-} from './usage-error-copy'
+} from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
 import { GroupedPoolUsage } from './usage-grouped-pools'
-import { formatStatusBarSectionLabel, isGroupedUsagePool } from './usage-pool-label'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
-import { useNow } from '@/hooks/use-now'
+import { formatStatusBarSectionLabel } from './usage-pool-label'
+import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
+import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
+import { useNow } from '@/lib/window-activity/use-now'
 
 const CALM_STALE_USAGE_MAX_AGE_MS = 30 * 60_000
 

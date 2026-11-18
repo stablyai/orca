@@ -16,10 +16,10 @@ import { buildDetectedGitWorktrees } from '../../../ipc/worktrees/listing/ssh-wo
 import {
   projectRepoWorktreeRows,
   resolveRepoWorktreeRows,
-  resolveScopedWorktreeIdRow,
   scanRepoWorktreeRows,
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
+import { resolveScopedWorktreeIdRow } from './scoped-worktree-row-resolution'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import {
   pendingWorktreeRemovals,

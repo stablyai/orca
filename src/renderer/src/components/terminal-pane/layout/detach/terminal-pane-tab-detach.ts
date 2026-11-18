@@ -8,7 +8,7 @@ import { commitTerminalSurfaceClose } from '@/store/terminals/retirement/termina
 import type { PaneCwdEntry } from '../split/resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import { moveLeafThroughLayoutOwner } from './terminal-pane-detach-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId

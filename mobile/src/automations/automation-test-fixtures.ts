@@ -1,4 +1,4 @@
-import { getSshTargetIdForExecutionHost } from '../../../src/shared/execution-host'
+import { getSshTargetIdForExecutionHost } from '../../../src/shared/execution-host/execution-host'
 import { vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'

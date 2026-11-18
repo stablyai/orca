@@ -4,20 +4,18 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createLocalFileSink } from './local-file-sink'
 
-let dir: string
+describe.skipIf(process.platform === 'win32')('trace-file privacy', () => {
+  let dir: string
 
-beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'orca-sink-'))
-})
-afterEach(() => {
-  rmSync(dir, { recursive: true, force: true })
-})
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-sink-'))
+  })
 
-describe('local-file-sink — basic write', () => {
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
   it('creates trace directories and files with private POSIX permissions', () => {
-    if (process.platform === 'win32') {
-      return
-    }
     const file = join(dir, 'logs', 'test.ndjson')
     const sink = createLocalFileSink({
       filePath: file,
@@ -31,9 +29,6 @@ describe('local-file-sink — basic write', () => {
   })
 
   it('tightens permissions on an existing rotated trace family', () => {
-    if (process.platform === 'win32') {
-      return
-    }
     const file = join(dir, 'test.ndjson')
     const rotated = `${file}.1`
     writeFileSync(file, '{}\n')

@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { blake3 } from '@noble/hashes/blake3'
 import { bytesToHex } from '@noble/hashes/utils'
-import { resolveAbsoluteDirOverride } from '../../../absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../file-access/absolute-dir-override'
 import {
   GrokSessionPathLookupQueue,
   type GrokSessionPathScanner

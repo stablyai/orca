@@ -115,7 +115,7 @@ describe('browserManager page prompt routing', () => {
     // Cancel quiets prompts until fresh input arrives.
     const clickInPage = (): void => {
       for (const [event, listener] of guestOnMock.mock.calls) {
-        if (event === 'input-event') {
+        if (event === 'before-mouse-event') {
           listener({}, { type: 'mouseDown' })
         }
       }

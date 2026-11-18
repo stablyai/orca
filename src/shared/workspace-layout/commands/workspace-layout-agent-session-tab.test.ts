@@ -5,7 +5,7 @@ import { build, testContext, WS } from './workspace-layout-command.test-fixture'
 
 const switchState = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 
-vi.mock('../../layout-owner-switch', () => ({
+vi.mock('../layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return switchState.layoutOwnerIsMain
   }

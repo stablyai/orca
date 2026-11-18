@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import type {
   DirectSshAuthority,
@@ -7,7 +7,7 @@ import type {
 import type {
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs
-} from '../../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 
 export function makeDetectedResult(
   repoId: string,

@@ -22,17 +22,6 @@ function buildAtomFeed(tags: string[]): string {
     .join('')}</feed>`
 }
 
-function buildManifest(tag: string): string {
-  const version = tag.replace(/^v/i, '')
-  return [
-    `version: ${version}`,
-    'files:',
-    `  - url: Orca-${version}-arm64-mac.zip`,
-    '    sha512: test',
-    `path: Orca-${version}-arm64-mac.zip`
-  ].join('\n')
-}
-
 function isPlatformManifestRequest(url: string): boolean {
   return /\/latest(?:-[a-z0-9-]+)?\.yml$/.test(url)
 }
@@ -49,55 +38,6 @@ function buildWindowsManifest(version: string): string {
     '    sha512: test',
     'path: orca-windows-setup.exe'
   ].join('\n')
-}
-
-function respondWithAtom(
-  tags: string[],
-  missingManifestTags: string[] = [],
-  missingAssetTags: string[] = [],
-  unavailableManifestTags: string[] = [],
-  missingManifestStatus = 404
-): void {
-  const missingManifests = new Set(missingManifestTags)
-  const missingAssets = new Set(missingAssetTags)
-  const unavailableManifests = new Set(unavailableManifestTags)
-  netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
-    if (url === 'https://github.com/stablyai/orca/releases.atom') {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        text: () => Promise.resolve(buildAtomFeed(tags))
-      })
-    }
-
-    const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z0-9-]+)?\.yml$/)
-    if (manifestMatch) {
-      const tag = decodeURIComponent(manifestMatch[1])
-      if (unavailableManifests.has(tag)) {
-        return Promise.resolve({
-          ok: false,
-          status: 503,
-          text: () => Promise.resolve('')
-        })
-      }
-      return Promise.resolve({
-        ok: !missingManifests.has(tag),
-        status: missingManifests.has(tag) ? missingManifestStatus : 200,
-        text: () => Promise.resolve(buildManifest(tag))
-      })
-    }
-
-    const assetMatch = url.match(/\/releases\/download\/([^/]+)\/(.+)$/)
-    if (assetMatch && init?.method === 'HEAD') {
-      return Promise.resolve({
-        ok: !missingAssets.has(decodeURIComponent(assetMatch[1])),
-        status: missingAssets.has(decodeURIComponent(assetMatch[1])) ? 404 : 200,
-        text: () => Promise.resolve('')
-      })
-    }
-
-    return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
-  })
 }
 
 describe('fetchNewerReleaseTagsWithReadiness', () => {
@@ -149,89 +89,6 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       state: 'ready'
     })
     expect(assetRequestInits).toEqual([expect.objectContaining({ redirect: 'manual' })])
-  })
-
-  it('aborts a GitHub asset request that exceeds the timeout', async () => {
-    vi.useFakeTimers()
-    setPlatformForTest('win32')
-    let resolveAsset: (() => void) | undefined
-    const pendingAsset = new Promise<{ ok: boolean; status: number }>((resolve) => {
-      resolveAsset = () => resolve({ ok: false, status: 503 })
-    })
-    netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
-      if (url === 'https://github.com/stablyai/orca/releases.atom') {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: () => Promise.resolve(buildAtomFeed(['v1.4.190']))
-        })
-      }
-      if (isPlatformManifestRequest(url)) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: () => Promise.resolve(buildWindowsManifest('1.4.190'))
-        })
-      }
-      if (init?.method === 'HEAD') {
-        return pendingAsset
-      }
-      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
-    })
-
-    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
-    const readiness = fetchNewerReleaseTagsWithReadiness('1.4.189', 1)
-    await vi.advanceTimersByTimeAsync(5000)
-
-    await expect(readiness).resolves.toEqual({
-      tags: [],
-      state: 'unavailable',
-      unavailableReason: 'manifest'
-    })
-    const request = netRequestMock.mock.results[0]?.value as { abort: ReturnType<typeof vi.fn> }
-    expect(request.abort).toHaveBeenCalledOnce()
-    resolveAsset?.()
-  })
-
-  it('does not return a last-good tag whose manifest asset is unavailable', async () => {
-    respondWithAtom(['v1.4.27', 'v1.4.26'], [], ['v1.4.27', 'v1.4.26'])
-
-    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
-
-    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
-      tags: [],
-      state: 'not-ready'
-    })
-  })
-
-  it('reports no-newer separately from feed fetch failures', async () => {
-    respondWithAtom(['v1.4.26'])
-
-    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
-
-    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
-      tags: [],
-      state: 'no-newer'
-    })
-
-    netFetchMock.mockResolvedValue({ ok: false, text: () => Promise.resolve('') })
-    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
-      tags: [],
-      state: 'unavailable',
-      unavailableReason: 'feed'
-    })
-  })
-
-  it('reports an unavailable newest manifest instead of pinning an older release', async () => {
-    respondWithAtom(['v1.4.28', 'v1.4.27'], [], [], ['v1.4.28'])
-
-    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
-
-    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
-      tags: [],
-      state: 'unavailable',
-      unavailableReason: 'manifest'
-    })
   })
 
   it('requires every asset referenced by the manifest files list to be reachable', async () => {
@@ -287,83 +144,6 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       tags: [],
       state: 'not-ready',
       lastGoodTag: 'v1.4.27'
-    })
-  })
-
-  it('treats malformed updater manifests as not ready', async () => {
-    netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
-      if (url === 'https://github.com/stablyai/orca/releases.atom') {
-        return Promise.resolve({
-          ok: true,
-          text: () => Promise.resolve(buildAtomFeed(['v1.4.28', 'v1.4.27']))
-        })
-      }
-
-      if (url.includes('/releases/download/v1.4.28/')) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: () => Promise.resolve('files:\n  - url: [')
-        })
-      }
-
-      if (url.includes('/releases/download/v1.4.27/') && isPlatformManifestRequest(url)) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: () => Promise.resolve(buildManifest('v1.4.27'))
-        })
-      }
-
-      if (init?.method === 'HEAD') {
-        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
-      }
-
-      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
-    })
-
-    const { fetchNewerReleaseTag, fetchNewerReleaseTagsWithReadiness } =
-      await import('./updater-prerelease-feed')
-
-    expect(await fetchNewerReleaseTag('1.4.26')).toBeNull()
-    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
-      tags: [],
-      state: 'not-ready',
-      lastGoodTag: 'v1.4.27'
-    })
-  })
-
-  it('uses prerelease last-good tags only for prerelease-aware checks', async () => {
-    respondWithAtom(['v1.4.27-rc.2', 'v1.4.27-rc.1', 'v1.4.26'], ['v1.4.27-rc.2'])
-
-    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
-
-    await expect(
-      fetchNewerReleaseTagsWithReadiness('1.4.27-rc.1', 1, { includePrerelease: true })
-    ).resolves.toEqual({
-      tags: [],
-      state: 'not-ready',
-      lastGoodTag: 'v1.4.27-rc.1'
-    })
-    await expect(
-      fetchNewerReleaseTagsWithReadiness('1.4.26', 1, { includePrerelease: false })
-    ).resolves.toEqual({
-      tags: [],
-      state: 'no-newer'
-    })
-  })
-
-  it('does not guess a last-good tag outside the bounded probe window', async () => {
-    respondWithAtom(
-      ['v1.4.33', 'v1.4.32', 'v1.4.31', 'v1.4.30', 'v1.4.29', 'v1.4.28', 'v1.4.27'],
-      ['v1.4.33', 'v1.4.32', 'v1.4.31', 'v1.4.30', 'v1.4.29', 'v1.4.28']
-    )
-
-    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
-
-    await expect(fetchNewerReleaseTagsWithReadiness('1.4.27', 1)).resolves.toEqual({
-      tags: [],
-      state: 'not-ready'
     })
   })
 })

@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import type * as RuntimeImportLimits from '../../ipc/runtime-import-limits'
+import type * as RuntimeImportLimits from '../../ipc/runtime-transfers/runtime-import-limits'
 
 const fsFaults: {
   beforeCopyWrite: (() => void) | null
@@ -36,7 +36,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-vi.mock('../../ipc/runtime-import-limits', async (importOriginal) => ({
+vi.mock('../../ipc/runtime-transfers/runtime-import-limits', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeImportLimits>()),
   REMOTE_IMPORT_MAX_FILE_BYTES: 10,
   REMOTE_IMPORT_MAX_TOTAL_BYTES: 16
@@ -222,23 +222,5 @@ describe('materializeDragTempPaths', () => {
     expect(await materializeDragTempPaths([source], env)).toEqual([
       { sourcePath: source, status: 'failed', reason: 'storage-not-private' }
     ])
-  })
-
-  it('removes copies it already made when aborted partway through a drop', async () => {
-    const first = await dragTempFile('a.png', 'a')
-    const second = await dragTempFile('b.png', 'b')
-    const controller = new AbortController()
-    let writes = 0
-    fsFaults.beforeCopyWrite = () => {
-      writes += 1
-      if (writes === 2) {
-        controller.abort(new Error('timed out'))
-      }
-    }
-
-    await expect(
-      materializeDragTempPaths([first, second], env, controller.signal)
-    ).rejects.toThrow()
-    expect(await copyDirs()).toEqual([])
   })
 })

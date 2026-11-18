@@ -2,7 +2,7 @@
  * Which panes main's legacy relay bridge serves, known before those panes mount.
  * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
  */
-import type { LegacyRelayBridgedPane } from '../../../../../../shared/legacy-relay-bridge-contract'
+import type { LegacyRelayBridgedPane } from '../../../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,

@@ -1,13 +1,13 @@
 import { parseOrcaSessionAddress } from '../../../../../../src/shared/agent-session/identity/orca-session-address'
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
 import type { MobileSessionTab } from '../../../tabs/mobile-session-tabs'
-import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
 import {
   agentMessageSavedKind,
   agentMessageSenderLabel,
   agentMessageSenderView,
   type AgentMessageSenderView
-} from '../../../../../../src/shared/agent-session/agent-message-presentation'
+} from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { resolveMobileTerminalTabAgentId } from '../../../tabs/mobile-terminal-tab-agent'
 import { agentDotState } from '../../../../worktree/agent-lineage/agent-row-display'
 

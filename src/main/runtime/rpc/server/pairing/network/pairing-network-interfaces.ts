@@ -5,7 +5,7 @@ import {
   selectAutoAdvertisedPairingAddress
 } from '../../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 import { isLinkLocalAddress } from '../../../../../../shared/network/link-local-address'
-import { isTailnetIPv4Address } from '../../../../../../shared/tailnet-address'
+import { isTailnetIPv4Address } from '../../../../../../shared/network/tailnet-address'
 import { getWindowsDefaultRouteInterfaceNames } from './windows-default-route-interfaces'
 
 export type NetworkInterface = {

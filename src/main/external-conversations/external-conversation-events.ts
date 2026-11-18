@@ -7,7 +7,7 @@ import type { AgentTurnOutcome } from '../../shared/agent-status/lifecycle/agent
 import type {
   ConnectorAgent,
   ExternalConversationLink
-} from '../../shared/external-conversation-link'
+} from '../../shared/connectors/external-conversation-link'
 import { judgeIdleAgentTurn } from '../runtime/agent-state-rules/agent-turn-idle-verdict'
 import {
   TerminalAgentTurnNews,
@@ -15,6 +15,7 @@ import {
 } from '../runtime/push/notifications/terminal-agent-turn-news'
 import {
   allLinks,
+  findLinkForPane,
   type ExternalConversationLinkStore,
   type LinkedConversation
 } from './external-conversation-links'
@@ -320,12 +321,7 @@ export class ConversationEvents {
   }
 
   private linkedFor(paneKey: string): LinkedConversation | null {
-    for (const linked of allLinks(this.deps.store)) {
-      if (linked.link.paneKey === paneKey) {
-        return linked
-      }
-    }
-    return null
+    return findLinkForPane(this.deps.store, paneKey)
   }
 
   private emit(event: ConversationEvent): void {

@@ -17,7 +17,7 @@ import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { makeStore } from '../../rpc/server/runtime-rpc-worktree-store-fixtures'
 import { spawnedPtyEnv } from '../../terminal/launch/spawned-pty-env-fixtures'
-import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { committingSpawn } from '../../terminal/layout/bind-first-pane.test-fixture'
 
 // STA-4557: deferred OpenCode foreground reads retained/revived finished authority (#14866, reverted in #14943).
 

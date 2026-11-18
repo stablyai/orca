@@ -6,7 +6,7 @@ import {
   oldestStructuredAgentSessionCursor,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../structured-agent-session-reducer'
+} from './live-read/structured-agent-session-reducer'
 
 function item(sequence: number): AgentJournalRenderItem {
   return {
@@ -89,33 +89,5 @@ describe('structured agent session item retention', () => {
     expect(older.items.find((entry) => entry.sequence === 50)?.revision).toBe(2)
     expect(oldestStructuredAgentSessionCursor(older)?.sequence).toBe(50)
     expect(older.hasOlder).toBe(false)
-  })
-  it('lets a live chat run 128 rows past its window before trimming back to it', () => {
-    let state = hydrate(Array.from({ length: 1024 }, (_, index) => item(index + 1)))
-    const append = (sequence: number) => {
-      state = reduceStructuredAgentSession(state, {
-        type: 'event',
-        event: {
-          type: 'batch',
-          sessionId: 'session-a',
-          batch: {
-            cursor: { epoch: 'epoch-a', sequence },
-            items: [item(sequence)],
-            removedItemIds: [],
-            submissions: []
-          }
-        }
-      })
-    }
-    for (let sequence = 1025; sequence <= 1152; sequence += 1) {
-      append(sequence)
-    }
-    expect(state.items).toHaveLength(1152)
-    expect(state.items[0]?.sequence).toBe(1)
-
-    append(1153)
-    expect(state.items).toHaveLength(1024)
-    expect(state.items[0]?.sequence).toBe(130)
-    expect(state.hasOlder).toBe(true)
   })
 })

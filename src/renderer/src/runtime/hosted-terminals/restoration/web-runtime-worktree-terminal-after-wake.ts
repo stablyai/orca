@@ -1,10 +1,10 @@
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { useAppStore } from '@/store/index'
-import { tabHasLivePty } from '../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
+import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync/tracking/tracking-lifecycle'
 import {
   beginWebRuntimeWakeTerminalRespawn,
   endWebRuntimeWakeTerminalRespawn

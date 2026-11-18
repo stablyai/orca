@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
 import { buildWorktreePurgeState } from '../../slices/worktrees/teardown/worktree-purge-state'
 import { createTestStore } from '../../testing/app-store-test-fixture'

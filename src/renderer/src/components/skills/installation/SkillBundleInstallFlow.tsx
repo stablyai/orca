@@ -58,8 +58,6 @@ export function SkillBundleInstallFlow(props: {
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
   const repos = useAppStore((state) => state.repos)
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
-  const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
-  const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
   const allSkillIds = useMemo(
     () => props.version.manifest.skills.map((skill) => skill.id),
     [props.version.manifest.skills]
@@ -95,15 +93,6 @@ export function SkillBundleInstallFlow(props: {
     () => skillInstallWorkspaceChoices({ environmentId, folderWorkspaces, repos, worktreesByRepo }),
     [environmentId, folderWorkspaces, repos, worktreesByRepo]
   )
-  const sshConnections = useMemo(
-    () =>
-      [...sshTargetLabels.entries()].map(([id, label]) => ({
-        id,
-        label,
-        connected: sshConnectionStates.get(id)?.status === 'connected'
-      })),
-    [sshConnectionStates, sshTargetLabels]
-  )
 
   const resetPreview = (): void => {
     setDestinationPreview(null)
@@ -120,12 +109,7 @@ export function SkillBundleInstallFlow(props: {
         ? { scope: 'workspace', worktreeId: choice.id }
         : { scope: 'workspace', folderWorkspaceId: choice!.id }
     }
-    return environmentId.startsWith('ssh:')
-      ? {
-          scope: 'global',
-          executionTarget: { kind: 'ssh', connectionId: environmentId.slice('ssh:'.length) }
-        }
-      : { scope: 'global', ...(executionTarget ? { executionTarget } : {}) }
+    return { scope: 'global', ...(executionTarget ? { executionTarget } : {}) }
   }
 
   const install = async (
@@ -154,9 +138,7 @@ export function SkillBundleInstallFlow(props: {
           : null
       if (!checked) {
         const operation = await window.api.skills.previewBundleInstall({
-          ...(environmentId === 'local' || environmentId.startsWith('ssh:')
-            ? {}
-            : { environmentId }),
+          ...(environmentId === 'local' ? {} : { environmentId }),
           package: {
             packageId: props.version.packageId,
             versionId: props.version.versionId,
@@ -183,7 +165,7 @@ export function SkillBundleInstallFlow(props: {
         shareId: props.shareId,
         versionId: props.version.versionId,
         operationId,
-        ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId }),
+        ...(environmentId === 'local' ? {} : { environmentId }),
         selectedSkillIds: [...requestedIds],
         destination: target,
         providers: [...providers],
@@ -238,7 +220,7 @@ export function SkillBundleInstallFlow(props: {
     }
     const cancelled = await window.api.skills.cancelInstall({
       operationId: installProgress.activeOperationId,
-      ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
+      ...(environmentId === 'local' ? {} : { environmentId })
     })
     if (!cancelled.cancelled) {
       setError(
@@ -319,7 +301,6 @@ export function SkillBundleInstallFlow(props: {
             busy={busy}
             runtimeEnvironments={runtimeEnvironments}
             runtimeStatus={runtimeStatus}
-            sshConnections={sshConnections}
             workspaceChoices={workspaceChoices}
             requiredCapability={SKILL_BUNDLE_INSTALL_CAPABILITY}
           />

@@ -14,7 +14,7 @@ import {
 } from '../../../../../../shared/sidebar-list/sorting/smart-sort-phase'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSidebarListSession } from '@/components/sidebar/sidebar-feed/sidebar-list-session'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import {
   getWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity

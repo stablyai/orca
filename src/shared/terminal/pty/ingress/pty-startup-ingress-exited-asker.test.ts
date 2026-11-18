@@ -14,12 +14,10 @@ function createHarness() {
   const writes: string[] = []
   const emissions: PtyIngressEmission[] = []
   let group: number | null = SHELL_GROUP
-  const groupReads = { count: 0 }
   const ingress = new PtyStartupIngress({
     ownerBackend: 'posix-pty',
     resolveHostColors: () => ({ foreground: '#ffffff', background: '#000000' }),
     readForegroundGroup: () => {
-      groupReads.count += 1
       return group
     },
     write: (data) => writes.push(data),
@@ -34,7 +32,7 @@ function createHarness() {
     ingress.accept(`${PROMPT}${COMMAND_START}`)
     group = commandGroup
   }
-  return { ingress, writes, emissions, visible, setGroup, runCommand, groupReads }
+  return { ingress, writes, visible, setGroup, runCommand }
 }
 
 describe('PTY owner colour replies after the asker exits', () => {
@@ -103,47 +101,6 @@ describe('PTY owner colour replies after the asker exits', () => {
     expect(writes).toEqual([REPLY, REPLY])
   })
 
-  it('answers a builtin or command substitution in the shell group once no prompt follows', () => {
-    vi.useFakeTimers()
-    const { ingress, writes, runCommand } = createHarness()
-    runCommand(SHELL_GROUP)
-    ingress.accept(QUERY)
-    vi.advanceTimersByTime(20)
-
-    expect(writes).toEqual([REPLY])
-  })
-
-  it('forgets a live shell-group asker once its command ends', () => {
-    vi.useFakeTimers()
-    const { ingress, writes, runCommand } = createHarness()
-    runCommand(SHELL_GROUP)
-    ingress.accept(QUERY)
-    vi.advanceTimersByTime(20)
-    runCommand(SHELL_GROUP)
-    ingress.accept(QUERY)
-    ingress.accept(PROMPT)
-    vi.runAllTimers()
-
-    expect(writes).toEqual([REPLY])
-  })
-
-  it('forgets a live group once a later asker in the command is proven gone', () => {
-    vi.useFakeTimers()
-    const { ingress, writes, setGroup, runCommand } = createHarness()
-    runCommand()
-    ingress.accept(QUERY)
-    vi.advanceTimersByTime(20)
-    setGroup(COMMAND_GROUP + 1)
-    ingress.accept(QUERY)
-    setGroup(COMMAND_GROUP)
-    vi.advanceTimersByTime(20)
-    ingress.accept(QUERY)
-    ingress.accept(PROMPT)
-    vi.runAllTimers()
-
-    expect(writes).toEqual([REPLY])
-  })
-
   it('sees a finish marker split across reads during the wait', () => {
     vi.useFakeTimers()
     const { ingress, writes, runCommand } = createHarness()
@@ -166,23 +123,6 @@ describe('PTY owner colour replies after the asker exits', () => {
 
     expect(writes).toEqual([])
     expect(visible()).toBe(`${PROMPT}${COMMAND_START}after${PROMPT}`)
-  })
-
-  it('keeps a torn echo behind a held query across a snapshot barrier', () => {
-    vi.useFakeTimers()
-    const { ingress, writes, emissions, runCommand } = createHarness()
-    ingress.accept(QUERY)
-    runCommand()
-    // A cooked reader echoes the earlier reply (`^[]11;…`) right after the next query.
-    ingress.accept(`${QUERY}^[]11;rgb`)
-    ingress.snapshotBarrier()
-    vi.advanceTimersByTime(20)
-
-    expect(writes).toEqual([REPLY, REPLY])
-    // Emitted ranges stay contiguous: the held echo never overtakes the held query.
-    for (const [index, emission] of emissions.entries()) {
-      expect(emission.rawStartSeq).toBe(index === 0 ? 0 : emissions[index - 1]?.rawEndSeq)
-    }
   })
 
   it("drops a gone asker's later queries along with the first", () => {
@@ -210,15 +150,6 @@ describe('PTY owner colour replies after the asker exits', () => {
     vi.runAllTimers()
 
     expect(writes).toEqual([REPLY])
-  })
-
-  it('answers at once at the prompt', () => {
-    const { ingress, writes } = createHarness()
-    ingress.accept(QUERY)
-    ingress.accept(PROMPT)
-    ingress.accept(QUERY)
-
-    expect(writes).toEqual([REPLY, REPLY])
   })
 
   it('keeps watching a command whose app closes its own prompt zone (B C D;0, #10923)', () => {

@@ -1,3 +1,4 @@
+import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
@@ -68,13 +69,15 @@ export function useNativeChatPromptCardPresentation({
     }
   }, [dismissal, matches, content, transcriptSettled, paneKey])
   // Without a wait-start stamp, an unobserved interval could contain a new occurrence.
-  useLayoutEffect(
-    () => () => {
-      if (dismissals.read(paneKey)?.startedAt === null) {
-        dismissals.forget(paneKey)
-      }
-    },
-    [paneKey]
+  useNativeChatPaneLifetimeEffect(
+    useCallback(
+      () => () => {
+        if (dismissals.read(paneKey)?.startedAt === null) {
+          dismissals.forget(paneKey)
+        }
+      },
+      [paneKey]
+    )
   )
   const record = useCallback(
     (state: NativeChatPromptDismissal['state']) => {

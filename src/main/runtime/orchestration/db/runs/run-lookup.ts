@@ -16,6 +16,7 @@ import { encodeRunListCursor, decodeRunListCursor } from '../run-list-cursor'
 import type { RunListPage } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
 import { RUN_COLUMN_LIST } from '../row-column-lists'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { workerSeatGrabSql } from './run-coordinator-mail-routing'
 
 export type LegacyAdoptedMailboxOwner = {
@@ -29,6 +30,15 @@ const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
          ORDER BY rowid DESC`
+// Predicates match the partial indexes idx_runs_current_pane_exact/_leaf (created on every open).
+const CURRENT_RUN_FOR_EXACT_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
+         WHERE legacy = 0 AND coordinator_pane_key IS NOT NULL AND coordinator_pane_key = ?
+         ORDER BY rowid DESC LIMIT 1`
+const CURRENT_RUN_FOR_PANE_LEAF_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
+         WHERE legacy = 0 AND coordinator_pane_key IS NOT NULL
+           AND instr(coordinator_pane_key, ':') > 1
+           AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid DESC LIMIT 1`
 // Use one query to preserve newest-first rowid order across pane and session matches; filter identity in JavaScript.
 const RUNS_BOUND_TO_COORDINATOR_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE legacy = 0 AND (
@@ -119,8 +129,13 @@ export function listRuns(
   }
 }
 
+// One indexed seek for the newest equivalent Run: an unparseable key is equivalent only to itself,
+// and a valid pane to any key with a nonempty tab prefix and the same leaf UUID.
 export function getCurrentRunForPane(this: OrchestrationDb, paneKey: string): RunRow | undefined {
-  const run = this.runsBoundToPane(paneKey)[0]
+  const leaf = parsePaneKey(paneKey)?.leafId
+  const sql = leaf ? CURRENT_RUN_FOR_PANE_LEAF_SQL : CURRENT_RUN_FOR_EXACT_PANE_SQL
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RUN_COLUMN_LIST projects the schema-owned Run row; the adapter exposes unknown.
+  const run = this.db.prepare(sql).get(leaf ?? paneKey) as RunRow | undefined
   return run ? exposeRunTimestamps(run) : undefined
 }
 

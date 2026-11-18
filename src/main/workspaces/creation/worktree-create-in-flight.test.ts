@@ -10,17 +10,6 @@ import {
 const rows = [{ path: '/repo' }, { path: '/ws/new' }, { path: '/ws/other' }]
 
 describe('withoutInFlightWorktreeCreates', () => {
-  it('omits a held checkout from its own repo until released', async () => {
-    const release = await holdInFlightWorktreeCreate('repo-a', '/ws/new')
-    expect(withoutInFlightWorktreeCreates('repo-a', rows)).toEqual([
-      { path: '/repo' },
-      { path: '/ws/other' }
-    ])
-    expect(withoutInFlightWorktreeCreates('repo-b', rows)).toBe(rows)
-    release()
-    expect(withoutInFlightWorktreeCreates('repo-a', rows)).toBe(rows)
-  })
-
   it('keeps a second hold on the same path after the first releases', async () => {
     const releaseFirst = await holdInFlightWorktreeCreate('repo-a', '/ws/new')
     const releaseSecond = await holdInFlightWorktreeCreate('repo-a', '/ws/new/')

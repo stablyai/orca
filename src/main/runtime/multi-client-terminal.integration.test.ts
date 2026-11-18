@@ -23,10 +23,10 @@ import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 import { readRuntimeMetadata } from './rpc/server/runtime-metadata'
 import { sendRequest } from './rpc/server/runtime-rpc-test-harness'
 import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
-import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from './construction/test-context/runtime-store-partial-fixture'
 import { settledWriteStub } from '../providers/testing/settled-pty-write-stub'
 import { publishHeadlessRuntimeGraph } from './session-graph/headless-runtime-graph'
-import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
+import { committingSpawn } from './terminal/layout/bind-first-pane.test-fixture'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeScanCacheModule>()),

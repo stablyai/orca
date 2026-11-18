@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { appStarSourceSchema } from '../../gh-star-source'
+import { appStarSourceSchema } from '../../github/repositories/gh-star-source'
 import {
   FEATURE_INTERACTION_CATEGORIES,
   getFeatureInteractionCategory
