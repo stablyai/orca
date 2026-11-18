@@ -136,3 +136,56 @@ it('lands the pending hide handoff on the neighbour when focus is not taken', ()
   cleanup()
   restore()
 })
+
+it('disables Move right on the last strip tab while More holds the rest', () => {
+  const checks: ActivityBarItem = { id: 'checks', title: 'Checks', icon: () => null, shortcut: '' }
+  const overflowed: ActivityBarItem = {
+    id: 'plugin:test/panel',
+    pluginKey: 'test',
+    title: 'Plugin',
+    icon: () => null,
+    shortcut: ''
+  }
+  const strip = [item, checks]
+  render(
+    <DndContext>
+      <RightSidebarTopActivityBar
+        hasDesktopWindowChrome={false}
+        topActivityStripRef={vi.fn()}
+        topActivityLayout={{
+          visibleItems: strip,
+          overflowItems: [overflowed],
+          compactIds: new Set()
+        }}
+        effectiveTab="explorer"
+        onSelectTab={vi.fn()}
+        checksStatus={null}
+        closeButton={null}
+        activityBarPosition="top"
+        onChangeActivityBarPosition={vi.fn()}
+        arrangementItems={[item, checks, overflowed]}
+      />
+    </DndContext>
+  )
+  const button = screen.getByRole('button', { name: 'Checks' })
+  button.focus()
+  fireEvent.keyDown(button, { key: 'F10', shiftKey: true })
+  expect(screen.getByRole('menuitem', { name: 'Move right' }).getAttribute('aria-disabled')).toBe(
+    'true'
+  )
+})
+
+it('keeps focus moved into an unrelated menu before the pending handoff runs', () => {
+  const { flushFrames, restore } = renderHideWithDelayedFrames()
+  const unrelatedMenu = document.createElement('div')
+  unrelatedMenu.setAttribute('role', 'menu')
+  const search = document.createElement('input')
+  unrelatedMenu.append(search)
+  document.body.append(unrelatedMenu)
+  search.focus()
+  flushFrames()
+  expect(document.activeElement).toBe(search)
+  unrelatedMenu.remove()
+  cleanup()
+  restore()
+})

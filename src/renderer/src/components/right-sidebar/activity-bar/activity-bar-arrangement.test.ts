@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { arrangeActivityItems, mergeActivityOrder } from './activity-bar-arrangement'
+import {
+  activityOrderForPage,
+  arrangeActivityItems,
+  mergeActivityOrder,
+  reorderActivityOrders
+} from './activity-bar-arrangement'
 import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-activity-items'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 import { translate } from '@/i18n/i18n'
@@ -162,5 +167,40 @@ describe('activity bar arrangement', () => {
         (item) => item.id
       )
     ).toEqual(['bot-chats', 'bot-activity', 'bot-connectors', 'explorer'])
+  })
+  it('keeps workspace and bot-page orders apart in both move sequences', () => {
+    const workspaceIds = ['explorer', 'checks', 'source-control', 'plugin:test/panel']
+    const start: { order: string[]; botOrder: string[] } = { order: workspaceIds, botOrder: [] }
+    const dragChatsFirst = reorderActivityOrders(start, true, [
+      'bot-chats',
+      'bot-activity',
+      'bot-connectors',
+      'explorer'
+    ])
+    expect(dragChatsFirst.order).toEqual(workspaceIds)
+    expect(dragChatsFirst.botOrder).toEqual([
+      'bot-chats',
+      'bot-activity',
+      'bot-connectors',
+      'explorer'
+    ])
+    const moveCheckedFirst = reorderActivityOrders(dragChatsFirst, false, [
+      'checks',
+      'explorer',
+      'source-control',
+      'plugin:test/panel'
+    ])
+    expect(moveCheckedFirst.botOrder).toEqual([
+      'bot-chats',
+      'bot-activity',
+      'bot-connectors',
+      'explorer'
+    ])
+    expect(activityOrderForPage(moveCheckedFirst, false)).toEqual([
+      'checks',
+      'explorer',
+      'source-control',
+      'plugin:test/panel'
+    ])
   })
 })

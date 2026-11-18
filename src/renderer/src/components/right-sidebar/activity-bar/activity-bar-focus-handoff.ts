@@ -1,5 +1,5 @@
 const ACTIVITY_BAR_FOCUS_SELECTOR =
-  '[data-activity-item-id], [data-activity-overflow-trigger], [role="menu"]'
+  '[data-activity-item-id], [data-activity-overflow-trigger], [data-activity-bar-menu]'
 const ACTIVITY_TAB_SELECTOR =
   'button[data-activity-item-id], [role="menuitem"][data-activity-item-id]'
 
@@ -52,7 +52,9 @@ export function scheduleActivityBarFocusHandoff(neighbourId: string | undefined)
       }
       const tabs = Array.from(document.querySelectorAll<HTMLElement>(ACTIVITY_TAB_SELECTOR))
       const target = tabs.find((tab) => tab.dataset.activityItemId === neighbourId)
-      ;(target ?? tabs[0])?.focus()
+      // A neighbour under More is reached through its trigger, not the first tab.
+      const more = document.querySelector<HTMLElement>('[data-activity-overflow-trigger]')
+      ;(target ?? (neighbourId === undefined ? undefined : more) ?? tabs[0])?.focus()
       finish()
     })
   })

@@ -76,6 +76,7 @@ export function mergeHostWebUIState(
     sidebarOpen: local.sidebarOpen,
     activityBarPosition: local.activityBarPosition,
     activityBarOrder: local.activityBarOrder,
+    activityBarBotOrder: local.activityBarBotOrder,
     activityBarHidden: local.activityBarHidden,
     showAgentModels: local.showAgentModels !== false,
     agentsVisibleHostIds: local.agentsVisibleHostIds,

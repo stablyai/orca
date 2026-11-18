@@ -96,17 +96,22 @@ export function TopActivityOverflowMenu({
   checksStatus,
   arrangementItems,
   activityBarPosition,
-  onChangeActivityBarPosition
+  onChangeActivityBarPosition,
+  isBotPage,
+  stripItemIds
 }: {
   arrangementItems: ActivityBarItem[]
   activityBarPosition: ActivityBarPosition
   onChangeActivityBarPosition: (position: ActivityBarPosition) => void
+  isBotPage?: boolean
+  stripItemIds?: ReadonlySet<string>
   items: ActivityBarItem[]
   activeTab: ActiveRightSidebarTab
   onSelect: (tab: ActiveRightSidebarTab) => void
   checksStatus?: CheckStatus | null
 }): React.JSX.Element {
   const t = useTranslate()
+  const holdsActiveTab = items.some((item) => item.id === activeTab)
   const hiddenChecksStatus =
     checksStatus && checksStatus !== 'neutral' && items.some((item) => item.id === 'checks')
       ? checksStatus
@@ -126,7 +131,8 @@ export function TopActivityOverflowMenu({
           type="button"
           data-activity-overflow-trigger=""
           className={cn(
-            'relative flex h-[36px] w-8 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            'relative flex h-[36px] w-8 shrink-0 items-center justify-center transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            holdsActiveTab ? 'text-foreground' : 'text-muted-foreground/60',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
           )}
           aria-label={
@@ -148,7 +154,7 @@ export function TopActivityOverflowMenu({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
+      <DropdownMenuContent data-activity-bar-menu="" align="end" side="bottom" sideOffset={6}>
         {items.map((item) => {
           const Icon = item.icon
           const active = item.id === activeTab
@@ -182,6 +188,8 @@ export function TopActivityOverflowMenu({
                 pluginKey={item.pluginKey}
                 itemId={item.id}
                 items={arrangementItems}
+                isBotPage={isBotPage}
+                stripItemIds={stripItemIds}
               />
             </ContextMenu>
           )

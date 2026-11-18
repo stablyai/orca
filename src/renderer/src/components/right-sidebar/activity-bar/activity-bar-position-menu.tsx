@@ -13,7 +13,7 @@ import {
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { ActivityBarItem } from './activity-bar-buttons'
-import { mergeActivityOrder } from './activity-bar-arrangement'
+import { reorderActivityOrders } from './activity-bar-arrangement'
 import { scheduleActivityBarFocusHandoff } from './activity-bar-focus-handoff'
 import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 
@@ -74,21 +74,30 @@ export function ActivityBarPositionMenu({
   onChangePosition,
   pluginKey,
   itemId,
-  items
+  items,
+  isBotPage = false,
+  stripItemIds
 }: {
   currentPosition: ActivityBarPosition
   onChangePosition: (pos: ActivityBarPosition) => void
   pluginKey?: string | null
   itemId?: string | null
   items: ActivityBarItem[]
+  isBotPage?: boolean
+  /** Top layout: moves run only among the tabs in the strip, not those under More. */
+  stripItemIds?: ReadonlySet<string>
 }): React.JSX.Element {
   const t = useTranslate()
   const hidden = useAppStore((s) => s.activityBarHidden)
   const setHidden = useAppStore((s) => s.setActivityBarHidden)
   const order = useAppStore((s) => s.activityBarOrder)
+  const botOrder = useAppStore((s) => s.activityBarBotOrder)
   const setOrder = useAppStore((s) => s.setActivityBarOrder)
-  const visible = items.filter((item) => !item.pluginKey || !hidden.includes(item.id))
+  const setBotOrder = useAppStore((s) => s.setActivityBarBotOrder)
+  const shown = items.filter((item) => !item.pluginKey || !hidden.includes(item.id))
+  const visible = stripItemIds ? shown.filter((item) => stripItemIds.has(item.id)) : shown
   const index = visible.findIndex((item) => item.id === itemId)
+  const shownIndex = shown.findIndex((item) => item.id === itemId)
   const selected = items.find((item) => item.id === itemId)
   const activeTab = useAppStore((s) => s.rightSidebarEffectiveTab)
   const selectTab = useAppStore((s) => s.setRightSidebarTab)
@@ -99,11 +108,16 @@ export function ActivityBarPositionMenu({
       return
     }
     ;[ids[index], ids[target]] = [ids[target], ids[index]]
-    setOrder(mergeActivityOrder(order, ids))
+    const next = reorderActivityOrders({ order, botOrder }, isBotPage, ids)
+    if (isBotPage) {
+      setBotOrder(next.botOrder)
+    } else {
+      setOrder(next.order)
+    }
   }
   const [disabling, setDisabling] = useState(false)
   return (
-    <ContextMenuContent>
+    <ContextMenuContent data-activity-bar-menu="">
       {selected && (
         <>
           <ContextMenuItem disabled={index <= 0} onSelect={() => move(-1)}>
@@ -122,7 +136,7 @@ export function ActivityBarPositionMenu({
           {selected.pluginKey && !hidden.includes(selected.id) && (
             <ContextMenuItem
               onSelect={() => {
-                const neighbour = visible[index + 1] ?? visible[index - 1]
+                const neighbour = shown[shownIndex + 1] ?? shown[shownIndex - 1]
                 if (activeTab === selected.id) {
                   if (neighbour) {
                     selectTab(neighbour.id)
@@ -149,8 +163,10 @@ export function ActivityBarPositionMenu({
           </ContextMenuItem>
         ))}
       <ContextMenuItem
+        disabled={order.length === 0 && botOrder.length === 0 && hidden.length === 0}
         onSelect={() => {
           setOrder([])
+          setBotOrder([])
           setHidden([])
         }}
       >

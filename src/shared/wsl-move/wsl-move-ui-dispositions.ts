@@ -91,6 +91,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'rightSidebarWidth',
   'activityBarPosition',
   'activityBarOrder',
+  'activityBarBotOrder',
   'activityBarHidden',
   'markdownTocPanelWidth',
   'combinedDiffFileTreeWidth',

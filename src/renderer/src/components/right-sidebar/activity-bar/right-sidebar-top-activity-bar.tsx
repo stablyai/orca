@@ -31,10 +31,12 @@ export function RightSidebarTopActivityBar({
   activityBarPosition,
   onChangeActivityBarPosition,
   arrangementItems,
-  hiddenActiveItem
+  hiddenActiveItem,
+  isBotPage = false
 }: {
   arrangementItems: ActivityBarItem[]
   hiddenActiveItem?: ActivityBarItem
+  isBotPage?: boolean
   hasDesktopWindowChrome: boolean
   topActivityStripRef: (node: HTMLDivElement | null) => void
   topActivityLayout: TopActivityBarLayout<ActivityBarItem>
@@ -68,6 +70,7 @@ export function RightSidebarTopActivityBar({
   const overflowItems = hiddenActiveItem
     ? [...topActivityLayout.overflowItems, hiddenActiveItem]
     : topActivityLayout.overflowItems
+  const stripItemIds = new Set(topActivityLayout.visibleItems.map((item) => item.id))
   const overflowMenu = overflowItems.length > 0 && (
     <TopActivityOverflowMenu
       items={overflowItems}
@@ -77,6 +80,8 @@ export function RightSidebarTopActivityBar({
       arrangementItems={arrangementItems}
       activityBarPosition={activityBarPosition}
       onChangeActivityBarPosition={onChangeActivityBarPosition}
+      isBotPage={isBotPage}
+      stripItemIds={stripItemIds}
     />
   )
   return (
@@ -147,6 +152,8 @@ export function RightSidebarTopActivityBar({
         pluginKey={contextPlugin.pluginKey}
         itemId={contextPlugin.itemId}
         items={arrangementItems}
+        isBotPage={isBotPage}
+        stripItemIds={stripItemIds}
       />
     </ContextMenu>
   )

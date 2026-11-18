@@ -52,14 +52,16 @@ export type TopActivityBarLayout<T> = {
  * Which tabs fit beside the panel toggle. Labeled tabs keep every title while all of them fit; else
  * only the open tab keeps its title and the rest are icons. Tabs that still don't fit go under More;
  * the open tab always stays in the bar. `availableWidth` is the strip's border box; `stripPadding`
- * is its horizontal padding; `measureTitle` measures titles in the tab's font (estimated without it).
+ * is its horizontal padding; `measureTitle` measures titles in the tab's font (estimated without it);
+ * `reserveMore` holds room for a More button that holds tabs outside `items`.
  */
 export function getTopActivityBarLayout<T extends TopActivityItem>(
   items: readonly T[],
   availableWidth: number | null,
   activeId: ActiveRightSidebarTab,
   stripPadding = 0,
-  measureTitle: MeasureTabTitle = () => null
+  measureTitle: MeasureTabTitle = () => null,
+  reserveMore = false
 ): TopActivityBarLayout<T> {
   const titleWidth = (item: TopActivityItem): number =>
     measureTitle(item.title) ?? estimateTitle(item.title)
@@ -76,8 +78,9 @@ export function getTopActivityBarLayout<T extends TopActivityItem>(
   if (!availableWidth || !Number.isFinite(availableWidth)) {
     return { visibleItems: [...items], overflowItems: [], compactIds }
   }
+  const moreWidth = reserveMore ? TOP_ACTIVITY_MORE_BUTTON_WIDTH : 0
   let totalWidth = items.reduce((total, item) => total + buttonWidth(item, false), 0)
-  if (totalWidth + stripPadding <= availableWidth) {
+  if (totalWidth + stripPadding + moreWidth <= availableWidth) {
     return { visibleItems: [...items], overflowItems: [], compactIds }
   }
   const activeItem = items.find((item) => item.id === activeId)
@@ -88,7 +91,7 @@ export function getTopActivityBarLayout<T extends TopActivityItem>(
       totalWidth += buttonWidth(item, true) - buttonWidth(item, false)
     }
   }
-  if (compactIds.size > 0 && totalWidth + reserve <= availableWidth) {
+  if (compactIds.size > 0 && totalWidth + reserve + moreWidth <= availableWidth) {
     return { visibleItems: [...items], overflowItems: [], compactIds }
   }
 
