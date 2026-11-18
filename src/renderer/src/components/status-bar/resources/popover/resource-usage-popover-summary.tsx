@@ -11,6 +11,7 @@ import type {
   getResourceMemoryMetricCopy
 } from './resource-memory-metric-copy'
 import { formatCpu, formatMemory } from './resource-usage-metrics'
+import type { ResourceOwnerSplit } from './resource-owner-split'
 
 export function renderResourceUsagePopoverHeader(
   {
@@ -130,18 +131,44 @@ export function renderSessionsOnlyErrorBanner(t: Translate = translate): React.J
   )
 }
 
+const OWNER_SWATCH_CLS = {
+  orca: 'bg-chart-2 dark:bg-chart-1',
+  agents: 'bg-chart-5 dark:bg-chart-2',
+  yourProcesses: 'bg-foreground/45',
+  otherApps: 'bg-foreground/15',
+  free: 'bg-foreground/[0.06] ring-1 ring-inset ring-foreground/20'
+} as const
+
+type OwnerKey = keyof typeof OWNER_SWATCH_CLS
+
+function OwnerSwatch({ owner }: { owner: OwnerKey }): React.JSX.Element {
+  return (
+    <span
+      className={cn('inline-block size-2 shrink-0 rounded-[2px]', OWNER_SWATCH_CLS[owner])}
+      aria-hidden
+    />
+  )
+}
+
+function ownerLabels(t: Translate): Record<Exclude<OwnerKey, 'free'>, string> {
+  return {
+    orca: t('resourceManager.owner.orca', 'Orca'),
+    agents: t('resourceManager.owner.agents', 'Agents'),
+    yourProcesses: t('resourceManager.owner.yourProcesses', 'Your processes'),
+    otherApps: t('resourceManager.owner.otherApps', 'Other apps')
+  }
+}
+
 export function renderResourceUsageSummary(
   {
-    totalCpu,
-    totalMemory,
+    ownerSplit,
     memoryMetricCopy,
     commitBadgeLabel,
     commitMetricCopy,
     commitToneClass,
     orphanCount
   }: {
-    totalCpu: number
-    totalMemory: number
+    ownerSplit: ResourceOwnerSplit
     memoryMetricCopy: ReturnType<typeof getResourceMemoryMetricCopy>
     commitBadgeLabel: string | null
     commitMetricCopy: ReturnType<typeof getResourceCommitMetricCopy> | null
@@ -150,37 +177,151 @@ export function renderResourceUsageSummary(
   },
   t: Translate = translate
 ): React.JSX.Element {
+  const labels = ownerLabels(t)
+  const owners = ['orca', 'agents', 'yourProcesses'] as const
+  const memoryOf = (owner: Exclude<OwnerKey, 'free'>): number =>
+    owner === 'otherApps' ? ownerSplit.otherApps : ownerSplit[owner].memory
+  const barSegments = [...owners, 'otherApps' as const]
+  // Why: summed per-process bytes can double-count shared pages, so scale to whichever is larger.
+  const barTotal = Math.max(
+    ownerSplit.hostTotal,
+    barSegments.reduce((sum, owner) => sum + memoryOf(owner), 0) + ownerSplit.free
+  )
+  const freeLabel = t('resourceManager.owner.freeOfTotal', '{{free}} free of {{total}}', {
+    free: formatMemory(ownerSplit.free),
+    total: formatMemory(ownerSplit.hostTotal)
+  })
   return (
-    <div className="shrink-0 border-b border-border px-3 py-2 text-xs tabular-nums">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <span className="font-medium text-foreground">{formatCpu(totalCpu)}</span>
-        <span className="font-medium text-foreground">
-          {formatMemory(totalMemory)}{' '}
-          <span className="font-normal text-muted-foreground">{memoryMetricCopy.summaryLabel}</span>
-        </span>
-        {commitBadgeLabel && commitMetricCopy && (
-          <span className={cn('font-medium', commitToneClass ?? 'text-foreground')}>
-            {commitBadgeLabel}{' '}
-            <span className="font-normal text-muted-foreground">
-              {commitMetricCopy.summaryLabel}
-            </span>
-          </span>
-        )}
-        {orphanCount > 0 && (
-          <span className="ml-auto shrink-0 text-status-warning-text" aria-live="polite">
-            {t(
-              'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount',
-              '{{count}} orphans',
-              { count: orphanCount, defaultValue_one: '{{count}} orphan' }
-            )}
-          </span>
-        )}
-      </div>
+    <div className="shrink-0 border-b border-border px-3 pt-2 pb-1.5 text-xs tabular-nums">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            tabIndex={0}
+            className="cursor-default rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+              {owners.map((owner) => (
+                <span key={owner} className="inline-flex items-baseline gap-1 whitespace-nowrap">
+                  <span className="self-center">
+                    <OwnerSwatch owner={owner} />
+                  </span>
+                  <span className="text-muted-foreground">{labels[owner]}</span>
+                  <span className="font-medium text-foreground">
+                    {formatMemory(memoryOf(owner))}
+                  </span>
+                </span>
+              ))}
+            </div>
+            <div
+              className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-foreground/[0.06]"
+              aria-hidden
+            >
+              {barSegments.map((owner) => (
+                <span
+                  key={owner}
+                  className={cn(
+                    'h-full shadow-[inset_1px_0_0_var(--popover)] first:shadow-none',
+                    OWNER_SWATCH_CLS[owner]
+                  )}
+                  style={{ width: `${(memoryOf(owner) / barTotal) * 100}%` }}
+                />
+              ))}
+            </div>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 text-[11px] text-muted-foreground">
+              <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                <span className="self-center">
+                  <OwnerSwatch owner="otherApps" />
+                </span>
+                {labels.otherApps} {formatMemory(ownerSplit.otherApps)}
+              </span>
+              <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                <span className="self-center">
+                  <OwnerSwatch owner="free" />
+                </span>
+                {freeLabel}
+              </span>
+              {orphanCount > 0 && (
+                <span className="ml-auto shrink-0 text-status-warning-text" aria-live="polite">
+                  {t(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount',
+                    '{{count}} orphans',
+                    { count: orphanCount, defaultValue_one: '{{count}} orphan' }
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent variant="tab-preview" side="bottom" sideOffset={6} className="w-auto">
+          <table className="text-xs tabular-nums">
+            <thead>
+              <tr className="text-muted-foreground">
+                <th />
+                <th className="pl-4 text-right font-medium">
+                  {t('auto.components.status.bar.ResourceUsageStatusSegment.298f4be7f2', 'CPU')}
+                </th>
+                <th className="pl-4 text-right font-medium">{memoryMetricCopy.columnLabel}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {owners.map((owner) => (
+                <tr key={owner}>
+                  <td className="whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1.5">
+                      <OwnerSwatch owner={owner} />
+                      {labels[owner]}
+                    </span>
+                  </td>
+                  <td className="pl-4 text-right">{formatCpu(ownerSplit[owner].cpu)}</td>
+                  <td className="pl-4 text-right">{formatMemory(memoryOf(owner))}</td>
+                </tr>
+              ))}
+              <tr>
+                <td className="whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1.5">
+                    <OwnerSwatch owner="otherApps" />
+                    {labels.otherApps}
+                  </span>
+                </td>
+                <td className="pl-4 text-right text-muted-foreground">—</td>
+                <td className="pl-4 text-right">{formatMemory(ownerSplit.otherApps)}</td>
+              </tr>
+              <tr>
+                <td className="whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1.5">
+                    <OwnerSwatch owner="free" />
+                    {t('resourceManager.owner.free', 'Free')}
+                  </span>
+                </td>
+                <td />
+                <td className="pl-4 text-right">{formatMemory(ownerSplit.free)}</td>
+              </tr>
+              {commitBadgeLabel && commitMetricCopy && (
+                <tr>
+                  <td className="whitespace-nowrap pt-1 text-muted-foreground">
+                    {commitMetricCopy.summaryLabel}
+                  </td>
+                  <td />
+                  <td className={cn('pl-4 pt-1 text-right', commitToneClass)}>
+                    {commitBadgeLabel}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </TooltipContent>
+      </Tooltip>
       <details className="mt-1.5 text-muted-foreground">
         <summary className="cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {t('resourceManager.metricDetails', 'Metric details')}
         </summary>
         <div className="mt-1.5 space-y-1.5">
+          <p>
+            {t(
+              'resourceManager.owner.description',
+              'Orca is the app. Agents and Your processes are terminals you run in Orca. Other apps is everything else on this machine.'
+            )}
+          </p>
           <p>
             {t(
               'auto.components.status.bar.ResourceUsageStatusSegment.1fedf94eae',

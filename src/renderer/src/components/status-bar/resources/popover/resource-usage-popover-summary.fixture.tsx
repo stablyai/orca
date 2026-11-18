@@ -7,12 +7,20 @@ import {
   getResourceCommitMetricCopy
 } from './resource-memory-metric-copy'
 
+const fixtureOwnerSplit = {
+  orca: { cpu: 6.4, memory: 987842478 },
+  agents: { cpu: 49.6, memory: 6023725056 },
+  yourProcesses: { cpu: 8.9, memory: 2029359923 },
+  otherApps: 14388140032,
+  free: 10951022182,
+  hostTotal: 34359738368
+}
+
 export const metricDetails = defineFixture({
   width: 420,
   render: () =>
     renderResourceUsageSummary({
-      totalCpu: 138,
-      totalMemory: 2147483648,
+      ownerSplit: fixtureOwnerSplit,
       memoryMetricCopy: getResourceMemoryMetricCopy('working-set'),
       commitBadgeLabel: '3 GB',
       commitMetricCopy: getResourceCommitMetricCopy(),
@@ -24,14 +32,32 @@ export const metricDetails = defineFixture({
   }
 })
 
+export const ownerBreakdown = defineFixture({
+  // Popover is 26rem wide; the frame adds 16px padding on each side.
+  width: 448,
+  render: () =>
+    renderResourceUsageSummary({
+      ownerSplit: fixtureOwnerSplit,
+      memoryMetricCopy: getResourceMemoryMetricCopy('footprint'),
+      commitBadgeLabel: null,
+      commitMetricCopy: null,
+      commitToneClass: null,
+      orphanCount: 2
+    }),
+  interact: async (frame) => {
+    const trigger = frame.querySelector<HTMLElement>('[tabindex="0"]')
+    trigger?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+  }
+})
+
 export const narrowMetricDetails = defineFixture({ ...metricDetails, width: 280 })
 
 export const orphanSummary = defineFixture({
   width: 420,
   render: () =>
     renderResourceUsageSummary({
-      totalCpu: 138,
-      totalMemory: 2147483648,
+      ownerSplit: fixtureOwnerSplit,
       memoryMetricCopy: getResourceMemoryMetricCopy('footprint'),
       commitBadgeLabel: null,
       commitMetricCopy: null,
