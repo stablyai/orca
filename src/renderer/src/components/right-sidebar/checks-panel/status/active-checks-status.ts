@@ -42,11 +42,6 @@ let activeChecksStatusCache: {
   status: CheckStatus | null
 } | null = null
 
-/** @internal */
-export function clearActiveChecksStatusCacheForTests(): void {
-  activeChecksStatusCache = null
-}
-
 function hasSameInputs(inputs: ActiveChecksStatusInputs, state: ActiveChecksStatusState): boolean {
   for (const key of ACTIVE_CHECKS_STATUS_INPUT_KEYS) {
     if (inputs[key] !== state[key]) {

@@ -1,4 +1,4 @@
-import { createE2EConfig } from '../../shared/e2e-config'
+import { createE2EConfig } from '../../shared/app-lifecycle/launch/e2e-config'
 
 const preloadEnv = (
   import.meta as ImportMeta & {

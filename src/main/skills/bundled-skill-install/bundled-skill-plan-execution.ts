@@ -7,11 +7,11 @@ import type {
   BundledSkillOpOutcome,
   BundledSkillOutcome,
   BundledSkillPlanEntry
-} from '../../../shared/bundled-skill-plan'
+} from '../../../shared/skills/bundled/bundled-skill-plan'
 import {
   holdsCurrentBundledSkillCopy,
   isBundledSkillAutoUpdateOp
-} from '../../../shared/bundled-skill-summary'
+} from '../../../shared/skills/bundled/bundled-skill-summary'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { classifyBundledSkillPath } from './bundled-skill-classification'
 import { filesystemErrorCode } from './bundled-skill-filesystem-error'

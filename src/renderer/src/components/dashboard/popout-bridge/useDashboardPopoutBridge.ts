@@ -6,12 +6,11 @@ import {
   getStructuredChatTabNames
 } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { revealDashboardAgent } from '../navigation/reveal-dashboard-agent'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import {
   buildDashboardSnapshot,
   type DashboardSnapshotState
 } from '../snapshot/build-dashboard-snapshot'
-import { createWorktreeAgentRowsCache } from '../rows/worktree-agent-rows-cache'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Throttle cross-worktree snapshot rebuilds to 4Hz during agent-status bursts.
@@ -45,7 +44,6 @@ export function dashboardSnapshotInputsChanged(
     selectWorktreesByRepo(state) !== selectWorktreesByRepo(previousState) ||
     state.tabsByWorktree !== previousState.tabsByWorktree ||
     state.unifiedTabsByWorktree !== previousState.unifiedTabsByWorktree ||
-    state.retainedAgentsByPaneKey !== previousState.retainedAgentsByPaneKey ||
     state.migrationUnsupportedByPtyId !== previousState.migrationUnsupportedByPtyId ||
     state.runtimeAgentOrchestrationByPaneKey !== previousState.runtimeAgentOrchestrationByPaneKey ||
     state.terminalLayoutsByTabId !== previousState.terminalLayoutsByTabId ||
@@ -123,17 +121,12 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     let lastPublishedRepoIcons: Record<string, RepoIcon | null> | null = null
 
     // Force icons for new/requesting windows; throttle-time omissions retain their map. Cache worktree rows per bridge lifecycle.
-    const rowsCache = createWorktreeAgentRowsCache()
     const publishNow = (withIcons: boolean): void => {
       lastPublishAt = Date.now()
       const state = useAppStore.getState()
       const snapshot = buildDashboardSnapshot(
         { ...state, chatNames: getStructuredChatTabNames() },
-        lastPublishAt,
-        {
-          rowsCache,
-          rowsGeneration: state.agentStatusEpoch
-        }
+        lastPublishAt
       )
       const icons = snapshot.repoIconsByRepoId ?? {}
       if (!withIcons && repoIconsUnchanged(icons, lastPublishedRepoIcons)) {

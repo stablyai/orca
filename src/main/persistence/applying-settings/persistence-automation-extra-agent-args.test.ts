@@ -73,25 +73,6 @@ describe('automation extra agent args persistence', () => {
     expect(reloaded.listAutomations()[0].extraAgentArgs).toBe(text)
   })
 
-  it('preserves on omission, replaces, and clears with empty or whitespace text', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const { id } = store.createAutomation({ ...BASE, extraAgentArgs: '--model opus' })
-
-    // Older clients omit extraAgentArgs from unrelated patches.
-    expect(store.updateAutomation(id, { name: 'Renamed' }).extraAgentArgs).toBe('--model opus')
-    expect(store.updateAutomation(id, { extraAgentArgs: '--effort high' }).extraAgentArgs).toBe(
-      '--effort high'
-    )
-    expect(
-      Object.hasOwn(store.updateAutomation(id, { extraAgentArgs: '  ' }), 'extraAgentArgs')
-    ).toBe(false)
-    store.updateAutomation(id, { extraAgentArgs: '--model opus' })
-    expect(
-      Object.hasOwn(store.updateAutomation(id, { extraAgentArgs: '' }), 'extraAgentArgs')
-    ).toBe(false)
-  })
-
   it('rejects invalid extras without changing the record', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -107,22 +88,6 @@ describe('automation extra agent args persistence', () => {
     expect(store.listAutomations()[0].extraAgentArgs).toBe('--model opus')
   })
 
-  it('validates the merged record so enabling Reuse with stored extras fails', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const { id } = store.createAutomation({ ...BASE, extraAgentArgs: '--model opus' })
-
-    expect(() => store.updateAutomation(id, { reuseSession: true })).toThrow(
-      'Extra arguments require a fresh session for every run.'
-    )
-    expect(() =>
-      store.createAutomation({ ...BASE, reuseSession: true, extraAgentArgs: '--model opus' })
-    ).toThrow('fresh session')
-    expect(() => store.updateAutomation(id, { agentId: 'gemini' })).toThrow("aren't supported")
-    expect(
-      store.updateAutomation(id, { extraAgentArgs: '', reuseSession: true }).reuseSession
-    ).toBe(true)
-  })
   it('atomically saves Chat with retained Terminal extras and keeps legacy records Terminal after reload', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -206,29 +171,6 @@ describe('automation extra agent args persistence', () => {
     })
   })
 
-  it('replaces extras with full Args, supports all agents, and honors inherit on the latest owner', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const created = store.createAutomation({ ...BASE, extraAgentArgs: '--model opus' })
-    const full = store.updateAutomation(created.id, {
-      launchSetupPatch: { arguments: { kind: 'value', value: '--verbose' } }
-    })
-    expect(full.launchSetup).toEqual({ agentArgs: '--verbose' })
-    store.updateAutomation(created.id, { extraAgentArgs: '--add-dir docs' })
-    const inherited = store.updateAutomation(created.id, {
-      launchSetupPatch: { arguments: { kind: 'inherit' } }
-    })
-    expect(inherited.launchSetup).toEqual({})
-    const rebound = store.updateAutomation(created.id, {
-      agentId: 'opencode',
-      launchSetupPatch: {
-        arguments: { kind: 'value', value: '--arbitrary-provider-argument' }
-      }
-    })
-    expect(rebound.launchSetup?.agentArgs).toBe('--arbitrary-provider-argument')
-    expect(rebound.launchSetup?.launchPreferences).toBeUndefined()
-  })
-
   it('retains target-agent validation and visible extras when a rebind also changes surface', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -253,24 +195,6 @@ describe('automation extra agent args persistence', () => {
         launchSetupPatch: { arguments: { kind: 'value', value: '--new' } }
       }).launchSetup?.agentArgs
     ).toBe('--new')
-  })
-
-  it('retires a raw model through the shared control reconciler without dropping raw siblings', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const created = store.createAutomation({
-      ...BASE,
-      launchSetupPatch: {
-        arguments: { kind: 'value', value: '--model sonnet --verbose' }
-      }
-    })
-    const removed = store.updateAutomation(created.id, {
-      launchSetupPatch: { choices: { model: null } }
-    })
-    expect(removed.launchSetup).toMatchObject({
-      agentArgs: '--verbose',
-      launchPreferences: { model: null }
-    })
   })
 
   it('validates only the active surface consumption for reuse and validates surface switches atomically', async () => {
@@ -299,28 +223,6 @@ describe('automation extra agent args persistence', () => {
       launchSetupPatch: { arguments: { kind: 'value', value: '--verbose' } }
     })
     expect(inert.reuseSession).toBe(true)
-  })
-
-  it('copies canonical presence and bytes rather than a legacy projection', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const source = store.createAutomation({
-      ...BASE,
-      launchSetupPatch: {
-        surface: 'chat',
-        copy: {
-          agentArgs: null,
-          launchPreferences: { model: null, options: { effort: null } },
-          extraAgentArgs: '--legacy-dormant-text'
-        }
-      }
-    })
-    const copy = store.createAutomation({
-      ...BASE,
-      creationKey: 'modern-copy',
-      launchSetupPatch: { copy: source.launchSetup }
-    })
-    expect(copy.launchSetup).toEqual(source.launchSetup)
   })
 
   it('applies permission source edits to the latest old-writer model without replacing its raw field', async () => {

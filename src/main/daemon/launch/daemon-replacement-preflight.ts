@@ -1,5 +1,5 @@
-import { getAppEnvironment } from '../../../shared/app-environment'
-import type { DaemonReplaceReason } from '../../../shared/daemon-lifecycle-telemetry'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import type { DaemonReplaceReason } from '../../../shared/telemetry/daemon-lifecycle-telemetry'
 import { migrateLegacyDaemonScope } from '../process-scopes/daemon-cgroup-scope'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { DaemonEndpointOwnershipError } from './daemon-endpoint-adoption'

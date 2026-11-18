@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { GroupHookCheckResult } from '../../../../../../shared/project-group-hooks'
-import { projectGroupHookOwner } from '../../../../../../shared/workspace-hook-owner'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { GroupHookCheckResult } from '../../../../../../shared/project/groups/project-group-hooks'
+import { projectGroupHookOwner } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
-} from '../../../../../../shared/worktree-runtime-capabilities'
+} from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { getFolderSourceRepos } from '../../../../../../shared/folder-workspaces/folder-workspace-source-repos'
-import { projectGroupSetupExample } from '../../../../../../shared/project-group-setup-example'
+import { projectGroupSetupExample } from '../../../../../../shared/project/groups/project-group-setup-example'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { useAppStore } from '@/store'
@@ -21,7 +21,7 @@ import { groupHookYamlPresentation } from './repository-hook-settings-draft'
 import type {
   ProjectGroupHookSupport,
   ProjectGroupSettingsEntry
-} from '@/hooks/use-supported-group-hook-settings'
+} from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
 
 export function ProjectGroupHooksSection({
   group

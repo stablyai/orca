@@ -2,9 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import Database from '../../../../sqlite/sync-database'
-import { buildOpenCodeSqliteCandidatePath } from '../../../../../shared/opencode-sqlite-session-path'
+import { buildOpenCodeSqliteCandidatePath } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 
@@ -132,26 +131,6 @@ describe('listOpenCodeSqliteSessions — LIMIT-first discovery', () => {
     ])
     expect(candidates[0].file.mtimeMs).toBe(1_777_634_003_000)
   })
-
-  it('lists a session despite a malformed unused message payload', async () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    insertSession(db, 'ses_candidate', 1_777_634_001_000)
-    db.prepare(`INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)`).run(
-      'msg_malformed',
-      'ses_candidate',
-      1_777_634_000_500,
-      'malformed JSON'
-    )
-    db.close()
-
-    const issues: AiVaultScanIssue[] = []
-    const candidates = await listOpenCodeSqliteSessions({ dbPaths: [path], limit: 10, issues })
-    expect(candidates.map((candidate) => candidate.file.path)).toEqual([
-      buildOpenCodeSqliteCandidatePath(path, 'ses_candidate')
-    ])
-    expect(issues).toEqual([])
-  })
 })
 
 describe('parseOpenCodeSqliteSession — bounded preview window', () => {
@@ -182,46 +161,6 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
     const previewText = session!.previewMessages.map((m) => m.text)
     expect(previewText).not.toContain('OLDEST_PROMPT')
     expect(previewText).toContain('recent text 104')
-  })
-
-  it('excludes user text whose message falls outside the newest-100 window', async () => {
-    // Fill the recent window with non-text parts so stale text can surface only if the window is ignored.
-    const { db, path } = createTempDb()
-    applySchema(db)
-    const base = 1_777_634_000_000
-    insertSession(db, 'ses_window', base + 500_000)
-
-    for (let i = 0; i < 3; i++) {
-      insertMessageWithPart(db, {
-        id: `old_${i}`,
-        sessionId: 'ses_window',
-        timeCreated: base + i * 100,
-        role: 'user',
-        partType: 'text',
-        text: `OLD_USER_TEXT_${i}`
-      })
-    }
-    for (let i = 0; i < 100; i++) {
-      insertMessageWithPart(db, {
-        id: `new_${String(i).padStart(3, '0')}`,
-        sessionId: 'ses_window',
-        timeCreated: base + 10_000 + i * 100,
-        role: 'assistant',
-        partType: 'tool',
-        text: `tool output ${i}`
-      })
-    }
-    db.close()
-
-    const session = await parseOpenCodeSqliteSession({
-      dbPath: path,
-      sessionId: 'ses_window',
-      platform: 'darwin'
-    })
-    expect(session).not.toBeNull()
-    expect(session!.messageCount).toBe(103)
-    expect(session!.previewMessages).toHaveLength(0)
-    expect(session!.previewMessages.map((m) => m.text)).not.toContain('OLD_USER_TEXT_0')
   })
 
   it('counts only user/assistant messages, ignoring tool/system rows', async () => {

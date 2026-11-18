@@ -13,8 +13,19 @@ export function observeJournalProviderActivity(
   savedAt: number,
   fence: number
 ): void {
-  if (row.recovered || !isProviderActivity(body)) {
+  if (!isJournalProviderActivity(row.recovered, itemId, body)) {
     return
+  }
+  state.providerActivityAt.set(fence, Math.max(state.providerActivityAt.get(fence) ?? 0, savedAt))
+}
+
+export function isJournalProviderActivity(
+  recovered: true | undefined,
+  itemId: string,
+  body: AgentJournalItemBody
+): boolean {
+  if (recovered || !isProviderActivity(body)) {
+    return false
   }
   const identity = parseAgentJournalItemKey(itemId)
   // Codex detail rows use Orca IDs; fallback rows already identify their provider.
@@ -24,9 +35,9 @@ export function observeJournalProviderActivity(
       !identity.clientMessageId.startsWith('codex-item:') &&
       !(body.kind === 'status' && body.providerFrame !== undefined))
   ) {
-    return
+    return false
   }
-  state.providerActivityAt.set(fence, Math.max(state.providerActivityAt.get(fence) ?? 0, savedAt))
+  return true
 }
 
 function isProviderActivity(body: AgentJournalItemBody): boolean {

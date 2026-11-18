@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexRateLimitHomeResolution } from '../../../codex-accounts/runtime-home/runtime-home-service-types'
 
 vi.mock('../../../wsl/discovery/wsl-default-distro', () => ({

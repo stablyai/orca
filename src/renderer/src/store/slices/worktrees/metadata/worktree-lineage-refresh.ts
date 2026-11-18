@@ -6,7 +6,7 @@ import type {
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   getRuntimeTargetHostId,
   type HostRoute
@@ -19,7 +19,7 @@ import {
   withStoreCrossStoreLineage,
   type HostLineageList
 } from './cross-store-lineage-state'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { replaceWorktreeInRepoLists } from '../listing/worktree-owner-settings'
 import {
   withRepoHostOwnership,

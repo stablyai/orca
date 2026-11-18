@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from '../git-exec-file'
 import { gitStreamStdout } from '../git-stream-stdout'
-import { toLinuxPath } from '../../../../shared/wsl-paths'
+import { toLinuxPath } from '../../../../shared/file-access/wsl-paths'
 import { listWorktrees } from '../../worktrees/catalog/worktree-scan-cache'
 import { resetWslLinkedWorktreeGitRoutingForTests } from './wsl-linked-worktree-git-routing'
 

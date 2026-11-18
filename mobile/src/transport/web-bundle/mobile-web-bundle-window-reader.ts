@@ -1,4 +1,4 @@
-import { errorMessage } from '../../../../src/shared/error-message'
+import { errorMessage } from '../../../../src/shared/errors/error-message'
 import { decodeBase64Bytes } from '../encryption/base64-byte-codec'
 import { pairedE2EENativeCodec } from '../encryption/paired-e2ee-native-codec'
 import {

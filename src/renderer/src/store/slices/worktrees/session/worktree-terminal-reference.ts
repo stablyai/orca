@@ -1,8 +1,8 @@
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { WorktreeSlice } from '../worktree-slice-contract'
@@ -25,7 +25,7 @@ import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { readHostedReviewForRepo } from '@/lib/source-control/review/hosted-review-repo-read'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
-import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
 
 function terminalReviewSourceKey(repo: Repo | null | undefined): string {
   const host = repo && parseExecutionHostId(getRepoExecutionHostId(repo))

@@ -12,6 +12,9 @@ internal fun mobileWebShellResponseHeaders(path: String, byteCount: Int): Map<St
     // HTTPS images can expose session identity: Android uses a hashed host, iOS the verbatim id.
     // WebKit srcdoc images leaked the embedder origin despite iframe referrerPolicy; set the document header.
     headers["Referrer-Policy"] = "no-referrer"
+  } else if (path == MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_PATH) {
+    headers["Content-Security-Policy"] = MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_CSP
+    headers["Referrer-Policy"] = "no-referrer"
   }
   return headers
 }

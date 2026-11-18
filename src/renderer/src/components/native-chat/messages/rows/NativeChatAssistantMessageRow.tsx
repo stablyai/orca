@@ -7,7 +7,7 @@ import type { NativeChatMessage } from '../../../../../../shared/native-chat/nat
 import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from '../../markdown/NativeChatPacedMarkdown'
-import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../selection-quotes/native-chat-quote-selection'
+import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import { NativeChatToolRun } from '../../tools/runs/NativeChatToolRun'
 import {
   NativeChatCodeBlock,
@@ -121,7 +121,7 @@ export function NativeChatAssistantMessageRow({
             ) : null
           }
           className={cn(
-            'mt-1 w-fit select-none',
+            'w-fit select-none',
             !latestResponse &&
               fork?.pendingItemId !== message.id &&
               'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',

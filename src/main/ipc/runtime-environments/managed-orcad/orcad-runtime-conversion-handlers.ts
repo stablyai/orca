@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import type {
   OrcadManagedConversionResult,
   OrcadManagedPendingMigrationRow
-} from '../../../../shared/orcad-managed-runtime'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { listPendingManagedOrcadMigrations } from '../../../managed-server/lifecycle/orcad-managed-migration-status'
 import { convertSshTargetToManagedOrcad } from '../../../managed-server/lifecycle/orcad-runtime-conversion'
 import { conversionCollaborators } from '../../../managed-server/lifecycle/orcad-runtime-conversion-wiring'

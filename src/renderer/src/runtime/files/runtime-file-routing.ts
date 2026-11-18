@@ -2,8 +2,8 @@ import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot,
   normalizeRelativePath
-} from '../../../../shared/cross-platform-path'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+} from '../../../../shared/file-access/cross-platform-path'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { chatScratchFileAddress } from './addressing/runtime-chat-scratch-file-address'

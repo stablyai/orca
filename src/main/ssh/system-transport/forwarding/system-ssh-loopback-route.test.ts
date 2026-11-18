@@ -34,7 +34,7 @@ vi.mock('child_process', () => ({ spawn: spawnMock }))
 
 vi.mock('net', () => ({ connect: connectMock, createServer: createServerMock }))
 
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 
 import '../system-ssh-args'
 import './system-ssh-forward-process'

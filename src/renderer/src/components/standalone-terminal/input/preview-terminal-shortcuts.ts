@@ -3,7 +3,7 @@ import type { MacOptionAsAlt } from '@/components/terminal-pane/input/keyboard/t
 import type { TerminalShortcutAction } from '@/components/terminal-pane/input/keyboard/terminal-shortcut-policy'
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import type { OptionKeyLocationState } from '@/lib/keyboard-layout/option-key-location-state'
-import type { DashboardCardTerminalInput } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCardTerminalInput } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { normalizeTerminalShortcutPolicy } from '../../../../../shared/keybindings/effective'
 import type {
   KeybindingOverrides,

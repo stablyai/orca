@@ -1,15 +1,15 @@
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { parseWorktreeId } from '../../worktree-logic'
-import { mergeWorktree } from '../../worktree-metadata-merge'
+import { parseWorktreeId } from '../paths/worktree-logic'
+import { mergeWorktree } from '../metadata/worktree-metadata-merge'
 import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
 } from '../../../../shared/worktree/id'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitWorktreeInfo, DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { readWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
@@ -17,7 +17,7 @@ import {
   buildKnownOrcaWorkspaceLayouts,
   toDetectedWorktree
 } from '../../../../shared/worktree/visibility/ownership'
-import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/external-worktree-visibility'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/worktree/visibility/external-worktree-visibility'
 import {
   areWorktreePathsEqual,
   dedupeWorktreesByPath

@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../journal-observation.test-support'
 // Persist explicit queuedMessageId links; clients must not infer them by comparing unrelated IDs.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -66,8 +67,8 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
           { messageId: 'draft-1', expect: 'waiting' }
         )
       ).rejects.toThrow()
-      expect(journal.submissions()).toHaveLength(0)
-      expect(journal.queuedMessages.get('draft-1')?.state).toBe('waiting')
+      expect(await readTestJournalSubmissions(journal)).toHaveLength(0)
+      expect((await journal.queuedMessages.get('draft-1'))?.state).toBe('waiting')
     })
   })
 }

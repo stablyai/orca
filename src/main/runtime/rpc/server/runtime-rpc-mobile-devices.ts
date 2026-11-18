@@ -5,7 +5,7 @@ import type {
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
-} from '../../../../shared/delegated-mobile-device-contract'
+} from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import type { DeviceEntry } from './pairing/device-entry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 

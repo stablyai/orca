@@ -4,7 +4,7 @@ import type {
   LocalBundledSkillExecuteRequest,
   BundledSkillPlan,
   LocalBundledSkillPlanRequest
-} from '../../../../shared/bundled-skill-plan'
+} from '../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   localBundledSkillInput,
   type BundledSkillSelection

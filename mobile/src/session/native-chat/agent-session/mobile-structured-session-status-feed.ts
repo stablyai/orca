@@ -10,7 +10,7 @@ import type { AgentSessionStatusEvent } from '../../../../../src/shared/agent-se
 import {
   foldAgentSessionConversationNames,
   type AgentSessionConversationNames
-} from '../../../../../src/shared/agent-session/agent-session-conversation-names'
+} from '../../../../../src/shared/agent-session/conversation-naming/agent-session-conversation-names'
 import { isMobileMethodUnavailableError } from '../../../transport/rpc/mobile-method-unavailable'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 

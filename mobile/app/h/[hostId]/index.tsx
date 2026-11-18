@@ -1,9 +1,9 @@
 import { useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../../../src/navigation/route-param-reader'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
-import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
-import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/PageRouteUnavailableScreen'
-import { useHostDocumentOpenTarget } from '../../../src/mobile-web-shell/use-host-document-open-target'
+import { shellScreenRoute } from '../../../src/mobile-web-shell/routing/shell-screen-route'
+import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
+import { useHostDocumentOpenTarget } from '../../../src/mobile-web-shell/routing/use-host-document-open-target'
 
 // Encode decoded hostId so ?, # and whitespace cannot form a pathname the page refuses; shell gates unsupported bundles.
 function HostListScreen() {

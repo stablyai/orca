@@ -1,8 +1,8 @@
 import {
   cachedBrowserGuestMetadata,
   issueBrowserGuestNavigation
-} from '../host-guest/browser-guest-metadata-cache'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+} from '../host-guest/metadata/browser-guest-metadata-cache'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import { browserGuestHasNothingToReload } from '../../../../../shared/browser/guest-lifecycle/browser-guest-reloadability'
 
 export type BrowserReloadTrigger = 'button' | 'reload' | 'hard-reload'

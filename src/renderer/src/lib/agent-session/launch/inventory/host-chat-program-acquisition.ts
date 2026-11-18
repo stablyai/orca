@@ -19,7 +19,7 @@ import {
   firstHostStructuredAgentAvailability
 } from '@/runtime/native-chat/agent-catalogs/host-structured-agent-availability'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'

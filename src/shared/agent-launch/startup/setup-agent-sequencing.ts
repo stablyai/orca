@@ -1,15 +1,15 @@
 import { quotePosixShellUnlessPlainNoAt } from '../../shell/launch/shell-argument-quoting'
-import { encodePowerShellCommand } from '../../powershell-command-encoding'
-import { getPosixCodexShellLaunchPreflight } from '../../codex-shell-function'
-import { getPosixClaudeShellFunction } from '../../claude-shell-function'
+import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
+import { getPosixCodexShellLaunchPreflight } from '../../shell/launch/agents/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../../shell/launch/agents/claude-shell-function'
 import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
   type SetupRunnerShell
 } from './setup-runner-command'
-import { createNonSecureContextUuid } from '../../non-secure-context-uuid'
-import { quotePowerShellLiteral } from '../../powershell-native-argument'
+import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
+import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
@@ -132,7 +132,7 @@ function buildPosixStartupScript(
     // Announce success so “Waiting for setup...” does not linger. Install launch functions only after setup
     // may have supplied codex; fresh bash -lc does not read Orca’s wrapper.
     `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
-    'echo "Setup failed; skipping agent startup." >&2;',
+    `echo "Setup failed (exit \${status:-1}); skipping agent startup. See the Setup terminal for details." >&2;`,
     'exit "${status:-1}";',
     'fi;',
     'fi;',
@@ -252,7 +252,7 @@ function buildWindowsStartupCommand(
     '      $setupStatus = [int]$Matches[2]',
     '      Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '      if ($setupStatus -ne 0) {',
-    '        [Console]::Error.WriteLine("Setup failed; skipping agent startup.")',
+    '        [Console]::Error.WriteLine("Setup failed (exit $setupStatus); skipping agent startup. See the Setup terminal for details.")',
     '        exit $setupStatus',
     '      }',
     `      $startup = $env:${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}`,

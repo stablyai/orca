@@ -1,8 +1,8 @@
-import { withDurableRuntimeStore } from '../orca-runtime-tests/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../construction/test-context/runtime-durable-store-fixture'
 import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import type { RuntimeTerminalListResult } from '../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalListResult } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { withMainLayout } from './main-layout-close-fixture'
 import {
@@ -36,11 +36,11 @@ export type CloseContinuityHarness = {
   flushOrThrow: Mock<() => void>
   kill: Mock<(ptyId: string) => boolean>
   stopAndWait: Mock<(ptyId: string, ...args: unknown[]) => Promise<boolean | void>>
-  syncCanaryGraph: () => void
-  syncEmptyGraph: () => void
-  syncFixtureGraph: () => void
-  syncFixtureTabWithoutLeaf: () => void
-  syncSplitFixtureGraph: () => void
+  syncCanaryGraph: () => Promise<unknown>
+  syncEmptyGraph: () => Promise<unknown>
+  syncFixtureGraph: () => Promise<unknown>
+  syncFixtureTabWithoutLeaf: () => Promise<unknown>
+  syncSplitFixtureGraph: () => Promise<unknown>
   getSession: () => WorkspaceSessionState
   editSession: (edit: (session: WorkspaceSessionState) => WorkspaceSessionState) => void
   makeSessionUnavailable: () => void
@@ -55,14 +55,14 @@ export type CloseContinuityHarness = {
   replacePersistedIncarnation: (next: string) => void
 }
 
-function createHarness(
+async function createHarness(
   options: {
     ptyId?: string
     publishMobileSurface?: boolean
     registerPtyBacked?: boolean
     includeCanary?: boolean
   } = {}
-): CloseContinuityHarness {
+): Promise<CloseContinuityHarness> {
   const ptyId = options.ptyId ?? PTY_ID
   let session = makeSession(ptyId, options.includeCanary)
   let sessionAvailable = true
@@ -179,7 +179,7 @@ function createHarness(
       })
     }
   }
-  graph.syncFixtureGraph()
+  await graph.syncFixtureGraph()
   return withDurableRuntimeStore({
     runtime,
     acknowledged,
@@ -250,20 +250,20 @@ function createHarness(
   })
 }
 
-function createPtyBackedPublishedSurfaceHarness(): CloseContinuityHarness {
-  const harness = createHarness({
+async function createPtyBackedPublishedSurfaceHarness(): Promise<CloseContinuityHarness> {
+  const harness = await createHarness({
     ptyId: RUNTIME_OWNED_PTY_ID,
     publishMobileSurface: true,
     registerPtyBacked: true
   })
-  harness.syncFixtureTabWithoutLeaf()
+  await harness.syncFixtureTabWithoutLeaf()
   return harness
 }
 
 async function createStaleTabCloseHarness(
   options: { headless?: boolean } = {}
 ): Promise<CloseContinuityHarness & { terminal: RuntimeTerminalListResult['terminals'][number] }> {
-  const harness = createPtyBackedPublishedSurfaceHarness()
+  const harness = await createPtyBackedPublishedSurfaceHarness()
   const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
     (candidate) => candidate.ptyId === RUNTIME_OWNED_PTY_ID
   )!
@@ -274,7 +274,7 @@ async function createStaleTabCloseHarness(
   })
   harness.setCloseTerminalTabAction(() => {})
   if (options.headless) {
-    harness.syncEmptyGraph()
+    await harness.syncEmptyGraph()
   }
   return { ...harness, terminal }
 }

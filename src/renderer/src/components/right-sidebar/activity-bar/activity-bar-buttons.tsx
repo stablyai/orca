@@ -1,6 +1,6 @@
 import React from 'react'
 import { MoreHorizontal } from 'lucide-react'
-import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome-types'
+import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/github/pull-requests/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/class-names'
@@ -166,6 +166,7 @@ export function ActivityBarButton({
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}
+          aria-current={active ? 'page' : undefined}
           data-workspace-board-dismiss=""
           data-activity-plugin-key={item.pluginKey}
           aria-label={activityItemAriaLabel(item, effectiveStatus, t)}
@@ -183,10 +184,10 @@ export function ActivityBarButton({
           )}
 
           {active && isTop && (
-            <div className="absolute bottom-0 left-[25%] right-[25%] h-[2px] bg-foreground rounded-t" />
+            <div className="absolute bottom-0 left-[25%] right-[25%] h-[2px] bg-activity-bar-indicator rounded-t" />
           )}
           {active && !isTop && (
-            <div className="absolute right-0 top-[25%] bottom-[25%] w-[2px] bg-foreground rounded-l" />
+            <div className="absolute right-0 top-[25%] bottom-[25%] w-[2px] bg-activity-bar-indicator rounded-l" />
           )}
         </button>
       </TooltipTrigger>

@@ -1,4 +1,4 @@
-import type { ExternalConversationLink } from '../../shared/external-conversation-link'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { LaunchedAgentReadinessRuntime } from '../runtime/terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { waitForStartedAgentReady } from '../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt'

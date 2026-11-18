@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Text, View } from 'react-native'
-import { OrcaLogo } from '../components/OrcaLogo'
+import { OrcaLogo } from '../components/icons/OrcaLogo'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'

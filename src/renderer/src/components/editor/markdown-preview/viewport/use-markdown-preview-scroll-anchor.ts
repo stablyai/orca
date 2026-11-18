@@ -3,8 +3,8 @@ import type { Virtualizer } from '@tanstack/react-virtual'
 import {
   useVirtualizedScrollAnchor,
   type VirtualizedScrollAnchor
-} from '@/hooks/useVirtualizedScrollAnchor'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+} from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import {
   scrollTopCache,
   setWithLRU

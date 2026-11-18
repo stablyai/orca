@@ -1,7 +1,7 @@
 // Persist runtime pane membership before spawning through the same layout model used by client commands.
 
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   leafIdsOf,
@@ -16,7 +16,7 @@ import type {
   LayoutRefusalCode
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
-import { loadWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import {
@@ -30,7 +30,7 @@ import {
   followRemoteSessionAfterPaneDetach
 } from '../pane-moves/pane-remote-session-follow'
 import { pruneClosedTerminalTabTombstones } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import {
   editorViewsOfModel,
   type PartitionEditorViews
@@ -64,7 +64,7 @@ export function admitPaneToSession(
   admission: TerminalPaneAdmission
 ): PaneLayoutChange<TerminalPaneAdmissionOutcome> {
   const leafId = admission.type === 'createTerminalTab' ? admission.leafId : admission.newLeafId
-  const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
+  const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
   const workspace = loaded.layout.workspaces[admission.workspace]
   if (workspace && locatePane(workspace, paneKeyOf(admission.tabId, leafId))) {
     return { value: 'exists', session: null }
@@ -78,7 +78,7 @@ export function withdrawPaneFromSession(
   session: WorkspaceSessionState,
   pane: CommandOf<'closePane'>
 ): PaneLayoutChange<LayoutRefusalCode | null> {
-  const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
+  const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
   const change = applyToSession(loaded, pane, false, {}, touchedRecordsWrite(session, loaded))
   return { ...change, value: change.value.ok ? null : change.value.code }
 }
@@ -112,7 +112,7 @@ export function applyCommandToSession(
   const context = views
     ? { ...nameBasedLoadContext(), editorViewsOf: (key: string) => views[key] }
     : nameBasedLoadContext()
-  const loaded = loadWorkspaceLayout(hostId, session, context)
+  const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, context)
   const taken = takenIds(loaded.layout, command)
   if (taken) {
     return { value: taken, session: null }
@@ -134,7 +134,7 @@ export function applyRenamesToSession(
   session: WorkspaceSessionState,
   renames: readonly CommandOf<'renameTab'>[]
 ): PaneLayoutChange<{ rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[]> {
-  const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
+  const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
   let layout = loaded.layout
   const refused: { rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[] = []
   for (const rename of renames) {

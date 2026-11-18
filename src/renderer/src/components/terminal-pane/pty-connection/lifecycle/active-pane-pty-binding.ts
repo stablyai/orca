@@ -101,6 +101,7 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
       // Publish the tab identity first so a late layout callback cannot leave a tab and pane split.
       session.syncPanePtyLayoutBinding(ptyId)
     }
+    session.deps.releaseResumeInPlace?.()
     if (session.paneStartup && !session.startupPtyBound) {
       // Settles the captured one-shot startup only after this pane owns a concrete PTY.
       session.startupPtyBound = true

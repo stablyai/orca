@@ -72,10 +72,11 @@ export function insertAgentReferences(
   if (references.length === 0) {
     return
   }
-  const nextNode = editor.state.selection.$to.nodeAfter
-  const hasRightSeparator = nextNode?.isText
-    ? /^\s/u.test(nextNode.text ?? '')
-    : nextNode?.type.name === 'hardBreak'
+  const { $to } = editor.state.selection
+  const nextNode = $to.nodeAfter
+  const endsNonFinalLine =
+    !nextNode && $to.depth > 0 && $to.after(1) < editor.state.doc.content.size
+  const hasRightSeparator = nextNode?.isText ? /^\s/u.test(nextNode.text ?? '') : endsNonFinalLine
   editor.view.dispatch(closeHistory(editor.state.tr))
   editor.commands.insertContent(
     references.flatMap((attrs, index) => [

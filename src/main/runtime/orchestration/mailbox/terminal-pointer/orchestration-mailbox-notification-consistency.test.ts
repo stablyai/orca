@@ -44,7 +44,7 @@ describe('orchestration notification mailbox consistency', () => {
   it('never points direct Run A mail after the pane is rebound to Run B', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
-    const first = createRuntime(db)
+    const first = await createRuntime(db)
     const runA = createBoundRun(db, 'Run A')
     const staleDirectMessage = insertDirectRunMessage(db, runA.id, 'Run A completion')
     const runB = createBoundRun(db, 'Run B', { rebind: true })
@@ -70,7 +70,7 @@ describe('orchestration notification mailbox consistency', () => {
   it('fences the pointed mailbox instead of checking a rebound empty Run', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const runA = createBoundRun(db, 'Run A')
     insertDirectRunMessage(db, runA.id, 'Run A completion')
 

@@ -1,14 +1,14 @@
 import {
   discardStagedStartupCommand,
   type StartupCommandStaging
-} from '../../../shared/startup-command-staging'
+} from '../../../shared/shell/launch/startup-command-staging'
 import type { TerminalHostSessionCreateDependencies } from './terminal-host-session-create'
 import { enumerateDirectoryOnce } from '../permissions/directory-enumeration-probe'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { TerminalSpawnGate } from '../admission/terminal-spawn-gate'
 import type { LegacyRestoreDetails } from '../admission/legacy-restore-records'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
-import { sharedPromiseSettlementWaiters } from '../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../shared/concurrency/promise-settlement-waiters'
 
 export function createSessionExitHandler(
   onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],

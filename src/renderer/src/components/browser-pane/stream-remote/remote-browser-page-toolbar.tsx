@@ -2,13 +2,13 @@ import { MessageSquarePlus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { BrowserNavigationControlRow } from '../assemble-chrome/browser-navigation-control-row'
-import BrowserAddressBar from '../assemble-chrome/BrowserAddressBar'
-import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/use-browser-address-bar-edit-session'
-import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
-import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/browser-egress-indicator'
-import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
-import type { MarkupModeController } from '../annotate/useMarkupMode'
+import { BrowserNavigationControlRow } from '../assemble-chrome/toolbar/browser-navigation-control-row'
+import BrowserAddressBar from '../assemble-chrome/address-bar/BrowserAddressBar'
+import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/feedback/browser-egress-indicator'
+import { MarkupDrawButton } from '../annotate/markup-tools/MarkupDrawButton'
+import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 
 export function RemoteBrowserPageToolbar({
   runtimeEnvironmentId,
@@ -25,6 +25,7 @@ export function RemoteBrowserPageToolbar({
   markup,
   frameUrl,
   isActive,
+  history,
   onBack,
   onForward,
   onReload
@@ -44,6 +45,7 @@ export function RemoteBrowserPageToolbar({
   markup: MarkupModeController
   frameUrl: string | null
   isActive: boolean
+  history: { canGoBack: boolean; canGoForward: boolean }
   onBack: () => void
   onForward: () => void
   onReload: () => void
@@ -52,9 +54,8 @@ export function RemoteBrowserPageToolbar({
   return (
     <BrowserNavigationControlRow
       controls={{
-        // Hosts report no history depth; keep arrows enabled and let dead-end RPCs no-op.
-        canGoBack: true,
-        canGoForward: true,
+        canGoBack: history.canGoBack,
+        canGoForward: history.canGoForward,
         goBack: onBack,
         goForward: onForward,
         reload: onReload,
@@ -85,13 +86,12 @@ export function RemoteBrowserPageToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
+              size="icon-xs"
+              variant="muted-field-icon"
               aria-label={t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
               onClick={onReload}
             >
-              <RefreshCw className="size-4" />
+              <RefreshCw className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
@@ -103,9 +103,8 @@ export function RemoteBrowserPageToolbar({
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 opacity-50"
+            size="icon-xs"
+            variant="muted-field-icon"
             aria-disabled="true"
             aria-label={t(
               'auto.components.browser.pane.BrowserPane.deb5293610',
@@ -115,7 +114,7 @@ export function RemoteBrowserPageToolbar({
               event.preventDefault()
             }}
           >
-            <MessageSquarePlus className="size-4" />
+            <MessageSquarePlus className="size-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
@@ -130,7 +129,6 @@ export function RemoteBrowserPageToolbar({
         disabled={!frameUrl}
         active={markup.isActive}
         surfaceActive={isActive}
-        className="h-7 w-7"
       />
     </BrowserNavigationControlRow>
   )

@@ -1,6 +1,6 @@
 import type { Mock } from 'vitest'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { RuntimeRpcFailureError } from '../types'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { RuntimeRpcFailureError } from '../connection/types'
 
 type OkFixture = {
   id: string

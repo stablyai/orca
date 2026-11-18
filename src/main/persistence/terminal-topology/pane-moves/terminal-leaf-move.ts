@@ -1,5 +1,5 @@
-import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import {

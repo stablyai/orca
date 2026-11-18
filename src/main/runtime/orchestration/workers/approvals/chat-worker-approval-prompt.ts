@@ -26,8 +26,7 @@ export const readChatWorkerPrompt: ChatWorkerPromptReader = async (sessionId, it
   if (!host) {
     throw new Error('No chat host is running.')
   }
-  const snapshot = await host.journalCurrentRead(sessionId)
-  const item = snapshot.items.find((candidate) => candidate.itemId === itemId)
+  const item = await host.approvalPrompt(sessionId, itemId)
   return item?.body.kind === 'approval' ? { revision: item.revision, body: item.body } : null
 }
 

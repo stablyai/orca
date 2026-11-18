@@ -1,5 +1,6 @@
 import type { Translate } from '../i18n/mobile-i18n'
 import { PairingCodeRejectedError } from './pairing-candidate-race'
+import { RuntimeAccessLinkError } from './mobile-pairing-offer-scope'
 
 /** Failure copy for a first pairing from the scan or confirm screen. */
 export function getPairingFailureMessage(args: {
@@ -30,6 +31,12 @@ export function getPairingFailureMessage(args: {
     return t(
       'app.pairScan.codeNoLongerValid',
       'This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.'
+    )
+  }
+  if (error instanceof RuntimeAccessLinkError) {
+    return t(
+      'app.pairScan.runtimeAccessLink',
+      'This link is for another Orca app. Scan the code in Settings → Mobile on your computer, or run orca pair --mobile on your server.'
     )
   }
   return screen === 'scan'

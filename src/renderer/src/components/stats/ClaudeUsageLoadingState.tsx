@@ -11,11 +11,11 @@ type ClaudeUsageLoadingStateProps = {
 export function ClaudeUsageLoadingState({
   title,
   summaryCardCount = 8,
-  summaryGridClassName = 'md:grid-cols-2 xl:grid-cols-4'
+  summaryGridClassName = '@md:grid-cols-2 @4xl:grid-cols-4'
 }: ClaudeUsageLoadingStateProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="space-y-4 rounded-lg border border-border/60 bg-card/30 p-4">
+    <div className="@container space-y-4 rounded-lg border border-border/60 bg-card/30 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-foreground">
