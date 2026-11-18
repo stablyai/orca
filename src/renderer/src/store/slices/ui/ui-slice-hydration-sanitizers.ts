@@ -269,12 +269,18 @@ export function sanitizePerWorktreePreferences(
 export function sanitizeActivityBarArrangement(
   ui: {
     activityBarOrder?: unknown
+    activityBarBotOrder?: unknown
     activityBarHidden?: unknown
     activityBarPosition?: unknown
   },
-  current: { activityBarOrder: string[]; activityBarHidden: string[] }
+  current: {
+    activityBarOrder: string[]
+    activityBarBotOrder: string[]
+    activityBarHidden: string[]
+  }
 ): {
   activityBarOrder: string[]
+  activityBarBotOrder: string[]
   activityBarHidden: string[]
   activityBarPosition: ActivityBarPosition
 } {
@@ -284,6 +290,9 @@ export function sanitizeActivityBarArrangement(
     activityBarPosition: sanitizeActivityBarPosition(ui.activityBarPosition),
     activityBarOrder:
       preserveStringArrayIdentity(current.activityBarOrder, strings(ui.activityBarOrder)) ?? [],
+    activityBarBotOrder:
+      preserveStringArrayIdentity(current.activityBarBotOrder, strings(ui.activityBarBotOrder)) ??
+      [],
     activityBarHidden:
       preserveStringArrayIdentity(current.activityBarHidden, strings(ui.activityBarHidden)) ?? []
   }

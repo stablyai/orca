@@ -14,6 +14,7 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   // Activity bar placement is a per-viewport layout choice like sidebarOpen; older hosts reject the new key.
   'activityBarPosition',
   'activityBarOrder',
+  'activityBarBotOrder',
   'activityBarHidden',
   // Sidebar model badges are a client display choice; older hosts reject the new key.
   'showAgentModels',

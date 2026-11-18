@@ -12,6 +12,7 @@ export type PersistedUIWriteBaseline = {
   rightSidebarExplorerView: PersistedUIState['rightSidebarExplorerView']
   rightSidebarWidth: number
   activityBarOrder: string[]
+  activityBarBotOrder: string[]
   activityBarHidden: string[]
   activityBarPosition: ActivityBarPosition
   markdownTocPanelWidth: number
@@ -48,6 +49,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   rightSidebarWidth: true,
   activityBarPosition: true,
   activityBarOrder: true,
+  activityBarBotOrder: true,
   activityBarHidden: true,
   markdownTocPanelWidth: true,
   combinedDiffFileTreeWidth: true,
@@ -111,7 +113,12 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
     // Same equality as hydration, so a key-order-only difference is never unsaved.
     return persistedUIValuesEqual(a, b)
   }
-  if (field === 'filterRepoIds' || field === 'activityBarOrder' || field === 'activityBarHidden') {
+  if (
+    field === 'filterRepoIds' ||
+    field === 'activityBarOrder' ||
+    field === 'activityBarBotOrder' ||
+    field === 'activityBarHidden'
+  ) {
     return stringArrayEqual(a as readonly string[], b as readonly string[])
   }
   if (field === 'visibleWorkspaceHostIds') {

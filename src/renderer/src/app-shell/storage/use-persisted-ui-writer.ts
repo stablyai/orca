@@ -130,6 +130,7 @@ export function usePersistedUIWriter(): void {
       rightSidebarWidth: s.rightSidebarWidth,
       activityBarPosition: s.activityBarPosition,
       activityBarOrder: s.activityBarOrder,
+      activityBarBotOrder: s.activityBarBotOrder,
       activityBarHidden: s.activityBarHidden,
       markdownTocPanelWidth: s.markdownTocPanelWidth,
       combinedDiffFileTreeWidth: s.combinedDiffFileTreeWidth,

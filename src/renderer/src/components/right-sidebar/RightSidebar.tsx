@@ -13,7 +13,11 @@ import { measureTabTitle } from './right-sidebar-tab-title-width'
 import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import { TopActivityOverflowMenu } from './activity-bar/activity-bar-buttons'
 import { SortableActivityButton } from './activity-bar/sortable-activity-button'
-import { arrangeActivityItems, mergeActivityOrder } from './activity-bar/activity-bar-arrangement'
+import {
+  activityOrderForPage,
+  arrangeActivityItems,
+  reorderActivityOrders
+} from './activity-bar/activity-bar-arrangement'
 import { getActiveChecksStatus } from './checks-panel/status/active-checks-status'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import {
@@ -97,13 +101,19 @@ function RightSidebarInner(): React.JSX.Element {
     isBotPage
   })
 
-  const { order, hidden } = useAppStore(
-    useShallow((s) => ({ order: s.activityBarOrder, hidden: s.activityBarHidden }))
+  const { order, botOrder, hidden } = useAppStore(
+    useShallow((s) => ({
+      order: s.activityBarOrder,
+      botOrder: s.activityBarBotOrder,
+      hidden: s.activityBarHidden
+    }))
   )
   const setOrder = useAppStore((s) => s.setActivityBarOrder)
+  const setBotOrder = useAppStore((s) => s.setActivityBarBotOrder)
   const orderedItems = useMemo(
-    () => arrangeActivityItems(availableItems, order),
-    [availableItems, order]
+    () =>
+      arrangeActivityItems(availableItems, activityOrderForPage({ order, botOrder }, isBotPage)),
+    [availableItems, order, botOrder, isBotPage]
   )
   const visibleItems = useMemo(
     () => orderedItems.filter((item) => !hidden.includes(item.id) || !item.pluginKey),
@@ -221,9 +231,10 @@ function RightSidebarInner(): React.JSX.Element {
         hasDesktopWindowChrome
           ? RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_PADDING
           : RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_PADDING,
-        measureTabTitle
+        measureTabTitle,
+        Boolean(hiddenActiveItem)
       ),
-    [visibleItems, topActivityStripWidth, effectiveTab, hasDesktopWindowChrome]
+    [visibleItems, topActivityStripWidth, effectiveTab, hasDesktopWindowChrome, hiddenActiveItem]
   )
 
   const sideActivityBarIcons = visibleItems.map((item) => (
@@ -296,7 +307,16 @@ function RightSidebarInner(): React.JSX.Element {
         const from = ids.indexOf(String(active.id))
         const to = ids.indexOf(String(over.id))
         if (from !== -1 && to !== -1) {
-          setOrder(mergeActivityOrder(order, arrayMove(ids, from, to)))
+          const next = reorderActivityOrders(
+            { order, botOrder },
+            isBotPage,
+            arrayMove(ids, from, to)
+          )
+          if (isBotPage) {
+            setBotOrder(next.botOrder)
+          } else {
+            setOrder(next.order)
+          }
         }
       }}
     >
@@ -327,6 +347,7 @@ function RightSidebarInner(): React.JSX.Element {
               onChangeActivityBarPosition={setActivityBarPosition}
               arrangementItems={orderedItems}
               hiddenActiveItem={hiddenActiveItem}
+              isBotPage={isBotPage}
             />
           ) : (
             /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
@@ -376,6 +397,7 @@ function RightSidebarInner(): React.JSX.Element {
                       arrangementItems={orderedItems}
                       activityBarPosition={activityBarPosition}
                       onChangeActivityBarPosition={setActivityBarPosition}
+                      isBotPage={isBotPage}
                     />
                   )}
                 </TooltipProvider>
@@ -387,6 +409,7 @@ function RightSidebarInner(): React.JSX.Element {
               pluginKey={contextPlugin.pluginKey}
               itemId={contextPlugin.itemId}
               items={orderedItems}
+              isBotPage={isBotPage}
             />
           </ContextMenu>
         )}

@@ -49,3 +49,20 @@ export function mergeActivityOrder(saved: string[], reordered: string[]): string
   let index = 0
   return slots.map((id) => (available.has(id) ? reordered[index++] : id))
 }
+
+export function reorderActivityOrders(
+  orders: { order: string[]; botOrder: string[] },
+  isBotPage: boolean,
+  reordered: string[]
+): { order: string[]; botOrder: string[] } {
+  return isBotPage
+    ? { ...orders, botOrder: mergeActivityOrder(orders.botOrder, reordered) }
+    : { ...orders, order: mergeActivityOrder(orders.order, reordered) }
+}
+
+export function activityOrderForPage(
+  orders: { order: string[]; botOrder: string[] },
+  isBotPage: boolean
+): string[] {
+  return isBotPage ? orders.botOrder : orders.order
+}
