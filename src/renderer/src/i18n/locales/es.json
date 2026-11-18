@@ -24325,6 +24325,11 @@
       "newConversationIn": "Nueva conversación en {{project}}",
       "settingLabel": "Barra lateral simple",
       "settingDescription": "Proyectos con un botón + y solo las conversaciones que tú iniciaste. Apágala para ver todas las tarjetas de workspaces, ramas y agentes."
+    },
+    "composer": {
+      "worktreeLabel": "Crear un worktree",
+      "worktreeOn": "Una copia aparte en una rama nueva, basada en la rama que elijas abajo. El agente no toca la carpeta del proyecto.",
+      "worktreeOff": "La conversación se abre en la carpeta del proyecto, en la rama que tiene ahora."
     }
   }
 }

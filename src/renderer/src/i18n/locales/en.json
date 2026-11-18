@@ -25951,6 +25951,11 @@
       "newConversationIn": "New conversation in {{project}}",
       "settingLabel": "Simple sidebar",
       "settingDescription": "Projects with a + button and only the conversations you started. Turn it off to see every workspace card, branch and agent."
+    },
+    "composer": {
+      "worktreeLabel": "Create a worktree",
+      "worktreeOn": "A separate copy on a new branch, based on the branch you pick below. The agent never touches your project folder.",
+      "worktreeOff": "The conversation opens in the project folder, on the branch it has checked out now."
     }
   }
 }

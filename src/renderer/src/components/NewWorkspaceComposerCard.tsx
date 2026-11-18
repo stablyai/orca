@@ -29,6 +29,7 @@ import { NewWorkspaceComposerAdvancedSection } from './new-workspace/composer/Ne
 import { NewWorkspaceComposerAgentSection } from './new-workspace/composer/NewWorkspaceComposerAgentSection'
 import { NewWorkspaceComposerFooter } from './new-workspace/composer/NewWorkspaceComposerFooter'
 import { NewWorkspaceComposerNameSection } from './new-workspace/composer/NewWorkspaceComposerNameSection'
+import { useZotzComposerWorktreeSwitch } from './zotz/composer/use-zotz-composer-worktree-switch'
 import { NewWorkspaceComposerProjectSection } from './new-workspace/composer/NewWorkspaceComposerProjectSection'
 import {
   EMPTY_EPHEMERAL_VM_RECIPES,
@@ -294,6 +295,8 @@ export default function NewWorkspaceComposerCard(
         : 'workspace_creation_visible')
   )
 
+  const zotzWorktree = useZotzComposerWorktreeSwitch(props)
+
   return (
     <div
       ref={setComposerNode}
@@ -333,7 +336,10 @@ export default function NewWorkspaceComposerCard(
           connectButtonLabel={connectButtonLabel}
           selectedProjectName={selectedProjectName}
         />
-        <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
+        {zotzWorktree.switchRow}
+        {zotzWorktree.createWorktree ? (
+          <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
+        ) : null}
         <NewWorkspaceComposerAgentSection
           {...props}
           createDisabled={props.createDisabled || sparseEditing}
@@ -359,6 +365,8 @@ export default function NewWorkspaceComposerCard(
         <div className="shrink-0 space-y-1">
           <NewWorkspaceComposerFooter
             {...props}
+            onCreate={zotzWorktree.onCreate}
+            createDisabled={zotzWorktree.createDisabled}
             submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
           />
         </div>
