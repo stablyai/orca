@@ -90,10 +90,11 @@ export function nativeChatTurnDiffGitState(
     uncommittedCount: uncommittedPaths.size,
     committedCount,
     allPushed:
-      upstream?.hasUpstream === true
-        ? upstream.head !== undefined && statusHead !== undefined && upstream.head !== statusHead
-          ? null
-          : upstream.ahead === 0
+      upstream?.hasUpstream === true &&
+      upstream.head !== undefined &&
+      statusHead !== undefined &&
+      upstream.head === statusHead
+        ? upstream.ahead === 0
         : null
   }
 }
