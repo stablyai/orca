@@ -88,7 +88,8 @@ export function clearSshRemotePtyBindingsForLeases(
           : tab
       )
       if (nextTabs.some((tab, index) => tab !== tabs[index])) {
-        rows = { ...(rows ?? session.tabsByWorktree), [worktreeId]: nextTabs }
+        rows ??= { ...session.tabsByWorktree }
+        rows[worktreeId] = nextTabs
         changed = true
       }
     }
@@ -116,10 +117,8 @@ export function clearSshRemotePtyBindingsForLeases(
         )
       )
       if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
-        layouts = {
-          ...(layouts ?? session.terminalLayoutsByTabId),
-          [tabId]: { ...layout, ptyIdsByLeafId: nextBindings }
-        }
+        layouts ??= { ...session.terminalLayoutsByTabId }
+        layouts[tabId] = { ...layout, ptyIdsByLeafId: nextBindings }
         changed = true
       }
     }

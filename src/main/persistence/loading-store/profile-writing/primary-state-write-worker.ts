@@ -99,8 +99,8 @@ function beginWrite(
       selective.automationRuns !== undefined
         ? authority.writeSerializedAutomationRuns(replacements, selective.automationRuns)
         : replacements.length === 0 && patches.length === 0 && sessionCandidates.length > 0
-          ? // The dirty session domains match what the writer holds.
-            Promise.resolve()
+          ? // The dirty session domains match what the writer holds; still fence the revision.
+            authority.assertCurrentRevision()
           : authority.writeSerializedDomains(replacements, patches)
     return {
       completion: written.then(() => baseline.acknowledge(sessionCandidates)),
