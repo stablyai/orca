@@ -22,14 +22,30 @@ describe('root lookups for old local owners', () => {
     ])
   })
 
-  it('reads a failed inventory as unknown and lists again for the next sweep', async () => {
+  it('lists once more when one pane going stale rejects the shared listing', async () => {
     const list = vi
       .fn()
       .mockRejectedValueOnce(new Error('terminal_handle_stale'))
+      .mockResolvedValueOnce([{ id: 'pty-healthy', incarnationId: 'inc', rootProcessId: 42 }])
+    const discovery = new AdoptedRootDiscovery(list)
+    const [healthy, stale] = await Promise.all([
+      discovery.find('pty-healthy'),
+      discovery.find('pty-stale')
+    ])
+    expect(healthy).toEqual({ incarnationId: 'inc', pid: 42 })
+    expect(stale).toBeNull()
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads a listing that fails twice as unknown and lists again for the next sweep', async () => {
+    const list = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('owner_unavailable'))
+      .mockRejectedValueOnce(new Error('owner_unavailable'))
       .mockResolvedValueOnce([{ id: 'pty-1', incarnationId: 'inc', rootProcessId: 42 }])
     const discovery = new AdoptedRootDiscovery(list)
     await expect(discovery.find('pty-1')).resolves.toBeNull()
     await expect(discovery.find('pty-1')).resolves.toEqual({ incarnationId: 'inc', pid: 42 })
-    expect(list).toHaveBeenCalledTimes(2)
+    expect(list).toHaveBeenCalledTimes(3)
   })
 })

@@ -62,17 +62,15 @@ export class DaemonPtyTargetInspection {
       adapter: this.exactOwner(id),
       incarnation: this.incarnationFor(id)
     }))
-    const groups = new Set(targets.map((target) => target.adapter))
+    const idsByAdapter = new Map<DaemonPtyAdapter, string[]>()
+    for (const target of targets) {
+      const group = idsByAdapter.get(target.adapter) ?? []
+      group.push(target.id)
+      idsByAdapter.set(target.adapter, group)
+    }
     const rows = (
       await Promise.all(
-        [...groups].map((adapter) =>
-          adapter.listProcesses({
-            ...opts,
-            ptyIds: targets
-              .filter((target) => target.adapter === adapter)
-              .map((target) => target.id)
-          })
-        )
+        [...idsByAdapter].map(([adapter, ptyIds]) => adapter.listProcesses({ ...opts, ptyIds }))
       )
     ).flat()
     for (const target of targets) {
@@ -84,8 +82,9 @@ export class DaemonPtyTargetInspection {
       }
     }
     // A missing or replaced row is absent here; the caller reads that as unknown, never as exit.
+    const targetsById = new Map(targets.map((target) => [target.id, target]))
     return rows.filter((row) => {
-      const target = targets.find((candidate) => candidate.id === row.id)
+      const target = targetsById.get(row.id)
       return target && (!target.incarnation || row.incarnationId === target.incarnation)
     })
   }

@@ -22,11 +22,17 @@ export class AdoptedRootDiscovery {
     })
   }
 
+  private async listOnce(ids: ReadonlySet<string>): Promise<readonly ListedRoot[] | undefined> {
+    return await this.list([...ids])
+  }
+
   private openBatch(): NonNullable<AdoptedRootDiscovery['open']> {
     const ids = new Set<string>()
     const rows = new Promise<void>((resolve) => setTimeout(resolve, 0)).then(async () => {
       this.open = null
-      const listed = await Promise.resolve(this.list([...ids])).catch(() => undefined)
+      // Why once more: one pane's route changing mid-listing rejects the whole batch, and that pane
+      // is settled by the retry, so it can't cost the healthy panes their read.
+      const listed = await this.listOnce(ids).catch(() => this.listOnce(ids).catch(() => undefined))
       return new Map((listed ?? []).map((row) => [row.id, row]))
     })
     this.open = { ids, rows }

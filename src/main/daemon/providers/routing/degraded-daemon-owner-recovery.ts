@@ -52,15 +52,19 @@ export class DegradedDaemonOwnerRecovery {
     if (!ids || ids.some((id) => !this.routes.has(id))) {
       return this.attachResolver.listProcesses(opts)
     }
-    const owners = new Set(ids.map((id) => this.routes.get(id)!))
+    const idsByOwner = new Map<IPtyProvider, string[]>()
+    for (const id of ids) {
+      const owner = this.routes.get(id)!
+      const group = idsByOwner.get(owner) ?? []
+      group.push(id)
+      idsByOwner.set(owner, group)
+    }
+    const requested = new Set(ids)
     const rows = await Promise.all(
-      [...owners].map(async (owner) =>
-        (
-          await owner.listProcesses({
-            ptyIds: ids.filter((id) => this.routes.get(id) === owner),
-            targetOwnerOnly: true
-          })
-        ).filter((row) => ids.includes(row.id) && this.routes.get(row.id) === owner)
+      [...idsByOwner].map(async ([owner, ptyIds]) =>
+        (await owner.listProcesses({ ptyIds, targetOwnerOnly: true })).filter(
+          (row) => requested.has(row.id) && this.routes.get(row.id) === owner
+        )
       )
     )
     return rows.flat()
