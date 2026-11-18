@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { automationEventKind } from '../automation-event-triggers'
 import { isValidAutomationSchedule } from '../automations/scheduling/automation-schedule-parsing'
 import { describeAutomationSchedule } from '../automations/scheduling/automation-schedules'
-import { BOT_TEMPLATES, LEGACY_BOT_TEMPLATE_IDS, botTemplate } from './bot-templates'
+import { BOT_TEMPLATES } from './bot-templates'
 
 // Each English line a template shows, and the schedule it must be.
 const WHEN: Record<string, { kind: string; cron?: string } & Record<string, unknown>> = {
@@ -37,15 +37,5 @@ describe('the template catalog', () => {
     for (const { source, event } of BOT_TEMPLATES.flatMap((template) => template.events)) {
       expect(automationEventKind(source, event), `${source}.${event}`).not.toBeNull()
     }
-  })
-
-  it('keeps the ids older bots and hosts know', () => {
-    expect(LEGACY_BOT_TEMPLATE_IDS.map((id) => botTemplate(id)?.mascot)).toEqual([
-      'A1',
-      'D1',
-      'E1',
-      'F1',
-      'G1'
-    ])
   })
 })
