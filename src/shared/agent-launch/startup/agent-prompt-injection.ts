@@ -85,8 +85,8 @@ export function getAgentPromptHeldSubmitBudgetMs(
   const config = TUI_AGENT_CONFIG[agent]
   const startupMs = config.submitRetryBudgetMs ?? 0
   const pasteBurstMs = getWindowsInputRecordPasteBurstMs(platform, agent, pastePayload)
-  // Why the cap: with the render gate (<= 8 s + ingest), ingest itself and this wait, delivery
-  // stays <= 38 s, inside worker-start's 50 s grace once observation is shortened by delivery time.
+  // Why the cap: with the render gate (<= 8 s + ingest), ingest itself and this wait plus one
+  // recheck, delivery stays <= 40 s, inside worker-start's 50 s grace once observation is shortened.
   const capMs =
     AGENT_PROMPT_EFFECT_TIMEOUT_MS -
     2 * getTerminalPasteIngestMs(platform, Buffer.byteLength(pastePayload, 'utf8'))

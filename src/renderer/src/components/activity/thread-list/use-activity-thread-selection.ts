@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type React from 'react'
-import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
+import { useListMultiSelection } from '@/lib/list-interaction/use-list-multi-selection'
 import type { ActivityVirtualItemDescriptor } from './activity-thread-virtual-items'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 

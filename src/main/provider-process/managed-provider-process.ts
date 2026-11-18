@@ -25,7 +25,7 @@ import {
   type ProviderProcessTree
 } from './provider-process-close'
 
-const STDERR_TAIL_MAX_CHARS = 8192
+export const STDERR_TAIL_MAX_CHARS = 8192
 
 export type ProviderProcessExit = {
   code: number | null

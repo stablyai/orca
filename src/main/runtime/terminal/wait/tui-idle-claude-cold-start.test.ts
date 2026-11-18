@@ -1,10 +1,7 @@
 /** STA-2380: a shell auto-title names Claude before it draws anything; quiet alone must not make it ready. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTranscriptPane,
-  TRANSCRIPT_PANE_PTY_ID
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 import { waitForWorkerStartComposer } from './launched-agent-composer-readiness'
 import { sendAgentTurn } from '../../orchestration/turn-delivery/send-agent-turn'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'

@@ -50,6 +50,11 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return this.tabIdByWebContentsId.get(webContentsId) ?? null
   }
 
+  /** The browser workspace (outer tab) a registered page belongs to. */
+  getWorkspaceIdForPage(browserPageId: string): string | null {
+    return this.workspaceIdByPageId.get(browserPageId) ?? null
+  }
+
   /** Includes popups owned by the page. */
   getOwningTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
     return this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)

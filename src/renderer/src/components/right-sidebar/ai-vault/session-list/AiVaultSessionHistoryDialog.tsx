@@ -4,8 +4,8 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   AI_VAULT_AGENTS,

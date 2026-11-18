@@ -12,7 +12,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   partialRuntimeStore,
   storeWorktreeMeta
-} from '../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-store-partial-fixture'
 
 // BUG-9: lost relay contact must report unverifiable, never live:0/pty:no for a surviving terminal.
 

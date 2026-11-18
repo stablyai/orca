@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store/index'
-import { WorktreeCardsKeptHintContent } from '../../WorktreeCardsIntroNotice'
+import { WorktreeCardsKeptHintContent } from '../../workspace-card/template/WorktreeCardsIntroNotice'
 import { OptionsFilterCountBadge } from './options-filter-count-badge'
 import {
   useWorkspaceOptionsFilterBadge,

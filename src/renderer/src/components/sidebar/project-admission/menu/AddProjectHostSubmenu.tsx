@@ -21,9 +21,9 @@ import {
   openWslHostsExperimentalSetting,
   useWslHostsAcceptNewWork,
   useWslHostsPaused
-} from '../../use-wsl-hosts-enabled'
+} from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { sidebarHostDisplayLabel } from '../../worktree-list/controls/sidebar-host-options'
-import { getWslHostsPausedShortLabel } from '../../wsl-host-row-status'
+import { getWslHostsPausedShortLabel } from '../../host-admission/wsl/wsl-host-row-status'
 import {
   canConnectAddRepoHost,
   canSelectAddRepoHost

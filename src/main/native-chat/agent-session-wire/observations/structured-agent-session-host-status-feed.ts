@@ -17,6 +17,7 @@ import {
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionConversationNaming } from '../host/structured-agent-session-host-types'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 
 /** Resolve deps lazily because field initializers run before host constructor assignments. */
 export function createStructuredAgentSessionHostStatusFeed(args: {
@@ -31,6 +32,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
       'getConversation' | 'replacedRuntime' | 'listConversations' | 'isSessionTabRetired'
     >
     logger: StructuredAgentSessionLogger
+    adapter?: Pick<StructuredAgentSessionAdapter, 'runningPermissionMode'>
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
     conversationNaming?: StructuredAgentSessionConversationNaming
@@ -67,6 +69,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     sessions: args.sessions,
     starting: args.starting,
     readUsageLimitContinue: args.readUsageLimitContinue,
+    runningPermissionMode: (sessionId) => args.deps().adapter?.runningPermissionMode?.(sessionId),
     onPublished: args.onPublished,
     getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
     listConversations: () => args.deps().store.listConversations(),

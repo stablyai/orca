@@ -6,7 +6,7 @@ import { RetainedPaneHost } from '../../tab-group/retained-pane/RetainedPaneHost
 import type { ActivityTerminalPortalTarget } from '../../activity/terminal-portal/activity-terminal-portal'
 import TerminalPane from '../TerminalPane'
 import type { HiddenTerminalPrewarm } from '../controller/terminal-pane-types'
-import { closeTerminalTab } from '../../terminal/terminal-tab-actions'
+import { closeTerminalTab } from '../../terminal/tab-lifecycle/terminal-tab-actions'
 import { shouldDeferParkedPtyExitTabClose } from '../parking/output-watchers/terminal-parked-tab-watchers'
 
 type TerminalOverlaySlotProps = {

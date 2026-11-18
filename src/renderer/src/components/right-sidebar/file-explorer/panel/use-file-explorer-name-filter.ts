@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import {
   useRuntimeFileListForWorktree,
   type RuntimeFileListState
-} from '@/components/quick-open-file-list'
+} from '@/components/file-actions/quick-open/quick-open-file-list'
 import {
   isFileExplorerNameFilterQueryTooLarge,
   type FileExplorerNameFilterProjectionSource
