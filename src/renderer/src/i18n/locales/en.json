@@ -20782,6 +20782,7 @@
         "hide": "Hide",
         "hidden": "Orca won't show turn diffs anymore",
         "fileUncommitted": "uncommitted",
+        "fileDiverged": "uncommitted · changed",
         "pushed": "pushed",
         "unpushed": "committed · unpushed",
         "committed": "committed",

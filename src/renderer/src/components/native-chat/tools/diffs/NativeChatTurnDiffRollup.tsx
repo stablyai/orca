@@ -39,10 +39,12 @@ function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.
 
 function TurnDiffFileRow({
   file,
-  uncommitted
+  uncommitted,
+  diverged
 }: {
   file: NativeChatTurnDiffFile
   uncommitted: boolean
+  diverged: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const name = nativeChatEditFileBaseName(file.path)
@@ -67,7 +69,9 @@ function TurnDiffFileRow({
         <DiffLineCounts added={file.added} removed={file.removed} />
         {uncommitted ? (
           <span className="shrink-0 text-chat-warning">
-            {t('components.native-chat.turnDiff.fileUncommitted', 'uncommitted')}
+            {diverged
+              ? t('components.native-chat.turnDiff.fileDiverged', 'uncommitted · changed')
+              : t('components.native-chat.turnDiff.fileUncommitted', 'uncommitted')}
           </span>
         ) : null}
       </Button>
@@ -138,6 +142,7 @@ export function NativeChatTurnDiffRollup({
             key={file.path}
             file={file}
             uncommitted={git?.uncommittedPaths.has(file.path) === true}
+            diverged={git?.divergedPaths.has(file.path) === true}
           />
         ))}
         {remaining > 0 ? (

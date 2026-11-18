@@ -17,6 +17,8 @@ import type {
 export type NativeChatTurnDiffGitState = {
   /** Turn-diff paths still carrying uncommitted changes. */
   uncommittedPaths: ReadonlySet<string>
+  /** Uncommitted paths whose live diff line counts no longer match the turn's recorded diff. */
+  divergedPaths: ReadonlySet<string>
   uncommittedCount: number
   committedCount: number
   /** True when the upstream reports no unpushed commits; null when push state is unknown. */
@@ -42,7 +44,8 @@ export function nativeChatTurnDiffGitState(
   upstream: GitUpstreamStatus | undefined,
   worktreePath: string | undefined,
   statusHead: string | undefined,
-  worktreeId: string | undefined
+  worktreeId: string | undefined,
+  statusCapped = false
 ): NativeChatTurnDiffGitState | null {
   if (entries === undefined || worktreePath === undefined) {
     return null
@@ -56,12 +59,36 @@ export function nativeChatTurnDiffGitState(
   }
   const observed = worktreeId ? dirtyObservations.get(worktreeId) : undefined
   const uncommittedPaths = new Set<string>()
+  const divergedPaths = new Set<string>()
   let committedCount = 0
   for (const file of diff.files) {
     // Status paths are repo-relative; edit paths are whatever the tool call carried (often absolute).
     const relative = getRelativePathInsideRoot(file.path, worktreePath)
     if (dirty.has(file.path) || dirty.has(relative ?? '')) {
       uncommittedPaths.add(file.path)
+      // Same counts is the recorded diff still live; different counts means the
+      // worktree moved on since the turn. Unknown counts say nothing.
+      if (!file.truncated) {
+        let liveAdded = 0
+        let liveRemoved = 0
+        let known = false
+        for (const entry of entries) {
+          const matches =
+            entry.path === file.path ||
+            entry.path === relative ||
+            entry.oldPath === file.path ||
+            entry.oldPath === relative
+          if (!matches || entry.added === undefined || entry.removed === undefined) {
+            continue
+          }
+          known = true
+          liveAdded += entry.added
+          liveRemoved += entry.removed
+        }
+        if (known && (liveAdded !== file.added || liveRemoved !== file.removed)) {
+          divergedPaths.add(file.path)
+        }
+      }
       if (statusHead !== undefined && worktreeId !== undefined) {
         let files = dirtyObservations.get(worktreeId)
         if (files === undefined) {
@@ -70,6 +97,10 @@ export function nativeChatTurnDiffGitState(
         }
         files.set(file.path, { head: statusHead, vanishedSameHead: false })
       }
+      continue
+    }
+    // A capped status stops mid-list: absence proves nothing, so claim and mark nothing.
+    if (statusCapped) {
       continue
     }
     const last = observed?.get(file.path)
@@ -87,6 +118,7 @@ export function nativeChatTurnDiffGitState(
   }
   return {
     uncommittedPaths,
+    divergedPaths,
     uncommittedCount: uncommittedPaths.size,
     committedCount,
     allPushed:
@@ -102,6 +134,7 @@ export function nativeChatTurnDiffGitState(
 const TURN_DIFF_GIT_REFRESH_MIN_INTERVAL_MS = 10_000
 const refreshRequestedAt = new Map<string, number>()
 const pendingRefresh = new Map<string, ReturnType<typeof setTimeout>>()
+const refreshConsumers = new Map<string, number>()
 
 /** Every rendered turn diff keeps its worktree's status current, at a background pace. */
 function ensureTurnDiffGitStatus(worktreeId: string): void {
@@ -158,6 +191,9 @@ export function useNativeChatTurnDiffGitState(
   const statusHead = useAppStore((s) =>
     worktreeId ? s.gitStatusHeadByWorktree[worktreeId] : undefined
   )
+  const statusCapped = useAppStore((s) =>
+    worktreeId ? s.gitStatusHugeByWorktree[worktreeId] !== undefined : false
+  )
   const worktreePath = useAppStore((s) =>
     worktreeId ? selectKnownWorktreeById(s, worktreeId)?.path : undefined
   )
@@ -165,13 +201,25 @@ export function useNativeChatTurnDiffGitState(
     if (!worktreeId) {
       return
     }
-    ensureTurnDiffGitStatus(worktreeId)
+    // Only the last consumer may cancel the shared trailing timer.
+    refreshConsumers.set(worktreeId, (refreshConsumers.get(worktreeId) ?? 0) + 1)
     return () => {
+      const remaining = (refreshConsumers.get(worktreeId) ?? 1) - 1
+      if (remaining > 0) {
+        refreshConsumers.set(worktreeId, remaining)
+        return
+      }
+      refreshConsumers.delete(worktreeId)
       const pending = pendingRefresh.get(worktreeId)
       if (pending !== undefined) {
         clearTimeout(pending)
         pendingRefresh.delete(worktreeId)
       }
+    }
+  }, [worktreeId])
+  useEffect(() => {
+    if (worktreeId) {
+      ensureTurnDiffGitStatus(worktreeId)
     }
   }, [worktreeId, diff])
   return useMemo(
@@ -182,8 +230,9 @@ export function useNativeChatTurnDiffGitState(
         upstream,
         worktreePath,
         statusHead,
-        worktreeId ?? undefined
+        worktreeId ?? undefined,
+        statusCapped
       ),
-    [diff, entries, upstream, worktreePath, statusHead, worktreeId]
+    [diff, entries, upstream, worktreePath, statusHead, worktreeId, statusCapped]
   )
 }
