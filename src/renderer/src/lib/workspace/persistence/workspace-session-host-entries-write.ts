@@ -1,10 +1,8 @@
-import type {
-  WorkspaceSessionPatch,
-  WorkspaceSessionState
-} from '../../../../../shared/workspace-session/workspace-session-state-types'
+import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
@@ -18,8 +16,11 @@ export function routedSessionHostIds(
   slices: HostSessionSlices
 ): Set<ExecutionHostId> {
   const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
-  for (const hostId of Object.keys(slices) as ExecutionHostId[]) {
-    hostIds.add(hostId)
+  for (const key of Object.keys(slices)) {
+    const hostId = normalizeExecutionHostId(key)
+    if (hostId) {
+      hostIds.add(hostId)
+    }
   }
   for (const repo of state.repos) {
     hostIds.add(getRepoExecutionHostId(repo))
@@ -48,7 +49,7 @@ export function patchHostSlice(
   if (!acknowledged || !api.patchEntries) {
     return api.patch(slice, target)
   }
-  const { patch, acknowledge } = acknowledged.diff(hostId, slice as WorkspaceSessionState)
+  const { patch, acknowledge } = acknowledged.diff(hostId, slice)
   // Sent even when empty: main's unchanged-save handling still has to see this partition's save.
   return api.patchEntries(patch, target).then(
     (result) => {

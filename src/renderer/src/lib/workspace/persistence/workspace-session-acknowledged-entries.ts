@@ -2,9 +2,7 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
 import { isWorkspaceSessionRecord } from '../../../../../shared/workspace-session/workspace-session-host-records'
 import type { WorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
-import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-
-type SessionField = keyof WorkspaceSessionState
+import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
 
 export type WorkspaceSessionEntriesDiff = {
   patch: WorkspaceSessionEntriesPatch
@@ -19,19 +17,20 @@ function sameValue(previous: unknown, next: unknown): boolean {
 /** What main last acknowledged from this window, per host partition and field. A field main hasn't
  *  acknowledged goes whole; after that only the keys whose values changed travel. */
 export class AcknowledgedWorkspaceSessionEntries {
-  private readonly byHost = new Map<ExecutionHostId, Map<SessionField, unknown>>()
+  private readonly byHost = new Map<ExecutionHostId, Map<string, unknown>>()
   // A whole-session write replaces main's copy; an acknowledgement that started before it is stale.
   private generation = 0
 
-  diff(hostId: ExecutionHostId, slice: WorkspaceSessionState): WorkspaceSessionEntriesDiff {
+  diff(hostId: ExecutionHostId, slice: WorkspaceSessionPatch): WorkspaceSessionEntriesDiff {
     const acknowledged = this.byHost.get(hostId)
     const generation = this.generation
     const patch: WorkspaceSessionEntriesPatch = { fields: {}, entries: {} }
-    const fields = Object.keys(slice) as SessionField[]
+    const sliceFields: Record<string, unknown> = slice
+    const fields = Object.keys(slice)
     for (const field of fields) {
-      const value = slice[field]
+      const value = sliceFields[field]
       if (!acknowledged?.has(field)) {
-        ;(patch.fields as Record<string, unknown>)[field] = value
+        Reflect.set(patch.fields, field, value)
         continue
       }
       const previous = acknowledged.get(field)
@@ -46,12 +45,12 @@ export class AcknowledgedWorkspaceSessionEntries {
         }
         const remove = Object.keys(previous).filter((key) => !Object.hasOwn(value, key))
         if (changed || remove.length > 0) {
-          patch.entries[field] = { set, remove }
+          Reflect.set(patch.entries, field, { set, remove })
         }
         continue
       }
       if (!sameValue(previous, value)) {
-        ;(patch.fields as Record<string, unknown>)[field] = value
+        Reflect.set(patch.fields, field, value)
       }
     }
     return {
@@ -66,7 +65,7 @@ export class AcknowledgedWorkspaceSessionEntries {
           this.byHost.set(hostId, host)
         }
         for (const field of fields) {
-          host.set(field, slice[field])
+          host.set(field, sliceFields[field])
         }
       }
     }
@@ -80,7 +79,7 @@ export class AcknowledgedWorkspaceSessionEntries {
     } else if (fields) {
       const host = this.byHost.get(hostId)
       for (const field of fields) {
-        host?.delete(field as SessionField)
+        host?.delete(field)
       }
     } else {
       this.byHost.delete(hostId)

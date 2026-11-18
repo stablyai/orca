@@ -43,18 +43,19 @@ export function applyWorkspaceSessionEntriesPatch(
   const whole: WorkspaceSessionPatch = isWorkspaceSessionRecord(patch?.fields)
     ? { ...patch.fields }
     : {}
+  const storedFields: Record<string, unknown> = stored
   const entries = isWorkspaceSessionRecord(patch?.entries) ? patch.entries : {}
-  for (const [field, changes] of Object.entries(entries) as [SessionField, unknown][]) {
+  for (const [field, changes] of Object.entries(entries)) {
     if (!isFieldEntryChanges(changes)) {
       continue
     }
-    const current = stored[field]
+    const current = storedFields[field]
     const next: Record<string, unknown> = isWorkspaceSessionRecord(current) ? { ...current } : {}
     for (const key of changes.remove) {
       delete next[key]
     }
     Object.assign(next, changes.set)
-    ;(whole as Record<string, unknown>)[field] = next
+    Reflect.set(whole, field, next)
   }
   return whole
 }
@@ -66,9 +67,10 @@ export function fieldsStoredDifferently(
   patch: WorkspaceSessionEntriesPatch
 ): string[] {
   const differ: string[] = []
+  const storedFields: Record<string, unknown> = stored
   const fields = isWorkspaceSessionRecord(patch?.fields) ? patch.fields : {}
   for (const [field, value] of Object.entries(fields)) {
-    if (!structuralValuesEqual(stored[field as SessionField], value)) {
+    if (!structuralValuesEqual(storedFields[field], value)) {
       differ.push(field)
     }
   }
@@ -77,7 +79,7 @@ export function fieldsStoredDifferently(
     if (!isFieldEntryChanges(changes)) {
       continue
     }
-    const current = stored[field as SessionField]
+    const current = storedFields[field]
     const record = isWorkspaceSessionRecord(current) ? current : {}
     const same =
       changes.remove.every((key) => !Object.hasOwn(record, key)) &&
