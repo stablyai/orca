@@ -90,10 +90,18 @@ export function findSmartWorkspaceBranchIntentRef(
   if (!needle) {
     return null
   }
-  const pickUnique = (matches: readonly SmartWorkspaceBranchRef[]): string | null =>
-    matches.length > 0 && new Set(matches.map((ref) => ref.localBranchName)).size === 1
-      ? matches[0].refName
-      : null
+  const pickUnique = (matches: readonly SmartWorkspaceBranchRef[]): string | null => {
+    if (matches.length === 0 || new Set(matches.map((ref) => ref.localBranchName)).size !== 1) {
+      return null
+    }
+    const remotes = new Set(
+      matches.flatMap((ref) => {
+        const remote = /^refs\/remotes\/([^/]+)\//.exec(ref.refName)?.[1]
+        return remote ? [remote] : []
+      })
+    )
+    return remotes.size <= 1 ? matches[0].refName : null
+  }
   const exactMatches = branches.filter(
     (ref) =>
       ref.localBranchName === needle ||

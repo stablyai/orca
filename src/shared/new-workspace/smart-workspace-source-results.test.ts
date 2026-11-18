@@ -187,6 +187,26 @@ describe('Branch intent resolution (#18701)', () => {
       findSmartWorkspaceBranchIntentRef('TV', [branch('TV-foo-bar'), branch('TV-baz')], LIMIT)
     ).toBeNull()
     expect(
+      findSmartWorkspaceBranchIntentRef(
+        'feat',
+        [
+          branch('refs/remotes/origin/feature', 'feature'),
+          branch('refs/remotes/upstream/feature', 'feature')
+        ],
+        LIMIT
+      )
+    ).toBeNull()
+    expect(
+      findSmartWorkspaceBranchIntentRef(
+        'feature',
+        [
+          branch('refs/remotes/origin/feature', 'feature'),
+          branch('refs/remotes/upstream/feature', 'feature')
+        ],
+        LIMIT
+      )
+    ).toBeNull()
+    expect(
       findSmartWorkspaceBranchIntentRef('TV', [branch('feature/TV-foo-bar')], LIMIT)
     ).toBeNull()
     expect(findSmartWorkspaceBranchIntentRef('  ', [branch('TV-foo-bar')], LIMIT)).toBeNull()
