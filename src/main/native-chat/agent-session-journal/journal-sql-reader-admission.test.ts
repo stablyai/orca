@@ -36,8 +36,9 @@ const counters = new Int32Array(getEnvironmentData(${JSON.stringify(COUNTERS_KEY
 parentPort.on('message', ({ id, operation }) => {
   Atomics.add(counters, 0, 1)
   if (operation.request.sessionId.startsWith('hold-')) Atomics.wait(counters, 2, 0)
-  parentPort.postMessage({ type: 'page', id, result: { text: String(id).padEnd(${REPLY_BYTES}, 'x') } })
+  // Counted before posting, so main never reads a reply that the count doesn't include yet.
   Atomics.add(counters, 1, 1)
+  parentPort.postMessage({ type: 'page', id, result: { text: String(id).padEnd(${REPLY_BYTES}, 'x') } })
 })
 parentPort.postMessage({ type: 'ready' })`
   )
