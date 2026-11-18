@@ -51,7 +51,9 @@ describe('useNativeChatComposerAttachments', () => {
       begun.kept = probe.latest().beginPendingImageAttachment()
       begun.removed = probe.latest().beginPendingImageAttachment()
     })
-    if (!begun.kept || !begun.removed) { throw new Error('expected pending images') }
+    if (!begun.kept || !begun.removed) {
+      throw new Error('expected pending images')
+    }
     expect(probe.draft()).toBe('Describe these images')
     expect(probe.latest().imageAttachments.map(({ id }) => id)).toEqual([begun.kept, begun.removed])
     act(() => probe.latest().removeImageAttachment(begun.removed!))
@@ -65,13 +67,18 @@ describe('useNativeChatComposerAttachments', () => {
     const probe = await renderProbe('image-chat-a', true)
     const fromA = probe.latest()
     const pending: { id?: string | null } = {}
-    act(() => { pending.id = fromA.beginPendingImageAttachment() })
-    if (!pending.id) { throw new Error('expected a pending image') }
+    act(() => {
+      pending.id = fromA.beginPendingImageAttachment()
+    })
+    if (!pending.id) {
+      throw new Error('expected a pending image')
+    }
     await probe.rerender('image-chat-b')
     act(() => probe.latest().adoptDraft('B draft'))
     act(() => fromA.resolvePendingImageAttachment(pending.id!, '/up/a.png'))
     expect(readNativeChatComposerDraft('image-chat-a')).toMatchObject({
-      text: '', images: [{ id: pending.id, path: '/up/a.png' }]
+      text: '',
+      images: [{ id: pending.id, path: '/up/a.png' }]
     })
     expect(probe.draft()).toBe('B draft')
     act(() => probe.root.unmount())
