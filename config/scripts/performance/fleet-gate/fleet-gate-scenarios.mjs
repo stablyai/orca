@@ -200,6 +200,32 @@ async function typeIntoComposer({ page, windowMs }) {
 }
 
 // Same check as the workspace-switch paint benchmark: a full-window fixed layer above z 40 swallows card clicks.
+// One cheap check per click (a full-page scan per click costs ~1 s at fleet scale and lands in the window):
+// closes the setup-script tip, which floats over the workspace list, then hit-tests the target card's centre.
+async function clearPathTo(page, id) {
+  return page.evaluate((target) => {
+    const layer = document.querySelector('[data-setup-script-prompt-layer]')
+    const dismiss =
+      layer?.querySelector('button[aria-label^="Dismiss"]') ?? layer?.querySelector('button')
+    if (dismiss) {
+      dismiss.click()
+      return 'tip'
+    }
+    const surface = target
+      ? document.querySelector(
+          `[data-worktree-id="${CSS.escape(target)}"] [data-worktree-card-surface]`
+        )
+      : null
+    const box = surface?.getBoundingClientRect()
+    if (!box) {
+      return 'clear'
+    }
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+    return hit && surface.contains(hit) ? 'clear' : 'covered'
+  }, id)
+}
+
+// Once per window: full-window layers and fixed notices close on Escape.
 async function dismissOverlays(page) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const blocked = await page.evaluate(() =>
@@ -221,14 +247,7 @@ async function dismissOverlays(page) {
           getComputedStyle(element).position === 'fixed' && element.getClientRects().length > 0
       )
     )
-    // The setup-script tip floats over the bottom of the workspace list; its own Dismiss closes it for the repo.
-    const tipClosed = await page.evaluate(() => {
-      const layer = document.querySelector('[data-setup-script-prompt-layer]')
-      const dismiss =
-        layer?.querySelector('button[aria-label^="Dismiss"]') ?? layer?.querySelector('button')
-      dismiss?.click()
-      return Boolean(dismiss)
-    })
+    const tipClosed = (await clearPathTo(page, null)) === 'tip'
     if (!blocked && !notice && !tipClosed) {
       return
     }
@@ -276,8 +295,17 @@ async function switchWorkspaces({ page, windowMs }) {
   while (Date.now() < deadline) {
     const id = pair[switches % 2]
     let landed = false
-    // Notices appear after a delay, so clear them before every click, not just the first.
-    await dismissOverlays(page)
+    // Tips and notices appear after a delay, so check before every click, not just the first.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const path = await clearPathTo(page, id)
+      if (path === 'clear') {
+        break
+      }
+      if (path === 'covered') {
+        await page.keyboard.press('Escape')
+      }
+      await sleep(100)
+    }
     try {
       await page
         .locator(`[data-worktree-id="${id}"] [data-worktree-card-surface]`)
