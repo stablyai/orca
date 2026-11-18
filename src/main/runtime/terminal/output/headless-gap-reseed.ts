@@ -33,6 +33,8 @@ const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms).unref?.())
 
 type RebuildResult = 'rebuilt' | 'failed' | 'behind' | 'misaligned'
+// Above the daemon stream's held write-through budget (32 Mi chars): a lead this large is no queue.
+const GAP_RESEED_MAX_IN_FLIGHT_CHARS = 64 * 1024 * 1024
 // How long a stream must stay silent before a capture whose seq cannot be reconciled is taken as the screen.
 const GAP_RESEED_QUIET_ANCHOR_MS = 250
 
@@ -164,6 +166,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     state.gapReseedLastCaptureAt = Date.now()
     // Journal before asking, so whatever the snapshot misses after its seq is here.
     startGapJournal(recovery, this.getPtyOutputSequence(ptyId))
+    // Before asking: a gap while the capture is out leaves its snapshot short of the dropped span.
+    const gaps = recovery.gaps
     // Screen only: a storm repeats this, and history readers go to the provider instead.
     const { snapshot } = await this.awaitProviderTerminalBuffer(
       ptyId,
@@ -174,7 +178,6 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       return false
     }
     const deadline = Date.now() + GAP_RESEED_CAPTURE_TIMEOUT_MS
-    const gaps = recovery.gaps
     for (;;) {
       const result = await this.rebuildScreenAfterGap(ptyId, state, recovery, snapshot)
       if (result === 'misaligned') {
@@ -183,10 +186,10 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (result !== 'behind') {
         return result === 'rebuilt'
       }
-      // Still ahead of a silent stream after it had time to deliver: the seqs disagree the other way.
+      // Ahead by more than any stream queue can hold: the seqs disagree the other way, not bytes in flight.
       if (
         recovery.journal?.length === 0 &&
-        Date.now() - deadline + GAP_RESEED_CAPTURE_TIMEOUT_MS > 1_000
+        snapshot.seq - state.outputSequence > GAP_RESEED_MAX_IN_FLIGHT_CHARS
       ) {
         return this.rebuildFromQuietSnapshot(ptyId, state, recovery, snapshot, gaps)
       }

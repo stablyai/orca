@@ -164,7 +164,7 @@ it('recaptures when output arrived during a capture whose seq cannot place it', 
   }
 })
 
-it.each([3, 900])(
+it.each([3, 200_000_000])(
   'rebuilds from a fresh capture on a silent stream even when its seq (%i) does not match this one',
   async (seq) => {
     const runtime = createRuntime()
