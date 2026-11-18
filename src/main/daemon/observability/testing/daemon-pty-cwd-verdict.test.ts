@@ -17,9 +17,9 @@ const HELPER: DaemonEndpointIdentity = { pid: 1530, startedAtMs: 1_700_000, laun
 const FOLDER = '/work/orca-cwd-verdict/repo'
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
-function verdict(cwdReadableByDaemon: boolean): Promise<void> {
+function verdict(cwdReadableByDaemon: boolean, cwd = FOLDER): Promise<void> {
   return reportDaemonPtyCwdVerdict({
-    cwd: FOLDER,
+    cwd,
     cwdReadableByDaemon,
     pidPath: null,
     daemonIdentity: HELPER
@@ -45,5 +45,17 @@ describe('helper folder verdicts', () => {
     finishRecheck('ok')
     await denial
     expect(getDaemonFolderAccessMismatch(HELPER)).toBeNull()
+  })
+
+  it('keeps an older denial when a later one is for a folder this app cannot read either', async () => {
+    let finishRecheck: (outcome: string) => void = () => {}
+    enumerateMock
+      .mockReturnValueOnce(new Promise((resolve) => (finishRecheck = resolve)))
+      .mockResolvedValueOnce('denied')
+    const denial = verdict(false)
+    await verdict(false, '/work/orca-cwd-verdict/other')
+    finishRecheck('ok')
+    await denial
+    expect(getDaemonFolderAccessMismatch(HELPER)).not.toBeNull()
   })
 })

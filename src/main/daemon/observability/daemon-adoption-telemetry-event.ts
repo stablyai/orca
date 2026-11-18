@@ -7,6 +7,7 @@ import {
   classifyDaemonPtyCwd,
   classifyDaemonSpawnerPath,
   isMacTccFolderClass,
+  type DaemonPtyCwdClass,
   type DaemonSpawnerPathClass
 } from '../../../shared/telemetry/daemon-adoption-telemetry'
 import { bucketDaemonLiveSessionCount } from '../../../shared/telemetry/daemon-lifecycle-telemetry'
@@ -116,9 +117,9 @@ export async function trackDaemonPtyCwdVerdict(
   }
 }
 
-// An older denial's app-side read can finish after a newer verdict for the same folder class.
-const latestVerdicts = new Map<string, number>()
-let verdictCount = 0
+// An older denial's app-side read can finish after the same helper read that folder class again;
+// one entry per class keeps this bounded.
+const latestReadable = new Map<DaemonPtyCwdClass, { helper: string }>()
 
 /** Do not await: the app-side directory read can wait indefinitely on a macOS permission prompt. */
 export async function reportDaemonPtyCwdVerdict(args: {
@@ -136,10 +137,10 @@ export async function reportDaemonPtyCwdVerdict(args: {
     const cwdClass = classifyDaemonPtyCwd(cwd, homedir())
     const tccFolderClass =
       process.platform === 'darwin' && isMacTccFolderClass(cwdClass) ? cwdClass : null
-    const verdictKey = `${args.daemonIdentity?.pid}:${args.daemonIdentity?.launchNonce}:${cwdClass}`
-    const verdict = ++verdictCount
-    latestVerdicts.set(verdictKey, verdict)
+    const helper = `${args.daemonIdentity?.pid}:${args.daemonIdentity?.launchNonce}`
+    const readableBefore = latestReadable.get(cwdClass)
     if (args.cwdReadableByDaemon === true) {
+      latestReadable.set(cwdClass, { helper })
       clearDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
       // TCC-gated folders only: elsewhere a readable cwd says nothing about the theory.
       if (tccFolderClass) {
@@ -154,7 +155,9 @@ export async function reportDaemonPtyCwdVerdict(args: {
         ? await prepareTccDenialCapture(args.daemonIdentity, tccFolderClass, deniedAtMs)
         : null
     const diverged = await hasDaemonPtyCwdDenialDiverged(cwd, args.cwdReadableByDaemon)
-    if (!diverged || latestVerdicts.get(verdictKey) !== verdict) {
+    const readableAfter = latestReadable.get(cwdClass)
+    const reallowed = readableAfter !== readableBefore && readableAfter?.helper === helper
+    if (!diverged || reallowed) {
       if (capture) {
         releaseTccDenialCapture(capture)
       }

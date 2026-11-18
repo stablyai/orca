@@ -7,6 +7,8 @@ import type {
 import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import type { DeferredProviderOwner } from './deferred-provider-owner'
 import { ProviderOwnerListener } from './provider-owner-channels'
+import { PROVIDER_BOOTSTRAP_DEADLINE_MS } from './provider-bootstrap-status'
+import { OWNERSHIP_PROOF_WINDOW_MS } from './provider-ownership-launch-proof'
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type { DaemonEndpointIdentity } from '../daemon/protocol/daemon-hello-protocol'
 import { inspectMacProcessCodeIdentity } from '../daemon/executable-host/macos/daemon-mac-code-identity'
@@ -113,9 +115,9 @@ export type ProviderHostRoute = {
   reportCwd: HostedCwdReporter
 }
 
-// The owner's 15 s bootstrap deadline starts with the launch; a failed hosted start must leave a
-// direct launch enough of it.
-const HOSTED_START_BUDGET_MS = 8_000
+// The bootstrap deadline starts with the launch; whichever owner attaches still needs time for
+// its ownership proof, so a failed hosted start always leaves a direct launch enough of it.
+const HOSTED_START_BUDGET_MS = PROVIDER_BOOTSTRAP_DEADLINE_MS - OWNERSHIP_PROOF_WINDOW_MS - 1_000
 
 async function connectedHost(route: ProviderHostRoute): Promise<DaemonClient | null> {
   try {
@@ -196,9 +198,13 @@ export async function launchProviderOwner(
     if (remainingMs() === 0) {
       throw new Error('Provider host start ran out of time')
     }
-    const result = await client.request<HostedProviderSpawnResult>(
-      'spawnProvider',
-      hostedLaunch(spec, path, listener.nonce),
+    // A timer, not only the request's own timeout, so a stalled event loop still falls back in time.
+    const result = await withProviderStartDeadline(
+      client.request<HostedProviderSpawnResult>(
+        'spawnProvider',
+        hostedLaunch(spec, path, listener.nonce),
+        remainingMs()
+      ),
       remainingMs()
     )
     if ('spawnError' in result) {
