@@ -117,7 +117,8 @@ export async function answerWorkerApproval(
         approval: closedApproval(answered.approval, {
           by: access.answeredBy,
           decision: params.decision,
-          reason: access.reason,
+          // Told only when it reached the worker, as the chat path does.
+          reason: params.decision === 'deny' || reasonMessage ? access.reason : null,
           reasonDelivered: params.decision === 'deny'
         })
       },
