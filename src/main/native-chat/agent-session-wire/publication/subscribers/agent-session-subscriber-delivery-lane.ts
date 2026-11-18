@@ -133,6 +133,9 @@ export class SubscriberDeliveryLane {
 
   /** Ordered work (an opening or snapshot) sending live text itself; false past the stream's share. */
   sendsLiveText(items: object): boolean {
+    if (this.stopped.aborted) {
+      return false
+    }
     const adopts = this.active?.kind === 'ordered'
     if (adopts) {
       // It sends the current live text, at least as new as any waiting, which would only repeat it.
