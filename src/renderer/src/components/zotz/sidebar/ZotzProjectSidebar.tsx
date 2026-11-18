@@ -25,6 +25,8 @@ import {
 } from './zotz-project-conversations'
 import { useZotzGitHubRepoIcons } from './use-zotz-github-repo-icons'
 import { ZotzConversationMenu } from './ZotzConversationMenu'
+import { ZotzProjectMenu } from './ZotzProjectMenu'
+import HiddenProjectsSection from '../../sidebar/hidden-projects/HiddenProjectsSection'
 
 function AddProjectButton(): React.JSX.Element {
   const t = useTranslate()
@@ -108,6 +110,7 @@ function ProjectHeader({ repo }: { repo: Repo }): React.JSX.Element {
       {repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github' ? (
         <GitHubIcon className="size-3.5 shrink-0 text-worktree-sidebar-foreground/40" />
       ) : null}
+      <ZotzProjectMenu repo={repo} />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -208,6 +211,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
           </section>
         ) : null}
       </div>
+      <HiddenProjectsSection />
     </div>
   )
 }
