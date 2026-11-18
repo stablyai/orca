@@ -1,13 +1,11 @@
-import React, { useCallback, useMemo } from 'react'
-import { Ban, FolderPlus, Plus } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo } from 'react'
+import { FolderPlus, Plus } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
-import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/AgentStateDot'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { activityThreadStatusId } from '@/components/activity/activity-thread-presentation'
 import { useAllAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
@@ -23,15 +21,15 @@ import {
   buildZotzFolderConversations,
   buildZotzProjectSections,
   summarizeZotzConversationStatus,
-  type ZotzConversationRow,
   type ZotzConversationStatus
 } from './zotz-project-conversations'
 import { useZotzGitHubRepoIcons } from './use-zotz-github-repo-icons'
-import { ZotzWorkingRipple } from './ZotzWorkingRipple'
 import { useZotzAgentQueue } from '../agent-queue/zotz-agent-queue-store'
 import { ZotzConversationMenu } from './ZotzConversationMenu'
 import { ZotzProjectMenu } from './ZotzProjectMenu'
 import HiddenProjectsSection from '../../sidebar/hidden-projects/HiddenProjectsSection'
+import { ZotzConversationRow } from './ZotzConversationRow'
+import { ZotzArchivedSection } from './ZotzArchivedSection'
 
 function AddProjectButton(): React.JSX.Element {
   const t = useTranslate()
@@ -52,64 +50,6 @@ function AddProjectButton(): React.JSX.Element {
         <FolderPlus className="size-3.5" />
       </Button>
     </AddProjectMenu>
-  )
-}
-
-function ConversationRow({
-  row,
-  active,
-  status,
-  canceled
-}: {
-  row: ZotzConversationRow
-  active: boolean
-  status: ZotzConversationStatus | null
-  /** Its only agent was canceled in the memory queue and never started. */
-  canceled: boolean
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <button
-      type="button"
-      data-current={active ? 'true' : undefined}
-      aria-current={active ? 'page' : undefined}
-      onClick={() => activateAndRevealWorkspace(row.id)}
-      className={cn(
-        'flex w-full min-w-0 items-start gap-2 rounded-md py-1.5 pr-8 pl-6 text-left transition-colors',
-        active
-          ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-          : 'text-worktree-sidebar-foreground/80 hover:bg-worktree-sidebar-foreground/8'
-      )}
-    >
-      <span className="mt-1 flex h-3 w-5 shrink-0 items-center justify-center">
-        {status && (status.state === 'working' || status.state === 'monitoring') ? (
-          <ZotzWorkingRipple />
-        ) : status ? (
-          <AgentStateDot
-            state={status.state}
-            unread={status.unread}
-            size="md"
-            tooltipSide="right"
-          />
-        ) : canceled ? (
-          <Ban
-            role="img"
-            aria-label={t('zotz.agentQueue.canceledMark', 'Canceled')}
-            className="size-3 text-muted-foreground"
-          />
-        ) : (
-          <span aria-hidden className="size-1.5 rounded-full bg-worktree-sidebar-foreground/25" />
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-medium">{row.title}</span>
-        {row.branch && row.branch !== row.title ? (
-          <span className="block truncate font-mono text-2xs text-worktree-sidebar-foreground/50">
-            {row.branch}
-          </span>
-        ) : null}
-      </span>
-    </button>
   )
 }
 
@@ -189,6 +129,26 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
       }),
     [repos, worktreesByRepo, statusByWorkspace, canceledWorkspaces]
   )
+  // Upstream refreshes PR status only for cards it reports as on screen; this list is the cards here.
+  const setVisibleReviewIds = useAppStore((s) => s.setVisibleReviewCardWorktreeIds)
+  const reviewIds = useMemo(
+    () =>
+      sections.flatMap(({ conversations }) =>
+        conversations.flatMap((row) => (row.worktree?.branch ? [row.worktree.id] : []))
+      ),
+    [sections]
+  )
+  useEffect(() => {
+    const publish = (): void =>
+      setVisibleReviewIds(document.visibilityState === 'visible' ? reviewIds : [])
+    publish()
+    document.addEventListener('visibilitychange', publish)
+    return () => {
+      document.removeEventListener('visibilitychange', publish)
+      setVisibleReviewIds([])
+    }
+  }, [reviewIds, setVisibleReviewIds])
+
   const folders = useMemo(
     () =>
       buildZotzFolderConversations({ folders: folderWorkspaces, tabsByWorkspace: tabsByWorktree }),
@@ -214,8 +174,9 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
             <ProjectHeader repo={repo} />
             {conversations.map((row) => (
               <ZotzConversationMenu key={row.id} worktree={row.worktree}>
-                <ConversationRow
+                <ZotzConversationRow
                   row={row}
+                  repo={repo}
                   active={row.id === activeWorktreeId}
                   status={statusByWorkspace.get(row.id) ?? null}
                   canceled={canceledWorkspaces.has(row.id)}
@@ -230,9 +191,10 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
               {t('zotz.sidebar.folders', 'Folders')}
             </div>
             {folders.map((row) => (
-              <ConversationRow
+              <ZotzConversationRow
                 key={row.id}
                 row={row}
+                repo={undefined}
                 active={row.id === activeWorktreeId}
                 status={statusByWorkspace.get(row.id) ?? null}
                 canceled={canceledWorkspaces.has(row.id)}
@@ -241,6 +203,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
           </section>
         ) : null}
       </div>
+      <ZotzArchivedSection />
       <HiddenProjectsSection />
     </div>
   )

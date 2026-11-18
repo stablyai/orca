@@ -17,6 +17,12 @@ import {
   hasGitHubCheckHandle
 } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 
+/** The parts of a PR the fix prompt and check reads need; upstream's card and review shapes both fit. */
+export type ZotzReviewRef = Pick<
+  HostedReviewInfo,
+  'provider' | 'number' | 'title' | 'url' | 'headSha' | 'githubRepository'
+>
+
 export type ZotzFixChecksOutcome = 'sent' | 'launched' | 'nothing-broken' | 'agent-busy' | 'failed'
 
 /** The conversation's agent: the one in the active tab, else the first that can take a message. */
@@ -31,7 +37,7 @@ export function pickZotzFixChecksTarget(
 /** The broken checks with their failed-step logs, worded like upstream's "Fix With AI". */
 async function buildPrompt(
   repo: Repo,
-  review: HostedReviewInfo,
+  review: ZotzReviewRef,
   checks: PRCheckDetail[]
 ): Promise<string> {
   const { fetchPRCheckDetails } = useAppStore.getState()
@@ -71,7 +77,7 @@ async function buildPrompt(
 export async function fixZotzPrChecks(input: {
   worktreeId: string
   repo: Repo
-  review: HostedReviewInfo
+  review: ZotzReviewRef
   checks: PRCheckDetail[]
   onlyIfIdle?: boolean
 }): Promise<ZotzFixChecksOutcome> {

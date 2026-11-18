@@ -25960,7 +25960,11 @@
       "duplicate": "Duplicate in a new worktree",
       "archive": "Archive",
       "delete": "Delete",
-      "conversationActions": "Conversation actions"
+      "conversationActions": "Conversation actions",
+      "archivedMerged": "Merged and archived: {{name}}",
+      "viewArchived": "View archived",
+      "archivedTitle": "Archived",
+      "restore": "Restore {{name}}"
     },
     "composer": {
       "worktreeLabel": "Worktree",
@@ -25972,7 +25976,6 @@
       "stayOnBranch": "Stay on {{branch}}"
     },
     "prChecks": {
-      "title": "Pull request",
       "openPr": "Open the pull request",
       "loading": "Loading checks…",
       "none": "No checks on this pull request",
@@ -25985,6 +25988,26 @@
       "sent": "Sent the failing checks to the conversation",
       "launched": "No agent here: opened one to fix the checks",
       "sendFailed": "Could not send the failing checks"
+    },
+    "pr": {
+      "merged": "Merged",
+      "closed": "Closed",
+      "draft": "Draft",
+      "conflicts": "Merge conflicts",
+      "failing": "Checks failed",
+      "pending": "Checks running…",
+      "ready": "Ready to merge",
+      "open": "Open",
+      "none": "No pull request yet",
+      "create": "Create PR",
+      "createSent": "Asked the agent to open the pull request",
+      "createFailed": "Could not ask the agent to open the pull request",
+      "merge": "Merge",
+      "mergedToast": "Pull request #{{number}} merged",
+      "mergeFailed": "Could not merge the pull request"
+    },
+    "prChip": {
+      "dismiss": "Hide the pull request bar"
     }
   }
 }

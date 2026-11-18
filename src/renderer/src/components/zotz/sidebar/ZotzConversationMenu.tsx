@@ -1,7 +1,6 @@
 import React from 'react'
 import { Archive, Copy, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
@@ -19,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { archiveZotzConversation } from './zotz-archive'
 import { runWorktreeDelete } from '../../sidebar/workspace-actions/deletion/delete-worktree-flow'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
@@ -29,18 +29,6 @@ type MenuAction = {
   destructive?: boolean
   separatorBefore?: boolean
   run: () => void
-}
-
-function archive(worktree: Worktree, t: Translate): void {
-  const { updateWorktreeMeta } = useAppStore.getState()
-  void updateWorktreeMeta(worktree.id, { isArchived: true })
-  toast.success(t('zotz.sidebar.archived', 'Conversation archived'), {
-    action: {
-      label: t('zotz.sidebar.undo', 'Undo'),
-      onClick: () =>
-        void useAppStore.getState().updateWorktreeMeta(worktree.id, { isArchived: false })
-    }
-  })
 }
 
 function conversationActions(worktree: Worktree, t: Translate): MenuAction[] {
@@ -83,7 +71,7 @@ function conversationActions(worktree: Worktree, t: Translate): MenuAction[] {
         label: t('zotz.sidebar.archive', 'Archive'),
         icon: Archive,
         separatorBefore: true,
-        run: () => archive(worktree, t)
+        run: () => archiveZotzConversation(worktree, 'user')
       },
       {
         key: 'delete',

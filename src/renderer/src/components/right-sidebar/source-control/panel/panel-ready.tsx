@@ -5,7 +5,7 @@ import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
 import type { SourceControlPanelReadyProps } from './panel-props'
-import { ZotzPrChecksSection } from '../../../zotz/source-control/ZotzPrChecksSection'
+import { ZotzPrStatusStrip } from '../../../zotz/source-control/ZotzPrStatusStrip'
 
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { model, worktreePath } = props
@@ -118,11 +118,10 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           />
         )}
 
-        {activeWorktreeId && hostedReview ? (
-          <ZotzPrChecksSection
-            key={`${activeWorktreeId}:${hostedReview.number}`}
+        {activeWorktreeId ? (
+          <ZotzPrStatusStrip
             worktreeId={activeWorktreeId}
-            review={hostedReview}
+            onCreatePrFallback={() => void handleCreatePrHeaderClick()}
           />
         ) : null}
 
