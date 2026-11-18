@@ -16,9 +16,10 @@ export type RestartWorkerStopReportDeps = {
   /** Opens a chat so its status is read from its journal; null when this host runs no chats. */
   chats: {
     open: (sessionId: string) => Promise<unknown>
+    /** Read from the journal, not the status the last run saved. */
     status: (
       sessionId: string
-    ) => Pick<AgentSessionStatusSummary, 'status' | 'lastAssistantMessage'> | undefined
+    ) => Promise<Pick<AgentSessionStatusSummary, 'status' | 'lastAssistantMessage'> | undefined>
   } | null
 }
 
@@ -51,7 +52,7 @@ export async function reportWorkerStopsAcrossRestart(
         continue
       }
       await deps.chats.open(sessionId)
-      const status = deps.chats.status(sessionId)
+      const status = await deps.chats.status(sessionId)
       // Working (continued, or busy), or waiting on its person: not a stop to report.
       if (status?.status !== 'idle') {
         continue

@@ -103,7 +103,7 @@ describe('worker stops across a restart', () => {
         db: ctx.db,
         reportDeps: ctx.reportDeps,
         reportRestingPane: async () => {},
-        chats: { open, status: () => ({ status, lastAssistantMessage: 'Waiting.' }) }
+        chats: { open, status: async () => ({ status, lastAssistantMessage: 'Waiting.' }) }
       })
       expect(open).toHaveBeenCalledWith(CHAT_SESSION)
       expect(ctx.mail().map((report) => report.subject)).toEqual(reports)
