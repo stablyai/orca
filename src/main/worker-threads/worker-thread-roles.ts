@@ -15,6 +15,7 @@ export type WorkerThreadRole =
   | 'orca-main-thread-hang-watchdog'
   | 'orca-opencode-sqlite-reader'
   | 'orca-orchestration-checkpoint'
+  | 'orca-orchestration-compaction'
   | 'orca-plugin-transpile'
   | 'orca-port-scan'
   | 'orca-profile-state-backup'

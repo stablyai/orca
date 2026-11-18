@@ -164,6 +164,10 @@ export async function activateBackendRuntime(
   const { createOrcadPairedEnvironmentOptions } =
     await import('../orcad/host-runtime/orcad-paired-environment-options')
   const pairedEnvironments = createOrcadPairedEnvironmentOptions()
+  const { compactOrchestrationDbBeforeOpen } =
+    await import('../runtime/orchestration/db/maintenance/orchestration-db-compaction')
+  // Before the runtime can open the file: VACUUM needs it to itself.
+  await compactOrchestrationDbBeforeOpen()
   const runtime = new OrcaRuntimeService(profileStore, stats, {
     legacyStructuredSessionTabIds: chatJournal.open.legacySessionTabIds,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.

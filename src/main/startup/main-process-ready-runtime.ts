@@ -52,6 +52,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-
 import { reapLeftoverMacOSPermissionStatusHelpers } from '../computer/macos-permissions/macos-permission-status-leftover-reap'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
+import { compactOrchestrationDbBeforeOpen } from '../runtime/orchestration/db/maintenance/orchestration-db-compaction'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
 import { startWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner-startup'
@@ -70,6 +71,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   await prepareWorktreeRemovalsForStore(store)
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
+  // Before the runtime can open the file: VACUUM needs it to itself.
+  await compactOrchestrationDbBeforeOpen()
   const runtime = initializeMainProcessRuntime()
   initializeMainProcessAutomations()
   startWorkspaceCleanupRunner(runtime, store)
