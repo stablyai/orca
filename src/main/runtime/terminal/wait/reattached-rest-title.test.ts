@@ -52,6 +52,28 @@ describe('reading that the agent itself is in front', () => {
   })
 })
 
+describe('an exact read whose own observation named the agent', () => {
+  it('does not ask the owner for the name again', async () => {
+    const confirmForegroundProcess = vi.fn(async () => 'claude')
+    const observedClaude = {
+      readLaunchedAgentForeground: async (
+        _ptyId: string,
+        _agent: string,
+        exact?: { named: boolean }
+      ) => {
+        if (exact) {
+          exact.named = true
+        }
+        return 'agent' as const
+      }
+    }
+    await expect(
+      readExactAgentForeground(observedClaude, { confirmForegroundProcess }, 'pty-1', 'claude')
+    ).resolves.toBe('agent')
+    expect(confirmForegroundProcess).not.toHaveBeenCalled()
+  })
+})
+
 describe('rest-title reads on a quiet reattached pane', () => {
   it('reads again once discovery stores the root an old owner needs, not before the retry', async () => {
     const pane: ReturnType<typeof seededPane> & {

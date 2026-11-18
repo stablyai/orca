@@ -6,6 +6,7 @@ import {
   readAdoptedRootAgentForeground,
   readExactAgentForeground,
   readLaunchedAgentForeground,
+  type ExactAgentName,
   type LaunchedAgentForeground,
   type LaunchedAgentHost
 } from '../../terminal/wait/launched-agent-foreground'
@@ -19,7 +20,8 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
   /** Read at the physical owner; discard a result that outlived this runtime binding. */
   async readLaunchedAgentForeground(
     ptyId: string,
-    agent: TuiAgent
+    agent: TuiAgent,
+    exact?: ExactAgentName
   ): Promise<LaunchedAgentForeground> {
     const pty = this.ptysById.get(ptyId)
     const incarnation = pty?.incarnationId
@@ -29,7 +31,8 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
       host,
       ptyId,
       agent,
-      incarnation ?? undefined
+      incarnation ?? undefined,
+      exact
     )
     return this.ptysById.get(ptyId) === pty && pty?.incarnationId === incarnation
       ? result
