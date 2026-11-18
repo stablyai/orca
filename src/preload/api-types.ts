@@ -8,6 +8,7 @@ import type {
   ZcodePlanCredentialsApi
 } from './api/agent-accounts/agent-account-api'
 import type { HooksApi } from './api/agent-hooks/agent-hook-api'
+import type { HermesProfilesSnapshot } from '../shared/hermes-profiles'
 import type { SkillsApi } from './api/skills/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi } from './api/agent-status/agent-status-api'
 import type {
@@ -128,6 +129,7 @@ export type PreloadApi = {
   keybindings: KeybindingsApi
   codexAccounts: CodexAccountsApi
   claudeAccounts: ClaudeAccountsApi
+  hermesProfiles: { list: () => Promise<HermesProfilesSnapshot> }
   cli: CliApi
   orcaUninstall: OrcaUninstallApi
   codexConfigSync: CodexConfigSyncApi
