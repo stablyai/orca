@@ -48,7 +48,9 @@ it('reads a real native receipt through the paired encrypted RPC transport on it
     recordAutomationSavedCard(sessionId, 'created', automation, () => 'UTC')
     const itemId = 'orca:automation-saved%3Acollision%3A200'
     await eventually(async () =>
-      expect(await rig.host.nativeAutomationReceipt(sessionId, itemId)).toMatchObject({
+      expect(
+        (await (await rig.host.journalReads(sessionId)).nativeAutomationReceipt(itemId))?.body
+      ).toMatchObject({
         automation: { name: 'Writer-owned' }
       })
     )

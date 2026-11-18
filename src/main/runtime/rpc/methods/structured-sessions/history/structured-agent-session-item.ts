@@ -19,8 +19,9 @@ export const STRUCTURED_AGENT_SESSION_ITEM_METHODS = [
     params: ItemParams,
     handler: async (params, ctx): Promise<AutomationReceiptRead> => {
       const host = await requireInstalledStructuredHost(ctx, params.sessionId, true)
-      const receipt = await host.nativeAutomationReceipt(params.sessionId, params.itemId)
-      if (!receipt) {
+      const reads = await host.journalReads(params.sessionId)
+      const receipt = (await reads.nativeAutomationReceipt(params.itemId))?.body
+      if (receipt?.kind !== 'automation-saved') {
         return { status: 'unverified' }
       }
       const id = receipt.automation.id
