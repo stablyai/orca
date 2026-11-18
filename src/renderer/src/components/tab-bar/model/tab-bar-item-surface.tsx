@@ -91,7 +91,7 @@ export function renderTabBarItems({
     if (item.type === 'simulator') {
       return activeTabType === 'simulator' && item.id === activeSimulatorTabId
     }
-    if (item.type === 'agent-session') {
+    if (item.type === 'agent-session' || item.type === 'room') {
       return activeTabType === 'agent-session' && item.id === activeTabId
     }
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id

@@ -1001,7 +1001,7 @@
       "src/main/copilot/hook-service.test.ts": 180,
       "src/main/crash-reporting/reports/crash-report-store.test.ts": 438,
       "src/main/crash-reporting/minidumps/minidump-crash-signature.test.ts": 87,
-      "src/main/crash-reporting/memory/renderer-heap-allocation-sites.test.ts": 62,
+      "src/main/crash-reporting/memory/heap-allocation-sites.test.ts": 62,
       "src/main/cursor/hook-command.live-shell.test.ts": 488,
       "src/main/cursor/hook-service.test.ts": 360,
       "src/main/daemon/pty-subprocess/testing/agent-startup-prompt-latency.node-pty.test.ts": 2576,

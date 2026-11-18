@@ -16,6 +16,7 @@ import type {
 } from './workspace-layout-command-types'
 import {
   openAgentSessionTab,
+  openRoomTab,
   openBrowserTab,
   openEditorTab
 } from './commands/workspace-layout-content-commands'
@@ -58,7 +59,8 @@ const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
   'openEditorTab',
   'openBrowserTab',
   'openAgentSessionTab',
-  'openSimulatorTab'
+  'openSimulatorTab',
+  'openRoomTab'
 ])
 
 export function renameTabCommandsOf(command: RenameTabsCommand): CommandOf<'renameTab'>[] {
@@ -171,6 +173,8 @@ function applyCommand(
       return setBrowserTabProfile(model, command)
     case 'openAgentSessionTab':
       return openInNewGroup(model, command, (next) => openAgentSessionTab(next, command, context))
+    case 'openRoomTab':
+      return openInNewGroup(model, command, (next) => openRoomTab(next, command, context))
     case 'startPane':
       return startPane(model, command, context)
     case 'restartPane':

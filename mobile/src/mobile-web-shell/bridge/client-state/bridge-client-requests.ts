@@ -23,6 +23,10 @@ export class BridgeClientRequests {
     return this.pending.has(id)
   }
 
+  ids(): readonly string[] {
+    return [...this.pending.keys()]
+  }
+
   open(id: string, request: PendingRequest): void {
     this.pending.set(id, request)
   }

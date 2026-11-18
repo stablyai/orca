@@ -118,10 +118,19 @@ export function writeDurableSecureJsonFile(
 
 const discardStage = (tmpFile: string): void => rmSync(tmpFile, { force: true })
 
-type SecureWriteOptions = { shouldPublish?: () => boolean; onPublished?: () => void }
+type SecureWriteOptions = {
+  shouldPublish?: () => boolean
+  onPublished?: () => void
+  // Publish only a file owner-only permissions hold for, else nothing and false.
+  ownerOnly?: boolean
+}
 type StagedSecureFile = { tmpFile: string; dir: string; restricted: boolean }
 
-function stageSecureFile(targetPath: string, contents: string): StagedSecureFile {
+function stageSecureFile(
+  targetPath: string,
+  contents: string,
+  ownerOnly: boolean | undefined
+): StagedSecureFile {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -133,7 +142,7 @@ function stageSecureFile(targetPath: string, contents: string): StagedSecureFile
     // Create restricted on Windows: mode is ignored there, leaving inherited DACL exposure until a later fix.
     const restricted =
       process.platform === 'win32'
-        ? writeRestrictedWindowsFile(tmpFile, contents)
+        ? writeRestrictedWindowsFile(tmpFile, contents, false, { ownerOnly })
         : writeModeRestrictedFile(tmpFile, contents)
     return { tmpFile, dir, restricted }
   } catch (error) {
@@ -148,7 +157,10 @@ function publishStagedSecureFile(
   options: SecureWriteOptions
 ): boolean {
   // Recheck after hardening; the check and rename are separate, non-atomic operations.
-  if (options.shouldPublish && !options.shouldPublish()) {
+  if (
+    (options.ownerOnly && !staged.restricted) ||
+    (options.shouldPublish && !options.shouldPublish())
+  ) {
     discardStage(staged.tmpFile)
     return false
   }
@@ -171,7 +183,7 @@ export function writeSecureFile(
   contents: string,
   options: SecureWriteOptions & { durable?: boolean } = {}
 ): boolean {
-  const staged = stageSecureFile(targetPath, contents)
+  const staged = stageSecureFile(targetPath, contents, options.ownerOnly)
   let restricted: boolean
   try {
     if (options.durable) {
@@ -195,7 +207,7 @@ export async function writeDurableSecureFile(
   contents: string,
   options: SecureWriteOptions = {}
 ): Promise<boolean> {
-  const staged = stageSecureFile(targetPath, contents)
+  const staged = stageSecureFile(targetPath, contents, options.ownerOnly)
   let restricted: boolean
   try {
     await fsyncPath(staged.tmpFile, process.platform === 'win32' ? 'r+' : 'r')

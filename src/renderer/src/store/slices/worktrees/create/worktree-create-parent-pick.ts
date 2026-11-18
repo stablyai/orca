@@ -12,6 +12,9 @@ import {
   getIndexedAllWorktrees,
   getIndexedWorktreesById
 } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { readBots } from '@/lib/bot-catalog-snapshot'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import { isHome } from '../../../../../../shared/bots/bot-homes'
 import {
   getWorktreeHostIdentity,
   isWorktreeHostIdentity
@@ -151,8 +154,10 @@ export function resolveWorktreeCreateParent(
     }
   }
   return {
+    // A bot's or group's home parents only its own workers' workspaces, never one made while it is open.
     parentWorkspace:
-      activeScope?.type === 'folder'
+      activeScope?.type === 'folder' &&
+      !(activeFolder && isHome(activeFolder, [...readBots(), ...readBotGroups()]))
         ? folderWorkspaceKey(activeScope.folderWorkspaceId)
         : undefined,
     pickedDisplayName,

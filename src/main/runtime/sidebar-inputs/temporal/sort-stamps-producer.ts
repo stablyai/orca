@@ -88,6 +88,11 @@ export class SortStampsProducer {
     this.stamp({ worktreeId, sshHostId }, { kind: 'terminal-started' })
   }
 
+  /** News outside any pane, as a member's reply in a group room: stamped and raised as a bell is. */
+  noteWorkspaceNews(worktreeId: string): void {
+    this.stamp({ worktreeId, sshHostId: null }, { kind: 'bell' })
+  }
+
   /** A record write may have moved an unread flag; a Done beside a Working pane re-tiers on it. */
   noteRecordsWritten(): void {
     const phasesByWorkspace = new Map<string, { workspace: TrackedPane; phases: Set<AgentPhase> }>()

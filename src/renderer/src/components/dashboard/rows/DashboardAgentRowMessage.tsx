@@ -51,6 +51,7 @@ export function DashboardAgentRowMessage({
       {lastAssistantMessage ? (
         <CommentMarkdownAsync
           content={lastAssistantMessage}
+          singleTildeStrikethrough={false}
           // Animate natural markdown height with CSS instead of JS measurement.
           className={cn(
             'min-w-0 flex-1 overflow-hidden text-[10px] leading-snug text-muted-foreground/80',

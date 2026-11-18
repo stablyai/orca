@@ -46,8 +46,14 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     marginLeft: 6
   },
+  // Muted and plain, like the header's count: a fact about the section, not an action.
   sectionPendingSpinner: {
     marginLeft: spacing.sm
+  },
+  // At the header's end, as the desktop's Bots + is.
+  sectionNewBot: {
+    marginLeft: 'auto',
+    paddingHorizontal: spacing.xs
   },
   separator: {
     height: StyleSheet.hairlineWidth,

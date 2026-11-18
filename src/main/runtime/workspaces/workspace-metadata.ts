@@ -12,6 +12,12 @@ import {
 } from './metadata/runtime-managed-worktree-metadata'
 import type { CrossStoreParentRef } from '../../../shared/worktree/lineage-types'
 import { RuntimeWorktreeReviewBase } from './metadata/runtime-worktree-review-base'
+import type { WorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase {
   recordOptimisticReconcileToken(worktreeId: string): string {
@@ -71,6 +77,19 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+    // A folder workspace's only lineage is its workspace link; other fields stay git-only as before.
+    const { lineage, ...rest } = updates
+    const folder =
+      lineage?.noParent === true && Object.values(rest).every((value) => value === undefined)
+        ? this.resolveFolderWorkspaceSelector(worktreeSelector)
+        : null
+    if (folder) {
+      const folderKey = folderWorkspaceKey(folder.id)
+      this.store.removeWorkspaceLineage?.((link) => link.childWorkspaceKey === folderKey)
+      this.invalidateResolvedWorktreeCache()
+      this.notifyFolderWorkspaceChanged()
+      return this.showManagedWorktree(worktreeSelector)
+    }
     return updateRuntimeManagedWorktreeMetadata({
       selector: worktreeSelector,
       updates,
@@ -86,6 +105,37 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
         showWorktree: (selector) => this.showManagedWorktree(selector)
       }
     })
+  }
+
+  /** Drops every link under a deleted bot's home on this host: same-store ones, and ones to a home on
+   *  the computer `homeInstallationId` names. */
+  releaseBotHome(botHomeKey: WorkspaceKey, homeInstallationId?: string): { released: number } {
+    const store = this.requireStore()
+    const released = [
+      ...(store.removeWorkspaceLineage?.((lineage) => lineage.parentWorkspaceKey === botHomeKey) ??
+        []),
+      ...(homeInstallationId
+        ? (store.removeCrossStoreWorkspaceLineage?.(
+            ({ parent }) =>
+              parent.workspaceKey === botHomeKey && parent.installationId === homeInstallationId
+          ) ?? [])
+        : [])
+    ]
+    if (released.length === 0) {
+      return { released: 0 }
+    }
+    this.invalidateResolvedWorktreeCache()
+    this.notifyFolderWorkspaceChanged()
+    const repoIds = new Set(
+      released.flatMap((key) => {
+        const parsed = parseWorkspaceKey(key)
+        return parsed?.type === 'worktree' ? [getRepoIdFromWorktreeId(parsed.worktreeId)] : []
+      })
+    )
+    for (const repoId of repoIds) {
+      this.notifyWorktreesChanged(repoId)
+    }
+    return { released: released.length }
   }
 
   persistManagedWorktreeSortOrder(

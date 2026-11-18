@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
-import { loadKnownUsageWorktreesByRepo } from '../usage/worktree-attribution/usage-worktree-metadata'
+import { readUsageWorktreeCatalog } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
@@ -31,12 +31,7 @@ export function createBackendDesktopCapabilities(
 ): (method: string, params: unknown) => Promise<unknown> {
   return async (method, params) => {
     if (method === 'usage.catalog') {
-      await store.whenLoaded()
-      const repos = store.getRepos()
-      return {
-        repoIds: repos.map((repo) => repo.id),
-        worktreesByRepo: [...loadKnownUsageWorktreesByRepo(store, repos)]
-      }
+      return readUsageWorktreeCatalog(store)
     }
     if (method === 'usage.claudeProfileDirs') {
       return claudeProfileTranscriptDirs()

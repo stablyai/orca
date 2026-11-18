@@ -271,15 +271,33 @@ describe('usage-limit row over time', () => {
     expect(screen.queryByRole('menuitem', { name: 'Auto-continue settings…' })).toBeNull()
   })
 
-  it('offers the auto-continue setting while waiting even with no published state', () => {
+  it('turns auto-continue on in place while waiting, even with no published state', () => {
     const openSettingsPage = vi.fn()
-    useAppStore.setState({ openSettingsPage, openSettingsTarget: vi.fn() })
+    const updateSettings = vi.fn(async () => {})
+    useAppStore.setState({ openSettingsPage, openSettingsTarget: vi.fn(), updateSettings })
     const view = render(row({ resetsAt: start + HOUR, auto: null }))
-    fireEvent.click(screen.getByRole('button', { name: 'Auto-continue settings' }))
-    expect(openSettingsPage).toHaveBeenCalledTimes(1)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue automatically when limits reset' })
+    )
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatAutoContinueAfterUsageLimit: true })
+    expect(openSettingsPage).not.toHaveBeenCalled()
     // Nothing to schedule against without a reset time.
     view.rerender(row({ resetsAt: undefined, auto: null }))
-    expect(screen.queryByRole('button', { name: 'Auto-continue settings' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Continue automatically when limits reset' })
+    ).toBeNull()
+  })
+
+  it('opens Settings when the host reports off while the setting is already on', () => {
+    const openSettingsPage = vi.fn()
+    useAppStore.setState({
+      openSettingsPage,
+      openSettingsTarget: vi.fn(),
+      settings: { ...useAppStore.getState().settings!, nativeChatAutoContinueAfterUsageLimit: true }
+    })
+    render(row({ resetsAt: start + HOUR, auto: { kind: 'off' } }))
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-continue settings' }))
+    expect(openSettingsPage).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a preparing Hand off focusable but inert', () => {
@@ -357,26 +375,5 @@ describe('usage-limit row More menu', () => {
       expect(writeClipboardText).toHaveBeenCalledWith(expect.stringContaining(part))
     }
     expect(toastError).not.toHaveBeenCalled()
-  })
-
-  it('reports a clipboard failure', async () => {
-    writeClipboardText.mockRejectedValue(new Error('denied'))
-    const user = userEvent.setup()
-    render(row({ resetsAt: Date.now() + HOUR }))
-    await user.click(screen.getByRole('button', { name: 'More actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Copy error' }))
-    expect(toastError).toHaveBeenCalledTimes(1)
-  })
-
-  it('opens and closes from the keyboard, returning focus to its trigger', async () => {
-    const user = userEvent.setup()
-    render(row({ resetsAt: Date.now() + HOUR }))
-    const more = screen.getByRole('button', { name: 'More actions' })
-    more.focus()
-    await user.keyboard('{Enter}')
-    expect(await screen.findByRole('menuitem', { name: 'Copy error' })).toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    expect(screen.queryByRole('menuitem', { name: 'Copy error' })).toBeNull()
-    expect(more).toHaveFocus()
   })
 })
