@@ -294,16 +294,18 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
         return false
       }
       ptyId = result.ptyId
-      if (this.claudeSelectionEpoch === epoch) {
-        const accounts = this.accounts.getSnapshot().claude
-        this.restartedClaudePanes.set(ptyId, {
-          session,
-          accountId: claudeLaunchAccountId(accounts, accounts.activeAccountId)
-        })
-        return false
+      if (this.claudeSelectionEpoch !== epoch) {
+        // Its launch-seeded row still names the old folder; only a hook will name the real one.
+        this.restartedClaudePanes.set(ptyId, { session, accountId: undefined })
+        continue
       }
+      const accounts = this.accounts.getSnapshot().claude
+      this.restartedClaudePanes.set(ptyId, {
+        session,
+        accountId: claudeLaunchAccountId(accounts, accounts.activeAccountId)
+      })
+      return false
     }
-    this.restartedClaudePanes.set(ptyId, { session, accountId: undefined })
     const replaced = this.ptysById.get(ptyId)
     if (!replaced) {
       return false

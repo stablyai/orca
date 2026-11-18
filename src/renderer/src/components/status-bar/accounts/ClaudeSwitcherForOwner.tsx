@@ -161,7 +161,7 @@ export function ClaudeSwitcherForOwner({
         await fetchSettings()
       }
       const nextActiveAccountId = getClaudeStatusActiveId(next, target)
-      if (!chatAction && (previousActiveAccountId !== nextActiveAccountId || runningSessions)) {
+      if (runningSessions || (!chatAction && previousActiveAccountId !== nextActiveAccountId)) {
         void handleRunningClaudeSessionsAfterSwitch({
           owner: runtimeTarget,
           target,

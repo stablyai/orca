@@ -98,6 +98,10 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       ) {
         return refuse('busy')
       }
+      // A conversation started outside Orca holds no claim; it may have appeared during that await.
+      if (await this.isProviderSessionLiveInAnotherPane(session, ownPaneKey).catch(() => true)) {
+        return refuse('busy')
+      }
       // The awaits above let the pane move, change process or gain a viewer: checked again with no
       // await before the stop.
       const current = this.ptysById.get(ptyId)
