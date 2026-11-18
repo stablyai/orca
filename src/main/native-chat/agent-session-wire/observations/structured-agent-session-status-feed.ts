@@ -40,7 +40,7 @@ export class StructuredAgentSessionStatusFeed {
   )
   private readonly subscriptions = new StructuredAgentSessionStatusSubscriptions()
   private readonly broadcast = this.subscriptions.broadcast
-  // Never evicted: chats are named only while in here, and AI Vault reads closed ones' names here.
+  // Live chats and shown tabs only; every chat's name reaches readers from its record (naming snapshot).
   private readonly published = new Map<string, StatusPublication>()
   private readonly acceptedSends = new Map<string, string>()
   readonly journalProjection
@@ -70,19 +70,24 @@ export class StructuredAgentSessionStatusFeed {
     return unsubscribe
   }
 
-  /** Revoke live ownership/remove sink children while retaining reload history. */
+  /** Revoke live ownership and remove sink children; with no tab left, its row goes too. */
   close(sessionId: string): void {
     this.revokeLive(sessionId)
     this.forget(sessionId)
+    this.published.delete(sessionId)
   }
 
-  /** Drop sink roster membership and refresh retained child projections. */
+  /** Drop sink roster membership; a live chat keeps its row with refreshed child projections. */
   forget(sessionId: string): void {
     this.acceptedSends.delete(sessionId)
     try {
       this.ownership.forget(sessionId)
     } catch (error) {
       this.logFailure('status-sink-forget', 'status sink forget failed', sessionId, error)
+    }
+    if (!this.deps.sessions.has(sessionId)) {
+      this.published.delete(sessionId)
+      return
     }
     const publication = this.published.get(sessionId)
     const previous = publication?.summary
