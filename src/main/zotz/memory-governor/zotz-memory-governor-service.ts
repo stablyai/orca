@@ -43,12 +43,18 @@ export class ZotzMemoryGovernorService {
   private sampling = false
   private disposed = false
   private readonly listeners = new Set<(state: ZotzMemoryGovernorState) => void>()
+  // Queued launches keep sampling alive: memory freed by other apps can let them in.
+  private hasWaitingDemand: () => boolean = () => false
 
   constructor(private readonly deps: ZotzMemoryGovernorDeps) {}
 
   async start(): Promise<void> {
     this.ledger = await this.deps.loadLedger()
     this.wake()
+  }
+
+  setWaitingDemand(hasWaitingDemand: () => boolean): void {
+    this.hasWaitingDemand = hasWaitingDemand
   }
 
   getState(): ZotzMemoryGovernorState | null {
@@ -116,7 +122,7 @@ export class ZotzMemoryGovernorService {
     } finally {
       this.sampling = false
     }
-    if (!this.disposed && this.deps.sampler.hasLiveAgents()) {
+    if (!this.disposed && (this.deps.sampler.hasLiveAgents() || this.hasWaitingDemand())) {
       this.timer = setTimeout(() => {
         this.timer = null
         void this.sampleOnce()

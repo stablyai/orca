@@ -8,6 +8,8 @@ import { listRegisteredPtys } from '../../memory/pty-registry'
 import { ZotzAgentQueueStore } from '../zotz-agent-queue-store'
 import { ZotzAgentMemorySampler, type ZotzLiveAgentPane } from './zotz-agent-memory-sampler'
 import { ZotzMemoryGovernorService } from './zotz-memory-governor-service'
+import { ZotzAgentLaunchQueue } from './zotz-agent-launch-queue'
+import { setZotzAgentLaunchQueue } from './zotz-agent-launch-hold'
 
 let governor: ZotzMemoryGovernorService | null = null
 
@@ -62,11 +64,13 @@ export function startZotzMemoryGovernor(input: {
     now: Date.now
   })
   governor = service
+  setZotzAgentLaunchQueue(new ZotzAgentLaunchQueue(service))
   void service.start()
   const unsubscribe = input.server.subscribeStatusRowMutations(() => service.wake())
   return () => {
     unsubscribe()
     service.dispose()
+    setZotzAgentLaunchQueue(null)
     if (governor === service) {
       governor = null
     }
