@@ -27,9 +27,7 @@ function crashCut(): AgentJournalRenderItem {
   }
 }
 
-function backgroundTask(
-  state: 'unverifiable' | 'completed' = 'unverifiable'
-): AgentJournalRenderItem {
+function backgroundTask(state: 'unverifiable' | 'done' = 'unverifiable'): AgentJournalRenderItem {
   return {
     itemId: 'orca:background-task',
     revision: 2,
@@ -110,7 +108,7 @@ describe('crash cut resume marker', () => {
     }
     expect(derive([interrupted(), crashCut(), later])).toBeNull()
     expect(derive([turnItem('turn-1', 'completed')])).toBeNull()
-    expect(derive([turnItem('turn-1', 'completed'), backgroundTask('completed')])).toBeNull()
+    expect(derive([turnItem('turn-1', 'completed'), backgroundTask('done')])).toBeNull()
     const older = { recovered: true, recoveredAt: STARTED - 1 } as const
     expect(
       derive([
