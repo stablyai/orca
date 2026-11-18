@@ -10,16 +10,7 @@ export async function openSidebarProjectMenu(page: Page): Promise<void> {
   await expect(page.getByRole('menu', { name: 'Add project' })).toBeVisible()
 }
 
-export async function showWorkspaceSidebar(page: Page): Promise<void> {
-  const title = page.locator('[data-sidebar-section-title]').first()
-  if ((await title.getAttribute('data-sidebar-section-title')) !== 'workspaces') {
-    await title.click()
-    await page.getByRole('menuitem', { name: 'Workspaces', exact: true }).click()
-  }
-}
-
 export async function openSidebarWorkspaceComposer(page: Page): Promise<void> {
-  await showWorkspaceSidebar(page)
   const createButton = sidebarHeaderActions(page).getByRole('button', {
     name: 'New workspace',
     exact: true

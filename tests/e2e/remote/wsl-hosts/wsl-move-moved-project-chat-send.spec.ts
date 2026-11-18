@@ -19,7 +19,7 @@ import { delimiter, dirname, join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
-import { selectSidebarBody, waitForSessionReady } from '../../desktop/renderer-probes/store'
+import { waitForSessionReady } from '../../desktop/renderer-probes/store'
 import { createRestartSession } from '../../desktop/electron-fixtures/orca-restart'
 import { buildFakeAgentCommandOverride } from '../../agents/session-fixtures/fake-agent-command-override'
 import { SUPPORTED, createChatOnHost } from '../../agents/session-fixtures/structured-claude-stub'
@@ -119,7 +119,6 @@ test("a moved project's existing chat still answers here after the move", async 
     launched = await session.launch()
     const { page } = launched
     await waitForSessionReady(page)
-    await selectSidebarBody(page, 'workspaces')
     const entry = page.getByTestId('wsl-moved-project')
     await expect(entry).toBeVisible({ timeout: 30_000 })
     await entry.getByTestId('wsl-moved-chat').click()

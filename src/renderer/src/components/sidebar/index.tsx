@@ -86,7 +86,7 @@ function Sidebar({
   const botsEnabled = useBotsEnabled()
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
-  const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'conversations')
+  const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
   const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)

@@ -43,13 +43,18 @@ import {
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 import { createUiBotPreferenceActions } from './ui-slice-bot-preference-actions'
 import { toggleCollapsedGroupSet } from './collapsed-group-toggle'
+import { DEFAULT_SIDEBAR_BODY } from '../../../../../shared/ui-chrome/sidebar-body'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     gitGraphFiltersByWorktree: {},
-    sidebarBody: 'conversations',
+    sidebarBody: DEFAULT_SIDEBAR_BODY,
     setSidebarBody: (body) => set({ sidebarBody: body }),
+    chooseSidebarBody: (body) => {
+      set({ sidebarBody: body })
+      window.api.ui.set({ sidebarBody: body }).catch(console.error)
+    },
 
     groupBy: 'repo',
     // Why: group keys are mode-specific, so clear collapsed state on mode switch — stale keys are meaningless and accumulate.

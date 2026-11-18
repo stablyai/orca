@@ -28,12 +28,16 @@ import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
 import type { BotSidebarView } from '../../../../../shared/bots/bot-sidebar-view'
 import type { BotChatFold } from '../../../../../shared/bots/bot-chat-tree'
+import type { SidebarBody } from '../../../../../shared/ui-chrome/sidebar-body'
 
 export type UISlicePreferences = {
   gitGraphFiltersByWorktree?: PersistedUIState['gitGraphFiltersByWorktree']
   /** Which list the sidebar body shows. Navigator-only; does not change the active view. */
-  sidebarBody: 'conversations' | 'workspaces' | 'agents'
-  setSidebarBody: (body: UISlicePreferences['sidebarBody']) => void
+  sidebarBody: SidebarBody
+  /** Transient switch, e.g. revealing a workspace; the remembered choice stays as it was. */
+  setSidebarBody: (body: SidebarBody) => void
+  /** The user's own pick, remembered across restarts. */
+  chooseSidebarBody: (body: SidebarBody) => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlicePreferences['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'

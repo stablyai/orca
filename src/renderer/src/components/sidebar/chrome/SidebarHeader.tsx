@@ -33,9 +33,16 @@ const SidebarHeader = React.memo(function SidebarHeader({
   projectsCollapseTarget
 }: SidebarHeaderProps) {
   const t = useTranslate()
-  const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'conversations')
+  const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const groupBy = useAppStore((s) => s.groupBy)
-  const setSidebarBody = useAppStore((s) => s.setSidebarBody)
+  const chooseSidebarBody = useAppStore((s) => s.chooseSidebarBody)
+  // Turning Activity off returns to the list it replaced.
+  const listBodyRef = React.useRef<'conversations' | 'workspaces'>('workspaces')
+  React.useEffect(() => {
+    if (sidebarBody !== 'agents') {
+      listBodyRef.current = sidebarBody
+    }
+  }, [sidebarBody])
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
   const activityBadgeId = useId()
@@ -104,15 +111,15 @@ const SidebarHeader = React.memo(function SidebarHeader({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem onSelect={() => setSidebarBody('conversations')}>
+            <DropdownMenuItem onSelect={() => chooseSidebarBody('conversations')}>
               <FolderTree />
               {t('dashboard.sidebar.projects', 'Projects')}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setSidebarBody('workspaces')}>
+            <DropdownMenuItem onSelect={() => chooseSidebarBody('workspaces')}>
               <GitBranch />
               {workspaceTitle}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setSidebarBody('agents')}>
+            <DropdownMenuItem onSelect={() => chooseSidebarBody('agents')}>
               <Activity />
               {t('dashboard.sidebar.activity', 'Activity')}
             </DropdownMenuItem>
@@ -155,7 +162,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
                       aria-pressed={agentsViewActive}
                       aria-describedby={activityBadgeId}
                       onClick={() =>
-                        setSidebarBody?.(agentsViewActive ? 'conversations' : 'agents')
+                        chooseSidebarBody?.(agentsViewActive ? listBodyRef.current : 'agents')
                       }
                     >
                       <span className="relative h-5 w-6 shrink-0">

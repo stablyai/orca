@@ -11,7 +11,6 @@ import {
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { selectSidebarBody } from '../renderer-probes/store'
 import { closeElectronAppForE2E } from './electron-process-shutdown'
 import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
@@ -32,8 +31,6 @@ type OrcaTestFixtures = {
   registerPostElectronShutdownCleanup: (cleanup: () => Promise<void>) => void
   sharedPage: Page
   orcaPage: Page
-  // Legacy workspace scenarios pin their view; null exercises the application default.
-  sidebarBody: 'conversations' | 'workspaces' | 'agents' | null
   // Dismiss pointer-blocking onboarding by default; onboarding specs explicitly opt out.
   dismissOnboarding: boolean
   // Seed a ready project unless a first-run golden needs the zero-project path.
@@ -206,7 +203,6 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     await removeUserDataDirAfterShutdown(userDataDir)
   },
 
-  sidebarBody: ['workspaces', { option: true }],
   dismissOnboarding: [true, { option: true }],
   seedTestRepo: [true, { option: true }],
   // Test-scoped so generation scenarios can isolate Git indexes and remotes.
@@ -348,8 +344,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     await provideFixture(page)
   },
 
-  orcaPage: async ({ sharedPage, sidebarBody }, provideFixture) => {
-    await selectSidebarBody(sharedPage, sidebarBody)
+  orcaPage: async ({ sharedPage }, provideFixture) => {
     await provideFixture(sharedPage)
   }
 })
