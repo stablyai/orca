@@ -98,10 +98,20 @@ function sourceBounds(node: Nodes): { sourceLine: number | null; sourceEndLine: 
 }
 
 function imageSourceText(node: Nodes): string {
-  if (node.type === 'element' && node.tagName === 'img') {
-    return String(node.properties.src ?? '')
+  const sources: string[] = []
+  const collect = (current: Nodes): void => {
+    if (current.type === 'element' && current.tagName === 'img') {
+      sources.push(String(current.properties.src ?? ''))
+      return
+    }
+    if ('children' in current) {
+      for (const child of current.children) {
+        collect(child)
+      }
+    }
   }
-  return 'children' in node ? node.children.map((child) => imageSourceText(child)).join('\n') : ''
+  collect(node)
+  return sources.join('\n')
 }
 
 export function parseMarkdownPreviewDocument(content: string): {

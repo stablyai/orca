@@ -22,7 +22,7 @@ export const markdownPreviewScrollAnchorKey = (block: MarkdownPreviewBlock): str
     : `index:${block.index}`
 
 /** Re-point an anchor at its block after a re-parse when its source position moved; source lines shift on edits above. */
-export function followMarkdownPreviewAnchor(
+function followMarkdownPreviewAnchor(
   anchor: NonNullable<VirtualizedScrollAnchor>,
   previous: readonly MarkdownPreviewBlock[],
   next: readonly MarkdownPreviewBlock[]
