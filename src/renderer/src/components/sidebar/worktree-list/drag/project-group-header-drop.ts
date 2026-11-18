@@ -20,12 +20,15 @@ export type ProjectGroupHeaderDragRect = {
 
 export type ProjectGroupHeaderDropPreview = WorktreeSidebarHeaderDropPreview
 
+/** What the drag reads of a header: its bucket and its order. The Bots section's rows reuse it. */
+export type ProjectGroupHeaderDragItem = Pick<ProjectGroup, 'parentGroupId' | 'tabOrder'>
+
 export type ProjectGroupTabOrderUpdate = {
   groupId: string
   tabOrder: number
 }
 
-const ROOT_PROJECT_GROUP_HEADER_BUCKET = 'root'
+export const ROOT_PROJECT_GROUP_HEADER_BUCKET = 'root'
 
 type SidebarProjectGroupHeader = ProjectGroup | { id: null } | undefined
 
@@ -37,7 +40,7 @@ function isConcreteProjectGroup(
 
 export function getProjectGroupHeaderDragBucketKey(
   group: Pick<ProjectGroup, 'parentGroupId'>,
-  projectGroupById?: ReadonlyMap<string, ProjectGroup>
+  projectGroupById?: ReadonlyMap<string, ProjectGroupHeaderDragItem>
 ): ProjectGroupHeaderDragBucketKey {
   const parentGroupId = group.parentGroupId ?? null
   if (!parentGroupId) {
@@ -88,7 +91,7 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
   sidebarProjectGroupHeaderIds: readonly string[]
   draggedGroupId: string
   sidebarDropIndex: number
-  projectGroupById: ReadonlyMap<string, ProjectGroup>
+  projectGroupById: ReadonlyMap<string, ProjectGroupHeaderDragItem>
 }): ProjectGroupTabOrderUpdate[] {
   const sourceIndex = args.sidebarProjectGroupHeaderIds.indexOf(args.draggedGroupId)
   if (sourceIndex === -1) {

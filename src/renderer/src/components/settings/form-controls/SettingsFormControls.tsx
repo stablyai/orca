@@ -34,13 +34,14 @@ export function SettingsRow({
       id={id}
       data-settings-row=""
       className={cn(
-        'flex gap-4',
+        // A narrow host (a bot's right panel) puts the control under the label.
+        'flex flex-wrap gap-x-4 gap-y-2',
         description ? 'py-3' : 'py-2',
         alignTop ? 'items-start' : 'items-center justify-between',
         className
       )}
     >
-      <div className={cn('min-w-0 flex-1', description ? 'space-y-1' : 'space-y-0.5')}>
+      <div className={cn('min-w-0 grow basis-32', description ? 'space-y-1' : 'space-y-0.5')}>
         <Label id={labelId} className="select-text">
           {label}
         </Label>
@@ -48,7 +49,7 @@ export function SettingsRow({
           <p className="select-text text-xs text-muted-foreground">{description}</p>
         ) : null}
       </div>
-      <div className="shrink-0">{control}</div>
+      <div className="max-w-full shrink-0">{control}</div>
     </div>
   )
 }

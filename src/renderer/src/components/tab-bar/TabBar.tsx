@@ -11,6 +11,7 @@ import { renderTabBarSurface } from './strip/tab-bar-surface'
 import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
+import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
 import { useTranslate } from '@/i18n/use-translate'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
@@ -28,6 +29,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onPinFile
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
+  const bot = useBotForWorkspace(worktreeId)
+  const botGroup = useBotGroupForWorkspace(worktreeId)
   const baseCreateMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -124,7 +127,9 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       tabStripDragScroll,
       activeClientHostedBrowserRowId,
       itemActions,
-      surfaceRef
+      surfaceRef,
+      bot,
+      botGroup
     },
     t
   )

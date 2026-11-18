@@ -1,9 +1,9 @@
-import { HostSectionHeader } from '../host-section-header'
 import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { resolveProjectPreferenceKey } from '../../../../src/shared/project-preference-identity'
 import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { Animated, Platform, RefreshControl, View } from 'react-native'
+import { isBotsListRow, useMobileBotsListParts } from '../../bots/use-mobile-bots-list-parts'
 import { AuthFailedBanner } from '../../components/host-connection/AuthFailedBanner'
 import { Presence } from '../../components/motion/AutoHeight'
 import { HostDiagnosticsLink } from '../../components/host-connection/HostDiagnosticsLink'
@@ -35,6 +35,7 @@ import { DEFAULT_REPO_BADGE_COLOR } from '../../../../src/shared/repository/appe
 import { getWorktreeCardDetails } from '../../../../src/shared/worktree/row-display/card-properties'
 import { hostScreenStyles as styles } from '../host-screen-styles'
 import { useRepoLookById } from '../catalog/host-repo-looks'
+import { HostSectionHeader } from './host-section-header'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { useHostMutationDrafts } from '../../query/host-mutation-drafts'
 import { workspaceRenameDraftKey } from '../workspace-actions/workspace-rename-sheet'
@@ -80,6 +81,7 @@ export function HostWorkspaceList({
     state
   } = controller
   const { rawSections, sections, repoById } = sectionsResult
+  const bots = useMobileBotsListParts(controller)
   const { pending } = settings.pendingViewChanges
   // A collapse the desktop has not answered within SLOW_PENDING_MS spins on its header.
   const pendingCollapseKeys = useSlowPendingKeys(
@@ -138,28 +140,30 @@ export function HostWorkspaceList({
         ? state.view.personalProjectOrder?.projects[projectKey]?.pinned === true
         : false
       return (
-        <HostSectionHeader
-          title={section.title}
-          icon={section.icon}
-          isProjectGroup={section.isProjectGroup}
-          projectGroupDepth={section.projectGroupDepth}
-          pendingCreations={section.pendingCreations}
-          collapseKey={collapseKey}
-          collapsed={collapsedGroups.has(collapseKey)}
-          count={section.count ?? sectionCounts.get(section.key) ?? 0}
-          pending={pendingCollapseKeys.has(collapseKey)}
-          groupByRepo={groupBy === 'repo'}
-          repoLook={groupBy === 'repo' && section.repo ? repoLookById.get(section.repo.id) : null}
-          onToggle={toggleCollapsed}
-          pinRepo={projectKey && settings.supportsPersonalProjectOrder ? section.repo : undefined}
-          pinLabel={
-            pinned
-              ? t('hostScreen.project.unpin', 'Unpin project')
-              : t('hostScreen.project.pin', 'Pin project')
-          }
-          projectPinned={pinned}
-          onToggleProjectPin={settings.toggleProjectPin}
-        />
+        bots.header(section, collapsedGroups, pendingCollapseKeys, toggleCollapsed) ?? (
+          <HostSectionHeader
+            title={section.title}
+            icon={section.icon}
+            isProjectGroup={section.isProjectGroup}
+            projectGroupDepth={section.projectGroupDepth}
+            pendingCreations={section.pendingCreations}
+            collapseKey={collapseKey}
+            collapsed={collapsedGroups.has(collapseKey)}
+            count={section.count ?? sectionCounts.get(section.key) ?? 0}
+            pending={pendingCollapseKeys.has(collapseKey)}
+            groupByRepo={groupBy === 'repo'}
+            repoLook={groupBy === 'repo' && section.repo ? repoLookById.get(section.repo.id) : null}
+            onToggle={toggleCollapsed}
+            pinRepo={projectKey && settings.supportsPersonalProjectOrder ? section.repo : undefined}
+            pinLabel={
+              pinned
+                ? t('hostScreen.project.unpin', 'Unpin project')
+                : t('hostScreen.project.pin', 'Pin project')
+            }
+            projectPinned={pinned}
+            onToggleProjectPin={settings.toggleProjectPin}
+          />
+        )
       )
     },
     [
@@ -173,31 +177,39 @@ export function HostWorkspaceList({
       state.view.personalProjectOrder,
       settings.supportsPersonalProjectOrder,
       settings.toggleProjectPin,
-      t
+      t,
+      bots
     ]
   )
 
+  const renderSectionFooter = useCallback(
+    ({ section }: { section: Section }) => bots.footer(section, collapsedGroups),
+    [bots, collapsedGroups]
+  )
+
   const renderItem = useCallback(
-    ({ item: { row: item, view } }: { item: WorkspaceListItem }) => (
-      <WorktreeListRow
-        item={item}
-        view={view}
-        isReadOnly={isReadOnly}
-        status={hasWorktreeAgentState(item) ? getWorktreeDotStatus(item) : null}
-        repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
-        repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
-        hideRepo={groupBy === 'repo' && !view.showProjectName}
-        cardDetails={cardDetails}
-        agentActivityDisplayMode={agentActivityDisplayMode}
-        onPress={openWorktreeSession}
-        onAgentPress={openWorktreeSession}
-        statusLive={statusLive && !view.hostContextHealthLabel}
-        onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
-        onToggleLineage={toggleWorktreeLineage}
-        unsavedName={unsavedRename(renameDrafts, hostId, item)}
-      />
-    ),
+    ({ item: { row: item, view } }: { item: WorkspaceListItem }) =>
+      bots.groupRow(item, view, isReadOnly) ?? (
+        <WorktreeListRow
+          item={item}
+          view={view}
+          isReadOnly={isReadOnly}
+          status={hasWorktreeAgentState(item) ? getWorktreeDotStatus(item) : null}
+          repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
+          repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
+          hideRepo={groupBy === 'repo' && !view.showProjectName}
+          cardDetails={cardDetails}
+          agentActivityDisplayMode={agentActivityDisplayMode}
+          onPress={openWorktreeSession}
+          onAgentPress={openWorktreeSession}
+          statusLive={statusLive && !view.hostContextHealthLabel}
+          onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
+          onToggleLineage={toggleWorktreeLineage}
+          unsavedName={unsavedRename(renameDrafts, hostId, item)}
+        />
+      ),
     [
+      bots,
       renameDrafts,
       hostId,
       isReadOnly,
@@ -332,6 +344,7 @@ export function HostWorkspaceList({
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
           renderSectionHeader={renderSectionHeader}
+          renderSectionFooter={renderSectionFooter}
           ItemSeparatorComponent={ListSeparator}
           // Why (#8498): manual pull-to-refresh forces a fresh snapshot after a stale-cache reconnect.
           refreshControl={
@@ -345,6 +358,7 @@ export function HostWorkspaceList({
           renderItem={renderItem}
         />
       )}
+      {bots.sheets}
     </>
   )
 }
@@ -359,7 +373,8 @@ function unsavedRename(
   return draft?.trim() && draft !== row.displayName ? draft : undefined
 }
 
-function ListSeparator() {
+function ListSeparator({ leadingItem }: { leadingItem?: WorkspaceListItem }) {
   useMobileColorScheme()
-  return <View style={styles.separator} />
+  // A separator keeps the neighbours it mounted with, so the Bots list draws its own dividers.
+  return isBotsListRow(leadingItem?.view) ? null : <View style={styles.separator} />
 }

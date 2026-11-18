@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useReducer, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useLocalSearchParams, usePathname } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -33,6 +33,9 @@ import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-ac
 import { useHostWorktreeCatalog } from './catalog/use-host-worktree-catalog'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { classifyConnection } from '../transport/connection/connection-health'
+import { useHostBots } from '../bots/use-host-bots'
+import type { BotsChangeScope } from '../worktree/execution-hosts/host-worktree-refresh'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 
 export type HostScreenProps = {
   embedded?: boolean
@@ -92,6 +95,16 @@ export function useHostScreenController({
     hostCapabilities,
     projectCatalog
   })
+  // The host's botsChanged re-reads its own bots; a reconnect or the foreground, every host's.
+  const [botsChangeKeys, noteBotsChanged] = useReducer(
+    (keys: Record<BotsChangeScope, number>, scope: BotsChangeScope) => ({
+      ...keys,
+      [scope]: keys[scope] + 1
+    }),
+    { host: 0, 'host-threads': 0, 'every-host': 0 }
+  )
+  // The computer New bot starts on, while it is open.
+  const [newBotHostId, setNewBotHostId] = useState<ExecutionHostId | null>(null)
   const catalog = useHostWorktreeCatalog({
     client,
     connState,
@@ -101,7 +114,8 @@ export function useHostScreenController({
     hostId,
     sidebarFeed: sidebarFeed?.triggers ?? null,
     state,
-    syncViewSettingsFromDesktop: settings.syncViewSettingsFromDesktop
+    syncViewSettingsFromDesktop: settings.syncViewSettingsFromDesktop,
+    onBotsChanged: noteBotsChanged
   })
   useHostRepoMetadata({ client, hostId, state, subscribed: catalog.subscribed })
   const feed = sidebarFeed?.feed ?? null
@@ -132,6 +146,23 @@ export function useHostScreenController({
     state,
     hostPlatform
   )
+  // Row identities, so a workspace swapped for another of the same count still rereads the bots.
+  const botRowsKey = useMemo(
+    () => displayWorktrees.map((row) => `${row.hostId ?? ''}|${row.worktreeId}`).join('\n'),
+    [displayWorktrees]
+  )
+  const bots = useHostBots({
+    client,
+    pairedHostId: hostId,
+    connState,
+    hostCapabilities,
+    hostLabel: state.hostName,
+    serverHosts: state.serverWorkspaces.hosts,
+    rowsKey: botRowsKey,
+    changeKey: botsChangeKeys['every-host'],
+    pairedChangeKey: botsChangeKeys.host + botsChangeKeys['host-threads'],
+    pairedThreadsKey: botsChangeKeys['host-threads']
+  })
   const sectionsResult = useHostListSections({
     client,
     hostId,
@@ -140,7 +171,9 @@ export function useHostScreenController({
     hostContextOf,
     hostPlatform,
     hostInstallationId,
-    state
+    hostCapabilities,
+    state,
+    bots
   })
   const { collapsedGroups, projectOrderBy } = sectionsResult
   const { uniqueRepos } = sectionsResult
@@ -159,6 +192,7 @@ export function useHostScreenController({
     actions,
     activeFilterCount,
     activeWorktreeScroll,
+    bots,
     catalog,
     collapsedGroups,
     feed,
@@ -189,7 +223,16 @@ export function useHostScreenController({
     sectionsResult,
     setDismissedNotice,
     settings,
-    state
+    state,
+    newBot: {
+      hostId: newBotHostId,
+      open: setNewBotHostId,
+      // Its Home is a new row too; hosts that don't push rows would leave it to the backstop poll.
+      created: () => {
+        noteBotsChanged('every-host')
+        void catalog.fetchWorktrees()
+      }
+    }
   }
 }
 

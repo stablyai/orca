@@ -67,11 +67,11 @@ import {
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
 import {
-  hydrateAgentReadState,
-  hydrateSidebarWidths,
   hydrateOneShotNoticesSeen,
+  hydrateReadAndBotState,
   sanitizeTaskResumeState
-} from './ui-slice-hydration-values'
+} from './ui-slice-bot-sidebar-hydration'
+import { hydrateSidebarWidths } from './ui-slice-hydration-values'
 import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
@@ -261,7 +261,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
           ...hydrateOneShotNoticesSeen(ui),
           ...hydrateWslMovedSection(ui),
-          ...hydrateAgentReadState(ui),
+          ...hydrateReadAndBotState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals
           ),

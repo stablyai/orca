@@ -50,6 +50,17 @@ function agentDescriptions(agent: string): Partial<Record<AgentChatPermissionMod
   return AGENT_DESCRIPTIONS.get(agent) ?? OTHER_AGENT_DESCRIPTIONS
 }
 
+/** A mode's name and what it does on `agent`, for surfaces that list the modes themselves. */
+export function agentChatPermissionModeCopy(
+  agent: string,
+  mode: AgentChatPermissionMode
+): { label: string; description: string } {
+  return {
+    label: MODE_COPY[mode].label,
+    description: agentDescriptions(agent)[mode] ?? MODE_COPY[mode].description
+  }
+}
+
 export function structuredAgentSessionPermissionDescriptor(state: {
   record: StructuredAgentSessionOptionRecord
   permissionMode: string | null
@@ -90,8 +101,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
       currentValue: current,
       choices: support.modes.map((value) => ({
         value,
-        label: MODE_COPY[value].label,
-        description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description
+        ...agentChatPermissionModeCopy(state.record.agent, value)
       }))
     },
     valueSource: activeValue === undefined ? 'applied' : 'dispatched',

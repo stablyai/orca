@@ -21,6 +21,8 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { useAppStore } from '@/store/index'
+import { BotAvatar } from '../../bots/BotAvatar'
+import type { Bot } from '../../../../../shared/bot-types'
 import {
   rankSettingsSearchResults,
   SETTINGS_SEARCH_RESULT_LIMIT,
@@ -34,6 +36,7 @@ type NavSection = {
   icon: SettingsNavIcon
   badge?: string
   installStatus?: SettingsNavInstallStatus
+  bot?: Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'>
 }
 
 type NavGroup = {
@@ -303,7 +306,14 @@ export function SettingsSidebar({
                           onClick={() => onSelectSection(section.id)}
                           className={navItemClassName(isActive)}
                         >
-                          <Icon className="size-4 shrink-0" />
+                          {section.bot ? (
+                            <BotAvatar
+                              bot={section.bot}
+                              className="size-4 rounded-[4px] text-3xs"
+                            />
+                          ) : (
+                            <Icon className="size-4 shrink-0" />
+                          )}
                           <span className="truncate">{section.title}</span>
                           {isVisibleInstallStatus(section.installStatus) ? (
                             <span className={installStatusClassName}>

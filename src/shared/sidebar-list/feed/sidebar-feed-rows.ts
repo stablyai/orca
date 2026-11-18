@@ -41,15 +41,16 @@ import {
   type HostSectionOption,
   type HostSectionRow
 } from '../hosts/host-section-rows'
-import type {
-  ImportedWorktreesCardCandidate,
-  NewExternalWorktreesInboxCandidate,
-  Row
-} from '../row-types'
+import type { Row } from '../row-types'
+import type { SidebarFeedWindowExtras } from '../sidebar-feed-extras'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import { planSidebarRows } from '../sidebar-row-plan'
 import type { FeedLineagePolicy } from './sidebar-feed-lineage-parents'
-import { selectVisibleSidebarWorktrees } from '../selection/visible-worktrees'
+import {
+  selectVisibleSidebarWorktrees,
+  withoutBotListedFolderWorkspaces,
+  withoutBotListedWorktrees
+} from '../selection/visible-worktrees'
 import { isIdleWorkspaceActivity } from '../feed-facts/workspace-activity-facts'
 import { prGroupOfReviewFact } from '../feed-facts/workspace-review-facts'
 
@@ -66,13 +67,6 @@ export type SidebarFeedRows = {
   sectionRows: HostSectionRow[]
   /** Row keys of every occurrence of the desktop's open workspace; a pinned duplicate shows twice. */
   activeRowKeys: ReadonlySet<string>
-}
-
-/** What only the desktop window adds over the inputs: transient reveals and its own cards. */
-export type SidebarFeedWindowExtras = {
-  forcedVisibleWorktreeIds?: readonly string[]
-  importedWorktreesByRepo?: ReadonlyMap<string, ImportedWorktreesCardCandidate>
-  newExternalWorktreesInboxByRepo?: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
 }
 
 export type SidebarFeedPlan = {
@@ -128,7 +122,7 @@ export function planSidebarFeedRows(
   const hiddenProjects = indexHiddenProjects(repos, defaultHostId)
 
   const visibleWorktrees = selectVisibleSidebarWorktrees({
-    rows: allWorktrees,
+    rows: withoutBotListedWorktrees(allWorktrees, extras.botListedWorktreeIdentities),
     ancestorByIdentity,
     rankOf: (worktree) => rankByIdentity.get(getWorktreeHostIdentity(worktree)),
     filters: view.filters,
@@ -164,7 +158,7 @@ export function planSidebarFeedRows(
   )
   const visibleRepos = filterReposForVisibleHosts(repos, visibleHostIdSet, defaultHostId)
   const hostVisibleFolderWorkspaces = filterFolderWorkspacesForVisibleHosts(
-    folderWorkspaces,
+    withoutBotListedFolderWorkspaces(folderWorkspaces, extras.botListedWorktreeIdentities),
     projectGroups,
     visibleHostIdSet,
     defaultHostId
@@ -276,15 +270,16 @@ export function buildSidebarFeedRows(
   domains: SidebarFeedDomains,
   catalog: SidebarFeedCatalog,
   view: SidebarFeedView,
-  lineagePolicy: FeedLineagePolicy = {}
+  extras: SidebarFeedWindowExtras & FeedLineagePolicy = {}
 ): SidebarFeedRows {
-  const index = indexSidebarFeed(domains, catalog.repos, lineagePolicy)
+  const index = indexSidebarFeed(domains, catalog.repos, extras)
   const planned = planSidebarFeedRows(
     domains,
     index,
     catalog,
     view,
-    rankSidebarFeedWorktrees(index, view.sortBy)
+    rankSidebarFeedWorktrees(index, view.sortBy),
+    extras
   )
   const { rows, sectionRows } = renderSidebarFeedRows(planned, view, view.collapsedGroups)
   const active = {
