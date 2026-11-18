@@ -65,7 +65,9 @@ export class HostAccountSignInFlows {
   ): HostAccountSignInStatus {
     if (this.platform === 'win32') {
       throw new Error(
-        'Adding accounts from another device is not available on Windows hosts yet. Run `orca account add` in a terminal on that host.'
+        accountId
+          ? 'Signing in again from another device is not available on Windows hosts yet. Sign in again on that host.'
+          : 'Adding accounts from another device is not available on Windows hosts yet. Run `orca account add` in a terminal on that host.'
       )
     }
     const current = this.active

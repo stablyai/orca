@@ -2,14 +2,12 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
-import { translate } from '@/i18n/i18n'
 import {
-  HOST_ACCOUNT_SIGN_IN_FAILURE_COPY as FAILURE_EN,
   HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES,
-  type HostAccountSignInFailureCode,
   type HostAccountSignInProvider,
   type HostAccountSignInStatus
 } from '../../../../../shared/agent-accounts/host-account-sign-in-types'
+import { hostAccountSignInFailureText } from './host-account-sign-in-failure-text'
 import {
   HOST_ACCOUNT_REAUTH_RUNTIME_CAPABILITY,
   HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY
@@ -17,7 +15,7 @@ import {
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { classifyTerminalProcessInspectionFailure } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import { assertRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-capability-proof'
+import { runtimeEnvironmentCapabilityProof } from '../../rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 
@@ -67,11 +65,13 @@ function call(
   attempt: Attempt,
   method: string,
   params: unknown,
-  timeoutMs = CALL_TIMEOUT_MS
+  timeoutMs = CALL_TIMEOUT_MS,
+  expectedEnvironmentRuntimeId?: string
 ): Promise<HostAccountSignInStatus> {
   return callRuntimeRpc<HostAccountSignInStatus>(attempt.owner, method, params, {
     timeoutMs,
-    expectedEnvironmentPairingRevision: attempt.pairingRevision
+    expectedEnvironmentPairingRevision: attempt.pairingRevision,
+    expectedEnvironmentRuntimeId
   })
 }
 
@@ -119,16 +119,17 @@ async function deliverCancel(attempt: Attempt): Promise<void> {
 }
 
 async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
-  await assertRuntimeEnvironmentCapability(
+  const proof = await runtimeEnvironmentCapabilityProof(
     attempt.owner.environmentId,
-    HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY,
-    'This server runs an older Orca that cannot add accounts from here. Update Orca on that server, or run `orca account add` in a terminal there.'
+    attempt.accountId
+      ? HOST_ACCOUNT_REAUTH_RUNTIME_CAPABILITY
+      : HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY
   )
-  if (attempt.accountId) {
-    await assertRuntimeEnvironmentCapability(
-      attempt.owner.environmentId,
-      HOST_ACCOUNT_REAUTH_RUNTIME_CAPABILITY,
-      'This server runs an older Orca that cannot re-authenticate accounts from here. Update Orca on that server, or remove the account and add it again.'
+  if (!proof.supported) {
+    throw new Error(
+      attempt.accountId
+        ? 'This server runs an older Orca that cannot re-authenticate accounts from here. Update Orca on that server, or remove the account and add it again.'
+        : 'This server runs an older Orca that cannot add accounts from here. Update Orca on that server, or run `orca account add` in a terminal there.'
     )
   }
   if (attempt.cancelRequested) {
@@ -139,10 +140,17 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
   advance(
     attempt,
     await retryLostAnswers(() =>
-      call(attempt, 'accounts.hostSignInStart', {
-        provider: attempt.provider,
-        ...(attempt.accountId ? { accountId: attempt.accountId } : {})
-      })
+      call(
+        attempt,
+        'accounts.hostSignInStart',
+        {
+          provider: attempt.provider,
+          ...(attempt.accountId ? { accountId: attempt.accountId } : {})
+        },
+        CALL_TIMEOUT_MS,
+        // Why pinned: a replacement runtime may predate re-auth and would add a second account.
+        attempt.accountId ? proof.runtimeId : undefined
+      )
     )
   )
   attempt.stage = 'following'
@@ -170,25 +178,6 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
       )
     )
   }
-}
-
-const FAILURE_COPY: Record<HostAccountSignInFailureCode, () => string> = {
-  ownerSilent: () => translate('accounts.hostSignIn.errors.ownerSilent', FAILURE_EN.ownerSilent),
-  superseded: () => translate('accounts.hostSignIn.errors.superseded', FAILURE_EN.superseded)
-}
-
-function isHostAccountSignInFailureCode(code: unknown): code is HostAccountSignInFailureCode {
-  return typeof code === 'string' && Object.hasOwn(FAILURE_COPY, code)
-}
-
-/** The host's failure in the UI language; the login's own (uncoded) errors stay verbatim. */
-export function hostAccountSignInFailureText(status: HostAccountSignInStatus): string {
-  if (isHostAccountSignInFailureCode(status.errorCode)) {
-    return FAILURE_COPY[status.errorCode]()
-  }
-  return (
-    status.error ?? translate('accounts.hostSignIn.errors.failed', 'Sign-in failed. Try again.')
-  )
 }
 
 function settle(attempt: Attempt): HostAccountSignInStatus {
