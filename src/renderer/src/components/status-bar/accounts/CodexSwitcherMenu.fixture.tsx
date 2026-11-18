@@ -172,6 +172,7 @@ function switcherFixture(
         owner: { target: { kind: 'local' }, wslHostDistro: null },
         rateLimits,
         accounts: null,
+        accountsUnverifiable: false,
         remoteOwner: null,
         refreshRemote: null
       }
