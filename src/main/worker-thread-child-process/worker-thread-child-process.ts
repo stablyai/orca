@@ -175,6 +175,7 @@ export class WorkerThreadChildProcessHost {
   private readonly children = new Map<number, WorkerThreadChildProcess>()
   private nextId = 1
   private workerAnswered = false
+  private workerReady = false
   // A worker that dies before answering anything is broken here (e.g. an unloadable chunk); stop offering it.
   private failedToStart = false
 
@@ -206,6 +207,7 @@ export class WorkerThreadChildProcessHost {
     if (!this.host.current) {
       // A fresh worker (first use or after idle teardown) has not proven it starts yet.
       this.workerAnswered = false
+      this.workerReady = false
     }
     return this.host.ensure() !== null
   }
@@ -247,6 +249,10 @@ export class WorkerThreadChildProcessHost {
 
   private route(event: WorkerThreadChildEvent): void {
     this.workerAnswered = true
+    if (event.type === 'ready') {
+      this.workerReady = true
+      return
+    }
     const child = this.children.get(event.id)
     if (!child) {
       return
@@ -276,13 +282,16 @@ export class WorkerThreadChildProcessHost {
       this.failedToStart = true
       console.warn(`[worker-thread-child-process] worker died before answering. ${message}`)
     }
+    // A worker lost before it was ready never ran a request, so its children never existed: they fail to start.
+    const ran = this.workerReady
     this.workerAnswered = false
+    this.workerReady = false
     const abandoned = [...this.children.values()]
     this.children.clear()
     this.host.destroy()
     for (const child of abandoned) {
       child.receive({
-        type: 'error',
+        type: ran ? 'error' : 'spawn-error',
         id: child.id,
         error: { message, code: WORKER_CHILD_ABANDONED_CODE }
       })
