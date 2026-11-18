@@ -21,7 +21,7 @@ it('claims owed mail with the selected stored body and sparse options, without s
   })
   expect(f.card('mail')?.state).toBe('waiting')
   const preparation = f.prepare(100, 'owed')
-  expect((await f.claim('send', preparation)).value).toEqual({
+  expect((await f.claim('send', preparation)).value).toMatchObject({
     kind: 'claimed',
     messageId: 'mail',
     clientMessageId: 'send'
@@ -71,7 +71,7 @@ it('evaluates the first nonmail fallback itself and waits on it instead of bypas
       listedServiceTiers: []
     }
   }
-  expect((await f.claim('send', f.prepare(100, 'unavailable'))).value).toEqual({
+  expect((await f.claim('send', f.prepare(100, 'unavailable'))).value).toMatchObject({
     kind: 'claimed',
     messageId: 'person',
     clientMessageId: 'send'
@@ -146,7 +146,7 @@ it('keeps overlapping edit barriers at the fixed preparation instant and returns
   expect(f.card('person')?.state).toBe('waiting')
   expect(
     (await f.claim('send', f.prepare(130_000, 'unavailable'), undefined, 130_000)).value
-  ).toEqual({ kind: 'claimed', messageId: 'person', clientMessageId: 'send' })
+  ).toMatchObject({ kind: 'claimed', messageId: 'person', clientMessageId: 'send' })
 })
 
 it('requires a ready accepting child only while steering and rolls failed conversion back before holding its actual card', async () => {

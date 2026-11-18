@@ -3,6 +3,7 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session/failu
 import { createHash } from 'node:crypto'
 import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type { AgentSessionStoreState } from './agent-session-store-state'
+import { withoutAgentSessionInstructionsKey } from './agent-session-instructions-receipt'
 import type { AgentSessionConversationCommandRecord } from '../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 
 export type AgentSessionConversationClear = {
@@ -38,10 +39,11 @@ export function commitConversationClearRecord(
   if (source.lease.ownerProcess !== null || source.lease.claimStatus !== 'released') {
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
+  const kept = withoutAgentSessionInstructionsKey(source)
   state.records.set(clear.sessionId, {
-    ...(source.conversationNameSource === 'user'
-      ? source
-      : setAgentSessionRecordConversationName(source, null, clear.now)),
+    ...(kept.conversationNameSource === 'user'
+      ? kept
+      : setAgentSessionRecordConversationName(kept, null, clear.now)),
     providerHandleChain: [],
     lease: { ...source.lease, provenHandleLinkId: null },
     conversationCommand: clear.command,

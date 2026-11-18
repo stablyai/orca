@@ -6,9 +6,6 @@ import {
 import { NativeChatPaneFileDropScope } from './attachments/intake/NativeChatPaneFileDropSurface'
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
-import { cn } from '@/lib/class-names'
-import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './appearance/native-chat-appearance-style'
-import { useNativeChatStoreAppearanceStyle } from './appearance/use-native-chat-store-appearance-style'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store/index'
 import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
@@ -27,12 +24,9 @@ import {
 } from './messages/actions/use-native-chat-reveal-latest'
 import { useNativeChatLaunchPromptDeliveryNotice } from './session/terminal/delivery/use-native-chat-launch-prompt-delivery-notice'
 import { NativeChatComposer } from './composer/NativeChatComposer'
-import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
-import { useNativeChatFontSize } from './appearance/use-native-chat-font-size'
-import { useNativeChatFind } from './viewport/find/use-native-chat-find'
-import { NativeChatFindBar } from './viewport/find/NativeChatFindBar'
 import { useNativeChatCanSend } from './host-access/use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './prompts/NativeChatInteractiveCard'
+import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
 import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat/native-chat-agent-support'
 import { useNativeChatTerminalPromptCard } from './prompts/use-native-chat-interactive-prompt-card'
 import { NativeChatPromptStrip } from './prompts/NativeChatPromptCollapse'
@@ -46,23 +40,15 @@ import {
   useNativeChatOptimisticSend
 } from './session/terminal/delivery/use-native-chat-pending-delivery'
 import { useNativeChatCommandMarkers } from './session/terminal/delivery/use-native-chat-command-markers'
-import { useNativeChatRootInputRouting } from './composer/focus/use-native-chat-root-input-routing'
-import {
-  emptyNativeChatContextMenuActions,
-  useNativeChatContextMenu
-} from './pane/actions/use-native-chat-context-menu'
 import { createNativeChatRuntimeSelector } from './pane/ownership/native-chat-runtime-owner'
-import { useNativeChatPasteBridge } from './paste/use-native-chat-paste-bridge'
-import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
-import { useNativeChatLinkActions } from './links/actions/use-native-chat-link-actions'
-import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
+import { useNativeChatSurface, type NativeChatSurfaceArgs } from './use-native-chat-surface'
+import { NativeChatSurface, NativeChatSurfaceFindBar } from './NativeChatSurface'
+import { runNativeChatTerminalPaneShortcut } from './pane/routing/native-chat-pane-shortcut'
 import { useNativeChatFileLinkContext } from './links/actions/use-native-chat-file-link-context'
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './links/actions/use-native-chat-file-link-existence'
 import { useNativeChatLocalCommandAnswer } from './session/options/terminal/use-native-chat-local-command-answer'
 import { useNativeChatImageRuntimeContext } from './media/images/native-chat-image-runtime-context'
-import { handleNativeChatPaneShortcut } from './pane/routing/native-chat-pane-shortcut'
-import { formatShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 
 export function NativeChatResolvedView({
   paneKey,
@@ -85,7 +71,6 @@ export function NativeChatResolvedView({
   const childNavigator = useNativeChatChildNavigator(
     JSON.stringify([paneKey, runtimeEnvironmentId, sessionId])
   )
-  const keybindings = useAppStore((s) => s.keybindings)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(terminalTabId)
   const session = useNativeChatRetainedSession({
     paneKey,
@@ -117,7 +102,6 @@ export function NativeChatResolvedView({
   const interactiveSend = useNativeChatInteractiveSendReveal(send, targetPtyId, revealLatest)
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
   const previousWorkingEpochRef = useRef<number | null>(null)
-  const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
   const readOnlyComposerRef = useRef<NativeChatComposerHandle>(null)
   const activeComposerRef = childNavigator.child ? readOnlyComposerRef : composerRef
@@ -128,11 +112,6 @@ export function NativeChatResolvedView({
     ? readOnlyQuestionAnswerInputRef
     : questionAnswerInputRef
   const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
-  const onPaste = useNativeChatPasteBridge({
-    rootRef,
-    composerRef: activeComposerRef,
-    questionAnswerInputRef: activeQuestionAnswerInputRef
-  })
 
   // Keep optimistic echoes until their transcript turns land so sent messages never disappear during catch-up.
   const commandMarkerScope = useMemo(
@@ -190,17 +169,6 @@ export function NativeChatResolvedView({
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
   const mountedPromptCard = shownPromptCard ?? collapsedCard
   const composerReady = shownPromptCard === null && targetPtyId !== null && canSend
-  const rootInput = useNativeChatRootInputRouting({
-    tabId: terminalTabId,
-    rootRef,
-    composerRef: activeComposerRef,
-    questionAnswerInputRef: activeQuestionAnswerInputRef,
-    isVisible,
-    isFocusedGroup,
-    composerReady: composerReady && childNavigator.child === null,
-    surfaceReady: shownPromptCard !== null || childNavigator.child !== null
-  })
-
   const sessionWithPending = useNativeChatPendingProjection(
     sessionAfterCommandBoundaries,
     delivery.pending,
@@ -248,67 +216,40 @@ export function NativeChatResolvedView({
     clearDelivery()
     interactiveSend.cancel()
   }, [interactiveSend, clearDelivery])
-  const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
-    fileLinkContext,
-    rootRef,
-    { sessionId, isVisible }
+  const onSplit = useMemo<NativeChatSurfaceArgs['onSplit']>(
+    () =>
+      contextMenuActions
+        ? (shortcut) => runNativeChatTerminalPaneShortcut(shortcut, contextMenuActions)
+        : undefined,
+    [contextMenuActions]
   )
-
-  useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
-  const find = useNativeChatFind(
-    isVisible && isFocusedGroup,
-    rootRef,
-    activeComposerRef,
-    childNavigator.child ? childNavigator.messageListRef : messageListRef
-  )
-  const contextMenu = useNativeChatContextMenu({
-    rootRef,
+  const surface = useNativeChatSurface({
+    tabId: terminalTabId,
+    sessionId,
+    isVisible,
+    isFocusedGroup,
     composerRef: activeComposerRef,
-    enabled: isVisible,
-    onSwitchToTerminal,
-    splitShortcutLabels: {
-      right: formatShortcutLabel('terminal.splitRight', keybindings),
-      down: formatShortcutLabel('terminal.splitDown', keybindings)
-    },
-    actions: { onPaste, ...(contextMenuActions ?? emptyNativeChatContextMenuActions) },
-    messageListRef: childNavigator.child ? childNavigator.messageListRef : messageListRef,
+    questionAnswerInputRef: activeQuestionAnswerInputRef,
+    transcriptRef: childNavigator.child ? childNavigator.messageListRef : messageListRef,
     fileLinkContext,
-    onFind: find.open
+    composerReady: composerReady && childNavigator.child === null,
+    surfaceReady: shownPromptCard !== null || childNavigator.child !== null,
+    conversationShown: isConversation,
+    menu: { onSwitchToTerminal, actions: contextMenuActions },
+    onSplit,
+    // The terminal under this chat must not take a right-click meant for the chat's menu.
+    onPointerDownCapture: (event) => {
+      if (event.button === 2) {
+        event.stopPropagation()
+      }
+    },
+    onKeyDown: (event) => closeNativeChatSubagentOnEscape(event, paneKey)
   })
-  const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
-  const root = (
+  return (
     <NativeChatChildNavigationContext.Provider value={childNavigator.navigation}>
-      <div
-        ref={rootRef}
-        data-native-chat-root="true"
-        data-native-chat-working={isWorking ? 'true' : 'false'}
-        tabIndex={-1}
-        onPointerDownCapture={(event) => {
-          contextMenu.onPointerDownCapture(event)
-          if (event.button === 2) {
-            event.stopPropagation()
-            return
-          }
-          rootInput.onPointerDownCapture(event)
-        }}
-        onKeyDownCapture={(event) => {
-          find.onKeyDownCapture(event)
-          if (handleNativeChatPaneShortcut(event, keybindings, contextMenuActions)) {
-            return
-          }
-          rootInput.onKeyDownCapture(event)
-        }}
-        onKeyDown={(event) => closeNativeChatSubagentOnEscape(event, paneKey)}
-        onContextMenuCapture={contextMenu.onContextMenuCapture}
-        className={cn(
-          NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
-          'flex h-full min-h-0 w-full flex-col focus:outline-none'
-        )}
-        style={appearanceStyle}
-        data-native-chat-scheme={appearanceStyle.colorScheme}
-      >
-        {find.isOpen ? <NativeChatFindBar find={find} isVisible={isVisible} /> : null}
+      <NativeChatSurface surface={surface} working={isWorking}>
+        <NativeChatSurfaceFindBar surface={surface} isVisible={isVisible} />
         <NativeChatPaneFileDropScope
           enabled={childNavigator.child === null}
           hidden={childNavigator.child !== null}
@@ -334,7 +275,7 @@ export function NativeChatResolvedView({
               ) : (
                 <NativeChatSubagentTranscripts
                   paneKey={paneKey}
-                  find={find}
+                  find={surface.find}
                   ref={messageListRef}
                   session={sessionWithPending}
                   isVisible={isVisible && childNavigator.child === null}
@@ -407,14 +348,11 @@ export function NativeChatResolvedView({
             onBack={childNavigator.back}
             session={sessionWithPending}
             isVisible={isVisible}
-            onLinkClick={onLinkClick}
+            onLinkClick={surface.onLinkClick}
             runtimeContext={imageRuntimeContext}
           />
         ) : null}
-        {contextMenu.menu}
-        <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
-      </div>
+      </NativeChatSurface>
     </NativeChatChildNavigationContext.Provider>
   )
-  return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
 }

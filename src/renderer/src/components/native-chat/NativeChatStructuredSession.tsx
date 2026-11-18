@@ -1,15 +1,10 @@
 import { useStructuredNativeChatSubagents } from './subagents/use-structured-native-chat-subagents'
-import { NativeChatStructuredPrompts } from './prompts/NativeChatStructuredAsyncQuestion'
 import { NativeChatPaneFileDropScope } from './attachments/intake/NativeChatPaneFileDropSurface'
 import { useNativeChatHandOff } from './pane/actions/use-native-chat-hand-off'
 import { useNativeChatStructuredPaneNotices } from '@/components/native-chat/messages/notices/use-native-chat-structured-pane-notices'
 import { useNativeChatPaneFork } from '@/components/native-chat/messages/actions/use-native-chat-fork'
-import { cn } from '@/lib/class-names'
-import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from '@/components/native-chat/appearance/native-chat-appearance-style'
-import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { useStructuredChatLiveSession } from './session/structured/use-structured-chat-live-session'
 import { NativeChatComposer } from './composer/NativeChatComposer'
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
 import type { NativeChatOptionPickerRequest } from './session/options/controls/native-chat-option-picker-request'
@@ -30,24 +25,27 @@ import {
 import { NativeChatContextClearFade } from './conversation/projection/NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from './pane/actions/use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from './prompts/use-structured-prompt-response-hold'
+import { useBotLinkPrompt } from '@/lib/agent-session/open/bot-link-item-target'
+import { useStructuredChatLiveSession } from './session/structured/use-structured-chat-live-session'
+import { nativeChatStructuredAsyncQuestion } from './prompts/NativeChatStructuredAsyncQuestion'
+import { NativeChatStructuredPromptCard } from './prompts/NativeChatStructuredPromptCard'
 import {
   selectNativeChatViewState,
   structuredChatHistoryPhase
 } from './session/status/native-chat-view-state'
-import { useNativeChatRootInputRouting } from './composer/focus/use-native-chat-root-input-routing'
-import { useNativeChatFontSize } from './appearance/use-native-chat-font-size'
-import { useNativeChatFind } from './viewport/find/use-native-chat-find'
-import { NativeChatFindBar } from './viewport/find/NativeChatFindBar'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
-import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
-import { useNativeChatLinkActions } from './links/actions/use-native-chat-link-actions'
-import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
 import { useNativeChatFileLinkContext } from './links/actions/use-native-chat-file-link-context'
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './links/actions/use-native-chat-file-link-existence'
-import { useNativeChatTabOwnerWorktreeId } from './pane/ownership/use-native-chat-tab-owner'
+import { useBotChatOwner } from '../bots/use-bot-chat-identity'
+import {
+  NativeChatSlackMirrorContext,
+  useNativeChatSlackMirror
+} from './slack-mirror/native-chat-slack-mirror'
 import { useStructuredAgentSession } from './session/structured/use-structured-agent-session'
 import { useNativeChatImageRuntimeContext } from './media/images/native-chat-image-runtime-context'
 import { useStructuredNativeChatPaneCommands } from './pane/actions/use-structured-native-chat-pane-commands'
+import { useNativeChatSurface } from './use-native-chat-surface'
+import { NativeChatSurface, NativeChatSurfaceFindBar } from './NativeChatSurface'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { useNativeChatInterruptedContinuation } from './usage/NativeChatInterruptedContinue'
 import { NativeChatPromptSlotNotices } from './composer/controls/NativeChatComposerNotices'
@@ -57,11 +55,12 @@ import {
 } from './host-access/NativeChatInstallSlot'
 import { useNativeChatComposerError } from './composer/controls/use-native-chat-composer-notice'
 import { useNativeChatProvisionalLaunch } from './host-access/use-native-chat-provisional-launch'
-import { useStructuredAgentSessionHostExecution } from './session/status/structured-agent-session-status-hooks'
 import { useNativeChatRewindHost } from './messages/actions/use-native-chat-rewind-host'
 import { NativeChatQueuedMessageList } from './queue/NativeChatQueuedMessageList'
-import { nativeChatStructuredStopControls } from './session/structured/writes/native-chat-structured-stop-controls'
-import { useAppStore } from '../../store'
+import { cancelStructuredPrompt } from './session/structured/writes/native-chat-structured-stop-controls'
+import { useNativeChatBotHome } from './NativeChatBotHomeScope'
+import { useStructuredAgentSessionHostExecution } from '@/components/native-chat/session/status/structured-agent-session-status-hooks'
+import { useAppStore } from '@/store/index'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
@@ -71,12 +70,15 @@ import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-ch
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from '@/components/native-chat/host-access/use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from '@/components/native-chat/host-access/use-native-chat-host-outage-notice'
+import { useBotForWorkspace } from '@/components/bots/bot-workspace'
+import { BotServerOutageCard } from '@/components/bots/BotServerOutageCard'
 import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/use-native-chat-host-send-gate'
 import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
-  const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
+  const { ownerWorktreeId, turnBot, bot: chatBot } = useBotChatOwner(props)
+  const slackMirror = useNativeChatSlackMirror(chatBot, props.sessionId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
   // The host's own word on whether the provider child has answered startup yet.
@@ -107,13 +109,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     ...(provisionalLaunch.launch ? { launch: provisionalLaunch.launch } : {})
   })
   useRecheckNativeChatFileLinksWhenTurnEnds(controller.isWorking)
-  const stopControls = nativeChatStructuredStopControls(controller, hostExecution.stopping)
   const { composerError, reportComposerError } = useNativeChatComposerError(
     controller.commandRefusalCauses
   )
   const [optionPickerRequest, setOptionPickerRequest] =
     useState<NativeChatOptionPickerRequest | null>(null)
-  const rootRef = useRef<HTMLDivElement>(null)
   const historyPhase = structuredChatHistoryPhase(provisionalLaunch, controller.status)
   const hostOutage = useNativeChatHostOutage(props.target)
   const hostNotice = useNativeChatHostOutageNotice(hostOutage)
@@ -154,18 +154,10 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const viewState = selectNativeChatViewState(session, { readRetries: readFailure?.final !== true })
   const paneActive = props.isVisible && props.isFocusedGroup
   const parentShown = props.isVisible && childNavigator.child === null
-  useNativeChatFontSize(viewState.kind === 'ready' && paneActive, rootRef)
   const activeComposerRef = childNavigator.child ? readOnlyComposerRef : composerRef
   const activeAnswerInputRef = childNavigator.child ? childAnswerInputRef : questionAnswerInputRef
   const activeMessageListRef = childNavigator.child ? childMessageListRef : submits.messageListRef
-  const find = useNativeChatFind(paneActive, rootRef, activeComposerRef, activeMessageListRef)
-  const appearanceStyle = useNativeChatStoreAppearanceStyle()
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
-  const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
-    fileLinkContext,
-    rootRef,
-    { sessionId: props.sessionId, isVisible: props.isVisible }
-  )
   const handOff = useNativeChatHandOff({
     pane: props,
     directory: fileLinkContext,
@@ -178,35 +170,43 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     handOff,
     sessionContext: controller,
     ownerWorktreeId,
-    rootRef,
-    composerRef: activeComposerRef,
-    questionAnswerInputRef: activeAnswerInputRef,
-    messageListRef: activeMessageListRef,
-    fileLinkContext,
-    rewind: controller.rewind.surface,
-    onFind: find.open
+    composerRef,
+    rewind: controller.rewind.surface
   })
-  const prompt = controller.prompts[0] ?? null
+  const prompt = useBotLinkPrompt(props.sessionId, controller.prompts)
   // Unknown prompts leave the composer usable; a send starts a turn whose cancel can resolve them.
   const promptsUnanswerable = pendingPromptsAllUnanswerableHere(controller.prompts)
+  // A bot's page whose server is down keeps its last read; the recovery card stands in for the composer.
+  const pageBot = useBotForWorkspace(ownerWorktreeId ?? null)
+  const botServerDown = pageBot !== null && hostOutage !== null && hostOutage.kind !== 'stopped'
   const subagents = useStructuredNativeChatSubagents({ ...props, paneKey, controller })
   const subagentOpen = subagents.openId !== null
   const composerShown =
-    (prompt === null || promptsUnanswerable) && readFailure?.final !== true && !subagentOpen
+    (prompt === null || promptsUnanswerable) &&
+    readFailure?.final !== true &&
+    !botServerDown &&
+    !subagentOpen
   // An owned prompt keeps its card; otherwise a missing program leaves the composer disabled.
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const canMention = composerShown && install.unavailableHint === undefined
-  const rootInput = useNativeChatRootInputRouting({
+  const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
+  const surface = useNativeChatSurface({
     tabId: props.tabId,
-    rootRef,
-    composerRef: activeComposerRef,
-    questionAnswerInputRef: activeAnswerInputRef,
+    sessionId: props.sessionId,
     isVisible: props.isVisible,
     isFocusedGroup: props.isFocusedGroup,
+    composerRef: activeComposerRef,
+    questionAnswerInputRef: activeAnswerInputRef,
+    transcriptRef: activeMessageListRef,
+    fileLinkContext,
     composerReady:
       composerShown && install.slot.kind !== 'install' && childNavigator.child === null,
-    surfaceReady: !composerShown || install.slot.kind === 'install' || childNavigator.child !== null
+    surfaceReady:
+      !composerShown || install.slot.kind === 'install' || childNavigator.child !== null,
+    conversationShown: viewState.kind === 'ready',
+    ...paneCommands,
+    onKeyDown: subagents.onKeyDown
   })
   const forks = useNativeChatPaneFork(props, controller, ownerWorktreeId)
   const transport = useNativeChatStructuredComposerTransport({
@@ -234,6 +234,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     transport
   })
 
+  const bot = useNativeChatBotHome(session, controller, transport, ownerWorktreeId, hostExecution)
+
   const { setup, notices } = useNativeChatStructuredPaneNotices({
     props,
     ownerWorktreeId,
@@ -249,164 +251,150 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     composerError,
     install,
     hostSendGate,
-    hostNotice
+    hostNotice: botServerDown ? null : hostNotice
   })
-  const root = (
-    <NativeChatChildNavigationContext.Provider value={childNavigator.navigation}>
-      <div
-        ref={rootRef}
-        data-native-chat-root="true"
-        data-native-chat-working={controller.isWorking ? 'true' : 'false'}
-        tabIndex={-1}
-        onPointerDownCapture={(event) => {
-          paneCommands.onPointerDownCapture(event)
-          rootInput.onPointerDownCapture(event)
-        }}
-        onKeyDownCapture={(event) => {
-          find.onKeyDownCapture(event)
-          paneCommands.onKeyDownCapture(event)
-          rootInput.onKeyDownCapture(event)
-        }}
-        onKeyDown={subagents.onKeyDown}
-        onContextMenuCapture={paneCommands.onContextMenuCapture}
-        className={cn(
-          NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
-          'flex h-full min-h-0 w-full flex-col focus:outline-none'
-        )}
-        style={appearanceStyle}
-        data-native-chat-scheme={appearanceStyle.colorScheme}
-      >
-        {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme, handOff)}
-        <NativeChatPaneFileDropScope
-          enabled={childNavigator.child === null}
-          hidden={childNavigator.child !== null}
-          inert={childNavigator.child !== null}
-          className={childNavigator.child ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}
-        >
-          <NativeChatStructuredTranscriptFrame
-            pane={props}
-            composerRef={composerRef}
-            canMention={canMention && childNavigator.child === null}
-            isVisible={parentShown}
+  return (
+    <NativeChatSlackMirrorContext.Provider value={slackMirror}>
+      <NativeChatChildNavigationContext.Provider value={childNavigator.navigation}>
+        <NativeChatSurface surface={surface} working={controller.isWorking}>
+          {nativeChatPaneHeader(props, ownerWorktreeId, surface.appearance.colorScheme, handOff)}
+          <NativeChatPaneFileDropScope
+            enabled={childNavigator.child === null}
+            hidden={childNavigator.child !== null}
+            inert={childNavigator.child !== null}
+            className={childNavigator.child ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}
           >
-            <NativeChatContextClearFade
-              clearing={controller.contextClear.clearing && viewState.kind !== 'error'}
-              overlay={
-                find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null
-              }
+            <NativeChatStructuredTranscriptFrame
+              pane={props}
+              composerRef={composerRef}
+              canMention={canMention && childNavigator.child === null}
+              isVisible={parentShown}
             >
-              {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
-                historyPhase !== 'unread' && <NativeChatLoadingCue />
-              ) : viewState.kind === 'error' ? (
-                <NativeChatEmptyState
-                  kind="error"
-                  retrying={!readFailure?.final}
-                  {...(readFailure?.named ? { headline: readFailure.text } : {})}
-                />
-              ) : viewState.kind === 'empty' ? (
-                <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
-              ) : (
-                <NativeChatStructuredTranscript
-                  pane={props}
-                  paneKey={paneKey}
-                  find={find}
-                  directory={fileLinkContext}
-                  controller={controller}
-                  continuation={continuation.view}
-                  setup={setup}
-                  forks={forks}
-                  messageListRef={submits.messageListRef}
-                  session={session}
-                  isVisible={parentShown}
-                  awaitingInput={prompt === null ? null : 'shown'}
-                  stopping={stopControls.stopping}
-                  runtimeContext={imageRuntimeContext}
-                  deliveryNotices={deliveryNotices}
-                />
-              )}
-            </NativeChatContextClearFade>
-          </NativeChatStructuredTranscriptFrame>
-          {readFailure?.final ? null : (
-            <>
-              {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
-              <NativeChatQueuedMessageList
-                controller={submits.queuedMessages}
-                chatWorktreeId={ownerWorktreeId ?? null}
-                agentName={agentLabel}
-                statedFailures={startFailures}
-                steerHeld={stopControls.stopping || hostHeld}
-                focusComposer={focusComposer}
-                editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
-              />
-              {subagents.strip}
-              <NativeChatStructuredWorkerApprovals pane={props} isVisible={parentShown} />
-              {prompt || subagentOpen ? null : (
-                <NativeChatStructuredComposerTabStrips
-                  tabId={props.tabId}
-                  runtimeContext={imageRuntimeContext}
-                  threadGoal={controller.threadGoal}
-                  transport={transport}
-                  isWorking={controller.isWorking}
-                  isVisible={props.isVisible}
-                  turnId={controller.turnId}
-                  workingStartedAt={controller.workingStartedAt}
-                  target={props.target}
+              <NativeChatContextClearFade
+                clearing={controller.contextClear.clearing && viewState.kind !== 'error'}
+                overlay={<NativeChatSurfaceFindBar surface={surface} isVisible={props.isVisible} />}
+              >
+                {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
+                  historyPhase !== 'unread' && <NativeChatLoadingCue />
+                ) : viewState.kind === 'error' ? (
+                  <NativeChatEmptyState
+                    kind="error"
+                    retrying={!readFailure?.final}
+                    {...(readFailure?.named ? { headline: readFailure.text } : {})}
+                  />
+                ) : viewState.kind === 'empty' ? (
+                  <NativeChatEmptyPane
+                    slot={install.slot}
+                    agent={props.agent}
+                    tabId={props.tabId}
+                  />
+                ) : (
+                  <NativeChatStructuredTranscript
+                    pane={props}
+                    paneKey={paneKey}
+                    find={surface.find}
+                    directory={fileLinkContext}
+                    controller={controller}
+                    continuation={continuation.view}
+                    setup={setup}
+                    forks={forks}
+                    messageListRef={submits.messageListRef}
+                    session={session}
+                    isVisible={parentShown}
+                    awaitingInput={prompt === null ? null : 'shown'}
+                    stopping={bot.stopControls.stopping}
+                    runtimeContext={imageRuntimeContext}
+                    deliveryNotices={deliveryNotices}
+                    {...{ turnBot, botHome: bot.kickoff }}
+                  />
+                )}
+              </NativeChatContextClearFade>
+            </NativeChatStructuredTranscriptFrame>
+            {readFailure?.final ? null : (
+              <>
+                {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
+                <NativeChatQueuedMessageList
+                  controller={submits.queuedMessages}
+                  chatWorktreeId={ownerWorktreeId ?? null}
+                  agentName={agentLabel}
+                  statedFailures={startFailures}
+                  steerHeld={bot.stopControls.stopping || hostHeld}
                   focusComposer={focusComposer}
+                  editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
                 />
-              )}
-              {/* Prompt cards take the composer's slot, below the background-task dock. */}
-              {composerShown || subagentOpen ? null : (
-                <NativeChatPromptSlotNotices notices={notices} />
-              )}
-              <NativeChatStructuredPrompts
-                pane={props}
-                controller={controller}
-                response={promptResponse}
-                session={session}
-                transport={transport}
-                submits={submits}
-                shouldFocus={!promptsUnanswerable && paneActive && childNavigator.child === null}
-                answerInputRef={questionAnswerInputRef}
-              />
+                {subagents.strip}
+                <NativeChatStructuredWorkerApprovals pane={props} isVisible={parentShown} />
+                {prompt || subagentOpen ? null : (
+                  <NativeChatStructuredComposerTabStrips
+                    tabId={props.tabId}
+                    runtimeContext={imageRuntimeContext}
+                    threadGoal={controller.threadGoal}
+                    transport={transport}
+                    isWorking={controller.isWorking}
+                    isVisible={props.isVisible}
+                    turnId={controller.turnId}
+                    workingStartedAt={controller.workingStartedAt}
+                    target={props.target}
+                    focusComposer={focusComposer}
+                  />
+                )}
+                {/* Prompt cards take the composer's slot, below the background-task dock. */}
+                {composerShown || subagentOpen ? null : (
+                  <NativeChatPromptSlotNotices notices={notices} />
+                )}
+                <NativeChatStructuredPromptCard
+                  key={prompt ? `${prompt.itemId}:${prompt.revision}` : undefined}
+                  prompt={prompt}
+                  promptResponse={promptResponse}
+                  onCancel={cancelPrompt}
+                  shouldFocus={!promptsUnanswerable && paneActive && childNavigator.child === null}
+                  answerInputRef={questionAnswerInputRef}
+                />
+                {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
+                {botServerDown && hostOutage ? (
+                  <BotServerOutageCard key={hostOutage.environmentId} outage={hostOutage} />
+                ) : null}
 
-              {composerShown && <NativeChatInstallSlot install={install} agentLabel={agentLabel} />}
-              {subagents.statusBar}
-              {composerShown ? (
-                <NativeChatComposer
-                  ref={composerRef}
-                  terminalTabId={props.tabId}
-                  paneKey={paneKey}
-                  draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
-                  targetPtyId={null}
-                  agent={props.agent}
-                  {...stopControls.composer}
-                  unavailableHint={install.unavailableHint}
-                  steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
-                  structuredTransport={transport}
-                  notices={notices}
-                  recallSource={{ messages: session.messages, withoutImageMarkers: true }}
-                />
-              ) : null}
-            </>
-          )}
-        </NativeChatPaneFileDropScope>
-        {childNavigator.child ? (
-          <NativeChatChildTranscriptStack
-            messageListRef={childMessageListRef}
-            path={childNavigator.path}
-            onBack={childNavigator.back}
-            session={session}
-            roster={controller.subagentRoster}
-            isVisible={props.isVisible}
-            onLinkClick={onLinkClick}
-            runtimeContext={imageRuntimeContext}
-          />
-        ) : null}
-        {paneCommands.menu}
-        {handOff.dialog}
-        <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
-      </div>
-    </NativeChatChildNavigationContext.Provider>
+                {composerShown && (
+                  <NativeChatInstallSlot install={install} agentLabel={agentLabel} />
+                )}
+                {subagents.statusBar}
+                {composerShown ? (
+                  <NativeChatComposer
+                    ref={composerRef}
+                    terminalTabId={props.tabId}
+                    paneKey={paneKey}
+                    draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
+                    targetPtyId={null}
+                    agent={props.agent}
+                    {...bot.stopControls.composer}
+                    unavailableHint={install.unavailableHint}
+                    steerHead={
+                      bot.stopControls.stopping ? undefined : submits.queuedMessages.steerHead
+                    }
+                    structuredTransport={transport}
+                    notices={notices}
+                    recallSource={{ messages: session.messages, withoutImageMarkers: true }}
+                  />
+                ) : null}
+              </>
+            )}
+          </NativeChatPaneFileDropScope>
+          {childNavigator.child ? (
+            <NativeChatChildTranscriptStack
+              messageListRef={childMessageListRef}
+              path={childNavigator.path}
+              onBack={childNavigator.back}
+              session={session}
+              roster={controller.subagentRoster}
+              isVisible={props.isVisible}
+              onLinkClick={surface.onLinkClick}
+              runtimeContext={imageRuntimeContext}
+            />
+          ) : null}
+          {handOff.dialog}
+        </NativeChatSurface>
+      </NativeChatChildNavigationContext.Provider>
+    </NativeChatSlackMirrorContext.Provider>
   )
-  return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
 }

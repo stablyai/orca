@@ -50,7 +50,7 @@ import { useWorktreeAgentRows } from '@/components/sidebar/workspace-card/activi
 import { useAgentRowConversationName } from '@/components/dashboard/rows/use-agent-row-conversation-name'
 import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
-import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
+import { agentRowDisplayDotState } from '../../../../../shared/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'

@@ -63,7 +63,7 @@ export async function cleanupAcpTextTaskProtocol(
 }
 
 export function acpTextTaskArgs(spec: AcpLaunchSpec): string[] {
-  const args = spec.args({ fullAccess: false, pluginDir: null })
+  const args = spec.args({ fullAccess: false, pluginDirs: [] })
   if (spec.agent === 'grok') {
     args.splice(1, 0, '--no-leader')
     args.unshift('--permission-mode', 'default')
