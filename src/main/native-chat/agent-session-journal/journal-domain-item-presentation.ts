@@ -1,3 +1,4 @@
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -88,21 +89,23 @@ export function readJournalDomainClientItems(
   return ids.flatMap((id) => (selected.has(id) ? [selected.get(id)!.item] : []))
 }
 
+// Current rows keep a detail form within the detail limit; older rows hold only the whole item.
+const DETAIL_JSON = `CASE WHEN wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
+  THEN COALESCE(detail_json,payload_json) ELSE payload_json END`
+
 export function readJournalDomainItemDetail(
   db: Database.Database,
   target: JournalDomainItemTarget,
   itemId: string
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT wire_version,
-    CASE WHEN wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION} THEN COALESCE(detail_json,payload_json)
-      ELSE payload_json END AS detail_json FROM journal_items
+    .prepare(`SELECT wire_version,${boundedStoredJsonSql(DETAIL_JSON, 'detail_json')} FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(target.sessionId, target.epoch, itemId)
   if (!row) {
     return null
   }
-  const parsed: AgentJournalRenderItem = JSON.parse(String(row.detail_json))
+  const parsed: AgentJournalRenderItem = JSON.parse(String(boundedStoredJson(row, 'detail_json')))
   const item = hydrateJournalStoredItem(db, [target.sessionId, target.epoch], parsed)
   if (row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION) {
     return item
