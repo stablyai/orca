@@ -194,6 +194,8 @@ vi.mock('../server/serve-readiness', () => ({
 }))
 // Speech warmup keeps its own settings listener for the process; these cases follow the hooks one.
 vi.mock('../speech/speech-model-warmup', () => ({ startSpeechModelWarmup: vi.fn() }))
+// Usage history reads worktree metadata this push-startup store does not model.
+vi.mock('./orcad-usage-history', () => ({ startOrcadUsageHistory: vi.fn() }))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
     constructor(store: unknown, stats: unknown, deps: RuntimeConstructionDependencies) {
