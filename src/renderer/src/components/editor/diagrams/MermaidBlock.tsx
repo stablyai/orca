@@ -49,6 +49,11 @@ function enqueueRender(fn: () => Promise<void>): void {
 // The uppercase letter keeps it out of the lowercase heading slugs the markdown preview renders as IDs.
 let renderSequence = 0
 
+function nextMermaidRenderId(): string {
+  renderSequence += 1
+  return `orcaMermaid${renderSequence}`
+}
+
 /** Render SVG with a source/error fallback so invalid syntax cannot break the preview. */
 export default function MermaidBlock({
   content,
@@ -75,7 +80,7 @@ export default function MermaidBlock({
       return
     }
     let cancelled = false
-    const renderId = `orcaMermaid${++renderSequence}`
+    const renderId = nextMermaidRenderId()
 
     const render = async (): Promise<void> => {
       try {
