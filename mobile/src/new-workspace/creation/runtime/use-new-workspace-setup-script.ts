@@ -3,6 +3,7 @@ import { getRepoExecutionHostId } from '../../../../../src/shared/execution-host
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { readRepoHooksSetupCommand } from '../setup-hook-trust'
 import { newWorkspaceSetupHooksRead } from './new-workspace-operations'
+import { getRepoSetupAgentStartupPolicy } from '../../../../../src/shared/workspace-setup/repo-hook-settings-defaults'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { MobileWorkspaceRepo, SetupHookDetails } from '../forms/new-worktree-modal-types'
 
@@ -11,6 +12,7 @@ type SetupScriptValues = {
   setupDecisionChoice: Exclude<WorkspaceCreateSetupDecision, 'inherit'> | null
   runSetup: boolean
   showAdvanced: boolean
+  waitForSetupChoice: boolean | null
 }
 
 export function useNewWorkspaceSetupScript(args: {
@@ -26,6 +28,9 @@ export function useNewWorkspaceSetupScript(args: {
   setRunSetup: (run: boolean) => void
   showAdvanced: boolean
   setShowAdvanced: (show: boolean) => void
+  /** Null when the host reports no setup script to wait for (or predates the report). */
+  waitForSetup: boolean | null
+  setWaitForSetup: (wait: boolean) => void
 } {
   const { client, selectedRepo } = args
   const repoId = selectedRepo?.id ?? null
@@ -34,7 +39,8 @@ export function useNewWorkspaceSetupScript(args: {
     details: null,
     setupDecisionChoice: null,
     runSetup: true,
-    showAdvanced: false
+    showAdvanced: false,
+    waitForSetupChoice: null
   }
   const [state, setState] = useState({ client, repoId, executionHostId, ...emptyValues })
   const matchesOwner =
@@ -46,7 +52,8 @@ export function useNewWorkspaceSetupScript(args: {
     details: activeDetails,
     setupDecisionChoice,
     runSetup,
-    showAdvanced
+    showAdvanced,
+    waitForSetupChoice
   } = matchesOwner ? state : emptyValues
   const updateChoices = useCallback(
     (values: Partial<SetupScriptValues>) => {
@@ -81,9 +88,12 @@ export function useNewWorkspaceSetupScript(args: {
             repoId,
             command,
             source: result.source,
-            runPolicy
+            runPolicy,
+            // As desktop: default tabs alone are no setup to wait for; older hosts send no setupConfig.
+            agentCanWaitForSetup: !!result.setupConfig && result.setupConfig.kind !== 'default-tabs'
           },
           setupDecisionChoice: null,
+          waitForSetupChoice: null,
           runSetup: runPolicy !== 'skip-by-default',
           ...(command && runPolicy === 'ask' ? { showAdvanced: true } : {})
         })
@@ -107,6 +117,11 @@ export function useNewWorkspaceSetupScript(args: {
     runSetup,
     setRunSetup: (runSetup) => updateChoices({ runSetup }),
     showAdvanced,
-    setShowAdvanced: (showAdvanced) => updateChoices({ showAdvanced })
+    setShowAdvanced: (showAdvanced) => updateChoices({ showAdvanced }),
+    waitForSetup: activeDetails?.agentCanWaitForSetup
+      ? (waitForSetupChoice ??
+        getRepoSetupAgentStartupPolicy(selectedRepo ?? undefined) === 'wait-for-setup')
+      : null,
+    setWaitForSetup: (waitForSetupChoice) => updateChoices({ waitForSetupChoice })
   }
 }

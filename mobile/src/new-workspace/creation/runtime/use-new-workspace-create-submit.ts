@@ -16,6 +16,7 @@ import {
   composerCreateRepoId
 } from '../source-workspace-create'
 import { createdSetupReviewPrompt } from '../created-worktree-setup-review'
+import { saveStartupPolicy } from './setup-agent-startup-policy-save'
 import {
   useNewWorkspaceSetupTrust,
   type CreateOptions,
@@ -67,6 +68,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   setupRunPolicy: SetupRunPolicy
   setupDecisionChoice: Exclude<WorkspaceCreateSetupDecision, 'inherit'> | null
   runSetup: boolean
+  waitForSetup: boolean | null
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   setTrustedOrcaHooks: (trust: PersistedTrustedOrcaHooks) => void
   getWorktreeCreateCutoverSupport: () => Promise<WorktreeCreateIdempotencySupport | false>
@@ -213,6 +215,9 @@ export function useNewWorkspaceCreateSubmit(args: {
           return
         }
         setupApproval = resolved.approved
+      }
+      if (!(await saveStartupPolicy(client, selectedRepo, args.waitForSetup, args.setError))) {
+        return
       }
       const createdWithAgentId =
         args.selectedAgent.id !== '__blank__' ? args.selectedAgent.id : undefined

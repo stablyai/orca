@@ -1049,7 +1049,9 @@
       "label": "Script de configuração",
       "run": "Executar",
       "runSetupCommand": "Executar comando de configuração",
-      "skip": "Pular"
+      "skip": "Pular",
+      "waitForSetup": "Esperar a configuração terminar antes de iniciar o agente",
+      "waitForSetupSaveFailed": "Falha ao salvar o comportamento de inicialização da configuração."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Conectar",
