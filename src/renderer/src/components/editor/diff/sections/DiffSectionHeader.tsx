@@ -73,10 +73,10 @@ export function DiffSectionHeader({
           <span className="path-display-prefix">{displayPath.prefix}</span>
           <span className="path-display-file">{displayPath.fileName}</span>
         </span>
-        <span className="diff-section-header-counts flex shrink-0 items-center">
+        <span className="flex shrink-0 items-center">
           {dirty && <span className="font-medium ml-1">M</span>}
           {(added > 0 || removed > 0) && (
-            <span className="tabular-nums ml-2">
+            <span className="diff-section-header-counts tabular-nums ml-2">
               {added > 0 && <span className="text-green-600 dark:text-green-500">+{added}</span>}
               {added > 0 && removed > 0 && <span> </span>}
               {removed > 0 && <span className="text-red-500">-{removed}</span>}
@@ -115,9 +115,9 @@ export function DiffSectionHeader({
           <ExternalLink className="size-3.5" />
         </button>
         {collapsed ? (
-          <ChevronRight className="diff-section-header-chevron size-3.5 shrink-0 text-muted-foreground" />
+          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
         ) : (
-          <ChevronDown className="diff-section-header-chevron size-3.5 shrink-0 text-muted-foreground" />
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
         )}
       </div>
     </div>

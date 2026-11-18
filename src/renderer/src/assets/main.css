@@ -1621,9 +1621,11 @@ html.native-shell .app-layout {
 }
 
 /* The folder prefix gives up its space first; the file name only ellipsizes once the prefix is gone. */
+/* Only the folder prefix shrinks; the file name keeps its full width (capped at the row) and ellipsizes
+   only once the prefix is gone. */
 .path-display-prefix,
 .editor-header-path-prefix {
-  flex: 0 1000 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1632,15 +1634,15 @@ html.native-shell .app-layout {
 
 .path-display-file,
 .editor-header-path-file {
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: 0 0 auto;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* A narrow diff header keeps its file name readable: the counts (also in the file list and gutter) go
-   first, then the chevron (the header still toggles) and spacing. Actions stay; the header height is fixed. */
+/* A narrow diff header gives its line counts (also in the file list and gutter) to the file name, then
+   tightens spacing. The unsaved marker, actions and chevron stay; the header height is fixed. */
 @container (width < 16rem) {
   .diff-section-header-counts {
     display: none;
@@ -1648,10 +1650,6 @@ html.native-shell .app-layout {
 }
 
 @container (width < 10rem) {
-  .diff-section-header-chevron {
-    display: none;
-  }
-
   .diff-section-header-actions {
     margin-left: 0.25rem;
   }
