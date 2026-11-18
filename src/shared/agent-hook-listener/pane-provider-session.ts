@@ -27,15 +27,27 @@ export function readPaneSessionContext(
   eventName: unknown
 ) {
   const { paneKey, hookPayloadRecord } = envelope
+  const providerSession = readPaneProviderSession(
+    state,
+    source,
+    paneKey,
+    hookPayloadRecord,
+    eventName
+  )
+  const activeAntigravityRoot =
+    source === 'antigravity' && providerSession === null
+      ? state.antigravityChildWorkByPaneKey.get(paneKey)?.rootConversationId
+      : undefined
   return {
-    providerSession: readPaneProviderSession(state, source, paneKey, hookPayloadRecord, eventName),
+    providerSession,
     statusAdmissionSession: hasSeparateHookSessionAdmission(source)
-      ? extractAgentProviderSession(
+      ? (activeAntigravityRoot ??
+        extractAgentProviderSession(
           source,
           source === 'hermes'
             ? withHermesPaneSessionId(state, paneKey, hookPayloadRecord)
             : hookPayloadRecord
-        )?.id
+        )?.id)
       : undefined
   }
 }
@@ -274,9 +286,9 @@ export function retainHookRootContext(
   const modelSource =
     incoming.payload.agentType === 'codex'
       ? previousRoot
-      : incoming.payload.agentType === 'claude' &&
+      : (incoming.payload.agentType === 'claude' || incoming.payload.agentType === 'antigravity') &&
           sameTerminalOwner &&
-          previous?.payload.agentType === 'claude'
+          previous?.payload.agentType === incoming.payload.agentType
         ? previous
         : undefined
   const model = incoming.payload.model ? undefined : modelSource?.payload.model

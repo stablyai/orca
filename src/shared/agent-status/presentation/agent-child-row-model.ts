@@ -253,7 +253,10 @@ export function buildLegacyAgentChildRowModels(
       context
     )
     const named = childName({ ...subagent, kind: 'agent' })
-    const name = named.name
+    const operation =
+      subagent.toolName !== undefined
+        ? { toolName: subagent.toolName, input: subagent.toolInput }
+        : undefined
     return {
       id: subagent.id,
       providerId: subagent.id,
@@ -263,7 +266,14 @@ export function buildLegacyAgentChildRowModels(
       ...(subagent.agentType !== undefined ? { agentType: subagent.agentType } : {}),
       ...(subagent.model !== undefined ? { model: subagent.model } : {}),
       detail: agentChildRowDetail(
-        { evidence: 'child', kind: 'agent', name, agentType: subagent.agentType, settled: false },
+        {
+          evidence: 'child',
+          kind: 'agent',
+          name: named.name,
+          agentType: subagent.agentType,
+          operation,
+          settled: false
+        },
         displayState
       ),
       firstObservedAt: subagent.startedAt,

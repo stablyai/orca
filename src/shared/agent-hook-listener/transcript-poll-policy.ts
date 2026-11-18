@@ -1,6 +1,8 @@
+import { agentSubagentsEqual } from '../agent-status/contracts/agent-status-subagent-snapshot'
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
+import { hasAntigravityPollWork } from './providers/antigravity/antigravity-transcript-poll'
 import { hasCodexTranscriptSubagents } from './providers/codex/codex-state'
 import { hasMuseSessionLog } from './providers/muse/muse-events'
 import { hasPendingCodexSubagentIdentity } from './providers/codex/codex-subagent-roster'
@@ -18,6 +20,9 @@ export function shouldPollHookTranscript(
       (state.codexLeadStateByPaneKey.get(event.paneKey)?.state !== 'done' &&
         Boolean(state.codexSubagentTranscriptByPaneKey.get(event.paneKey)?.parent.filePath))
     )
+  }
+  if (source === 'antigravity') {
+    return hasAntigravityPollWork(state, event)
   }
   if (source === 'muse') {
     // Muse question waits/answers exist only in the session log.
@@ -88,6 +93,30 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
     return changed
       ? { ...polled, hasExplicitPrompt: undefined, hookEventName: undefined }
       : undefined
+  }
+  if (source === 'antigravity') {
+    const subagentsChanged = !agentSubagentsEqual(
+      polled.payload.subagents,
+      original.payload.subagents
+    )
+    const changed =
+      subagentsChanged ||
+      polled.payload.state !== original.payload.state ||
+      polled.payload.workingMode !== original.payload.workingMode ||
+      polled.payload.model !== original.payload.model ||
+      polled.payload.mainAgent?.state !== original.payload.mainAgent?.state
+    if (!changed) {
+      return undefined
+    }
+    const completedTurn =
+      polled.payload.state === 'done' &&
+      original.payload.state !== 'done' &&
+      polled.payload.mainAgent?.state === 'done'
+    return {
+      ...polled,
+      hasExplicitPrompt: undefined,
+      hookEventName: completedTurn ? 'Stop' : undefined
+    }
   }
   const subagentsChanged =
     JSON.stringify(polled.payload.subagents) !== JSON.stringify(original.payload.subagents)
