@@ -10,17 +10,25 @@ export function nativeChatNextRedrawAt(drawnAt: number, cost: number): number {
   return drawnAt + Math.min(MAX_HOLD_MS, (cost * (1 - REDRAW_SHARE)) / REDRAW_SHARE)
 }
 
-/** Costly redraws of a growing reply (a reply that must be parsed whole, a huge block) come less
+/** Reports how long the platform spent drawing the next frame (style, layout, paint) after a
+ *  commit; returns a cancel. */
+export type NativeChatMeasureFrameRendering = (done: (ms: number) => void) => () => void
+
+/** Costly redraws of a growing reply (a reply that must be parsed whole, a huge reply) come less
  *  often instead of every frame; cheap ones and the finished text draw at once. */
-export function createNativeChatRedrawPaceHook({
-  useEffect,
-  useLayoutEffect,
-  useReducer,
-  useRef
-}: Pick<typeof React, 'useEffect' | 'useLayoutEffect' | 'useReducer' | 'useRef'>) {
+export function createNativeChatRedrawPaceHook(
+  {
+    useEffect,
+    useLayoutEffect,
+    useReducer,
+    useRef
+  }: Pick<typeof React, 'useEffect' | 'useLayoutEffect' | 'useReducer' | 'useRef'>,
+  measureFrameRendering?: NativeChatMeasureFrameRendering
+) {
   return function useNativeChatRedrawPace(text: string, growing: boolean): string {
-    const [, wake] = useReducer((count: number) => count + 1, 0)
+    const [woken, wake] = useReducer((count: number) => count + 1, 0)
     const pace = useRef({ drawn: text, nextAt: 0, renderAt: 0 })
+    const measuring = useRef<(() => void) | undefined>(undefined)
     const hold = growing && text !== pace.current.drawn && performance.now() < pace.current.nextAt
     const drawn = hold ? pace.current.drawn : text
     if (drawn !== pace.current.drawn) {
@@ -33,12 +41,20 @@ export function createNativeChatRedrawPaceHook({
         return
       }
       const now = performance.now()
-      pace.current = {
-        drawn,
-        nextAt: nativeChatNextRedrawAt(now, now - pace.current.renderAt),
-        renderAt: 0
+      const cost = now - pace.current.renderAt
+      pace.current = { drawn, nextAt: nativeChatNextRedrawAt(now, cost), renderAt: 0 }
+      if (measureFrameRendering && !measuring.current) {
+        measuring.current = measureFrameRendering((rendering) => {
+          measuring.current = undefined
+          pace.current.nextAt = Math.max(
+            pace.current.nextAt,
+            nativeChatNextRedrawAt(now, cost + rendering)
+          )
+        })
       }
     }, [drawn])
+
+    useEffect(() => () => measuring.current?.(), [])
 
     useEffect(() => {
       if (!hold) {
@@ -46,7 +62,7 @@ export function createNativeChatRedrawPaceHook({
       }
       const timer = setTimeout(wake, Math.max(0, pace.current.nextAt - performance.now()))
       return () => clearTimeout(timer)
-    }, [hold, text])
+    }, [hold, text, woken])
 
     return drawn
   }
