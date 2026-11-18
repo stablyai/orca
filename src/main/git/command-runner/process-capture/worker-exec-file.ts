@@ -110,6 +110,9 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
     finish(error)
   })
   child.once('close', (code: number | null, signal: NodeJS.Signals | null) => {
+    if (completed) {
+      return
+    }
     if (overflowError || code === 0) {
       finish(overflowError)
       return
