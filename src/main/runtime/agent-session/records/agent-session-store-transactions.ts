@@ -298,6 +298,7 @@ export class AgentSessionStoreTransactions {
       }
       this.leaseHolders.applyCommitted(this.published, writes.records)
       this.keyIndexes.applyCommitted(
+        published,
         this.published,
         writes.records,
         published.unreadableRecords !== draft.unreadableRecords

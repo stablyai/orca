@@ -1,14 +1,25 @@
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
-import { agentSessionScopeKey } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import {
+  agentSessionExecutionLocationsEqual,
+  agentSessionScopeKey
+} from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getAgentSessionConversation,
   listAgentSessionConversations,
   type AgentSessionStoreState
 } from './agent-session-store-state'
 
+/** What keys may depend on: a write that leaves these alone (a lease renewal) moves no key. */
+type AgentSessionConversationKeyInputs = Pick<
+  AgentSessionConversationView,
+  'provider' | 'location' | 'providerHandleChain'
+>
+
 /** The lookup keys one chat answers to. Pass a module-level function: the store keeps one index
  *  per function, so a fresh closure would build a fresh index on every call. */
-export type AgentSessionConversationKeys = (view: AgentSessionConversationView) => readonly string[]
+export type AgentSessionConversationKeys = (
+  inputs: AgentSessionConversationKeyInputs
+) => readonly string[]
 
 export const nativeIdKeys: AgentSessionConversationKeys = (view) =>
   view.providerHandleChain.map(({ handle }) => handle.nativeId)
@@ -56,6 +67,7 @@ export class AgentSessionConversationKeyIndexes {
   }
 
   applyCommitted(
+    before: AgentSessionStoreState,
     state: AgentSessionStoreState,
     records: CommittedRecords,
     unreadableChanged: boolean
@@ -66,7 +78,21 @@ export class AgentSessionConversationKeyIndexes {
       return
     }
     this.order?.applyCommitted(state, records)
-    this.indexes.forEach((index) => index.applyCommitted(state, records))
+    if (this.indexes.size === 0) {
+      return
+    }
+    const moved = [
+      ...records.upsert.flatMap(([sessionId]) =>
+        sameKeyInputs(
+          getAgentSessionConversation(before, sessionId),
+          getAgentSessionConversation(state, sessionId)
+        )
+          ? []
+          : [sessionId]
+      ),
+      ...records.remove
+    ]
+    this.indexes.forEach((index) => index.applyCommitted(state, moved))
   }
 }
 
@@ -125,9 +151,9 @@ export class AgentSessionConversationKeyIndex {
     }
   }
 
-  /** Follows one committed transaction: only the written records' keys move. */
-  applyCommitted(draft: AgentSessionStoreState, records: CommittedRecords): void {
-    for (const sessionId of [...records.upsert.map(([id]) => id), ...records.remove]) {
+  /** Follows one committed transaction: only the chats whose key inputs moved are re-keyed. */
+  applyCommitted(draft: AgentSessionStoreState, moved: readonly string[]): void {
+    for (const sessionId of moved) {
       this.remove(sessionId)
       const view = getAgentSessionConversation(draft, sessionId)
       if (view) {
@@ -174,4 +200,25 @@ export class AgentSessionConversationKeyIndex {
     }
     this.keysBySession.delete(sessionId)
   }
+}
+
+function sameKeyInputs(
+  before: AgentSessionConversationKeyInputs | null,
+  after: AgentSessionConversationKeyInputs | null
+): boolean {
+  return (
+    !!before &&
+    !!after &&
+    before.provider === after.provider &&
+    agentSessionExecutionLocationsEqual(before.location, after.location) &&
+    before.providerHandleChain.length === after.providerHandleChain.length &&
+    before.providerHandleChain.every((link, index) => {
+      const next = after.providerHandleChain[index]!
+      return (
+        link.linkId === next.linkId &&
+        link.handle.agent === next.handle.agent &&
+        link.handle.nativeId === next.handle.nativeId
+      )
+    })
+  )
 }

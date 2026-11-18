@@ -1,7 +1,10 @@
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionConversationKeys } from '../../runtime/agent-session/records/agent-session-conversation-key-index'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
+import {
+  STRUCTURED_AGENT_RUNTIME_METADATA,
+  structuredAgentRuntimeMetadata
+} from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   listStructuredProviderSessionOwnership,
@@ -43,8 +46,15 @@ export function historyRowOwnershipLookup():
 const ownershipKey = (ownership: { provider: string; providerSessionId: string }): string =>
   `${ownership.provider}\0${ownership.providerSessionId}`
 
-const ownershipKeys: AgentSessionConversationKeys = (view) =>
-  listStructuredProviderSessionOwnership([view]).map(ownershipKey)
+// Every link of a chat whose agent lists history, as `listStructuredProviderSessionOwnership` keys it.
+const ownershipKeys: AgentSessionConversationKeys = ({ provider, providerHandleChain }) => {
+  const history = structuredAgentRuntimeMetadata(provider)?.sessionHistory
+  return history
+    ? providerHandleChain.map((link) =>
+        ownershipKey({ provider, providerSessionId: history.rowSessionId(link) })
+      )
+    : []
+}
 
 /** One history row agent can correspond to several chat providers. */
 const HISTORY_ROW_OWNERS = new Map<string, StructuredAgentId[]>()
