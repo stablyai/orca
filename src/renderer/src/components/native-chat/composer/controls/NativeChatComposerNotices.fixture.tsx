@@ -124,7 +124,7 @@ export const conversationInOtherFolder = defineFixture({
   )
 })
 
-function codexTooOld(phase: 'idle' | 'running') {
+function codexTooOld(phase: 'idle' | 'running' | 'failed', hostName = 'this computer') {
   return defineFixture({
     width: 720,
     render: () => (
@@ -147,6 +147,7 @@ function codexTooOld(phase: 'idle' | 'running') {
               retry: () => {}
             },
             agentLabel: 'Codex',
+            hostName,
             sessionError: null,
             composerError: null,
             setup: {
@@ -154,8 +155,14 @@ function codexTooOld(phase: 'idle' | 'running') {
               install: null,
               update: {
                 update: null,
-                run: phase === 'running' ? { phase } : null,
-                start: async () => false
+                run:
+                  phase === 'running'
+                    ? { phase }
+                    : phase === 'failed'
+                      ? { phase, output: 'npm error code EACCES', finishedAt: 0 }
+                      : null,
+                start: async () => false,
+                openFailure: () => {}
               }
             }
           })}
@@ -167,3 +174,5 @@ function codexTooOld(phase: 'idle' | 'running') {
 
 export const codexTooOldUpdate = codexTooOld('idle')
 export const codexTooOldUpdating = codexTooOld('running')
+export const codexTooOldUpdateFailed = codexTooOld('failed')
+export const codexTooOldOnServer = codexTooOld('idle', 'Build server')

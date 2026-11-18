@@ -163,8 +163,13 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   const cliUpdate = useAgentCliUpdate(target, agent)
   const cliUpdatePhase = cliUpdate.run?.phase ?? 'idle'
   const cliUpdateAgent = cliUpdate.update?.runnable ? cliUpdate.update.agent : null
-  const startCliUpdate = cliUpdate.start
+  const { start: runCliUpdate, openFailure: openCliUpdateFailure } = cliUpdate
   const { demandModelCatalog } = hostCatalog
+  // The updated CLI lists its new models.
+  const startCliUpdate = useCallback(
+    () => void runCliUpdate().then((updated) => updated && demandModelCatalog()),
+    [runCliUpdate, demandModelCatalog]
+  )
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
       getSnapshot: () => optionSnapshot,
@@ -174,8 +179,8 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
             cliUpdate: {
               agent: cliUpdateAgent,
               phase: cliUpdatePhase,
-              // The updated CLI lists its new models.
-              start: () => void startCliUpdate().then((updated) => updated && demandModelCatalog())
+              start: startCliUpdate,
+              openFailure: () => openCliUpdateFailure(startCliUpdate)
             }
           }
         : {}),
@@ -191,7 +196,8 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       writer,
       cliUpdateAgent,
       cliUpdatePhase,
-      startCliUpdate
+      startCliUpdate,
+      openCliUpdateFailure
     ]
   )
 

@@ -19504,7 +19504,6 @@
         "couldNotStart": "{{agent}} 无法启动",
         "editSavedArguments": "请在设置 > 代理 > 参数中编辑",
         "couldNotRestart": "{{agent}} 无法重新启动",
-        "cliTooOld": "{{agent}} {{installedVersion}} 版本过旧，无法用于聊天。请更新到 {{minimumVersion}} 或更高版本",
         "startTimedOut": "{{agent}} 启动时间过长（{{seconds}} 秒后 {{method}} 仍无响应）",
         "startTimedOutKeepsHappening": "如果此问题持续出现，运行此聊天的计算机可能负载过重",
         "notSignedIn": "{{agent}} 尚未登录",
