@@ -1,4 +1,9 @@
 import { join } from 'node:path'
+import { BrowserWindow, ipcMain } from 'electron'
+import {
+  BACKGROUND_WORKER_PAUSED_CHANNEL,
+  BACKGROUND_WORKER_RETRY_CHANNEL
+} from '../../shared/background-worker/background-worker-pause-channels'
 import { UtilityWorkerHost } from '../utility-worker-host/utility-worker-host'
 import {
   currentWorkerEntryLayout,
@@ -13,6 +18,19 @@ import { setHeavyWorkerHost } from '../utility-worker-host/heavy-worker-spawn'
 import { HEAVY_WORKER_HOST_NAME } from '../utility-worker-host/heavy-worker-host-name'
 
 const CRASH_WINDOW_MS = 5 * 60_000
+
+function broadcastBackgroundWorkerPaused(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed()) {
+      continue
+    }
+    try {
+      window.webContents.send(BACKGROUND_WORKER_PAUSED_CHANNEL)
+    } catch {
+      // A renderer can disappear between isDestroyed() and send().
+    }
+  }
+}
 
 // Resolved at first spawn: the packaged layout is known only after app environment setup.
 const hostEntry = (): string =>
@@ -49,9 +67,12 @@ export function installElectronHeavyWorkerHost(): void {
       crashes: 3,
       windowMs: CRASH_WINDOW_MS,
       message:
-        'Orca stopped this after its background worker crashed 3 times in 5 minutes. Try again, or restart Orca if it keeps happening.'
+        'Orca paused this after it crashed 3 times in 5 minutes. Choose Retry on the notice, or restart Orca.',
+      onPause: broadcastBackgroundWorkerPaused
     }
   )
+  ipcMain.removeHandler(BACKGROUND_WORKER_RETRY_CHANNEL)
+  ipcMain.handle(BACKGROUND_WORKER_RETRY_CHANNEL, () => host.retry())
   setHeavyWorkerHost({
     spawn: (filename, { name, workerData }) =>
       // Only tests and unbuilt sources name a URL entry; the host can load built files only.

@@ -29,7 +29,12 @@ const HOST_IDLE_EXIT_MS = 30_000
 let quitting = false
 
 /** After repeated crashes a capped host refuses work until a user retries; never moves it in-process. */
-export type UtilityWorkerHostCrashCap = { crashes: number; windowMs: number; message: string }
+export type UtilityWorkerHostCrashCap = {
+  crashes: number
+  windowMs: number
+  message: string
+  onPause: () => void
+}
 
 export class UtilityWorkerHostPausedError extends Error {
   readonly code = UTILITY_WORKER_HOST_PAUSED
@@ -246,6 +251,7 @@ export class UtilityWorkerHost {
         serviceName: this.serviceName,
         crashes: recent
       })
+      this.crashCap.onPause()
     }
   }
 
