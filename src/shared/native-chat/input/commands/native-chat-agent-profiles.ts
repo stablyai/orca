@@ -1,5 +1,5 @@
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
-import type { SkillDiscoverySource } from '../../../skills/discovery/skills'
+import type { DiscoveredSkill, SkillDiscoverySource } from '../../../skills/discovery/skills'
 import {
   getAgentSlashCommands,
   type NativeChatCommandReply,
@@ -12,8 +12,8 @@ export type NativeChatAgentProfile = {
   skillSourceOwner: AgentType
   /** The agent reports and invokes each skill under this prefix, e.g. Pi's `skill:<name>`. */
   skillNamePrefix?: string
-  /** Another agent whose own skill folders, though not its plugins, this agent also reads. */
-  readsSkillFoldersOf?: AgentType
+  /** Other agents whose own skill folders, though not their plugins, this agent also reads. */
+  readsSkillFoldersOf?: readonly AgentType[]
   /** OpenCode 1.x reports some skills as commands; 2.x reports none. Keep folder scans for running chats. */
   keepsScannedSkills?: true
   /** The agent's own harness expands a slash command out of the message text, so
@@ -30,7 +30,7 @@ export type NativeChatAgentProfile = {
 const OPENCODE_PROFILE: NativeChatAgentProfile = {
   skillPrefix: '/',
   skillSourceOwner: 'opencode',
-  readsSkillFoldersOf: 'claude',
+  readsSkillFoldersOf: ['claude'],
   keepsScannedSkills: true,
   expandsSlashCommandsFromText: true
 }
@@ -53,6 +53,12 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     expandsSlashCommandsFromText: true
   },
   opencode: OPENCODE_PROFILE,
+  // Cursor's ACP reports skills only once a session starts, so resting chats rely on the scan.
+  cursor: {
+    skillPrefix: '/',
+    skillSourceOwner: 'cursor',
+    readsSkillFoldersOf: ['claude', 'codex', 'grok']
+  },
   opencode2: OPENCODE_PROFILE,
   // ACP reports built-in commands but no skills; the server never reads Gemini CLI's ~/.gemini/skills.
   antigravity: {
@@ -73,16 +79,19 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
   }
 }
 
-/** Whether skills under `source` reach `profile`'s agent: shared roots, its own, and the skill
- *  folders of an agent it also reads. */
+/** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill
+ *  folders of agents it also reads, without their plugins or the skills they bundle. */
 export function readsSkillSource(
   profile: Pick<NativeChatAgentProfile, 'skillSourceOwner' | 'readsSkillFoldersOf'>,
-  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>
+  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>,
+  skill: Pick<DiscoveredSkill, 'sourceKind'>
 ): boolean {
   return (
     source.owner === null ||
     source.owner === profile.skillSourceOwner ||
-    (source.owner === profile.readsSkillFoldersOf && source.sourceKind !== 'plugin')
+    (profile.readsSkillFoldersOf?.includes(source.owner) === true &&
+      source.sourceKind !== 'plugin' &&
+      skill.sourceKind !== 'bundled')
   )
 }
 
