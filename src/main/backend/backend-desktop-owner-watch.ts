@@ -20,6 +20,7 @@ export function watchDesktopOwner(argv: readonly string[], onGone: () => void): 
   // Main forked this backend, so a process on main's pid that started later is a reused pid.
   const ownStart = readStartTicks('self')
   let checking = false
+  let seen = false
   const check = (): void => {
     if (checking) {
       return
@@ -28,10 +29,16 @@ export function watchDesktopOwner(argv: readonly string[], onGone: () => void): 
     void Promise.all([desktopState(pid), ownStart])
       .then(([state, own]) => {
         const reused = Boolean(state?.startTicks && own && Number(state.startTicks) > Number(own))
-        if (state === null || reused) {
+        const gone = state === null || reused
+        if (gone && !seen) {
+          // Main forked this backend moments ago; not seeing it means another pid namespace.
+          clearInterval(timer)
+          console.warn(`[backend] Can't observe desktop pid ${pid}; not watching it.`)
+        } else if (gone) {
           clearInterval(timer)
           onGone()
         }
+        seen = true
       })
       .finally(() => {
         checking = false

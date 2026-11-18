@@ -152,6 +152,10 @@ static int set_cloexec(int fd, int enabled) {
 #ifndef CLOSE_RANGE_CLOEXEC
 #define CLOSE_RANGE_CLOEXEC (1U << 2)
 #endif
+// Older glibc headers lack SYS_close_range even when the kernel headers have the number.
+#if !defined(SYS_close_range) && defined(__NR_close_range)
+#define SYS_close_range __NR_close_range
+#endif
 
 // Marks every fd above 2 close-on-exec; walks /proc where close_range is missing or filtered.
 static int cloexec_inherited_fds(void) {
@@ -191,13 +195,16 @@ static int exec_without_inherited_fds(char *argv[]) {
     if (channel != NULL &&
             (parse_ms(channel, INT_MAX, &channel_fd) != 0 || channel_fd < 3 ||
                 fcntl((int)channel_fd, F_GETFD) < 0)) {
+        fputs("orca-provider-exec: NODE_CHANNEL_FD is not an open descriptor\n", stderr);
         return EXIT_USAGE;
     }
     if (cloexec_inherited_fds() != 0 ||
             (channel != NULL && set_cloexec((int)channel_fd, 0) != 0)) {
+        fputs("orca-provider-exec: could not close inherited descriptors\n", stderr);
         return EXIT_BOOTSTRAP;
     }
     execvp(argv[0], argv);
+    fprintf(stderr, "orca-provider-exec: exec %s failed: %s\n", argv[0], strerror(errno));
     return EXIT_EXEC_FAILED;
 }
 #endif
