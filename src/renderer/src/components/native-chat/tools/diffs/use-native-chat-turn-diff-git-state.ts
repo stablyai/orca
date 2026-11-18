@@ -78,8 +78,13 @@ export function nativeChatTurnDiffGitState(
             entry.path === relative ||
             entry.oldPath === file.path ||
             entry.oldPath === relative
-          if (!matches || entry.added === undefined || entry.removed === undefined) {
+          if (!matches) {
             continue
+          }
+          if (entry.added === undefined || entry.removed === undefined) {
+            // One staging area without counts makes the live total unknowable.
+            known = false
+            break
           }
           known = true
           liveAdded += entry.added

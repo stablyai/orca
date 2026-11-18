@@ -63,6 +63,26 @@ it('sums counts across staging areas before comparing', () => {
   expect(state?.divergedPaths.size).toBe(0)
 })
 
+it('claims no divergence when any matching entry lacks counts', () => {
+  const staged: GitStatusEntry = {
+    path: 'src/a.ts',
+    status: 'modified',
+    area: 'staged',
+    added: 4,
+    removed: 0
+  }
+  const unstaged: GitStatusEntry = { path: 'src/a.ts', status: 'modified', area: 'unstaged' }
+  const state = nativeChatTurnDiffGitState(
+    turnDiff(diffFile('src/a.ts', 10, 2)),
+    [staged, unstaged],
+    undefined,
+    WORKTREE,
+    undefined,
+    undefined
+  )
+  expect(state?.divergedPaths.size).toBe(0)
+})
+
 it('claims no divergence for truncated or count-less entries', () => {
   const state = nativeChatTurnDiffGitState(
     turnDiff(diffFile('src/a.ts', 10, 2, true), diffFile('src/b.ts', 5, 5)),
