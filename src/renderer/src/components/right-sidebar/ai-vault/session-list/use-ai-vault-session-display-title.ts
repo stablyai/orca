@@ -1,6 +1,8 @@
 import { structuredChatDisplayName } from '../../../../../../shared/agent-session/view/structured-chat-row-name'
 import { useAppStore } from '@/store/index'
 import { structuredChatTabBySessionId } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
+import { useBotGroups } from '@/lib/bot-group-list'
+import { botGroupRoomOfRow } from '@/lib/bot-group-room-history'
 import { useStructuredChatNaming } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -36,7 +38,10 @@ export function useAiVaultSessionDisplayTitle(
       : undefined
   )
   const naming = useStructuredChatNaming(session.executionHostId, owner?.sessionId)
-  // A forked chat's row draws the fork mark before its title.
+  const room = botGroupRoomOfRow(useBotGroups(owner !== undefined), session)
+  if (room) {
+    return { title: room.label, forked: false }
+  }
   return owner
     ? {
         title: structuredChatDisplayName(customLabel, naming.name, session.title),

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
@@ -106,6 +106,8 @@ export const WorktreeCreate = z
     cwdParentAmbiguous: z.literal(true).optional(),
     noParent: OptionalBoolean,
     callerTerminalHandle: OptionalString,
+    // Older hosts strip it; a paired route's claim names a session on another host and is dropped.
+    callerAgentSessionId: OptionalString,
     orchestrationContext: z
       .object({
         parentWorktreeId: OptionalString,

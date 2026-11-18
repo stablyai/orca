@@ -12,6 +12,7 @@ import {
   resolveAntigravityChatAuthConfig
 } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import { deliverAntigravityInstructions } from '../acp/launch/acp-instructions'
 import { ANTIGRAVITY_ACP_COMMAND, ANTIGRAVITY_ACP_RUNTIME } from './antigravity-acp-runtime'
 import {
   compareAppVersions,
@@ -91,13 +92,12 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
     listsOnDemand: true,
     discardSession: discardAntigravityListingSession
   },
+  instructions: deliverAntigravityInstructions,
   transcriptImport: null,
   sessionHistory: ANTIGRAVITY_SESSION_HISTORY,
   privateTempDirectory: true,
-  // The Windows 1.4.5 server otherwise writes its workflow tool into every chat workspace.
-  ...(process.platform === 'win32'
-    ? { sessionMeta: { antigravity: { disabledTools: ['run_workflow'] } } }
-    : {}),
+  // The server otherwise writes its workflow tool into every chat workspace.
+  sessionMeta: { antigravity: { disabledTools: ['run_workflow'] } },
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
   resolveSessionMeta: antigravityChatRulesMeta,

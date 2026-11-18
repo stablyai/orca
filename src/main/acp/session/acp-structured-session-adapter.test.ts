@@ -6,6 +6,7 @@ import {
   SESSION
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
+  GROK,
   openAcpAdapterRig,
   PROVIDER_SESSION,
   waitFor,
@@ -308,5 +309,27 @@ describe('ACP structured session adapter: close and exit', () => {
     )
     const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
     expect(turns.at(-1)).toMatchObject({ state: 'interrupted' })
+  })
+})
+
+describe('Grok launch spec', () => {
+  it('runs `grok agent stdio`, asking for always-approve only with full access', () => {
+    expect(GROK.args({ fullAccess: false, pluginDirs: [] })).toEqual(['agent', 'stdio'])
+    expect(GROK.args({ fullAccess: true, pluginDirs: [] })).toEqual([
+      'agent',
+      '--always-approve',
+      'stdio'
+    ])
+    expect(GROK.args({ fullAccess: true, pluginDirs: ['/orca/visuals', '/repo/.agents'] })).toEqual(
+      [
+        'agent',
+        '--always-approve',
+        '--plugin-dir',
+        '/orca/visuals',
+        '--plugin-dir',
+        '/repo/.agents',
+        'stdio'
+      ]
+    )
   })
 })

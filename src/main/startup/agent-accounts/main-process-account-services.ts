@@ -1,6 +1,6 @@
 import { installProviderAccountCatalogWarmup } from '../../providers/accounts/provider-account-catalog-warmup'
 import { createDesktopCodexSessionMigration } from '../../codex/history/backfill/desktop-codex-session-migration'
-import { app } from 'electron'
+import { app, shell } from 'electron'
 import { KeybindingService } from '../../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'
 import {
@@ -11,6 +11,10 @@ import {
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { mainProcessState as state } from '../main-process-state'
+import { createDesktopOrcaAccountService } from '../desktop-orca-account-service'
+import { installOrcaServerSignIn, OrcaServerSignIn } from '../../orca-profiles/orca-server-sign-in'
+import { GoogleConnect, installGoogleConnect } from '../../google/google-connect'
+import { setBotToolSignInBrowser } from '../../bots/tool-oauth/bot-tool-sign-in-flows'
 
 export function initializeMainProcessAccountServices(): void {
   const store = state.store
@@ -31,6 +35,11 @@ export function initializeMainProcessAccountServices(): void {
   state.codexAccounts = services.codexAccounts
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
+  state.orcaAccount = createDesktopOrcaAccountService()
+  // A paired client may sign this host in too (D3); the desktop keeps its own window sign-in.
+  installOrcaServerSignIn(new OrcaServerSignIn({ account: state.orcaAccount }))
+  installGoogleConnect(new GoogleConnect({ openBrowser: (url) => shell.openExternal(url) }))
+  setBotToolSignInBrowser((url) => shell.openExternal(url))
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
   installProviderAccountCatalogWarmup(store)

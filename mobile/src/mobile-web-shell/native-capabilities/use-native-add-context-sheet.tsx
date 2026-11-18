@@ -7,6 +7,7 @@ import type {
 import { BridgeNativeVerbRefusedError } from '../host-bridge/bridge-host-errors'
 import type { AddContextPresenter } from '../../platform/media-picking/native-recent-photos'
 import { useMediaPicker } from '../../platform/media-picking/media-picker'
+import { useNativeDeviceVerbs } from '../../platform/use-native-device-verbs'
 import { MobileNativeChatAddContextSheet } from '../../session/native-chat/composer/attachments/MobileNativeChatAddContextSheet'
 import { mobileNativeChatAttachActions } from '../../session/native-chat/composer/attachments/mobile-native-chat-attach-actions'
 
@@ -90,4 +91,10 @@ export function useNativeAddContextSheet(sessionId: string | null): {
   ) : null
 
   return { present, sheet }
+}
+
+/** A shell page's device verbs, with Add context drawn over the page. */
+export function useShellDeviceVerbs(sessionId: string | null) {
+  const addContext = useNativeAddContextSheet(sessionId)
+  return { serve: useNativeDeviceVerbs(sessionId, addContext.present), sheet: addContext.sheet }
 }

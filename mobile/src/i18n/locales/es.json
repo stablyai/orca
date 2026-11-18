@@ -169,11 +169,13 @@
       "invalidUrl": "Introduce una URL válida."
     },
     "paneView": {
-      "dialogTitle": "Diálogo del navegador",
       "forward": "Adelante",
       "keyboardPlaceholder": "Escribe en la página…",
       "reload": "Recargar",
-      "sendText": "Enviar texto al navegador"
+      "sendText": "Enviar texto al navegador",
+      "dialogTitleWithOrigin": "{{origin}} dice",
+      "dialogTitleNoOrigin": "Esta página dice",
+      "dialogAnswer": "Respuesta"
     },
     "pointerModifiers": {
       "clickModifier": "Modificador {{key}} para clics"
@@ -186,6 +188,9 @@
     "viewModeSwitch": {
       "mobileView": "Mostrar vista móvil del sitio web",
       "webView": "Mostrar vista de escritorio del sitio web"
+    },
+    "loadFailure": {
+      "retry": "Reintentar"
     }
   },
   "chat": {
@@ -218,7 +223,8 @@
     "contextUsage": {
       "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
       "title": "Contexto",
-      "estimated": "Estimado a partir de la última respuesta."
+      "estimated": "Estimado a partir de la última respuesta.",
+      "deferredNote": "Se cargan cuando se necesitan. No cuentan en el total usado."
     },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",
@@ -1174,6 +1180,9 @@
       "composer": {
         "planMode": "Planificar",
         "exitPlanMode": "Salir del modo de planificación"
+      },
+      "goal": {
+        "sentAsGoal": "Enviado como objetivo"
       }
     }
   },
@@ -2714,7 +2723,7 @@
       "disconnected": "No se pudo pegar (sin conexión)",
       "imageTooLarge": "Imagen demasiado grande para pegarla",
       "pasteFailed": "No se pudo pegar",
-      "pasteTooLarge": "Contenido demasiado grande para pegarlo (máx. 256 KiB)",
+      "pasteTooLarge": "El contenido pegado es demasiado grande.",
       "terminalChanged": "Pegado cancelado (se cambió de terminal)"
     },
     "worktreeLabel": {
@@ -2852,6 +2861,9 @@
       "camera": "Cámara",
       "choosePhotos": "Elegir fotos",
       "recentPhoto": "Foto reciente"
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "No se pudo encontrar ese mensaje."
     }
   },
   "settings": {
@@ -4450,6 +4462,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Vincular un ordenador",
+      "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador.",
+      "pairAction": "Vincular un ordenador",
+      "openFailed": "No se pudo abrir este enlace",
+      "ambiguous": "Este bot está en {{names}}. Abre el chat en Orca en el ordenador que quieras.",
+      "computer": "tu ordenador",
+      "updateNeeded": "Actualiza Orca en {{names}} para abrir este enlace.",
+      "unreachable": "No se pudo conectar con {{names}}. Asegúrate de que Orca esté abierto en uno de ellos e inténtalo de nuevo.",
+      "missing": "Ninguno de tus ordenadores vinculados tiene este bot.",
+      "offline": "{{name}} está desconectado. Vuelve a abrir el enlace cuando se conecte.",
+      "chatOpenFailed": "{{name}} no pudo abrir este chat. Vuelve a intentar el enlace.",
+      "unreachableSingle": "No se pudo conectar con {{name}}. Asegúrate de que Orca esté abierto allí e inténtalo de nuevo.",
+      "workspaceDeleted": "El espacio de trabajo de este chat se eliminó en {{name}}."
     }
   }
 }

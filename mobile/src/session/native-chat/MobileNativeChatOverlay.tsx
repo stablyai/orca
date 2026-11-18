@@ -284,6 +284,7 @@ function MobileNativeChatOverlayContent({
                 <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
                   <MobileNativeChatNoticeContext.Provider value={noticeView}>
                     <MobileNativeChatView
+                      itemNavigation={session.itemNavigation}
                       messages={session.messages}
                       folded={folded}
                       status={session.status}

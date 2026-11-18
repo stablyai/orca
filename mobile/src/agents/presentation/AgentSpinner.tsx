@@ -139,7 +139,6 @@ const styles = themedStyleSheet(() => ({
     width: 8,
     height: 8,
     borderRadius: radii.pill,
-    borderWidth: 2,
-    borderTopColor: 'transparent'
+    borderWidth: 2
   }
 }))

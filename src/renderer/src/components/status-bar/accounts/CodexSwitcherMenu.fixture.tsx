@@ -10,6 +10,7 @@ import type {
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
+import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -158,14 +159,21 @@ function switcherFixture(
     codex: { accounts: accounts.map(managed), activeAccountId: active.id },
     rateLimits
   }
-  const ownerUsage = remote
+  const ownerUsage: OwnerUsageRateLimits = remote
     ? {
+        owner: { target: { kind: 'environment', environmentId: 'laptop' }, wslHostDistro: null },
         rateLimits,
         accounts: snapshot,
         remoteOwner: { environmentId: 'laptop', label: 'Laptop' },
         refreshRemote: null
       }
-    : undefined
+    : {
+        owner: { target: { kind: 'local' }, wslHostDistro: null },
+        rateLimits,
+        accounts: null,
+        remoteOwner: null,
+        refreshRemote: null
+      }
   return defineFixture({
     width: 520,
     store: {

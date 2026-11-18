@@ -128,6 +128,8 @@ export function stamp(flow: number, event: PendingEvent): MobileWebShellSessionE
     case 'page-painted':
     case 'page-back-claim':
     case 'layout-changed':
+    case 'app-resumed':
+    case 'update-swap':
       return event
     case 'cache-read':
     case 'manifest-read':

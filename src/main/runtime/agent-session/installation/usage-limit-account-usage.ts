@@ -60,6 +60,8 @@ type AccountSettings = Partial<
     | 'nativeChatInheritShellEnvironment'
     | 'nativeChatShellEnvironmentVariables'
     | 'agentDefaultEnv'
+    | 'httpProxyUrl'
+    | 'httpProxyBypassRules'
   >
 >
 
