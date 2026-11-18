@@ -319,7 +319,6 @@
 8 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 3 src/main/native-chat/agent-session-journal/database/journal-legacy-source-receipt.ts
-1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/node-runtime/managed-runtime-release-install.ts
 7 src/main/node-runtime/managed-runtime-release.ts
