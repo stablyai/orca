@@ -1,7 +1,9 @@
 import { net } from 'electron'
 import { parse } from 'yaml'
+import { ZOTZ_RELEASES_URL } from '../../../shared/zotz/zotz-app-identity'
+import { escapeRegex } from '../../../shared/text/regex-escaping'
 
-const RELEASES_DOWNLOAD_BASE = 'https://github.com/stablyai/orca/releases/download'
+const RELEASES_DOWNLOAD_BASE = `${ZOTZ_RELEASES_URL}/download`
 export const FETCH_TIMEOUT_MS = 5000
 
 export function getReleaseDownloadUrl(tag: string): string {
@@ -106,8 +108,7 @@ async function getReleaseAssetReadiness(tag: string, assetName: string): Promise
   const isRelativeAsset = !/^https?:\/\//i.test(assetName)
   const isGitHubReleaseAsset =
     process.platform === 'win32' &&
-    (isRelativeAsset ||
-      /^https:\/\/github\.com\/stablyai\/orca\/releases\/download\//i.test(assetName))
+    (isRelativeAsset || new RegExp(`^${escapeRegex(RELEASES_DOWNLOAD_BASE)}/`, 'i').test(assetName))
   const assetUrl = isRelativeAsset
     ? getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
     : assetName

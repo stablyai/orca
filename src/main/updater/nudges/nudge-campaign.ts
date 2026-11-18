@@ -1,5 +1,6 @@
 import { net } from 'electron'
 import { compareVersions, isValidVersion } from '../releases/updater-fallback'
+import { isZotzCloudFeatureAllowed } from '../../../shared/zotz/zotz-network-policy'
 
 export type NudgeConfig = {
   id: string
@@ -8,6 +9,9 @@ export type NudgeConfig = {
 }
 
 export async function fetchNudge(): Promise<NudgeConfig | null> {
+  if (!isZotzCloudFeatureAllowed('orca-whats-new')) {
+    return null
+  }
   try {
     const res = await net.fetch('https://orca.dev/whats-new/nudge.json', {
       signal: AbortSignal.timeout(5000)

@@ -72,7 +72,7 @@ describe('updater', () => {
     expect(autoUpdaterMock.setFeedURL.mock.calls.slice(feedCallsBeforeCheck)).not.toContainEqual([
       {
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url: 'https://github.com/HugoRodriguezDEV/zotz/releases/latest/download'
       }
     ])
   })
@@ -97,7 +97,7 @@ describe('updater', () => {
     })
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/download/v1.4.142'
+      url: 'https://github.com/HugoRodriguezDEV/zotz/releases/download/v1.4.142'
     })
     expect(sendMock).not.toHaveBeenCalledWith(
       'updater:status',
@@ -174,7 +174,7 @@ describe('updater', () => {
     })
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/download/v1.4.27'
+      url: 'https://github.com/HugoRodriguezDEV/zotz/releases/download/v1.4.27'
     })
   })
 
@@ -213,7 +213,7 @@ describe('updater', () => {
     })
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/download/v1.4.27'
+      url: 'https://github.com/HugoRodriguezDEV/zotz/releases/download/v1.4.27'
     })
   })
 

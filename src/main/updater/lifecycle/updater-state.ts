@@ -10,7 +10,8 @@ import type {
 import type { ReleaseChannel } from '../../../shared/release-channel'
 import type { PrimaryEventSuppression, UpdateCheckVariant } from './updater-types'
 
-export const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+// Zotz: a 24/7 node checks its own releases every 6 h (docs/zotz/UPDATES-SPEC.md §5.4).
+export const AUTO_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 export const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 // #7576: back off persistent feed failures up to this cap; completed checks reset the cadence.
 export const MAX_AUTO_UPDATE_RETRY_INTERVAL_MS = 6 * 60 * 60 * 1000

@@ -14,8 +14,8 @@ import {
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
-import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
+import { ZotzUpdatesSetting, ZotzVersionLabel } from '../../zotz/ZotzUpdatesSetting'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/hooks/use-now'
 import { isDelayedUpdatePending } from '../../../../../shared/update-delay'
@@ -47,8 +47,6 @@ export function GeneralUpdateSettingsSection({
     updateStatus.state === 'not-available' && Boolean(updateStatus.delayedUpdate)
   )
   const updateCheckHint = getUpdateCheckHint()
-  // Hide channel switching behind Option/Alt-click because it can downgrade to unvetted builds.
-  const [channelSwitcherRevealed, setChannelSwitcherRevealed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -68,15 +66,7 @@ export function GeneralUpdateSettingsSection({
   }
 
   return (
-    <SettingsGroup
-      key="updates"
-      title={t('settings.general.about.title', 'About')}
-      onHeaderClick={(event) => {
-        if (event.altKey) {
-          setChannelSwitcherRevealed((revealed) => !revealed)
-        }
-      }}
-    >
+    <SettingsGroup key="updates" title={t('settings.general.about.title', 'About')}>
       <SearchableSetting
         title={t(
           'auto.components.settings.GeneralUpdateSettingsSection.6d27bd46e3',
@@ -84,17 +74,13 @@ export function GeneralUpdateSettingsSection({
         )}
         description={t(
           'auto.components.settings.GeneralUpdateSettingsSection.ceb579abaf',
-          'Check for app updates and install a newer Orca version.'
+          'Check for app updates and install a newer Zotz version.'
         )}
         keywords={['about', 'update', 'version', 'release notes', 'download']}
         className="space-y-3 py-3"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm">
-            {t('settings.general.about.version', 'Orca {{version}}', {
-              version: appVersion ?? '…'
-            })}
-          </span>
+          <ZotzVersionLabel version={appVersion} />
           <Button
             variant="outline"
             size="sm"
@@ -288,8 +274,8 @@ export function GeneralUpdateSettingsSection({
                     ))}
         </p>
       </SearchableSetting>
+      <ZotzUpdatesSetting />
       <UpdateDelaySetting />
-      {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
       {children}
     </SettingsGroup>

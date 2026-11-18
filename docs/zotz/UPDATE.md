@@ -1,19 +1,44 @@
 # Actualizar Zotz
 
-Zotz **no se auto-actualiza**. El actualizador heredado de Orca descarga releases de `stablyai/orca`, que pisarían el fork y reiniciarían la app a media tarea. Por eso, salvo que se defina `ZOTZ_ENABLE_UPDATER=1`:
+Zotz se actualiza **desde sus propios releases** (`HugoRodriguezDEV/zotz`), nunca desde los de Orca. El diseño completo está en [UPDATES-SPEC.md](./UPDATES-SPEC.md).
 
-- No hay revisión automática de updates (ni al arrancar, ni periódica, ni al despertar el equipo).
-- "Buscar actualizaciones" (menú, bandeja, Ajustes) solo muestra el aviso _"Zotz se actualiza con git pull + build"_.
-- Descargar, instalar y cambiar de canal/build no hacen nada; la lista de builds sale vacía.
-- Un cliente remoto (laptop o móvil) no puede pedirle al nodo en `serve` que se actualice: recibe `remote_update_manual_required`.
-- No aparecen nudges ni tarjetas de "update disponible".
-- Los plugins no se auto-actualizan salvo que se defina `ORCA_PLUGIN_AUTO_UPDATE=1`.
+## Cómo llega una versión nueva
 
-La lógica vive en `src/main/updater/zotz-updater-policy.ts` y se engancha en `src/main/updater/updater-service.ts`.
+1. Cada merge a `main` que cambie código publica un release `v1.4.<parche×100 + build>`. Por ejemplo, `v1.4.21427` = Orca 1.4.214, build 27 de Zotz. Los cambios solo de docs no publican.
+2. Zotz revisa al arrancar y cada 6 horas. En Windows y en el AppImage de Linux la **descarga sola** en segundo plano.
+3. Muestra "Hay una versión nueva" en Ajustes → Acerca de y en la barra de estado.
+4. **Nunca reinicia sola:**
+   - **Personal:** se instala cuando le das "Reiniciar para actualizar" o cuando cierras Zotz.
+   - **Modo servidor:** se instala sola después de 10 minutos seguidos sin agentes trabajando, y la tarea `\Zotz\Server` vuelve a levantar Zotz. Con un agente trabajando, espera.
 
-## Actualizar el nodo de la MSI (Windows)
+Para apagarlo: Ajustes → Acerca de → "Buscar y descargar versiones nuevas de Zotz". Se aplica al reiniciar. Para launches automatizados que nunca deben tocar GitHub existe `ZOTZ_DISABLE_UPDATER=1`.
 
-En PowerShell, dentro del clon de Zotz:
+| Plataforma     | Qué pasa                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| Windows        | Descarga e instala (sin firma funciona; SmartScreen solo pregunta en instalaciones manuales). |
+| Linux AppImage | Descarga e instala.                                                                           |
+| Linux deb      | Avisa; se instala con el gestor de paquetes.                                                  |
+| macOS          | Avisa con enlace al `.dmg`. Sin firma de Apple no puede instalarse sola.                      |
+
+Lo de Orca que sigue apagado:
+
+- Las novedades y campañas de `orca.dev` (política de red `orca-whats-new`).
+- Los canales RC, hourly, daily y adhoc: el selector oculto de canales ya no existe.
+
+## La primera vez (una sola instalación manual)
+
+Las versiones anteriores a la Fase 3b no saben buscar en el repo de Zotz. Descarga la primera versión con updates e instálala encima; los datos en `%APPDATA%\zotz` se conservan:
+
+```powershell
+gh release download v1.4.21401 -R HugoRodriguezDEV/zotz -p zotz-windows-x64-setup.exe
+.\zotz-windows-x64-setup.exe
+```
+
+Desde ahí, las siguientes llegan solas.
+
+## Construir desde el código (opcional)
+
+Para probar un cambio sin pasar por un release, en PowerShell dentro del clon:
 
 ```powershell
 git switch main
@@ -22,39 +47,18 @@ corepack pnpm install
 corepack pnpm build:win
 ```
 
-- `build:win` = `build:desktop` (typecheck + `out/`: Electron, CLI, web y mobile-web) + `electron-builder --win`. Deja el instalador NSIS en `dist\`.
-- Detén `serve` (ver abajo), ejecuta el instalador nuevo de `dist\` y vuelve a levantar `serve`. El CLI corre dentro del Electron instalado, así que el reinicio es lo que aplica la versión nueva.
-- `pnpm build` (= `build:desktop` + `build:native`) sirve para validar el código, pero no produce instalador; `build:native` solo arma addons de macOS.
-- Para probar sin instalar: `corepack pnpm build:unpack` deja la app desempaquetada en `dist\win-unpacked\`.
+- `build:win` deja el instalador NSIS en `dist\`. Una build local conserva la versión de Orca (`1.4.214`), así que el actualizador le ofrecerá el siguiente release de Zotz.
+- `corepack pnpm build:unpack` deja la app desempaquetada en `dist\win-unpacked\` para probar sin instalar.
+- Construir en Windows necesita Visual Studio con "Desktop development with C++" (módulos nativos).
 
-Si `pnpm install` o el build fallan, no reinicies: el proceso que está corriendo sigue usando el build anterior. Arregla, vuelve a construir y entonces reinicia.
+## Cómo se publica (CI)
 
-## Reiniciar `serve`
+`.github/workflows/zotz-desktop-builds.yml`:
 
-El proceso en marcha sigue con el código viejo hasta que se reinicia.
+1. Revisa que el actualizador no apunte a `stablyai/orca` (`zotz-check-release-repo-refs.mjs`).
+2. Calcula la versión (`zotz-release-version.mjs`).
+3. Construye Windows, macOS (dmg + zip) y Linux con esa versión.
+4. Sube los manifiestos `latest*.yml`, los archivos que nombran y sus `.blockmap` con su nombre original, más copias `zotz-*` para descargar a mano (`zotz-stage-release-assets.mjs`).
+5. Crea el release estable `v<versión>` marcado como _latest_.
 
-**Cuando exista `zotz serve service` (Fase 5):** reinicia la tarea programada que lo levanta.
-
-```powershell
-zotz serve service status
-# reinicio de la tarea programada (nombre según lo que registre `zotz serve service install`)
-schtasks /End /TN "<tarea de zotz serve>"
-schtasks /Run /TN "<tarea de zotz serve>"
-```
-
-**Mientras tanto (manual):**
-
-1. Detén el `serve` actual: `Ctrl+C` en la terminal donde corre, o termina el proceso de Zotz desde el Administrador de tareas.
-2. Si toca, ejecuta el instalador nuevo de `dist\`.
-3. Vuelve a levantarlo con los mismos flags de siempre, por ejemplo `zotz serve --bind <IP-tailscale>` (antes de la Fase 1 el binario se llama `orca`).
-4. Desde la laptop o el móvil, confirma que el nodo responde y que la versión es la nueva.
-
-Las sesiones de terminal y agentes que estaban corriendo se cortan con el reinicio: actualiza cuando no haya tareas en curso.
-
-## Reactivar el actualizador de Orca (escape hatch)
-
-Define `ZOTZ_ENABLE_UPDATER=1` en el entorno del proceso de Zotz (la tarea programada o la terminal que corre `serve`) y reinícialo. Vuelve el comportamiento de upstream completo: revisiones automáticas, nudges y descargas desde `stablyai/orca`. Úsalo solo para depurar; un update de Orca reemplaza el build de Zotz.
-
-## Al sincronizar con upstream
-
-Si upstream agrega un camino nuevo que busque, descargue o instale updates (por ejemplo, una función nueva en `updater-service.ts` o un temporizador fuera de `setupAutoUpdater`), pásalo por `isZotzUpdaterEnabled()`. La prueba `src/main/updater/zotz-updater-policy.test.ts` falla si el guard desaparece de los caminos actuales.
+Si una plataforma falla (pasa con los runners macOS arm64 de GitHub), el release sale con las demás y esas máquinas simplemente no ven esa versión.

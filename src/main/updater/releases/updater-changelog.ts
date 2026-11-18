@@ -1,6 +1,7 @@
 import { net } from 'electron'
 import type { ChangelogData } from '../../../shared/update-status-types'
 import { compareVersions } from './updater-fallback'
+import { isZotzCloudFeatureAllowed } from '../../../shared/zotz/zotz-network-policy'
 
 type ChangelogEntry = {
   version: string
@@ -29,6 +30,9 @@ export async function fetchChangelog(
   incomingVersion: string,
   localVersion: string
 ): Promise<ChangelogData | null> {
+  if (!isZotzCloudFeatureAllowed('orca-whats-new')) {
+    return null
+  }
   const res = await net.fetch('https://orca.dev/whats-new/changelog.json', {
     signal: AbortSignal.timeout(5000)
   })
