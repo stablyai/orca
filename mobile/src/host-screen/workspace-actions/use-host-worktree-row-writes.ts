@@ -65,6 +65,10 @@ export function useHostWorktreeRowWrites(args: {
           } else if (entry.id === id) {
             patchRow(item, entry.committed)
           }
+          // Settled with nothing queued behind it: the next write starts from the row as then listed.
+          if (entry.id === id) {
+            writesRef.current.delete(key)
+          }
         })
       writesRef.current.set(key, { id, done, committed: before?.committed ?? previous })
     },
