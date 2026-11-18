@@ -23744,11 +23744,7 @@
   },
   "onboarding": {
     "language": {
-      "back": "言語",
-      "requestPrompt": "Orcaに対応してほしい言語は何ですか？",
-      "requestError": "リクエストを記録できませんでした。再試行してください。",
       "retry": "再試行",
-      "requestAction": "言語をリクエスト",
       "title": "表示言語",
       "settingsError": "設定を読み込めませんでした。",
       "loadingSettings": "設定を読み込み中…",

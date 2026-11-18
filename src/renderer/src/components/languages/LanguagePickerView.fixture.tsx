@@ -62,10 +62,19 @@ type Overrides = Partial<Record<'ebbop' | 'matteo' | 'uk' | 'vi', Partial<Langua
 /** Two italiano packs (publisher shown to tell them apart), plus two other languages. */
 function packs(overrides: Overrides = {}) {
   return {
-    ebbop: pack('it', 'ebbop', { publisher: 'ebbop', needsInstall: false, ...overrides.ebbop }),
-    matteo: pack('it', 'matteoeusebi', { publisher: 'matteoeusebi', ...overrides.matteo }),
-    uk: pack('uk', 'mancunianez', overrides.uk),
-    vi: pack('vi-VN', 'dohaidang', overrides.vi)
+    ebbop: pack('it', 'ebbop', {
+      publisher: 'ebbop',
+      installs: 1_240,
+      needsInstall: false,
+      ...overrides.ebbop
+    }),
+    matteo: pack('it', 'matteoeusebi', {
+      publisher: 'matteoeusebi',
+      installs: 84,
+      ...overrides.matteo
+    }),
+    uk: pack('uk', 'mancunianez', { installs: 312, ...overrides.uk }),
+    vi: pack('vi-VN', 'dohaidang', { installs: 68, ...overrides.vi })
   }
 }
 
@@ -102,9 +111,6 @@ const base: LanguagePickerViewProps = {
   error: null,
   switchBackTo: null,
   onSwitchBack: noop,
-  requesting: false,
-  onRequest: noop,
-  onRequestBack: noop,
   onManagePlugins: noop,
   onDone: noop
 }
@@ -236,17 +242,21 @@ export const onboarding = picker({
   ...devicePinned()
 })
 
+export const onboardingCommunity = picker(
+  {
+    onboarding: true,
+    onManagePlugins: undefined,
+    community: allCommunity({ ebbop: { needsInstall: true } })
+  },
+  { scroll: true }
+)
+
 /** Plugins run only on desktop: no catalog, no Get, no Plugins links. */
 export const webClient = picker({
   catalogSupported: false,
   community: [],
-  onRequest: undefined,
   onManagePlugins: undefined
 })
-
-export const requestForm = picker({ requesting: true })
-
-export const requestFormPrefilled = picker({ requesting: true, requestDraft: 'klingon' })
 
 export const narrow = picker(devicePinned({ ebbop: { needsInstall: true } }), { width: 452 })
 

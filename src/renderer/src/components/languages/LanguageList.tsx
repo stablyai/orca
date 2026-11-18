@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { MessageSquarePlus, Puzzle, RotateCw } from 'lucide-react'
+import { Puzzle, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -23,8 +23,6 @@ export type LanguageListProps = {
   /** Blocks catalog refresh while a language change is in flight. */
   busy: boolean
   onRefresh: () => void
-  /** Omitted where requests cannot be sent (web client). */
-  onRequest?: (draft?: string) => void
   /** Omitted during onboarding and on the web client. */
   onManagePlugins?: () => void
 }
@@ -157,7 +155,7 @@ function CommunityGroup({
   )
 }
 
-function NoMatches({ query, onRequest, onManagePlugins }: LanguageListProps): React.JSX.Element {
+function NoMatches({ query, onManagePlugins }: LanguageListProps): React.JSX.Element {
   const t = useTranslate()
   const trimmed = query.trim()
   return (
@@ -165,21 +163,11 @@ function NoMatches({ query, onRequest, onManagePlugins }: LanguageListProps): Re
       <p className="text-sm text-muted-foreground">
         {t('languages.noMatches', 'No languages match “{{query}}”.', { query: trimmed })}
       </p>
-      {(onRequest || onManagePlugins) && (
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
-          {onRequest && (
-            <Button size="inline" variant="link" onClick={() => onRequest(trimmed)}>
-              <MessageSquarePlus />
-              {t('languages.requestQuery', 'Request “{{query}}”', { query: trimmed })}
-            </Button>
-          )}
-          {onManagePlugins && (
-            <Button size="inline" variant="link" onClick={onManagePlugins}>
-              <Puzzle />
-              {t('languages.managePacks', 'Browse in Plugins')}
-            </Button>
-          )}
-        </div>
+      {onManagePlugins && (
+        <Button size="inline" variant="link" onClick={onManagePlugins}>
+          <Puzzle />
+          {t('languages.managePacks', 'Browse in Plugins')}
+        </Button>
       )}
     </div>
   )

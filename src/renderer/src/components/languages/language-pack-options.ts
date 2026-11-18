@@ -1,22 +1,50 @@
-import type { PluginMarketplaceHostListing } from '../../../../preload/api/plugins/plugin-host-api'
+import type {
+  PluginMarketplaceHostListing,
+  PluginMarketplaceHostSourceState
+} from '../../../../preload/api/plugins/plugin-host-api'
 import type { PluginLanguagePackRegistration } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { normalizeUiLocaleTag } from '../../../../shared/i18n/ui-locale'
 import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 import type { PluginUiLanguage } from '../../../../shared/i18n/ui-language'
+import { isPublicCatalogListing } from '../plugins/list/plugin-public-catalog'
 
 export type CatalogLanguagePack = {
   id: PluginUiLanguage
   locale: string
   listing: PluginMarketplaceHostListing
+  /** Listed by Orca's official or community catalog, whose plugins have public stats. */
+  publicCatalog?: boolean
+}
+
+function releaseTimestamp(listing: PluginMarketplaceHostListing): number {
+  const raw = listing.updatedAt ?? listing.release?.updatedAt
+  const parsed = raw ? Date.parse(raw) : Number.NaN
+  return Number.isNaN(parsed) ? -Infinity : parsed
+}
+
+export function sortCatalogLanguagePacks(
+  packs: readonly CatalogLanguagePack[],
+  installCounts: Readonly<Record<string, number>> = {}
+): CatalogLanguagePack[] {
+  const countOf = (pack: CatalogLanguagePack): number =>
+    pack.publicCatalog && typeof installCounts[pack.listing.pluginKey] === 'number'
+      ? installCounts[pack.listing.pluginKey]
+      : -1
+  return [...packs].sort(
+    (a, b) => countOf(b) - countOf(a) || releaseTimestamp(b.listing) - releaseTimestamp(a.listing)
+  )
 }
 
 export function catalogLanguagePacks(
-  listings: readonly PluginMarketplaceHostListing[]
+  listings: readonly PluginMarketplaceHostListing[],
+  catalogById?: ReadonlyMap<string, PluginMarketplaceHostSourceState>,
+  installCounts: Readonly<Record<string, number>> = {}
 ): CatalogLanguagePack[] {
-  return listings.flatMap((listing) => {
+  const packs = listings.flatMap((listing) => {
     if (listing.blockedByKillList || listing.release?.execution !== 'data') {
       return []
     }
+    const publicCatalog = catalogById ? isPublicCatalogListing(listing, catalogById) : false
     return (listing.release.contributes ?? []).flatMap((item) => {
       const locale = item.kind === 'languagePacks' ? normalizeUiLocaleTag(item.name) : null
       return locale
@@ -24,12 +52,30 @@ export function catalogLanguagePacks(
             {
               id: `plugin:${listing.pluginKey}/${item.name}`,
               locale,
-              listing
+              listing,
+              publicCatalog
             } satisfies CatalogLanguagePack
           ]
         : []
     })
   })
+  return sortCatalogLanguagePacks(packs, installCounts)
+}
+
+export function packInstallCount(
+  pack: CatalogLanguagePack | PluginLanguagePackRegistration,
+  catalogPacks: readonly CatalogLanguagePack[],
+  installCounts: Readonly<Record<string, number>>
+): number | undefined {
+  const pluginKey = 'listing' in pack ? pack.listing.pluginKey : pack.pluginKey
+  const eligible =
+    'listing' in pack
+      ? pack.publicCatalog === true
+      : catalogPacks.some(
+          (candidate) => candidate.listing.pluginKey === pluginKey && candidate.publicCatalog
+        )
+  const count = eligible ? installCounts[pluginKey] : undefined
+  return typeof count === 'number' ? count : undefined
 }
 
 export function languageNames(locale: string): { native: string; english: string } {

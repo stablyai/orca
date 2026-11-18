@@ -22686,11 +22686,7 @@
   },
   "onboarding": {
     "language": {
-      "back": "Diller",
-      "requestPrompt": "Orca'nın hangi dili desteklemesini istersiniz?",
-      "requestError": "İsteğiniz kaydedilemedi. Tekrar deneyin.",
       "retry": "Yeniden dene",
-      "requestAction": "Dil iste",
       "title": "Görüntüleme dili",
       "settingsError": "Ayarlarınız yüklenemedi.",
       "loadingSettings": "Ayarlar yükleniyor…",

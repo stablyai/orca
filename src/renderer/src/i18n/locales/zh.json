@@ -24177,11 +24177,7 @@
   },
   "onboarding": {
     "language": {
-      "back": "语言",
-      "requestPrompt": "你希望 Orca 支持哪种语言？",
-      "requestError": "无法记录你的请求。请重试",
       "retry": "重试",
-      "requestAction": "请求语言支持",
       "title": "显示语言",
       "settingsError": "无法加载你的设置",
       "loadingSettings": "正在加载设置…",

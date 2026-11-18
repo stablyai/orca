@@ -22992,11 +22992,7 @@
   },
   "onboarding": {
     "language": {
-      "back": "Langues",
-      "requestPrompt": "Quelle langue aimeriez-vous voir prise en charge par Orca ?",
-      "requestError": "Impossible d’enregistrer votre demande. Réessayez.",
       "retry": "Réessayer",
-      "requestAction": "Demander une langue",
       "title": "Langue d’affichage",
       "settingsError": "Impossible de charger vos paramètres.",
       "loadingSettings": "Chargement des paramètres…",

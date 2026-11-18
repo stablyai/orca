@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
+import type { PluginMarketplaceHostSourceState } from '../../../../preload/api/plugins/plugin-host-api'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { catalogLanguagePacks, type CatalogLanguagePack } from './language-pack-options'
+import {
+  requestPluginInstallCounts,
+  usePluginInstallCountsStore
+} from '@/store/plugins/installation/plugin-install-counts'
+import {
+  catalogLanguagePacks,
+  sortCatalogLanguagePacks,
+  type CatalogLanguagePack
+} from './language-pack-options'
 
 type LanguagePackCatalog = {
   packs: CatalogLanguagePack[]
@@ -10,6 +19,13 @@ type LanguagePackCatalog = {
   error: boolean
 }
 const useCatalog = create<LanguagePackCatalog>(() => ({ packs: [], loaded: false, error: false }))
+
+usePluginInstallCountsStore.subscribe((state) => {
+  const current = useCatalog.getState()
+  if (current.packs.length > 1) {
+    useCatalog.setState({ packs: sortCatalogLanguagePacks(current.packs, state.counts) })
+  }
+})
 
 let pending: Promise<LanguagePackCatalog> | null = null
 
@@ -23,12 +39,25 @@ export function loadLanguagePackCatalog(refresh = false): Promise<LanguagePackCa
     return refresh ? pending.then(() => loadLanguagePackCatalog(true)) : pending
   }
   pending = (async () => {
+    requestPluginInstallCounts()
     try {
       if (refresh) {
         await window.api.plugins.refreshMarketplaces({})
       }
-      const listings = await window.api.plugins.listMarketplacePlugins()
-      useCatalog.setState({ packs: catalogLanguagePacks(listings), loaded: true, error: false })
+      const emptySources: PluginMarketplaceHostSourceState[] = []
+      const [sources, listings] = await Promise.all([
+        (window.api.plugins.listMarketplaces?.() ?? Promise.resolve(emptySources)).catch(
+          () => emptySources
+        ),
+        window.api.plugins.listMarketplacePlugins()
+      ])
+      const catalogById = new Map(sources.map((source) => [source.id, source] as const))
+      const packs = catalogLanguagePacks(
+        listings,
+        catalogById,
+        usePluginInstallCountsStore.getState().counts
+      )
+      useCatalog.setState({ packs, loaded: true, error: false })
     } catch {
       useCatalog.setState({ loaded: true, error: true })
     }

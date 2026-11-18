@@ -22234,11 +22234,7 @@
   },
   "onboarding": {
     "language": {
-      "back": "언어",
-      "requestPrompt": "Orca에서 어떤 언어를 지원하면 좋을까요?",
-      "requestError": "요청을 기록하지 못했습니다. 다시 시도하세요.",
       "retry": "다시 시도",
-      "requestAction": "언어 지원 요청",
       "title": "표시 언어",
       "settingsError": "설정을 불러오지 못했습니다.",
       "loadingSettings": "설정 불러오는 중…",

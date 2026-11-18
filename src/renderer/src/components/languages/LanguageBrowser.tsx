@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
 import { useAppStore } from '@/store'
+import { usePluginInstallCountsStore } from '@/store/plugins/installation/plugin-install-counts'
 import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-language-packs'
 import {
   getRendererLanguageDetection,
@@ -21,6 +22,7 @@ import {
   availableCatalogPacks,
   languageMatchesDevice,
   languageNames,
+  packInstallCount,
   packPublisher,
   sharedLanguageNames
 } from './language-pack-options'
@@ -42,6 +44,7 @@ export function LanguageBrowser({
   const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const entries = usePluginLanguagePackStore((state) => state.entries)
+  const installCounts = usePluginInstallCountsStore((state) => state.counts)
   const detection =
     useLanguageReadiness((state) => state.detection) ?? getRendererLanguageDetection()
   const catalogError = useLanguageReadiness((state) => state.error)
@@ -56,8 +59,6 @@ export function LanguageBrowser({
     id: string
     kind: 'choose' | 'install'
   } | null>(null)
-  // Why a string: `null` is the list, a string (possibly empty) is the request form's prefill.
-  const [requestDraft, setRequestDraft] = useState<string | null>(null)
   const { selecting, error, choose, restore } = useUiLanguageSelection({
     onboarding,
     // Why: outside onboarding a pick closes the picker, so the toast (with Switch back) is visible.
@@ -166,6 +167,8 @@ export function LanguageBrowser({
       : null
   const allPacks = [...entries, ...available]
   const sharedNames = sharedLanguageNames(allPacks)
+  const installsOf = (pack: (typeof allPacks)[number]): number | undefined =>
+    packInstallCount(pack, catalog.packs, installCounts)
   const packRows: LanguageRowModel[] = allPacks
     .filter((pack) => {
       const names = languageNames(pack.locale)
@@ -175,7 +178,8 @@ export function LanguageBrowser({
       (a, b) =>
         languageNames(a.locale).native.localeCompare(languageNames(b.locale).native) ||
         // Why: of two packs for one language, the installed one is the likelier pick.
-        Number('listing' in a) - Number('listing' in b)
+        Number('listing' in a) - Number('listing' in b) ||
+        (installsOf(b) ?? -1) - (installsOf(a) ?? -1)
     )
     .map((pack) => {
       const names = languageNames(pack.locale)
@@ -190,6 +194,7 @@ export function LanguageBrowser({
         hint: names.english === names.native ? undefined : names.english,
         // Why: the publisher only earns space when it is what tells two packs apart.
         publisher: sharedNames.has(names.native) ? packPublisher(pack) : undefined,
+        installs: installsOf(pack),
         coverage:
           coverage !== undefined && coverage < PLUGIN_LANGUAGE_PACK_MIN_COVERAGE
             ? coverage
@@ -265,10 +270,6 @@ export function LanguageBrowser({
         setLastAttempt(null)
         void restore()
       }}
-      requesting={requestDraft !== null}
-      requestDraft={requestDraft ?? undefined}
-      onRequest={isWebClientLocation() ? undefined : (draft = '') => setRequestDraft(draft)}
-      onRequestBack={() => setRequestDraft(null)}
       onManagePlugins={
         onboarding || !catalogSupported
           ? undefined

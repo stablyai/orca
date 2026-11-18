@@ -6,6 +6,7 @@ import type {
 } from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { translate } from '@/i18n/i18n'
+import { requestPluginInstallCounts } from '@/store/plugins/installation/plugin-install-counts'
 import { pluginInstallErrorMessage } from '../presentation/plugin-error-presentation'
 import { catalogInstallTrustPrompt } from '../presentation/plugin-install-trust'
 import { usePluginInstallTrust } from './use-plugin-install-trust'
@@ -129,9 +130,21 @@ export function usePluginInstallAction({
         })
         return
       }
+      const sources =
+        listing.official && preview.official
+          ? []
+          : await (window.api.plugins.listMarketplaces?.() ?? Promise.resolve([])).catch(() => [])
+      if (!mountedRef.current) {
+        return
+      }
+      const catalogUrl =
+        sources.find((source) => source.id === listing.marketplaceSourceId)?.source.url ?? null
       // Why here: the card, the page and every link-opened page install through this one gate.
-      const trustPrompt = catalogInstallTrustPrompt(listing, preview)
+      const trustPrompt = catalogInstallTrustPrompt(listing, preview, catalogUrl)
       if (trustPrompt) {
+        if (trustPrompt.installCountPluginKey) {
+          requestPluginInstallCounts()
+        }
         setPhase(pluginKey, null)
         const confirmed = await confirmTrust(trustPrompt)
         if (!confirmed || !mountedRef.current) {

@@ -1,9 +1,10 @@
 import { useId } from 'react'
 import { AlertCircle, Check } from 'lucide-react'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { isUsablePluginLanguagePack } from '../../../../shared/plugins/languages/plugin-language-pack-coverage'
+import { pluginInstallCountLabel } from '../plugins/presentation/plugin-install-count'
 
 export type LanguageRowModel = {
   id: string
@@ -15,6 +16,8 @@ export type LanguageRowModel = {
   hintLang?: string
   /** Shown only to tell two packs for one language apart. */
   publisher?: string
+  /** Public install count from the plugin catalog, when known. */
+  installs?: number
   /** Shown only when below the usable threshold. */
   coverage?: number
   selected: boolean
@@ -42,6 +45,7 @@ export type LanguageRowModel = {
 /** One line per language: name, muted gloss, and a quiet trailing state. */
 export function LanguagePackRow({ row }: { row: LanguageRowModel }): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const errorId = useId()
   const incomplete =
     row.coverage !== undefined && !isUsablePluginLanguagePack({ coverage: row.coverage })
@@ -51,6 +55,9 @@ export function LanguagePackRow({ row }: { row: LanguageRowModel }): React.JSX.E
     row.hint ? { text: row.hint, lang: row.hintLang } : null,
     row.publisher
       ? { text: t('languages.byPublisher', 'by {{publisher}}', { publisher: row.publisher }) }
+      : null,
+    row.installs !== undefined
+      ? { text: pluginInstallCountLabel(row.installs, t, intlLocale) }
       : null,
     incomplete
       ? { text: t('languages.coverage', '{{percent}}% translated', { percent: row.coverage }) }

@@ -22969,11 +22969,7 @@
   },
   "onboarding": {
     "language": {
-      "back": "Idiomas",
-      "requestPrompt": "¿Qué idioma te gustaría que Orca admitiera?",
-      "requestError": "No se pudo registrar tu solicitud. Inténtalo de nuevo.",
       "retry": "Reintentar",
-      "requestAction": "Solicitar idioma",
       "title": "Idioma de la interfaz",
       "settingsError": "No se pudo cargar tu configuración.",
       "loadingSettings": "Cargando configuración…",

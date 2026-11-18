@@ -22703,11 +22703,7 @@
   },
   "onboarding": {
     "language": {
-      "back": "Sprachen",
-      "requestPrompt": "Welche Sprache soll Orca unterstützen?",
-      "requestError": "Die Anfrage konnte nicht erfasst werden. Erneut versuchen.",
       "retry": "Erneut versuchen",
-      "requestAction": "Sprache anfragen",
       "title": "Anzeigesprache",
       "settingsError": "Die Einstellungen konnten nicht geladen werden.",
       "loadingSettings": "Einstellungen werden geladen…",
