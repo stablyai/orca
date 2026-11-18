@@ -86,6 +86,8 @@ export type GitUpstreamStatus = {
   hasConfiguredPushTarget?: boolean
   // Rebases can leave older patch-equivalent upstream commits; pulling restores stale history, requiring lease-protected force push instead.
   behindCommitsArePatchEquivalent?: boolean
+  // Renderer-stamped HEAD the comparison applied to; untagged entries are legacy writes.
+  head?: string
 }
 
 export type GitBranchChangeStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied'

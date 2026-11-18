@@ -120,7 +120,8 @@ export function areUpstreamStatusesEqual(
     prev.ahead === next.ahead &&
     prev.behind === next.behind &&
     prev.hasConfiguredPushTarget === next.hasConfiguredPushTarget &&
-    prev.behindCommitsArePatchEquivalent === next.behindCommitsArePatchEquivalent
+    prev.behindCommitsArePatchEquivalent === next.behindCommitsArePatchEquivalent &&
+    prev.head === next.head
   )
 }
 
