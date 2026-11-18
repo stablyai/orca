@@ -75,6 +75,12 @@ export function fakeObjectState() {
       kv.set(key, structuredClone(value))
     },
     delete: async (key: string) => kv.delete(key),
+    deleteAll: async () => {
+      kv.clear()
+      alarm = null
+      const names = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all().map((row) => String(row.name))
+      for (const name of names) { db.exec(`DROP TABLE "${name}"`) }
+    },
     getAlarm: async () => alarm,
     setAlarm: async (at: number) => {
       alarm = at

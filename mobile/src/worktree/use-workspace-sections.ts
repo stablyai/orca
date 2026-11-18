@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { withoutProjectsListedElsewhere } from './project-sections/projects-listed-elsewhere'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
@@ -7,10 +8,10 @@ import type {
   WorkspaceSortBy
 } from '../../../src/shared/workspace-view/workspace-view-options'
 import {
-  buildSectionRepoMap,
   buildMobileWorkspacePlan,
   type ProjectSectionCatalog
 } from './workspace-list/workspace-list-sections'
+import { buildSectionRepoMap } from './workspace-list/section-repo-map'
 import type {
   FilterState,
   Section,
@@ -23,6 +24,8 @@ import type { MobileLineageStores } from './agent-lineage/mobile-workspace-linea
 
 export function useWorkspaceSections(args: {
   displayWorktrees: Worktree[]
+  /** Every row the host has, including those listed elsewhere (a Bots section); defaults to displayWorktrees. */
+  allHostRows?: readonly Worktree[]
   hostContextOf: WorktreeHostContextOf
   sortMode: WorkspaceSortBy
   filters: FilterState
@@ -48,6 +51,7 @@ export function useWorkspaceSections(args: {
   const t = useMobileTranslation()
   const {
     displayWorktrees,
+    allHostRows,
     hostContextOf,
     sortMode,
     filters,
@@ -82,7 +86,7 @@ export function useWorkspaceSections(args: {
         search,
         groupMode,
         pinnedIds,
-        projectCatalog,
+        withoutProjectsListedElsewhere(projectCatalog, displayWorktrees, allHostRows),
         workspaceStatuses,
         undefined,
         showPinnedInGroups,
@@ -93,6 +97,7 @@ export function useWorkspaceSections(args: {
       repoHostIdByRepoId,
       lineageStores,
       displayWorktrees,
+      allHostRows,
       sortMode,
       filters,
       search,

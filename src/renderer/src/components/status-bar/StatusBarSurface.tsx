@@ -38,6 +38,7 @@ import {
 } from './usage/usage-unit-label'
 import { useStatusBarController } from './composition/use-status-bar-controller'
 import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
+import { getAccountOwnerKey } from './accounts/owner-account-rows'
 import { StatusBarVisibilityMenu } from './composition/StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { GitBlameStatusSegment } from './GitBlameStatusSegment'
@@ -95,6 +96,7 @@ export function StatusBarSurface({
     isEmptyUsageState,
     isRefreshing,
     overflowing,
+    ownerUsage,
     petEnabled,
     remoteOwner,
     rosterProviders,
@@ -236,6 +238,7 @@ export function StatusBarSurface({
                         return (
                           <ClaudeSwitcherMenu
                             claude={p}
+                            ownerUsage={ownerUsage}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu
@@ -257,7 +260,9 @@ export function StatusBarSurface({
                       if (p.provider === 'codex') {
                         return (
                           <CodexSwitcherMenu
+                            key={getAccountOwnerKey(ownerUsage.owner)}
                             codex={p}
+                            ownerUsage={ownerUsage}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu

@@ -23,6 +23,7 @@ import {
   type OrchestrationSessionParty
 } from '../../addressing/orchestration-party'
 import {
+  createLineageRunningSessionResolver,
   resolveLineageRunningSession,
   type LineageRunningSession,
   type AgentSessionRecordReader
@@ -71,17 +72,74 @@ export function structuredSessionMailReach(
   return deriveStructuredSessionMailReach(
     resolveLineageRunningSession(store, record.sessionId),
     (id) => Boolean(addressableSessionParty(id, db, canonicalStore)),
-    () => {
-      // One keyed question per check, never every visible tab to find one.
-      const retired = store.isSessionTabRetired
-      if (retired) {
-        return { present: true, isListed: (id: string) => !retired(id) }
-      }
-      const visible = store.getVisibleSessionTabIndex?.()
-      return visible
-        ? { present: visible.present, isListed: (id: string) => visible.sessionIds.includes(id) }
-        : undefined
+    sessionTabVisibility(store)
+  )
+}
+
+/** Which sessions a person closed the tab of, as a reach check reads it: all a tab commit can change. */
+export function sessionTabClosedCheck(store: AgentSessionRecordReader): (id: string) => boolean {
+  const visible = sessionTabVisibility(store)()
+  return (id) => Boolean(visible?.present && !visible.isListed(id))
+}
+
+/** Which chats have an open tab, asked per session: one keyed question per check, never every visible tab. */
+function sessionTabVisibility(
+  store: AgentSessionRecordReader
+): () => { present: boolean; isListed: (id: string) => boolean } | undefined {
+  return () => {
+    // A chat sent to the background has no tab but is still open.
+    const background = (id: string) => store.isSessionInBackground?.(id) === true
+    const retired = store.isSessionTabRetired
+    if (retired) {
+      return { present: true, isListed: (id: string) => !retired(id) || background(id) }
     }
+    const visible = store.getVisibleSessionTabIndex?.()
+    return visible
+      ? {
+          present: visible.present,
+          isListed: (id: string) => visible.sessionIds.includes(id) || background(id)
+        }
+      : undefined
+  }
+}
+
+/** Lineage walks and party resolutions shared by every reach check of one synchronous pass over many
+ *  chats. It holds no rows and is dropped with the pass; nothing it answers outlives an await. */
+export type StructuredSessionReachContext = {
+  running: (sessionId: string) => LineageRunningSession
+  addressable: (id: OrcaSessionId) => boolean
+}
+
+export function createStructuredSessionReachContext(
+  store: AgentSessionRecordReader | null,
+  db: OrchestrationDb | null | undefined
+): StructuredSessionReachContext {
+  const parties = new Map<string, boolean>()
+  return {
+    running: createLineageRunningSessionResolver(store),
+    addressable: (id) => {
+      const known = parties.get(id)
+      if (known !== undefined) {
+        return known
+      }
+      const addressable = Boolean(addressableSessionParty(id, db))
+      parties.set(id, addressable)
+      return addressable
+    }
+  }
+}
+
+/** `structuredSessionMailReach` through a pass's shared context: the same verdicts, each walk and party
+ *  resolved once per pass. */
+export function structuredSessionMailReachWith(
+  context: StructuredSessionReachContext,
+  store: AgentSessionRecordReader,
+  record: AgentSessionConversationView
+): StructuredSessionMailReach {
+  return deriveStructuredSessionMailReach(
+    context.running(record.sessionId),
+    context.addressable,
+    sessionTabVisibility(store)
   )
 }
 
@@ -104,7 +162,7 @@ export function deriveStructuredSessionMailReach(
   }
   const visible = visibility()
   if (visible?.present && !visible.isListed(live.sessionId)) {
-    // Do not revive closed chats into invisible turns; their mail waits.
+    // Do not revive chats a person closed into invisible turns; their mail waits.
     return { kind: 'ended', reason: 'closed' }
   }
   return { kind: 'reachable', session: live }

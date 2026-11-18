@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { rowLabel } from './launch-menu/agent-menu-row-presentation'
@@ -47,6 +48,14 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
+/** A model's name as the agent's catalog lists it, else its id. */
+export function launchModelLabel(agent: string, model: string | undefined): string | undefined {
+  return (
+    getAgentSessionOptionLaunchCatalog(agent)?.models.find((entry) => entry.id === model)?.label ??
+    model
+  )
+}
+
 const AGENT_LAUNCH_PICKER_SIDE_OFFSET = 4
 const AGENT_LAUNCH_PICKER_COLLISION_PADDING = 8
 
@@ -59,6 +68,7 @@ export const AgentLaunchPicker = memo(
     model,
     entries: suppliedEntries,
     triggerLabel,
+    triggerDetail,
     draftScope,
     worktreeId,
     value,
@@ -83,6 +93,8 @@ export const AgentLaunchPicker = memo(
     model: NewTabAgentMenuModel
     entries?: AgentPickerEntry[]
     triggerLabel?: string
+    /** Muted after triggerLabel, as the launch summary follows an agent's name. */
+    triggerDetail?: string
     draftScope?: object
     worktreeId?: string
     value?: AgentPickerDraft
@@ -291,7 +303,9 @@ export const AgentLaunchPicker = memo(
               {agent ? <AgentVariantIcon agent={agent} size={14} /> : null}
               <span className="min-w-0 flex-1 truncate text-left">
                 {triggerLabel ?? agentLabel}
-                {!triggerLabel && agent && summary ? (
+                {triggerLabel && triggerDetail ? (
+                  <span className="text-muted-foreground"> · {triggerDetail}</span>
+                ) : !triggerLabel && agent && summary ? (
                   <span className="text-muted-foreground"> · {summary}</span>
                 ) : null}
               </span>

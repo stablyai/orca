@@ -61,10 +61,12 @@ class ComposerEditors {
 
   get(scope: string, options: Options): OwnedEditor {
     const existing = this.editors.get(scope)
-    if (existing) {
+    if (existing && !existing.editor.isDestroyed) {
       existing.options = options
       return existing
     }
+    // Something outside the owner destroyed it; a composer that reappears gets a live one.
+    existing?.release()
     const entry: OwnedEditor = {
       options,
       release: () => {},

@@ -22,6 +22,7 @@ import {
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
@@ -215,7 +216,11 @@ export function descriptorRowElements(
       />
     ]
   }
-  const { currentValue, choices } = descriptor.kind
+  const { currentValue } = descriptor.kind
+  const choices =
+    descriptor.category === 'thought_level'
+      ? orderEffortLevels(descriptor.kind.choices)
+      : descriptor.kind.choices
   const choiceRow = (choice: (typeof choices)[number]) => (
     <ListRow
       key={choice.value}

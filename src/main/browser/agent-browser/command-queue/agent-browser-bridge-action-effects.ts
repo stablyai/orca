@@ -3,6 +3,7 @@ import { AgentBrowserBridgeShutdown } from '../session-lifecycle/agent-browser-b
 import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
 import type { ActionEffectsHost } from '../observation/agent-browser-action-effects'
+import { isPageTextWithheld } from '../agent-browser-withheld-page-text'
 
 const EFFECTS_SNAPSHOT_TIMEOUT_MS = 5_000
 
@@ -36,6 +37,14 @@ export abstract class AgentBrowserBridgeActionEffects extends AgentBrowserBridge
             return [tabId, wc?.getURL() ?? null]
           })
         ),
+      withholdsPageText: () => {
+        try {
+          const url = this.getWebContents(currentTarget().webContentsId)?.getURL() ?? ''
+          return isPageTextWithheld({ browserPageId, url })
+        } catch {
+          return false
+        }
+      },
       loadError: () => {
         const error = this.browserManager.getBrowserPageLoadError(browserPageId)
         return error ? `${error.description} (${error.code})` : null

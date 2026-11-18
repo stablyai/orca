@@ -9,6 +9,7 @@ import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-r
 import { useAppStore } from '../../store/index'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
 import { openNewWorkspaceFromShortcut } from './new-workspace-command'
+import { canNavigateWorktreeHistory } from '../../app-shell/chrome/titlebar-worktree-history-controls'
 
 export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -106,7 +107,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
     window.api.ui.onWorktreeHistoryNavigate((direction) => {
       const store = useAppStore.getState()
       // Why: mirror button visibility — worktree history nav is only meaningful in the terminal view, so no-op elsewhere.
-      if (store.activeView !== 'terminal') {
+      if (store.activeView !== 'terminal' || !canNavigateWorktreeHistory(store)) {
         return
       }
       if (direction === 'back') {
