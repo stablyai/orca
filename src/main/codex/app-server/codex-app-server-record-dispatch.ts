@@ -41,6 +41,7 @@ export function createCodexAppServerRecordDispatcher(input: {
 } {
   const pending = new Map<number, CodexPendingRequest>()
   const timedOutMethods = new Map<number, string>()
+  let highestIssued = -1
 
   const timeOutPending = (id: number): void => {
     const waiter = pending.get(id)
@@ -146,8 +147,8 @@ export function createCodexAppServerRecordDispatcher(input: {
             rejected.maxLineBytes
           )
         )
-      } else if (timedOutMethods.has(classification.id)) {
-        // A late reply to a request that already timed out is dropped like any late reply.
+      } else if (classification.id <= highestIssued) {
+        // Ids only grow, so this answers a request that timed out; dropped like any late reply.
         timedOutMethods.delete(classification.id)
       } else {
         // No request ever had this id, so nothing can take the blame alone.
@@ -185,7 +186,10 @@ export function createCodexAppServerRecordDispatcher(input: {
   }
 
   return {
-    addPending: (id, waiter) => pending.set(id, waiter),
+    addPending: (id, waiter) => {
+      highestIssued = Math.max(highestIssued, id)
+      pending.set(id, waiter)
+    },
     deletePending: (id) => pending.delete(id),
     timeOutPending,
     failPending,

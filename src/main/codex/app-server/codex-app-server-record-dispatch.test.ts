@@ -35,9 +35,12 @@ it('drops an oversized late reply to a request that timed out, leaving other req
     reject: (error: Error) => rejected.push(error),
     timer: undefined
   })
-  dispatcher.addPending(1, waiter('thread/read'))
-  dispatcher.addPending(2, waiter('thread/resume'))
-  dispatcher.timeOutPending(1)
+  // More timeouts than the dispatcher remembers by method.
+  for (let id = 1; id <= 65; id++) {
+    dispatcher.addPending(id, waiter('thread/read'))
+    dispatcher.timeOutPending(id)
+  }
+  dispatcher.addPending(66, waiter('thread/resume'))
   dispatcher.rejectOversized({
     kind: 'line-too-long',
     maxLineBytes: 128 * 2 ** 20,
