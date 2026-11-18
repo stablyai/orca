@@ -204,10 +204,11 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         if (pty.lastOutputAt === null) {
           // Why at discovery: a wait can start before a surviving session's attach runs.
           awaitReattachedTerminalPaint(pty, Date.now(), false)
-          pty.adoptedRootProcess = session.rootProcessId
-            ? { incarnationId: pty.incarnationId, pid: session.rootProcessId }
-            : null
         }
+        // Why even after output: attach can arm the fence and see output before this inventory lands.
+        pty.adoptedRootProcess = session.rootProcessId
+          ? { incarnationId: pty.incarnationId, pid: session.rootProcessId }
+          : null
         pty.controllerTitle = session.title?.trim() || null
         this.mainDaemonAttachments.reconcile(session.id)
       }
