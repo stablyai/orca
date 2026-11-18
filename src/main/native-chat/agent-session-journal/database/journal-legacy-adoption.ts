@@ -5,7 +5,12 @@ import { readMeta } from './journal-legacy-reconcile-marks'
 
 export type Claim = SqliteRow
 
-type Lookup = Pick<Set<string>, 'has' | 'add' | 'delete'>
+/** A Set over a walk's rows, or point reads over this file's own. */
+type Lookup = {
+  has(value: string): boolean
+  add(value: string): unknown
+  delete(value: string): unknown
+}
 
 /** The original's tabs and claims, and this file's tabs, read once per walk. */
 export type Adoption = {
@@ -67,10 +72,9 @@ export function readAdoption(
 /** This file's own rows answer, so a tab added or rolled back needs no bookkeeping here. */
 function tabLookup(db: Database.Database, column: 'session_id' | 'tab_id'): Lookup {
   const query = db.prepare(`SELECT 1 FROM agent_session_tabs WHERE ${column}=?`)
-  const lookup: Lookup = {
+  return {
     has: (value) => query.get(value) !== undefined,
-    add: () => lookup as Set<string>,
-    delete: () => true
+    add: () => undefined,
+    delete: () => undefined
   }
-  return lookup
 }
