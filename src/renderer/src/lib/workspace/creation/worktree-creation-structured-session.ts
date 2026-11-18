@@ -192,6 +192,11 @@ export async function launchStructuredWorktreeSession(
       )
     }
   }
+  // Whether a surface took the first message: the chat tab, or a declined chat's terminal.
+  let reached = false
+  // Chat-only input needs the chat tab; plain text also lands in that terminal.
+  const inputLost = (): boolean =>
+    (primaryTabId === null && needsChat()) || (!reached && Boolean(plan.prompt?.trim()))
   try {
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
@@ -232,60 +237,67 @@ export async function launchStructuredWorktreeSession(
         launch.cancel()
         return { ...settled, cancelled: true, activation, primaryTabId }
       }
-      if (primaryTabId === null && needsChat()) {
-        return retainInput()
+      reached =
+        primaryTabId !== null ||
+        (!layoutRefused && launch.tab === null && (await launch.settlement).kind === 'terminal')
+    }
+    const stillVisible = (): boolean => {
+      const state = useAppStore.getState()
+      return (
+        !activation &&
+        state.activeView === 'terminal' &&
+        state.activePendingCreationId === args.creationId
+      )
+    }
+    let recovered = false
+    if (
+      launch &&
+      args.shouldActivateOnCompletion &&
+      !reached &&
+      plan.prompt &&
+      layoutRefused &&
+      !needsChat()
+    ) {
+      const { launchAgentInNewTabWithOutcome } =
+        await import('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab')
+      if (abandoned.signal.aborted || isCancelled()) {
+        launch.cancel()
+        return { ...settled, cancelled: true, activation, primaryTabId }
       }
-    } else if (needsChat() && !isCancelled()) {
+      const fallback = launchAgentInNewTabWithOutcome({
+        agent,
+        ...request.launchInputs,
+        worktreeId: args.worktreeId,
+        prompt: plan.prompt,
+        promptDelivery: plan.promptDelivery,
+        activate: stillVisible(),
+        agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
+          route: 'terminal-tui',
+          requestId: args.creationId,
+          agent,
+          worktreeId: args.worktreeId
+        })
+      })
+      if (fallback && !('refused' in fallback)) {
+        reached = true
+        recovered = true
+        primaryTabId = fallback.surface.kind === 'local-terminal' ? fallback.surface.tabId : null
+      }
+    }
+    if (inputLost() && !isCancelled()) {
       return retainInput()
     }
-    if (launch && args.shouldActivateOnCompletion) {
-      const stillVisible = (): boolean => {
-        const state = useAppStore.getState()
-        return (
-          !activation &&
-          state.activeView === 'terminal' &&
-          state.activePendingCreationId === args.creationId
-        )
-      }
-      let recoveryProvidesSurface = false
-      if (primaryTabId === null && plan.prompt && layoutRefused) {
-        const { launchAgentInNewTabWithOutcome } =
-          await import('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab')
-        if (abandoned.signal.aborted || isCancelled()) {
-          launch.cancel()
-          return { ...settled, cancelled: true, activation, primaryTabId }
-        }
-        const fallback = launchAgentInNewTabWithOutcome({
-          agent,
-          ...request.launchInputs,
-          worktreeId: args.worktreeId,
-          prompt: plan.prompt,
-          promptDelivery: plan.promptDelivery,
-          activate: stillVisible(),
-          agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
-            route: 'terminal-tui',
-            requestId: args.creationId,
-            agent,
-            worktreeId: args.worktreeId
-          })
-        })
-        if (fallback && !('refused' in fallback)) {
-          recoveryProvidesSurface = true
-          primaryTabId = fallback.surface.kind === 'local-terminal' ? fallback.surface.tabId : null
-        }
-      }
-      if (stillVisible()) {
-        activation = activateAndRevealWorktree(args.worktreeId, {
-          providesInitialSurface: primaryTabId !== null || recoveryProvidesSurface,
-          worktreeCreationId: args.creationId
-        })
-        primaryTabId ??= activation === false ? null : activation.primaryTabId
-      }
+    if (launch && args.shouldActivateOnCompletion && stillVisible()) {
+      activation = activateAndRevealWorktree(args.worktreeId, {
+        providesInitialSurface: primaryTabId !== null || recovered,
+        worktreeCreationId: args.creationId
+      })
+      primaryTabId ??= activation === false ? null : activation.primaryTabId
     }
   } catch (error) {
     // Contain this fire-and-forget caller’s errors or the panel remains mid-create.
     console.error('worktree create: structured chat tab failed to open', args.worktreeId, error)
-    if (needsChat() && !isCancelled()) {
+    if (inputLost() && !isCancelled()) {
       return retainInput()
     }
     return { ...settled, activation, primaryTabId }

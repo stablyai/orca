@@ -206,4 +206,31 @@ describe('launchStructuredWorktreeSession', () => {
     )
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledOnce()
   })
+
+  it('keeps a held text message when the launch ends with nothing opened', async () => {
+    mocks.state.pendingWorktreeCreations = {
+      'creation-1': { request, heldChatMessage: 'Fix the route' }
+    }
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      args.onTabOpenSettled?.(null)
+      return {
+        sessionId: null,
+        tab: null,
+        settlement: Promise.resolve({ kind: 'cancelled', sessionId: null }),
+        cancel: vi.fn()
+      } as never
+    })
+
+    const result = await launchStructuredWorktreeSession({
+      ...baseArgs,
+      shouldActivateOnCompletion: false
+    })
+
+    expect(result.retainedInput).toBe(true)
+    expect(mocks.state.updatePendingWorktreeCreation).toHaveBeenLastCalledWith('creation-1', {
+      worktreeId: 'worktree-1',
+      status: 'error',
+      error: expect.any(String)
+    })
+  })
 })
