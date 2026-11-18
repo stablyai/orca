@@ -126,7 +126,8 @@ async function streamAgentStatus({ page, userDataDir, windowMs }) {
   if (panes.length === 0) {
     return { note: 'no terminal panes to stream into', undriven: 'no terminal panes' }
   }
-  const deadline = Date.now() + windowMs
+  const started = Date.now()
+  const deadline = started + windowMs
   let posted = 0
   let failed = 0
   while (Date.now() < deadline) {
@@ -137,12 +138,18 @@ async function streamAgentStatus({ page, userDataDir, windowMs }) {
       failed += 1
     }
     posted += 1
-    await sleep(1_000 / STREAM_EVENTS_PER_SECOND)
+    // Paced by the clock, so slow hook replies shrink the count (and show as incomplete) instead of hiding.
+    await sleep(Math.max(0, started + (posted * 1_000) / STREAM_EVENTS_PER_SECOND - Date.now()))
   }
+  const planned = Math.floor((windowMs / 1_000) * STREAM_EVENTS_PER_SECOND)
+  const delivered = posted - failed
   return {
     note: `${posted} hook events over ${panes.length} terminal panes`,
     failed,
-    undriven: failed > posted * MAX_MISSED_SHARE ? `${failed} of ${posted} hook posts failed` : null
+    undriven:
+      delivered < planned * (1 - MAX_MISSED_SHARE)
+        ? `${delivered} of ${planned} planned hook events delivered`
+        : null
   }
 }
 

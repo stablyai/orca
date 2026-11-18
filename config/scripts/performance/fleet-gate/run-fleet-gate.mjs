@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 // Fleet-scale perf gate: OLD vs NEW on a ~1,900-workspace synthetic profile. Usage: docs/readme/fleet-perf-gate.md.
 import { _electron as electron } from '@stablyai/playwright-test'
-import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 import { CACHE_ROOT, ensureBuild, git, pruneCache, resolveCommit } from './fleet-gate-builds.mjs'
+import { lockCacheEntry } from './fleet-gate-cache-lock.mjs'
+import { copyProfile, stopCopyDaemons } from './fleet-gate-copies.mjs'
+import { startVirtualDisplay } from './fleet-gate-display.mjs'
 import { hotPathChanges } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
@@ -34,11 +36,8 @@ import {
 const KEEP_SEEDS = 2
 // Idle agents spread over this many workspaces; the #42104 report had ~500 keyed statuses on ~1,900 workspaces.
 const AGENT_PANES = 200
-// Only Linux gets a private display; elsewhere copies stay hidden and unpainted, so clicks and focus can't be driven.
-const PAINTED = process.platform === 'linux'
-const DEFAULT_SCENARIOS = PAINTED
-  ? [...Object.keys(SCENARIOS), 'burst']
-  : ['idle', 'streaming', 'burst']
+// Copies and helpers to stop if the gate itself is stopped (a release bot's timeout, Ctrl-C).
+const liveCleanups = new Set()
 
 // Packaged builds don't expose the store the gate seeds, drives and probes through.
 function packagedAppUnsupported() {
@@ -56,7 +55,7 @@ function parseArgs(argv) {
     settleMs: 120_000,
     windowMs: 30_000,
     idleWindowMs: 60_000,
-    scenarios: DEFAULT_SCENARIOS,
+    scenarios: null,
     force: false,
     pathsOnly: false,
     out: null
@@ -91,7 +90,10 @@ function parseArgs(argv) {
     }
     setters[arg]()
   }
-  for (const name of options.scenarios) {
+  if (options.scenarios?.length === 0) {
+    throw new Error('--scenarios names no scenario')
+  }
+  for (const name of options.scenarios ?? []) {
     if (!SCENARIOS[name] && name !== 'burst') {
       throw new Error(`unknown scenario ${name}; known: ${Object.keys(SCENARIOS).join(', ')}`)
     }
@@ -101,39 +103,6 @@ function parseArgs(argv) {
 
 // Hidden windows never paint, so clicks and screenshots stall; on Linux the copy gets its own Xvfb, never a real desktop.
 let virtualDisplay = null
-
-function findOnPath(binary) {
-  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
-    const candidate = path.join(dir, binary)
-    if (dir && fs.existsSync(candidate)) {
-      return candidate
-    }
-  }
-  return null
-}
-
-async function startVirtualDisplay() {
-  const xvfb = process.platform === 'linux' ? findOnPath('Xvfb') : null
-  if (!xvfb) {
-    return null
-  }
-  let number = 140 + Math.floor(Math.random() * 400)
-  while (fs.existsSync(`/tmp/.X11-unix/X${number}`) || fs.existsSync(`/tmp/.X${number}-lock`)) {
-    number += 1
-  }
-  const child = spawn(xvfb, [`:${number}`, '-screen', '0', '1600x1000x24', '-nolisten', 'tcp'], {
-    stdio: 'ignore'
-  })
-  const deadline = Date.now() + 10_000
-  while (!fs.existsSync(`/tmp/.X11-unix/X${number}`)) {
-    if (Date.now() > deadline || child.exitCode !== null) {
-      child.kill('SIGKILL')
-      return null
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  return { display: `:${number}`, stop: () => child.kill('SIGTERM') }
-}
 
 function launchArgs(buildDir) {
   const keychain = ['--password-store=basic', '--use-mock-keychain']
@@ -179,7 +148,11 @@ function isolatedEnv(runDir, userDataDir) {
           'WAYLAND_DISPLAY',
           'DISPLAY',
           'XDG_SESSION_TYPE',
-          'ELECTRON_OZONE_PLATFORM_HINT'
+          'ELECTRON_OZONE_PLATFORM_HINT',
+          // Shells would still read the user's own rc files through these, whatever HOME says.
+          'ZDOTDIR',
+          'BASH_ENV',
+          'ENV'
         ].includes(key)
     )
   )
@@ -298,7 +271,10 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
     if (child.exitCode === null && child.signalCode === null) {
       child.kill('SIGKILL')
     }
+    await stopCopyDaemons(userDataDir)
+    liveCleanups.delete(close)
   }
+  liveCleanups.add(close)
   try {
     const page = await waitForAppWindow(app, { label, userDataDir, outDir, stderrTail })
     return { app, page, close, ownershipText: () => ownershipText }
@@ -309,9 +285,9 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
 }
 
 /** Quit with chats mid-turn, restart under load and continue them all, then a cold burst: every launch must start. */
-async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot }) {
+async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot, minWorkspaces }) {
   const userDataDir = path.join(runDir, 'user-data')
-  fs.cpSync(seedDir, userDataDir, { recursive: true, mode: fs.constants.COPYFILE_FICLONE })
+  copyProfile(seedDir, userDataDir)
   const stub = writeClaudeStub(path.join(runDir, 'stub'), repoRoot)
   const extraEnv = {
     PATH: [path.dirname(stub.command), process.env.PATH ?? ''].join(path.delimiter)
@@ -319,10 +295,16 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
   const label = `burst-${arm}-${sha.slice(0, 11)}`
   const copy = (suffix) =>
     launchCopy({ buildDir, runDir, userDataDir, label: `${label}-${suffix}`, outDir, extraEnv })
-  const result = { arm, sha }
+  const result = { arm, sha, incomplete: [] }
   let stderrOwnership = ''
   const first = await copy('mid-turn')
   try {
+    const { workspaces } = await readFleetCensus(first.page)
+    if (minWorkspaces && !(workspaces >= minWorkspaces)) {
+      result.incomplete.push(
+        `burst fleet loaded ${String(workspaces)} of ${String(minWorkspaces)} workspaces`
+      )
+    }
     await pointClaudeAtStub(first.page, stub.command)
     // The stub keeps a prompt containing "slow" running until interrupted, so these chats quit mid-turn.
     result.midTurn = await createChatBurst(first.page, BURST_CHATS, 0, 'slow fleet gate turn')
@@ -333,6 +315,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     await first.close()
   }
   const stopLoad = startCpuLoad(repoRoot)
+  liveCleanups.add(stopLoad)
   try {
     const second = await copy('restart')
     try {
@@ -356,6 +339,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     }
   } finally {
     stopLoad()
+    liveCleanups.delete(stopLoad)
   }
   result.ownershipRefusals = countOwnershipRefusals(stderrOwnership, userDataDir)
   fs.rmSync(runDir, { recursive: true, force: true })
@@ -367,6 +351,16 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
 async function ensureSeed({ oldSha, oldBuild, outDir }) {
   const seedsDir = path.join(CACHE_ROOT, 'seeds')
   const seedDir = path.join(seedsDir, oldSha)
+  fs.mkdirSync(seedsDir, { recursive: true })
+  const unlock = lockCacheEntry(seedDir)
+  try {
+    return await seedUnderLock({ seedsDir, seedDir, oldSha, oldBuild, outDir })
+  } finally {
+    unlock()
+  }
+}
+
+async function seedUnderLock({ seedsDir, seedDir, oldSha, oldBuild, outDir }) {
   const existing = readSeedReceipt(seedDir)
   if (existing) {
     fs.utimesSync(path.join(seedDir, '.fleet-seed.json'), new Date(), new Date())
@@ -392,14 +386,14 @@ async function ensureSeed({ oldSha, oldBuild, outDir }) {
 
 async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDir }) {
   const userDataDir = path.join(runDir, 'user-data')
-  fs.cpSync(seedDir, userDataDir, { recursive: true, mode: fs.constants.COPYFILE_FICLONE })
+  copyProfile(seedDir, userDataDir)
   const result = { arm, sha, windows: {}, census: null, notes: [], incomplete: [] }
   const label = `${arm}-${sha.slice(0, 11)}`
   const { app, page, close } = await launchCopy({ buildDir, runDir, userDataDir, label, outDir })
   try {
     const probeState = await installMainProbeIn(app)
     if (probeState === 'installed-without-invoke') {
-      result.notes.push(`main probe ${probeState}: R→M counts only send(), not invoke()`)
+      result.incomplete.push('main probe could not count invoke(): R→M would miss requests')
     }
     const renderer = await installRendererProbe(page)
     if (renderer.breakpoints === 0) {
@@ -481,6 +475,10 @@ async function main() {
   const outDir = options.out ?? path.join(CACHE_ROOT, 'reports')
   fs.mkdirSync(outDir, { recursive: true })
   virtualDisplay = await startVirtualDisplay()
+  // Without a private display copies stay hidden and unpainted, so clicks and focus can't be driven.
+  options.scenarios ??= virtualDisplay
+    ? [...Object.keys(SCENARIOS), 'burst']
+    : ['idle', 'streaming', 'burst']
   const builds = { old: ensureBuild(repoRoot, oldSha), new: ensureBuild(repoRoot, newSha) }
   const seed = options.seed
     ? { seedDir: options.seed, receipt: null }
@@ -521,6 +519,7 @@ async function main() {
             seedDir: seed.seedDir,
             outDir,
             repoRoot,
+            minWorkspaces: seed.receipt ? SEED_SHAPE.worktrees + SEED_SHAPE.folders : 0,
             runDir: path.join(runsRoot, `burst-${arm}`)
           })
         )
@@ -533,7 +532,11 @@ async function main() {
   const rows = [...compareRuns(runs, windowScenarios), ...burstRows(bursts)]
   const notes = [...new Set(runs.flatMap((entry) => entry.notes))]
   const incomplete = [
-    ...new Set(runs.flatMap((entry) => entry.incomplete.map((reason) => `${entry.arm} ${reason}`)))
+    ...new Set(
+      [...runs, ...bursts].flatMap((entry) =>
+        entry.incomplete.map((reason) => `${entry.arm} ${reason}`)
+      )
+    )
   ]
   for (const name of windowScenarios) {
     const drivenNotes = [
@@ -560,6 +563,20 @@ async function main() {
   console.log(text)
   console.log(`=== END FLEET GATE TABLE === (raw ${stem}.json)`)
   process.exitCode = { PASS: 0, FAIL: 1, INCOMPLETE: 2 }[result]
+}
+
+// A stopped gate still stops its copies, their daemons, the CPU load and Xvfb before it exits.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, () => {
+    console.error(`[fleet-gate] ${signal}: stopping copies`)
+    void Promise.race([
+      Promise.allSettled([...liveCleanups].map((cleanup) => cleanup())),
+      new Promise((resolve) => setTimeout(resolve, 20_000))
+    ]).finally(() => {
+      virtualDisplay?.stop()
+      process.exit(2)
+    })
+  })
 }
 
 // Exit explicitly: a launched copy's driver handles otherwise keep the process (and its qa-gate slot) alive.

@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { lockCacheEntry } from './fleet-gate-cache-lock.mjs'
 
 export const CACHE_ROOT =
   process.env.ORCA_FLEET_GATE_CACHE ?? path.join(os.homedir(), '.cache', 'orca-fleet-gate')
@@ -47,10 +48,23 @@ export function ensureBuild(repoRoot, sha) {
   const buildsDir = path.join(CACHE_ROOT, 'builds')
   const dir = path.join(buildsDir, sha)
   const marker = path.join(dir, '.fleet-gate-built')
-  if (fs.existsSync(marker)) {
-    fs.utimesSync(marker, new Date(), new Date())
-    return dir
+  fs.mkdirSync(buildsDir, { recursive: true })
+  const unlock = lockCacheEntry(dir)
+  try {
+    if (fs.existsSync(marker)) {
+      fs.utimesSync(marker, new Date(), new Date())
+      return dir
+    }
+    buildInto(repoRoot, sha, dir, marker)
+  } finally {
+    unlock()
   }
+  pruneCache(buildsDir, '.fleet-gate-built', KEEP_BUILDS, new Set([dir]))
+  return dir
+}
+
+function buildInto(repoRoot, sha, dir, marker) {
+  const buildsDir = path.dirname(dir)
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(buildsDir, { recursive: true })
   const log = path.join(buildsDir, `${sha}.log`)
@@ -87,8 +101,6 @@ export function ensureBuild(repoRoot, sha) {
   )
   run('pnpm', ['run', 'ensure:electron-runtime'], dir, log)
   fs.writeFileSync(marker, `${new Date().toISOString()}\n`)
-  pruneCache(buildsDir, '.fleet-gate-built', KEEP_BUILDS, new Set([dir]))
-  return dir
 }
 
 // Gate runs on one machine share the cache; never delete what a run started within this window may still use.

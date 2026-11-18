@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { lockCacheEntry } from './fleet-gate-cache-lock.mjs'
 
 export const SEED_SHAPE = { worktrees: 1_800, folders: 100, chats: 1_800, terminals: 200 }
 const SEED_FORMAT = 2
@@ -13,9 +14,19 @@ function git(cwd, args) {
 /** One small repo with linked worktrees plus plain folders; paths stay fixed so every seed built on it stays valid. */
 export function ensureFleetCorpus(corpusDir) {
   const marker = path.join(corpusDir, '.fleet-corpus-ready')
-  if (fs.existsSync(marker)) {
-    return corpusDir
+  fs.mkdirSync(path.dirname(corpusDir), { recursive: true })
+  const unlock = lockCacheEntry(corpusDir)
+  try {
+    if (!fs.existsSync(marker)) {
+      buildCorpus(corpusDir, marker)
+    }
+  } finally {
+    unlock()
   }
+  return corpusDir
+}
+
+function buildCorpus(corpusDir, marker) {
   fs.rmSync(corpusDir, { recursive: true, force: true })
   const repo = path.join(corpusDir, 'fleet-repo')
   fs.mkdirSync(path.join(repo, 'src'), { recursive: true })
@@ -38,7 +49,6 @@ export function ensureFleetCorpus(corpusDir) {
     fs.writeFileSync(path.join(folder, 'notes.txt'), `notes ${index}\n`)
   }
   fs.writeFileSync(marker, `${new Date().toISOString()}\n`)
-  return corpusDir
 }
 
 export function readSeedReceipt(seedDir) {
@@ -225,6 +235,15 @@ export async function buildSyntheticFleetSeed({ seedDir, corpusDir, builtBy, lau
     const terminals = await seedTerminals(page, SEED_SHAPE.terminals)
     const census = await readFleetCensus(page)
     const receipt = { format: SEED_FORMAT, builtBy, workspaces, chats, terminals, census }
+    // A short fleet must never be cached: every later run would measure it as if it were full size.
+    const short = [
+      census.workspaces < SEED_SHAPE.worktrees + SEED_SHAPE.folders && 'workspaces',
+      chats.ok < SEED_SHAPE.chats && 'chats',
+      terminals.ok < SEED_SHAPE.terminals && 'terminals'
+    ].filter(Boolean)
+    if (short.length > 0) {
+      throw new Error(`seed is short of ${short.join(', ')}: ${JSON.stringify(receipt)}`)
+    }
     await close()
     fs.writeFileSync(
       path.join(seedDir, '.fleet-seed.json'),

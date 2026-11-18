@@ -90,12 +90,16 @@ export function burstRows(bursts) {
     {
       label: 'mid-turn chats quit',
       read: (burst) => burst.midTurnLaunched,
-      bad: (burst) => burst.midTurnLaunched < (burst.midTurn?.requested ?? 0)
+      bad: (burst) =>
+        !(burst.midTurn?.requested > 0) ||
+        burst.midTurnLaunched < burst.midTurn.requested ||
+        (burst.midTurn.refused?.length ?? 0) > 0
     },
     {
+      // Every chat that quit mid-turn must be offered again; a partial resume is the regression this guards.
       label: 'restart offers',
       read: (burst) => burst.continuation?.offered,
-      bad: (burst) => (burst.continuation?.offered ?? 0) === 0
+      bad: (burst) => (burst.continuation?.offered ?? 0) < (burst.midTurn?.requested ?? 1)
     },
     {
       label: 'continuations started',
