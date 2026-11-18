@@ -28,6 +28,11 @@ export const scopeKeys: AgentSessionConversationKeys = (view) => [
   agentSessionScopeKey(view.location)
 ]
 
+type MovedChat = {
+  before: AgentSessionConversationView | null
+  after: AgentSessionConversationView | null
+}
+
 type CommittedRecords = {
   upsert: readonly (readonly [string, string])[]
   remove: readonly string[]
@@ -81,18 +86,13 @@ export class AgentSessionConversationKeyIndexes {
     if (this.indexes.size === 0) {
       return
     }
-    const moved = [
-      ...records.upsert.flatMap(([sessionId]) =>
-        sameKeyInputs(
-          getAgentSessionConversation(before, sessionId),
-          getAgentSessionConversation(state, sessionId)
-        )
-          ? []
-          : [sessionId]
-      ),
-      ...records.remove
-    ]
-    this.indexes.forEach((index) => index.applyCommitted(state, moved))
+    const moved = [...records.upsert.map(([sessionId]) => sessionId), ...records.remove]
+      .map((sessionId) => ({
+        before: getAgentSessionConversation(before, sessionId),
+        after: getAgentSessionConversation(state, sessionId)
+      }))
+      .filter(({ before, after }) => !sameKeyInputs(before, after))
+    this.indexes.forEach((index) => index.applyCommitted(moved))
   }
 }
 
@@ -138,8 +138,8 @@ class AgentSessionListingOrder {
  *  authority, then kept by committed record writes, so a keyed question never walks the history.
  *  Derived only; nothing is saved. */
 export class AgentSessionConversationKeyIndex {
+  /** Keys are not stored per chat: a commit re-derives the old ones from the chat's prior view. */
   private readonly sessionsByKey = new Map<string, Set<string>>()
-  private readonly keysBySession = new Map<string, readonly string[]>()
 
   constructor(
     state: AgentSessionStoreState,
@@ -152,12 +152,13 @@ export class AgentSessionConversationKeyIndex {
   }
 
   /** Follows one committed transaction: only the chats whose key inputs moved are re-keyed. */
-  applyCommitted(draft: AgentSessionStoreState, moved: readonly string[]): void {
-    for (const sessionId of moved) {
-      this.remove(sessionId)
-      const view = getAgentSessionConversation(draft, sessionId)
-      if (view) {
-        this.add(view)
+  applyCommitted(moved: readonly MovedChat[]): void {
+    for (const { before, after } of moved) {
+      if (before) {
+        this.remove(before)
+      }
+      if (after) {
+        this.add(after)
       }
     }
   }
@@ -181,24 +182,21 @@ export class AgentSessionConversationKeyIndex {
   }
 
   private add(view: AgentSessionConversationView): void {
-    const keys = this.keysOf(view)
-    this.keysBySession.set(view.sessionId, keys)
-    for (const key of keys) {
+    for (const key of this.keysOf(view)) {
       const sessions = this.sessionsByKey.get(key) ?? new Set<string>()
       sessions.add(view.sessionId)
       this.sessionsByKey.set(key, sessions)
     }
   }
 
-  private remove(sessionId: string): void {
-    for (const key of this.keysBySession.get(sessionId) ?? []) {
+  private remove(view: AgentSessionConversationView): void {
+    for (const key of this.keysOf(view)) {
       const sessions = this.sessionsByKey.get(key)
-      sessions?.delete(sessionId)
+      sessions?.delete(view.sessionId)
       if (sessions?.size === 0) {
         this.sessionsByKey.delete(key)
       }
     }
-    this.keysBySession.delete(sessionId)
   }
 }
 
