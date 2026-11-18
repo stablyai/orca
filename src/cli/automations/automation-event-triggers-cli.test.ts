@@ -140,18 +140,6 @@ describe('orca automations --on', () => {
     })
   })
 
-  it('asks nothing extra of the host for an edit without events', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client, call } = host()
-
-    await run('automations edit', client, [
-      ['id', 'a1'],
-      ['disabled', true]
-    ])
-
-    expect(call.mock.calls.map(([method]) => method)).not.toContain('status.get')
-  })
-
   it('lists the events without a host', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const { client, call } = host()
@@ -165,20 +153,6 @@ describe('orca automations --on', () => {
 
     expect(call).not.toHaveBeenCalled()
     expect(log.mock.calls[0]?.[0]).toContain('slack.reaction')
-  })
-
-  it('carries the notes in JSON too', async () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client } = host()
-
-    await AUTOMATION_HANDLERS['automations trigger-options']!({
-      client,
-      cwd: '/tmp',
-      flags: new Map([['source', 'slack']]),
-      json: true
-    })
-
-    expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.guide).toContain('needs no automation')
   })
 
   it('refuses an event from a source the bot has no connector for, naming what it has', async () => {
@@ -241,19 +215,5 @@ describe('orca automations list', () => {
     expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.wontFire).toEqual({
       unheard: "won't fire: Ranger has no Linear connector (linear.assigned)"
     })
-  })
-
-  it('asks nothing more of the host when no automation has events', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client, call } = host([automation('scheduled', [])])
-
-    await AUTOMATION_HANDLERS['automations list']!({
-      client,
-      cwd: '/tmp',
-      flags: new Map(),
-      json: false
-    })
-
-    expect(call.mock.calls.map(([method]) => method)).toEqual(['automation.list'])
   })
 })

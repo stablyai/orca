@@ -15,13 +15,14 @@ import {
   redirectNativeChatEditDraft
 } from '../../drafts/native-chat-composer-draft-memory'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
+import { mountedEditorView } from './native-chat-mounted-editor-view'
 
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
 })
 
-it('keeps the draft, selection and undo across hides, and frees the editor when its tab closes', async () => {
+it('keeps the draft, selection and undo across hides without a hidden view, and frees the editor when its tab closes', async () => {
   vi.useFakeTimers()
   const input = createRef<NativeChatComposerInput>()
   const pane = (visible: boolean) => (
@@ -43,6 +44,8 @@ it('keeps the draft, selection and undo across hides, and frees the editor when 
   )
   const view = render(pane(true))
   const editor = promptEditor(within(view.container).getByRole('textbox'))
+  const onDestroy = vi.fn()
+  editor.on('destroy', onDestroy)
   act(() => {
     input.current!.setSelectionRange(5, 5)
     input.current!.insertText!(' world')
@@ -50,6 +53,9 @@ it('keeps the draft, selection and undo across hides, and frees the editor when 
   })
   view.rerender(pane(false))
   await act(() => vi.runOnlyPendingTimersAsync())
+  // A hidden composer keeps no view, so none of its document listeners run while other chats are typed in.
+  expect(mountedEditorView(editor)).toBeNull()
+  expect(onDestroy).not.toHaveBeenCalled()
   view.rerender(pane(true))
   expect(input.current!.value).toBe('hello world')
   expect([input.current!.selectionStart, input.current!.selectionEnd]).toEqual([2, 4])
@@ -60,7 +66,7 @@ it('keeps the draft, selection and undo across hides, and frees the editor when 
   view.rerender(pane(false))
   view.unmount()
   await act(() => vi.runOnlyPendingTimersAsync())
-  expect(editor.isDestroyed).toBe(true)
+  expect(onDestroy).toHaveBeenCalledOnce()
 })
 
 it.each([20, 200])(
