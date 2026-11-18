@@ -9,6 +9,7 @@ export function WorkspaceAccountOptions({
   accounts,
   provider,
   selectedId,
+  hostDefaultDetail,
   loading,
   saving,
   error,
@@ -17,6 +18,7 @@ export function WorkspaceAccountOptions({
   provider: string
   accounts: { id: string; label: string }[]
   selectedId?: string
+  hostDefaultDetail?: string | null
   loading: boolean
   saving: boolean
   error: string | null
@@ -34,7 +36,12 @@ export function WorkspaceAccountOptions({
   return (
     <DropdownMenuRadioGroup value={selectedId ?? 'inherit'} onValueChange={onSelect}>
       <DropdownMenuRadioItem value="inherit" disabled={saving}>
-        {t('workspace.codexAccount.inherit', 'Use host default')}
+        <span className="flex min-w-0 flex-col">
+          <span>{t('workspace.codexAccount.inherit', 'Use host default')}</span>
+          {hostDefaultDetail && (
+            <span className="break-all text-xs text-muted-foreground">{hostDefaultDetail}</span>
+          )}
+        </span>
       </DropdownMenuRadioItem>
       {missing && (
         <DropdownMenuRadioItem value={selectedId} disabled>
