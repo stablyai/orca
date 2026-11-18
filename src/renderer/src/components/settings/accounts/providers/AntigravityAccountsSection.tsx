@@ -228,11 +228,6 @@ export function AntigravityAccountsSection({
           {chatRows}
         </SettingsGroup>
       ) : null}
-      {chats &&
-      chatRuntime.kind !== 'active' &&
-      structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
-        <ChatUnavailableOnWindowsNote label={t('accounts.antigravity.title', 'Antigravity')} />
-      ) : null}
       <SettingsGroup
         title={logoTitle(t('accounts.antigravity.terminalTitle', 'agy in the terminal'))}
         description={
@@ -278,6 +273,11 @@ export function AntigravityAccountsSection({
           run={(action, accountId) => void run(action, accountId)}
         />
       </SettingsGroup>
+      {chats &&
+      chatRuntime.kind !== 'active' &&
+      structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
+        <ChatUnavailableOnWindowsNote label={t('accounts.antigravity.title', 'Antigravity')} />
+      ) : null}
     </div>
   )
 }

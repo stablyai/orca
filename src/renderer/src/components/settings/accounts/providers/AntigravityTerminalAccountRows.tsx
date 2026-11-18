@@ -201,21 +201,23 @@ export function AntigravityTerminalAccountRows({
       />
     )
   }
-  terminalRows.push(
-    <div
-      key="add-account"
-      data-settings-row=""
-      className="flex items-center gap-2 py-3 text-xs text-muted-foreground"
-    >
-      <UserPlus className="size-3.5 shrink-0" />
-      <span>
-        {t(
-          'accounts.antigravity.addAccountHelp',
-          'To add an account, run /logout in agy, sign in again, then Save it here.'
-        )}
-      </span>
-    </div>
-  )
+  if (state?.currentAccount) {
+    terminalRows.push(
+      <div
+        key="add-account"
+        data-settings-row=""
+        className="flex items-center gap-2 py-3 text-xs text-muted-foreground"
+      >
+        <UserPlus className="size-3.5 shrink-0" />
+        <span>
+          {t(
+            'accounts.antigravity.addAccountHelp',
+            'To add an account, run /logout in agy, sign in again, then Save it here.'
+          )}
+        </span>
+      </div>
+    )
+  }
   return <>{terminalRows}</>
 }
 
