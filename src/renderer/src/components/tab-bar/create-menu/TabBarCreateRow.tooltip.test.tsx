@@ -113,3 +113,16 @@ it('hands a keyboard label to the pointer without a cold wait', () => {
   fireEvent.pointerMove(icon('browser'))
   expect(tooltip()).toHaveTextContent('New Browser')
 })
+
+it('hands a keyboard label to a pointer already inside the row', () => {
+  renderRow()
+  const row = screen.getByRole('menuitem', { name: /New tab actions/ })
+  fireEvent.pointerEnter(row)
+  act(() => row.focus())
+  fireEvent.keyDown(row, { key: 'ArrowRight' })
+  advance(1000)
+  expect(tooltip()).toHaveTextContent('New Browser')
+
+  fireEvent.pointerMove(icon('terminal'))
+  expect(tooltip()).toHaveTextContent('New Terminal')
+})

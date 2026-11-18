@@ -112,6 +112,14 @@ export function TabBarCreateRow({
     )
   }
   const activeItem = visible[active]
+  // The pointer may enter the row first or already be inside it; either way the keyboard label
+  // it replaces counts as just shown, so the next icon opens without a cold wait.
+  const handOffToPointer = (): void => {
+    if (keyboardActive) {
+      hoverTooltip.startSkipWindow()
+    }
+    setKeyboardNav(false)
+  }
   const recorderHasFocus = (): boolean =>
     document.activeElement?.matches('[data-shortcut-recorder-active]') ?? false
   const customizeLabel = t('tabBar.createRow.customize', 'Customize')
@@ -136,11 +144,7 @@ export function TabBarCreateRow({
           )}
           onPointerEnter={() => {
             pointerInside.current = true
-            // Pointer takeover closes the keyboard label; reaching an icon must not restart a cold wait.
-            if (keyboardActive) {
-              hoverTooltip.startSkipWindow()
-            }
-            setKeyboardNav(false)
+            handOffToPointer()
           }}
           onPointerLeave={() => {
             pointerInside.current = false
@@ -181,7 +185,7 @@ export function TabBarCreateRow({
             onEscape={closeMenu}
             onHover={(index, pressed) => {
               if (index !== null) {
-                setKeyboardNav(false)
+                handOffToPointer()
               }
               setHoveredIndex(index)
               hoverTooltip.hover(index, pressed)
