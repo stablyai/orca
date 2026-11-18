@@ -35,7 +35,8 @@ export async function resolveStructuredClaudeAccountHomePath(
   const workspace = await getClaudeWorkspaceProfiles()?.resolve(
     deps.workspaceId,
     deps.wslDistro ? { runtime: 'wsl', wslDistro: deps.wslDistro } : { runtime: 'host' },
-    deps.prepare === true
+    deps.prepare === true,
+    deps.prepare ? undefined : deps.purpose
   )
   if (workspace) {
     return workspace.configDir

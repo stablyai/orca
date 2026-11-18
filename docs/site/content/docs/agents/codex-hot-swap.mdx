@@ -24,6 +24,10 @@ Open the workspace context menu, then **Agent accounts**, and choose the Codex o
 
 Accounts belong to the host running the workspace. A missing or incompatible assigned account requires attention rather than silently launching another account. Existing terminal processes keep the account they started with. Workspace-aware usage readouts use the assigned account and avoid showing another account's quota when its usage is unavailable.
 
+When an older Claude profile still shares history through directory links, its first workspace-bound setup snapshots the history it could already see into independent private directories before removing those links. Existing transcripts and companion files remain available; later writes are no longer shared. Stop active Claude writers before migrating legacy shared profiles so a turn cannot append to the old store after its snapshot.
+
+Restarting a terminal uses the workspace's current compatible account binding, then the host default when the workspace inherits it. A conversation opened with an explicit History account choice retains that choice instead. Changing a binding while launch preparation is running refuses that launch and asks you to try again.
+
 ## Swap accounts
 
 Click the Codex chip in the status bar to open the account switcher, or pick an account in Settings. New sessions without a workspace binding use that account, and new chats use that selection. Existing chats retain the account associated with their conversation. Terminal sessions already running keep their original account until restarted.

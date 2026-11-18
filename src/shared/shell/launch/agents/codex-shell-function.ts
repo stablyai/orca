@@ -40,7 +40,17 @@ export function getPosixCodexShellLaunchPreflight(): string {
 # assignment adopts its exit status, so an absent codex trips set -e in bash too.
 __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
 # Why typeset -f: a user's own codex function wins; command -v prints its bare name, which -x tests against the cwd.
-if ! typeset -f codex >/dev/null 2>&1 && [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
+if typeset -f codex >/dev/null 2>&1; then
+  if ! typeset -f __orca_codex_user >/dev/null 2>&1; then
+    __orca_codex_user_definition="$(typeset -f codex)"
+    eval "function __orca_codex_user {\${__orca_codex_user_definition#*{}"
+    unset __orca_codex_user_definition
+  fi
+  function codex {
+    if [ -n "\${ORCA_CODEX_LAUNCH_ERROR:-}" ]; then printf '%s\\n' "\${ORCA_CODEX_LAUNCH_ERROR}" >&2; return 1; fi
+    __orca_codex_user "$@"
+  }
+elif [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
@@ -82,7 +92,18 @@ export function getFishCodexShellLaunchPreflight(): string {
 # absent, leaving "test = file" — fish then errors instead of failing closed.
 # Quoting in place is not the fix; fish never substitutes inside double quotes.
 set -l __orca_codex_type (type -t codex 2>/dev/null)
-if test "$__orca_codex_type" = file
+if functions -q codex
+  if not functions -q __orca_codex_user
+    functions --copy codex __orca_codex_user
+  end
+  function codex
+    if test -n "$ORCA_CODEX_LAUNCH_ERROR"
+      printf '%s\\n' "$ORCA_CODEX_LAUNCH_ERROR" >&2
+      return 1
+    end
+    __orca_codex_user $argv
+  end
+else if test "$__orca_codex_type" = file
   function codex
     if test -n "$ORCA_CODEX_LAUNCH_ERROR"
       printf '%s\\n' "$ORCA_CODEX_LAUNCH_ERROR" >&2
@@ -116,7 +137,13 @@ set -e __orca_codex_type`
 // Keep the identity loop compact to share PowerShell’s command-line budget with startup commands.
 export function getPowerShellCodexShellLaunchPreflight(): string {
   return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($orcaCodexCommand -and
+if ($orcaCodexCommand -and $orcaCodexCommand.CommandType -eq 'Function') {
+    if (-not (Test-Path Variable:global:__orcaCodexUser)) { $global:__orcaCodexUser = $orcaCodexCommand.ScriptBlock }
+    function Global:codex {
+        if ($env:ORCA_CODEX_LAUNCH_ERROR) { Write-Error $env:ORCA_CODEX_LAUNCH_ERROR -ErrorAction Continue; $global:LASTEXITCODE = 1; return }
+        if ($MyInvocation.ExpectingInput) { $input | & $global:__orcaCodexUser @args } else { & $global:__orcaCodexUser @args }
+    }
+} elseif ($orcaCodexCommand -and
     $orcaCodexCommand.CommandType -in @("Application", "ExternalScript")) {
     function Global:codex {
     if ($env:ORCA_CODEX_LAUNCH_ERROR) { Write-Error $env:ORCA_CODEX_LAUNCH_ERROR -ErrorAction Continue; $global:LASTEXITCODE = 1; return }

@@ -227,10 +227,10 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     ) {
       return
     }
-    const priorLive =
-      !inactiveAccount && this.liveClaudeUsage
-        ? withoutResetWindows(this.liveClaudeUsage, now)
-        : null
+    const previousLive = inactiveAccount
+      ? this.inactiveClaudeLiveUsage.get(inactiveAccount.accountId)
+      : this.liveClaudeUsage
+    const priorLive = previousLive ? withoutResetWindows(previousLive, now) : null
     const live: ProviderRateLimits = {
       provider: 'claude',
       session: freshSession ?? priorLive?.session ?? null,

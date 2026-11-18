@@ -96,3 +96,12 @@ it('leaves another runtime to its own account lane instead of using the host bin
     profiles.resolve('folder:client', { runtime: 'wsl', wslDistro: 'Ubuntu' }, true)
   ).resolves.toBeNull()
 })
+
+it('names a signed-out workspace profile for identity but refuses to launch it', async () => {
+  rmSync(claudeStateFile(router.accountHome('work')))
+  const identity = await profiles.resolve('folder:client', { runtime: 'host' }, false, 'identity')
+  expect(identity?.configDir).toBe(router.accountHome('work'))
+  await expect(profiles.resolve('folder:client', { runtime: 'host' }, true)).rejects.toThrow(
+    'not signed in'
+  )
+})

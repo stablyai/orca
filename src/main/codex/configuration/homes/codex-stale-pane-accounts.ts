@@ -24,11 +24,21 @@ export function listStaleCodexPanes(args: {
     if (!record || record.pinnedByResume) {
       continue
     }
+    const lane = parseSelectionLaneKey(record.selectionKey)
+    const workspaceId = codexWorkspaceAccountId(
+      args.settings.codexWorkspaceAccounts,
+      record.workspaceId
+    )
+    const workspace = args.settings.codexManagedAccounts.find(
+      (account) => account.id === workspaceId
+    )
+    const matches =
+      workspace &&
+      (workspace.managedHomeRuntime === 'wsl') === (lane.runtime === 'wsl') &&
+      (lane.runtime !== 'wsl' ||
+        workspace.wslDistro?.toLowerCase() === lane.wslDistro?.toLowerCase())
     const activeAccountId =
-      (record.pinnedByWorkspace
-        ? codexWorkspaceAccountId(args.settings.codexWorkspaceAccounts, record.workspaceId)
-        : undefined) ??
-      getSelectedCodexAccountIdForTarget(args.settings, parseSelectionLaneKey(record.selectionKey))
+      (matches ? workspaceId : undefined) ?? getSelectedCodexAccountIdForTarget(args.settings, lane)
     if (record.accountId !== activeAccountId) {
       stalePanes.push({ ptyId, launchAccountId: record.accountId, activeAccountId })
     }
