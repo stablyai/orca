@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionEndedChild } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { batch, mutation, rig, SESSION, tick } from './chat-worker-request-failure-rig.test-fixture'
 
@@ -62,4 +62,29 @@ it('leaves a death that a request failure reports, an expected end and a failed 
     await die(r, child)
   }
   expect(r.mail()).toHaveLength(1)
+})
+
+it('stays quiet about a worker its coordinator is stopping, and caps a long exit cause', async () => {
+  const r = await rig()
+  // Any real worker row; only its state is read here.
+  const { worker } = r.db.createStartingWorkerDispatch({
+    taskSpec: 'other work',
+    taskRunId: r.dispatch().run_id,
+    startOptions: {},
+    creator: { kind: 'system' },
+    maxDepth: Number.MAX_SAFE_INTEGER
+  })
+  for (const [fence, state] of [
+    [0, 'stopping'],
+    [1, 'stop_unknown']
+  ] as const) {
+    const spy = vi.spyOn(r.db, 'getWorkerDispatch').mockReturnValue({ ...worker, state })
+    await die(r, ended(r, fence))
+    spy.mockRestore()
+  }
+  expect(r.mail()).toHaveLength(0)
+  await die(r, ended(r, 2, { reason: `${'x'.repeat(5_000)}stderr tail` }))
+  const body = r.mail()[0]?.body ?? ''
+  expect(body).toContain('stderr tail')
+  expect(body.length).toBeLessThan(3_000)
 })

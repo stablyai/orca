@@ -15,8 +15,13 @@ export function reportChatWorkerProviderDeath(
     }
     for (const { dispatch, from } of chatWorkerDispatches(death.sessionId, db)) {
       const state = db.getWorkerDispatch(dispatch.id)?.state
-      // A start still being decided reports its own outcome.
-      if (state === 'starting' || state === 'start_unknown') {
+      // A start still being decided reports its own outcome; a stop the coordinator asked for is no news.
+      if (
+        state === 'starting' ||
+        state === 'start_unknown' ||
+        state === 'stopping' ||
+        state === 'stop_unknown'
+      ) {
         continue
       }
       reportWorkerTurnStop(

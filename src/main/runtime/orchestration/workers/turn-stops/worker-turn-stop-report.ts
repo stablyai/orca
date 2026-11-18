@@ -96,7 +96,12 @@ function describeStop(stop: WorkerTurnStop, context: StopContext): string {
   // Failure text (a remote selector, a URL) can also carry credentials.
   const redactFailure = (text: string | undefined) =>
     text && redactString(replaceDispatchCapabilities(text).value)
-  const cause = redactFailure(stop.cause)
+  const fullCause = redactFailure(stop.cause)
+  // A provider's stderr can be long; its end names the failure.
+  const cause =
+    fullCause && fullCause.length > LAST_OUTPUT_MAX_CHARS
+      ? `…${fullCause.slice(-LAST_OUTPUT_MAX_CHARS)}`
+      : fullCause
   const leftover = redactFailure(stop.leftover)
   const what =
     stop.reason === 'needs-input'
