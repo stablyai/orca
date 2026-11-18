@@ -1,6 +1,6 @@
 // The orchestration reader thread: read-only queries over the orchestration database, off the runtime's
-// thread. One request at a time (the client serializes them); each read is its own implicit
-// transaction, so it sees every commit main finished before sending it.
+// thread. One request at a time (the client serializes them); each read's snapshot begins when it
+// arrives, so it sees every commit main finished before sending it.
 import { parentPort } from 'node:worker_threads'
 import Database from '../../../../sqlite/sync-database'
 import { installWorkerSendLedger } from '../../../../worker-threads/worker-send-ledger'
@@ -33,17 +33,12 @@ export function handleOrchestrationRead(
 ): OrchestrationReaderResponse {
   try {
     const connection = connectionFor(request.path)
-    switch (request.read) {
-      case 'connectorWorkerCandidates':
-        return {
-          id: request.id,
-          ok: true,
-          value: readConnectorWorkerCandidates(
-            connection,
-            request.args.sessionIds,
-            request.args.now
-          )
-        }
+    // One snapshot per read, so its queries agree; it ends before the answer leaves.
+    connection.db.exec('BEGIN')
+    try {
+      return { id: request.id, ok: true, value: runRead(connection, request) }
+    } finally {
+      connection.db.exec('COMMIT')
     }
   } catch (error) {
     return {
@@ -51,6 +46,16 @@ export function handleOrchestrationRead(
       ok: false,
       error: error instanceof Error ? error.message : String(error)
     }
+  }
+}
+
+function runRead(
+  connection: OrchestrationDbConnection,
+  request: OrchestrationReaderRequest
+): unknown {
+  switch (request.read) {
+    case 'connectorWorkerCandidates':
+      return readConnectorWorkerCandidates(connection, request.args.sessionIds, request.args.now)
   }
 }
 
