@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultVoiceSettings } from '../../../../../shared/orca-profiles/constants'
 import {
@@ -10,6 +11,26 @@ import type {
   SpeechModelState
 } from '../../../../../shared/speech/speech-types'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
+import { VoiceChatGptAccountSetting } from './VoiceChatGptAccountSetting'
+
+function SubscriptionAccountFixture({
+  initialId
+}: {
+  initialId: string | null
+}): React.JSX.Element {
+  const [accountId, setAccountId] = useState(initialId)
+  return (
+    <VoiceChatGptAccountSetting
+      accountId={accountId}
+      accounts={[
+        { id: 'dictation-personal', label: 'Personal (voice@example.test)' },
+        { id: 'dictation-work', label: 'Work (work@example.test)' }
+      ]}
+      onChange={setAccountId}
+      onManage={() => {}}
+    />
+  )
+}
 
 const rates = (entries: Record<string, number>): SpeechModelErrorRate[] =>
   Object.entries(entries).map(([language, percent]) => ({
@@ -85,6 +106,16 @@ const catalog: SpeechModelManifest[] = [
     languages: ['en', 'ko'],
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'chatgpt-subscription-transcribe',
+    label: 'ChatGPT subscription',
+    type: 'chatgpt',
+    provider: 'chatgpt',
+    language: 'multilingual',
+    languages: ['en', 'ko'],
+    sampleRate: 16000,
+    streaming: false
   }
 ]
 
@@ -92,7 +123,8 @@ function render(
   sttModel: string,
   modelStates: SpeechModelState[],
   ratingLanguage: string,
-  setUpModelId?: string
+  setUpModelId?: string,
+  chatGptAccountId: string | null = null
 ): React.JSX.Element {
   const voiceSettings = { ...getDefaultVoiceSettings(), enabled: true, sttModel }
   return (
@@ -107,7 +139,11 @@ function render(
       onUpdateVoiceSettings={() => {}}
       onOpenCloudSetup={() => {}}
       onRefreshModelStates={() => {}}
-      cloudSettings={null}
+      cloudSettings={
+        sttModel === 'chatgpt-subscription-transcribe' ? (
+          <SubscriptionAccountFixture initialId={chatGptAccountId} />
+        ) : null
+      }
     />
   )
 }
@@ -157,4 +193,51 @@ export const updateAndRetired = defineFixture({
       ],
       'en'
     )
+})
+
+export const subscriptionReady = defineFixture({
+  width: 760,
+  render: () =>
+    render(
+      'chatgpt-subscription-transcribe',
+      [{ id: 'chatgpt-subscription-transcribe', status: 'ready' }],
+      'en',
+      undefined,
+      'dictation-personal'
+    )
+})
+
+export const subscriptionLoginRequired = defineFixture({
+  width: 760,
+  render: () =>
+    render(
+      'chatgpt-subscription-transcribe',
+      [{ id: 'chatgpt-subscription-transcribe', status: 'not-downloaded' }],
+      'en'
+    )
+})
+
+export const subscriptionRemovedAccount = defineFixture({
+  width: 760,
+  render: () =>
+    render(
+      'chatgpt-subscription-transcribe',
+      [{ id: 'chatgpt-subscription-transcribe', status: 'not-downloaded' }],
+      'en',
+      undefined,
+      'removed-account'
+    )
+})
+
+export const subscriptionNarrow = defineFixture({ ...subscriptionReady, width: 420 })
+
+export const subscriptionAccountMenu = defineFixture({
+  ...subscriptionReady,
+  interact: (frame) => {
+    const trigger = frame.querySelector<HTMLElement>('[role="combobox"][aria-labelledby]')
+    if (!trigger) {
+      throw new Error('ChatGPT account selector is missing')
+    }
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+  }
 })

@@ -1,4 +1,5 @@
 import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { lstat, readFile, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 
@@ -113,42 +114,25 @@ function evaluate({
     return { kind: 'indeterminate', error }
   }
 
-  if (expectedAccountId !== undefined) {
-    const candidateUsesManagedRootSpelling =
-      pathIsInsideOrEqual(resolvedRoot, resolvedCandidate) ||
-      pathIsInsideOrEqual(canonicalRoot, resolvedCandidate)
-    let canonicalExpectedHome: string
-    try {
-      canonicalExpectedHome = canonicalizeIfPresent(join(canonicalRoot, expectedAccountId, 'home'))
-    } catch (error) {
-      return { kind: 'indeterminate', error }
-    }
-    if (
-      !candidateUsesManagedRootSpelling ||
-      !pathsEqual(canonicalCandidate, canonicalExpectedHome)
-    ) {
-      return {
-        kind: 'untrusted',
-        reason: 'Managed Codex home does not match its persisted account ID.'
-      }
-    }
+  let canonicalExpectedHome: string | undefined
+  try {
+    canonicalExpectedHome =
+      expectedAccountId === undefined
+        ? undefined
+        : canonicalizeIfPresent(join(canonicalRoot, expectedAccountId, 'home'))
+  } catch (error) {
+    return { kind: 'indeterminate', error }
   }
-
-  // A redirected accounts root must never allow managed writes into the system home.
-  if (pathIsInsideOrEqual(canonicalSystemHome, canonicalCandidate)) {
-    return {
-      kind: 'untrusted',
-      reason: 'Managed Codex home resolves inside the system Codex home.'
-    }
-  }
-  if (
-    !pathIsInsideOrEqual(canonicalRoot, canonicalCandidate) ||
-    canonicalRoot === canonicalCandidate
-  ) {
-    return {
-      kind: 'untrusted',
-      reason: `Managed Codex home is outside current storage root (expected under ${canonicalRoot}).`
-    }
+  const pathFailure = evaluateCanonicalPaths({
+    resolvedCandidate,
+    resolvedRoot,
+    canonicalCandidate,
+    canonicalRoot,
+    canonicalSystemHome,
+    canonicalExpectedHome
+  })
+  if (pathFailure) {
+    return pathFailure
   }
 
   let markerIsRegularFile: boolean
@@ -164,17 +148,9 @@ function evaluate({
     }
     return { kind: 'indeterminate', error }
   }
-  if (!markerIsRegularFile) {
-    return {
-      kind: 'untrusted',
-      reason: 'Managed Codex home ownership marker is not a regular file.'
-    }
-  }
-  if (expectedAccountId !== undefined && markerContents.trim() !== expectedAccountId) {
-    return {
-      kind: 'untrusted',
-      reason: 'Managed Codex home ownership marker does not match its account ID.'
-    }
+  const markerFailure = evaluateMarker(markerIsRegularFile, markerContents, expectedAccountId)
+  if (markerFailure) {
+    return markerFailure
   }
 
   return { kind: 'owned', homePath: canonicalCandidate }
@@ -184,6 +160,138 @@ export function resolveHostCodexManagedHomeVerdict(
   options: HostCodexManagedHomeOwnershipOptions
 ): HostCodexManagedHomeVerdict {
   return evaluate(options)
+}
+
+function evaluateCanonicalPaths(paths: {
+  resolvedCandidate: string
+  resolvedRoot: string
+  canonicalCandidate: string
+  canonicalRoot: string
+  canonicalSystemHome: string
+  canonicalExpectedHome: string | undefined
+}): Extract<HostCodexManagedHomeVerdict, { kind: 'untrusted' }> | null {
+  const {
+    resolvedCandidate,
+    resolvedRoot,
+    canonicalCandidate,
+    canonicalRoot,
+    canonicalSystemHome,
+    canonicalExpectedHome
+  } = paths
+  if (
+    canonicalExpectedHome !== undefined &&
+    ((!pathIsInsideOrEqual(resolvedRoot, resolvedCandidate) &&
+      !pathIsInsideOrEqual(canonicalRoot, resolvedCandidate)) ||
+      !pathsEqual(canonicalCandidate, canonicalExpectedHome))
+  ) {
+    return {
+      kind: 'untrusted',
+      reason: 'Managed Codex home does not match its persisted account ID.'
+    }
+  }
+  if (pathIsInsideOrEqual(canonicalSystemHome, canonicalCandidate)) {
+    return {
+      kind: 'untrusted',
+      reason: 'Managed Codex home resolves inside the system Codex home.'
+    }
+  }
+  if (
+    !pathIsInsideOrEqual(canonicalRoot, canonicalCandidate) ||
+    canonicalRoot === canonicalCandidate
+  ) {
+    return {
+      kind: 'untrusted',
+      reason: `Managed Codex home is outside current storage root (expected under ${canonicalRoot}).`
+    }
+  }
+  return null
+}
+
+function evaluateMarker(
+  isFile: boolean,
+  contents: string,
+  expectedAccountId: string | undefined
+): Extract<HostCodexManagedHomeVerdict, { kind: 'untrusted' }> | null {
+  if (!isFile) {
+    return {
+      kind: 'untrusted',
+      reason: 'Managed Codex home ownership marker is not a regular file.'
+    }
+  }
+  if (expectedAccountId !== undefined && contents.trim() !== expectedAccountId) {
+    return {
+      kind: 'untrusted',
+      reason: 'Managed Codex home ownership marker does not match its account ID.'
+    }
+  }
+  return null
+}
+
+async function canonicalizeIfPresentAsync(path: string): Promise<string> {
+  try {
+    return await realpath(resolve(path))
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return resolve(path)
+    }
+    throw error
+  }
+}
+
+/** Read-only consumers must not run the ownership filesystem checks on the host event loop. */
+export async function resolveHostCodexManagedHomeVerdictAsync({
+  candidatePath,
+  managedAccountsRoot,
+  systemCodexHomePath,
+  expectedAccountId
+}: HostCodexManagedHomeOwnershipOptions): Promise<HostCodexManagedHomeVerdict> {
+  const resolvedCandidate = resolve(candidatePath)
+  const resolvedRoot = resolve(managedAccountsRoot)
+  let canonicalCandidate: string
+  try {
+    await stat(resolvedCandidate)
+    canonicalCandidate = await realpath(resolvedCandidate)
+  } catch (error) {
+    return isDefinitiveAbsence(error)
+      ? { kind: 'untrusted', reason: MISSING_MANAGED_HOME_MESSAGE }
+      : { kind: 'indeterminate', error }
+  }
+  try {
+    const canonicalRoot = await realpath(resolvedRoot)
+    const pathFailure = evaluateCanonicalPaths({
+      resolvedCandidate,
+      resolvedRoot,
+      canonicalCandidate,
+      canonicalRoot,
+      canonicalSystemHome: await canonicalizeIfPresentAsync(systemCodexHomePath),
+      canonicalExpectedHome:
+        expectedAccountId === undefined
+          ? undefined
+          : await canonicalizeIfPresentAsync(join(canonicalRoot, expectedAccountId, 'home'))
+    })
+    if (pathFailure) {
+      return pathFailure
+    }
+  } catch (error) {
+    return { kind: 'indeterminate', error }
+  }
+  for (const name of [MANAGED_HOME_MARKER, LINKED_MANAGED_HOME_MARKER]) {
+    try {
+      const path = join(canonicalCandidate, name)
+      const isFile = (await lstat(path)).isFile()
+      const failure = evaluateMarker(
+        isFile,
+        isFile ? await readFile(path, 'utf8') : '',
+        expectedAccountId
+      )
+      return failure ?? { kind: 'owned', homePath: canonicalCandidate }
+    } catch (error) {
+      if (!isDefinitiveAbsence(error)) {
+        return { kind: 'indeterminate', error }
+      }
+    }
+  }
+  return { kind: 'untrusted', reason: 'Managed Codex home is missing Orca ownership marker.' }
 }
 
 /** Distinct errors prevent transient read failures from triggering home recreation during reauth. */

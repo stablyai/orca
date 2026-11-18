@@ -118,7 +118,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Enable Voice Dictation** — requires microphone permission (macOS may open Privacy & Security).
 - **Microphone** — pick which input device dictation uses. Defaults to the system mic; choose a specific device (for example a headset) when you do not want the OS default. If the chosen mic is unplugged or missing, Orca falls back to the system default and shows a non-blocking notice.
 - **Dictation mode** — **Toggle** (press shortcut to start/stop) or **Hold** (hold shortcut to talk).
-- **Speech Model** — download/select an on-device model, or use cloud OpenAI models after pasting an API key:
+- **Speech Model** — download/select an on-device model, use a ChatGPT subscription login, or configure separately billed OpenAI API or OpenAI-compatible transcription:
   - **Parakeet TDT v3** (recommended) — multilingual European languages, offline.
   - **Parakeet TDT v2** — English, faster.
   - **Zipformer** family — bilingual ZH+EN streaming; streaming EN/ZH; **Zipformer Streaming KO** (Korean).
@@ -127,7 +127,19 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
   - **SenseVoice** — ZH / EN / JA / KO / Cantonese with auto language detection.
   - **Whisper Tiny** — 90+ languages, lower accuracy.
   - **GPT Transcribe** — cloud; needs OpenAI key under the same pane. A saved GPT-4o mini or GPT-4o Transcribe choice moves to it, since OpenAI shuts those down on 2027-02-26.
+  - **ChatGPT subscription** — cloud dictation using a ChatGPT account saved in Orca's **AI Provider Accounts** settings. Choose the account separately under Voice; no extra API key or model download.
+  - **OpenAI-compatible** — cloud transcription through the base URL, model and optional API key you configure.
 - While listening, a **Listening…** pill shows a **Stop** control; in toggle mode the tooltip also shows the dictation shortcut.
+
+For subscription dictation, add or sign in to a ChatGPT account through **Settings → AI Provider Accounts** on the transcription host. Select **ChatGPT subscription** under Voice, then choose the account to use for dictation. This choice is independent of the active agent or chat account and does not change when you switch harnesses.
+
+If the chosen account is removed, expires, or needs a fresh login, use the existing account settings to sign in again. Dictation never picks another account automatically, scans omp credentials, or falls back to a separately billed API provider.
+
+Recordings keep the account chosen when they start, even if Voice settings change before transcription. After a phone loses a settings reply, it refreshes the host's saved state; the connection error remains visible until the next action.
+
+Paired phones need a version that supports ChatGPT account selection to show this provider in Voice settings. Older phones keep their existing speech-provider controls.
+
+Credentials remain on the host performing transcription, including when dictating from mobile or a remote client. This provider uses ChatGPT's backend transcription endpoint; account eligibility, subscription limits, rate limits, and upstream changes apply. Transcribed text goes into the existing editable composer without automatically sending the message.
 
 ## SSH
 

@@ -1,9 +1,10 @@
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { voiceModelUnloadDelayMs } from '../../shared/speech/models/voice-model-unload'
 import { findSpeechSttService, getSpeechSttService } from './speech-runtime-service'
+import type { ChatGptSpeechSettings } from './chatgpt-subscription-auth'
 
 type SpeechWarmupStore = {
-  getSettings(): Pick<GlobalSettings, 'voice'>
+  getSettings(): ChatGptSpeechSettings
   onSettingsChanged?(listener: (updates: Partial<GlobalSettings>) => void): unknown
 }
 

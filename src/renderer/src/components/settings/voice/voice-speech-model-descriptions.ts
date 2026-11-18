@@ -6,8 +6,17 @@ export function speechModelDescription(
   manifest: SpeechModelManifest,
   t: Translate
 ): string | undefined {
+  if (manifest.provider === 'chatgpt') {
+    return t(
+      'settings.voice.modelDescriptions.chatgptSubscriptionTranscribe',
+      'Uses the ChatGPT account chosen for dictation on this host; no extra API key. Subscription limits apply.'
+    )
+  }
   if (manifest.provider === 'openai') {
-    return t('components.settings.voice.models.sendsToOpenAi', 'Sends your audio to OpenAI.')
+    return t(
+      'components.settings.voice.models.sendsToOpenAi',
+      'Sends your audio to OpenAI. Requires a separately billed API key.'
+    )
   }
   if (manifest.provider === 'openai-compatible') {
     return t(

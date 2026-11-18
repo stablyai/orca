@@ -1517,6 +1517,18 @@
       "moreResults": "{{value0}} more · keep typing to narrow"
     },
     "voice": {
+      "modelDescriptions": {
+        "chatgptSubscriptionTranscribe": "Uses the ChatGPT account chosen for dictation on this host; no extra API key. Subscription limits apply."
+      },
+      "chatgptLoginGuidance": "Choose a dictation account below. Add or reauthenticate it in AI Provider Accounts on this host.",
+      "chatgptAccount": "ChatGPT account",
+      "chatgptAccountUnavailable": "{{account}} (unavailable)",
+      "chatgptAccountsLoading": "Loading accounts…",
+      "chatgptAccountDescription": "Used only for dictation, independently of your chat account.",
+      "chatgptManageAccounts": "Manage AI Provider Accounts",
+      "chatgptChooseAccount": "Choose an account",
+      "chatgptAccountsFailed": "Could not load ChatGPT accounts. Reopen Voice settings to retry.",
+      "chatgptAccountSaveFailed": "Could not update the dictation account. Try again.",
       "cleanup": {
         "recipeDescription": "Clean up dictated text before it lands."
       }
@@ -22410,7 +22422,7 @@
         },
         "models": {
           "retired": "No longer offered. Delete it to free up space.",
-          "sendsToOpenAi": "Sends your audio to OpenAI.",
+          "sendsToOpenAi": "Sends your audio to OpenAI. Requires a separately billed API key.",
           "sendsToCompatible": "Sends your audio to the service you set up.",
           "delete": "Delete",
           "inUse": "In use",

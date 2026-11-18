@@ -11,6 +11,7 @@ import { dictationTextSettingsFor } from '../../shared/speech/dictation/dictatio
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import { listChatGptSpeechAccounts } from '../speech/chatgpt-subscription-auth'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
@@ -79,6 +80,8 @@ export function registerSpeechHandlers(
   ipcMain.handle('speech:getModelStates', async () => {
     return getSpeechModelManager(store).getModelStates()
   })
+
+  ipcMain.handle('speech:getChatGptAccounts', () => listChatGptSpeechAccounts(store.getSettings()))
 
   ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
     return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }

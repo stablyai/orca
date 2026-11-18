@@ -6,7 +6,8 @@ export type SpeechModelType =
   | 'senseVoice'
   | 'nemo-ctc'
   | 'openai'
-export type SpeechModelProvider = 'local' | 'openai' | 'openai-compatible'
+  | 'chatgpt'
+export type SpeechModelProvider = 'local' | 'openai' | 'openai-compatible' | 'chatgpt'
 
 export type SpeechModelDownloadFile = {
   name: string
@@ -112,9 +113,18 @@ export type DictationMode = 'toggle' | 'hold'
 
 export type SpeechGpuMode = 'auto' | 'off'
 
+export const CHATGPT_SPEECH_ACCOUNTS_CLIENT_CAPABILITY = 'speech.chatgpt-accounts.v1'
+
+export type ChatGptSpeechAccount = {
+  id: string
+  label: string
+}
+
 export type VoiceSettings = {
   enabled: boolean
   sttModel: string
+  /** Explicit managed ChatGPT account for dictation; never follows the active chat account. */
+  chatGptAccountId?: string | null
   modelsDir: string
   /** 'auto' or an ISO-639-1 code. Not `language`: its stored 'en' default never came from the user. */
   dictationLanguage: string

@@ -11,8 +11,10 @@ import {
   openAiCompatibleTranscriptionUrl,
   readOpenAiCompatibleSpeechProvider
 } from './openai-compatible-speech-provider-store'
+import { hasChatGptSubscriptionAuth } from './chatgpt-subscription-auth'
 
 export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
+export const CHATGPT_TRANSCRIPTION_URL = 'https://chatgpt.com/backend-api/transcribe'
 
 const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'openai-gpt-transcribe': 'gpt-transcribe'
@@ -25,16 +27,27 @@ export type CloudTranscriptionTarget = {
   apiKey: string
   /** Names the service in errors. */
   label: string
+  auth?: 'chatgpt'
 }
 
-export function hasCloudSpeechCredentials(provider: SpeechModelProvider): boolean {
+export function hasCloudSpeechCredentials(
+  provider: SpeechModelProvider
+): boolean | Promise<boolean> {
+  if (provider === 'chatgpt') {
+    return hasChatGptSubscriptionAuth()
+  }
   return provider === 'openai-compatible'
     ? hasOpenAiCompatibleSpeechProvider()
     : hasOpenAiSpeechApiKey()
 }
 
 /** Headless hosts can't raise keychain prompts, so their readiness verifies decryption. */
-export function canReadCloudSpeechCredentials(provider: SpeechModelProvider): boolean {
+export function canReadCloudSpeechCredentials(
+  provider: SpeechModelProvider
+): boolean | Promise<boolean> {
+  if (provider === 'chatgpt') {
+    return hasChatGptSubscriptionAuth()
+  }
   return provider === 'openai-compatible'
     ? canReadOpenAiCompatibleSpeechProvider()
     : canReadOpenAiSpeechApiKey()
@@ -42,6 +55,15 @@ export function canReadCloudSpeechCredentials(provider: SpeechModelProvider): bo
 
 /** Reads the key (and the compatible provider's URL) only when audio is ready to upload. */
 export function resolveCloudTranscriptionTarget(modelId: string): CloudTranscriptionTarget {
+  if (getCatalogModel(modelId)?.provider === 'chatgpt') {
+    return {
+      url: CHATGPT_TRANSCRIPTION_URL,
+      model: '',
+      apiKey: '',
+      label: 'ChatGPT',
+      auth: 'chatgpt'
+    }
+  }
   if (getCatalogModel(modelId)?.provider === 'openai-compatible') {
     const provider = readOpenAiCompatibleSpeechProvider()
     if (!provider) {

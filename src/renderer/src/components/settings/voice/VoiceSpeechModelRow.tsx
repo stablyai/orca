@@ -75,6 +75,12 @@ export function VoiceSpeechModelRow({
       'Needs a one-time download for the faster engine.'
     )
   }
+  if (manifest.provider === 'chatgpt' && !ready) {
+    subline = t(
+      'settings.voice.chatgptLoginGuidance',
+      'Choose a dictation account below. Add or reauthenticate it in AI Provider Accounts on this host.'
+    )
+  }
 
   const button = (
     label: string,

@@ -13,6 +13,7 @@ import {
 } from '../../speech/model-catalog'
 import { isOfferedSpeechModel } from '../../../shared/speech/models/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
+import { listChatGptSpeechAccounts } from '../../speech/chatgpt-subscription-auth'
 import { hasLocalSpeechRecognizer } from '../../speech/stt-worker-paths'
 import {
   deleteLocalSpeechModel,
@@ -39,7 +40,8 @@ export class RuntimeMobileSpeechCatalog {
   /** `worktreeId` picks the repo terms a phone recognizing on its own spells with. */
   async list(worktreeId?: string): Promise<RuntimeSpeechSetupState> {
     const store = this.requireStore()
-    const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
+    const settings = store.getSettings()
+    const voice = settings.voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
     // Omit unsupported status variants; older phones could treat them as pickable models.
@@ -47,7 +49,7 @@ export class RuntimeMobileSpeechCatalog {
       (manifest) =>
         isOfferedSpeechModel(manifest) &&
         (!isLocalSpeechModel(manifest) || hasLocalSpeechRecognizer()) &&
-        // Phones offer an unready cloud row as "add an OpenAI key", which can't set this one up.
+        // Unconfigured compatible providers need desktop setup; subscriptions show login guidance.
         (manifest.provider !== 'openai-compatible' ||
           stateById.get(manifest.id)?.status === 'ready')
     )
@@ -56,8 +58,7 @@ export class RuntimeMobileSpeechCatalog {
       return {
         id: manifest.id,
         label: manifest.label,
-        // Older phones know only these two; both cloud providers transcribe on this host.
-        provider: isLocalSpeechModel(manifest) ? 'local' : 'openai',
+        provider: manifest.provider === 'openai-compatible' ? 'openai' : manifest.provider,
         sizeBytes: manifest.sizeBytes ?? null,
         recommended: manifest.recommended === true,
         status: state?.status ?? 'not-downloaded',
@@ -67,6 +68,8 @@ export class RuntimeMobileSpeechCatalog {
     return {
       enabled: voice.enabled === true,
       selectedModelId: voice.sttModel ?? '',
+      chatGptAccountId: voice.chatGptAccountId ?? null,
+      chatGptAccounts: listChatGptSpeechAccounts(settings),
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
       dictationHoldToRecord: voice.dictationHoldToRecord !== false,
       removeFillerWords: voice.removeFillerWords !== false,
@@ -113,6 +116,7 @@ export class RuntimeMobileSpeechCatalog {
   async configure(params: {
     enabled?: boolean
     modelId?: string
+    chatGptAccountId?: string | null
     dictationMode?: 'toggle' | 'hold'
     dictationHoldToRecord?: boolean
   }): Promise<RuntimeSpeechSetupState> {
@@ -124,10 +128,22 @@ export class RuntimeMobileSpeechCatalog {
         throw new Error('voice_model_unknown')
       }
     }
+    if (
+      params.chatGptAccountId !== undefined &&
+      params.chatGptAccountId !== null &&
+      !listChatGptSpeechAccounts(store.getSettings()).some(
+        (account) => account.id === params.chatGptAccountId
+      )
+    ) {
+      throw new Error('voice_chatgpt_account_unavailable')
+    }
     const nextVoice: VoiceSettings = {
       ...current,
       ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
       ...(params.modelId !== undefined ? { sttModel: params.modelId } : {}),
+      ...(params.chatGptAccountId !== undefined
+        ? { chatGptAccountId: params.chatGptAccountId }
+        : {}),
       ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
       ...(params.dictationHoldToRecord !== undefined
         ? { dictationHoldToRecord: params.dictationHoldToRecord }

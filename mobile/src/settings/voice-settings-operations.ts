@@ -5,6 +5,7 @@ export interface VoiceSettingsOperations {
   configure(params: {
     enabled?: boolean
     modelId?: string
+    chatGptAccountId?: string | null
     dictationMode?: 'toggle' | 'hold'
     dictationHoldToRecord?: boolean
   }): Promise<MobileSpeechSetup>

@@ -10,8 +10,10 @@ import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { VoiceModelList } from '../dictation/setup/VoiceModelList'
+import { ChatGptAccountPicker } from '../dictation/setup/ChatGptAccountPicker'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
 import {
+  dictationFailureMessage,
   isModelInFlight,
   type MobileSpeechModel,
   type MobileSpeechSetup
@@ -50,7 +52,7 @@ function voiceSettingsErrorMessage(t: Translate, error: VoiceSettingsError | nul
     return null
   }
   if (typeof error === 'object') {
-    return error.message
+    return dictationFailureMessage(error.message)
   }
   switch (error) {
     case 'loadFailed':
@@ -180,11 +182,23 @@ export default function VoiceSettingsScreen({
       }
       if (result.ok) {
         setSetup(result.reply)
+        if (
+          params.chatGptAccountId !== undefined &&
+          (result.reply.chatGptAccounts === undefined ||
+            (result.reply.chatGptAccountId ?? null) !== params.chatGptAccountId)
+        ) {
+          setError({
+            message: t(
+              'dictation.setup.chatgptAccountsUpdateRequired',
+              'Update Orca on the transcription host to choose a ChatGPT dictation account here. Manage sign-ins in that host’s Settings → AI Provider Accounts.'
+            )
+          })
+        }
       } else {
         setError(result.error instanceof Error ? { message: result.error.message } : 'updateFailed')
       }
     },
-    [operations, sendChange]
+    [operations, sendChange, t]
   )
 
   const handleUseModel = useCallback(
@@ -371,6 +385,17 @@ export default function VoiceSettingsScreen({
               onPress={() => setModelDrawerOpen(true)}
             />
           </SettingsSection>
+          {setup.models.some((model) => model.provider === 'chatgpt') ? (
+            <ChatGptAccountPicker
+              setup={setup}
+              disabled={loading || busyAction !== null || pendingChanges.current > 0}
+              onChange={(chatGptAccountId) => {
+                if (setup.chatGptAccounts !== undefined) {
+                  void configure({ chatGptAccountId })
+                }
+              }}
+            />
+          ) : null}
         </>
       )}
     </SettingsScreen>

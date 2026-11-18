@@ -1,9 +1,14 @@
 import { SPEECH_MODEL_NEEDS_UPDATE_ERROR } from '../../shared/speech/models/speech-model-retirement'
 import { engineDictationLanguage } from '../../shared/speech/models/dictation-language'
 import type { SpeechModelManifest } from '../../shared/speech/speech-types'
+import type { CodexManagedAccount } from '../../shared/agent-accounts/managed-account-types'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { resolveCloudTranscriptionTarget } from './cloud-transcription-target'
+import {
+  captureChatGptSpeechAccount,
+  readChatGptSubscriptionHeaders
+} from './chatgpt-subscription-auth'
 import type { SttEventSink } from './stt-service'
 import {
   MAX_STT_SESSIONS,
@@ -67,6 +72,7 @@ export async function startSttDictation(
     throw new Error('dictation_model_busy')
   }
 
+  const chatGptAccount = manifest.provider === 'chatgpt' ? captureChatGptSpeechAccount() : null
   const session: SttSession = {
     owner,
     streamId: String(state.nextStreamId++),
@@ -89,12 +95,13 @@ export async function startSttDictation(
         throw new Error(STT_WORKER_EXITED_ERROR)
       }
     } else {
-      await requireModelReady(state, modelId)
+      await requireModelReady(state, modelId, chatGptAccount)
       // A cloud dictation needs no recognizer; free one nobody else uses.
       await teardownIdleSttEngine(state)
       session.cloud = new OpenAiTranscriptionSession(
         () => resolveCloudTranscriptionTarget(modelId),
-        engineDictationLanguage(manifest, language)
+        engineDictationLanguage(manifest, language),
+        chatGptAccount
       )
     }
     throwIfCanceled(state, session)
@@ -122,7 +129,20 @@ function throwIfCanceled(state: SttSessionState, session: SttSession): void {
   }
 }
 
-async function requireModelReady(state: SttSessionState, modelId: string): Promise<void> {
+async function requireModelReady(
+  state: SttSessionState,
+  modelId: string,
+  chatGptAccount: CodexManagedAccount | null = null
+): Promise<void> {
+  if (getCatalogModel(modelId)?.provider === 'chatgpt') {
+    try {
+      await readChatGptSubscriptionHeaders(AbortSignal.timeout(5_000), chatGptAccount)
+    } catch (error) {
+      await teardownIdleSttEngine(state, modelId)
+      throw error
+    }
+    return
+  }
   const modelState = await state.modelManager.getModelState(modelId)
   if (modelState.status !== 'ready') {
     await teardownIdleSttEngine(state, modelId)

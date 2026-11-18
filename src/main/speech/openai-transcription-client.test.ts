@@ -3,6 +3,20 @@ import {
   OpenAiTranscriptionSession,
   sanitizeOpenAiTranscriptionErrorMessage
 } from './openai-transcription-client'
+import { readChatGptSubscriptionHeaders } from './chatgpt-subscription-auth'
+import { resolveCloudTranscriptionTarget } from './cloud-transcription-target'
+import { readOpenAiSpeechApiKey } from './openai-api-key-store'
+import { setMainHttpClient } from '../network/http-client'
+
+vi.mock('./chatgpt-subscription-auth', () => ({
+  readChatGptSubscriptionHeaders: vi.fn()
+}))
+
+vi.mock('./openai-api-key-store', () => ({
+  hasOpenAiSpeechApiKey: vi.fn(() => true),
+  canReadOpenAiSpeechApiKey: vi.fn(() => true),
+  readOpenAiSpeechApiKey: vi.fn(() => 'paid-key-must-not-be-used')
+}))
 
 describe('sanitizeOpenAiTranscriptionErrorMessage', () => {
   it('does not expose the invalid OpenAI API key echoed by the provider', () => {
@@ -23,7 +37,149 @@ describe('sanitizeOpenAiTranscriptionErrorMessage', () => {
 })
 
 describe('OpenAiTranscriptionSession', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+    setMainHttpClient(null)
+  })
+
+  it('uses the proxy multipart protocol without paid fallback or leaked credentials on HTTP 401', async () => {
+    vi.mocked(readChatGptSubscriptionHeaders).mockResolvedValue({
+      Authorization: 'Bearer subscription-token',
+      'ChatGPT-Account-Id': 'subscription-account'
+    })
+    const requests: string[] = []
+    setMainHttpClient({
+      proxySession: () => null,
+      fetch: async (url, init) => {
+        requests.push(url)
+        expect(init?.method).toBe('POST')
+        expect(init?.redirect).toBe('error')
+        expect(init?.credentials).toBe('omit')
+        expect(init?.headers).toEqual({
+          Authorization: 'Bearer subscription-token',
+          'ChatGPT-Account-Id': 'subscription-account'
+        })
+        const form = init?.body
+        if (!(form instanceof FormData)) {
+          throw new Error('Expected multipart body')
+        }
+        expect(form.has('model')).toBe(false)
+        expect(form.has('response_format')).toBe(false)
+        expect(form.get('language')).toBe('ko')
+        expect(form.get('file')).toBeInstanceOf(File)
+        return new Response('private subscription-token subscription-account', { status: 401 })
+      }
+    })
+    vi.stubGlobal('fetch', () => {
+      throw new Error('Subscription dictation bypassed the main HTTP client')
+    })
+    const session = new OpenAiTranscriptionSession(
+      () => resolveCloudTranscriptionTarget('chatgpt-subscription-transcribe'),
+      'ko',
+      null
+    )
+    session.feedAudio(new Float32Array([0.1]), 16000)
+    const result = session.finish()
+    await expect(result).rejects.toThrow(/login.*expired/i)
+    await expect(result).rejects.not.toThrow('subscription-token')
+    await expect(result).rejects.not.toThrow('subscription-account')
+    expect(readOpenAiSpeechApiKey).not.toHaveBeenCalled()
+    expect(requests).toEqual(['https://chatgpt.com/backend-api/transcribe'])
+  })
+
+  it.each([
+    { status: 403, error: /rejected.*account or client/i },
+    { status: 429, error: /limit.*reached/i }
+  ])(
+    'distinguishes subscription rejection from quota exhaustion on HTTP $status',
+    async ({ status, error }) => {
+      vi.mocked(readChatGptSubscriptionHeaders).mockResolvedValue({
+        Authorization: 'Bearer subscription-token'
+      })
+      setMainHttpClient({
+        proxySession: () => null,
+        fetch: async () => new Response('private subscription-token', { status })
+      })
+      const session = new OpenAiTranscriptionSession(
+        () => resolveCloudTranscriptionTarget('chatgpt-subscription-transcribe'),
+        undefined,
+        null
+      )
+      session.feedAudio(new Float32Array([0.1]), 16000)
+      const result = session.finish()
+      await expect(result).rejects.toThrow(error)
+      await expect(result).rejects.not.toThrow('subscription-token')
+    }
+  )
+
+  it('cancels subscription transcription while credentials are being read', async () => {
+    const session = new OpenAiTranscriptionSession(
+      () => resolveCloudTranscriptionTarget('chatgpt-subscription-transcribe'),
+      undefined,
+      null
+    )
+    vi.mocked(readChatGptSubscriptionHeaders).mockImplementation(async () => {
+      session.cancel()
+      return { Authorization: 'Bearer subscription-token' }
+    })
+    const upload = vi.fn()
+    vi.stubGlobal('fetch', upload)
+    session.feedAudio(new Float32Array([0.1]), 16000)
+    await expect(session.finish()).rejects.toMatchObject({ name: 'AbortError' })
+    expect(upload).not.toHaveBeenCalled()
+    expect(readOpenAiSpeechApiKey).not.toHaveBeenCalled()
+  })
+
+  it('does not upload or try paid credentials when subscription authentication is rejected', async () => {
+    vi.mocked(readChatGptSubscriptionHeaders).mockRejectedValue(
+      new Error('ChatGPT subscription login has expired; sign in again through Accounts settings.')
+    )
+    const upload = vi.fn()
+    vi.stubGlobal('fetch', upload)
+    const session = new OpenAiTranscriptionSession(
+      () => resolveCloudTranscriptionTarget('chatgpt-subscription-transcribe'),
+      undefined,
+      null
+    )
+    session.feedAudio(new Float32Array([0.1]), 16000)
+    await expect(session.finish()).rejects.toThrow('login has expired')
+    expect(upload).not.toHaveBeenCalled()
+    expect(readOpenAiSpeechApiKey).not.toHaveBeenCalled()
+  })
+
+  it('keeps subscription credentials out of transport and malformed-response errors', async () => {
+    vi.mocked(readChatGptSubscriptionHeaders).mockResolvedValue({
+      Authorization: 'Bearer subscription-token'
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockRejectedValueOnce(new Error('failed sending subscription-token'))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: { message: 'subscription-token' } }))
+        )
+        .mockResolvedValueOnce(new Response(JSON.stringify({ text: ' subscription dictation ' })))
+    )
+    const transcribe = () => {
+      const session = new OpenAiTranscriptionSession(
+        () => resolveCloudTranscriptionTarget('chatgpt-subscription-transcribe'),
+        undefined,
+        null
+      )
+      session.feedAudio(new Float32Array([0.1]), 16000)
+      return session.finish()
+    }
+    const transportFailure = transcribe()
+    await expect(transportFailure).rejects.toThrow(/request failed/i)
+    await expect(transportFailure).rejects.not.toThrow('subscription-token')
+    const malformedResponse = transcribe()
+    await expect(malformedResponse).rejects.toThrow(/response.*text/i)
+    await expect(malformedResponse).rejects.not.toThrow('subscription-token')
+    expect(await transcribe()).toBe('subscription dictation')
+    expect(readOpenAiSpeechApiKey).not.toHaveBeenCalled()
+  })
 
   it('preserves multipart WAV bytes across owned, resampled and empty audio chunks', async () => {
     const uploads: Buffer[] = []
@@ -54,7 +210,8 @@ describe('OpenAiTranscriptionSession', () => {
         apiKey: 'test-key',
         label: 'OpenAI'
       }),
-      'de'
+      'de',
+      null
     )
     const input = new Float32Array([
       -2,
@@ -98,7 +255,8 @@ describe('OpenAiTranscriptionSession', () => {
         apiKey: '',
         label: '127.0.0.1:8000'
       }),
-      'es'
+      'es',
+      null
     )
     session.feedAudio(new Float32Array(160), 16000)
 

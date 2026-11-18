@@ -1,13 +1,14 @@
 import type { ModelManager } from './model-manager'
 import type { SttService } from './stt-service'
-import type { VoiceSettings } from '../../shared/speech/speech-types'
+import {
+  setChatGptSpeechSettingsSource,
+  type ChatGptSpeechSettings
+} from './chatgpt-subscription-auth'
 
 /** Hosts inject Chromium/Node download factories; missing services reject per call rather than appearing to transcribe. */
 
 type SpeechSettingsStore = {
-  getSettings(): {
-    voice?: VoiceSettings
-  }
+  getSettings(): ChatGptSpeechSettings
 }
 
 export type SpeechServiceFactories = {
@@ -22,6 +23,7 @@ let sttService: SttService | null = null
 
 export function setSpeechServiceFactories(next: SpeechServiceFactories | null): void {
   factories = next
+  setChatGptSpeechSettingsSource(null)
   modelManager = null
   sttService = null
 }
@@ -35,6 +37,7 @@ function requireFactories(): SpeechServiceFactories {
 
 export function getSpeechModelManager(store: SpeechSettingsStore): ModelManager {
   if (!modelManager) {
+    setChatGptSpeechSettingsSource(() => store.getSettings())
     const settings = store.getSettings()
     const customDir = settings.voice?.modelsDir || undefined
     modelManager = requireFactories().createModelManager(customDir || undefined)
