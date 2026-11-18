@@ -20,6 +20,8 @@ type ActivityActions = Pick<
   | 'clearManuallyUnreadTurns'
 >
 
+const ACKNOWLEDGEMENT_REFRESH_MS = 24 * 60 * 60 * 1000
+
 export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): ActivityActions {
   return {
     acknowledgedAgentsByPaneKey: {},
@@ -59,7 +61,12 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             }
           }
           // A stamp already covering every known turn changes no reader; re-stamping costs a persisted UI write per click.
-          if (s.acknowledgedAgentsByPaneKey[key] !== undefined && prev >= known) {
+          // Refresh it once a day anyway so hydration's 7-day expiry can't drop a stamp the user keeps renewing.
+          if (
+            s.acknowledgedAgentsByPaneKey[key] !== undefined &&
+            prev >= known &&
+            now - prev < ACKNOWLEDGEMENT_REFRESH_MS
+          ) {
             continue
           }
           const stamp = Math.max(now, known)
