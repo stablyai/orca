@@ -1,5 +1,8 @@
 import { isCodexAccountRestart } from '../codex-account-restart-continuation'
-import { replaceTabBuckets, replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
+import {
+  replaceTabBuckets,
+  replaceRecordEntries
+} from '@/store/record-transitions/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from '../ownership/terminal-tab-owner-index'
 import {
   isRemoteRuntimePtyId,
