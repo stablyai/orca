@@ -14,6 +14,8 @@ import { useComposerProviderRuntimeSync } from './workspace-setup/provider-runti
 import { useDerivedComposerState } from './derived-composer-state'
 import { useDraftTargetSync } from './workspace-target/draft-target-sync'
 import { needsVisibleRunTargetHost } from '@/lib/workspace/creation/run-target-host-visibility'
+import { useLocalWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export function useComposerTargetState(
   options: ComposerStateInput,
@@ -60,6 +62,12 @@ export function useComposerTargetState(
     workspaceHostScope: composerTargetStore.workspaceHostScope,
     worktreesByRepo: composerTargetStore.worktreesByRepo
   })
+  useLocalWindowsTerminalCapabilities(
+    !isWebClientLocation() &&
+      runtimeTargetSelection.selectedRepoAgentLaunchFact.kind === 'known' &&
+      runtimeTargetSelection.selectedRepoAgentLaunchFact.hostKind === 'local' &&
+      runtimeTargetSelection.selectedRepoAgentLaunchFact.platform === 'win32'
+  )
   const initialTargetState = {
     ...initialTargetSeedState,
     repoId: runtimeTargetSelection.resolvedRepoId

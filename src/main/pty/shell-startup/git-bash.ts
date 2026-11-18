@@ -1,6 +1,9 @@
 import { existsSync } from 'node:fs'
 import { win32 as pathWin32 } from 'node:path'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/shell/launch/windows-terminal-shell'
+import {
+  canonicalizeWindowsShellOverride,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../../shared/shell/launch/windows-terminal-shell'
 
 type GitBashPathOptions = {
   env?: NodeJS.ProcessEnv
@@ -107,6 +110,24 @@ export function resolveGitBashPath(options: GitBashPathOptions = {}): string | n
 
 export function isGitBashAvailable(): boolean {
   return resolveGitBashPath() !== null
+}
+
+/** Probe disk only when launching locally on Windows with `git-bash` configured; otherwise undefined. */
+export function isConfiguredGitBashAvailable(
+  shell: string | null | undefined,
+  options: GitBashPathOptions = {}
+): boolean | undefined {
+  const trimmed = shell?.trim()
+  if (
+    !trimmed ||
+    (canonicalizeWindowsShellOverride(trimmed) ?? trimmed) !== WINDOWS_GIT_BASH_SHELL
+  ) {
+    return undefined
+  }
+  if ((options.platform ?? process.platform) !== 'win32') {
+    return undefined
+  }
+  return resolveGitBashPath(options) !== null
 }
 
 export function isGitForWindowsBashPath(shellPath: string): boolean {

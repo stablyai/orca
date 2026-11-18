@@ -49,6 +49,8 @@ export function resolveAgentStartupPlanInputs(args: {
   extraAgentArgs?: string
   /** Pass the actual PTY shell; omission is valid only when the Settings shell is what the PTY receives. */
   shell: AgentStartupShell | undefined
+  /** The launch host's Git Bash probe; omit when unknown. */
+  gitBashAvailable?: boolean
   sessionOptions?: Readonly<Record<string, SessionOptionValue>> | undefined
   sessionOptionsYieldToAgentArgs?: boolean
   /** Orca types into this launch after start (worker, automation, handoff), not a user. */
@@ -61,7 +63,8 @@ export function resolveAgentStartupPlanInputs(args: {
     resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
-      terminalWindowsShell: settings.terminalWindowsShell
+      terminalWindowsShell: settings.terminalWindowsShell,
+      gitBashAvailable: args.gitBashAvailable
     })
   const options = terminalSessionOptionInputs({
     agent,

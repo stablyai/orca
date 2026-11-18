@@ -5,6 +5,11 @@ import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import {
+  getProbedLocalGitBashAvailability,
+  useLocalWindowsTerminalCapabilities
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 import {
@@ -165,26 +170,28 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
-  const shell = useAppStore((s) => {
-    const status =
-      input.target.kind === 'environment'
-        ? lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId.get(input.target.environmentId))
-        : null
-    const platform = input.target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
-    if (!platform) {
-      return null
-    }
-    return (
-      resolveHostAgentStartupShell({
+  const isRemote = input.target.kind !== 'local'
+  const platform = useAppStore((s) =>
+    input.target.kind === 'environment'
+      ? (lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId.get(input.target.environmentId))
+          ?.hostPlatform ?? null)
+      : getRendererAppPlatform()
+  )
+  const hostTerminalWindowsShell = useAppStore((s) =>
+    input.target.kind === 'environment'
+      ? lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId.get(input.target.environmentId))
+          ?.terminalWindowsShell
+      : s.settings?.terminalWindowsShell
+  )
+  useLocalWindowsTerminalCapabilities(!isRemote && platform === 'win32' && !isWebClientLocation())
+  const shell = platform
+    ? (resolveHostAgentStartupShell({
         platform,
-        isRemote: input.target.kind !== 'local',
-        hostTerminalWindowsShell:
-          input.target.kind === 'local'
-            ? s.settings?.terminalWindowsShell
-            : status?.terminalWindowsShell
-      }) ?? (platform === 'win32' ? null : 'posix')
-    )
-  })
+        isRemote,
+        hostTerminalWindowsShell,
+        gitBashAvailable: isRemote ? undefined : getProbedLocalGitBashAvailability()
+      }) ?? (platform === 'win32' ? null : 'posix'))
+    : null
   const command = agentSessionSignInCommand(input.agent, {
     account: input.account,
     remote: input.target.kind !== 'local',
