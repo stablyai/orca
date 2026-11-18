@@ -263,6 +263,13 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     globalSegments: null,
     workspaceSegments: null
   },
+  // Duo reads ~/.agents/skills and <workspace>/.agents/skills.
+  {
+    id: 'gitlab-duo',
+    displayName: 'GitLab Duo',
+    globalSegments: null,
+    workspaceSegments: null
+  },
   {
     id: 'dsh',
     displayName: 'DeepSeek Harness',

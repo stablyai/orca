@@ -998,6 +998,7 @@
           "muse_label": "Muse",
           "zcode_label": "ZCode",
           "codebuddy_label": "CodeBuddy",
+          "gitlab_duo_label": "GitLab Duo",
           "jcode_label": "Jcode",
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",

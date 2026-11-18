@@ -1370,6 +1370,7 @@
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode",
+          "gitlab_duo_label": "GitLab Duo",
           "jcode_label": "Jcode",
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",

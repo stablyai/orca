@@ -48,6 +48,8 @@ const DISPLAY_LABELS = [
   ),
   ['claude code', 'claude'],
   ['gemini cli', 'gemini'],
+  // glab can take ~10s to exec duo, past the command-start reads; this title prompts a late re-read.
+  ['gitlab duo cli', 'gitlab-duo'],
   ['agent teams', 'claude-agent-teams']
 ] satisfies readonly (readonly [string, TerminalAgent])[]
 

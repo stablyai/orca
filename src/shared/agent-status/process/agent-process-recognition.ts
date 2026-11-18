@@ -55,11 +55,13 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG)) {
     continue
   }
   AGENT_TYPE_IDS.add(agent)
-  for (const candidate of [
-    config.expectedProcess,
-    ...getTuiAgentDetectCommands(config),
-    getFirstCommandToken(config.launchCmd)
-  ]) {
+  for (const candidate of config.sharedLauncherCmd
+    ? [config.expectedProcess]
+    : [
+        config.expectedProcess,
+        ...getTuiAgentDetectCommands(config),
+        getFirstCommandToken(config.launchCmd)
+      ]) {
     const normalized = normalizeProcessName(candidate)
     if (normalized) {
       // claude-agent-teams wraps real claude; wrapper config must not overwrite its canonical foreground ownership.
@@ -68,6 +70,24 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG)) {
       }
     }
   }
+}
+
+const SHARED_LAUNCHER_COMMANDS = Object.entries(TUI_AGENT_CONFIG).flatMap(([agent, config]) =>
+  isTuiAgent(agent) && config.sharedLauncherCmd
+    ? [{ agent, tokens: config.launchCmd.toLowerCase().split(/\s+/) }]
+    : []
+)
+
+function recognizeSharedLauncherCommand(
+  tokens: readonly string[],
+  firstNormalized: string
+): RecognizedAgentProcess | null {
+  const match = SHARED_LAUNCHER_COMMANDS.find(
+    (launcher) =>
+      launcher.tokens[0] === firstNormalized &&
+      launcher.tokens.every((part, index) => index === 0 || tokens[index]?.toLowerCase() === part)
+  )
+  return match ? { agent: match.agent, processName: firstNormalized } : null
 }
 
 function agentForNormalizedProcess(normalized: string): TerminalAgent | undefined {
@@ -238,7 +258,9 @@ export function recognizeAgentProcessFromCommandLine(
   const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  let direct = recognizedAgentForProcess(firstNormalized)
+  let direct =
+    recognizedAgentForProcess(firstNormalized) ??
+    recognizeSharedLauncherCommand(tokens, firstNormalized)
   // Qoder's public dispatcher routes these commands to the IDE rather than the agent CLI.
   if (firstNormalized === 'qoder' && tokens[1] && !tokens[1].startsWith('-')) {
     return null

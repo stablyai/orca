@@ -1257,6 +1257,7 @@
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
           "qoder_cn_label": "Qoder CLI China",
+          "gitlab_duo_label": "GitLab Duo",
           "jcode_label": "Jcode"
         },
         "skill": {

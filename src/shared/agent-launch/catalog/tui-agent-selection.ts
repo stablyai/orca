@@ -1,6 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import type { GlobalSettings } from '../../settings/global-settings-types'
-import { isTuiAgent } from './tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 
 // Match desktop catalog order: this determines fallback priority without a selected default.
 export const TUI_AGENT_AUTO_PICK_ORDER = [
@@ -48,8 +48,14 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'devin',
   'openclaw',
   'codebuddy',
-  'jcode'
+  'jcode',
+  'gitlab-duo'
 ] as const satisfies readonly TuiAgent[]
+
+// Detecting a shared launcher (e.g. `glab`) doesn't prove its agent subcommand exists, so only an explicit choice picks it.
+export const TUI_AGENT_FALLBACK_PICK_ORDER: readonly TuiAgent[] = TUI_AGENT_AUTO_PICK_ORDER.filter(
+  (agent) => !TUI_AGENT_CONFIG[agent].sharedLauncherCmd
+)
 
 // Fresh installs show Agent Teams; the migration separately preserves legacy hidden defaults.
 export const DEFAULT_DISABLED_TUI_AGENTS = [] as const satisfies readonly TuiAgent[]
@@ -72,7 +78,7 @@ export function pickTuiAgent(
   ) {
     return preferred
   }
-  for (const agent of TUI_AGENT_AUTO_PICK_ORDER) {
+  for (const agent of TUI_AGENT_FALLBACK_PICK_ORDER) {
     if (detectedSet.has(agent) && !disabledSet.has(agent)) {
       return agent
     }
