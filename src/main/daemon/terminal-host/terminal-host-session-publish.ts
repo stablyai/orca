@@ -220,32 +220,17 @@ export async function spawnAndPublishSession(
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
-  // Locals, not opts: a closure here shares this scope with session-lifetime callbacks, so reading opts would pin the request.
-  const submissionSessionId = opts.sessionId
-  const orcaBuiltLine = opts.launchAgent !== undefined
-  const buildSubmission = (command: string): string => {
-    staging.current = stageStartupCommand({
-      command,
-      shellPath: subprocess.shellPath,
-      orcaBuiltLine
-    })
-    const notice = startupStagingFailureNotice(staging.current)
-    if (notice) {
-      session.startupIngress.accept(notice)
-      try {
-        deps.reportReadinessEvent?.('startup-command-stage-failed', {
-          sessionId: submissionSessionId,
-          reason: staging.current.failure
-        })
-      } catch {
-        // Diagnostics must never turn a live PTY into a failed create.
-      }
-    }
-    // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    return buildStartupCommandSubmission(staging.current.command, {
-      bracketedPasteSafe: shellReadySupported
-    })
+  // Module-level builder with explicit inputs: closures here share this scope with session-lifetime callbacks.
+  const submission: StartupSubmissionInputs = {
+    staging,
+    session,
+    shellPath: subprocess.shellPath,
+    orcaBuiltLine: opts.launchAgent !== undefined,
+    shellReadySupported,
+    sessionId: opts.sessionId,
+    reportReadinessEvent: deps.reportReadinessEvent
   }
+  const buildSubmission = (command: string): string => buildStartupSubmission(command, submission)
   const command = opts.command
   if (command && startupCommandWritten) {
     session.writeStartupCommand(buildSubmission(command))
@@ -262,4 +247,39 @@ export async function spawnAndPublishSession(
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
     attachToken: token
   }
+}
+
+type StartupSubmissionInputs = {
+  staging: { current?: StartupCommandStaging }
+  session: Session
+  shellPath: string | undefined
+  orcaBuiltLine: boolean
+  shellReadySupported: boolean
+  sessionId: string
+  reportReadinessEvent: TerminalHostSessionCreateDependencies['reportReadinessEvent']
+}
+
+function buildStartupSubmission(command: string, inputs: StartupSubmissionInputs): string {
+  const staged = stageStartupCommand({
+    command,
+    shellPath: inputs.shellPath,
+    orcaBuiltLine: inputs.orcaBuiltLine
+  })
+  inputs.staging.current = staged
+  const notice = startupStagingFailureNotice(staged)
+  if (notice) {
+    inputs.session.startupIngress.accept(notice)
+    try {
+      inputs.reportReadinessEvent?.('startup-command-stage-failed', {
+        sessionId: inputs.sessionId,
+        reason: staged.failure
+      })
+    } catch {
+      // Diagnostics must never turn a live PTY into a failed create.
+    }
+  }
+  // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
+  return buildStartupCommandSubmission(staged.command, {
+    bracketedPasteSafe: inputs.shellReadySupported
+  })
 }
