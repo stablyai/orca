@@ -58,14 +58,11 @@ export function withStopTranscriptReadsSkipped<T>(normalize: () => T): {
 
 /** Stop-text fallback when the hook carries none; skipped inside withStopTranscriptReadsSkipped. */
 export function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
-  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
-    return undefined
-  }
-  if (skippedStopTranscripts) {
+  if (skippedStopTranscripts && typeof transcriptPath === 'string' && transcriptPath.length > 0) {
     skippedStopTranscripts.push(transcriptPath)
     return undefined
   }
-  return readLastAssistantFromTranscriptOnce(transcriptPath)
+  return readLastAssistantFromTranscriptInline(transcriptPath)
 }
 
 /** Always reads now; for fallbacks whose order against other sources must not change. */
