@@ -4,7 +4,6 @@ import { observeStructuredWorker } from '../../orchestration/terminal-authority/
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
-import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 import {
@@ -20,7 +19,11 @@ import type {
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
+import {
+  classifyIndexedWorkerTerminalProcessIncarnation,
+  indexWorkerTerminalProcesses,
+  type WorkerTerminalProcessIndex
+} from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
 import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
@@ -210,7 +213,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
   async inspectTerminalProcessIncarnationLiveness(
     processIncarnation: string,
     serializedHostScope: string | null,
-    inventories?: Map<string, Promise<readonly PtyProcessInfo[] | null>>
+    inventories?: Map<string, Promise<WorkerTerminalProcessIndex | null>>
   ): Promise<'live' | 'exited' | 'unverifiable'> {
     const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
     if (structuredSessionId) {
@@ -226,13 +229,16 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       hostScope.kind === 'ssh' ? toSshExecutionHostId(hostScope.targetId) : LOCAL_EXECUTION_HOST_ID
     let listing = inventories?.get(hostId)
     if (!listing) {
-      listing = withTimeoutResult(controller.listProcesses(hostId), PTY_CONTROLLER_LIST_TIMEOUT_MS).then(
-        (listed) => (listed.ok ? listed.value : null)
-      )
+      listing = withTimeoutResult(
+        controller.listProcesses(hostId),
+        PTY_CONTROLLER_LIST_TIMEOUT_MS
+      ).then((listed) => (listed.ok ? indexWorkerTerminalProcesses(listed.value) : null))
       inventories?.set(hostId, listing)
     }
-    const sessions = await listing
-    return sessions ? classifyWorkerTerminalProcessIncarnation(processIncarnation, sessions) : 'unverifiable'
+    const index = await listing
+    return index
+      ? classifyIndexedWorkerTerminalProcessIncarnation(processIncarnation, index)
+      : 'unverifiable'
   }
 
   protected getTerminalTopologyRevision(worktreeId: string): number {

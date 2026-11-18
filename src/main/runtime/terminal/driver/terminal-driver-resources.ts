@@ -12,7 +12,7 @@ import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/cli
 import type { BrowserWindow } from 'electron'
 import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { WorkerTerminalProcessIndex } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type {
   RuntimeTerminalClose,
@@ -107,7 +107,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   abstract inspectTerminalProcessIncarnationLiveness(
     processIncarnation: string,
     serializedHostScope: string | null,
-    inventories?: Map<string, Promise<readonly PtyProcessInfo[] | null>>
+    inventories?: Map<string, Promise<WorkerTerminalProcessIndex | null>>
   ): Promise<'live' | 'exited' | 'unverifiable'>
   abstract closeTerminal(handle: string): Promise<RuntimeTerminalClose>
   abstract getExactWorkerProviderSession(
