@@ -173,11 +173,13 @@
       "invalidUrl": "Введите корректный URL."
     },
     "paneView": {
-      "dialogTitle": "Диалог браузера",
       "forward": "Вперёд",
       "keyboardPlaceholder": "Введите текст для страницы…",
       "reload": "Перезагрузить",
-      "sendText": "Отправить текст в браузер"
+      "sendText": "Отправить текст в браузер",
+      "dialogTitleWithOrigin": "{{origin}} сообщает",
+      "dialogTitleNoOrigin": "Эта страница сообщает",
+      "dialogAnswer": "Ответ"
     },
     "pointerModifiers": {
       "clickModifier": "Модификатор {{key}} для щелчка"
@@ -190,6 +192,9 @@
     "viewModeSwitch": {
       "mobileView": "Показать мобильную версию сайта",
       "webView": "Показать версию сайта для компьютера"
+    },
+    "loadFailure": {
+      "retry": "Повторить"
     }
   },
   "chat": {
