@@ -9,8 +9,16 @@ import {
   type WorkerAttentionInput
 } from '../worker-terminal/worker-terminal-attention-query'
 import { listWorkerTerminalResources } from '../worker-terminal/worker-terminal-listing'
+import { listFederatedDispatchesByIds } from '../../legacy-remote-home/federated-dispatch-store'
+import type { FederatedDispatchRow } from '../orchestration-records'
 
 export type ConnectorWorkerRow = ReturnType<typeof listWorkerTerminalResources>[number]
+
+/** The workers that may still run, and the paired-host rows of those started on one. */
+export type ConnectorWorkerCandidates = {
+  candidates: ConnectorWorkerCandidate[]
+  federated: FederatedDispatchRow[]
+}
 
 /** A worker that may still run, with what its live projection needs from the database. */
 export type ConnectorWorkerCandidate = {
@@ -39,9 +47,10 @@ export function readConnectorWorkerCandidates(
   connection: OrchestrationDbConnection,
   sessionIds: readonly string[],
   now: number
-): ConnectorWorkerCandidate[] {
+): ConnectorWorkerCandidates {
+  const none = { candidates: [], federated: [] }
   if (sessionIds.length === 0) {
-    return []
+    return none
   }
   const sessionByDispatch = new Map<string, string>()
   for (const row of connection.db
@@ -52,7 +61,7 @@ export function readConnectorWorkerCandidates(
     }
   }
   if (sessionByDispatch.size === 0) {
-    return []
+    return none
   }
   const rows = listWorkerTerminalResources.call(connection, {
     dispatchIds: [...sessionByDispatch.keys()]
@@ -61,7 +70,7 @@ export function readConnectorWorkerCandidates(
     connection,
     rows.map((row) => row.dispatchId)
   )
-  return rows.flatMap((row) => {
+  const candidates = rows.flatMap((row) => {
     const input = attention.get(row.dispatchId)
     const sessionId = sessionByDispatch.get(row.dispatchId)
     if (!input || !sessionId || isSettled(row, input, now)) {
@@ -69,6 +78,13 @@ export function readConnectorWorkerCandidates(
     }
     return [{ sessionId, row, attention: input }]
   })
+  return {
+    candidates,
+    federated: listFederatedDispatchesByIds.call(
+      connection,
+      candidates.map((candidate) => candidate.row.dispatchId)
+    )
+  }
 }
 
 // The settled half of sessionWorkerState, which no liveness verdict overrides.

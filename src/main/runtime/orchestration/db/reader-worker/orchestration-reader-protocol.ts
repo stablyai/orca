@@ -1,11 +1,11 @@
 // Electron-free: shared by the orchestration reader thread and its client.
-import type { ConnectorWorkerCandidate } from '../connector-workers/connector-worker-candidates'
+import type { ConnectorWorkerCandidates } from '../connector-workers/connector-worker-candidates'
 
 /** Each read the thread runs, by name, with its arguments and answer. */
 export type OrchestrationReads = {
   connectorWorkerCandidates: {
     args: { sessionIds: readonly string[]; now: number }
-    value: ConnectorWorkerCandidate[]
+    value: ConnectorWorkerCandidates
   }
 }
 

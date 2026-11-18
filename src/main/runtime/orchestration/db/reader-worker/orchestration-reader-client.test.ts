@@ -11,7 +11,7 @@ const STALLED_READER = `
 const { parentPort } = require('node:worker_threads');
 parentPort.on('message', (request) => {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
-  parentPort.postMessage({ id: request.id, ok: true, value: request.args.sessionIds.map(() => null) });
+  parentPort.postMessage({ id: request.id, ok: true, value: { candidates: [], federated: [], asked: request.args.sessionIds.length } });
 });
 `
 
@@ -43,7 +43,7 @@ describe('orchestration reads', () => {
 
     const read = await client.read(fileDb(), 'connectorWorkerCandidates', { sessionIds, now: 0 })
 
-    expect(read).toHaveLength(2_000)
+    expect(read).toEqual({ candidates: [], federated: [], asked: 2_000 })
     // A read on this thread would have held every tick for the whole second.
     expect(ticks).toBeGreaterThan(20)
   })

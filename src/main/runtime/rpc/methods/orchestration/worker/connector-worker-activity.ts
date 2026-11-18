@@ -35,10 +35,14 @@ export async function readConnectorWorkerActivity(
     sessionIds.map((sessionId) => [sessionId, []])
   )
   const db = runtime.getOrchestrationDb()
-  const candidates = await orchestrationReader().read(db, 'connectorWorkerCandidates', {
-    sessionIds,
-    now: Date.now()
-  })
+  const { candidates, federated } = await orchestrationReader().read(
+    db,
+    'connectorWorkerCandidates',
+    {
+      sessionIds,
+      now: Date.now()
+    }
+  )
   if (candidates.length === 0) {
     return bySession
   }
@@ -52,7 +56,8 @@ export async function readConnectorWorkerActivity(
         projectWorkerAttentionInput(candidate.attention, now)
       ])
     ),
-    now
+    now,
+    federated
   )
   const sessionOf = new Map(
     candidates.map((candidate) => [candidate.row.dispatchId, candidate.sessionId])

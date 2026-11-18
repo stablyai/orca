@@ -289,10 +289,13 @@ export async function readCachedFederatedFleetSnapshots(args: {
   dispatchIds: readonly string[]
   /** The ones still open; a settled worker's host has nothing left to say. */
   isOpen: (dispatchId: string) => boolean
+  /** Their federated rows, when a caller already read them off the runtime's thread. */
+  federatedRows?: readonly FederatedDispatchRow[]
 }): Promise<FederatedSnapshots | null> {
   const { runtime, db } = args
   const rows =
-    args.dispatchIds.length > 0 ? db.listFederatedDispatchesByIds([...args.dispatchIds]) : []
+    args.federatedRows ??
+    (args.dispatchIds.length > 0 ? db.listFederatedDispatchesByIds([...args.dispatchIds]) : [])
   if (rows.length === 0) {
     return null
   }

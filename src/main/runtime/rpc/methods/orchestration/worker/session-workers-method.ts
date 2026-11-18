@@ -15,6 +15,7 @@ import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/
 import { SessionWorkersParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 import { chatAssigneeSessionId } from '../../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { exposeUtcTimestamp } from '../../../../orchestration/db/utc-timestamp'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -118,7 +119,8 @@ export async function projectDispatchFleet(
   runtime: SessionWorkersRuntime,
   rows: ReturnType<OrchestrationDb['listWorkerTerminalResources']>,
   attentionFacts: ReturnType<OrchestrationDb['getWorkerAttentionFactsForDispatches']>,
-  now: number
+  now: number,
+  federatedRows?: readonly FederatedDispatchRow[]
 ) {
   const db = runtime.getOrchestrationDb()
   const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
@@ -140,7 +142,8 @@ export async function projectDispatchFleet(
     runtime,
     db,
     dispatchIds: rows.map((row) => row.dispatchId),
-    isOpen: (dispatchId) => openIds.has(dispatchId)
+    isOpen: (dispatchId) => openIds.has(dispatchId),
+    ...(federatedRows ? { federatedRows } : {})
   })
   if (federated) {
     applyFederatedFleetObservations(fleet, federated, fleet.durable)
