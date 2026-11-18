@@ -272,7 +272,10 @@ export class RelaySessionBroker {
     // Retries after an unanswered attempt alternate with the director's authOrigin (front door).
     const authOrigin = this.originPool.activeAssignment?.authOrigin
     try {
-      const result = await renewRelayAuthorization(this.options, this.renewalOrigin.next(authOrigin))
+      const result = await renewRelayAuthorization(
+        this.options,
+        this.renewalOrigin.next(authOrigin)
+      )
       this.assertCurrent()
       if (result.kind === 'refused') {
         this.closeNow(result.hostCloseReason)
