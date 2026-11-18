@@ -23,7 +23,7 @@ function botById(context: RpcContext, botId: string) {
   return bot
 }
 
-export function botTidyUpView(context: RpcContext, botId: string): BotTidyUpView {
+export async function botTidyUpView(context: RpcContext, botId: string): Promise<BotTidyUpView> {
   const bot = botById(context, botId)
   const { runtime } = context
   const setting = botTidyUp(bot)
@@ -32,7 +32,9 @@ export function botTidyUpView(context: RpcContext, botId: string): BotTidyUpView
   const rowId = state.last?.rowId
   const undone =
     rowId != null &&
-    runtime.bots.memory.history(bot.id).some((row) => row.by.kind === 'undo' && row.by.of === rowId)
+    (await runtime.bots.memory.history(bot.id)).some(
+      (row) => row.by.kind === 'undo' && row.by.of === rowId
+    )
   return {
     setting,
     last: state.last ? { ...state.last, undone } : null,
@@ -50,7 +52,7 @@ export const BOT_TIDY_UP_METHODS = [
     name: 'bots.tidyUp.get',
     permission: 'workspace',
     params: BotTidyUpAct,
-    handler: (params, context) => ({ tidyUp: botTidyUpView(context, params.botId) })
+    handler: async (params, context) => ({ tidyUp: await botTidyUpView(context, params.botId) })
   }),
   defineMethod({
     name: 'bots.tidyUp.now',
@@ -80,7 +82,7 @@ export const BOT_TIDY_UP_METHODS = [
         botHomeFolder(bot),
         params.rowId
       )
-      return { undone, tidyUp: botTidyUpView(context, bot.id) }
+      return { undone, tidyUp: await botTidyUpView(context, bot.id) }
     }
   })
 ]

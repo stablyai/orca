@@ -74,13 +74,12 @@ export function createBotMemoryRecord(
     await run
   }
 
-  /** A history row for `change`; a history that can't be written never fails the change. */
+  /** A history row for `change`, queued now so later reads see it; a history that can't be
+   *  written never fails the change. */
   const noted = (botId: string, by: BotMemoryAuthor, made: BotMemoryChange): void => {
-    try {
-      history.append(botId, by, made)
-    } catch (error) {
+    history.append(botId, by, made).catch((error: unknown) => {
       console.warn('[bots] memory history not written', error)
-    }
+    })
   }
 
   /**
@@ -94,7 +93,7 @@ export function createBotMemoryRecord(
     botId: string,
     folder: string,
     by: BotMemoryAuthor,
-    make: (file: string, record: string | null) => BotMemoryChange,
+    make: (file: string, record: string | null) => BotMemoryChange | Promise<BotMemoryChange>,
     beforeWrite?: (made: BotMemoryChange) => Promise<void>
   ): Promise<BotMemoryChange> => {
     const path = join(folder, 'MEMORY.md')
@@ -106,7 +105,7 @@ export function createBotMemoryRecord(
         for (let attempt = 0; attempt < REWRITE_ATTEMPTS; attempt += 1) {
           const current = await fs.readText(path)
           const base = current ?? ''
-          const asked = make(base, text)
+          const asked = await make(base, text)
           const next = applyBotMemoryChange(base, asked)
           const recorded = text === null ? next : applyBotMemoryChange(text, asked)
           unreadable = current === null
@@ -157,6 +156,8 @@ export function createBotMemoryRecord(
     change,
     noted,
     history: (botId: string) => history.list(botId),
+    /** Every history write queued so far, landed; for quit. */
+    historySettled: () => history.settled(),
     /** Takes `fact` out of MEMORY.md and the record; false when neither had it. */
     forget: async (
       botId: string,
@@ -175,9 +176,9 @@ export function createBotMemoryRecord(
     /** Puts back what history row `id` changed, leaving alone any fact a later change touched or
      *  that is gone; false when nothing was left to undo. */
     undo: async (botId: string, folder: string, id: string): Promise<boolean> => {
-      const made = await change(botId, folder, { kind: 'undo', of: id }, (file, record) => {
+      const made = await change(botId, folder, { kind: 'undo', of: id }, async (file, record) => {
         // Read on the bot's queue, so the changes queued ahead of this Undo count as later.
-        const rows = history.list(botId)
+        const rows = await history.list(botId)
         const index = rows.findIndex((entry) => entry.id === id)
         const row = rows[index]
         if (!row?.undoable) {
@@ -208,7 +209,9 @@ export function createBotMemoryRecord(
     },
     removed: (botId: string): void => {
       bots.delete(botId)
-      history.removed(botId)
+      history.removed(botId).catch((error: unknown) => {
+        console.warn('[bots] memory history not removed', error)
+      })
     }
   }
 }

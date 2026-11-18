@@ -102,11 +102,9 @@
 2 src/main/bitbucket/pull-request-creation.ts
 2 src/main/bitbucket/resolve-auth.ts
 1 src/main/bots/bot-access-request-watch.ts
-1 src/main/bots/bot-controller.ts
 1 src/main/bots/bot-items-link-join.ts
 1 src/main/bots/bot-look-around-store.ts
-2 src/main/bots/bot-memory-history.ts
-1 src/main/bots/bot-memory-record.ts
+1 src/main/bots/bot-memory-history.ts
 1 src/main/bots/bot-package-apply.ts
 2 src/main/bots/bot-structured-session-wiring.ts
 14 src/main/bots/bot-tool-credentials.ts
@@ -393,7 +391,7 @@
 1 src/main/connector-cloud/connector-cloud.ts
 3 src/main/connector-cloud/connector-host-install.ts
 7 src/main/connector-cloud/connector-token-mint.ts
-1 src/main/connector-cloud/connector-turn-events.ts
+1 src/main/connector-cloud/connector-turn-outbox-file.ts # only the Windows addon load (realpathSync, once per process, cached) via the async owner-only writer
 6 src/main/copilot/hook-service.ts
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
 1 src/main/crash-reporting/capture/crashpad-capture.ts
@@ -524,6 +522,7 @@
 28 src/main/filesystem/atomic-file-publication.ts
 5 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
+7 src/main/filesystem/owner-only-durable-file-write.ts # only the Windows addon load (realpathSync, once per process, cached); every write is async
 2 src/main/filesystem/rolling-file-backup.ts
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts

@@ -11,6 +11,7 @@ import {
   pollClientHarness,
   settle
 } from './connector-poll-client.test-fixture'
+import { ConnectorTurnEvents } from './connector-turn-events'
 import { FAKE_BOT } from './fake-connector-seam.test-fixture'
 
 const h = pollClientHarness()
@@ -41,6 +42,7 @@ describe('ConnectorPollClient events', () => {
       at: 5
     })
     await settle()
+    await ConnectorTurnEvents.settled()
     const stored = JSON.parse(readFileSync(outboxFile, 'utf8')).turnEnds
     expect(stored).toHaveLength(1)
     // 8 KB would split a two-byte character after the leading 'x', so the cut steps back one byte.
@@ -73,6 +75,7 @@ describe('ConnectorPollClient events', () => {
         at: turn
       })
     }
+    await ConnectorTurnEvents.settled()
     const stored = JSON.parse(
       readFileSync(join(h.userDataPath, 'connector-turn-outbox.json'), 'utf8')
     ).turnEnds
@@ -159,6 +162,7 @@ describe('ConnectorPollClient events', () => {
       stopReason: 'success',
       at: 9
     })
+    await ConnectorTurnEvents.settled()
     expect(existsSync(join(h.userDataPath, 'connector-turn-outbox.json'))).toBe(true)
     h.fake.online = true
     await settle(30_000)

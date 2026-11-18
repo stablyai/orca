@@ -79,10 +79,12 @@ export const BOT_MEMORY_METHODS = [
       const titles = new Map(
         (await readBotChats(runtime, bot, null, true)).map((chat) => [chat.id, chat.title])
       )
-      const rows: BotMemoryHistoryView[] = runtime.bots.memory.history(bot.id).map((row) => ({
-        ...row,
-        chat: 'sessionId' in row.by ? (titles.get(row.by.sessionId) ?? null) : null
-      }))
+      const rows: BotMemoryHistoryView[] = (await runtime.bots.memory.history(bot.id)).map(
+        (row) => ({
+          ...row,
+          chat: 'sessionId' in row.by ? (titles.get(row.by.sessionId) ?? null) : null
+        })
+      )
       return { rows }
     }
   }),
