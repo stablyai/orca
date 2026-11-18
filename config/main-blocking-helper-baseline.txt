@@ -94,7 +94,7 @@
 1 src/main/automations/launch/automation-run-setup-skip.ts
 2 src/main/automations/runtime-automation-service.ts
 5 src/main/backend/backend-entry.ts
-12 src/main/backend/core-runtime-activation.ts
+11 src/main/backend/core-runtime-activation.ts
 2 src/main/backend/core-runtime.ts
 4 src/main/bitbucket/client.ts
 5 src/main/bitbucket/credential-connection.ts
@@ -1321,7 +1321,6 @@
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
-1 src/main/runtime/workspaces/process-listing/workspace-process-listing.ts
 1 src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
@@ -1405,7 +1404,7 @@
 1 src/main/startup/main-process-preflight-failure.ts
 25 src/main/startup/main-process-preflight.ts
 15 src/main/startup/main-process-ready-foundation.ts
-8 src/main/startup/main-process-ready-runtime.ts
+7 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts

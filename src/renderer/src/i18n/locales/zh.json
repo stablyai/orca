@@ -5999,7 +5999,6 @@
           "74fc00776f": "错误详情",
           "ca3b225195": "分支自动命名失败",
           "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
-          "dismissError": "清除错误",
           "dismissing": "正在清除…"
         },
         "CreateProjectLocationField": {
