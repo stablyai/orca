@@ -30,7 +30,7 @@ vi.mock(
   })
 )
 
-const { OrcaRuntimeWithGetPtyRecordForPaneKey } = await import('./terminal-pane-mail-routing')
+const { OrcaRuntimeWithStructuredSessionMail } = await import('./terminal-pane-mail-routing')
 const { OrchestrationDb } = await import('../../db/orchestration-db')
 const { resolveOrcaSessionParty } = await import('../../addressing/orchestration-party')
 
@@ -38,7 +38,7 @@ const CHAT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 const CHAT_ADDRESS = formatOrcaSessionAddress(CHAT)
 
 /** The real methods through the real prototype chain; a re-declared copy would pin nothing. */
-abstract class MailTargetProbe extends OrcaRuntimeWithGetPtyRecordForPaneKey {
+abstract class MailTargetProbe extends OrcaRuntimeWithStructuredSessionMail {
   target(mailboxHandle: string): unknown {
     return this.resolveStructuredMailboxTarget(mailboxHandle)
   }

@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import {
   describeLaunchedAgentHost,
   readLaunchedAgentForeground,
+  readMailboxForeground,
   type LaunchedAgentForeground,
   type LaunchedAgentHost
 } from '../../terminal/wait/launched-agent-foreground'
@@ -15,7 +16,7 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
   /** Read at the physical owner; discard a result that outlived this runtime binding. */
   async readLaunchedAgentForeground(
     ptyId: string,
-    agent: TuiAgent
+    agent?: TuiAgent
   ): Promise<LaunchedAgentForeground> {
     const pty = this.ptysById.get(ptyId)
     const incarnation = pty?.incarnationId
@@ -30,6 +31,24 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     return this.ptysById.get(ptyId) === pty && pty?.incarnationId === incarnation
       ? result
       : 'unknown'
+  }
+
+  async inspectMailboxForeground(ptyId: string, agent?: TuiAgent) {
+    const pty = this.ptysById.get(ptyId)
+    const incarnation = pty?.incarnationId
+    const controller = this.ptyController
+    const result = await readMailboxForeground(
+      controller,
+      this.launchedAgentHost(ptyId),
+      ptyId,
+      agent,
+      incarnation ?? undefined
+    )
+    return this.ptyController === controller &&
+      this.ptysById.get(ptyId) === pty &&
+      pty?.incarnationId === incarnation
+      ? result
+      : { foreground: 'unknown' as const }
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */

@@ -1,3 +1,10 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { MailboxForegroundEvidence } from './mailbox-foreground-evidence'
+export type {
+  OrchestrationMailboxForegroundObservation,
+  OrchestrationMailboxForegroundProbe
+} from './mailbox-foreground-evidence'
+
 export type OrchestrationMailboxDeliveryFlight = {
   enterTimer: ReturnType<typeof setTimeout> | null
   stagedMessageIds: string[]
@@ -6,6 +13,8 @@ export type OrchestrationMailboxDeliveryFlight = {
   idleObservedWhileDeferred: boolean
   /** The incarnation that staged this flight, so retirement can name the rows it owns. */
   processIncarnation?: string
+  agent?: TuiAgent
+  stagedPointerText?: string
 }
 
 /** A mailbox waiting behind a terminal's in-flight pointer, with the types its waiters reserve. */
@@ -21,8 +30,52 @@ export class OrchestrationMailboxPointerState {
   private readonly watermarkMailboxesByPtyId = new Map<string, Set<string>>()
   private readonly parkedTypesByMailbox = new Map<string, ReadonlySet<string> | null>()
 
+  private readonly observedMail = new Map<string, number>()
+
+  noteMailSequence(ptyId: string, sequence: number): boolean {
+    const previous = this.observedMail.get(ptyId)
+    if (previous !== undefined && sequence <= previous) {
+      return false
+    }
+    this.observedMail.set(ptyId, sequence)
+    return true
+  }
+
+  readonly foreground: MailboxForegroundEvidence
+
+  constructor(onForegroundRecovery?: (ptyId: string) => void) {
+    this.foreground = new MailboxForegroundEvidence(onForegroundRecovery)
+  }
+
+  hasActiveFlight(ptyId: string): boolean {
+    const flight = this.flightsByPtyId.get(ptyId)
+    return !!flight && !flight.deferredUntilIdle
+  }
+
+  stagedPointerText(ptyId: string): string | undefined {
+    return this.flightsByPtyId.get(ptyId)?.stagedPointerText
+  }
+
+  flightForPty(ptyId: string): OrchestrationMailboxDeliveryFlight | undefined {
+    return this.flightsByPtyId.get(ptyId)
+  }
+
+  hasRecoveryFlight(ptyId: string): boolean {
+    const flight = this.flightForPty(ptyId)
+    return (
+      !!flight?.processIncarnation &&
+      this.foreground.screenRecovery(ptyId) === flight.processIncarnation
+    )
+  }
+
   hasFlight(ptyId: string): boolean {
     return this.flightsByPtyId.has(ptyId)
+  }
+
+  completeRecovery(ptyId: string): void {
+    if (!this.hasFlight(ptyId)) {
+      this.foreground.completeDelivery(ptyId)
+    }
   }
 
   beginFlight(ptyId: string): OrchestrationMailboxDeliveryFlight {
@@ -174,22 +227,29 @@ export class OrchestrationMailboxPointerState {
     return parkedTypes ?? null
   }
 
-  retirePty(ptyId: string): {
+  retirePty(
+    ptyId: string,
+    preserveForeground = false
+  ): {
     flight: OrchestrationMailboxDeliveryFlight | undefined
     releasedMailboxes: string[]
   } {
+    if (!preserveForeground) {
+      this.foreground.retirePty(ptyId)
+      this.observedMail.delete(ptyId)
+    }
     const flight = this.flightsByPtyId.get(ptyId)
     this.flightsByPtyId.delete(ptyId)
+    const releasedMailboxes = new Set(this.parkedDeliveriesByPtyId.get(ptyId)?.keys())
     this.parkedDeliveriesByPtyId.delete(ptyId)
-    const releasedMailboxes: string[] = []
     for (const mailboxHandle of this.watermarkMailboxesByPtyId.get(ptyId) ?? []) {
       const owner = this.watermarkByMailbox.get(mailboxHandle)
       if (owner?.ptyId === ptyId && this.clearWatermark(mailboxHandle, owner.sequence, ptyId)) {
-        releasedMailboxes.push(mailboxHandle)
+        releasedMailboxes.add(mailboxHandle)
       }
     }
     this.watermarkMailboxesByPtyId.delete(ptyId)
-    return { flight, releasedMailboxes }
+    return { flight, releasedMailboxes: [...releasedMailboxes] }
   }
 
   private removeWatermarkPtyIndex(mailbox: string, ptyId: string): void {

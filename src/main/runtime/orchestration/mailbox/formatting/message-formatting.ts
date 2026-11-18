@@ -158,7 +158,7 @@ export function formatMessagePointer(
   const runFlag = orchestrationCheckRunFlag(mailboxHandle)
   const checkCommand = `${cliCommand} orchestration check${runFlag}${terminalHandle ? ` --terminal ${terminalHandle}` : ''}`
   if (heldDeliveryId) {
-    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${checkCommand}\` to see it again; once it is handled, run \`${checkCommand} --ack ${heldDeliveryId}\`, then \`${checkCommand}\` for the new mail.\n`
+    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run ${checkCommand} to see it again; once it is handled, run ${checkCommand} --ack ${heldDeliveryId}, then ${checkCommand} for the new mail.\n`
   }
-  return `\nYou have ${count} orchestration ${noun}. Run \`${checkCommand}\`.\n`
+  return `\nYou have ${count} orchestration ${noun}. Run ${checkCommand}.\n`
 }

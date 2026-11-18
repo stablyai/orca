@@ -1,5 +1,11 @@
-import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
+import { MailboxForegroundDelivery } from './mailbox-foreground-delivery'
+import type {
+  PointerDeliveryDependencies,
+  PointerDeliveryOptions
+} from './mailbox-pointer-delivery-contract'
 import {
+  hasPendingMailboxPointerFlight,
+  resumeDeferredMailboxPointer,
   hasUnfilteredOrchestrationWaiter,
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
@@ -16,151 +22,225 @@ import {
   MAILBOX_POINTER_RESERVED,
   MAILBOX_POINTER_WRITE_ATTEMPTED
 } from '../../db/messages/mailbox-pointer-enter-state'
-import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resume'
-import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
-
-const DEFAULT_POINTER_ENTER_DELAY_MS = 500
-
-function pointerEnterDelayMs(): number {
-  const configured = Number(process.env.ORCA_E2E_ORCHESTRATION_POINTER_ENTER_DELAY_MS)
-  return Number.isFinite(configured) && configured >= 1 && configured <= 60_000
-    ? configured
-    : DEFAULT_POINTER_ENTER_DELAY_MS
-}
+import {
+  reconcilePendingOrchestrationMailboxPointer,
+  UncertainMailboxReconciliation
+} from './mailbox-pointer-resume'
+import { stageOrchestrationMailboxPointer, pointerEnterDelayMs } from './mailbox-pointer-stage'
 
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
-  private readonly state = new OrchestrationMailboxPointerState()
+  private readonly state = new OrchestrationMailboxPointerState((ptyId) => {
+    this.deps.onDeliveryDecision(ptyId, { reset: true })
+    queueMicrotask(() => this.deps.redriveTerminal(ptyId))
+  })
+  private readonly foregroundDelivery = new MailboxForegroundDelivery()
   private readonly coldParkedPtys = new Set<string>()
-  constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
+  private readonly uncertainty: UncertainMailboxReconciliation<TWaiter>
+  constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {
+    this.uncertainty = new UncertainMailboxReconciliation(deps, this.state)
+  }
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
+    this.foregroundDelivery.deliverForHandle(this.deps, this, handle, reservedTypes)
+  }
+
+  deliver(terminal: OrchestrationMailboxTerminal, options: PointerDeliveryOptions): void {
     try {
-      const terminal = this.deps.deliveryTarget.resolveTerminal(handle)
-      // Skip ownership resolution, and the reconciliation it schedules, for a terminal deliver() would refuse.
-      if (!terminal || !isMailboxTerminalTakingInput(terminal)) {
+      const db = this.deps.getDb()
+      const { mailboxHandle, foreground, agent } = options
+      const isOwnDirectMailbox = mailboxHandle === terminal.handle
+      if (
+        !db ||
+        (!isOwnDirectMailbox &&
+          !mailboxHandle.startsWith('run:') &&
+          !mailboxHandle.startsWith('dispatch:'))
+      ) {
         return
       }
-      const mailboxHandle = this.deps.mailboxOwner.resolve(terminal, handle)
-      if (mailboxHandle) {
-        this.deliver(terminal, { mailboxHandle, reservedTypes })
+      const { ptyId } = terminal
+      const target = this.deps.resolveSubmitTarget(ptyId, foreground, undefined, agent)
+      if (!target) {
+        return
       }
-    } catch {
-      // Persisted mail remains available to explicit check or the terminal's next input edge.
+      terminal = target.terminal
+      if (this.resumeDeferredEnter(terminal, options)) {
+        this.state.parkDelivery(ptyId, mailboxHandle, options.reservedTypes)
+        return
+      }
+      const foregroundHeld =
+        options.foreground === undefined &&
+        (this.isForegroundHeld(ptyId) ||
+          this.deps.needsForegroundEvaluation?.(ptyId) ||
+          this.deps.isForegroundCandidate?.(terminal))
+      if (
+        (!foregroundHeld &&
+          (!isMailboxTerminalTakingInput(terminal) ||
+            !this.deps.isAgentSettledForDelivery(ptyId, foreground, undefined, agent))) ||
+        this.state.hasActiveWatermark(mailboxHandle)
+      ) {
+        this.parkRedelivery(mailboxHandle, options.reservedTypes)
+        return
+      }
+
+      const waiters = this.deps.getMessageWaiters(mailboxHandle)
+      if (hasUnfilteredOrchestrationWaiter(waiters)) {
+        return
+      }
+      const pending = db.getPendingMailboxPointerMessages(mailboxHandle)
+      const { messages: unread, heldDeliveryId } = selectOrchestrationPointerBatch({
+        db,
+        mailboxHandle,
+        waiters,
+        reservedTypes: options.reservedTypes,
+        excludeRunOwnedDirect: isOwnDirectMailbox
+      })
+      const retained = reconcilePendingOrchestrationMailboxPointer({
+        deps: this.deps,
+        terminal,
+        messages: pending,
+        hasEligibleMail: unread.length > 0,
+        reconcile: () => this.uncertainty.ensure(ptyId, target.processIncarnation),
+        redrive: () => this.redrive(mailboxHandle, true)
+      })
+      const newestSequence = unread.at(-1)?.sequence ?? pending.at(-1)?.sequence
+      if (newestSequence !== undefined && unread.length > 0) {
+        if (this.state.noteMailSequence(ptyId, newestSequence)) {
+          this.deps.onDeliveryDecision(ptyId, { reset: true })
+        }
+        if (
+          this.deps.deliveryTarget.deferForAbsenceProbe(
+            ptyId,
+            mailboxHandle,
+            options.skipAbsenceProbe,
+            (probedMailbox) => this.redeliverAfterProbe(ptyId, probedMailbox)
+          )
+        ) {
+          return
+        }
+        if (this.foregroundDelivery.defer(this.deps, this, ptyId, options, target)) {
+          return
+        }
+      }
+      if (
+        newestSequence === undefined ||
+        unread.length === 0 ||
+        (retained && this.deps.readComposerText?.(ptyId, agent) !== '')
+      ) {
+        return
+      }
+      if (!this.state.releaseSupersededWatermark(mailboxHandle, newestSequence, ptyId)) {
+        return
+      }
+      if (
+        this.deps.mailboxOwner.resolve(terminal, mailboxHandle, { routeDirectMail: false }) !==
+        mailboxHandle
+      ) {
+        this.parkRedelivery(mailboxHandle, options.reservedTypes)
+        this.redrive(mailboxHandle)
+        return
+      }
+      stageOrchestrationMailboxPointer({
+        deps: this.deps,
+        state: this.state,
+        terminal,
+        agent: options.agent,
+        mailboxHandle,
+        messages: unread,
+        heldDeliveryId,
+        newestSequence,
+        enterDelayMs: pointerEnterDelayMs(),
+        settle: (ptyId, flight) => this.settle(ptyId, flight),
+        onUncertainDelivery: (ptyId) => this.reconcileUncertainMail(ptyId),
+        redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
+      })
+    } finally {
+      this.deps.onDeliveryDecision(terminal.ptyId)
     }
   }
 
-  deliver(
-    terminal: OrchestrationMailboxTerminal,
-    options: {
-      mailboxHandle: string
-      reservedTypes?: ReadonlySet<string>
-      skipAbsenceProbe?: boolean
-    }
-  ): void {
-    const db = this.deps.getDb()
-    const mailboxHandle = options.mailboxHandle
-    const isOwnDirectMailbox = mailboxHandle === terminal.handle
-    if (
-      !db ||
-      (!isOwnDirectMailbox &&
-        !mailboxHandle.startsWith('run:') &&
-        !mailboxHandle.startsWith('dispatch:'))
-    ) {
-      return
-    }
-    const { ptyId } = terminal
-    // Gate live, settled input at this shared commit point; refusal parks for recheck instead of dropping mail.
-    if (!isMailboxTerminalTakingInput(terminal) || !this.deps.isAgentSettledForDelivery(ptyId)) {
-      this.parkRedelivery(mailboxHandle, options.reservedTypes)
-      return
-    }
-    // As in observeAgentWorking: a cold-parked terminal's deferred Enter waits for rest.
-    const deferredEnter =
-      this.coldParkedPtys.has(ptyId) && terminal.lastAgentStatus !== 'idle'
-        ? null
-        : this.state.takeDeferredEnter(ptyId)
-    if (deferredEnter) {
-      this.state.parkDelivery(ptyId, mailboxHandle, options.reservedTypes)
-      deferredEnter()
-      return
-    }
-    if (this.state.hasFlight(ptyId)) {
-      this.state.parkDelivery(ptyId, mailboxHandle, options.reservedTypes)
-      return
-    }
-    if (this.state.hasActiveWatermark(mailboxHandle)) {
-      this.parkRedelivery(mailboxHandle, options.reservedTypes)
-      return
-    }
+  readonly probeForeground = (ptyId: string, processIncarnation: string) => {
+    const probe = this.state.foreground.probeForeground(ptyId, processIncarnation, () =>
+      this.deps.readForeground(ptyId)
+    )
+    this.deps.onDeliveryDecision(ptyId)
+    return probe
+  }
 
-    const waiters = this.deps.getMessageWaiters(mailboxHandle)
-    if (hasUnfilteredOrchestrationWaiter(waiters)) {
-      return
-    }
-    const pending = db.getPendingMailboxPointerMessages(mailboxHandle)
-    if (
-      pending.length > 0 &&
-      resumePendingOrchestrationMailboxPointer({ deps: this.deps, terminal, messages: pending })
-    ) {
-      return
-    }
-    const { messages: unread, heldDeliveryId } = selectOrchestrationPointerBatch({
-      db,
-      mailboxHandle,
-      waiters,
-      reservedTypes: options.reservedTypes,
-      excludeRunOwnedDirect: isOwnDirectMailbox
-    })
-    if (unread.length === 0) {
-      return
-    }
-    const newestSequence = unread.at(-1)?.sequence
-    if (newestSequence === undefined) {
-      return
-    }
-    if (!this.state.releaseSupersededWatermark(mailboxHandle, newestSequence, ptyId)) {
-      return
-    }
-    if (
-      this.deps.deliveryTarget.deferForAbsenceProbe(
-        ptyId,
-        mailboxHandle,
-        options.skipAbsenceProbe,
-        (probedMailbox) => this.redeliverAfterProbe(ptyId, probedMailbox)
-      )
-    ) {
-      return
-    }
-    // Every path stages here, async retries included: type only for a mailbox this terminal still owns.
-    if (
-      this.deps.mailboxOwner.resolve(terminal, mailboxHandle, { routeDirectMail: false }) !==
-      mailboxHandle
-    ) {
-      this.parkRedelivery(mailboxHandle, options.reservedTypes)
-      this.redrive(mailboxHandle)
-      return
-    }
-    stageOrchestrationMailboxPointer({
-      deps: this.deps,
-      state: this.state,
+  readonly applyForeground = this.state.foreground.applyForeground.bind(this.state.foreground)
+
+  stagedPointerText(ptyId: string): string | undefined {
+    return this.state.stagedPointerText(ptyId)
+  }
+
+  requiresCurrentScreen(ptyId: string): boolean {
+    const incarnation = this.state.foreground.screenRecovery(ptyId)
+    return (
+      incarnation !== undefined &&
+      incarnation === this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
+    )
+  }
+
+  readonly restoreUncertainMail = (ptyId: string): void => this.uncertainty.ensure(ptyId)
+
+  readonly reconcileUncertainMail = (ptyId: string): void => this.uncertainty.reconcile(ptyId)
+
+  readonly completeRecovery = this.state.completeRecovery.bind(this.state)
+
+  readonly hasPendingFlightMail = (terminal: OrchestrationMailboxTerminal): boolean =>
+    this.state.hasRecoveryFlight(terminal.ptyId) ||
+    hasPendingMailboxPointerFlight(this.deps, terminal, this.state.flightForPty(terminal.ptyId))
+
+  resumeDeferredEnter(
+    terminal: OrchestrationMailboxTerminal,
+    options?: PointerDeliveryOptions
+  ): boolean {
+    return resumeDeferredMailboxPointer(
+      this.deps,
+      this.state,
       terminal,
-      mailboxHandle,
-      messages: unread,
-      heldDeliveryId,
-      newestSequence,
-      enterDelayMs: pointerEnterDelayMs(),
-      settle: (ptyId, flight) => this.settle(ptyId, flight),
-      redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
-    })
+      this.coldParkedPtys.has(terminal.ptyId),
+      options
+    )
+  }
+
+  isDeliveryInFlight(ptyId: string): boolean {
+    return this.state.hasActiveFlight(ptyId) || this.state.foreground.hasForegroundProbe(ptyId)
+  }
+
+  captureForegroundObservation(ptyId: string) {
+    const processIncarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
+    return processIncarnation
+      ? this.state.foreground.captureForegroundObservation(ptyId, processIncarnation)
+      : undefined
+  }
+
+  isForegroundHeld(ptyId: string): boolean {
+    const hold = this.state.foreground.foregroundHold(ptyId)
+    if (hold && hold !== this.deps.resolveSubmitTarget(ptyId)?.processIncarnation) {
+      this.state.foreground.retirePty(ptyId)
+      return false
+    }
+    return !!hold
+  }
+
+  observeTerminal(ptyId: string, status?: string): void {
+    if (this.state.foreground.observeTerminal(ptyId, status)) {
+      this.deps.onDeliveryDecision(ptyId, { reset: true })
+      queueMicrotask(() => this.deps.redriveTerminal(ptyId))
+    }
   }
 
   parkRedelivery(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): void {
     this.state.parkRedelivery(mailboxHandle, reservedTypes)
   }
 
-  retirePty(ptyId: string): void {
+  retirePty(ptyId: string, preserveForeground = false): void {
     this.coldParkedPtys.delete(ptyId)
-    const { flight, releasedMailboxes } = this.state.retirePty(ptyId)
+    const { flight, releasedMailboxes } = this.state.retirePty(ptyId, preserveForeground)
+    if (!preserveForeground) {
+      this.uncertainty.retire(ptyId)
+      this.deps.onDeliveryDecision(ptyId, { foreground: false, uncertainMailboxes: [] })
+    }
     if (flight?.enterTimer != null) {
       clearTimeout(flight.enterTimer)
     }
@@ -191,7 +271,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         }
         return
       }
-      this.retirePty(ptyId)
+      this.retirePty(ptyId, true)
       this.deps.getDb()?.releasePendingMailboxPointerForPty(ptyId)
     } catch {
       // Runtime teardown can close the DB before the final PTY frame is drained.
@@ -222,11 +302,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   private settle(ptyId: string, flight: OrchestrationMailboxDeliveryFlight): void {
     const parked = this.state.settleFlight(ptyId, flight)
-    if (!parked) {
-      return
-    }
+    this.deps.onDeliveryDecision(ptyId, { settled: true, reset: true })
     const current = this.deps.getTerminal(ptyId)
-    for (const [mailboxHandle, reservedTypes] of parked) {
+    for (const [mailboxHandle, reservedTypes] of parked ?? []) {
       if (current) {
         this.deliver(current, { mailboxHandle, reservedTypes })
       } else {

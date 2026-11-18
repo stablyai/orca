@@ -68,7 +68,6 @@ export const ORCHESTRATION_CHECK_METHODS = [
       const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
       const reader = sessionCallerOf(orchestrationCaller)
       // Mail this check takes may still wait as a card in a chat's queue; that card must not run too.
-      // The item line is read for this answer only; the check's recorded receipt never holds it.
       const releasing = <T>(result: T): Promise<T> => {
         if (consumingCheck && params.ack && !params.wait) {
           runtime.withdrawStaleChatMail(checkedMailboxes(result))

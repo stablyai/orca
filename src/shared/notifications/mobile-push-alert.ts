@@ -12,13 +12,32 @@ type AlertEvent = {
   desktopAway?: boolean
   notificationSeq?: number
   notificationEpoch?: string
+  notificationId?: string
   title?: string
   body?: string
 }
 
-function clip(value: string, maxLength: number): string {
+function clip(value: string, maxLength: number, wholeLines = false): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
-  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`
+  if (normalized.length <= maxLength) {
+    return normalized
+  }
+  // Retain complete action lines when a coalesced notice exceeds the banner's limit.
+  const lines = value.trim().split('\n')
+  if (wholeLines && lines.length > 1) {
+    let complete = ''
+    for (const line of lines) {
+      const next = [complete, line.trim()].filter(Boolean).join(' ')
+      if (next.length >= maxLength) {
+        break
+      }
+      complete = next
+    }
+    if (complete) {
+      return `${complete}…`
+    }
+  }
+  return `${normalized.slice(0, maxLength - 1)}…`
 }
 
 export function mapPushAgentState(
@@ -80,6 +99,6 @@ export function mobilePushAlertContent(event: AlertEvent) {
         notificationSeq: event.notificationSeq,
         notificationEpoch: event.notificationEpoch,
         title: clip(event.title, 80),
-        body: clip(event.body, 180)
+        body: clip(event.body, 180, event.notificationId?.startsWith('orchestration-mail:'))
       }
 }
