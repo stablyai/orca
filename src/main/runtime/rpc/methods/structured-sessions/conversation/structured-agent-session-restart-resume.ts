@@ -91,6 +91,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
         }
       }
       const { continued, answer } = await launch.done
+      launch.markAnswered()
       if (!answer) {
         return { continuedSessionIds: [...continued] }
       }

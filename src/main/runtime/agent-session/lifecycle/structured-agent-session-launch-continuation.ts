@@ -20,8 +20,9 @@ export type StructuredAgentSessionLaunchContinuation = {
   continued: ReadonlySet<string>
   /** The automatic action's answer, as `restartContinue` gives a client; absent when none ran. */
   answer?: RestartContinuationAnswer
-  /** Chats the run that just ended cut and nothing carried on: its offer (or failure) is still there.
-   *  A continued chat, or one whose agent started on its own, has none. */
+  /** Chats the run that just ended may have cut and this start did not continue: the chats it held,
+   *  which covers a cut that left no offer, and chats with an offer it recorded (a quit releases its
+   *  chats first). */
   cutByLastRun: ReadonlySet<string>
 }
 
@@ -42,8 +43,11 @@ export async function continueStructuredAgentSessionsAtLaunch(
   deps: StructuredAgentSessionLaunchContinuationDeps,
   onReserved: (rows: StructuredAgentSessionResumeCandidate[]) => void = () => {}
 ): Promise<StructuredAgentSessionLaunchContinuation> {
+  const heldByLastRun = deps.store
+    .listHeldSessionIds()
+    .filter((sessionId) => deps.store.replacedRuntime(sessionId)?.runtime !== undefined)
   // Each chat's own owner says whether its run crashed, so a crash that cut a start short is still read.
-  const cuts = deps.store.listHeldSessionIds().flatMap((sessionId) => {
+  const cuts = heldByLastRun.flatMap((sessionId) => {
     const replaced = deps.store.replacedRuntime(sessionId)
     return replaced?.runtimeEnd === 'crash' && replaced.runtime
       ? [{ sessionId, crashedRuntime: replaced.runtime }]
@@ -54,18 +58,17 @@ export async function continueStructuredAgentSessionsAtLaunch(
     await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
   }
   const recordedBy = Date.now()
-  const cutByLastRun = async () => {
+  const cutByLastRun = async (continued: ReadonlySet<string> = new Set()) => {
     const since = await deps.previousRunStartedAt()
     const offers = [
       ...(await deps.restartResume.list()),
       ...(await deps.restartResume.listFailures())
     ]
     // A crash offer is recorded by this start, so it is always newer than the run it read.
-    return new Set(
-      offers.flatMap((offer) =>
-        since === undefined || offer.recordedAt < since ? [] : [offer.sessionId]
-      )
+    const recorded = offers.flatMap((offer) =>
+      since === undefined || offer.recordedAt < since ? [] : [offer.sessionId]
     )
+    return new Set([...heldByLastRun, ...recorded].filter((sessionId) => !continued.has(sessionId)))
   }
   try {
     if (!deps.resumeWorkOnRestart()) {
@@ -77,15 +80,12 @@ export async function continueStructuredAgentSessionsAtLaunch(
       undefined,
       { automatic: true, onReserved }
     )
-    return {
-      continued: new Set(
-        answer.continued.flatMap((outcome) =>
-          outcome.outcome === 'continued' ? [outcome.sessionId] : []
-        )
-      ),
-      answer,
-      cutByLastRun: await cutByLastRun()
-    }
+    const continued = new Set(
+      answer.continued.flatMap((outcome) =>
+        outcome.outcome === 'continued' ? [outcome.sessionId] : []
+      )
+    )
+    return { continued, answer, cutByLastRun: await cutByLastRun(continued) }
   } finally {
     // Only this launch continues on its own what the last run cut; later launches leave it to a person.
     await deps.restartResume.passOverAutomatic(recordedBy)
@@ -117,14 +117,21 @@ export class StructuredAgentSessionLaunchContinuationOnce {
   private started = false
   private readonly settled = Promise.withResolvers<StructuredAgentSessionLaunchContinuation>()
   private readonly reserved = Promise.withResolvers<StructuredAgentSessionResumeCandidate[]>()
+  private answered = false
 
   get done(): Promise<StructuredAgentSessionLaunchContinuation> {
     return this.settled.promise
   }
 
-  /** The chats the automatic action took, known before any agent starts, so a window can show it. */
+  /** The chats the automatic action took, known before any agent starts, so a window can show it.
+   *  Empty once a client was given the outcome: a reloaded or later window does not replay the run. */
   get taken(): Promise<StructuredAgentSessionResumeCandidate[]> {
-    return this.reserved.promise
+    return this.answered ? Promise.resolve([]) : this.reserved.promise
+  }
+
+  /** A client has been given the settled outcome. */
+  markAnswered(): void {
+    this.answered = true
   }
 
   /** Without a host (none saved, refused, or restoration failed) this start continues nothing and the

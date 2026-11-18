@@ -127,7 +127,8 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
     recordCrashCuts: async (cuts, settledSince) => {
       const markers: AgentSessionResumeMarker[] = []
       for (const cut of cuts) {
-        // A chat that cannot be read keeps no offer; its worker is reported as stopped instead.
+        // A chat that cannot be read keeps no offer; the startup Dispatch pass still reports its
+        // worker, since the crashed run held it.
         const marker = await crashCutOf(cut, settledSince).catch(() => null)
         if (marker) {
           markers.push(marker)

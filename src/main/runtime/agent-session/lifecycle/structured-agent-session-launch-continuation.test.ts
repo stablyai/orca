@@ -23,7 +23,11 @@ const ENDS = {
   'chat-crashed': { runtime: 'runtime-crashed', end: 'crash' },
   // An older run's crash, whose own start died before it read the cut.
   'chat-crashed-earlier': { runtime: 'runtime-earlier', end: 'crash' },
-  'chat-quit': { runtime: 'runtime-quit', end: 'quit' }
+  'chat-quit': { runtime: 'runtime-quit', end: 'quit' },
+  // Held by the run that just ended, then continued by this start.
+  continued: { runtime: 'runtime-quit', end: 'quit' },
+  // Released before the run ended: no owner to name.
+  'chat-released': { runtime: undefined, end: undefined }
 } as const
 
 function launch(resumeWorkOnRestart: boolean) {
@@ -60,7 +64,9 @@ function launch(resumeWorkOnRestart: boolean) {
         if (!owner) {
           return undefined
         }
-        return { fence: 1, runtime: owner.runtime, runtimeEnd: owner.end }
+        return owner.runtime
+          ? { fence: 1, runtime: owner.runtime, runtimeEnd: owner.end }
+          : { fence: 1 }
       }
     },
     startedAt: 5,
@@ -75,7 +81,10 @@ describe('continuing interrupted chats at launch', () => {
     const { result, restartResume, calls } = launch(true)
     const settled = await result
     expect(settled.continued).toEqual(new Set(['continued']))
-    expect(settled.cutByLastRun).toEqual(new Set(['chat-quit']))
+    // Held by the run that just ended (a cut may have left no offer), or with an offer it recorded.
+    expect(settled.cutByLastRun).toEqual(
+      new Set(['chat-crashed', 'chat-crashed-earlier', 'chat-quit'])
+    )
     expect(restartResume.adoptCrashCuts).toHaveBeenCalledWith(
       [
         { sessionId: 'chat-crashed', crashedRuntime: 'runtime-crashed' },
@@ -122,6 +131,9 @@ describe('continuing interrupted chats at launch', () => {
     const off = new StructuredAgentSessionLaunchContinuationOnce()
     off.start(launch(false).deps)
     expect(await off.taken).toEqual([])
+    // A reloaded or later window, after one was given the outcome, does not replay the run.
+    once.markAnswered()
+    expect(await once.taken).toEqual([])
   })
 
   it('lets waiters go on without a host, and still runs once a retried restoration has one', async () => {
