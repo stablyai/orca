@@ -60,7 +60,8 @@ export function readLastAssistantFromTranscriptAsync(
   return scanFileRegionsBackwardAsync(
     transcriptPath,
     { chunkBytes: TRANSCRIPT_CHUNK_BYTES, maxScanBytes: TRANSCRIPT_MAX_SCAN_BYTES },
-    (region) => findLastExtractedTranscriptLineText(region.toString('utf8'), extractAssistantTextFromLine),
+    (region) =>
+      findLastExtractedTranscriptLineText(region.toString('utf8'), extractAssistantTextFromLine),
     keepReading
   )
 }

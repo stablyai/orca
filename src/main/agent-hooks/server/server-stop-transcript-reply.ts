@@ -6,10 +6,13 @@ import { ASSISTANT_MESSAGE_RETRY_ATTEMPTS, ASSISTANT_MESSAGE_RETRY_MS } from './
 import { AgentHookServerStatusRetries } from './server-status-retries'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 
+/** The identity of one Stop's pending reply read. */
+type StopReplyClaim = { readonly paneKey: string }
+
 /** A Stop that came without its reply gets it from the transcript, read off the event loop. */
 export abstract class AgentHookServerStopTranscriptReply extends AgentHookServerStatusRetries {
   /** One per pane with a read in flight; any later hook that changes the row ends it. */
-  private readonly stopReplyClaims = new Map<string, object>()
+  private readonly stopReplyClaims = new Map<string, StopReplyClaim>()
 
   /** Whatever cancels a pending reply retry also ends the pane's pending read. */
   protected override clearAssistantMessageRetry(paneKey: string): void {
@@ -58,7 +61,7 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     this.stopReplyClaims.delete(enriched.paneKey)
     // A child's held permission card is not the lead's Stop row; restating it would drop the card.
     if (transcriptPath && enriched.toolAgentId === undefined) {
-      const claim = {}
+      const claim: StopReplyClaim = { paneKey: enriched.paneKey }
       this.stopReplyClaims.set(enriched.paneKey, claim)
       this.readStopTextFromTranscript(enriched, transcriptPath, claim)
     }
@@ -73,7 +76,7 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
   private readStopTextFromTranscript(
     original: EnrichedAgentHookEventPayload,
     transcriptPath: string,
-    claim: object,
+    claim: StopReplyClaim,
     attempt = 1
   ): void {
     const token = this.token
