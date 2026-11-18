@@ -61,7 +61,8 @@
       "messages_many": "{{count}} сообщений",
       "messages_one": "{{count}} сообщение",
       "messages_other": "{{count}} сообщения",
-      "resumeSession": "Продолжить сессию агента"
+      "resumeSession": "Продолжить сессию агента",
+      "continueInCli": "Продолжить в CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Не удалось связаться с сервером",
