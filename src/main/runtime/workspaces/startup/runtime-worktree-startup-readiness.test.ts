@@ -177,6 +177,24 @@ describe('startup draft behind a wait-for-setup wrapper', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(value).toBe('pty-1')
   })
+
+  it('gives up when Setup fails instead of pasting into the shell it returns to', async () => {
+    let listener = (_data: string): void => {}
+    const host: WorktreeStartupReadinessHost = {
+      getPtyId: () => 'pty-1',
+      getForegroundProcess: async () => 'bash',
+      subscribeToData: (_ptyId, onData) => {
+        listener = onData
+        return () => {}
+      },
+      readRecentOutput: () => 'Waiting for setup to finish before starting agent...\r\n',
+      write: vi.fn()
+    }
+    const pending = waitForWorktreeStartupDraft(host, 'term-1', 'claude', { afterSetup: true })
+
+    listener('Setup failed (exit 3); skipping agent startup.\r\n$ \x1b[?2004h')
+    await expect(pending).resolves.toBeNull()
+  })
 })
 
 describe('OpenCode submit readiness', () => {

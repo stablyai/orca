@@ -6,7 +6,11 @@ import {
   resolvePasteReadySignal
 } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
-import { createSetupWaitGate } from '../../../../shared/agent-launch/startup/setup-wait-output-gate'
+import {
+  createSetupWaitGate,
+  SETUP_WAIT_GATE_MAX_MS,
+  type SetupWaitPhase
+} from '../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
@@ -239,6 +243,9 @@ export function waitForWorktreeStartupDraft(
       const gated = setupGate?.observe(chunk)
       if (gated?.phase) {
         restartForSetupPhase(gated.phase)
+        if (settled) {
+          return
+        }
       }
       const output = gated ? gated.output : chunk
       const data = isShellInFront ? sinceShellHandoff(output) : output
@@ -280,14 +287,16 @@ export function waitForWorktreeStartupDraft(
         () => finish(null)
       )
     }
-    const armDeadline = (): void => {
-      hardTimer = setTimeout(
-        onDeadline,
-        options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent)
-      )
+    const armDeadline = (
+      ms = options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent)
+    ): void => {
+      hardTimer = setTimeout(onDeadline, ms)
     }
     /** Output before Setup ended was the wrapper's, so its scan and timers start over. */
-    function restartForSetupPhase(phase: 'waiting' | 'ended'): void {
+    function restartForSetupPhase(phase: SetupWaitPhase): void {
+      if (phase === 'failed') {
+        return finish(null)
+      }
       // A check begun on the wrapper's output cannot settle.
       handoffs += 1
       scanner = createDraftPasteReadyScanner(signal)
@@ -300,9 +309,7 @@ export function waitForWorktreeStartupDraft(
         clearTimeout(hardTimer)
         hardTimer = null
       }
-      if (phase === 'ended') {
-        armDeadline()
-      }
+      armDeadline(phase === 'waiting' ? SETUP_WAIT_GATE_MAX_MS : undefined)
     }
     armDeadline()
     const replay = host.readRecentOutput(ptyId)

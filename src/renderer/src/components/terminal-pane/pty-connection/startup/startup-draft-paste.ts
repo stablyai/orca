@@ -2,7 +2,10 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspec
 import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
-import { createSetupWaitGate } from '../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
+import {
+  createSetupWaitGate,
+  SETUP_WAIT_GATE_MAX_MS
+} from '../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../../input/paste/terminal-pty-paste-writer'
 import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
@@ -110,30 +113,33 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       // Best-effort fallback; the primary path is the PTY readiness marker.
     }
   }
-  const armStartupDraftHardTimer = (): void => {
+  const onStartupDraftDeadline = (): void => {
+    startupDraftHardTimer = null
+    if (!getStartupDraftPtyId()) {
+      return
+    }
+    if (session.startupDraftAgent === 'codex') {
+      startupDraftPasteSettled = true
+      // A timed-out launch stays consumed across pane disposal and remount.
+      session.startupDraftPasteAttempted = true
+      session.cleanupStartupDraftPasteTimers()
+      createPasteReadinessTimeoutNotice({
+        worktreeId: session.deps.worktreeId,
+        tabId: session.deps.tabId,
+        agent: 'codex',
+        submitted: false
+      }).onTimeout()
+      return
+    }
+    void deliverStartupDraftIfAgentOwnsPty()
+  }
+  const armStartupDraftHardTimer = (
+    ms = resolveDraftPasteReadyTimeoutMs(session.startupDraftAgent)
+  ): void => {
     if (!startupDraftReadyScanner || startupDraftPasteSettled || startupDraftHardTimer !== null) {
       return
     }
-    startupDraftHardTimer = setTimeout(() => {
-      startupDraftHardTimer = null
-      if (!getStartupDraftPtyId()) {
-        return
-      }
-      if (session.startupDraftAgent === 'codex') {
-        startupDraftPasteSettled = true
-        // A timed-out launch stays consumed across pane disposal and remount.
-        session.startupDraftPasteAttempted = true
-        session.cleanupStartupDraftPasteTimers()
-        createPasteReadinessTimeoutNotice({
-          worktreeId: session.deps.worktreeId,
-          tabId: session.deps.tabId,
-          agent: 'codex',
-          submitted: false
-        }).onTimeout()
-        return
-      }
-      void deliverStartupDraftIfAgentOwnsPty()
-    }, resolveDraftPasteReadyTimeoutMs(session.startupDraftAgent))
+    startupDraftHardTimer = setTimeout(onStartupDraftDeadline, ms)
   }
   const armStartupDraftQuietTimer = (): void => {
     if (!startupDraftReadyScanner || startupDraftPasteSettled) {
@@ -163,9 +169,11 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       // Output before Setup ended was the wrapper's, so the scan and timers start over.
       startupDraftReadyScanner = createStartupDraftReadyScanner()
       clearStartupDraftPasteTimers()
-      if (gated.phase === 'ended') {
-        armStartupDraftHardTimer()
+      if (gated.phase === 'failed') {
+        // No agent will start: settle now as the deadline would.
+        return onStartupDraftDeadline()
       }
+      armStartupDraftHardTimer(gated.phase === 'waiting' ? SETUP_WAIT_GATE_MAX_MS : undefined)
     }
     const scanned = startupDraftReadyScanner.observe(gated.output)
     if (scanned.ready) {
