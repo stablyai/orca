@@ -455,7 +455,9 @@
       "failed": "Couldn't resume the interrupted chats.",
       "count_one": "{{count}} chat was interrupted",
       "count_other": "{{count}} chats were interrupted",
-      "resumeAll": "Resume all"
+      "resumeAll": "Resume all",
+      "failedCount_one": "{{count}} chat couldn't resume",
+      "failedCount_other": "{{count}} chats couldn't resume"
     },
     "viewControls": {
       "allAgents": "All agents",
@@ -465,7 +467,8 @@
       "agentsLabel": "Agents: {{agents}}",
       "sortLabel": "Sort sessions: {{sort}}",
       "agents": "Agents",
-      "sort": "Sort"
+      "sort": "Sort",
+      "noAgents": "No agents"
     }
   },
   "diagnostics": {

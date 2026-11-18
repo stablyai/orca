@@ -1,3 +1,4 @@
+import { AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-restart-continue-timeout'
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 
 export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
@@ -9,6 +10,5 @@ export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, num
   ['agentSession.sleepWorkspace', 120_000],
   // A cold Codex read or a Claude sign-in finish (exchange, reconnect, re-read) can run long.
   ['agentSession.mcp', 90_000],
-  // All bounded-concurrency provider starts and dispatch settlements precede the reply.
-  ['agentSession.restartContinue', 600_000]
+  ['agentSession.restartContinue', AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS]
 ])

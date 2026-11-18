@@ -41,11 +41,13 @@ export function AgentHistoryViewControls({
   const shownAgents = listedAgents.filter((agent) => agents.includes(agent))
   const agentsLabel = allAgents
     ? t('agentHistory.viewControls.allAgents', 'All agents')
-    : shownAgents.length === 1
-      ? aiVaultAgentLabel(shownAgents[0]!)
-      : t('agentHistory.viewControls.agentCount', '{{count}} agents', {
-          count: shownAgents.length
-        })
+    : shownAgents.length === 0
+      ? t('agentHistory.viewControls.noAgents', 'No agents')
+      : shownAgents.length === 1
+        ? aiVaultAgentLabel(shownAgents[0]!)
+        : t('agentHistory.viewControls.agentCount', '{{count}} agents', {
+            count: shownAgents.length
+          })
   const sortOptions: { value: AiVaultSort; label: string; icon: LucideIcon }[] = [
     {
       value: 'updated',

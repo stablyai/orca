@@ -2,7 +2,9 @@
   "agentHistory": {
     "interrupted": {
       "count_one": "{{count}} chat was interrupted",
-      "count_other": "{{count}} chats were interrupted"
+      "count_other": "{{count}} chats were interrupted",
+      "failedCount_one": "{{count}} chat couldn't resume",
+      "failedCount_other": "{{count}} chats couldn't resume"
     },
     "panel": {
       "skipped_one": "{{count}} transcript skipped",

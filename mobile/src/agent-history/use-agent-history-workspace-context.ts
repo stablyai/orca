@@ -1,12 +1,23 @@
 import { useEffect, useState } from 'react'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { worktreeCatalogRead } from '../worktree/catalog/worktree-catalog-operations'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { MobileAiVaultProjectSetup } from './agent-history-scope-paths'
 import { agentHistoryProjectSetupsRead } from './mobile-agent-history-operations'
 
 const EMPTY_PROJECT_SETUPS: readonly MobileAiVaultProjectSetup[] = []
+
+// Optional: an unreadable setups reply leaves Project on the active repo and must not cost the worktree list.
+function readProjectSetups(reply: RpcResponse | null): readonly MobileAiVaultProjectSetup[] {
+  try {
+    const setups = reply && agentHistoryProjectSetupsRead.interpret(reply)
+    return setups?.accepted ? setups.value.setups : EMPTY_PROJECT_SETUPS
+  } catch {
+    return EMPTY_PROJECT_SETUPS
+  }
+}
 
 /** The host's workspaces and project setups History scopes its rows by. */
 export function useAgentHistoryWorkspaceContext(
@@ -33,10 +44,7 @@ export function useAgentHistoryWorkspaceContext(
         if (cancelled) {
           return
         }
-        const setups = setupsReply && agentHistoryProjectSetupsRead.interpret(setupsReply)
-        if (setups?.accepted) {
-          setProjectSetups(setups.value.setups)
-        }
+        setProjectSetups(readProjectSetups(setupsReply))
         const catalog = worktreeCatalogRead.interpret(worktreeReply)
         if (catalog.accepted) {
           // Why `?? []`: the member is salvaged, so an envelope the host answers without rows leaves it

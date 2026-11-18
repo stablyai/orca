@@ -135,24 +135,29 @@ export function AgentHistoryResumeNotice({
 export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRestartOffer }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { count, resuming, failed } = offer
-  if (count === 0) {
+  const { count, failedCount, requestFailed, resuming } = offer
+  if (count === 0 && failedCount === 0 && !requestFailed) {
     return null
   }
+  const message = requestFailed
+    ? t('agentHistory.interrupted.failed', "Couldn't resume the interrupted chats.")
+    : count > 0
+      ? count === 1
+        ? t('agentHistory.interrupted.count_one', '{{count}} chat was interrupted', { count })
+        : t('agentHistory.interrupted.count_other', '{{count}} chats were interrupted', { count })
+      : failedCount === 1
+        ? t('agentHistory.interrupted.failedCount_one', "{{count}} chat couldn't resume", {
+            count: failedCount
+          })
+        : t('agentHistory.interrupted.failedCount_other', "{{count}} chats couldn't resume", {
+            count: failedCount
+          })
   return (
     <View style={[styles.notice, styles.noticeRow]}>
-      <Text style={styles.noticeText}>
-        {failed
-          ? t('agentHistory.interrupted.failed', "Couldn't resume the interrupted chats.")
-          : count === 1
-            ? t('agentHistory.interrupted.count_one', '{{count}} chat was interrupted', { count })
-            : t('agentHistory.interrupted.count_other', '{{count}} chats were interrupted', {
-                count
-              })}
-      </Text>
+      <Text style={styles.noticeText}>{message}</Text>
       {resuming ? (
         <ActivityIndicator size="small" color={colors.textSecondary} />
-      ) : (
+      ) : count > 0 || requestFailed ? (
         <Pressable
           style={({ pressed }) => pressed && pressedStyle}
           onPress={offer.resumeAll}
@@ -160,12 +165,12 @@ export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRe
           accessibilityRole="button"
         >
           <Text style={styles.noticeAction}>
-            {failed
+            {requestFailed
               ? t('common.retry', 'Retry')
               : t('agentHistory.interrupted.resumeAll', 'Resume all')}
           </Text>
         </Pressable>
-      )}
+      ) : null}
       <Pressable
         style={({ pressed }) => pressed && pressedStyle}
         onPress={offer.dismiss}
