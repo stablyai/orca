@@ -136,6 +136,8 @@ export function useOnboardingFlow(
   const { agentSurface, setAgentSurface, chatAgents, chatDetected, refreshDetectedAgents } =
     useOnboardingAgentSurface({
       settings,
+      // Step 1 saves the surface, so only a flow that finished it has a choice to reflect.
+      surfaceChosen: remappedLastCompletedStep >= 1,
       selectedAgent,
       agentInteractedRef,
       setSelectedAgent

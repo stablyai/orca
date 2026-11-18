@@ -1,29 +1,14 @@
+import { ORCA_BROWSER_BLANK_URL } from '../../../../src/shared/browser/browser-blank-page'
+import {
+  DEFAULT_SEARCH_ENGINE,
+  normalizeBrowserNavigationUrl
+} from '../../../../src/shared/browser/navigation/browser-url'
+
+/** Desktop's address-bar rule; the phone has no search engine setting, so it uses desktop's default. */
 export function normalizeBrowserUrl(value: string): string | null {
-  const trimmed = value.trim()
-  if (!trimmed || isBlankBrowserUrl(trimmed)) {
-    return 'about:blank'
-  }
-  if (hasHttpLikeLocalHost(trimmed)) {
-    try {
-      return new URL(`http://${trimmed}`).toString()
-    } catch {
-      return null
-    }
-  }
-  try {
-    const parsed = new URL(trimmed)
-    return parsed.protocol === 'http:' ||
-      parsed.protocol === 'https:' ||
-      parsed.protocol === 'file:'
-      ? parsed.toString()
-      : null
-  } catch {
-    try {
-      return new URL(`https://${trimmed}`).toString()
-    } catch {
-      return null
-    }
-  }
+  const url = normalizeBrowserNavigationUrl(value, DEFAULT_SEARCH_ENGINE)
+  // Keep sending the blank address the phone always sent, which every host accepts.
+  return url === ORCA_BROWSER_BLANK_URL ? 'about:blank' : url
 }
 
 export function displayBrowserUrl(value: string | null | undefined): string {
@@ -55,11 +40,4 @@ export function compactMobileBrowserFileAddress(value: string): string | null {
 export function isBlankBrowserUrl(value: string | null | undefined): boolean {
   const trimmed = value?.trim() ?? ''
   return !trimmed || trimmed === 'about:blank' || trimmed.startsWith('data:text/html')
-}
-
-function hasHttpLikeLocalHost(value: string): boolean {
-  return (
-    /^(localhost|127(?:\.\d{1,3}){3}|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i.test(value) ||
-    /^[\w.-]+\.local(?::\d+)?(?:[/?#].*)?$/i.test(value)
-  )
 }

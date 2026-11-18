@@ -37,9 +37,15 @@ declare module 'mdast' {
     children: PhrasingContent[]
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
+  interface Mention extends Literal {
+    /** A Slack message's `@Name` or `#channel`, drawn as a mention. */
+    type: 'mention'
+  }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface PhrasingContentMap {
     inlineMath: InlineMath
     htmlSpan: HtmlSpan
+    mention: Mention
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface RootContentMap {
@@ -47,6 +53,7 @@ declare module 'mdast' {
     htmlSpan: HtmlSpan
     inlineMath: InlineMath
     math: Math
+    mention: Mention
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface BlockContentMap {

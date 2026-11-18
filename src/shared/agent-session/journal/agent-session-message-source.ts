@@ -21,6 +21,15 @@ export type AgentMessageSender = Readonly<{
   /** Its agent when Orca wrote, so the card keeps its icon once the agent is gone; absent when unknown. */
   agent?: AgentType
   relation?: 'worker' | 'coordinator' | 'none'
+  /** Mail finishing a connector conversation's ask (a report from a worker its turn started, or another
+   *  bot's answer to a request it sent); it answers there. */
+  toConversation?: true
+  /** `name` is the bot whose home the sender's chat is in; it outranks the chat's own live name. */
+  bot?: true
+  /** The paired computer the mail came from, by the name it gave; absent for this Orca's own senders. */
+  host?: string
+  /** That bot's avatar as its own Orca stores it, for a bot this Orca's catalog doesn't hold. */
+  botAvatar?: string
 }>
 
 /** One orchestration message a notice points at: its record, and its sender's `senders` address. */
@@ -129,6 +138,10 @@ const senderSchema = z.object({
   // Any bounded string: a kind a newer build knows still draws as its first letter.
   agent: salvagedOptional('agent', z.string().min(1).max(AGENT_TYPE_MAX_LENGTH)),
   relation: salvagedOptional('relation', z.enum(['worker', 'coordinator', 'none'])),
+  toConversation: salvagedOptional('toConversation', z.literal(true)),
+  bot: salvagedOptional('bot', z.literal(true)),
+  host: salvagedOptional('host', z.string().transform(agentMessageSenderName).pipe(z.string())),
+  botAvatar: salvagedOptional('botAvatar', z.string().min(1).max(200)),
   name: z.unknown().transform(agentMessageSenderName)
 })
 

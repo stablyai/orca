@@ -13,15 +13,15 @@ export const JOURNAL_READER_REPLY_BYTE_LIMIT = 64 * 2 ** 20
 
 /**
  * The bounded walk sizes a reply it saw whole; one it cut short is measured, so rows past the walk
- * can't hide. A reply carrying one stored item is never refused: no page can split it, and main
- * held it when it was written. The record set loads the chat store itself: refusing it
+ * can't hide. One stored item is refused like any aggregate: a completed tool output is kept whole,
+ * so a single item can be hundreds of MB. The record set loads the chat store itself: refusing it
  * would leave every chat unopenable, and it grows only with chat count (~25 MB at 18k chats).
  */
 export function journalReaderReplyExceedsLimit(
   reply: unknown,
   limit = JOURNAL_READER_REPLY_BYTE_LIMIT
 ): boolean {
-  if (isRecordSetReply(reply) || carriesOneItem(reply)) {
+  if (isRecordSetReply(reply)) {
     return false
   }
   const shape = describeWorkerMessage(reply)
@@ -44,8 +44,17 @@ export function limitJournalReaderReply<T extends { type: string }>(
   return {
     type: 'failed',
     id: reply.id,
-    error: journalSqlFailure(new Error(`journal read reply (${reply.type}) exceeds ${limit} bytes`))
+    error: journalSqlFailure(
+      new Error(`${REPLY_LIMIT_FAILURE} (${reply.type}) exceeds ${limit} bytes`)
+    )
   }
+}
+
+const REPLY_LIMIT_FAILURE = 'journal read reply'
+
+/** A chat whose rows can't fit one reply fails the same way at every retry. */
+export function isJournalReaderReplyLimitFailure(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith(`${REPLY_LIMIT_FAILURE} (`)
 }
 
 function isRecordSetReply(reply: unknown): boolean {
@@ -59,42 +68,5 @@ function isRecordSetReply(reply: unknown): boolean {
     result !== null &&
     'kind' in result &&
     result.kind === 'records'
-  )
-}
-
-/** Point reads of one stored entity; anything else, including nested aggregates, stays limited. */
-const SINGLE_ENTITY_RESULTS: ReadonlySet<unknown> = new Set([
-  'item',
-  'item-detail',
-  'saved-content',
-  'submission-body'
-])
-const ITEM_LIST_RESULTS: ReadonlySet<unknown> = new Set([
-  'items-by-kind',
-  'history-items',
-  'history-source-items'
-])
-
-function carriesOneItem(reply: unknown): boolean {
-  if (typeof reply !== 'object' || reply === null || !('type' in reply) || !('result' in reply)) {
-    return false
-  }
-  const { result } = reply
-  if (
-    reply.type !== 'point' ||
-    typeof result !== 'object' ||
-    result === null ||
-    !('kind' in result)
-  ) {
-    return false
-  }
-  if (SINGLE_ENTITY_RESULTS.has(result.kind)) {
-    return true
-  }
-  return (
-    ITEM_LIST_RESULTS.has(result.kind) &&
-    'items' in result &&
-    Array.isArray(result.items) &&
-    result.items.length <= 1
   )
 }

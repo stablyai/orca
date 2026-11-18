@@ -4,6 +4,7 @@ import * as z from 'zod'
 import type { AgentSessionCapabilities } from '../capabilities/agent-session-capabilities'
 import { isStructuredAgentId } from '../lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openEnum } from '../../validation/zod-salvage'
+import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY } from '../../agent-launch/installation/managed-runtime-install'
 
 export const AGENT_SESSION_AGENTS_METHOD = 'agentSession.agents'
 
@@ -70,4 +71,19 @@ export function decodeAgentSessionAgentsResult(
     }
   }
   return decoded
+}
+
+/** The host installs this agent's chat program itself, so a chat needs no detected CLI. */
+export function registeredAgentChatInstallable(
+  registered:
+    | readonly Pick<AgentSessionRegisteredAgent, 'agent' | 'managedRuntime'>[]
+    | null
+    | undefined,
+  agent: string,
+  hostCapabilities: readonly string[]
+): boolean {
+  return (
+    hostCapabilities.includes(MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY) &&
+    registered?.some((row) => row.agent === agent && row.managedRuntime === true) === true
+  )
 }
