@@ -15,6 +15,7 @@ import {
   shouldIgnoreDownloadedUpdateEvent
 } from './linux-package/linux-package-downloaded-status'
 import { isExternallyManagedLinuxInstall } from './linux-package/linux-update-package-type'
+import { zotzManualMacInstallFields } from './zotz-mac-manual-install'
 import * as linuxPackageRecovery from './linux-package/linux-package-update-recovery'
 import { preExtractDownloadedAppImageUpdate } from '../cli/appimage/appimage-copy-pre-extraction'
 
@@ -163,7 +164,8 @@ export function registerAutoUpdaterHandlers({
             version: info.version,
             changelog,
             // Tell clients this host cannot self-update before offering a download.
-            ...(isExternallyManagedLinuxInstall() ? { externallyManaged: true } : {})
+            ...(isExternallyManagedLinuxInstall() ? { externallyManaged: true } : {}),
+            ...zotzManualMacInstallFields(info.version)
           }
         )
       } finally {

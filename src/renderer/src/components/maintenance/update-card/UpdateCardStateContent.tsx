@@ -160,6 +160,7 @@ export function UpdateCardStateContent({
       onUpdate={onUpdate}
       onClose={onDismiss}
       externallyManaged={status.externallyManaged}
+      zotzManualDownloadUrl={status.zotzManualDownloadUrl}
     />
   ) : (
     <UpdateAvailableSimpleContent
@@ -168,6 +169,7 @@ export function UpdateCardStateContent({
       onUpdate={onUpdate}
       onClose={onDismiss}
       externallyManaged={status.externallyManaged}
+      zotzManualDownloadUrl={status.zotzManualDownloadUrl}
     />
   )
 }

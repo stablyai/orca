@@ -3,14 +3,22 @@ import type { ChangelogData } from '../../../../../shared/update-status-types'
 import { Button } from '../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { ZotzMacManualUpdateNote } from '../../zotz/ZotzMacManualUpdateNote'
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
 }
 
 /** A package manager owns this install: the release is real but Orca can never apply it here. */
-function ExternallyManagedNote(): React.JSX.Element {
+function ExternallyManagedNote({
+  zotzManualDownloadUrl
+}: {
+  zotzManualDownloadUrl?: string
+}): React.JSX.Element {
   const t = useTranslate()
+  if (zotzManualDownloadUrl) {
+    return <ZotzMacManualUpdateNote url={zotzManualDownloadUrl} />
+  }
   return (
     <p className="text-xs leading-relaxed text-muted-foreground">
       {t(
@@ -31,7 +39,8 @@ export function UpdateAvailableRichContent({
   onMediaLoad,
   onUpdate,
   onClose,
-  externallyManaged = false
+  externallyManaged = false,
+  zotzManualDownloadUrl
 }: {
   release: NonNullable<ChangelogData['release']>
   releasesBehind: number | null
@@ -43,6 +52,7 @@ export function UpdateAvailableRichContent({
   onUpdate: () => void
   onClose: () => void
   externallyManaged?: boolean
+  zotzManualDownloadUrl?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const showMedia =
@@ -108,7 +118,7 @@ export function UpdateAvailableRichContent({
         {t('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')}
       </button>
       {externallyManaged ? (
-        <ExternallyManagedNote />
+        <ExternallyManagedNote zotzManualDownloadUrl={zotzManualDownloadUrl} />
       ) : (
         <Button variant="default" size="sm" onClick={onUpdate} className="w-full cursor-pointer">
           {t('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
@@ -123,13 +133,15 @@ export function UpdateAvailableSimpleContent({
   releaseUrl,
   onUpdate,
   onClose,
-  externallyManaged = false
+  externallyManaged = false,
+  zotzManualDownloadUrl
 }: {
   version: string
   releaseUrl?: string
   onUpdate: () => void
   onClose: () => void
   externallyManaged?: boolean
+  zotzManualDownloadUrl?: string
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -154,7 +166,7 @@ export function UpdateAvailableSimpleContent({
         })}
       </p>
       {externallyManaged ? (
-        <ExternallyManagedNote />
+        <ExternallyManagedNote zotzManualDownloadUrl={zotzManualDownloadUrl} />
       ) : (
         <p className="text-xs leading-relaxed text-muted-foreground">
           {t('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
