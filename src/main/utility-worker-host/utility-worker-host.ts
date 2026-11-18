@@ -34,6 +34,7 @@ export type UtilityWorkerHostCrashCap = {
   windowMs: number
   message: string
   onPause: () => void
+  onResume: () => void
 }
 
 export class UtilityWorkerHostPausedError extends Error {
@@ -153,6 +154,7 @@ export class UtilityWorkerHost {
     recordDurableCrashBreadcrumb('utility_worker_host_retried', { serviceName: this.serviceName })
     this.paused = false
     this.crashes?.forget(this.serviceName)
+    this.crashCap?.onResume()
   }
 
   private liveHost(): Host {

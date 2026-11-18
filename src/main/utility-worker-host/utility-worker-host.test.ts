@@ -293,7 +293,8 @@ describe('UtilityWorkerHost', () => {
       return child
     })
     const onPause = vi.fn()
-    const host = newHost({ crashes: 3, windowMs: 60_000, message: 'paused', onPause })
+    const onResume = vi.fn()
+    const host = newHost({ crashes: 3, windowMs: 60_000, message: 'paused', onPause, onResume })
     const spawnEcho = () =>
       host.spawn({
         filename: echoEntry,
@@ -313,6 +314,7 @@ describe('UtilityWorkerHost', () => {
     expect(fork).toHaveBeenCalledTimes(3)
     expect(inProcess).not.toHaveBeenCalled()
     host.retry()
+    expect(onResume).toHaveBeenCalledTimes(1)
     const worker = spawnEcho()
     expect(await nextMessage(worker)).toEqual({ hello: 'x' })
     expect(fork).toHaveBeenCalledTimes(4)

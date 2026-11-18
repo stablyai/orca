@@ -26302,5 +26302,10 @@
     "suggestionUse": "Use",
     "browseOnline": "Browse",
     "browseOnlineLabel": "Browse community translations on orca.dev (opens in your browser)"
+  },
+  "backgroundWorkerPaused": {
+    "title": "Some background work paused after crashing repeatedly",
+    "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
+    "retry": "Retry"
   }
 }

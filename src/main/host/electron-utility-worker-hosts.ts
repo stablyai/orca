@@ -1,7 +1,9 @@
 import { join } from 'node:path'
 import { BrowserWindow, ipcMain } from 'electron'
 import {
+  BACKGROUND_WORKER_IS_PAUSED_CHANNEL,
   BACKGROUND_WORKER_PAUSED_CHANNEL,
+  BACKGROUND_WORKER_RESUMED_CHANNEL,
   BACKGROUND_WORKER_RETRY_CHANNEL
 } from '../../shared/background-worker/background-worker-pause-channels'
 import { UtilityWorkerHost } from '../utility-worker-host/utility-worker-host'
@@ -17,15 +19,16 @@ import { getLogsDirectory } from '../observability/logs-directory'
 import { setHeavyWorkerHost } from '../utility-worker-host/heavy-worker-spawn'
 import { HEAVY_WORKER_HOST_NAME } from '../utility-worker-host/heavy-worker-host-name'
 
+const CRASH_LIMIT = 3
 const CRASH_WINDOW_MS = 5 * 60_000
 
-function broadcastBackgroundWorkerPaused(): void {
+function broadcast(channel: string): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (window.isDestroyed()) {
       continue
     }
     try {
-      window.webContents.send(BACKGROUND_WORKER_PAUSED_CHANNEL)
+      window.webContents.send(channel)
     } catch {
       // A renderer can disappear between isDestroyed() and send().
     }
@@ -64,15 +67,17 @@ export function installElectronHeavyWorkerHost(): void {
     hostEntry,
     ({ filename, name, workerData }) => spawnWorkerThread(filename, { name, workerData }),
     {
-      crashes: 3,
+      crashes: CRASH_LIMIT,
       windowMs: CRASH_WINDOW_MS,
-      message:
-        'Orca paused this after it crashed 3 times in 5 minutes. Choose Retry on the notice, or restart Orca.',
-      onPause: broadcastBackgroundWorkerPaused
+      message: `Paused after crashing ${CRASH_LIMIT} times in 5 minutes. Try again to resume.`,
+      onPause: () => broadcast(BACKGROUND_WORKER_PAUSED_CHANNEL),
+      onResume: () => broadcast(BACKGROUND_WORKER_RESUMED_CHANNEL)
     }
   )
   ipcMain.removeHandler(BACKGROUND_WORKER_RETRY_CHANNEL)
   ipcMain.handle(BACKGROUND_WORKER_RETRY_CHANNEL, () => host.retry())
+  ipcMain.removeHandler(BACKGROUND_WORKER_IS_PAUSED_CHANNEL)
+  ipcMain.handle(BACKGROUND_WORKER_IS_PAUSED_CHANNEL, () => host.pauseMessage !== null)
   setHeavyWorkerHost({
     spawn: (filename, { name, workerData }) =>
       // Only tests and unbuilt sources name a URL entry; the host can load built files only.
