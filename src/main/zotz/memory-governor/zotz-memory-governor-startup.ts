@@ -10,6 +10,7 @@ import { ZotzAgentMemorySampler, type ZotzLiveAgentPane } from './zotz-agent-mem
 import { ZotzMemoryGovernorService } from './zotz-memory-governor-service'
 import { ZotzAgentLaunchQueue } from './zotz-agent-launch-queue'
 import { setZotzAgentLaunchQueue } from './zotz-agent-launch-hold'
+import { registerZotzAgentQueueHandlers } from './zotz-agent-queue-ipc'
 
 let governor: ZotzMemoryGovernorService | null = null
 
@@ -64,11 +65,14 @@ export function startZotzMemoryGovernor(input: {
     now: Date.now
   })
   governor = service
-  setZotzAgentLaunchQueue(new ZotzAgentLaunchQueue(service))
+  const launchQueue = new ZotzAgentLaunchQueue(service)
+  setZotzAgentLaunchQueue(launchQueue)
+  const unregisterIpc = registerZotzAgentQueueHandlers(service, launchQueue)
   void service.start()
   const unsubscribe = input.server.subscribeStatusRowMutations(() => service.wake())
   return () => {
     unsubscribe()
+    unregisterIpc()
     service.dispose()
     setZotzAgentLaunchQueue(null)
     if (governor === service) {

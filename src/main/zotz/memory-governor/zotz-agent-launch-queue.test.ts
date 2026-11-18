@@ -4,6 +4,9 @@ import type { ZotzMemoryGovernorState } from './zotz-memory-governor-service'
 import { ZotzAgentLaunchCanceledError, ZotzAgentLaunchQueue } from './zotz-agent-launch-queue'
 
 const GB = 1024 ** 3
+// Samples and the queue share this clock, so every sample counts as fresh.
+const NOW = 1_000_000
+const now = () => NOW
 
 /** A memory governor whose samples the test writes by hand. */
 function fakeGovernor() {
@@ -32,7 +35,7 @@ function fakeGovernor() {
           peakBytes: 1 * GB,
           startedAt: 0
         })),
-        sampledAt: Date.now()
+        sampledAt: NOW
       }
       for (const listener of listeners) {
         listener(state)
@@ -44,7 +47,7 @@ function fakeGovernor() {
 describe('ZotzAgentLaunchQueue', () => {
   it('holds launches until memory and a free slot let them in, manual first', async () => {
     const governor = fakeGovernor()
-    const queue = new ZotzAgentLaunchQueue(governor)
+    const queue = new ZotzAgentLaunchQueue(governor, now)
     const started: string[] = []
     const launch = (paneKey: string, priority: 'manual' | 'automation') =>
       queue.admit({ agent: 'codex', priority, paneKey, label: paneKey }).then(() => {
@@ -81,7 +84,7 @@ describe('ZotzAgentLaunchQueue', () => {
 
   it('lets the user cancel a queued launch or start it anyway', async () => {
     const governor = fakeGovernor()
-    const queue = new ZotzAgentLaunchQueue(governor)
+    const queue = new ZotzAgentLaunchQueue(governor, now)
     governor.sample(3, 0)
     const canceled = queue.admit({ agent: 'claude', priority: 'remote', paneKey: 'a', label: 'a' })
     const forced = queue.admit({ agent: 'claude', priority: 'remote', paneKey: 'b', label: 'b' })

@@ -22,6 +22,7 @@ import { handleInternalTerminalFileDrop } from '../input/file-drop/terminal-drop
 import { TerminalQuickCommandEditorDialog } from '../quick-commands/TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from '../chat/TerminalPaneNativeChatPortal'
 import { TerminalPaneSleepingPortals } from '../session-restore/spawn-deferral/TerminalPaneSleepingPortals'
+import { ZotzQueuedPanePortals } from '../../zotz/agent-queue/ZotzQueuedPanePortals'
 import { TerminalPaneCodexRestartPortals } from './TerminalPaneCodexRestartPortals'
 import { TerminalPaneMobileDriverPortals } from '../mobile-driver/TerminalPaneMobileDriverPortals'
 import { TerminalPaneProcessExitPortals } from '../process-exit/TerminalPaneProcessExitPortals'
@@ -385,6 +386,7 @@ export function TerminalPaneSurface({
       />
       <TerminalPaneRecoveryPortals controller={controller} />
       <TerminalPaneSleepingPortals controller={controller} />
+      <ZotzQueuedPanePortals controller={controller} />
       <TerminalPaneMobileDriverPortals controller={controller} />
       <CloseTerminalDialog
         open={pendingCloseConfirmation !== null}

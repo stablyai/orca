@@ -38,6 +38,7 @@ import { diagnosticsApi } from './api/diagnostics/diagnostics-bridge'
 import { settingsApi } from './api/preferences/settings-bridge'
 import { agentAwakeApi } from './api/agent-status/agent-awake-bridge'
 import { zotzNodeApi } from './api/zotz/zotz-node-bridge'
+import { zotzAgentQueueApi } from './api/zotz/zotz-agent-queue-bridge'
 import { localhostWorktreeLabelsApi } from './api/workspaces/localhost-worktree-labels-bridge'
 import { keybindingsApi } from './api/preferences/keybindings-bridge'
 import { codexAccountsApi } from './api/agent-accounts/codex-accounts-bridge'
@@ -148,6 +149,7 @@ const api = {
   settings: settingsApi,
   agentAwake: agentAwakeApi,
   zotzNode: zotzNodeApi,
+  zotzAgentQueue: zotzAgentQueueApi,
   localhostWorktreeLabels: localhostWorktreeLabelsApi,
   keybindings: keybindingsApi,
   codexAccounts: codexAccountsApi,

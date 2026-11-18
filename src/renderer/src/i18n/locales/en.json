@@ -25866,6 +25866,18 @@
         "windowsUpdate": "No automatic restarts while signed in"
       },
       "title": "Set up this computer as a remote server"
+    },
+    "agentQueue": {
+      "titleNext": "Queued · next to start",
+      "title": "Queued · {{ahead}} ahead",
+      "waitConcurrency": "{{running}} of {{max}} agents are already working on this machine.",
+      "waitMemory": "Needs ~{{need}} GB and {{free}} GB are free; Zotz always keeps {{min}} GB for the system.",
+      "waitBudget": "Agents already use {{used}} of their {{budget}} GB budget.",
+      "waitPressure": "The machine is low on memory; nothing new starts until some is freed.",
+      "waitStarting": "Checking memory…",
+      "autoStart": "The agent starts on its own when there is room. Nothing is lost if you wait.",
+      "cancel": "Cancel",
+      "forceStart": "Launch anyway"
     }
   }
 }

@@ -24240,6 +24240,18 @@
         "windowsUpdate": "Sin reinicios automáticos con sesión iniciada"
       },
       "title": "Configurar esta computadora como servidor remoto"
+    },
+    "agentQueue": {
+      "titleNext": "En cola · es la siguiente",
+      "title": "En cola · {{ahead}} antes",
+      "waitConcurrency": "Ya hay {{running}} de {{max}} agentes trabajando en esta máquina.",
+      "waitMemory": "Necesita ~{{need}} GB y hay {{free}} GB libres; Zotz siempre deja {{min}} GB para el sistema.",
+      "waitBudget": "Los agentes ya usan {{used}} de su presupuesto de {{budget}} GB.",
+      "waitPressure": "La máquina tiene poca memoria; nada nuevo arranca hasta que se libere.",
+      "waitStarting": "Revisando la memoria…",
+      "autoStart": "El agente arranca solo cuando haya lugar. No se pierde nada si esperas.",
+      "cancel": "Cancelar",
+      "forceStart": "Lanzar de todos modos"
     }
   }
 }
