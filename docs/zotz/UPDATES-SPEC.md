@@ -54,9 +54,10 @@ Por qué:
 
 **Cálculo en CI:**
 
-1. Base = `version` de `package.json` (la de Orca; no se edita a mano).
+1. Base = el release más nuevo de Orca cuyo corte ya está mergeado en el commit: para cada etiqueta `vX.Y.Z` de `stablyai/orca` (las 30 más nuevas), `merge-base(etiqueta, main de Orca)` debe ser ancestro de `HEAD`. No sirve `package.json`: Orca lo deja fijo en `main` (`1.4.214`) y solo lo sube en sus ramas de release. Por eso el job `version` clona con historia completa.
 2. `build` = (número de etiquetas `v<major>.<minor>.<parche×100 + n>` ya publicadas para esa base) + 1.
 3. Si `build > 99`, el job falla con un mensaje claro (sincroniza con Orca o cambia el esquema).
+   También falla si la versión no queda por encima del último release de Zotz: los nodos instalados solo aceptan versiones mayores.
 4. La versión se inyecta al empaquetar (`extraMetadata.version`, sin tocar `package.json` del repo). La app la ve en `app.getVersion()`.
 5. Ajustes → Acerca de muestra: `Zotz 1.4.21427 (Orca 1.4.214, build 27)`.
 
