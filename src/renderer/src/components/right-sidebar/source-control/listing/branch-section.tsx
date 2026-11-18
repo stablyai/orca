@@ -98,9 +98,8 @@ export function SourceControlBranchSection({
           onViewAll ? (
             <Button
               type="button"
-              variant="ghost"
+              variant="muted-field-icon"
               size="xs"
-              className="px-1.5 text-muted-foreground hover:text-foreground"
               onClick={(e) => {
                 e.stopPropagation()
                 onViewAll()

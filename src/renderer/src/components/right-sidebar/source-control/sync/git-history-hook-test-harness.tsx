@@ -30,7 +30,7 @@ export function historyResult(subject: string, headOid?: string): GitHistoryResu
   }
 }
 
-const ALL_WORKTREES = new Map<string, unknown>([
+export const ALL_WORKTREES = new Map<string, unknown>([
   ['A', {}],
   ['B', {}]
 ])
