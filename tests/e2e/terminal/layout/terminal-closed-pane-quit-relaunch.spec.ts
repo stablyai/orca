@@ -58,7 +58,7 @@ async function waitForBoundPanes(page: Page, count: number): Promise<BoundPane[]
 async function closeFocusedPaneWithChord(page: Page, panesBefore: number): Promise<void> {
   await focusActiveTerminalInput(page)
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+w' : 'Control+w')
-  const confirm = page.getByRole('button', { name: 'Stop and Close' })
+  const confirm = page.getByRole('button', { name: 'Stop and close', exact: true })
   await expect
     .poll(
       async () => {

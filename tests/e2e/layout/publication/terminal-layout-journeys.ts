@@ -78,7 +78,7 @@ export async function closeActivePaneFromKeyboard(page: Page, paneCount: number)
   await focusActiveTerminalInput(page)
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+w' : 'Control+w')
   // A fresh shell can still read as busy, which asks before stopping it.
-  const confirm = page.getByRole('button', { name: 'Stop and Close' })
+  const confirm = page.getByRole('button', { name: 'Stop and close', exact: true })
   await expect
     .poll(
       async () => {

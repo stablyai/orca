@@ -24,7 +24,7 @@ async function closeTabFromTabBar(page: Page, tabId: string): Promise<void> {
   const tab = tabLocator(page, tabId)
   await tab.hover()
   await tab.getByRole('button', { name: /^Close tab /i }).click()
-  const confirmation = page.getByRole('dialog', { name: 'Stop running command?' })
+  const confirmation = page.getByRole('dialog', { name: 'Stop the running command?' })
   // A shell still starting under load may require the running-command confirmation.
   await expect
     .poll(async () => (await confirmation.isVisible()) || (await tab.count()) === 0, {
@@ -32,7 +32,7 @@ async function closeTabFromTabBar(page: Page, tabId: string): Promise<void> {
     })
     .toBe(true)
   if (await confirmation.isVisible()) {
-    await confirmation.getByRole('button', { name: 'Stop and Close', exact: true }).click()
+    await confirmation.getByRole('button', { name: 'Stop and close', exact: true }).click()
   }
 }
 
