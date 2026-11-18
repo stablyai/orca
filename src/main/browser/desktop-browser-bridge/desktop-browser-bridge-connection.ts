@@ -10,7 +10,10 @@ import {
 } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { sendResultChunks } from '../client-hosts/commands/browser-host-command-result-staging'
+import {
+  formatMegabytes,
+  sendResultChunks
+} from '../client-hosts/commands/browser-host-command-result-staging'
 import type { DesktopBrowserBridgeOutcome } from './desktop-browser-bridge-executor'
 
 const RESULT_TIMEOUT_MS = 30_000
@@ -123,10 +126,9 @@ export class DesktopBrowserBridgeConnection {
     if (request.timeoutMs) {
       signals.push(AbortSignal.timeout(request.timeoutMs))
     }
-    const signal = AbortSignal.any(signals)
     let outcome: DesktopBrowserBridgeOutcome
     try {
-      outcome = await this.options.execute(request, signal, this.revoked.signal)
+      outcome = await this.options.execute(request, AbortSignal.any(signals), this.revoked.signal)
     } finally {
       if (this.cancellations.get(request.requestId) === cancelled) {
         this.cancellations.delete(request.requestId)
@@ -136,7 +138,14 @@ export class DesktopBrowserBridgeConnection {
     if (this.closed || this.attachmentId !== attachmentId || !sendRequest) {
       return
     }
-    const params = await resultParams(sendRequest, attachmentId, request, outcome, signal)
+    // Only revocation stops the upload: orcad's own timer bounds it by refusing late chunks.
+    const params = await resultParams(
+      sendRequest,
+      attachmentId,
+      request,
+      outcome,
+      this.revoked.signal
+    )
     if (await this.sendResult(sendRequest, params)) {
       return
     }
@@ -252,8 +261,4 @@ function isAccepted(result: unknown): boolean {
   return typeof result === 'object' && result !== null && 'accepted' in result
     ? result.accepted === true
     : false
-}
-
-function formatMegabytes(bytes: number): string {
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

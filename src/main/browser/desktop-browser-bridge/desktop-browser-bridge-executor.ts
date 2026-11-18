@@ -86,6 +86,7 @@ export async function executeDesktopBrowserBridgeRequest(
   }
   try {
     const { params, workspaceId, page } = await scopeRequest(request, deps)
+    audit.urlOrigin = urlOrigin(params.url)
     audit.workspaceId = workspaceId
     audit.page = page
     if (signal?.aborted) {
