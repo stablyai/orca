@@ -1,0 +1,31 @@
+import {
+  dashboardCardDisplayState,
+  type DashboardBucket,
+  type DashboardCard,
+  type DashboardCardBaseDisplayState
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
+
+/** The AgentStateDot glyph that stands for a whole bucket in counts and tiles. */
+export const FLEET_BUCKET_DOT_STATE: Record<DashboardBucket, DashboardCardBaseDisplayState> = {
+  attention: 'waiting',
+  working: 'working',
+  done: 'done',
+  idle: 'idle'
+}
+
+export const FLEET_BUCKET_BAR_CLASS: Record<DashboardBucket, string> = {
+  attention: 'bg-agent-question',
+  working: 'bg-agent-working',
+  done: 'bg-emerald-500',
+  idle: 'bg-neutral-500/40'
+}
+
+/** Same tint rule as AgentKanbanCard: only attention and unacknowledged completion are colored. */
+export function fleetCardSurfaceClass(card: DashboardCard): string {
+  if (card.bucket === 'attention') {
+    return 'border-agent-question/40 bg-agent-question/[0.06]'
+  }
+  return dashboardCardDisplayState(card) === 'done'
+    ? 'border-emerald-500/40 bg-emerald-500/[0.06]'
+    : 'border-border/60 bg-card'
+}

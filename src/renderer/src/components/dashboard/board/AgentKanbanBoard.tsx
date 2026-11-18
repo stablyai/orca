@@ -20,8 +20,8 @@ import {
   type DashboardFilters
 } from './agent-board-filtering'
 import './agent-board-transitions.css'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
+import { dashboardBucketLabel } from './dashboard-bucket-label'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 
 /** Relay acknowledgments to the main renderer; optional calls tolerate dev-HMR preload skew until restart. */
@@ -32,19 +32,6 @@ function ackAgentViaPopoutRelay(paneKey: string, intent: AgentSubjectReadIntent)
 /** Reveal via main-window IPC; optional calls tolerate the same dev-HMR preload skew as acknowledgments. */
 function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
-}
-
-function bucketLabel(bucket: DashboardBucket, t: Translate = translate): string {
-  switch (bucket) {
-    case 'attention':
-      return t('dashboardPopout.bucket.attention', 'Needs You')
-    case 'working':
-      return t('dashboardPopout.bucket.working', 'Working')
-    case 'done':
-      return t('dashboardPopout.bucket.done', 'Done')
-    case 'idle':
-      return t('dashboardPopout.bucket.idle', 'Idle')
-  }
 }
 
 function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, DashboardCard[]> {
@@ -80,7 +67,7 @@ function KanbanColumn({
   onOpenTerminal: (card: DashboardCard) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const label = bucketLabel(bucket, t)
+  const label = dashboardBucketLabel(bucket, t)
   // State, not a ref: the list's virtualizer must re-render once the parent scroller attaches.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
 
