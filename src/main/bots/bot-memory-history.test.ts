@@ -260,6 +260,51 @@ describe("a bot's memory history", () => {
     }
   )
 
+  it.each([10, 100])(
+    'keeps one write and one read waiting behind a stalled disk over %i edits and reads',
+    async (rounds) => {
+      const stored = new Map<string, string>()
+      let release = (): void => {}
+      const stalled = new Promise<void>((resolve) => (release = resolve))
+      let writes = 0
+      let reads = 0
+      const io = {
+        read: async (botId: string) => {
+          reads += 1
+          return stored.get(botId) ?? null
+        },
+        write: async (botId: string, text: string | null) => {
+          writes += 1
+          await stalled
+          void (text === null ? stored.delete(botId) : stored.set(botId, text))
+        },
+        bots: async () => []
+      }
+      const history = createBotMemoryHistory(io)
+      const edit = (index: number) =>
+        history.append('bot-1', { kind: 'owner' }, botMemoryChange('', `- fact ${index}\n`))
+      const first = edit(0)
+      await vi.waitFor(() => expect(writes).toBe(1))
+      const work: Promise<unknown>[] = [first]
+      const lists: Promise<{ change: { added: { line: string }[] } }[]>[] = []
+      for (let index = 1; index <= rounds; index++) {
+        work.push(edit(index))
+        lists.push(history.list('bot-1'))
+      }
+      release()
+      await Promise.all([...work, ...lists])
+
+      expect({ writes, reads }).toEqual({ writes: 2, reads: 3 })
+      const newestFirst = Array.from(
+        { length: rounds + 1 },
+        (_, index) => `- fact ${rounds - index}`
+      )
+      expect((await lists.at(-1))?.map((row) => row.change.added[0]?.line)).toEqual(newestFirst)
+      const restarted = await createBotMemoryHistory(io).list('bot-1')
+      expect(restarted.map((row) => row.change.added[0]?.line)).toEqual(newestFirst)
+    }
+  )
+
   it('creates MEMORY.md for a change when the file is missing', async () => {
     const { read, record, remove, rows } = bot(OLD)
     remove()

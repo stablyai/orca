@@ -38,7 +38,8 @@ export type BotMemoryHistoryIo = {
 }
 
 export type BotMemoryHistory = {
-  /** Records `change` as one row, queued behind the bot's earlier history work; nothing for no change. */
+  /** Records `change` as one row, written behind the bot's earlier history work; nothing for no change.
+   *  Never rejects: a failed write is logged once for every row it carried. */
   append: (botId: string, by: BotMemoryAuthor, change: BotMemoryChange) => Promise<void>
   /** Newest first, including every append made before this call. */
   list: (botId: string) => Promise<BotMemoryHistoryRow[]>
@@ -150,29 +151,43 @@ export function createBotMemoryHistory(
     }
     return rows
   }
-  // Appends waiting for their bot's turn share one write: a slow disk holds one pending batch a bot,
-  // at most MAX_ROWS rows, not a rewrite per append. A read or removal closes it, keeping order.
-  const openBatches = new Map<string, { rows: BotMemoryHistoryRow[]; written: Promise<void> }>()
-  const batched = (botId: string, row: BotMemoryHistoryRow): Promise<void> => {
-    const open = openBatches.get(botId)
-    if (open) {
-      open.rows = [row, ...open.rows].slice(0, MAX_ROWS)
-      return open.written
+  // Per bot, at most one queued write and one queued read, however slow the disk: rows not yet written
+  // wait here (newest first, at most MAX_ROWS) and reads add them to what the file holds.
+  const pending = new Map<
+    string,
+    {
+      unwritten: BotMemoryHistoryRow[]
+      write: Promise<void> | null
+      list: Promise<BotMemoryHistoryRow[]> | null
     }
-    const batch = {
-      rows: [row],
-      written: queued(botId, async () => {
-        if (openBatches.get(botId) === batch) {
-          openBatches.delete(botId)
-        }
-        await io.write(
-          botId,
-          JSON.stringify([...batch.rows, ...(await read(botId))].slice(0, MAX_ROWS))
-        )
-      })
+  >()
+  const pendingFor = (botId: string) => {
+    let state = pending.get(botId)
+    if (!state) {
+      state = { unwritten: [], write: null, list: null }
+      pending.set(botId, state)
     }
-    openBatches.set(botId, batch)
-    return batch.written
+    return state
+  }
+  const forget = (botId: string): void => {
+    const state = pending.get(botId)
+    if (state && !state.write && !state.list && state.unwritten.length === 0) {
+      pending.delete(botId)
+    }
+  }
+  const write = (botId: string): Promise<void> => {
+    const state = pendingFor(botId)
+    state.write ??= queued(botId, async () => {
+      state.write = null
+      const rows = state.unwritten
+      state.unwritten = []
+      if (rows.length > 0) {
+        await io.write(botId, JSON.stringify([...rows, ...(await read(botId))].slice(0, MAX_ROWS)))
+      }
+    })
+      .catch((error: unknown) => console.warn('[bots] memory history not written', error))
+      .finally(() => forget(botId))
+    return state.write
   }
   // Bots no one opens still lose their old rows: after the first use, every bot's history is
   // pruned in the background, one at a time behind that bot's own work.
@@ -192,10 +207,14 @@ export function createBotMemoryHistory(
   }
   return {
     list: (botId) => {
-      openBatches.delete(botId)
-      const rows = queued(botId, () => read(botId))
+      const state = pendingFor(botId)
+      state.list ??= queued(botId, async () => {
+        state.list = null
+        const rows = await read(botId)
+        return [...state.unwritten, ...rows].slice(0, MAX_ROWS)
+      }).finally(() => forget(botId))
       startSweep()
-      return rows
+      return state.list
     },
     append: (botId, by, change) => {
       if (isEmptyBotMemoryChange(change)) {
@@ -203,13 +222,15 @@ export function createBotMemoryHistory(
         return Promise.resolve()
       }
       const row: BotMemoryHistoryRow = { id: randomUUID(), at: now(), ...redacted(by, change) }
-      const appended = batched(botId, row)
+      const state = pendingFor(botId)
+      state.unwritten = [row, ...state.unwritten].slice(0, MAX_ROWS)
+      const written = write(botId)
       startSweep()
-      return appended
+      return written
     },
     removed: (botId) => {
-      openBatches.delete(botId)
-      const removed = queued(botId, () => io.write(botId, null))
+      pendingFor(botId).unwritten = []
+      const removed = queued(botId, () => io.write(botId, null)).finally(() => forget(botId))
       startSweep()
       return removed
     },

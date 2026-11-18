@@ -77,9 +77,7 @@ export function createBotMemoryRecord(
   /** A history row for `change`, queued now so later reads see it; a history that can't be
    *  written never fails the change. */
   const noted = (botId: string, by: BotMemoryAuthor, made: BotMemoryChange): void => {
-    history.append(botId, by, made).catch((error: unknown) => {
-      console.warn('[bots] memory history not written', error)
-    })
+    void history.append(botId, by, made)
   }
 
   /**
