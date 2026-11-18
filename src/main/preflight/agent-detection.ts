@@ -65,6 +65,7 @@ export type PreflightStatus = {
     account: string | null
     baseUrl: string | null
     tokenConfigured: boolean
+    authError?: string | null
   }
 }
 
