@@ -21,6 +21,7 @@ import { useHostBooleanSetting } from '../../host-scope/use-host-boolean-setting
 import { formatBytes } from '../../../../../../shared/text/format-bytes'
 import { getDeleteAgentHistorySearchEntry } from './delete-agent-history-search'
 import { useCodexHistoryDiskUsage } from './use-codex-history-disk-usage'
+import { matchesSettingsSearch } from '../../search/settings-search'
 
 /** The host that owns the workspaces deletes their chat history, so the switch reads and writes that host. */
 export function DeleteAgentHistoryWithWorkspaceSetting({
@@ -52,7 +53,12 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
       { host: hostLabel }
     )
   })
-  const diskUsage = useCodexHistoryDiskUsage(hostScope.target)
+  const query = useAppStateValue((state) => state.settingsSearchQuery)
+  // The row stays mounted while search hides it, so the size is read only when it can be seen.
+  const diskUsage = useCodexHistoryDiskUsage(
+    hostScope.target,
+    matchesSettingsSearch(query, search)
+  )
   const [confirming, setConfirming] = useState(false)
   const enabled = setting.state === 'ready' && setting.enabled
 

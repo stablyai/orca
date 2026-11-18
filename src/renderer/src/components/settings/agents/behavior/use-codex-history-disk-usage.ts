@@ -15,11 +15,12 @@ import type { CodexHistoryDiskUsage } from '../../../../../../shared/workspace-c
 // The host walks every Codex home within a minute, then answers with a lower bound.
 const DISK_USAGE_TIMEOUT_MS = 2 * 60_000
 
-/**
- * What the host's Codex chat history takes; null until read, or when the host can't say. Mounted
- * only while the row is shown, so a row settings search hides reads nothing.
- */
-export function useCodexHistoryDiskUsage(owner: RuntimeClientTarget): CodexHistoryDiskUsage | null {
+/** What the host's Codex chat history takes; null until read, or when the host can't say. */
+export function useCodexHistoryDiskUsage(
+  owner: RuntimeClientTarget,
+  /** False while settings search hides the row: the host walks nothing for it. */
+  shown: boolean
+): CodexHistoryDiskUsage | null {
   const environmentId = runtimeTargetEnvironmentId(owner)
   const ownerKey = environmentId ?? 'local'
   const windowVisible = useSyncExternalStore(
@@ -47,8 +48,8 @@ export function useCodexHistoryDiskUsage(owner: RuntimeClientTarget): CodexHisto
   )
 
   useEffect(() => {
-    // A hidden window waits; it reads once when shown if a run finished meanwhile.
-    if (!windowVisible || readRevision === revision) {
+    // A hidden window or row waits; it reads once when shown if a run finished meanwhile.
+    if (!shown || !windowVisible || readRevision === revision) {
       return
     }
     let current = true
@@ -73,7 +74,7 @@ export function useCodexHistoryDiskUsage(owner: RuntimeClientTarget): CodexHisto
     return () => {
       current = false
     }
-  }, [environmentId, ownerKey, revision, readRevision, windowVisible])
+  }, [environmentId, ownerKey, revision, readRevision, shown, windowVisible])
 
   return state?.ownerKey === ownerKey ? state.usage : null
 }
