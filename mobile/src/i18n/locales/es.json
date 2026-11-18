@@ -2713,7 +2713,7 @@
       "disconnected": "No se pudo pegar (sin conexión)",
       "imageTooLarge": "Imagen demasiado grande para pegarla",
       "pasteFailed": "No se pudo pegar",
-      "pasteTooLarge": "Contenido demasiado grande para pegarlo (máx. 16 MiB)",
+      "pasteTooLarge": "El contenido pegado es demasiado grande.",
       "terminalChanged": "Pegado cancelado (se cambió de terminal)"
     },
     "worktreeLabel": {

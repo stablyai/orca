@@ -70,11 +70,17 @@ describe('useMobileTerminalPaste', () => {
   it('sends a paste over 256 KiB as ordered chunks of one bracketed frame', async () => {
     clipboardText.value = 'a'.repeat(300 * 1024)
     const sent = await pasteInto(() => true)
-    expect(sent.map((text) => text.length)).toEqual([256 * 1024, 44 * 1024 + 12])
+    expect(sent.map((text) => text.length)).toEqual([
+      64 * 1024,
+      64 * 1024,
+      64 * 1024,
+      64 * 1024,
+      44 * 1024 + 12
+    ])
     expect(sent.join('')).toBe(`\x1b[200~${clipboardText.value}\x1b[201~`)
   })
 
-  it('closes the bracketed frame when a later chunk is refused', async () => {
+  it('stops at a refused chunk and closes the bracketed frame', async () => {
     clipboardText.value = 'b'.repeat(300 * 1024)
     const sent = await pasteInto((_text, index) => index !== 1)
     expect(sent).toHaveLength(3)

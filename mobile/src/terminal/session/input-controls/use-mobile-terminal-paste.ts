@@ -6,10 +6,9 @@ import {
 } from '../../../../../src/shared/terminal/input/terminal-bracketed-paste-text'
 import {
   isTerminalInputTooLargeWithYield,
-  splitTerminalInputChunks
+  iterateTerminalInputChunks
 } from '../../../../../src/shared/terminal/input/terminal-input'
-import { TERMINAL_LIVE_INPUT_MAX_BYTES } from '../../live-input/terminal-live-input'
-import { useCallback, type RefObject } from 'react'
+import { useCallback, useRef, type RefObject } from 'react'
 import { translate } from '../../../i18n/mobile-i18n'
 import { terminalInputSend } from '../../host-operations/mobile-terminal-operations'
 import { useClipboardReader } from '../../../platform/clipboard/clipboard'
@@ -21,6 +20,9 @@ import {
   saveMobileClipboardImageAsTempFile
 } from '../../../files/attachments/mobile-clipboard-image'
 import { fitMobileAgentImageBase64 } from '../../../files/attachments/mobile-agent-image-fit'
+
+// JSON escapes a control character to 6 bytes; 64 KiB chunks stay inside the page bridge frame and the host's 1 MiB frame.
+const PASTE_SEND_CHUNK_BYTES = 64 * 1024
 
 // Match xterm's paste(): newlines become CR, and DECSET 2004 frames the text with ESC made inert.
 function buildMobileTerminalClipboardTextPayload(
@@ -75,6 +77,8 @@ export function useMobileTerminalPaste({
 }: UseMobileTerminalPasteOptions): () => Promise<void> {
   // Read images through native media handles: inline clipboard base64 can exceed the bridge reply cap.
   const clipboard = useClipboardReader()
+  // One paste's chunks finish before the next paste starts, like desktop's per-PTY paste transaction.
+  const pasteTurnRef = useRef<Promise<unknown>>(Promise.resolve())
   return useCallback(async () => {
     if (!client || !activeHandle || !canSend) {
       return
@@ -114,14 +118,10 @@ export function useMobileTerminalPaste({
         )
       }
 
-      // Desktop's 16 MiB paste cap; each send stays within the phone's per-request size.
       if (await isTerminalInputTooLargeWithYield(payload)) {
         onError()
         console.warn('[mobile-clip] paste oversized', { length: payload.length })
-        showToast(
-          translate('session.useTerminalPaste.pasteTooLarge', 'Paste too large (max 16 MiB)'),
-          1500
-        )
+        showToast(translate('session.useTerminalPaste.pasteTooLarge', 'Paste is too large.'), 1500)
         return
       }
       // Accessory paste must follow pending IME text.
@@ -166,14 +166,24 @@ export function useMobileTerminalPaste({
           (response) => terminalInputSend.interpret(response) === true,
           () => false
         )
-      // Queue every chunk at once so typing during a long paste lands after it, never inside it.
-      const chunks = splitTerminalInputChunks(payload, TERMINAL_LIVE_INPUT_MAX_BYTES)
-      const accepted = await Promise.all(chunks.map(sendChunk))
-      if (accepted.includes(false)) {
-        // Like desktop, close a bracketed paste whose start landed so the program leaves paste mode.
-        if (accepted[0] && !accepted.at(-1) && payload.endsWith(BRACKETED_PASTE_END)) {
-          await sendChunk(BRACKETED_PASTE_END)
+      // Send in order and stop at the first refusal, as desktop's remote paste does.
+      const sendChunks = async (): Promise<boolean> => {
+        let sentAny = false
+        for (const chunk of iterateTerminalInputChunks(payload, PASTE_SEND_CHUNK_BYTES)) {
+          if (!(await sendChunk(chunk))) {
+            // Close a bracketed paste whose start landed so the program leaves paste mode.
+            if (sentAny && payload.endsWith(BRACKETED_PASTE_END)) {
+              await sendChunk(BRACKETED_PASTE_END)
+            }
+            return false
+          }
+          sentAny = true
         }
+        return true
+      }
+      const turn = pasteTurnRef.current.then(sendChunks)
+      pasteTurnRef.current = turn.catch(() => {})
+      if (!(await turn)) {
         throw new Error('Terminal input was not accepted')
       }
       onSuccess()
@@ -188,6 +198,9 @@ export function useMobileTerminalPaste({
           translate('session.useTerminalPaste.disconnected', 'Paste failed (disconnected)'),
           1500
         )
+      } else if ((e as { reason?: unknown }).reason === 'reply-too-large') {
+        // The page's clipboard bridge caps one reply below desktop's paste limit.
+        showToast(translate('session.useTerminalPaste.pasteTooLarge', 'Paste is too large.'), 1500)
       } else if (err.message === 'Clipboard image is too large') {
         showToast(
           translate('session.useTerminalPaste.imageTooLarge', 'Image too large to paste'),

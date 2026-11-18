@@ -2639,7 +2639,7 @@
       "disconnected": "貼上失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法貼上",
       "pasteFailed": "貼上失敗",
-      "pasteTooLarge": "貼上內容太大（上限為 16 MiB）",
+      "pasteTooLarge": "貼上內容過大。",
       "terminalChanged": "已取消貼上（終端機已變更）"
     },
     "worktreeLabel": {

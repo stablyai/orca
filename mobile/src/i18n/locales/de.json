@@ -2643,7 +2643,7 @@
       "disconnected": "Einfügen fehlgeschlagen (Verbindung getrennt)",
       "imageTooLarge": "Bild zu groß zum Einfügen",
       "pasteFailed": "Einfügen fehlgeschlagen",
-      "pasteTooLarge": "Einzufügender Inhalt zu groß (max. 16 MiB)",
+      "pasteTooLarge": "Der einzufügende Inhalt ist zu groß.",
       "terminalChanged": "Einfügen abgebrochen (Terminal gewechselt)"
     },
     "worktreeLabel": {

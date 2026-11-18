@@ -3099,7 +3099,7 @@
       "disconnected": "粘贴失败（连接已断开）",
       "imageTooLarge": "图片过大，无法粘贴",
       "pasteFailed": "粘贴失败",
-      "pasteTooLarge": "粘贴内容过大（最大 16 MiB）",
+      "pasteTooLarge": "粘贴内容过大",
       "terminalChanged": "粘贴已取消（终端已切换）"
     },
     "worktreeLabel": {

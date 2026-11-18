@@ -2643,7 +2643,7 @@
       "disconnected": "Yapıştırılamadı (bağlantı kesildi)",
       "imageTooLarge": "Görsel yapıştırılamayacak kadar büyük",
       "pasteFailed": "Yapıştırılamadı",
-      "pasteTooLarge": "Yapıştırılacak içerik çok büyük (en fazla 16 MiB)",
+      "pasteTooLarge": "Yapıştırılan içerik çok büyük.",
       "terminalChanged": "Yapıştırma iptal edildi (terminal değişti)"
     },
     "worktreeLabel": {

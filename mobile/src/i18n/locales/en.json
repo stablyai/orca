@@ -2674,7 +2674,7 @@
     },
     "useTerminalPaste": {
       "clipboardReadFailed": "Couldn't read the clipboard",
-      "pasteTooLarge": "Paste too large (max 16 MiB)",
+      "pasteTooLarge": "Paste is too large.",
       "disconnected": "Paste failed (disconnected)",
       "terminalChanged": "Paste canceled (terminal changed)",
       "pasteFailed": "Paste failed",
