@@ -18,7 +18,7 @@ function createSession(shellWrapperLaunch: boolean): {
 } {
   let ptyId: string | null = null
   const sent: [string, string][] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- minimal session bag for the draft installer
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer only touches the fields this bag defines
   const session = {
     deps: { preconnectInput: [] },
     transportOptions: {},
