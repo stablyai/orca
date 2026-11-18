@@ -118,7 +118,7 @@ export class HostedWorker extends EventEmitter {
     if (this.local || this.exitCode !== undefined) {
       return
     }
-    // A worker that dies unasked before loading could not load here; the host moves it in-process.
+    // Dying unasked before loading: the host decides whether it could not load or ran out of memory.
     if (!this.heard && !this.terminating && (event.type === 'error' || event.type === 'exit')) {
       this.supervisor.startFailed(event.type === 'error' ? restoreFailure(event.error) : undefined)
       return
