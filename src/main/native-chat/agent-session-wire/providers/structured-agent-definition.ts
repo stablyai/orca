@@ -7,6 +7,8 @@ import type { AgentSessionAccountHome } from '../../../../shared/agent-session/l
 
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities
+  /** Only a live command report establishes support for this backend. */
+  compactRequiresCommandReport?: true
   /** Absent means Orca never supplies this agent’s managed runtime. */
   managedRuntime?: () => boolean
   /** Whether a chat pinned to `home` runs a program the host has rather than the managed runtime. */

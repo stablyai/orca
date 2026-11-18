@@ -10,6 +10,7 @@ import {
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import type { StructuredAgentSessionCommandRun } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
 import { StructuredAgentRegistry } from '../../native-chat/agent-session-wire/providers/structured-agent-registry'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../session/acp-structured-agent-definitions'
@@ -72,6 +73,34 @@ async function ended(rig: AcpAdapterRig, command: StructuredAgentSessionCommandR
 }
 
 describe('ACP compaction settlement', () => {
+  it('runs Antigravity compact only while the current session reports the command', async () => {
+    const spec = ANTIGRAVITY_LAUNCH_SPEC.hostBackend.spec
+    const rig = await openAcpAdapterRig({ spec })
+    const registry = new StructuredAgentRegistry([
+      { definition: acpStructuredAgentDefinition(ANTIGRAVITY_LAUNCH_SPEC), adapter: rig.adapter }
+    ])
+    await rig.acquire()
+    const agent = rig.child().agent
+    const supported = () => registry.capabilities('antigravity', SESSION)?.compact
+    const report = (availableCommands: { name: string; description: string }[]) =>
+      agent.notify('session/update', {
+        sessionId: PROVIDER_SESSION,
+        update: { sessionUpdate: 'available_commands_update', availableCommands }
+      })
+    expect(supported()).toBe(false)
+    report([{ name: 'compact', description: 'Compact the conversation now' }])
+    await waitFor(async () => expect(supported()).toBe(true))
+    expect(registry.capabilities('antigravity', 'another-session')?.compact).toBe(false)
+    const command = await commandRun(rig)
+    await rig.adapter.compact({ sessionId: SESSION, fence: 1, command })
+    const prompt = await rig.frame('session/prompt')
+    expect(prompt.params).toMatchObject({ prompt: [{ type: 'text', text: '/compact' }] })
+    agent.reply(prompt, { stopReason: 'end_turn' })
+    expect((await ended(rig, command)).turn).toMatchObject({ outcome: 'success' })
+    report([])
+    await waitFor(async () => expect(supported()).toBe(false))
+  })
+
   it("reads Grok's rate-limit RPC code as one usage failure, ignoring its late notification", async () => {
     const { rig, command, prompt } = await compact(GROK)
     const { agent } = rig.child()

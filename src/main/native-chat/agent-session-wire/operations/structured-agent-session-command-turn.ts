@@ -260,7 +260,7 @@ async function commandBlocked(
     return agentSessionFailureFact('hostFault')
   }
   // Validate capability even if a client sends an unadvertised command or instructions.
-  const capabilities = ctx.agents.capabilities(record.provider)
+  const capabilities = ctx.agents.capabilities(record.provider, ctx.sessionId)
   if (!capabilities?.compact || (body.command.instructions && !capabilities.compactInstructions)) {
     return agentSessionFailureFact('commandRefused')
   }
