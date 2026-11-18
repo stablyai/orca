@@ -8,11 +8,11 @@ import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
+import type { OrcaAccountService } from '../orca-profiles/orca-account-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
-import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
-import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
+import type { RelayHost } from '../runtime/mobile-cloud-relay/relay-host-install'
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../power/agent-awake-service'
@@ -38,10 +38,8 @@ import type { createWindowsShellPathHydration } from './shell-environment/window
 import type { ServeOptions } from './serve-launch/serve-options'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
-import {
-  PluginInstallLinkState,
-  SkillShareDeepLinkState
-} from './open-routing/skill-share-deep-link-state'
+import { DeepLinkState } from './deep-link-state'
+import { PluginInstallLinkState } from './open-routing/skill-share-deep-link-state'
 import { OsOpenedDocumentState } from './open-routing/os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
@@ -98,13 +96,14 @@ export const mainProcessState = {
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,
   claudeAccounts: null as ClaudeAccountService | null,
   claudeRuntimeAuth: null as ClaudeRuntimeAuthService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the service assigned by main-process-account-services.
+  orcaAccount: null as OrcaAccountService | null,
   runtime: null as OrcaRuntimeService | null,
   rateLimits: null as RateLimitService | null,
   runtimeRpc: null as OrcaRuntimeRpcServer | null,
   serveReadinessPublisher: new ServeReadinessPublisher(),
-  desktopRelayService: null as DesktopRelayService | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the installer assigned by main-process-relay-startup.
-  desktopRelayInstaller: null as DesktopRelayServiceInstaller | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the relay host assigned by main-process-relay-startup.
+  relayHost: null as RelayHost | null,
   desktopPushService: null as DesktopPushService | null,
   desktopRelayStatus,
   pendingUnpairedDeviceAuthFailure: false,
@@ -141,7 +140,7 @@ export const mainProcessState = {
   pendingOpenSettings: createWebContentsTimedFlag(),
   // Why: a confirmed Quit Completely can open the window; its renderer pulls this one-shot on mount.
   pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
-  skillShareDeepLinks: new SkillShareDeepLinkState(),
+  deepLinks: new DeepLinkState(),
   pluginInstallLinks: new PluginInstallLinkState(),
   // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),

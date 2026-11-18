@@ -146,7 +146,12 @@ function scheduleDomainSave(
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
   notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
   for (const listener of runtime.stateWriteListeners) {
-    listener(dirtyDomains)
+    try {
+      listener(dirtyDomains)
+    } catch (error) {
+      // The state already changed; one observer's failure must not hide it from the rest or skip its save.
+      console.error('[store] state write listener failed:', error)
+    }
   }
   runtime.automationListProjectionCache = null
   // A run list replaced outside the run-delta path saves as a whole row; an older pending delta is stale.

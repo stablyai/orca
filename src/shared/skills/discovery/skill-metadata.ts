@@ -108,3 +108,21 @@ export function summarizeSkillMarkdown(markdown: string): SkillFrontmatterSummar
     description: description || null
   }
 }
+
+/** The name and description a SKILL.md declares in frontmatter; null when either is missing, so
+ *  arbitrary text never stands in for them. */
+export function declaredSkillMetadata(
+  markdown: string
+): { name: string; description: string } | null {
+  const match = /^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/.exec(markdown.replace(/^\uFEFF/, ''))
+  if (!match) {
+    return null
+  }
+  const { name, description } = parseYamlFrontmatter(match[1])
+  return typeof name === 'string' &&
+    name.trim() &&
+    typeof description === 'string' &&
+    description.trim()
+    ? { name: name.trim(), description: description.trim() }
+    : null
+}

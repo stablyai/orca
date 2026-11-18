@@ -43,6 +43,7 @@ import {
 import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { homeStatsQuery } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
+import { useHomeBots } from './bots/use-home-bots'
 import { projectHomeHostConnections } from './home-host-connection-projection'
 import { restoreHomeQueries } from './home-query-restore'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
@@ -271,12 +272,22 @@ export function useMobileHomeData() {
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const hostConnections = useMemo(() => projectHomeHostConnections(allClients), [allClients])
+  const { bots, botsByHost } = useHomeBots({
+    homeHosts,
+    hosts: sortedHosts,
+    hostStates,
+    worktreeInfo,
+    now,
+    subscribed: homeFocused
+  })
 
   return {
     ...connections,
     accountsByHost,
     applyAgentActivity: agentActivity.apply,
     activeAgents,
+    bots,
+    botsByHost,
     agentList,
     agentsNeedingYou,
     connectedHosts,

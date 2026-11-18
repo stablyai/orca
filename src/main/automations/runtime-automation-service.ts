@@ -22,6 +22,7 @@ import {
   createRuntimeAutomationRunTerminalObserver
 } from './observation/runtime-terminal-run-observer'
 import { closeEarlierHookReviewRunTerminals } from './terminal-retention/hook-review-blocked-run-terminals'
+import { bindBotAutomations, botAutomationServiceOptions } from './bot-automation-service-wiring'
 import {
   runPaneKeepsRunPty,
   runTabWasFocused
@@ -160,6 +161,7 @@ export function createRuntimeAutomationService(input: {
     },
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     allowRemoteHostScheduling: input.allowRemoteHostScheduling,
+    ...botAutomationServiceOptions(runtime),
     chatDispatcher: async (request) => {
       const { terminalHandle, ...launched } = await launchAutomationChatAgent(runtime, {
         ...request,
@@ -212,6 +214,7 @@ export function createRuntimeAutomationService(input: {
   })
   service.wakeGate.settled = () => automationSystemSettled()
   runtime.setAutomationService(service)
+  bindBotAutomations(service, store, runtime)
   return service
 }
 

@@ -121,7 +121,7 @@ export async function openAcpAdapterRig(
       spec,
       command: `/opt/bin/${spec.command}`,
       prefixArgs: [],
-      args: spec.args({ fullAccess: false, pluginDir: null }),
+      args: spec.args({ fullAccess: false, pluginDirs: [] }),
       cwd: '/workspace/project',
       env: { ...RIG_ENV, ...account },
       envToDelete: [],

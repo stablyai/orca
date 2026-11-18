@@ -254,8 +254,8 @@ function AgentLaunchPickerPane({
       }}
       onDraftChange={(draft, edit) => {
         setup.change(draft)
-        // Effort and speed apply at once to the agent in use; another agent's wait for its pick.
-        if (current && (edit === 'choice' || edit === 'speed')) {
+        // Effort, speed and a kept permission apply at once to the agent in use; another agent's wait.
+        if (current && (edit === 'choice' || edit === 'speed' || edit === 'permission')) {
           commit(false)
         }
       }}

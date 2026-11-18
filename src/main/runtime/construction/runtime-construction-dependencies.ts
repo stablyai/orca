@@ -1,3 +1,4 @@
+import type { PairedDeviceAccountLookup } from '../rpc/server/pairing/device-entry'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host/execution-host'
@@ -78,6 +79,9 @@ export type RuntimeConstructionDependencies = {
   dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
   canRecoverPersistentLocalPtys?: () => boolean
   getPairedDeviceName?: (pairedDeviceId: string) => string | null
+  /** The Orca account a paired device says it is signed in to (a phone: its desktop's), with its
+   *  computer; a desktop's comes from the sending connection's claim when one is given. */
+  getPairedDeviceAccount?: PairedDeviceAccountLookup
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -98,6 +102,8 @@ export type RuntimeConstructionDependencies = {
   applySessionSearchSettings?: SessionSearchSettingsApply
   orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
   workspaceSleepPlatform?: WorkspaceSleepPlatform
+  /** The Orca profile whose store this runtime serves; fixed for the process, unlike the active one. */
+  servedOrcaProfileId?: string
 }
 
 export type RuntimeConstructionBindings = Required<RuntimeConstructionDependencies>
