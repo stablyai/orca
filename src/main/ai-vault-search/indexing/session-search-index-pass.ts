@@ -4,8 +4,14 @@ import {
   parseAgentSessionFileCached,
   type SessionParseStats
 } from '../../ai-vault/parse-cache/session-scanner-parse-cache'
-import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
+import { isTranscriptSourceFailure } from '../../ai-vault/parsing/session-scanner-jsonl-reader'
+import {
+  physicalSessionCandidates,
+  type SessionFileCandidate,
+  type SessionFileChoice
+} from '../../ai-vault/session-scanner-types'
 import { fileIdentity } from '../storage/session-search-file-cursor'
+import { REMOVALS_PER_FLUSH } from '../discovery/session-search-deleted-sources'
 import { sessionSearchReadDecision } from './session-search-read-decision'
 import type {
   SessionSearchFileRow,
@@ -23,58 +29,137 @@ export type SessionSearchIndexPassOptions = {
 /** Deferred candidates stay owed by their stored state; left counts backlog outside the due-row count. */
 export async function runSessionSearchIndexPass(
   store: SessionSearchIndexStore,
-  candidates: readonly SessionFileCandidate[],
+  candidates: readonly SessionFileChoice[],
   options: SessionSearchIndexPassOptions
-): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number }> {
+): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number; retired: string[] }> {
   const stats = createSessionParseStats()
   const cutoffMs = store.retentionCutoff
+  const acceptsReads = () => store.acceptingReads !== false
   let read = 0
   let outOfTime = false
   let left = 0
-  for (const candidate of candidates) {
+  let heldRemovals = 0
+  let retirementOverdue = false
+  const retired: string[] = []
+  for (const choice of candidates) {
     throwIfAiVaultScanCancelled(options.signal)
-    const path = candidate.file.path
-    const row = options.rows.get(path)
-    const decision = sessionSearchReadDecision({
-      candidate,
-      row,
-      // New paths already require reading; avoid a redundant cursor query per file.
-      cursor: row ? store.indexedFile(path, fileIdentity(candidate.file)) : null,
-      cutoffMs
-    })
-    if (decision === 'skip') {
-      continue
+    if (!acceptsReads()) {
+      break
     }
-    // Continue decisions after the read deadline to count remaining backlog.
-    outOfTime ||= read > 0 && options.overdue?.() === true
-    if (outOfTime) {
-      // Status adds left to due-row counts; exclude due rows here to avoid double counting.
-      if (row?.state !== 'due') {
-        left += 1
-      }
-      continue
-    }
-    // Deadline callbacks may close the owner; recheck cancellation before touching the store.
-    throwIfAiVaultScanCancelled(options.signal)
-    read += 1
-    try {
-      await parseAgentSessionFileCached(
-        candidate,
-        process.platform,
-        stats,
-        decision,
-        options.signal,
-        true
-      )
-      await store.flush?.()
-    } catch (error) {
+    let deferred = false
+    let due = false
+    let admitted = false
+    const aliases = physicalSessionCandidates(choice)
+    for (const [position, candidate] of aliases.entries()) {
       throwIfAiVaultScanCancelled(options.signal)
-      console.warn(
-        '[ai-vault-search] indexing skipped',
-        candidate.agent,
-        error instanceof Error ? error.name : 'ParseError'
-      )
+      if (!acceptsReads()) {
+        break
+      }
+      const path = candidate.file.path
+      const row = options.rows.get(path)
+      const cursor = row ? store.indexedFile(path, fileIdentity(candidate.file)) : null
+      const decision = sessionSearchReadDecision({ candidate, row, cursor, cutoffMs })
+      if (decision === 'skip') {
+        if (
+          (cutoffMs === null || candidate.file.mtimeMs >= cutoffMs) &&
+          row?.state === 'current' &&
+          cursor !== null
+        ) {
+          deferred = false
+          // Later sweeps finish a large first cleanup; the preferred copy stays current.
+          const copies = choice.outrankedCopies
+          if (position + 1 < aliases.length || copies) {
+            const outranked = aliases.slice(position + 1)
+            for (const copyPath of retirableAliasRows(options.rows, candidate, outranked, copies)) {
+              if (outOfTime || retirementOverdue) {
+                break
+              }
+              store.removeFile(copyPath)
+              retired.push(copyPath)
+              if (++heldRemovals >= REMOVALS_PER_FLUSH) {
+                heldRemovals = 0
+                await store.flush?.()
+                throwIfAiVaultScanCancelled(options.signal)
+                retirementOverdue = options.overdue?.() === true
+              }
+            }
+          }
+          break
+        }
+        continue
+      }
+      if (!admitted) {
+        outOfTime ||= read > 0 && options.overdue?.() === true
+      }
+      if (outOfTime && !admitted) {
+        deferred = true
+        due ||= row?.state === 'due'
+        continue
+      }
+      throwIfAiVaultScanCancelled(options.signal)
+      if (!acceptsReads()) {
+        break
+      }
+      admitted = true
+      read += 1
+      try {
+        await parseAgentSessionFileCached(
+          candidate,
+          process.platform,
+          stats,
+          decision,
+          options.signal,
+          true
+        )
+      } catch (error) {
+        throwIfAiVaultScanCancelled(options.signal)
+        console.warn(
+          '[ai-vault-search] indexing skipped',
+          candidate.agent,
+          error instanceof Error ? error.name : 'ParseError'
+        )
+        if (isTranscriptSourceFailure(error)) {
+          continue
+        }
+        break
+      }
+      // Consumer/store failures cannot authorize reading another physical alias.
+      try {
+        await store.flush?.()
+      } catch (error) {
+        throwIfAiVaultScanCancelled(options.signal)
+        console.warn(
+          '[ai-vault-search] indexing skipped',
+          candidate.agent,
+          error instanceof Error ? error.name : 'FlushError'
+        )
+      }
+      break
+    }
+    if (deferred && !due) {
+      left += 1
     }
   }
-  return { stats, outOfTime, left }
+  return { stats, outOfTime, left, retired }
+}
+
+/** Hardlinks, moves and Codex archives keep mtime; same-format copies must also match size. */
+function* retirableAliasRows(
+  rows: ReadonlyMap<string, SessionSearchFileRow>,
+  preferred: SessionFileCandidate,
+  ...outranked: (readonly SessionFileCandidate[] | undefined)[]
+): Generator<string> {
+  for (const copies of outranked) {
+    for (const copy of copies ?? []) {
+      if (
+        copy.file.path !== preferred.file.path &&
+        rows.has(copy.file.path) &&
+        copy.file.mtimeMs === preferred.file.mtimeMs &&
+        (copy.file.path.endsWith('.zst') !== preferred.file.path.endsWith('.zst') ||
+          copy.file.sizeBytes === preferred.file.sizeBytes)
+      ) {
+        yield copy.file.path
+      }
+    }
+  }
 }

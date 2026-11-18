@@ -8,11 +8,15 @@ import { AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
-import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
+} from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../shared/app-lifecycle/identity/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import {
+  antigravityKeyringFallbackMarker,
   createAntigravityHostCredentialBackend,
   isAntigravityFileStorageHost
 } from './native-credential-backend'
@@ -24,7 +28,8 @@ export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
 const AGY_HOME_FOLDER = '.gemini'
 /** Approves tools, not plans; the check launches with it, so a build without it stays managed. */
 export const AGY_SKIP_PERMISSIONS_FLAG = '--dangerously-skip-permissions'
-const PROBE_TIMEOUT_MS = 5_000
+// agy.exe took 6-7s to list sessions while Orca started, and Windows has no managed fallback.
+const PROBE_TIMEOUT_MS = process.platform === 'win32' ? 15_000 : 5_000
 const RECHECK_MS = 5 * 60_000
 
 export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse): boolean {
@@ -96,7 +101,7 @@ export async function antigravityHostAcpReady(
         // A present keychain item does not prove agy can sign in silently; session requests
         // answer "Authentication required" until it has. Unlike session/new, listing writes no
         // conversation into agy's history.
-        await connection.listSessions(folder)
+        await connection.listSessions({ cwd: folder })
       }
     ).then(
       () => true,
@@ -142,8 +147,12 @@ export async function hasManagedAntigravityChatSignIn(managedHome: string): Prom
   return (await stat(token).catch(() => null)) !== null
 }
 
-/** Whether agy itself is signed in on this host; an unreadable store counts as signed out. */
+/** Whether agy itself may be signed in on this host; an unreadable store counts as signed out. */
 export async function hasAgyCredential(homePath: string): Promise<boolean> {
+  // After a keyring timeout agy may use either store, so the ACP readiness probe decides.
+  if (await stat(antigravityKeyringFallbackMarker(homePath)).catch(() => null)) {
+    return true
+  }
   try {
     // Reading the macOS secret would ask the person for keychain access; its attributes do not.
     if (process.platform === 'darwin' && !isAntigravityFileStorageHost(process.env)) {

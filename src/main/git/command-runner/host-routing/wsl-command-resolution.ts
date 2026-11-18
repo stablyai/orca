@@ -1,13 +1,13 @@
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
-import type { WslUncPathInfo as WslPathInfo } from '../../../../shared/wsl-paths'
+import type { WslUncPathInfo as WslPathInfo } from '../../../../shared/file-access/wsl-paths'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslLoginShellCommand,
   type WslCapturedLoginShellCommand
-} from '../../../../shared/wsl-login-shell-command'
+} from '../../../../shared/shell/wsl/wsl-login-shell-command'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../../shared/git/commands/git-output-locale'
 import type { WslGitReadEnvironment } from './wsl-git-read-environment'
@@ -15,9 +15,17 @@ import {
   createWslProcessGroupTermination,
   type WslProcessGroupTermination
 } from '../process-capture/wsl-process-group-termination'
-import { translateArgForWsl, translateArgsForWsl } from './wsl-path-translation'
+import { translateUncArgForWsl } from './wsl-path-translation'
+import { wslGuestShellPaths } from '../../../wsl/filesystem/wsl-guest-drive-path'
 import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
 import { noteWslDistroLaunched } from '../../../wsl/discovery/wsl-background-distro-gate'
+import { OFFLINE_GIT_ENV } from '../git-environment/git-process-env'
+
+/** Git settings direct WSL reads pass on the command line, so they need no login shell to reach the distro. */
+export const WSL_DIRECT_GIT_FORWARDED_ENV: readonly string[] = [
+  'GIT_OPTIONAL_LOCKS',
+  ...Object.keys(OFFLINE_GIT_ENV)
+]
 
 // Carry Git locale pins in the WSL command; these assignment values are shell-safe.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
@@ -82,6 +90,8 @@ export function resolveCommand(
   cwd: string | undefined,
   wslDistroOverride?: string,
   options: {
+    /** Task text must bypass path translation even when it looks like a Windows path. */
+    literalArgIndices?: readonly number[]
     useWslLoginShell?: boolean
     captureLoginShellOutput?: boolean
     wslGitReadEnvironment?: WslGitReadEnvironment
@@ -109,7 +119,24 @@ export function resolveCommand(
   // Every WSL Git/CLI run is about to start the distro; gated polls stop trusting a 'stopped' read.
   noteWslDistroLaunched(wsl.distro)
 
-  const translatedArgs = translateArgsForWsl(args)
+  // Drive paths resolve in the guest, which alone knows its automount root.
+  const hostCwd = cwdWsl ? null : cwd && wslDistroOverride ? cwd : null
+  const cwdFailureExitCode = options.cwdFailureExitCode ?? (command === 'git' ? 128 : 1)
+  const literals = new Set(options.literalArgIndices)
+  const guestArgs = args.map((arg, index) =>
+    literals.has(index) ? arg : translateUncArgForWsl(arg)
+  )
+  const guest = wslGuestShellPaths(
+    hostCwd === null ? guestArgs : [hostCwd, ...guestArgs],
+    cwdFailureExitCode,
+    hostCwd === null ? literals : new Set([...literals].map((index) => index + 1))
+  )
+  const cwdWord = cwdWsl
+    ? quotePosixShell(cwdWsl.linuxPath)
+    : hostCwd === null
+      ? null
+      : guest.words[0]
+  const escapedArgs = hostCwd === null ? guest.words : guest.words.slice(1)
   // WSL does not inherit unlisted Windows env vars; carry locale pins in the command.
   const localePrefix =
     command === 'git'
@@ -120,38 +147,46 @@ export function resolveCommand(
       ? `GIT_EDITOR=${quotePosixShell(options.env.GIT_EDITOR)} `
       : ''
   const escapedCommand = options.wslShellCommand ?? quotePosixShell(command)
-  // Quote each argument against shell splitting and expansion.
-  const escapedArgs = translatedArgs.map(quotePosixShell)
-  const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
   const invocation = `${localePrefix}${editorPrefix}${escapedCommand} ${escapedArgs.join(' ')}`
-  const enterCwd = linuxCwd
+  const enterCwd = cwdWord
     ? options.cwdFailureExitCode === undefined
-      ? `cd ${quotePosixShell(linuxCwd)} && `
-      : `cd ${quotePosixShell(linuxCwd)} || exit ${Math.trunc(options.cwdFailureExitCode)}; `
+      ? `cd ${cwdWord} && `
+      : `cd ${cwdWord} || exit ${Math.trunc(options.cwdFailureExitCode)}; `
     : ''
-  const shellCmd = `${enterCwd}${invocation}`
+  const shellCmd = `${guest.prelude}${enterCwd}${invocation}`
 
   if (command === 'git' && options.wslGitReadEnvironment) {
-    const optionalLocks = options.env?.GIT_OPTIONAL_LOCKS
+    const directArgv = [
+      '/usr/bin/env',
+      `PATH=${options.wslGitReadEnvironment.path}`,
+      `HOME=${options.wslGitReadEnvironment.home}`,
+      ...GIT_OUTPUT_LOCALE_ENV_ARGS,
+      ...(options.env?.GIT_EDITOR !== undefined ? [`GIT_EDITOR=${options.env.GIT_EDITOR}`] : []),
+      ...WSL_DIRECT_GIT_FORWARDED_ENV.flatMap((key) =>
+        options.env?.[key] !== undefined ? [`${key}=${options.env[key]}`] : []
+      ),
+      options.wslGitReadEnvironment.gitPath
+    ]
+    // Plain argv when every path is already a guest path; a drive path needs a non-login shell to expand.
+    const guestArgv = guest.prelude
+      ? [
+          '/bin/sh',
+          '-c',
+          `${guest.prelude}exec ${[
+            ...directArgv.map(quotePosixShell),
+            ...(cwdWord ? ['-C', cwdWord] : []),
+            ...escapedArgs
+          ].join(' ')}`
+        ]
+      : [
+          ...directArgv,
+          ...(cwdWsl ? ['-C', cwdWsl.linuxPath] : hostCwd ? ['-C', hostCwd] : []),
+          ...guestArgs
+        ]
     return withWslProcessGroupTermination(
       {
         binary: 'wsl.exe',
-        args: [
-          '-d',
-          wsl.distro,
-          '--exec',
-          '/usr/bin/env',
-          `PATH=${options.wslGitReadEnvironment.path}`,
-          `HOME=${options.wslGitReadEnvironment.home}`,
-          ...GIT_OUTPUT_LOCALE_ENV_ARGS,
-          ...(options.env?.GIT_EDITOR !== undefined
-            ? [`GIT_EDITOR=${options.env.GIT_EDITOR}`]
-            : []),
-          ...(optionalLocks !== undefined ? [`GIT_OPTIONAL_LOCKS=${optionalLocks}`] : []),
-          options.wslGitReadEnvironment.gitPath,
-          ...(linuxCwd ? ['-C', linuxCwd] : []),
-          ...translatedArgs
-        ],
+        args: ['-d', wsl.distro, '--exec', ...guestArgv],
         cwd: resolveWslInteropSpawnCwd(),
         wsl,
         wslMode: 'direct-git'

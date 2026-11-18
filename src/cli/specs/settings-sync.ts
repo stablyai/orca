@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 const SETTINGS_SYNC_NOTES = [
   'Copies preferences that mean the same on any computer: theme, language, fonts, terminal and editor appearance, diff views, source control views and branch naming.',

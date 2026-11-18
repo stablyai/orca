@@ -1,14 +1,14 @@
 import { useAppStore } from '../../../../store/index'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { resolveTerminalPasteRuntimeEnvironmentId } from './terminal-paste-runtime'
-import '../../../../../../shared/keybindings'
+
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import {
   firesNativePasteEvent,
   getClipboardEventText,
   isClipboardEventPasteRequired
 } from '../../clipboard/terminal-clipboard-event-paste'
-import { assertClipboardTextWithinLimitWithYield } from '../../../../../../shared/clipboard-text'
+import { assertClipboardTextWithinLimitWithYield } from '../../../../../../shared/clipboard/clipboard-text'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
 import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import {
@@ -18,6 +18,7 @@ import {
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { copyTerminalSelection } from '../../clipboard/terminal-selection-copy'
 import { isInsideNativeChatCover } from '../../chat/native-chat-covered-pane'
+import { synchronizeTerminalKeyboardPane } from '../keyboard/terminal-keyboard-pane-resolution'
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import {
   formatClipboardImagePasteError,
@@ -173,7 +174,8 @@ export function registerTerminalPanePasteListeners({
     if (!manager) {
       return
     }
-    const pane = manager.getActivePane() ?? manager.getPanes()[0]
+    // Menu pastes skip keydown's active-pane repair, so focus moved without a pointerdown (e.g. file drop) would target a stale pane.
+    const pane = synchronizeTerminalKeyboardPane(manager, activeElementAtDispatch)
     if (!pane) {
       return
     }

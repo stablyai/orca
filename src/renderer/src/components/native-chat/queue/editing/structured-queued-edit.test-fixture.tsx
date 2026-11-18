@@ -1,6 +1,6 @@
 import type * as StructuredAgentSessionCall from '@/runtime/native-chat/requests/structured-agent-session-call'
-import { QueuedMessageUpdateParams } from '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
-import { queuedMessageWithEdit } from '../../../../../../shared/queued-message-edit'
+import { QueuedMessageUpdateParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
+import { queuedMessageWithEdit } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 // @vitest-environment happy-dom
 
 // Exercise real edit lifecycle with a scripted host: preserve dirty text on departure and keep lease failures from blocking typing/Save/Cancel.

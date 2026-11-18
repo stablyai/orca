@@ -4,18 +4,21 @@ import {
   openTranscriptReadStream,
   wslGatedReaddir,
   wslGatedStat
-} from '../../native-chat/wsl-transcript-fs-access'
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { createAiVaultScopeCwdMatcher } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
 import type {
   AiVaultAgent,
   AiVaultScanIssue
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { parseWslUncPath, toWindowsWslUncPathSpellings } from '../../../shared/wsl-paths'
+import {
+  parseWslUncPath,
+  toWindowsWslUncPathSpellings
+} from '../../../shared/file-access/wsl-paths'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import type { FileWithMtime } from '../session-scanner-types'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../parsing/session-json-object'
 import { scanIssueTextFromError } from '../parsing/session-scan-issues'
 import { isMissingTranscriptPathError } from '../discovery/session-path-absence'

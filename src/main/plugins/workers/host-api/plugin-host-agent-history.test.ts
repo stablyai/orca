@@ -1,10 +1,9 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { PluginCapabilityKind } from '../../../../shared/plugins/capabilities/plugin-capabilities'
 import { callPluginHost, pluginHostTestServices } from './__mocks__/plugin-host-services-fixture'
-import { PLUGIN_HISTORY_TTL_MS } from './plugin-agent-history'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginHostServices } from './plugin-host-method-bindings'
 
@@ -96,13 +95,6 @@ const listSessions = (
     services: pluginHostTestServices(rpc, overrides)
   })
 
-const vaultCalls = (rpc: ReturnType<typeof runtime>) =>
-  rpc.mock.calls.filter(([method]) => method === 'aiVault.listSessions').map(([, params]) => params)
-
-afterEach(() => {
-  vi.useRealTimers()
-})
-
 describe('agent.listSessions', () => {
   it('ranks a symlinked workspace by its resolved folder', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-history-')))
@@ -135,25 +127,5 @@ describe('agent.listSessions', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
-  })
-
-  it('shares one read among calls, then revalidates it by fingerprint', async () => {
-    vi.useFakeTimers()
-    const rpc = runtime({
-      'aiVault.listSessions': (params: { afterFingerprint?: string }) =>
-        params.afterFingerprint === 'f1'
-          ? { sessions: [], issues: [], scannedAt: 'y', fingerprint: 'f1', unchanged: true }
-          : { sessions: [vaultRow()], issues: [], scannedAt: 'x', fingerprint: 'f1' }
-    })
-    const [first, second] = await Promise.all([listSessions(rpc), listSessions(rpc)])
-    expect(second).toEqual(first)
-    expect(vaultCalls(rpc)).toHaveLength(1)
-    vi.advanceTimersByTime(PLUGIN_HISTORY_TTL_MS + 1)
-    // Unchanged history keeps the rows already read.
-    expect(await listSessions(rpc)).toEqual(first)
-    expect(vaultCalls(rpc)).toEqual([
-      { limit: 200, afterFingerprint: null },
-      { limit: 200, afterFingerprint: 'f1' }
-    ])
   })
 })

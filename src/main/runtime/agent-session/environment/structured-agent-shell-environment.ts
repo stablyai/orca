@@ -13,13 +13,13 @@ import {
   mergeWindowsPathSegments,
   resolvePathEnvKey
 } from '../../../pty/environment/windows-path-segment-merge'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
 import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import {
   nativeChatShellEnvironmentPolicy,
   type NativeChatShellEnvironmentPolicy
-} from '../../../../shared/native-chat/native-chat-shell-environment'
+} from '../../../../shared/native-chat/settings/native-chat-shell-environment'
 
 // Even with shell inheritance off, preserve CLI lookup, locale and agent socket.
 const BASELINE_SHELL_VARIABLES = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'SSH_AUTH_SOCK']
@@ -204,7 +204,7 @@ export function createStructuredAgentEnvironmentResolvers(
   /** The shared base every agent's child env starts from, before its own overlay. */
   resolveBaseEnvironment: (cachedOnly?: boolean) => Promise<Record<string, string>>
   /** The base with the user's overlay for `agent` laid over it. */
-  resolveAgentEnvironment: (agent: string) => Promise<Record<string, string>>
+  resolveAgentEnvironment: (agent: string, cachedOnly?: boolean) => Promise<Record<string, string>>
   refreshAfterMissingProgram: (askedAt: number) => Promise<void>
   bindCatalogSources: (agents: readonly string[]) => () => void
 } {
@@ -245,7 +245,16 @@ export function createStructuredAgentEnvironmentResolvers(
                 overlays.get(agent),
                 process.platform
               )
-              return [agent, structuredAgentEnvironmentIdentity(effective)]
+              return [
+                agent,
+                structuredAgentEnvironmentIdentity(
+                  Object.fromEntries(
+                    Object.entries(effective).filter(([key]) =>
+                      process.platform === 'win32' ? key.toUpperCase() !== 'PATH' : key !== 'PATH'
+                    )
+                  )
+                )
+              ]
             })
           )
         }
@@ -256,9 +265,9 @@ export function createStructuredAgentEnvironmentResolvers(
       }
     },
     resolveBaseEnvironment: resolveBase,
-    resolveAgentEnvironment: async (agent) =>
+    resolveAgentEnvironment: async (agent, cachedOnly) =>
       overlayEnvironmentVariables(
-        await resolveBase(),
+        await resolveBase(cachedOnly),
         sources.resolveAgentLaunchEnv?.(agent),
         process.platform
       )

@@ -1,8 +1,8 @@
-import { AgentConversationCopyError } from '../../native-chat/agent-conversation-copy-error'
+import { AgentConversationCopyError } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
@@ -142,5 +142,5 @@ export function spawnClaudeConversationWorker(workerData: unknown) {
   const entry = installed
     ? installed
     : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)
-  return spawnWorkerThread(entry, { workerData })
+  return spawnWorkerThread(entry, { name: 'orca-claude-rewind-transcript', workerData })
 }

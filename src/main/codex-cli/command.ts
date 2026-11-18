@@ -1,7 +1,9 @@
-import { resolveCliCommandAsync } from '../../shared/node-cli-command-async-resolution'
-import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import { resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
+import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import { resolveGuestNativeProgram } from '../wsl/filesystem/wsl-guest-windows-drive-path'
 import { WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
+import { isAbsolute } from 'node:path'
+import { managedClaudeCommand } from '../claude/managed-runtime/claude-managed-runtime'
 
 export {
   getVersionManagerBinPaths,
@@ -9,7 +11,7 @@ export {
   resolveCliCommands,
   resolveExecutableCommand,
   withCliRuntimeOnPath
-} from '../../shared/node-cli-command-resolution'
+} from '../../shared/shell/command-resolution/node-cli-command-resolution'
 export { WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
 
 type ResolveCommandOptions = NonNullable<Parameters<typeof resolveCliCommand>[1]>
@@ -41,5 +43,9 @@ export async function resolveCodexCommandForSpawn(): Promise<string> {
 }
 
 export function resolveClaudeCommand(options: ResolveCommandOptions = {}): string {
-  return resolveGuestNativeAgentCommand('claude', options)
+  const resolved = resolveGuestNativeAgentCommand('claude', options)
+  // The user's own install wins; Orca's copy serves hosts that have none.
+  return isAbsolute(resolved) && !resolved.startsWith(WINDOWS_ONLY_AGENT_CLI_DIR)
+    ? resolved
+    : (managedClaudeCommand() ?? resolved)
 }

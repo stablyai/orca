@@ -6,7 +6,7 @@ import {
   resumeInvocationAfterMarker,
   type StructuredAgentCliConversations,
   type StructuredAgentSessionHistory
-} from '../../../native-chat/structured-agent-cli-conversations'
+} from '../../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath

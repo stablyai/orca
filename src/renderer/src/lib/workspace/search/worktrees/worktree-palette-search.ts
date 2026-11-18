@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import { matchPaletteDocument } from '../../../../../../shared/palette-match/match-document'
 import { preparePaletteQuery } from '../../../../../../shared/palette-match/palette-query'
 import type { MatchRange } from '../../../../../../shared/palette-match/normalized-text'
@@ -20,9 +21,9 @@ import {
   type PaletteSupportingKind
 } from './worktree-palette-evidence'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorkspaceLastActiveAt } from '../../../../../../shared/workspace-last-active'
+import { getWorkspaceLastActiveAt } from '../../../../../../shared/workspace-cleanup/workspace-last-active'
 import { getWorktreeVisitTimestamp } from '../../activation/worktree-visit-recency'
 import {
   getPaletteWorktreeExecutionHostId,
@@ -39,7 +40,7 @@ import {
   type PaletteActivityRank,
   type PaletteSearchContext
 } from '../../../../../../shared/palette-match/palette-ranking'
-import type { HiddenProjects } from '../../../../../../shared/hidden-projects'
+import type { HiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 export type PaletteMatchedField = 'displayName' | 'branch' | 'repo' | 'host' | PaletteSupportingKind
 
@@ -76,7 +77,11 @@ export function isPaletteSearchableWorktree(
   worktree: Worktree,
   hiddenProjects: HiddenProjects
 ): boolean {
-  return !worktree.isArchived && !hiddenProjects.isRowHidden(worktree)
+  return (
+    !worktree.isArchived &&
+    !isWorktreeRetiredByRemoval(worktree) &&
+    !hiddenProjects.isRowHidden(worktree)
+  )
 }
 
 export function getWorktreePaletteSearchScope(args: {

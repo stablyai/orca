@@ -59,6 +59,68 @@ const pendingAnswer: AgentJournalSubmission = {
 }
 
 describe('async question send ownership', () => {
+  it('keeps an answer locked when its queue card is replaced by a pending handoff', () => {
+    let recorded: (() => void) | undefined
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
+      request?.onCreated?.('card')
+      recorded = () => request?.onSettled?.('recorded')
+      return true
+    })
+    const render = (
+      queuedCards: { text: string }[] = [],
+      submissions: AgentJournalSubmission[] = [],
+      messages = [asked]
+    ) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="scope"
+            sourceKey="host/epoch"
+            sourceScope="host/epoch"
+            session={{ messages, readPhase: 'ready' }}
+            queuedCards={queuedCards}
+            submissions={submissions}
+            send={send}
+          />
+        )
+      )
+    const option = () => container.querySelector<HTMLButtonElement>('button[aria-pressed]')
+    const text = '> Which color?\n\nRed'
+    render()
+    act(() => option()!.click())
+    act(() => vi.runOnlyPendingTimers())
+    render([{ text }])
+    expect(option()).toBeNull()
+    act(() => recorded!())
+
+    const handoff = { ...pendingAnswer, queuedMessageId: 'card' }
+    render([], [handoff])
+    expect(option()?.disabled).toBe(true)
+
+    const rejected = { ...handoff, dispatchState: 'rejected' as const }
+    render([], [rejected])
+    expect(option()?.disabled).toBe(false)
+
+    render([], [rejected, { ...handoff, clientMessageId: 'retry', submittedAt: 3 }])
+    expect(option()?.disabled).toBe(true)
+
+    render(
+      [],
+      [{ ...handoff, dispatchState: 'accepted' }],
+      [
+        asked,
+        {
+          id: 'orca:answer',
+          role: 'user',
+          timestamp: 3,
+          source: 'transcript',
+          blocks: [{ type: 'text', text }]
+        }
+      ]
+    )
+    expect(option()).toBeNull()
+  })
+
   it('releases journal-first uncertainty before a late callback, fences retries and resets ownership on revised forms and sources', () => {
     const completions: (() => void)[] = []
     const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
@@ -102,7 +164,7 @@ describe('async question send ownership', () => {
     ).toBe(false)
     act(() =>
       [...container.querySelectorAll('button')]
-        .find((node) => node.textContent === 'Submit')!
+        .find((node) => node.textContent?.startsWith('Submit'))!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
     )
     act(() => completions[0]!())
@@ -132,5 +194,47 @@ describe('async question send ownership', () => {
         (node) => !node.disabled
       )
     ).toBe(true)
+  })
+  it('submits with Enter on the chosen option even though the async card does not take focus', () => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
+      request?.onCreated?.(send.mock.calls.length === 1 ? 'answer' : 'retry')
+      return true
+    })
+    const render = (submissions: AgentJournalSubmission[] = []) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="scope"
+            sourceKey="host/epoch"
+            sourceScope="host/epoch"
+            session={{ messages: [asked], readPhase: 'ready' }}
+            submissions={submissions}
+            send={send}
+          />
+        )
+      )
+    const blue = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find((node) =>
+        node.textContent?.includes('Blue')
+      )!
+    render()
+    act(() => blue().dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    act(() => vi.advanceTimersByTime(200))
+    expect(send).toHaveBeenCalledTimes(1)
+    // The first delivery is uncertain, so the card comes back with Blue still chosen.
+    render([{ ...pendingAnswer, dispatchState: 'unknown' }])
+    expect(blue().getAttribute('aria-pressed')).toBe('true')
+    // A real keyboard user can reach the row: it is enabled and holds focus.
+    expect(blue().disabled).toBe(false)
+    act(() => blue().focus())
+    expect(document.activeElement).toBe(blue())
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    act(() => {
+      blue().dispatchEvent(enter)
+    })
+    // Enter submits like the footer's Submit; it neither deselects nor lets the native click run.
+    expect(enter.defaultPrevented).toBe(true)
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(blue().getAttribute('aria-pressed')).toBe('true')
   })
 })

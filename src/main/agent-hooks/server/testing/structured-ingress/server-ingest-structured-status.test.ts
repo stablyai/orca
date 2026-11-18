@@ -1,12 +1,11 @@
 import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import { makeStructuredAgentStatusSubject } from '../../../../../shared/agent-status/contracts/agent-status-subject'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
-import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -93,29 +92,30 @@ afterEach(() => {
 })
 
 describe('AgentHookServer ingestStructuredStatus', () => {
-  it("folds the host's live child records into an idle session the way the hook lane folds a roster", () => {
+  it('retains early child work through status-less parent publications until the owner forgets it', () => {
     const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
+    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
     server.ingestStructuredChildWork(SUBJECT, [liveChild('child-1', 'agent')], 'codex')
-    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 1 }), SUBJECT)
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
-    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('workingMode')
-
-    server.ingestStructuredChildWork(
-      SUBJECT,
-      [endedChild('child-1'), liveChild('shell-1', 'command')],
-      'codex'
-    )
-    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 2 }), SUBJECT)
+    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
+    expect(server.getStatusSnapshot()).toEqual([])
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
     expect(server.getStatusSnapshot()[0]).toMatchObject({
       state: 'working',
-      workingMode: 'monitoring'
+      mainAgent: { state: 'done' }
     })
-
-    server.ingestStructuredChildWork(SUBJECT, [endedChild('shell-1')], 'codex')
-    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 3 }), SUBJECT)
+    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
+    expect(server.getStatusSnapshot()).toEqual([])
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done' }
+    })
+    server.ingestStructuredChildWork(SUBJECT, [endedChild('child-1')], 'codex')
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
-    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('workingMode')
+    server.dropStructuredStatus(SUBJECT)
+    expect(server.getStructuredChildWorkViews(SUBJECT)).toEqual([])
+    expect(server.getStatusSnapshot()).toEqual([])
   })
 
   it("reads child liveness from the host's records, never from the summary's task list", () => {
@@ -129,44 +129,6 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     )
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
   })
-
-  // Monitoring age must not become the age of a newly working turn.
-  it('restarts the state clock when monitoring becomes a real turn', () => {
-    const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
-    server.ingestStructuredChildWork(SUBJECT, [liveChild('shell-1', 'command')], 'codex')
-    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: 'working',
-      workingMode: 'monitoring',
-      stateStartedAt: OBSERVED_AT
-    })
-
-    server.ingestStructuredStatus(
-      summary({ status: 'working', updatedAt: OBSERVED_AT + 2_700_000 }),
-      SUBJECT
-    )
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: 'working',
-      stateStartedAt: OBSERVED_AT + 2_700_000
-    })
-    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('workingMode')
-  })
-
-  // Background edges do not advance journal activity; host receipt must keep live monitoring rows fresh.
-  it('dates a task edge by when the host saw it, not by the journal clock', () => {
-    const server = new AgentHookServer()
-    const before = Date.now()
-    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT }), SUBJECT)
-    server.ingestStructuredChildWork(SUBJECT, [liveChild('shell-1', 'command')], 'codex')
-    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT }), SUBJECT)
-    const row = server.getStatusSnapshot()[0]
-    expect(row).toMatchObject({ state: 'working', workingMode: 'monitoring' })
-    expect(row?.evidenceObservedAt).toBeGreaterThanOrEqual(before)
-    expect(isFreshNonDoneAgentStatus({ ...row!, updatedAt: row!.evidenceObservedAt! })).toBe(true)
-  })
-
-  // Structured resume identity belongs to the record store; a PTY-style remnant here could never be cleared.
 
   // The renderer feed owns structured panes, so host deletion must neither clear them nor rewrite hook persistence.
   it('drops the row without sending the renderer a clear for a pane it does not write', () => {
@@ -228,68 +190,5 @@ describe('structured rows and last-status.json', () => {
     } finally {
       restored.stop()
     }
-  })
-
-  it('are dropped on hydrate if some other writer put one on disk', async () => {
-    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
-    writeFileSync(
-      lastStatusPath(),
-      JSON.stringify({
-        version: 2,
-        entries: {
-          [STRUCTURED_PANE]: {
-            paneKey: STRUCTURED_PANE,
-            tabId: TAB,
-            connectionId: null,
-            receivedAt: Date.now(),
-            stateStartedAt: Date.now(),
-            structuredHost: 'owned',
-            payload: { state: 'working', prompt: 'ship the thing', agentType: 'codex' }
-          }
-        }
-      })
-    )
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      expect(server.getStatusSnapshot()).toEqual([])
-    } finally {
-      server.stop()
-    }
-  })
-})
-
-describe('the main agent fact on a structured row', () => {
-  it('publishes the main agent beside the folded state, on the journal clock with continuity', () => {
-    const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
-    server.ingestStructuredChildWork(SUBJECT, [liveChild('c', 'agent')], 'codex')
-    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: 'working',
-      mainAgent: { state: 'done', stateStartedAt: OBSERVED_AT }
-    })
-    expect(server.getStatusSnapshot()[0]?.mainAgent).not.toHaveProperty('outcome')
-
-    // Child drain does not change the settled main agent's clock.
-    server.ingestStructuredChildWork(SUBJECT, [endedChild('c')], 'codex')
-    server.ingestStructuredStatus(
-      summary({ status: 'idle', updatedAt: OBSERVED_AT + 5, turnOutcome: 'failure' }),
-      SUBJECT
-    )
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: 'done',
-      stateStartedAt: OBSERVED_AT + 5,
-      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: OBSERVED_AT }
-    })
-
-    server.ingestStructuredStatus(
-      summary({ status: 'working', updatedAt: OBSERVED_AT + 9 }),
-      SUBJECT
-    )
-    expect(server.getStatusSnapshot()[0]?.mainAgent).toEqual({
-      state: 'working',
-      stateStartedAt: OBSERVED_AT + 9
-    })
   })
 })

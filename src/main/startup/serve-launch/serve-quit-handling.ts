@@ -1,6 +1,6 @@
 import { isQuittingForUpdate } from '../../updater/updater-service'
-import { quitFromUserCommand } from '../main-window-actions'
-import { quitProcess } from '../process-quit-request'
+import { quitFromUserCommand } from '../main-window/main-window-actions'
+import { quitProcess } from '../quit/process-quit-request'
 import { installServeNativeQuitGuard } from './serve-native-quit-guard'
 import { registerServeSignalHandlers } from './serve-signal-handlers'
 

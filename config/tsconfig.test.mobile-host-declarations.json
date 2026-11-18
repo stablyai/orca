@@ -20,7 +20,7 @@
     "../src/main/github/issues/issue-field-options.ts",
     "../src/main/runtime/workspaces/process-listing/runtime-worktree-ps-summaries.ts",
     "../src/types/build-constants.d.ts",
-    "../src/main/native-chat/transcript-line-decoders-claude.ts",
+    "../src/main/native-chat/transcript-decoding/transcript-line-decoders-claude.ts",
     "../src/main/codex/structured/items/codex-thread-item-identity.ts",
     "../src/main/codex/structured/items/codex-structured-item-translation.ts"
   ],

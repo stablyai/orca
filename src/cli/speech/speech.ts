@@ -1,8 +1,9 @@
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
-import { OPENAI_SPEECH_KEY_MAX_LENGTH } from '../../shared/rpc-contract/speech-params'
+import { RuntimeClientError } from '../runtime/connection/types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { OPENAI_SPEECH_KEY_MAX_LENGTH } from '../../shared/rpc-contract/speech/speech-params'
+import { readApiKeyFromStdin } from '../arguments/stdin-api-key'
 
 type OpenAiSpeechKeyStatus = { configured: boolean; protection: string | null }
 
@@ -15,34 +16,17 @@ function formatKeyStatus(status: OpenAiSpeechKeyStatus): string {
     : 'OpenAI key saved on this host.'
 }
 
-// Keep secrets out of argv, shell history, and process listings.
-export async function readOpenAiKeyFromStdin(
-  stdin: AsyncIterable<unknown> & { isTTY?: boolean } = process.stdin
+export function readOpenAiKeyFromStdin(
+  stdin?: AsyncIterable<unknown> & { isTTY?: boolean }
 ): Promise<string> {
-  if (stdin.isTTY) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Pipe the key on stdin, e.g. printf %s "$OPENAI_API_KEY" | orca speech openai-key set'
-    )
-  }
-  const chunks: Buffer[] = []
-  let bytes = 0
-  for await (const chunk of stdin) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
-    bytes += buffer.length
-    if (bytes > OPENAI_SPEECH_KEY_MAX_LENGTH * 4) {
-      throw new RuntimeClientError('invalid_argument', 'That is too long to be an OpenAI key')
-    }
-    chunks.push(buffer)
-  }
-  const key = Buffer.concat(chunks).toString('utf8').trim()
-  if (!key) {
-    throw new RuntimeClientError('invalid_argument', 'No key on stdin')
-  }
-  if (key.length > OPENAI_SPEECH_KEY_MAX_LENGTH) {
-    throw new RuntimeClientError('invalid_argument', 'That is too long to be an OpenAI key')
-  }
-  return key
+  return readApiKeyFromStdin(
+    {
+      name: 'an OpenAI key',
+      pipeExample: 'printf %s "$OPENAI_API_KEY" | orca speech openai-key set',
+      maxLength: OPENAI_SPEECH_KEY_MAX_LENGTH
+    },
+    stdin
+  )
 }
 
 export async function callOpenAiKeyMethod(

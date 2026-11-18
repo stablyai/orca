@@ -1,24 +1,26 @@
-import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { useCallback, useContext, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
+import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isAiVaultAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { selectAiVaultPanelWorkspace } from '@/components/right-sidebar/ai-vault/scope/ai-vault-panel-workspace'
 import { openAgentSessionHistoryModal } from '@/components/right-sidebar/ai-vault/panel/agent-session-history-modal'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatPickerState } from '@/components/native-chat/composer/pickers/use-native-chat-picker-state'
 import { findNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/native-chat-tab-owner'
 import {
   writeNativeChatComposerText,
   type NativeChatComposerInput
-} from '@/components/native-chat/composer/editor/native-chat-composer-input'
+} from '../editor/native-chat-composer-input'
+import { NativeChatSessionHistoryScopeContext } from '../../native-chat-session-history-scope'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 
 export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
 
 const FORK_DRAFT = /^\/fork(?:\s+([\s\S]*))?$/i
+const MCP_DRAFT = /^\/mcp\s*$/i
 
 /** Replace the agent’s /resume catalog entry with Orca’s Session History command, and its /usage
  *  and /fork with Orca’s where this chat runs them. */
@@ -92,7 +94,10 @@ export type NativeChatResumeCommand = {
  *  reaches the agent. */
 export function useNativeChatResumeCommand(args: {
   structuredTransport:
-    | Pick<NativeChatStructuredComposerTransport, 'worktreeId' | 'accountUsage' | 'fork'>
+    | Pick<
+        NativeChatStructuredComposerTransport,
+        'worktreeId' | 'accountUsage' | 'fork' | 'mcpPanel'
+      >
     | undefined
   agent: AgentType
   terminalTabId: string
@@ -112,14 +117,17 @@ export function useNativeChatResumeCommand(args: {
   const { setNotice } = args
   const structured = structuredTransport !== undefined
   const structuredWorktreeId = structuredTransport?.worktreeId
+  // A room's history spans its members' agents; with no chat agent, nothing replaces the room.
+  const ownConversation = useContext(NativeChatSessionHistoryScopeContext) === 'conversation'
   const usage = structuredTransport?.accountUsage
   const fork = structuredTransport?.fork
-  const openUsage = useCallback(
-    (draft: string): void => {
+  const mcp = structuredTransport?.mcpPanel
+  const openPanel = useCallback(
+    (draft: string, panel: { open: () => void } | undefined): void => {
       const rest = draft.replace(/^\/\S+\s*/, '')
       // Focus before opening so closing the modal returns to the editor even after a Send click.
       textareaRef.current?.focus()
-      usage?.open()
+      panel?.open()
       setDraft(rest)
       setCaret(rest.length)
       setActiveSuggestion(0)
@@ -130,7 +138,7 @@ export function useNativeChatResumeCommand(args: {
         writeNativeChatComposerText(input, rest, rest.length)
       }
     },
-    [usage, setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
+    [setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
   )
 
   const runFork = useCallback(
@@ -186,7 +194,11 @@ export function useNativeChatResumeCommand(args: {
         workspace,
         chatTabId: terminalTabId,
         initialQuery: search,
-        ...(isAiVaultAgent(agent) ? { agent } : {})
+        ...(!ownConversation
+          ? { alongside: true as const }
+          : isAiVaultAgent(agent)
+            ? { agent }
+            : {})
       })
       // Attachments stay armed for the next real prompt.
       setDraft('')
@@ -196,6 +208,7 @@ export function useNativeChatResumeCommand(args: {
     },
     [
       agent,
+      ownConversation,
       setActiveSuggestion,
       setCaret,
       setDraft,
@@ -212,8 +225,10 @@ export function useNativeChatResumeCommand(args: {
       !isPickedSkill(draft) &&
       (parseNativeChatResumeDraft(draft) !== null ||
         (usage !== undefined && /^\/usage\s*$/i.test(draft)) ||
+        // Before goal mode too, so `/mcp` never becomes an objective.
+        (mcp !== undefined && MCP_DRAFT.test(draft)) ||
         (fork !== undefined && FORK_DRAFT.test(draft.trim()))),
-    [fork, isPickedSkill, structured, usage]
+    [fork, isPickedSkill, mcp, structured, usage]
   )
   const consume = useCallback(
     (draft: string): boolean => {
@@ -221,7 +236,9 @@ export function useNativeChatResumeCommand(args: {
         return false
       }
       if (/^\/usage\s*$/i.test(draft)) {
-        openUsage(draft)
+        openPanel(draft, usage)
+      } else if (MCP_DRAFT.test(draft)) {
+        openPanel(draft, mcp)
       } else if (fork && FORK_DRAFT.test(draft.trim())) {
         runFork(draft)
       } else {
@@ -229,7 +246,7 @@ export function useNativeChatResumeCommand(args: {
       }
       return true
     },
-    [fork, matchesDraft, open, openUsage, runFork]
+    [fork, matchesDraft, mcp, open, openPanel, runFork, usage]
   )
 
   const interceptPick = useCallback(
@@ -241,14 +258,15 @@ export function useNativeChatResumeCommand(args: {
           if (
             item.name !== 'resume' &&
             !(item.name === 'usage' && usage) &&
+            !(item.name === 'mcp' && mcp) &&
             !(item.name === 'fork' && fork)
           ) {
             pick(item)
             return
           }
           clearSkillOrigin()
-          if (item.name === 'usage') {
-            openUsage(textareaRef.current?.value ?? '')
+          if (item.name === 'usage' || item.name === 'mcp') {
+            openPanel(textareaRef.current?.value ?? '', item.name === 'usage' ? usage : mcp)
             return
           }
           if (item.name === 'fork') {
@@ -263,7 +281,7 @@ export function useNativeChatResumeCommand(args: {
         }
         pick(item)
       },
-    [autocomplete, clearSkillOrigin, fork, open, openUsage, runFork, textareaRef, usage]
+    [autocomplete, clearSkillOrigin, fork, mcp, open, openPanel, runFork, textareaRef, usage]
   )
 
   return { consume, interceptPick, matchesDraft }

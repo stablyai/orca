@@ -1,11 +1,12 @@
 import type {
   NativeChatVisualsLaunch,
   PrepareNativeChatVisuals
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS,
   CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS,
   CLAUDE_PLUGIN_DIR_FLAG,
+  CLAUDE_PROMPT_SUGGESTIONS_PAUSE_CONTROL,
   CLAUDE_THINKING_DISPLAY_FLAG,
   type ClaudeCliFlag,
   type ClaudeCliFlagFact,
@@ -19,12 +20,27 @@ export type ClaudeLaunchFlags = {
   /** Show thinking text without enabling thinking for users who disabled it. */
   thinkingDisplayArgs: Readonly<Record<string, string>>
   visuals: { visuals: NativeChatVisualsLaunch; pluginDir: string | null } | null
+  /** The host's setting allows suggestions and the CLI is new enough to be told to pause them. */
+  promptSuggestions: boolean
+}
+
+/** Whether this CLI loads plugin folders, which the visuals skill needs; a launch and a resting
+ *  `/` probe ask the same check. */
+export async function claudeTakesPluginDirs(
+  cliFlags: Pick<ClaudeCliFlagSupport, 'check'> | undefined,
+  launch: ClaudeCliLaunch
+): Promise<boolean> {
+  return (
+    (await cliFlags?.check(CLAUDE_PLUGIN_DIR_FLAG, launch, CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS)) ===
+    'supported'
+  )
 }
 
 export async function resolveClaudeLaunchFlags(
   deps: {
     cliFlags?: Pick<ClaudeCliFlagSupport, 'check'>
     prepareVisuals?: PrepareNativeChatVisuals
+    promptSuggestions?: () => boolean
   },
   sessionId: string,
   launch: ClaudeCliLaunch
@@ -42,15 +58,22 @@ export async function resolveClaudeLaunchFlags(
     thinking(),
     preparedVisuals,
     preparedVisuals.then(async (visuals) =>
-      visuals
-        ? (await check(CLAUDE_PLUGIN_DIR_FLAG, CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS)) === 'supported'
-        : false
+      visuals ? await claudeTakesPluginDirs(deps.cliFlags, launch) : false
     )
   ])
   // Reuse any version learned by the plugin check without starting a new probe.
   const thinks =
     thinksFirst || (visuals ? await thinking(CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS, false) : false)
+  // Unproven support stays off: each suggestion is a model request, and an older CLI can't pause one.
+  const suggests =
+    deps.promptSuggestions?.() === true &&
+    (await check(
+      CLAUDE_PROMPT_SUGGESTIONS_PAUSE_CONTROL,
+      CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS,
+      false
+    )) === 'supported'
   return {
+    promptSuggestions: suggests,
     thinkingDisplayArgs: thinks ? THINKING_DISPLAY_ARGS : {},
     visuals: visuals ? { visuals, pluginDir: loadsPlugins ? visuals.skill.pluginDir : null } : null
   }

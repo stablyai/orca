@@ -14,6 +14,7 @@ type NativeChatTranscriptRowContextInput = Omit<
 
 export function useNativeChatTranscriptRowContext({
   agent,
+  turnBot,
   hostWork,
   expandSignal,
   revealedDiff,
@@ -24,12 +25,13 @@ export function useNativeChatTranscriptRowContext({
   runtimeContext,
   structuredAttachments,
   onToggleExpandedTurn,
-  subagentDisclosure,
+  onOpenSubagent,
   onScrollMessageToTop,
   onRevealDiff
 }: NativeChatTranscriptRowContextInput): NativeChatTranscriptRowContext {
   return useMemo<NativeChatTranscriptRowContext>(
     () => ({
+      turnBot,
       agentName: structuredAgentLabel(agent),
       actionablePromptIds: hostWork?.actionablePromptIds,
       expandSignal,
@@ -41,12 +43,13 @@ export function useNativeChatTranscriptRowContext({
       runtimeContext,
       structuredAttachments,
       onToggleExpandedTurn,
-      subagentDisclosure,
+      onOpenSubagent,
       onScrollMessageToTop,
       onRevealDiff
     }),
     [
       agent,
+      turnBot,
       hostWork,
       expandSignal,
       expandedTurnIds,
@@ -58,7 +61,7 @@ export function useNativeChatTranscriptRowContext({
       structuredAttachments,
       onScrollMessageToTop,
       taskListPredecessors,
-      subagentDisclosure,
+      onOpenSubagent,
       onToggleExpandedTurn
     ]
   )

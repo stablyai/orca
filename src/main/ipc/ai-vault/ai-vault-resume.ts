@@ -1,4 +1,4 @@
-import { AiVaultPrepareSessionResumeParams } from '../../../shared/rpc-contract/ai-vault-params'
+import { AiVaultPrepareSessionResumeParams } from '../../../shared/rpc-contract/ai-vault/ai-vault-params'
 import { prepareStructuredChatCliFork } from '../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { ipcMain } from 'electron'
 import type {
@@ -6,12 +6,15 @@ import type {
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import {
+  isUnresolvedOwnerHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { assertLegacyAiVaultResumeAllowed } from '../../ai-vault/structured-sessions/structured-session-ownership'
-import { tryEnsureStructuredAgentSessionHostForResume } from '../../runtime/agent-session/structured-agent-session-host-refusal'
+import { tryEnsureStructuredAgentSessionHostForResume } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import { copyStructuredChatConversation } from '../../ai-vault/structured-sessions/structured-chat-conversation-copy'
-import { wakeNativeChatTranscriptDistro } from '../../native-chat/native-chat-open-wake'
+import { wakeNativeChatTranscriptDistro } from '../../native-chat/transcript-discovery/native-chat-open-wake'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { prepareAiVaultSessionHandoff } from './ai-vault-handoff'
 import type { AiVaultSessionHandoffArgs } from '../../../shared/ai-vault/contracts/ai-vault-session-handoff'

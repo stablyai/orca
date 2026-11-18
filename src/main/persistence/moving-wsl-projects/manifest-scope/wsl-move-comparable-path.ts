@@ -5,11 +5,21 @@
 import {
   foldWslUncPathCaseInsensitiveParts,
   toWindowsWslUncPath
-} from '../../../../shared/wsl-paths'
+} from '../../../../shared/file-access/wsl-paths'
+import {
+  toWslDistroUncPath,
+  type WslMappedDrive
+} from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 
-/** Null for a path that is not in a WSL distro (a Windows drive path, say). */
-export function comparableWslPath(path: string, distro: string): string | null {
-  const unc = isLinuxSpelled(path) ? toWindowsWslUncPath(path, distro) : path
+/** Null for a path that is not in a WSL distro (a Windows drive path no mapped drive covers). */
+export function comparableWslPath(
+  path: string,
+  distro: string,
+  mappedDrives: readonly WslMappedDrive[] = []
+): string | null {
+  const unc = isLinuxSpelled(path)
+    ? toWindowsWslUncPath(path, distro)
+    : toWslDistroUncPath(path, mappedDrives)
   return foldWslUncPathCaseInsensitiveParts(unc)?.replace(/\/+$/, '') ?? null
 }
 

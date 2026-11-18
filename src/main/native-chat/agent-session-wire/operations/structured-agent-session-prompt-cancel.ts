@@ -3,7 +3,10 @@
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  refuse,
+  AgentSessionRefusalError
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import '../providers/structured-agent-session-adapter'
 import { AgentSessionPromptUnavailableError } from '../providers/structured-agent-session-adapter-errors'
@@ -16,7 +19,10 @@ import {
 } from './structured-agent-session-prompt-state'
 import { cardCancelNotSavedRefusal, stopNotSaved } from './structured-agent-session-stop-acceptance'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import {
+  readContextStructuredAgentSessionWork,
+  readContextStructuredAgentSessionTurnScope
+} from '../observations/structured-agent-session-read-work'
 
 type CancelOutcome = TurnOutcome<AgentSessionCancelResult>
 type PendingPrompt = Extract<PendingPromptValidation, { ok: true }>
@@ -29,7 +35,7 @@ export async function cancelStructuredAgentSessionPrompt(
     interrupt: () => Promise<CancelOutcome>
   }
 ): Promise<CancelOutcome> {
-  const validated = validatePendingPrompt(ctx, input.prompt)
+  const validated = await validatePendingPrompt(ctx, input.prompt)
   if (!validated.ok) {
     return answerCancelOfSettledPrompt(ctx, input, validated)
   }
@@ -37,7 +43,7 @@ export async function cancelStructuredAgentSessionPrompt(
     sessionId: ctx.sessionId,
     prompt: validated.prompt
   })
-  if (isEndedGenerationPrompt(ctx, validated)) {
+  if (await isEndedGenerationPrompt(ctx, validated)) {
     return cancelEndedGenerationPrompt(ctx, input, validated, route ? null : routes.interrupt)
   }
   if (!route) {
@@ -49,7 +55,7 @@ export async function cancelStructuredAgentSessionPrompt(
   }
   // Recheck after handover: dismiss stale/background prompts without stopping an unrelated live turn.
   // Save dismissal with the receipt unless Stop already committed it.
-  if (route.kind === 'dismiss' || !raisedByLiveTurn(ctx, validated)) {
+  if (route.kind === 'dismiss' || !(await raisedByLiveTurn(ctx, validated))) {
     const dismissed = await dismissPrompt(ctx, validated, true)
     return dismissed.ok ? cancelled : dismissed
   }
@@ -69,7 +75,8 @@ async function cancelEndedGenerationPrompt(
   pending: PendingPrompt,
   interrupt: (() => Promise<CancelOutcome>) | null
 ): Promise<CancelOutcome> {
-  const liveTurnId = contextStructuredAgentSessionCurrentWork(ctx).activeTurnId()
+  const liveTurnId =
+    (await readContextStructuredAgentSessionWork(ctx, { kind: 'turn' })).activeTurn?.turnId ?? null
   const interrupted =
     interrupt && input.turnId !== undefined && input.turnId === liveTurnId
       ? await interrupt()
@@ -78,7 +85,7 @@ async function cancelEndedGenerationPrompt(
     return interrupted
   }
   // Recheck whether provider cancellation already settled the prompt.
-  const still = validatePendingPrompt(ctx, {
+  const still = await validatePendingPrompt(ctx, {
     itemId: pending.item.itemId,
     expectedRevision: pending.item.revision
   })
@@ -96,8 +103,11 @@ async function cancelEndedGenerationPrompt(
   )
 }
 
-function raisedByLiveTurn(ctx: AgentSessionTurnContext, pending: PendingPrompt): boolean {
-  const live = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
+async function raisedByLiveTurn(
+  ctx: AgentSessionTurnContext,
+  pending: PendingPrompt
+): Promise<boolean> {
+  const live = await readContextStructuredAgentSessionTurnScope(ctx)
   const raised = pending.item.turnScope
   return live.kind === 'turn' && raised?.kind === 'turn' && raised.turnItemId === live.turnItemId
 }
@@ -108,7 +118,7 @@ async function dismissPrompt(
   pending: PendingPrompt,
   answer: boolean | null
 ): Promise<TurnOutcome<null>> {
-  const { item, prompt } = pending
+  const { item } = pending
   const identity = parseAgentJournalItemKey(item.itemId)
   if (!identity) {
     return {
@@ -123,19 +133,21 @@ async function dismissPrompt(
   let committed = false
   const receipt = ctx.operationReceipt?.isCommitted() ? undefined : ctx.operationReceipt
   const commit = async (): Promise<void> => {
-    await ctx.journal.appendItem(
-      identity,
+    await ctx.journal.mutatePrompt(
       {
-        ...prompt,
+        itemId: item.itemId,
+        expectedRevision: item.revision,
         resolution: {
           state: 'cancelled',
           selectedOptionId: null,
           resolvedBy: ctx.resolvedBy,
           resolvedAt: ctx.now()
+        },
+        options: {
+          fence: ctx.fence,
+          turnScope: await readContextStructuredAgentSessionTurnScope(ctx)
         }
       },
-      // Revision must preserve the prompt’s original turn.
-      { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() },
       receipt
     )
     committed = true
@@ -152,7 +164,9 @@ async function dismissPrompt(
     }
   } catch (error) {
     if (!committed && !(error instanceof AgentSessionPromptUnavailableError)) {
-      return dismissalNotSaved(ctx, error)
+      return error instanceof AgentSessionRefusalError
+        ? { ok: false, refusal: error.refusal }
+        : dismissalNotSaved(ctx, error)
     }
     if (committed) {
       // Log adapter details locally; journal only the user-facing failure.
@@ -164,7 +178,7 @@ async function dismissPrompt(
             surface: 'row'
           })
         },
-        { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
+        { fence: ctx.fence, turnScope: await readContextStructuredAgentSessionTurnScope(ctx) }
       )
     }
   }
@@ -173,7 +187,9 @@ async function dismissPrompt(
     try {
       await commit()
     } catch (error) {
-      return dismissalNotSaved(ctx, error)
+      return error instanceof AgentSessionRefusalError
+        ? { ok: false, refusal: error.refusal }
+        : dismissalNotSaved(ctx, error)
     }
   }
   return { ok: true, value: null }

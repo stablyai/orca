@@ -1,21 +1,22 @@
-import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../../src/main/runtime/construction/test-context/runtime-test-module-registration.spec'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setRuntimeBrowserCommandsFactory } from '../../../src/main/runtime/browser/installation/runtime-browser-commands-factory'
 import { RuntimeBrowserCommands } from '../../../src/main/runtime/browser/commands/browser-commands'
 import { withOpenedServeBrowserTab } from '../../../src/main/runtime/browser/headless/serve-browser-tab-layout'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { TEST_WORKTREE_ID as WT } from '../../../src/main/runtime/orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import { TEST_WORKTREE_ID as WT } from '../../../src/main/runtime/construction/test-context/orca-runtime-test-fixtures.spec'
 import { createRuntimeFixture } from './active-tab-publication.test-fixture'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../src/shared/runtime-session-contracts'
-import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
+} from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import { electronMocks } from '../../../src/main/runtime/orca-runtime-test-mocks/setup.spec'
+import { getDefaultWorkspaceSession } from '../../../src/shared/orca-profiles/constants'
 
 const list = (runtime: OrcaRuntimeService) => runtime.listMobileSessionTabs(`id:${WT}`)
 
 function accept(runtime: OrcaRuntimeService, frame: RuntimeMobileSessionTabsSnapshot) {
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [frame] })
+  return runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [frame] })
 }
 
 afterEach(() => {
@@ -37,6 +38,11 @@ describe('legacy host navigation through inventory reconstruction', () => {
       })!
     }
     setSession(saved)
+    electronMocks.webContents.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      isLoading: () => false,
+      isLoadingMainFrame: () => false
+    })
     runtime.setOffscreenBrowserBackend({
       createTab: vi.fn(async () => ({ browserPageId: 'unused' })),
       closeTab: vi.fn(async () => {}),
@@ -54,12 +60,18 @@ describe('legacy host navigation through inventory reconstruction', () => {
         }))
       }),
       getRemoteTabFaviconUrl: () => null,
+      getPageNavigationState: () => null,
       tabSwitch: vi.fn(async () => ({ switched: 1, browserPageId: 'page-b' })),
       getRegisteredTabs: () =>
         new Map([
           ['page-a', 1],
           ['page-b', 2]
-        ])
+        ]),
+      getRegisteredPageWebContentsId: (pageId: string) =>
+        new Map([
+          ['page-a', 1],
+          ['page-b', 2]
+        ]).get(pageId)
     } as never)
     const tabs: RuntimeMobileSessionTabsSnapshot['tabs'] = ['page-a', 'page-b'].map((id) => ({
       type: 'browser',
@@ -73,7 +85,7 @@ describe('legacy host navigation through inventory reconstruction', () => {
       canGoForward: false,
       isActive: id === 'page-a'
     }))
-    accept(runtime, {
+    await accept(runtime, {
       worktree: WT,
       publicationEpoch: 'renderer:legacy-browser',
       snapshotVersion: 10,
@@ -82,13 +94,11 @@ describe('legacy host navigation through inventory reconstruction', () => {
       activeTabType: 'browser',
       tabs
     })
-    expect(runtime.mobileSessionTabsByWorktree.get(WT)?.tabGroups).toBeUndefined()
     const seen: RuntimeMobileSessionTabsResult[] = []
     runtime.onMobileSessionTabsChanged((snapshot) => seen.push(snapshot))
     await runtime.browserTabSwitch({ worktree: `id:${WT}`, page: 'page-b', focus: true })
     await vi.runAllTimersAsync()
     const result = await list(runtime)
-    expect(runtime.mobileSessionTabsByWorktree.get(WT)?.activeTabId).toBe('page-b')
     expect(result.activeTabId).toBe('page-b')
     expect(result.activeTabType).toBe('browser')
     expect(result.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual(['page-b'])

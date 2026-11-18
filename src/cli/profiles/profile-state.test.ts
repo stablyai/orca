@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProcessHostModule from '@orca/process-host'
-import * as http1Marker from '../../main/startup/http1-compatibility-marker'
+import * as http1Marker from '../../main/startup/network-compatibility/http1-compatibility-marker'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from '../../main/persistence/profile-state/database/profile-state-database'
-import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
 import {
   exportProfileStateJson,
   importProfileStateJson
@@ -58,7 +58,7 @@ vi.mock('../runtime/client', () => {
   return { RuntimeClient }
 })
 
-vi.mock('../runtime/metadata', async (importOriginal) => ({
+vi.mock('../runtime/profile/metadata', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDefaultUserDataPath: getDefaultUserDataPathMock
 }))

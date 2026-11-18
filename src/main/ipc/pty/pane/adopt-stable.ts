@@ -1,10 +1,10 @@
-import type { PtySpawnOutcome } from '../spawn-outcome'
-import { isClosedPaneFenced } from '../../../persistence/terminal-topology/closed-pane-binding-fence'
+import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
+import { isClosedPaneFenced } from '../../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
 import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import {
   toSshExecutionHostId,
   getConnectionExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { reconcilePaneOwner } from './stable-pane-attach'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

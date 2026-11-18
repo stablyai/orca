@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { captureStructuredAgentCliSource } from '../../../native-chat/structured-agent-cli-source'
+import { captureStructuredAgentCliSource } from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { OrchestrationEntryCaller } from '../../orchestration/addressing/orchestration-caller-identity'
 import { isRegistrationFencedUnsubscribe, type RpcContext, type RpcRequest } from '../core'
 import { resolveRpcCallerIdentity } from '../callers/rpc-caller-identity'
@@ -71,6 +71,7 @@ export function rpcContextFromTransport(
     caller: resolveRpcCallerIdentity(options),
     plugin: options?.plugin,
     clientKind: options?.clientKind,
+    callerScope: options?.callerScope,
     clientCapabilities: options?.clientCapabilities,
     capabilitySource: options?.capabilitySource,
     updateClientCapabilities: options?.updateClientCapabilities,

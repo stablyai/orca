@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { SETTINGS_SYNC_HANDLERS } from './settings-sync'
 
 const thisComputer = vi.hoisted(() => ({ call: vi.fn(), isRemote: false }))

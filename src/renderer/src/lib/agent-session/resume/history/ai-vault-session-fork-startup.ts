@@ -1,9 +1,7 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import type { AiVaultAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
-  resolveAiVaultCopiedSessionAgentArgs,
   type AiVaultResumeStartup
 } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import {
@@ -27,19 +25,11 @@ export function buildAiVaultForkStartupForWorktree(
   return buildAiVaultForkStartup(sharedStartupArgs(args))
 }
 
-/** Keeps the history row's launch mode while the copied conversation opens with its actual CLI. */
+/** The copy is the terminal's own conversation: a plain resume with its CLI's own launch settings. */
 export function buildAiVaultCopiedSessionStartupForWorktree(
-  args: AiVaultResumeWorktreeArgs,
-  sourceAgent: AiVaultAgent
+  args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup {
-  const agentArgs = resolveAiVaultCopiedSessionAgentArgs({
-    ...sharedStartupArgs(args),
-    sourceAgent
-  })
-  return {
-    ...buildAiVaultResumeStartupForWorktree({ ...args, agentArgs }),
-    agent: args.session.agent
-  }
+  return { ...buildAiVaultResumeStartupForWorktree(args), agent: args.session.agent }
 }
 
 /** Runtime hosts validate their own launch settings when making the copy. */

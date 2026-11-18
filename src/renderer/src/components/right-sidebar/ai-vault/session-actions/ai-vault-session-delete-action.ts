@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -94,10 +94,7 @@ export function useAiVaultSessionDeleteAction({
         return
       }
       const confirmed = await confirm({
-        title: translate(
-          'auto.components.right.sidebar.AiVaultSessionDeleteDialog.title',
-          'Delete this session?'
-        ),
+        title: translate('common.delete', 'Delete'),
         description: environmentId
           ? translate(
               'auto.components.right.sidebar.AiVaultSessionDeleteDialog.remoteDescription',

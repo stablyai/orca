@@ -1,18 +1,18 @@
 import { useMemo } from 'react'
 import { Folder, FolderTree, GitBranch, Monitor } from 'lucide-react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
-import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxRow'
+import { ProjectOptionDetail } from '@/components/new-workspace/project-selection/ProjectComboboxRow'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateHostDisplayLabel } from '@/components/sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '@/runtime/hosts/display/execution-host-label'
 import { resolveWorktreeBranchLabel } from '@/lib/workspace/display/worktree-default-display-name'
-import { getHostContextLabel } from '../../../../../shared/worktree/host-context-labels'
+import { getHostContextLabel } from '../../../../../shared/worktree/row-display/host-context-labels'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '../../../store/index'
 import * as workspaceDisplay from './native-chat-resume-workspace-display'
 import {

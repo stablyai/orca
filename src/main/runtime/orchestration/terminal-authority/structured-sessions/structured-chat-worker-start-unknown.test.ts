@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { expect, it, vi } from 'vitest'
 import * as sessionCreate from '../../../rpc/methods/structured-sessions/creation/structured-agent-session-create'
@@ -69,7 +70,7 @@ it('keeps a minted worker start unknown after one preamble handover without an e
   if (!sessionId) {
     throw new Error('minted worker session missing')
   }
-  const snapshot = await host.journalSnapshot(sessionId)
+  const snapshot = await readTestHostJournal(host, sessionId)
   expect(snapshot.submissions).toHaveLength(1)
   expect(snapshot.submissions[0]).toMatchObject({ dispatchState: 'unknown' })
   expect(worker.turns).toHaveLength(1)

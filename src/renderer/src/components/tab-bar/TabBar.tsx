@@ -1,16 +1,17 @@
 import React, { useCallback } from 'react'
-import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
-import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
+import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
+import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
 import type { TabBarProps } from './tab-bar-props'
-import type { TabBarItem } from './tab-bar-item-model'
-import { useTabBarRuntimeModel } from './use-tab-bar-runtime-model'
-import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
-import { usePluginNewFileMenuOptions } from './use-plugin-new-file-menu-options'
-import { useTabBarItemProjection } from './use-tab-bar-item-projection'
-import { renderTabBarSurface } from './tab-bar-surface'
-import { useTabBarItemActions } from './use-tab-bar-item-actions'
+import type { TabBarItem } from './model/tab-bar-item-model'
+import { useTabBarRuntimeModel } from './model/use-tab-bar-runtime-model'
+import { useTabBarCreateMenuController } from './create-menu/use-tab-bar-create-menu-controller'
+import { usePluginNewFileMenuOptions } from './create-menu/use-plugin-new-file-menu-options'
+import { useTabBarItemProjection } from './model/use-tab-bar-item-projection'
+import { renderTabBarSurface } from './strip/tab-bar-surface'
+import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
-import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
+import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
+import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
 import { useTranslate } from '@/i18n/use-translate'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
@@ -28,6 +29,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onPinFile
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
+  const bot = useBotForWorkspace(worktreeId)
+  const botGroup = useBotGroupForWorkspace(worktreeId)
   const baseCreateMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -124,7 +127,9 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       tabStripDragScroll,
       activeClientHostedBrowserRowId,
       itemActions,
-      surfaceRef
+      surfaceRef,
+      bot,
+      botGroup
     },
     t
   )

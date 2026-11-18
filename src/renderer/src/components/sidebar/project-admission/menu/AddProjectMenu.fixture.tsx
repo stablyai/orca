@@ -1,11 +1,11 @@
 import React from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
-import { NewWorkspaceComposerProjectSection } from '@/components/new-workspace/NewWorkspaceComposerProjectSection'
-import { SidebarHeaderActions } from '../../sidebar-header-actions'
+import { NewWorkspaceComposerProjectSection } from '@/components/new-workspace/composer/NewWorkspaceComposerProjectSection'
+import { SidebarHeaderActions } from '../../chrome/sidebar-header-actions'
 
 const ubuntuRuntime: PublicKnownRuntimeEnvironment = {
   id: 'wsl-ubuntu',

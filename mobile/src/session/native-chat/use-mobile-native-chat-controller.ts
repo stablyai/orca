@@ -2,24 +2,25 @@ import { asyncQuestionSourceScope } from '../../../../src/shared/native-chat/inp
 import { useCallback, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import type { MobileNativeChatTab } from './conversation/mobile-native-chat-eligibility'
 import type { StructuredAgentSessionHostSupport } from './agent-session/mobile-structured-agent-session-host-support'
-import { useMobileNativeChatDrafts } from './composer/use-mobile-native-chat-drafts'
-import { useMobileNativeChatWorkspaceCatalog } from './composer/use-mobile-native-chat-workspace-catalog'
-import { useMobileNativeChatMessageSend } from './transcript/use-mobile-native-chat-message-send'
-import { useMobileNativeChatSessionOptionController } from './input/use-mobile-native-chat-session-option-controller'
-import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
-import { useMobileStructuredNativeChatSendBridge } from './composer/use-mobile-structured-native-chat-send-bridge'
-import { useMobileNativeChatTerminalTurn } from './transcript/use-mobile-native-chat-terminal-turn'
+import { useMobileNativeChatDrafts } from './composer/drafts/use-mobile-native-chat-drafts'
+import { useMobileNativeChatWorkspaceCatalog } from './composer/attachments/use-mobile-native-chat-workspace-catalog'
+import { useMobileNativeChatMessageSend } from './transcript/sending/use-mobile-native-chat-message-send'
+import { useMobileNativeChatSessionOptionController } from './input/session-options/use-mobile-native-chat-session-option-controller'
+import { useMobileNativeChatSessionLane } from './conversation/use-mobile-native-chat-session-lane'
+import { useMobileStructuredNativeChatSendBridge } from './composer/delivery/use-mobile-structured-native-chat-send-bridge'
+import { useMobileNativeChatTerminalTurn } from './transcript/ingestion/use-mobile-native-chat-terminal-turn'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
-import { useMobileBridgeChatPromptWrites } from './input/use-mobile-bridge-chat-prompt-writes'
-import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
-import { useMobileNativeChatPromptController } from './input/use-mobile-native-chat-prompt-controller'
-import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
-import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { useMobileBridgeChatPromptWrites } from './input/prompts/use-mobile-bridge-chat-prompt-writes'
+import { useMobileNativeChatActiveResolution } from './conversation/use-mobile-native-chat-active-resolution'
+import { useMobileNativeChatPromptController } from './input/prompts/use-mobile-native-chat-prompt-controller'
+import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
+import { mobileNativeChatScopeKey } from './conversation/mobile-native-chat-scope-key'
 import { useMobileNativeChatCiResultLines } from './preferences/use-mobile-native-chat-ci-result-lines'
 
 export function useMobileNativeChatController(args: {
+  itemLink?: Parameters<typeof useMobileNativeChatSessionLane>[0]['itemLink']
   client: RpcClient | null
   /** The route's paired host; differs from `client` only when a server executes the workspace. */
   pairedHostClient: RpcClient | null
@@ -186,7 +187,6 @@ export function useMobileNativeChatController(args: {
 
   const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
 
-  // Break the send/options cycle through a ref so snapshot changes cannot recreate send callbacks.
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
 
   const {
@@ -209,7 +209,7 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
-  const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
+  const structuredSend = useMobileStructuredNativeChatSendBridge({
     agent: activeChatResolution?.agent,
     sessionCommands: nativeChatLane.sessionCommands.commands,
     sendStructured: structuredNativeChat.sendWithOutcome,
@@ -301,13 +301,12 @@ export function useMobileNativeChatController(args: {
       ? structuredNativeChat.interruptedContinue
       : null,
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
+    nativeChatMcpPanel: activeChatStructured ? structuredNativeChat.mcpPanel : null,
     nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
-    handleNativeChatSend: activeChatStructured
-      ? structuredNativeChatSend.send
-      : handleNativeChatSend,
+    handleNativeChatSend: activeChatStructured ? structuredSend.send : handleNativeChatSend,
     handleNativeChatSendWithOutcome: activeChatStructured
-      ? structuredNativeChatSend.sendWithOutcome
+      ? structuredSend.sendWithOutcome
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,

@@ -7,7 +7,7 @@ import {
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../../../shared/runtime-rpc-envelope'
+} from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
@@ -26,6 +26,12 @@ import type {
 const COORDINATOR_PANE = 'tab_coord:11111111-1111-4111-8111-111111111111'
 const OTHER_PANE = 'tab_other:22222222-2222-4222-8222-222222222222'
 const REQUEST = '6f1c2f1e-3a7b-4d55-9c1e-0a1b2c3d4e5f'
+
+const sendingConnection = {
+  endpoint: 'ws://127.0.0.1:1',
+  hostPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+  credential: { kind: 'token' as const, deviceToken: 'test-home-token' }
+}
 
 type Sent = {
   method: string
@@ -51,8 +57,8 @@ describe('commands about a worker a paired server owns', () => {
   const DEV_B: OrchestrationWorkerServer = {
     environmentId: 'env_b',
     name: 'devB',
-    peerFingerprint: 'host_b',
-    homePeerFingerprint: 'cred_a',
+    peerFingerprint: 'Zmh6rfhivXdsj8GLjp-OIAiXFIVu4jOzkCpZHQ1fKSU',
+    homePeerFingerprint: 'd9b49845ccf7825b16d8a6026f24f283a700ec94ad6e750e0ff344db365934a0',
     pairingRevision: 1
   }
   let server = DEV_B
@@ -81,6 +87,8 @@ describe('commands about a worker a paired server owns', () => {
       if (method === 'orchestration.peerMailAck') {
         return ok({})
       }
+      const guard = await send?.prepareGuard?.(sendingConnection)
+      guard?.()
       const prepared = send?.prepareRequest?.({ params, envelope, measure: () => 0 })
       sent.push({
         method,
@@ -173,6 +181,36 @@ describe('commands about a worker a paired server owns', () => {
       dispatchId: String(receipt.dispatchId)
     }
   }
+
+  it("sends a new-child there with this caller's workspace as its parent", async () => {
+    const parent = {
+      installationId: 'install_a',
+      workspaceKey: 'worktree:repo_a::/a/home',
+      instanceId: 'instance_a'
+    } as const
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start reads only the caller terminal's workspace.
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({ worktreeId: 'repo_a::/a/home' } as never)
+    const resolveParent = vi
+      .spyOn(runtime, 'resolveCallerParentForAnotherStore')
+      .mockResolvedValue({ parent, source: 'env-workspace' })
+    answers['orchestration.workerStart'] = [started()]
+
+    const response = await call('orchestration.workerStart', {
+      from: 'term_coord',
+      on: 'devB',
+      spec: 'build it',
+      worktree: 'new-child',
+      repo: 'id:repo_b'
+    })
+
+    expect(response.ok).toBe(true)
+    expect(resolveParent.mock.calls[0]?.[0]).toEqual({ envParentWorkspace: 'id:repo_a::/a/home' })
+    expect(sent.find((s) => s.method === 'orchestration.workerStart')?.params).toMatchObject({
+      worktree: 'new-child',
+      repo: 'id:repo_b',
+      crossStoreParent: parent
+    })
+  })
 
   it('fails the Task when the server refuses the start, and keeps it fenced when the answer is lost', async () => {
     answers['orchestration.workerStart'] = [
@@ -270,6 +308,27 @@ describe('commands about a worker a paired server owns', () => {
 
     expect(response.ok ? undefined : response.error.code).toBe('run_not_found')
     expect(getRemoteDispatch(db, 'ctx_b1')).toBeUndefined()
+  })
+
+  it("records the agent the server's start receipt names in its launch", async () => {
+    answers['orchestration.workerStart'] = [
+      {
+        result: {
+          dispatchId: 'ctx_b1',
+          run: { id: 'run_on_b' },
+          state: 'ready',
+          launch: { requested: { agent: null }, effective: { agent: 'codex' } }
+        }
+      }
+    ]
+    const response = await call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'build it', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+
+    expect(response.ok).toBe(true)
+    expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ agent: 'codex' })
   })
 
   it("answers a remote worker's question only from its Run's coordinator, as a local one is", async () => {

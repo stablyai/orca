@@ -1,6 +1,6 @@
 import { readStreamedSessionDocument } from '../../transcripts/session-document-stream'
 import { remoteSessionContentLines } from '../../transcripts/remote-session-content-lines'
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
@@ -19,7 +19,8 @@ import {
 } from '../../parsing/session-scanner-accumulator'
 import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { arrayValue, asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { extractContentText } from '../../parsing/session-scanner-text-normalization'
 import { tokenTotal } from '../../parsing/session-scanner-token-values'
@@ -166,8 +167,8 @@ export function consumeGeminiMessage(
     accumulator.messageCount++
     addSessionContent(accumulator, 'assistant', record.content, record.timestamp)
     const model = extractString(record.model)
-    if (model) {
-      accumulator.model = model
+    if (model && model !== accumulator.model) {
+      accumulator.model = ownRetainedString(model)
     }
     accumulator.totalTokens += tokenTotal(record.tokens)
   }

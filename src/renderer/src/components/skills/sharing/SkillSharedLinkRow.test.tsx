@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { SkillCloudOwnedShare } from '../../../../../shared/skill-cloud-contract'
+import type { SkillCloudOwnedShare } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { SkillSharedLinkRow } from './SkillSharedLinkRow'
 
 const share: SkillCloudOwnedShare = {
@@ -58,7 +58,7 @@ describe('SkillSharedLinkRow', () => {
     await openDeleteMenu()
     expect(deletePackage).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     expect(deletePackage).toHaveBeenCalledWith('pkg_1')
     await vi.waitFor(() => expect(onDeleted).toHaveBeenCalledOnce())

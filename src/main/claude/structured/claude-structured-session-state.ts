@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
-import type { ClaudeStartupOutcome } from './claude-structured-startup-outcome'
+import type { ClaudeStartupOutcome } from './startup/claude-structured-startup-outcome'
 import type {
   ClaudeCliFlagCheck,
   ClaudeCliFlagFact
@@ -24,17 +24,14 @@ import type { ClaudeBackgroundTaskTracker } from '../background-tasks/claude-bac
 import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from '../command-catalog/claude-at-rest-commands'
-import type { ClaudeInitProof } from './claude-structured-init-proof'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { ClaudeInitProof } from './startup/claude-structured-init-proof'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-invocation'
-import type { ClaudeInitializeFacts } from './claude-structured-session-startup'
+import type { ClaudeInitializeFacts } from './startup/claude-structured-session-startup'
 
-export type {
-  ClaudeAuthDiagnostic,
-  ClaudeStructuredSessionEvent
-} from './claude-structured-session-event'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from './lifecycle/claude-structured-session-event'
+import type { ClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
 
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
@@ -97,6 +94,8 @@ export type ClaudeDispatchWaiter = {
   requestedAt: number | null
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
+  /** Sent with priority `now`: the step it interrupts hands its open turn to this send. */
+  steers?: true
   /** Settled with no echo (failed write, child exit, doubt after start); a replay may name it. */
   retired?: boolean
   /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */
@@ -106,6 +105,7 @@ export type ClaudeDispatchWaiter = {
 }
 
 export type ClaudeSession = {
+  historyCatchUp?: AbortController
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
   /** Latest main-chain message seen on the live stream, mid-turn included. */
@@ -124,7 +124,6 @@ export type ClaudeSession = {
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: {
-    reportedModel?: string
     model?: string
     effort?: string
     fastMode?: boolean
@@ -138,10 +137,6 @@ export type ClaudeSession = {
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
-  /** A saved model pick no turn of this process has carried; its reports predate the pick. */
-  modelPickAwaitingTurn?: string
-  /** `dispatchSequence` at the last model write; that turn's replies predate the pick. */
-  modelMutationDispatch?: number
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */
@@ -157,6 +152,7 @@ export type ClaudeSession = {
   cliFlag?: ClaudeCliFlagCheck
   /** Whether the CLI answers live effort and Fast changes; `unknown` ones are rechecked, then tried. */
   flagSettingsControl?: ClaudeCliFlagFact
+  promptSuggestionPause?: ClaudePromptSuggestionPause
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker

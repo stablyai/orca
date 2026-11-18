@@ -1,5 +1,5 @@
 import { withGitHubRepoExecution } from '../../repositories/github-repository-identity'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { fetchCompareBaseRefWithLocalFallback } from '../../../git/remotes/compare-base-ref-fetch'
@@ -10,8 +10,8 @@ import { getWorkItem } from '../../client/fetch/get-work-item'
 import {
   githubPullRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
-} from '../../../../shared/review-head-tracking-ref'
-import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
+} from '../../../../shared/worktree/hosted-review/review-head-tracking-ref'
+import { reviewStartPointFailure } from '../../../../shared/worktree/hosted-review/review-start-point-failure-copy'
 
 type GitExec = (args: string[]) => Promise<{ stdout: string; stderr: string }>
 

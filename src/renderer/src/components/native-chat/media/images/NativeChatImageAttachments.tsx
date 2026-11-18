@@ -4,14 +4,14 @@ import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
-import { PanZoomImageDialog } from '../../../editor/PanZoomImageDialog'
+import { PanZoomImageDialog } from '../../../editor/document-images/PanZoomImageDialog'
 import {
   getLocalImageCacheKey,
   useLocalImageSrc
 } from '../../../editor/document-images/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '../../../../runtime/files/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
-import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/native-chat-image-label'
+import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/attachments/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
 import { chatImageAccess } from '../../../../lib/files/access/local-file-access'
 import { observeTranscriptVisibility } from './native-chat-image-visibility'

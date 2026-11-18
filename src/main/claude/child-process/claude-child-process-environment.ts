@@ -6,7 +6,7 @@ import { stripInheritedAgentSessionEnv } from '../../../shared/agent-launch/star
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
-} from '../../native-chat/native-chat-visuals-delivery'
+} from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 
 function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
@@ -37,6 +37,7 @@ export function buildClaudeChildProcessEnv(
   configuredEnv: Record<string, string> = {},
   options: {
     inheritedEnv?: NodeJS.ProcessEnv
+    envToDelete?: readonly string[]
     platform?: NodeJS.Platform
   } = {}
 ): Record<string, string> {
@@ -74,5 +75,9 @@ export function buildClaudeChildProcessEnv(
     )
   }
   stripInheritedAgentSessionEnv(env, { platform })
-  return { ...env, ...configuredEnv }
+  const configured = { ...env, ...configuredEnv }
+  for (const key of options.envToDelete ?? []) {
+    delete configured[key]
+  }
+  return configured
 }

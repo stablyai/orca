@@ -1,22 +1,22 @@
-import { open, realpath } from 'node:fs/promises'
-import { isAbsolute, normalize } from 'node:path'
-import { z } from 'zod'
+import { readPiSessionHeader, samePiDirectory } from './pi-session-header'
+export { readPiSessionHeader, samePiDirectory } from './pi-session-header'
+import { isAbsolute } from 'node:path'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionProviderHandleChainHead,
   type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { resolveCliCommand } from '../../../../shared/node-cli-command-resolution'
-import { hasReachedAppVersion } from '../../../../shared/app-version'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { resolveCliCommand } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { hasReachedAppVersion } from '../../../../shared/app-lifecycle/identity/app-version'
 import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
   type AgentCliVersionReader
 } from '../../../agent-launch/preflight/agent-cli-version-probe'
-import { AgentCliInstallationError } from '../../../native-chat/agent-cli-installation-error'
+import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   assertStructuredAgentResolutionCurrent,
@@ -24,12 +24,13 @@ import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommand,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../../../windows/windows-process-table'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import {
   PI_RPC_SESSION_ENV_TO_DELETE,
+  piToolLimit,
   withoutPiCallerEnv,
   type PiRpcLaunchOptions
 } from './rpc-launch'
@@ -37,7 +38,10 @@ import {
   ensurePiBackgroundWorkBridge,
   type PiBackgroundWorkLaunch
 } from '../background-work/rpc-background-work-bridge'
+import { piTitlebarExtensionService } from '../../managed-extensions/titlebar-extension-service'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { linkedSkillsSection } from '../../../native-chat/native-chat-skill-roots'
+import { writeAcpInstructionsFile } from '../../../acp/launch/acp-instructions'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
@@ -52,7 +56,10 @@ export type PiRpcLaunchPartDeps = {
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
   ensureBackgroundWorkBridge?: () => Promise<PiBackgroundWorkLaunch | null>
+  managedExtensionsEnabled?: () => boolean
   logger?: StructuredAgentSessionLogger
+  /** Where a chat's standing instructions are written for Pi to read. */
+  dataDirectory: string
 }
 
 // RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
@@ -76,6 +83,7 @@ export function resolvePiRpcCommand(
 
 export function checkPiRpcVersion(
   launch: {
+    operation?: StructuredAgentResolutionOperation
     command: string
     prefixArgs?: readonly string[]
     cwd: string
@@ -84,49 +92,16 @@ export function checkPiRpcVersion(
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
   return checkAgentCliVersion(
-    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
+    {
+      program: launch.command,
+      prefixArgs: launch.prefixArgs,
+      cwd: launch.cwd,
+      env: launch.env,
+      operation: launch.operation
+    },
     PI_RPC_MINIMUM_VERSIONS,
     read
   )
-}
-
-const headerSchema = z.object({
-  type: z.literal('session'),
-  cwd: z.string().min(1),
-  id: z.string().optional()
-})
-
-export async function readPiSessionHeader(
-  file: string
-): Promise<{ cwd: string; id?: string } | null> {
-  let descriptor
-  try {
-    descriptor = await open(file, 'r')
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      return null
-    }
-    throw error
-  }
-  try {
-    const buffer = Buffer.alloc(64 * 1024)
-    const { bytesRead } = await descriptor.read(buffer, 0, buffer.length, 0)
-    const data = buffer.subarray(0, bytesRead).toString('utf8')
-    const lf = data.indexOf('\n')
-    if (lf === -1) {
-      throw new Error('Pi session header is incomplete or oversized')
-    }
-    return headerSchema.parse(JSON.parse(data.slice(0, lf)))
-  } finally {
-    await descriptor.close()
-  }
-}
-
-export async function samePiDirectory(left: string, right: string): Promise<boolean> {
-  const canonical = async (value: string): Promise<string> =>
-    realpath(value).catch(() => normalize(value))
-  const [a, b] = await Promise.all([canonical(left), canonical(right)])
-  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
 /** Resolve chat/catalog launches identically; refresh the environment once if Pi is missing. */
@@ -161,7 +136,7 @@ export function resolvePiRpcInvocation(deps: {
 export function piRpcLaunchPart(
   deps: PiRpcLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<PiRpcResolvedLaunch> {
-  return async (basis) => {
+  return async (basis, identity) => {
     const { record } = basis
     if (process.platform === 'win32' && !isWindowsProcessStartTimeAvailable()) {
       throw new Error('Pi structured sessions require Windows process creation-time proof')
@@ -216,6 +191,20 @@ export function piRpcLaunchPart(
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
+    const linked = await basis.linkedSkills()
+    // Only a folder with skills; Pi loads every SKILL.md under it, links included.
+    const linkedRoot = linked.projects.length > 0 ? linked.root : null
+    const instructions = await basis.instructions(
+      linkedSkillsSection(linked.projects, linkedRoot ? [] : linked.projects)
+    )
+    const instructionsFile = instructions
+      ? await writeAcpInstructionsFile(deps.dataDirectory, identity.sessionId, instructions)
+      : undefined
+    const tools = piToolLimit(basis.readOnly, launchVersion)
+    // Chat loads extensions from its agent dir, so subagent rows need the current status extension there.
+    if (deps.managedExtensionsEnabled?.()) {
+      piTitlebarExtensionService.installManagedExtensions(accountHome.path, 'pi')
+    }
     const backgroundWork = await (
       deps.ensureBackgroundWorkBridge ??
       (() =>
@@ -239,6 +228,9 @@ export function piRpcLaunchPart(
         ...(forkFile ? { forkFile } : {}),
         ...(replacement ? { replacement } : {}),
         ...(backgroundWork ? { backgroundWork } : {}),
+        ...(instructionsFile ? { instructionsFile } : {}),
+        ...(linkedRoot ? { skillDirs: [linkedRoot.skillsRoot] } : {}),
+        ...(tools ? { tools } : {}),
         ...(launchVersion.status === 'ready' &&
         hasReachedAppVersion(launchVersion.version, PI_SHRINKS_EVERY_IMAGE_VERSION)
           ? { shrinksImages: true as const }

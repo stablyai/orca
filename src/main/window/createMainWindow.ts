@@ -7,9 +7,12 @@ import { getAppIconPath } from './desktop-integration/app-icon'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-hosting/browser-client-host-id-argument'
-import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
-import { windowMaterialOptions } from './window-material-options'
-import { rememberWindowMaterial } from './window-material-suppression'
+import {
+  formatWindowMaterialArgument,
+  resolveWindowMaterial
+} from '../../shared/app-lifecycle/windows/window-material'
+import { windowMaterialOptions } from './presentation/window-material-options'
+import { rememberWindowMaterial } from './presentation/window-material-suppression'
 import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
@@ -17,22 +20,22 @@ import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profil
 import type { Store } from '../persistence/loading-store/store'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
-import {
-  installMainWindowCloseLifecycle,
-  WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
-} from './main-window-close-lifecycle'
-import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
-import { mainWindowLoadErrorCode } from './main-window-load-error-code'
-import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
-import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
-import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
-import { installMainWindowActivityRelay } from './main-window-activity'
-import { stopHiddenWindowFramePumpOnShow } from './hidden-window-frame-pump'
+import { installMainWindowCloseLifecycle } from './main-window/main-window-close-lifecycle'
+import type {
+  CreateMainWindowOptions,
+  MainWindowLoadObserver
+} from './main-window/main-window-contracts'
+import { mainWindowLoadErrorCode } from './renderer-recovery/main-window-load-error-code'
+import { installMainWindowFocusLifecycle } from './main-window/main-window-focus-lifecycle'
+import { installMainWindowShortcutRouting } from './main-window/main-window-shortcut-routing'
+import { installMainWindowStateLifecycle } from './main-window/main-window-state-lifecycle'
+import { installMainWindowActivityRelay } from './main-window/main-window-activity'
+import { stopHiddenWindowFramePumpOnShow } from './visibility/hidden-window-frame-pump'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   formatHiddenWindowFramePumpArgument,
   shouldPumpHiddenWindowFrames
-} from '../../shared/hidden-window-frame-pump'
+} from '../../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import {
   forceRepaint,
   installMacosVisibilityRepaint,
@@ -41,13 +44,13 @@ import {
   TITLEBAR_CSS_CENTER,
   TRAFFIC_LIGHT_RADIUS,
   TRAFFIC_LIGHT_X
-} from './main-window-visual-lifecycle'
-import { installMainWindowWebviewSecurity } from './main-window-webview-security'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
+} from './main-window/main-window-visual-lifecycle'
+import { installMainWindowWebviewSecurity } from './security/main-window-webview-security'
+import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
-
-export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
+import { installNativeUnloadCoordinator } from './renderer-relays/native-unload-coordinator'
+import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from './web-contents-listener-budget'
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
   installRendererHangStackPolicy(
@@ -170,6 +173,8 @@ export function createMainWindow(
     }
   })
   rememberWindowMaterial(mainWindow, windowMaterial)
+  mainWindow.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
+  mainWindow.webContents.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Native paste fallback is privileged; trust only the top-level renderer.
@@ -211,11 +216,13 @@ export function createMainWindow(
   const state = installMainWindowStateLifecycle({
     mainWindow,
     revealOnDidFinishLoad: opts?.revealOnDidFinishLoad === true,
+    revealInBackground: opts?.revealInBackground,
     savedMaximized,
     savedFullScreen,
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  installNativeUnloadCoordinator(mainWindow, opts?.onBeforeReload)
   const activity = installMainWindowActivityRelay(mainWindow)
   if (pumpHiddenFrames) {
     stopHiddenWindowFramePumpOnShow(mainWindow)

@@ -1,12 +1,15 @@
 import { z } from 'zod'
-import { MAX_EDITOR_AUTO_SAVE_DELAY_MS, MIN_EDITOR_AUTO_SAVE_DELAY_MS } from './constants'
+import {
+  MAX_EDITOR_AUTO_SAVE_DELAY_MS,
+  MIN_EDITOR_AUTO_SAVE_DELAY_MS
+} from './editor/saving/editor-auto-save-delay'
 import {
   EDITOR_FONT_SIZE_MAX,
   EDITOR_FONT_SIZE_MIN,
   EDITOR_LINE_HEIGHT_MAX,
   EDITOR_LINE_HEIGHT_MIN
 } from './editor/editor-typography'
-import type { GlobalSettings } from './global-settings-types'
+import type { GlobalSettings } from './settings/global-settings-types'
 import {
   MAX_TERMINAL_LINE_HEIGHT,
   MIN_TERMINAL_LINE_HEIGHT
@@ -16,7 +19,7 @@ import {
   TERMINAL_FONT_WEIGHT_MIN
 } from './terminal/appearance/terminal-fonts'
 import { TERMINAL_THEME_CATALOG } from './terminal-themes/terminal-theme-catalog'
-import { isPluginUiLanguage, normalizeUiLanguage, type UiLanguage } from './ui-language'
+import { isPluginUiLanguage, normalizeUiLanguage, type UiLanguage } from './i18n/ui-language'
 
 const flag = z.boolean()
 const name = z.string().max(256)

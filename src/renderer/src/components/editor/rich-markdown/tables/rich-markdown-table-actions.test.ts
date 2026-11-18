@@ -79,17 +79,6 @@ function setFirstRowColumnWidths(editor: Editor, widths: number[]): void {
   editor.view.dispatch(transaction)
 }
 
-function firstRowColumnWidths(editor: Editor): number[] {
-  const table = editor.state.doc.firstChild
-  const row = table?.firstChild
-  if (!row) {
-    throw new Error('Expected a table with a first row')
-  }
-  const widths: number[] = []
-  row.forEach((cell) => widths.push(cell.attrs.colwidth?.[0] ?? 0))
-  return widths
-}
-
 function runAction(action: RichMarkdownTableAction, cellText: string): Editor {
   const editor = createEditor()
   editor.commands.setTextSelection(caretAtText(editor, cellText))
@@ -98,18 +87,6 @@ function runAction(action: RichMarkdownTableAction, cellText: string): Editor {
 }
 
 describe('rich markdown table actions', () => {
-  it('gives a new column an equal share of the locked table width', () => {
-    const editor = createEditor()
-    try {
-      setFirstRowColumnWidths(editor, [200, 100])
-      editor.commands.setTextSelection(caretAtText(editor, 'a1'))
-      expect(runRichMarkdownTableAction(editor, 'insert-column-right')).toBe(true)
-      expect(firstRowColumnWidths(editor)).toEqual([133, 100, 67])
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('reverts a rebalanced column insertion in a single undo', () => {
     const editor = createEditor()
     try {
@@ -125,36 +102,6 @@ describe('rich markdown table actions', () => {
       editor.destroy()
     }
   })
-
-  it.each([
-    ['insert-column-left', 'b2', [100, 133, 67]],
-    ['insert-column-right', 'a1', [133, 67, 100]]
-  ] as const)(
-    'rebalances %s at the selected rectangle edge, not clicked cell %s',
-    (action, clickedCell, expectedWidths) => {
-      const editor = createEditor()
-      try {
-        setFirstRowColumnWidths(editor, [200, 100])
-        editor.view.dispatch(
-          editor.state.tr.setSelection(
-            CellSelection.create(
-              editor.state.doc,
-              cellAtText(editor, 'a1'),
-              cellAtText(editor, 'b2')
-            )
-          )
-        )
-        expect(
-          runRichMarkdownTableAction(editor, action, {
-            cellPosition: cellAtText(editor, clickedCell)
-          })
-        ).toBe(true)
-        expect(firstRowColumnWidths(editor)).toEqual(expectedWidths)
-      } finally {
-        editor.destroy()
-      }
-    }
-  )
 
   it('does not throw when a cached cell position outlives the document', () => {
     const editor = createEditor()

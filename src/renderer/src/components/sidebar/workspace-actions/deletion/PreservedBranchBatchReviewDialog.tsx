@@ -74,14 +74,9 @@ export function PreservedBranchBatchReviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent surface="security" className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {t(
-              'auto.components.sidebar.PreservedBranchBatchReviewDialog.c4bf8e7eaf',
-              'Review kept branches'
-            )}
-          </DialogTitle>
+          <DialogTitle size="compact">{t('common.delete', 'Delete')}</DialogTitle>
           <DialogDescription>
             {t(
               'auto.components.sidebar.PreservedBranchBatchReviewDialog.f21976c9a8',
@@ -173,11 +168,7 @@ export function PreservedBranchBatchReviewDialog({
             onClick={() => onForceDelete(selectedBranches)}
           >
             <Trash2 />
-            {t(
-              'auto.components.sidebar.PreservedBranchBatchReviewDialog.a0f9863597',
-              'Force Delete {{count}} Branches',
-              { count: selectedBranches.length, defaultValue_one: 'Force Delete {{count}} Branch' }
-            )}
+            {t('common.delete', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>

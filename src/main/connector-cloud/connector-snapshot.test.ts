@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connector-cloud-contract'
+import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connectors/connector-cloud-contract'
 import type { ConversationSnapshot } from '../external-conversations/external-conversation-events'
 import { connectorSnapshot } from './connector-snapshot'
 
@@ -75,5 +75,16 @@ describe('connectorSnapshot', () => {
       CONNECTOR_CLIENT_LIMITS.maxEventBytes
     )
     expect(snapshot.conversations[0]?.paneKey).toBe(`0${escaped}`)
+  })
+
+  it('lists every cloud conversation, Slack, Discord or Linear', () => {
+    const conversations = (['slack', 'discord', 'linear'] as const).map((source) =>
+      entry(source, NOW, { conversation: { source, externalId: `${source}-1` } })
+    )
+    expect(
+      connectorSnapshot({ kind: 'snapshot', conversations }, NOW).snapshot.conversations.map(
+        (item) => item.conversation.source
+      )
+    ).toEqual(['slack', 'discord', 'linear'])
   })
 })

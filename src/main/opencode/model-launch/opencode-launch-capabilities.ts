@@ -1,8 +1,8 @@
-import { parseWslUncPath, toLinuxPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath, toLinuxPath } from '../../../shared/file-access/wsl-paths'
 import {
   getOpenCodeCliCapabilities,
   type OpenCodeCliCapabilities
-} from '../../../shared/opencode-cli-version'
+} from '../../../shared/agent-launch/startup/opencode-cli-version'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'

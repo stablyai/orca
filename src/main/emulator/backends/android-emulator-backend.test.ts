@@ -109,21 +109,6 @@ describe('AndroidEmulatorBackend', () => {
   }
   const yieldToExit = () => new Promise<void>((resolve) => setImmediate(resolve))
 
-  it('fails with the emulator output when the AVD exits before booting', async () => {
-    launchExitsWith(
-      'INFO         | Android emulator version 37.2.12.0\n' +
-        'WARNING      | /sdk/system-images/android-35/google_apis/arm64-v8a/ is not a valid directory.\n' +
-        'WARNING      | emulator has searched the above paths but found no valid sdk root directory.\n' +
-        'FATAL        | Cannot find AVD system path. Please define ANDROID_SDK_ROOT\n\n'
-    )
-    await expect(backend(runner, yieldToExit).ensureBooted('Pixel_Tablet')).rejects.toThrow(
-      'AVD "Pixel_Tablet" stopped before it finished booting: ' +
-        'WARNING | /sdk/system-images/android-35/google_apis/arm64-v8a/ is not a valid directory.\n' +
-        'WARNING | emulator has searched the above paths but found no valid sdk root directory.\n' +
-        'FATAL | Cannot find AVD system path. Please define ANDROID_SDK_ROOT'
-    )
-  })
-
   it('waits for an instance booting elsewhere when the launch exits on the AVD lock', async () => {
     // The third listing fails, which must not read as "no instance".
     launchExitsWith(

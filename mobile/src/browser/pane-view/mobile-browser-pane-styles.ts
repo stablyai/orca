@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input/text-input-font-size'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
@@ -103,6 +103,12 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     fontSize: typography.bodySize,
     lineHeight: 20,
     marginTop: spacing.sm
+  },
+  dialogInput: {
+    height: 36,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    fontSize: TEXT_INPUT_FONT_SIZE
   },
   dialogButtonDisabled: {
     opacity: 0.5

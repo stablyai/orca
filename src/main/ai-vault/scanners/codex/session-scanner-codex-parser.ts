@@ -1,16 +1,16 @@
 import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import {
   isZstdTranscriptPath,
   zstdTranscriptStream
-} from '../../../native-chat/transcript-zstd-decompression'
+} from '../../../native-chat/transcript-streaming/transcript-zstd-decompression'
 import { createInterface } from 'node:readline'
 import type {
   AiVaultSession,
   AiVaultSessionTitleKind
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   accumulatorSessionIdentity,
   cloneSessionAccumulator,
@@ -38,7 +38,7 @@ import {
   subtractCodexUsage
 } from '../../parsing/session-scanner-token-values'
 import { asRecord, extractGitBranch, extractModel } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
 import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
