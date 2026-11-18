@@ -1,7 +1,6 @@
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { PtyProcessInspectionOptions } from '../../../providers/pty/process-inspection'
-import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 /** Foreground reads go to the exact owner and never borrow the current daemon's default route. */
 export class DaemonPtyTargetInspection {
@@ -56,20 +55,6 @@ export class DaemonPtyTargetInspection {
     return result
   }
 
-  /** Targets with a route skip owner resolution; the router resolves any others apart. */
-  listTargets(
-    ids: readonly string[],
-    opts: Parameters<IPtyProvider['listProcesses']>[0],
-    router: Pick<IPtyProvider, 'listProcesses'>
-  ): Promise<PtyProcessInfo[]> {
-    return listRoutedTargetsApart(
-      ids,
-      (id) => this.routes.has(id),
-      (routed) => this.listProcesses(routed, opts),
-      (unrouted) => router.listProcesses({ ...opts, ptyIds: unrouted })
-    )
-  }
-
   /** An established target does not require a census of unrelated owners. */
   async listProcesses(ids: readonly string[], opts: Parameters<IPtyProvider['listProcesses']>[0]) {
     const targets = ids.map((id) => ({
@@ -112,20 +97,4 @@ export function listedOwnerRows<Row>(
     throw rejected.reason
   }
   return listed.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
-}
-
-/** Routed targets take their owners' path and the rest resolve apart, so either side failing
- *  costs only its own targets their rows. */
-export async function listRoutedTargetsApart<Row>(
-  ids: readonly string[],
-  isRouted: (id: string) => boolean,
-  listRouted: (ids: readonly string[]) => Promise<readonly Row[]>,
-  listUnrouted: (ids: readonly string[]) => Promise<readonly Row[]>
-): Promise<Row[]> {
-  const routed = ids.filter(isRouted)
-  if (routed.length === ids.length) {
-    return [...(await listRouted(routed))]
-  }
-  const unrouted = ids.filter((id) => !isRouted(id))
-  return listedOwnerRows(await Promise.allSettled([listRouted(routed), listUnrouted(unrouted)]))
 }

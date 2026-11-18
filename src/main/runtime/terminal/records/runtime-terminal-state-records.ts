@@ -1,4 +1,3 @@
-import type { AdoptedRootProcess } from '../wait/adopted-root-discovery'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
@@ -65,6 +64,8 @@ export type RuntimeLeafRecord = Readonly<RuntimeSyncedLeaf> &
     lastOscTitleAt: number | null
     paneTitleUpdatedAt: number | null
   }
+
+export type AdoptedRootProcess = { incarnationId: string | null; pid: number }
 
 export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   readonly ptyId: string

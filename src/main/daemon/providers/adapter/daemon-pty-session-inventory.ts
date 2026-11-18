@@ -11,6 +11,7 @@ import { cloneAgentSessionOwnerBinding } from '../../../../shared/agent-session/
 import { recordAuthenticatedInventory } from '../../observability/daemon-audit-classifier'
 import { isMissingWindowsNamedPipeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
+import { DaemonTargetListingBatch } from './daemon-target-listing-batch'
 import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-deadline'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
@@ -19,7 +20,26 @@ import { PtyProcessListAdmission } from '../../../providers/pty/process-list-adm
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
-  async listProcesses(opts?: {
+  private readonly targetListings = new DaemonTargetListingBatch<PtyProcessInfo>(
+    (ptyIds, deadlineMs) =>
+      this.listOwnerProcesses({
+        ptyIds,
+        targetOwnerOnly: true,
+        ...(deadlineMs ? { deadlineMs } : {})
+      })
+  )
+
+  listProcesses(opts?: {
+    deadlineMs?: number
+    ptyIds?: readonly string[]
+    targetOwnerOnly?: boolean
+  }): Promise<PtyProcessInfo[]> {
+    return opts?.targetOwnerOnly && opts.ptyIds
+      ? this.targetListings.read(opts.ptyIds, opts.deadlineMs)
+      : this.listOwnerProcesses(opts)
+  }
+
+  private async listOwnerProcesses(opts?: {
     deadlineMs?: number
     ptyIds?: readonly string[]
     targetOwnerOnly?: boolean

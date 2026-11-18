@@ -1,5 +1,5 @@
 import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
-import { listedOwnerRows, listRoutedTargetsApart } from './daemon-pty-target-inspection'
+import { listedOwnerRows } from './daemon-pty-target-inspection'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
@@ -50,16 +50,8 @@ export class DegradedDaemonOwnerRecovery {
   ): Promise<PtyProcessInfo[]> {
     const ids = opts?.targetOwnerOnly ? opts.ptyIds : undefined
     // Only established routes skip owner resolution; stop and liveness proofs never take this path.
-    if (!ids?.some((id) => this.routes.has(id))) {
+    if (!ids || ids.some((id) => !this.routes.has(id))) {
       return this.attachResolver.listProcesses(opts)
-    }
-    if (ids.some((id) => !this.routes.has(id))) {
-      return listRoutedTargetsApart(
-        ids,
-        (id) => this.routes.has(id),
-        (routed) => this.listProcesses({ ...opts, ptyIds: routed }),
-        (unrouted) => this.attachResolver.listProcesses({ ...opts, ptyIds: unrouted })
-      )
     }
     const idsByOwner = new Map<IPtyProvider, string[]>()
     for (const id of ids) {

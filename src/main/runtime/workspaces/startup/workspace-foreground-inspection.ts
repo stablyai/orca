@@ -1,4 +1,7 @@
-import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
+import type {
+  AdoptedRootProcess,
+  RuntimePtyWorktreeRecord
+} from '../../terminal/records/runtime-terminal-state-records'
 import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operations'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -10,7 +13,6 @@ import {
   type LaunchedAgentHost
 } from '../../terminal/wait/launched-agent-foreground'
 import { reattachedRestTitleAgent } from '../../terminal/wait/reattached-rest-title'
-import { AdoptedRootDiscovery } from '../../terminal/wait/adopted-root-discovery'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWithListManagedWorktrees {
@@ -63,10 +65,6 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     return true
   }
 
-  private readonly adoptedRoots = new AdoptedRootDiscovery((ptyIds) =>
-    this.ptyController?.listProcesses?.(LOCAL_EXECUTION_HOST_ID, { ptyIds, targetOwnerOnly: true })
-  )
-
   private async readRestTitleForeground(
     pty: RuntimePtyWorktreeRecord | undefined,
     ptyId: string,
@@ -78,14 +76,29 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     // Why the root on an old local owner: its launched-agent read lists every session per pane.
     let root = pty.adoptedRootProcess
     if (!root || root.incarnationId !== pty.incarnationId) {
-      // Attach can come before discovery stores it; one shared lookup serves the whole sweep.
-      root = await this.adoptedRoots.find(ptyId)
+      // Attach can come before discovery stores it; the owner joins a sweep's lookups into one listing.
+      root = await this.findAdoptedRoot(ptyId)
       if (!root || this.ptysById.get(ptyId) !== pty || root.incarnationId !== pty.incarnationId) {
         return 'unknown'
       }
       pty.adoptedRootProcess = root
     }
     return readAdoptedRootAgentForeground(this.ptyController, root.pid, ptyId, agent)
+  }
+
+  private async findAdoptedRoot(ptyId: string): Promise<AdoptedRootProcess | null> {
+    try {
+      const listed = await this.ptyController?.listProcesses?.(LOCAL_EXECUTION_HOST_ID, {
+        ptyIds: [ptyId],
+        targetOwnerOnly: true
+      })
+      const row = listed?.find((pane) => pane.id === ptyId)
+      return row?.rootProcessId
+        ? { incarnationId: row.incarnationId ?? null, pid: row.rootProcessId }
+        : null
+    } catch {
+      return null
+    }
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */
