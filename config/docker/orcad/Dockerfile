@@ -27,6 +27,7 @@ COPY src/ src/
 COPY native/ native/
 COPY resources/ resources/
 COPY mobile/ mobile/
+COPY cloud/packages/ cloud/packages/
 COPY config/ config/
 # The build context has no .git, so the caller supplies the revision.
 ARG ORCAD_SOURCE_COMMIT
