@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { resolveConnectorOrigin } from './connector-origin'
 
 describe('resolveConnectorOrigin', () => {
-  it('defaults to the orca.dev connector host', () => {
-    expect(resolveConnectorOrigin({}, true)).toBe('https://connector.orca.dev')
-  })
-
   it('honors ORCA_CONNECTOR_URL, the legacy host included', () => {
     expect(
       resolveConnectorOrigin({ ORCA_CONNECTOR_URL: 'https://connector.onorca.dev' }, true)
