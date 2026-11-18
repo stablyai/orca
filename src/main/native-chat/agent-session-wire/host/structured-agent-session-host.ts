@@ -19,7 +19,6 @@ import { StructuredAgentSessionBackgroundTaskChannel as BackgroundTasks } from '
 import { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import { createStructuredAgentSessionPublicationWiring } from './structured-agent-session-publication-wiring'
 import * as resume from '../recovery/structured-agent-session-restart-resume-host'
-import type { StructuredAgentSessionRestartResume } from '../recovery/structured-agent-session-restart-resume-contract'
 import { restartResumeSurfaces } from '../recovery/structured-agent-session-restart-resume-wiring'
 import * as conversation from '../delivery/structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from '../delivery/structured-agent-session-queued-wiring'
@@ -60,7 +59,7 @@ export class StructuredAgentSessionHost {
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: EventRecovery
   private readonly backgroundTasks: BackgroundTasks
-  readonly restartResume: StructuredAgentSessionRestartResume
+  readonly restartResume: ReturnType<typeof resume.createStructuredAgentSessionRestartResume>
 
   readonly usageLimitContinue: ReturnType<typeof usageLimit.start>
 
