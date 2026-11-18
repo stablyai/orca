@@ -17,7 +17,7 @@ import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
 import {
-  awaitReattachedTerminalPaint,
+  admitRestoredTerminalReport,
   hasTerminalCommandPainted,
   takeReattachedRepaintRequest
 } from '../input/terminal-command-paint'
@@ -245,16 +245,6 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       })
   }
 
-  /** A reattached live process may print nothing; its silence is observed quiet from the first attach of this generation. */
-  startReattachedOutputClock(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (pty && pty.lastOutputAt === null) {
-      pty.outputObservedSince ??= Date.now()
-    }
-    // Why not only when silent: output can arrive before this runs.
-    awaitReattachedTerminalPaint(pty)
-  }
-
   /** A surviving process main never saw live still has its agent's last own report, which the hook
    *  server restores across restarts while its writer can still be the pane's agent. Without a report,
    *  a screen-ruled agent's strong ready screen counts once that agent repaints it: such agents may
@@ -309,9 +299,12 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     }
   }
 
+  /** The restored report speaks for the process now running, so it counts as current. */
   private applyReattachedAgentStatus(ptyId: string, status: AgentStatus): void {
-    const title = this.ptysById.get(ptyId)?.lastOscTitle ?? ''
+    const pty = this.ptysById.get(ptyId)
+    const title = pty?.lastOscTitle ?? ''
     this.applyTrackedPtyTitle(ptyId, title, title, undefined, { statusOnly: true, status })
+    admitRestoredTerminalReport(pty, Date.now())
   }
 
   protected readOutputClockAt(ptyId: string | null | undefined): number | null {

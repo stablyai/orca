@@ -60,7 +60,13 @@ export class TerminalCommandPaint {
   private betweenCommands = false
   /** When the current command started, or the reattach that hid its start; null before any marker. */
   private startedAt: number | null = null
-  private commandFinishedInChunk = false
+  /** Whether this run saw the process start, or already fenced the reattach that hid it. */
+  private reattach: 'unknown' | 'vouched' | 'armed' = 'unknown'
+  /** A 133;C parsed since the last 133;D or reattach fence; later ones are the agent's own. */
+  private startSeen = false
+  private repaintOffered = false
+  /** When a report restored across the reattach was admitted for the process now running. */
+  private restoredReportAt: number | null = null
   private markerEndInChunk = -1
   /** Armed at each command start; absent before the first marker, where no command is attributable. */
   private composers: Map<
@@ -68,21 +74,31 @@ export class TerminalCommandPaint {
     { scanner: DraftPasteReadyScanner; seen: boolean }
   > | null = null
   private readonly scanner = createOsc133CommandFinishedScanner(
-    () => {
-      this.commandFinishedInChunk = true
-    },
+    () => {},
     (endInChunk) => {
       this.markerEndInChunk = endInChunk
     }
   )
 
-  observe(data: string, normalizedText: string): void {
+  observe(data: string, normalizedText: string, at: number): void {
     this.markerEndInChunk = -1
-    this.commandFinishedInChunk = false
-    this.scanner.scan(data)
+    const finishEnd = this.scanner.scan(data)
+    if (finishEnd > this.markerEndInChunk) {
+      // Why: the finished command's paint, a previous agent's ready screen included, speaks for nothing now.
+      this.betweenCommands = true
+      this.startSeen = false
+      this.awaitingPaint = true
+      this.repaintRequestable = false
+      this.composers = new Map()
+      return
+    }
     if (this.markerEndInChunk !== -1) {
+      // Why only at a boundary: an agent that writes its own 133;C mid-session is not a new command.
+      if (!this.startSeen) {
+        this.startedAt = at
+        this.startSeen = true
+      }
       this.betweenCommands = false
-      this.startedAt = Date.now()
       this.repaintRequestable = false
       // Why the rest of this chunk counts: a fast binary can paint in the same read as the marker.
       const commandOutput = data.slice(this.markerEndInChunk)
@@ -94,14 +110,6 @@ export class TerminalCommandPaint {
         ])
       )
       this.observeComposers(commandOutput)
-      return
-    }
-    if (this.commandFinishedInChunk) {
-      // Why: the finished command's paint, a previous agent's ready screen included, speaks for nothing now.
-      this.betweenCommands = true
-      this.awaitingPaint = true
-      this.repaintRequestable = false
-      this.composers = new Map()
       return
     }
     if (this.betweenCommands) {
@@ -126,12 +134,42 @@ export class TerminalCommandPaint {
   }
 
   /** A reattached process's command start predates this observer, so only its next visible paint
-   *  speaks for it; the screen it left may be an earlier program's. */
-  awaitReattachedPaint(): void {
-    this.startedAt = Date.now()
-    this.awaitingPaint = true
-    this.composers = null
-    this.repaintRequestable = true
+   *  speaks for it; the screen it left may be an earlier program's. Once per process, and never for
+   *  one this run saw start or whose command start it has parsed. `attached`: its output now reaches
+   *  this observer, so a repaint it is asked for would be seen. */
+  awaitReattachedPaint(at: number, attached: boolean): void {
+    if (this.reattach === 'unknown' && this.startedAt === null) {
+      this.reattach = 'armed'
+      this.startedAt = at
+      this.startSeen = false
+      this.awaitingPaint = true
+      this.composers = null
+    }
+    if (attached && this.reattach === 'armed' && !this.repaintOffered) {
+      this.repaintOffered = true
+      this.repaintRequestable = this.awaitingPaint && !this.startSeen
+    }
+  }
+
+  /** This run saw the process start: drop a fence a racing inventory armed before any command start. */
+  vouchSpawn(): void {
+    if (this.reattach === 'armed' && !this.startSeen) {
+      this.startedAt = null
+      this.awaitingPaint = false
+      this.repaintRequestable = false
+    }
+    this.reattach = 'vouched'
+  }
+
+  admitRestoredReport(at: number): void {
+    this.restoredReportAt = at
+  }
+
+  /** Whether the pane's status, last titled at `titleObservedAt`, speaks for the command now running. */
+  isCurrentStatus(titleObservedAt: number | null | undefined): boolean {
+    return this.isCurrentReport(
+      Math.max(titleObservedAt ?? -Infinity, this.restoredReportAt ?? -Infinity)
+    )
   }
 
   /** True once per reattach while nothing has painted: the one repaint request it allows. */
@@ -141,17 +179,14 @@ export class TerminalCommandPaint {
     return take
   }
 
-  /** Whether this observer saw the current command start, or armed for a reattach. */
-  hasObservedCommand(): boolean {
-    return this.startedAt !== null
-  }
-
   /** Whether the agent's own report at `observedAt` speaks for the command now running. */
   isCurrentReport(observedAt: number | null | undefined): boolean {
-    if (this.startedAt === null) {
-      return true
+    if (this.betweenCommands) {
+      return false
     }
-    return !this.betweenCommands && typeof observedAt === 'number' && observedAt >= this.startedAt
+    return (
+      this.startedAt === null || (typeof observedAt === 'number' && observedAt >= this.startedAt)
+    )
   }
 
   hasPainted(): boolean {
@@ -173,20 +208,28 @@ export type TerminalCommandPaintRecord = { commandPaint?: TerminalCommandPaint }
 export function observeTerminalCommandPaint(
   record: TerminalCommandPaintRecord,
   data: string,
-  normalizedText: string
+  normalizedText: string,
+  at: number
 ): void {
   record.commandPaint ??= new TerminalCommandPaint()
-  record.commandPaint.observe(data, normalizedText)
+  record.commandPaint.observe(data, normalizedText, at)
 }
 
-/** Arms the reattach fence unless this run already parsed the pane's current command start. */
-export function awaitReattachedTerminalPaint(record: TerminalCommandPaintRecord | undefined): void {
-  if (!record) {
-    return
+export function awaitReattachedTerminalPaint(
+  record: TerminalCommandPaintRecord | null | undefined,
+  at: number,
+  attached = true
+): void {
+  if (record) {
+    record.commandPaint ??= new TerminalCommandPaint()
+    record.commandPaint.awaitReattachedPaint(at, attached)
   }
-  record.commandPaint ??= new TerminalCommandPaint()
-  if (!record.commandPaint.hasObservedCommand()) {
-    record.commandPaint.awaitReattachedPaint()
+}
+
+export function vouchTerminalSpawn(record: TerminalCommandPaintRecord | null | undefined): void {
+  if (record) {
+    record.commandPaint ??= new TerminalCommandPaint()
+    record.commandPaint.vouchSpawn()
   }
 }
 
@@ -196,6 +239,21 @@ export function isCurrentCommandReport(
   observedAt: number | null | undefined
 ): boolean {
   return record.commandPaint?.isCurrentReport(observedAt) ?? true
+}
+
+export function admitRestoredTerminalReport(
+  record: TerminalCommandPaintRecord | undefined,
+  at: number
+): void {
+  record?.commandPaint?.admitRestoredReport(at)
+}
+
+/** A title or the status a restored report set, current like `isCurrentCommandReport`. */
+export function isCurrentCommandStatus(
+  record: TerminalCommandPaintRecord,
+  titleObservedAt: number | null | undefined
+): boolean {
+  return record.commandPaint?.isCurrentStatus(titleObservedAt) ?? true
 }
 
 export function takeReattachedRepaintRequest(record: TerminalCommandPaintRecord): boolean {

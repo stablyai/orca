@@ -28,6 +28,7 @@ import { retireOrchestrationAuthorityAbsentFromInventory } from '../../orchestra
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { exitingPtyIdsOf } from '../adoption/unshown-live-terminal-placement'
+import { awaitReattachedTerminalPaint } from '../input/terminal-command-paint'
 
 export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithPtyControllerInventoryListing {
   protected async refreshPtyWorktreeRecordsWithControllerInventory(
@@ -199,6 +200,10 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           )
         } else {
           this.restoredOrchestrationAuthorityByPtyId.delete(session.id)
+        }
+        if (pty.lastOutputAt === null) {
+          // Why at discovery: a wait can start before a surviving session's attach runs.
+          awaitReattachedTerminalPaint(pty, Date.now(), false)
         }
         pty.controllerTitle = session.title?.trim() || null
         this.mainDaemonAttachments.reconcile(session.id)

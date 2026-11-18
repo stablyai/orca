@@ -1,4 +1,5 @@
 import { RuntimeWorkspaceRepoScanRefresh } from '../../workspaces/catalog/workspace-repo-scan-refresh'
+import { awaitReattachedTerminalPaint, vouchTerminalSpawn } from '../input/terminal-command-paint'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
@@ -275,6 +276,20 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     return isTerminalLeafId(leaf.leafId)
       ? makePaneKey(leaf.tabId, leaf.leafId)
       : `${leaf.tabId}:${leaf.paneRuntimeId}`
+  }
+
+  /** A reattached live process may print nothing; its silence is observed quiet from the first attach of this generation. */
+  startReattachedOutputClock(ptyId: string): void {
+    const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+    if (pty && pty.lastOutputAt === null) {
+      pty.outputObservedSince ??= Date.now()
+    }
+    awaitReattachedTerminalPaint(pty, Date.now())
+  }
+
+  /** Main saw this process start, so no later reattach of it this run hides a command start. */
+  vouchSpawnedTerminal(ptyId: string): void {
+    vouchTerminalSpawn(this.getOrCreatePtyWorktreeRecord(ptyId))
   }
 
   protected getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null {

@@ -14,7 +14,11 @@ import {
   type AgentStateVerdict
 } from '../../agent-state-rules/agent-state-rules-engine'
 import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
-import { hasTerminalAgentPainted, isCurrentCommandReport } from '../input/terminal-command-paint'
+import {
+  hasTerminalAgentPainted,
+  isCurrentCommandReport,
+  isCurrentCommandStatus
+} from '../input/terminal-command-paint'
 import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { titleCommandLaunchesInteractiveTui } from '../../../../shared/agent-status/title/interactive-agent-title-command'
@@ -167,12 +171,12 @@ export function ptyTuiIdleEvidence(
   const readScreen = screenReader(source, agent, pty.ptyId)
   // Why: an agent's own ready report (explicit idle title, adopted idle, first-party done) from a
   // finished command or from before a reattach speaks for a program that may no longer be there.
-  const titleIsCurrent = isCurrentCommandReport(pty, pty.lastOscTitleEpochMs)
+  const titleIsCurrent = isCurrentCommandStatus(pty, pty.lastOscTitleEpochMs)
   const fullRecord = evidenceRecord(source, pty)
   const record =
-    titleIsCurrent || !hasExplicitIdleTitle(fullRecord)
+    titleIsCurrent || (fullRecord.lastAgentStatus !== 'idle' && !hasExplicitIdleTitle(fullRecord))
       ? fullRecord
-      : { ...fullRecord, lastOscTitle: null }
+      : { ...fullRecord, lastOscTitle: null, lastAgentStatus: null }
   const firstPartyStatus = source.getFirstPartyAgentStatus(pty.ptyId)
   // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
   const readCommandPainted = () =>
