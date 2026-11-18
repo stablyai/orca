@@ -3,21 +3,15 @@ import { useAppStore } from '@/store/index'
 import { onGitStatusRead } from '@/store/slices/editor/git/git-status-read-signal'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { getRelativePathInsideRoot } from '@/lib/path'
-import { getRuntimeGitSubmoduleStatus } from '@/runtime/source-control/git/runtime-git-status-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { getRuntimeGitSubmoduleWorkingTreeStatus } from '@/runtime/source-control/git/runtime-git-submodule-working-tree-client'
 import { RuntimeCapabilityMissingError } from '@/runtime/repository-gitlab/runtime-gitlab-api'
-import type {
-  GitStatusEntry,
-  GitStatusResult
-} from '../../../../../../shared/git/status/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { normalizeRelativePath } from '../../../../../../shared/file-access/cross-platform-path'
 import { useWorktreeGitOwnerTarget } from '../../source-control/sync/worktree-git-owner-target'
 import { buildSubmoduleChildEntry } from '../../source-control/listing/submodule-expansion'
 import { SubmoduleStatusReadQueue } from './file-explorer-submodule-read-queue'
-import {
-  selectExpandedDirtySubmodules,
-  type SelectedSubmodule
-} from './file-explorer-submodule-selection'
+import { selectExpandedDirtySubmodules } from './file-explorer-submodule-selection'
 import { areGitStatusEntriesEqual } from '@/store/slices/editor/git/git-status-reconciliation'
 import {
   buildFolderStatusMap,
@@ -29,48 +23,21 @@ const SUBMODULE_STATUS_CONCURRENCY = 4
 
 const NO_ENTRIES: GitStatusEntry[] = []
 
-function toChildEntries(submodulePath: string, status: GitStatusResult): GitStatusEntry[] | null {
-  // A failed read resolves with empty entries, which must not look like a clean submodule.
-  return status.readError === undefined
-    ? status.entries.map((innerEntry) => buildSubmoduleChildEntry(submodulePath, innerEntry))
-    : null
-}
-
 /** Parent-relative inner entries, or null on failure so callers keep the last good badges. */
 async function readSubmoduleChildEntries(
-  context: Parameters<typeof getRuntimeGitSubmoduleStatus>[0],
-  submodule: SelectedSubmodule
+  context: RuntimeGitContext,
+  submodulePath: string
 ): Promise<GitStatusEntry[] | null> {
   try {
-    return toChildEntries(
-      submodule.path,
-      await getRuntimeGitSubmoduleWorkingTreeStatus(context, submodule.path)
-    )
+    const status = await getRuntimeGitSubmoduleWorkingTreeStatus(context, submodulePath)
+    // A failed read resolves with empty entries, which must not look like a clean submodule.
+    return status.readError === undefined
+      ? status.entries.map((innerEntry) => buildSubmoduleChildEntry(submodulePath, innerEntry))
+      : null
   } catch (error) {
-    if (!(error instanceof RuntimeCapabilityMissingError)) {
-      return null
-    }
+    // Older hosts would mix committed-range rows into the answer, so they get no inner badges.
+    return error instanceof RuntimeCapabilityMissingError ? [] : null
   }
-  // Older hosts: a moved submodule's status would include committed-range rows, so show none.
-  if (submodule.moved) {
-    return []
-  }
-  try {
-    return toChildEntries(
-      submodule.path,
-      await getRuntimeGitSubmoduleStatus(context, submodule.path)
-    )
-  } catch {
-    return null
-  }
-}
-
-function encodeSelection(selection: readonly SelectedSubmodule[]): string {
-  return selection.map(({ path, moved }) => `${moved ? '1' : '0'}${path}`).join('\0')
-}
-
-function decodeSelection(key: string): SelectedSubmodule[] {
-  return key ? key.split('\0').map((item) => ({ path: item.slice(1), moved: item[0] === '1' })) : []
 }
 
 type SubmoduleStatusResult = {
@@ -122,9 +89,11 @@ function useFileExplorerSubmoduleStatus({
         expandedRelativePaths.add(normalizeRelativePath(relativePath))
       }
     }
-    return encodeSelection(
-      selectExpandedDirtySubmodules(entries, expandedRelativePaths, childEntriesByPath ?? new Map())
-    )
+    return selectExpandedDirtySubmodules(
+      entries,
+      expandedRelativePaths,
+      childEntriesByPath ?? new Map()
+    ).join('\0')
   }, [childEntriesByPath, entries, expanded, worktreePath])
 
   useEffect(() => {
@@ -140,19 +109,20 @@ function useFileExplorerSubmoduleStatus({
       connectionId: connectionId ?? undefined
     }
     // In-flight and queued reads are keyed by the owner route as well as the path.
-    const submoduleByKey = new Map(
-      decodeSelection(selectionKey).map((submodule) => [
-        `${scopeKey}\0${submodule.path}`,
-        submodule
-      ])
+    const submodulePathByKey = new Map(
+      selectionKey
+        .split('\0')
+        .map((submodulePath) => [`${scopeKey}\0${submodulePath}`, submodulePath])
     )
-    queue.setWanted([...submoduleByKey.keys()], {
+    queue.setWanted([...submodulePathByKey.keys()], {
       read: (key) => {
-        const submodule = submoduleByKey.get(key)
-        return submodule ? readSubmoduleChildEntries(context, submodule) : Promise.resolve(null)
+        const submodulePath = submodulePathByKey.get(key)
+        return submodulePath === undefined
+          ? Promise.resolve(null)
+          : readSubmoduleChildEntries(context, submodulePath)
       },
       apply: (key, childEntries) => {
-        const submodulePath = submoduleByKey.get(key)?.path
+        const submodulePath = submodulePathByKey.get(key)
         if (submodulePath === undefined) {
           return
         }
@@ -199,7 +169,7 @@ function useFileExplorerSubmoduleStatus({
       return NO_ENTRIES
     }
     const merged: GitStatusEntry[] = []
-    for (const { path } of decodeSelection(selectionKey)) {
+    for (const path of selectionKey ? selectionKey.split('\0') : []) {
       const childEntries = childEntriesByPath.get(path)
       if (childEntries) {
         merged.push(...childEntries)

@@ -82,26 +82,26 @@ async function getSubmoduleWorkingTreeStatus(
   submoduleWorktreePath: string,
   options: GetStatusOptions
 ): Promise<GitStatusResult> {
-  // An unchecked-out submodule folder has no repo of its own; Git would walk up to the parent.
-  if (!(await isOwnRepositoryRoot(submoduleWorktreePath, options))) {
+  let prefix: string
+  try {
+    const { stdout } = await gitExecFileAsync(['rev-parse', '--show-prefix'], {
+      ...gitOptionsForWorktree(submoduleWorktreePath, options),
+      env: gitOptionalLocksDisabledEnv()
+    })
+    prefix = stdout.trim()
+  } catch (error) {
+    // A failed probe proves nothing; callers keep their last good result.
+    return {
+      entries: [],
+      conflictOperation: 'unknown',
+      readError: error instanceof Error ? error.message : String(error)
+    }
+  }
+  // An unchecked-out submodule folder has no repo of its own; Git walked up to the parent.
+  if (prefix !== '') {
     return { entries: [], conflictOperation: 'unknown' }
   }
   return getStatus(submoduleWorktreePath, { ...options, includeLineStats: false })
-}
-
-async function isOwnRepositoryRoot(
-  directoryPath: string,
-  options: GitRuntimeOptions
-): Promise<boolean> {
-  try {
-    const { stdout } = await gitExecFileAsync(['rev-parse', '--show-prefix'], {
-      ...gitOptionsForWorktree(directoryPath, options),
-      env: gitOptionalLocksDisabledEnv()
-    })
-    return stdout.trim() === ''
-  } catch {
-    return false
-  }
 }
 
 async function computeSubmoduleRangeEntries(
