@@ -98,8 +98,6 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       args: WorkspaceSessionEntriesPatch,
       hostId?: string | null
     ): WorkspaceSessionEntriesPatchResult => {
-      // Saving can edit the sent objects in place (terminal binding replay), so compare a copy.
-      const sent = structuredClone(args)
       const status = patchWindowSession(
         (stored) => applyWorkspaceSessionEntriesPatch(stored, args),
         hostId
@@ -108,7 +106,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
         return { status }
       }
       // Normalization, fences and main's sleep records can store something else, saved or not.
-      const normalizedFields = fieldsStoredDifferently(store.getWorkspaceSession(hostId), sent)
+      const normalizedFields = fieldsStoredDifferently(store.getWorkspaceSession(hostId), args)
       return normalizedFields.length > 0 ? { status, normalizedFields } : { status }
     }
   )
