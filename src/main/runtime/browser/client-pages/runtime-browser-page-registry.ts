@@ -172,11 +172,11 @@ export class RuntimeBrowserPageRegistry {
   }
 
   private picked(page: RuntimeBrowserClientPage, picker: BrowserPagePicker): void {
+    // A newer pick than the held one, by the agent or the person.
+    this.heldPersonPicks.delete(page.workspaceId)
     if (picker === 'agent') {
       // Mark the new page now, or a person's pick before the agent's next command would take it.
       this.agentUse.begin(page.browserPageId)()
-    } else {
-      this.heldPersonPicks.delete(page.workspaceId)
     }
   }
 
@@ -205,8 +205,8 @@ export class RuntimeBrowserPageRegistry {
         const page = this.pages.get(browserPageId)
         const global = this.globalActivePageId ? this.pages.get(this.globalActivePageId) : undefined
         if (page) {
-          // A late pick never overrides a newer selection in another workspace.
-          this.select(page, global === undefined || global.workspaceId === heldWorkspaceId)
+          // A late pick takes the global selection only while nothing newer has moved it elsewhere.
+          this.select(page, global?.workspaceId === heldWorkspaceId)
         }
       }
     }
