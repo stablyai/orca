@@ -47,6 +47,43 @@ async function setLeftPaneWidth(page: Page, worktreeId: string, groupId: string,
   )
 }
 
+/** Where focus sits after a +N pick: the picked slot, this strip's chip, or the picked tab's own content. */
+async function pickedFocusTarget(
+  page: Page,
+  groupId: string,
+  slotId: string | null
+): Promise<'slot' | 'chip' | 'content' | null> {
+  return page.evaluate(
+    ({ gid, id }) => {
+      const active = document.activeElement
+      const strip = document.querySelector(`[data-tab-group-strip-id="${gid}"]`)
+      if (!active || !strip) {
+        return null
+      }
+      if (active.closest('[data-tab-strip-slot]')?.getAttribute('data-tab-strip-slot') === id) {
+        return 'slot'
+      }
+      if (strip.contains(active) && active.hasAttribute('data-tab-strip-overflow-chip')) {
+        return 'chip'
+      }
+      // Retained pane content is portaled beside the body, so check its box, not DOM ancestry.
+      const body = document
+        .querySelector(`[data-tab-group-body-id="${gid}"]`)
+        ?.getBoundingClientRect()
+      const rect = active.getBoundingClientRect()
+      const inPane =
+        body &&
+        !active.closest('[role="menu"]') &&
+        rect.left >= body.left - 1 &&
+        rect.right <= body.right + 1 &&
+        rect.top >= body.top - 1 &&
+        rect.bottom <= body.bottom + 1
+      return inPane && window.__store?.getState().activeTabId === id ? 'content' : null
+    },
+    { gid: groupId, id: slotId }
+  )
+}
+
 test('a narrow left-most pane folds the header, condenses tabs and reaches hidden tabs from +N', async ({
   orcaPage
 }) => {
@@ -88,32 +125,7 @@ test('a narrow left-most pane folds the header, condenses tabs and reaches hidde
   await expect(picked).toBeVisible()
   await expect(picked.locator('[data-active="true"]')).toHaveCount(1)
   // Focus lands on the picked tab: its slot, or its own content when activation focuses it (a terminal).
-  await expect
-    .poll(() =>
-      orcaPage.evaluate(
-        ({ slotId, gid }) => {
-          const active = document.activeElement
-          if (
-            active?.closest('[data-tab-strip-slot]')?.getAttribute('data-tab-strip-slot') === slotId
-          ) {
-            return 'slot'
-          }
-          const body = document
-            .querySelector(`[data-tab-group-body-id="${gid}"]`)
-            ?.getBoundingClientRect()
-          const rect = active?.getBoundingClientRect()
-          const inPane =
-            body &&
-            rect &&
-            rect.left >= body.left - 1 &&
-            rect.right <= body.right + 1 &&
-            rect.top >= body.top - 1
-          return inPane && window.__store?.getState().activeTabId === slotId ? 'content' : null
-        },
-        { slotId: lastId, gid: groupId }
-      )
-    )
-    .not.toBeNull()
+  await expect.poll(() => pickedFocusTarget(orcaPage, groupId, lastId)).not.toBeNull()
 })
 
 test('a chip-only strip keeps a keyboard pick in the pane', async ({ orcaPage }) => {
@@ -141,17 +153,6 @@ test('a chip-only strip keeps a keyboard pick in the pane', async ({ orcaPage })
   await expect
     .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeTabId))
     .toBe(lastId)
-  // Focus stays with this pane: the chip, or the picked tab's own content when activation focuses it.
-  await expect
-    .poll(() =>
-      orcaPage.evaluate((gid) => {
-        const active = document.activeElement
-        if (active?.hasAttribute('data-tab-strip-overflow-chip')) {
-          return 'chip'
-        }
-        const body = document.querySelector(`[data-tab-group-body-id="${gid}"]`)
-        return body?.contains(active) ? 'content' : null
-      }, groupId)
-    )
-    .not.toBeNull()
+  // No slot to land on, so focus goes to the chip, or the picked tab's own content when activation focuses it.
+  await expect.poll(() => pickedFocusTarget(orcaPage, groupId, lastId)).not.toBeNull()
 })

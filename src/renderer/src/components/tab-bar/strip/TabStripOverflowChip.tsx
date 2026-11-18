@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Check, Laptop, Smartphone } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -209,6 +209,15 @@ export function TabStripOverflowChip({
     setOpen(false)
   }
 
+  // Why: webview clicks miss the renderer pointerdown Radix uses for outside-click, so dismiss on window blur.
+  useEffect(() => {
+    if (!open) {
+      return undefined
+    }
+    const dismiss = (): void => setOpen(false)
+    window.addEventListener('blur', dismiss)
+    return () => window.removeEventListener('blur', dismiss)
+  }, [open])
   const surfaceRef = useRef(surface)
   useLayoutEffect(() => {
     surfaceRef.current = surface
