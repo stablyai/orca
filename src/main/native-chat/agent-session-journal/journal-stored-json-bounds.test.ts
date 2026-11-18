@@ -24,13 +24,14 @@ it('refuses full reads of an item over 64 MiB, shortens its display and visit fo
           : { kind: 'tool-call', name: 'read', input: {}, output, state: 'completed' }
     })
   }
-  // Grown inside SQLite so the test never holds the oversized text in JS.
+  // Grown inside SQLite so the test never holds the oversized text in JS. Newlines are stored
+  // escaped, so the tool row takes 68 MiB stored but its head only 34 MiB once extracted.
   const grow = f.db.prepare(
-    `UPDATE journal_items SET payload_json=json_set(payload_json,?,hex(zeroblob(?)))
+    `UPDATE journal_items SET payload_json=json_set(payload_json,?,replace(hex(zeroblob(?)),'0',?))
     WHERE item_id=?`
   )
-  grow.run('$.padding', 32 * 2 ** 20, 'orca:huge-message')
-  grow.run('$.body.output.head', 32 * 2 ** 20, 'orca:huge-tool')
+  grow.run('$.padding', 32 * 2 ** 20, 'x', 'orca:huge-message')
+  grow.run('$.body.output.head', 17 * 2 ** 20, '\n', 'orca:huge-tool')
   const point = (kind: 'item' | 'item-detail', itemId: string) =>
     readJournalSqlPoint(f.db, { sessionId: 'chat', operation: { kind, itemId } })
 
@@ -42,7 +43,7 @@ it('refuses full reads of an item over 64 MiB, shortens its display and visit fo
     throw new Error('detail unavailable')
   }
   expect(detail.item.body.output).toMatchObject({ byteLength: 5, truncated: true })
-  expect(detail.item.body.output!.head).toBe('0'.repeat(16 * 1024))
+  expect(detail.item.body.output!.head).toBe('\n'.repeat(16 * 1024))
 
   const visit = readJournalSqlPoint(f.db, {
     sessionId: 'chat',

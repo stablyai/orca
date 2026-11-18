@@ -22,14 +22,17 @@ export function boundedStoredJsonSql(
     ${bytes} AS ${as}_bytes`
 }
 
-/** Parsed once per row by SQLite, in the reader's native memory; the cut head is all JS receives. */
+/**
+ * Built in SQLite's native memory, which keeps the row's parse for each JSON call; the shortened
+ * item is measured itself, since escaping makes stored and extracted sizes differ.
+ */
 function shortenedJsonSql(json: string): string {
   const cut = (payload: string) => {
-    const head = `json_extract(${json},'${payload}.head')`
-    return `WHEN json_type(${json},'${payload}.head')='text'
-      AND octet_length(${json})-octet_length(${head})<=${LIMIT / 2}
-      THEN json_set(${json},'${payload}.head',substr(${head},1,${SHORTENED_HEAD_CHARS}),
-        '${payload}.truncated',json('true'))`
+    const shortened = `json_set(${json},'${payload}.head',
+      substr(json_extract(${json},'${payload}.head'),1,${SHORTENED_HEAD_CHARS}),
+      '${payload}.truncated',json('true'))`
+    return `WHEN json_type(${json},'${payload}.head')='text' AND octet_length(${shortened})<=${LIMIT}
+      THEN ${shortened}`
   }
   return `CASE ${cut('$.body.output')} ${cut('$.body.patch')} END`
 }
