@@ -448,7 +448,11 @@
             "discardFailed_one": "Failed to discard {{count}} file",
             "discardFailed_other": "Failed to discard {{count}} files",
             "noteCount_one": "{{count}} note",
-            "noteCount_other": "{{count}} notes"
+            "noteCount_other": "{{count}} notes",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commits",
+            "scopeFileCount_one": "{{count}} file",
+            "scopeFileCount_other": "{{count}} files"
           },
           "checks": {
             "panel": {
