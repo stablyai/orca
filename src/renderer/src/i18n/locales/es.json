@@ -21591,7 +21591,7 @@
       },
       "autoSwitch": {
         "title": "Cambiar de cuenta automáticamente",
-        "description": "Cuando la cuenta activa alcanza su límite, Orca cambia a la cuenta con más cuota disponible. Puedes desactivar o priorizar cuentas en sus filas.",
+        "description": "Cuando la cuenta activa alcanza su umbral, Orca cambia a la cuenta con mayor prioridad que siga por debajo de su propio umbral. Con la misma prioridad gana la que tenga más cuota disponible. Puedes desactivar o priorizar cuentas en sus filas.",
         "threshold": "Cambiar al % de uso",
         "inRotation": "En rotación",
         "priority": "Prioridad (la mayor se usa primero)"

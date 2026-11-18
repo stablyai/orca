@@ -22136,7 +22136,7 @@
       },
       "autoSwitch": {
         "title": "Hesapları otomatik değiştir",
-        "description": "Etkin hesap sınırına ulaştığında Orca, en çok kotası kalan hesaba geçer. Hesapları satırlarından devre dışı bırakabilir veya sıralayabilirsiniz.",
+        "description": "Etkin hesap eşiğine ulaştığında Orca, kendi eşiğinin altında kalan en yüksek öncelikli hesaba geçer. Öncelik eşitse kotası en çok kalan seçilir. Hesapları satırlarından devre dışı bırakabilir veya sıralayabilirsiniz.",
         "threshold": "Kullanım yüzdesinde değiştir",
         "inRotation": "Rotasyonda",
         "priority": "Öncelik (yüksek olan önce kullanılır)"

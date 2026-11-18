@@ -26,7 +26,7 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
     title: translate('accounts.claude.autoSwitch.title', 'Switch accounts automatically'),
     description: translate(
       'accounts.claude.autoSwitch.description',
-      'When the active account reaches its limit, switch to the account with the most quota left. Disable or rank accounts in their rows.'
+      'When the active account reaches its threshold, switch to the account with the highest priority that is still under its own threshold. Accounts with equal priority are ranked by most quota left. Disable or rank accounts in their rows.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),

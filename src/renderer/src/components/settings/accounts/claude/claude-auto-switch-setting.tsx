@@ -17,7 +17,7 @@ export function ClaudeAutoSwitchSetting({
   const title = t('accounts.claude.autoSwitch.title', 'Switch accounts automatically')
   const description = t(
     'accounts.claude.autoSwitch.description',
-    'When the active account reaches its limit, switch to the account with the most quota left. Disable or rank accounts in their rows.'
+    'When the active account reaches its threshold, switch to the account with the highest priority that is still under its own threshold. Accounts with equal priority are ranked by most quota left. Disable or rank accounts in their rows.'
   )
   const auto = settings.claudeAutoSwitch ?? {
     enabled: false,

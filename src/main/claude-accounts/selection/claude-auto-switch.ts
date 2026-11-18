@@ -81,6 +81,7 @@ export function createClaudeAutoSwitch(deps: {
       return
     }
     // The meter can be reading a WSL account or the one we just left; act only on the host account's own reading.
+    // An account covered by System default has no attributed reading, so it is not auto-switched.
     const reading = state.claude?.usageMetadata?.readingAccount
     if (
       state.claudeTarget.runtime !== 'host' ||

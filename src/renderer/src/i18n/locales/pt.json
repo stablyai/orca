@@ -22972,7 +22972,7 @@
       },
       "autoSwitch": {
         "title": "Alternar contas automaticamente",
-        "description": "Quando a conta ativa atinge o limite, o Orca alterna para a conta com mais cota restante. Desative ou priorize contas nas respectivas linhas.",
+        "description": "Quando a conta ativa atinge o limite definido, o Orca alterna para a conta de maior prioridade que ainda esteja abaixo do próprio limite. Com a mesma prioridade, vence a que tiver mais cota restante. Desative ou priorize contas nas respectivas linhas.",
         "threshold": "Alternar com % de uso",
         "inRotation": "Em rotação",
         "priority": "Prioridade (a maior é usada primeiro)"
