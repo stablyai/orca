@@ -124,7 +124,7 @@ it('rebuilds the screen from a provider snapshot plus the output after it, cutti
   }
 })
 
-it('recaptures instead of seeding a snapshot taken before the dropped span', async () => {
+it('recaptures when output arrived during a capture whose seq cannot place it', async () => {
   const snapshots: PtyProviderBufferSnapshot[] = [
     { data: 'before-gap', ...grid, seq: 7, source: 'headless' },
     { data: '\x1b[H\x1b[2Jfresh\r\ntail', ...grid, seq: 20, source: 'headless' }
@@ -136,18 +136,26 @@ it('recaptures instead of seeding a snapshot taken before the dropped span', asy
     kill: () => true,
     getForegroundProcess: async () => null,
     getSize: () => grid,
-    serializeProviderBuffer: async () => snapshots[Math.min(captures++, 1)]
+    serializeProviderBuffer: async () => {
+      if (captures === 0) {
+        // Output during the capture: with seq 7 the journal cannot tell what the snapshot holds.
+        runtime.onPtyData('pty-stale', 'tail', 2)
+      }
+      return snapshots[Math.min(captures++, 1)]
+    }
   })
   vi.useFakeTimers({ toFake: ['setTimeout'] })
   try {
     runtime.onPtyData('pty-stale', 'stale\r\n', 1)
     runtime.notePtyDataGap('pty-stale', 9)
-    // Arrives before the capture is asked for, so a snapshot without it is missing output.
-    runtime.onPtyData('pty-stale', 'tail', 2)
     // Captures are paced a second apart.
     await vi.advanceTimersByTimeAsync(5_000)
     vi.useRealTimers()
-    const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('pty-stale')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits this protected method with exactly this signature.
+    const headless = runtime as unknown as {
+      serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
+    }
+    const snapshot = await headless.serializeHeadlessTerminalBuffer('pty-stale')
     expect(captures).toBe(2)
     expect(await replay(snapshot, '')).toEqual(['fresh', 'tail'])
   } finally {
@@ -155,6 +163,44 @@ it('recaptures instead of seeding a snapshot taken before the dropped span', asy
     await runtime.onPtyExit('pty-stale', 0)
   }
 })
+
+it.each([3, 900])(
+  'rebuilds from a fresh capture on a silent stream even when its seq (%i) does not match this one',
+  async (seq) => {
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => grid,
+      serializeProviderBuffer: async () => ({
+        data: '\x1b[H\x1b[2Jfresh',
+        ...grid,
+        seq,
+        source: 'headless' as const
+      })
+    })
+    try {
+      runtime.onPtyData('pty-seq', 'stale\r\n', 1)
+      runtime.notePtyDataGap('pty-seq', 9)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits this protected method with exactly this signature.
+      const headless = runtime as unknown as {
+        serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
+      }
+      const snapshot = await vi.waitFor(
+        async () => {
+          const rebuilt = await headless.serializeHeadlessTerminalBuffer('pty-seq')
+          assert(rebuilt)
+          return rebuilt
+        },
+        { timeout: 5_000 }
+      )
+      expect(await replay(snapshot, '')).toEqual(['fresh'])
+    } finally {
+      await runtime.onPtyExit('pty-seq', 0)
+    }
+  }
+)
 
 describe('the hidden renderer after dropped output', () => {
   function createRendererRuntime() {

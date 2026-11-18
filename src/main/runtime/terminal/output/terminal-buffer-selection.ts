@@ -151,7 +151,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   protected async awaitProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: { timeoutMs?: number; retireOnTimeout?: boolean; exactScrollback?: boolean } = {}
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean; fresh?: boolean } = {}
   ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
@@ -163,8 +163,8 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       !acquisition ||
       acquisition.generation !== generation ||
       acquisition.scrollbackRows < scrollbackRows ||
-      // A screen repair must not parse a history reader's rows.
-      (wait.exactScrollback && acquisition.scrollbackRows !== scrollbackRows)
+      // A screen repair needs a capture taken after it asked, without a history reader's rows.
+      wait.fresh
     ) {
       const promise = this.captureProviderTerminalBuffer(ptyId, opts, generation)
       acquisition = { generation, scrollbackRows, promise, timedOut: false }

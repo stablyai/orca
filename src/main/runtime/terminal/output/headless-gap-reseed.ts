@@ -32,7 +32,9 @@ const GAP_RESEED_CATCH_UP_POLL_MS = 50
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms).unref?.())
 
-type RebuildResult = 'rebuilt' | 'failed' | 'behind'
+type RebuildResult = 'rebuilt' | 'failed' | 'behind' | 'misaligned'
+// How long a stream must stay silent before a capture whose seq cannot be reconciled is taken as the screen.
+const GAP_RESEED_QUIET_ANCHOR_MS = 250
 
 /** After the provider drops output, main's model keeps parsing and answering queries, but its screen is untrusted
  *  until it is repainted from a provider snapshot plus the output journaled since that capture started. */
@@ -166,16 +168,27 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     const { snapshot } = await this.awaitProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
-      { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS, exactScrollback: true }
+      { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS, fresh: true }
     )
     if (!snapshot) {
       return false
     }
     const deadline = Date.now() + GAP_RESEED_CAPTURE_TIMEOUT_MS
+    const gaps = recovery.gaps
     for (;;) {
       const result = await this.rebuildScreenAfterGap(ptyId, state, recovery, snapshot)
+      if (result === 'misaligned') {
+        return this.rebuildFromQuietSnapshot(ptyId, state, recovery, snapshot, gaps)
+      }
       if (result !== 'behind') {
         return result === 'rebuilt'
+      }
+      // Still ahead of a silent stream after it had time to deliver: the seqs disagree the other way.
+      if (
+        recovery.journal?.length === 0 &&
+        Date.now() - deadline + GAP_RESEED_CAPTURE_TIMEOUT_MS > 1_000
+      ) {
+        return this.rebuildFromQuietSnapshot(ptyId, state, recovery, snapshot, gaps)
       }
       // The provider is ahead of the bytes this process has parsed; wait for them to land.
       if (Date.now() > deadline) {
@@ -185,28 +198,58 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     }
   }
 
+  /** The provider's seq and this process's disagree (as after some reattaches), so the journal cannot be cut by it.
+   *  A silent stream since the fresh capture was requested makes the snapshot itself current. */
+  private async rebuildFromQuietSnapshot(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    recovery: GapRecovery,
+    snapshot: PtyProviderBufferSnapshot,
+    gaps: number
+  ): Promise<boolean> {
+    if (!recovery.journal || recovery.journal.length > 0 || recovery.gaps !== gaps) {
+      return false
+    }
+    console.warn('[terminal] dropped-output recovery: provider seq does not match this stream', {
+      ptyIdSuffix: ptyId.slice(-10),
+      snapshotSeq: snapshot.seq,
+      journalStart: recovery.journalStart
+    })
+    await delay(GAP_RESEED_QUIET_ANCHOR_MS)
+    const result = await this.rebuildScreenAfterGap(ptyId, state, recovery, snapshot, { gaps })
+    return result === 'rebuilt'
+  }
+
   /** Repaints in the write chain, between live chunks, so no chunk lands mid-repaint. */
   private rebuildScreenAfterGap(
     ptyId: string,
     state: RuntimeHeadlessTerminal,
     recovery: GapRecovery,
-    snapshot: PtyProviderBufferSnapshot
+    snapshot: PtyProviderBufferSnapshot,
+    quietAnchor?: { gaps: number }
   ): Promise<RebuildResult> {
     const step = state.writeChain.then(async (): Promise<RebuildResult> => {
       if (!this.isGapRecovering(ptyId, state, recovery)) {
         return 'failed'
       }
       // An overflowed or invalidated journal cannot rebuild however long output takes to catch up.
-      if (recovery.journal === null || snapshot.seq < recovery.journalStart) {
+      if (recovery.journal === null) {
         return 'failed'
       }
       const parsedTo = state.outputSequence
       const gaps = recovery.gaps
-      if (parsedTo < snapshot.seq) {
+      if (quietAnchor) {
+        // Nothing arrived since the fresh capture was requested, so its screen is the current one.
+        if (recovery.journal.length > 0 || gaps !== quietAnchor.gaps) {
+          return 'failed'
+        }
+      } else if (snapshot.seq < recovery.journalStart) {
+        return 'misaligned'
+      } else if (parsedTo < snapshot.seq) {
         return 'behind'
       }
-      // Null when the snapshot predates the journal (a reader's older shared capture, a later gap) or it overflowed.
-      const after = gapJournalAfter(recovery, snapshot.seq, parsedTo)
+      // Null when the snapshot predates the journal or a chunk straddling its seq cannot be cut exactly.
+      const after = quietAnchor ? '' : gapJournalAfter(recovery, snapshot.seq, parsedTo)
       if (after === null) {
         return 'failed'
       }
