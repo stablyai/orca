@@ -17,6 +17,7 @@ import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options/workspace-options-sheet'
+import { HostNewBotSheet } from './host-new-bot-sheet'
 import { WorkspaceDetailsSheet } from './workspace-actions/workspace-details-sheet'
 import { WorkspaceRenameSheet } from './workspace-actions/workspace-rename-sheet'
 import type { HostScreenController } from './use-host-screen-controller'
@@ -55,6 +56,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
   return (
     <>
       <WorkspaceOptionsSheet controller={controller} />
+      <HostNewBotSheet controller={controller} />
 
       {/* iOS cannot present over a closing sibling Modal; delete's confirm, trust prompt and failure share one. */}
       <BottomDrawerModalHost>

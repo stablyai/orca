@@ -1,9 +1,7 @@
-import type { ComponentType } from 'react'
 import { StatsPane } from './StatsPane'
 import { useAppStore } from '../../store'
 import { useTranslate } from '@/i18n/use-translate'
-import type { SettingsHostScope } from '../settings/host-scope/settings-host-scope'
-import { SettingsHostScopeUnavailableNotice } from '../settings/host-scope/SettingsHostScopePicker'
+import type { StatsHost } from './StatsHostScope'
 import { resolveAccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
@@ -12,20 +10,7 @@ import {
 } from '../status-bar/usage/use-owner-usage-rate-limits'
 import { UsageAccountQuotas } from './UsageAccountQuotas'
 
-const HistoryPane: ComponentType<{ hostScope?: SettingsHostScope }> = StatsPane
-
-export function AccountQuotaStatsPane({
-  hostScope
-}: {
-  hostScope?: SettingsHostScope
-}): React.JSX.Element {
-  return hostScope?.available === false ? (
-    <SettingsHostScopeUnavailableNotice />
-  ) : (
-    <OwnedAccountQuotas hostScope={hostScope} />
-  )
-}
-function OwnedAccountQuotas({ hostScope }: { hostScope?: SettingsHostScope }): React.JSX.Element {
+export function AccountQuotaStatsPane({ host }: { host: StatsHost }): React.JSX.Element {
   const t = useTranslate()
   const localRateLimits = useAppStore((state) => state.rateLimits)
   const refreshRateLimits = useAppStore((state) => state.refreshRateLimits)
@@ -35,12 +20,10 @@ function OwnedAccountQuotas({ hostScope }: { hostScope?: SettingsHostScope }): R
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const environments = useAppStore((state) => state.runtimeEnvironments)
   const selectedHost =
-    hostScope?.target.kind === 'local' && isWebClientLocation() && environments?.length === 1
+    host.target.kind === 'local' && isWebClientLocation() && environments?.length === 1
       ? { kind: 'environment' as const, environmentId: environments[0].id }
-      : hostScope?.target
-  const accountOwner = selectedHost
-    ? resolveAccountOwner(selectedHost, environments ?? [])
-    : undefined
+      : host.target
+  const accountOwner = resolveAccountOwner(selectedHost, environments ?? [])
   const { rateLimits, remoteOwner, refreshRemote, accounts, accountsUnverifiable } =
     useOwnerUsageRateLimits(localRateLimits, accountOwner, true)
   return (
@@ -67,7 +50,7 @@ function OwnedAccountQuotas({ hostScope }: { hostScope?: SettingsHostScope }): R
           openSettingsPage()
         }}
       />
-      <HistoryPane hostScope={hostScope} />
+      <StatsPane host={host} />
     </div>
   )
 }

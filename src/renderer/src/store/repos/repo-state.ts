@@ -38,6 +38,13 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import type { ConfirmedUnsavedDiscards } from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
 
+export type FolderWorkspaceDeleteOptions = {
+  executionHostId?: ExecutionHostId
+  /** Retry after the Archive script failed, removing the folder anyway. */
+  allowFailedArchiveHook?: boolean
+  /** The host call that removes the workspace, when its owner (a bot) must remove it; defaults to folder delete. */
+  remove?: () => Promise<boolean>
+}
 export const ERROR_TOAST_DURATION = 60_000
 
 export type RepoUpdate = Partial<
@@ -263,7 +270,7 @@ export type RepoSlice = {
   ) => Promise<boolean>
   deleteFolderWorkspace: (
     folderWorkspaceId: string,
-    options?: { executionHostId?: ExecutionHostId; allowFailedArchiveHook?: boolean }
+    options?: FolderWorkspaceDeleteOptions
   ) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the group's own host owns the call.
   updateProjectGroup: (

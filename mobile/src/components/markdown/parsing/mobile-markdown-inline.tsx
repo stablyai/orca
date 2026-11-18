@@ -206,6 +206,12 @@ function renderPhrasing(
           {node.label ?? node.identifier}
         </MarkdownText>
       )
+    case 'mention':
+      return (
+        <MarkdownText key={key} style={[outer, styles.mention]}>
+          {node.value}
+        </MarkdownText>
+      )
     case 'html':
       return <Fragment key={key}>{node.value}</Fragment>
     // markdown-it resolves references itself, so these only carry their text.

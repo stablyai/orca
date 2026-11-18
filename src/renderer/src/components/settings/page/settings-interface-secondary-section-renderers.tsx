@@ -1,4 +1,4 @@
-import { AccountQuotaStatsPane as StatsPane } from '../../stats/AccountQuotaStatsPane'
+import { AccountQuotaStatsPane } from '../../stats/AccountQuotaStatsPane'
 import { AppearancePane } from '../appearance/AppearancePane'
 import { ChatSettingsSection } from '../chat/ChatSettingsSection'
 import { InputPane } from '../input/InputPane'
@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 
 export function renderAppearanceSettingsSection(
   context: SettingsRenderContext,
@@ -153,6 +154,13 @@ export function renderStatsSettingsSection(
   t: Translate = translate
 ): React.JSX.Element {
   const { model, navigation, view } = context
+  const hostTarget = model.settingsHostScope.target
+  const hostName =
+    hostTarget.kind === 'environment'
+      ? (model.runtimeEnvironments.find(
+          (environment) => environment.id === hostTarget.environmentId
+        )?.name ?? hostTarget.environmentId)
+      : null
   return (
     <SettingsSection
       id="stats"
@@ -163,11 +171,13 @@ export function renderStatsSettingsSection(
       )}
       searchEntries={navigation.getSectionSearchEntries('stats')}
     >
-      {view.isSectionMounted('stats') ? (
+      {!view.isSectionMounted('stats') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : (
         <SettingsGroup bodyClassName="py-4">
-          <StatsPane hostScope={model.settingsHostScope} />
+          <AccountQuotaStatsPane host={{ target: hostTarget, name: hostName }} />
         </SettingsGroup>
-      ) : null}
+      )}
     </SettingsSection>
   )
 }

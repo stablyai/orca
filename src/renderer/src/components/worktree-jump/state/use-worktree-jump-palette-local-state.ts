@@ -27,19 +27,29 @@ export function useWorktreeJumpPaletteLocalState({
     }))
   )
   const [query, setQuery] = useState('')
+  // 'bots' while the @ scope is on; the @ itself is never part of the query.
+  const [scope, setScope] = useState<'all' | 'bots'>('all')
+  // What the other sections last searched, held while scoped so their work stays memoized.
+  const [scopeHeldQuery, setScopeHeldQuery] = useState('')
+  const scoped = scope === 'bots'
   const deferredQuery = useDeferredValue(query)
   const liveQueryRef = useRef(query)
   // Keyboard handlers must see the current query before effects flush.
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   liveQueryRef.current = query
-  const taskSourceUrl = useMemo(() => parseCmdJTaskSourceUrl(query), [query])
+  // Showing only bots, a link is searched as a bot name; the recovery row hands it back.
+  const taskSourceUrl = useMemo(
+    () => (scoped ? null : parseCmdJTaskSourceUrl(query)),
+    [query, scoped]
+  )
   const paletteSearchQuery = taskSourceUrl ? query.trim() : deferredQuery.trim()
   const deferredCreateAction = useMemo(
     () => getWorktreePaletteCreateActionState({ query: deferredQuery }),
     [deferredQuery]
   )
   const createWorktreeName = taskSourceUrl ? query.trim() : deferredCreateAction.createWorktreeName
-  const showCreateAction = deferredCreateAction.showCreateAction || taskSourceUrl !== null
+  const showCreateAction =
+    !scoped && (deferredCreateAction.showCreateAction || taskSourceUrl !== null)
   const [selectedItemId, setSelectedItemId] = useState('')
   const latestQueryRef = useRef('')
   const autoSelectedItemIdRef = useRef<string | null>(null)
@@ -75,11 +85,17 @@ export function useWorktreeJumpPaletteLocalState({
     setExpandedSectionCaps({})
     if (visibilityChanged && visible) {
       setFilter(buildPaletteFilterFromSidebarScope(sidebarScope))
+      setScope('all')
+      setScopeHeldQuery('')
     }
   }
   return {
     query,
     setQuery,
+    scope,
+    setScope,
+    scopeHeldQuery,
+    setScopeHeldQuery,
     deferredQuery,
     liveQueryRef,
     taskSourceUrl,

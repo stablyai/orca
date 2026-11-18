@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { useCallback, useContext, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -13,7 +13,8 @@ import { findNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/
 import {
   writeNativeChatComposerText,
   type NativeChatComposerInput
-} from '@/components/native-chat/composer/editor/native-chat-composer-input'
+} from '../editor/native-chat-composer-input'
+import { NativeChatSessionHistoryScopeContext } from '../../native-chat-session-history-scope'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 
 export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
@@ -116,6 +117,8 @@ export function useNativeChatResumeCommand(args: {
   const { setNotice } = args
   const structured = structuredTransport !== undefined
   const structuredWorktreeId = structuredTransport?.worktreeId
+  // A room's history spans its members' agents; with no chat agent, nothing replaces the room.
+  const ownConversation = useContext(NativeChatSessionHistoryScopeContext) === 'conversation'
   const usage = structuredTransport?.accountUsage
   const fork = structuredTransport?.fork
   const mcp = structuredTransport?.mcpPanel
@@ -191,7 +194,11 @@ export function useNativeChatResumeCommand(args: {
         workspace,
         chatTabId: terminalTabId,
         initialQuery: search,
-        ...(isAiVaultAgent(agent) ? { agent } : {})
+        ...(!ownConversation
+          ? { alongside: true as const }
+          : isAiVaultAgent(agent)
+            ? { agent }
+            : {})
       })
       // Attachments stay armed for the next real prompt.
       setDraft('')
@@ -201,6 +208,7 @@ export function useNativeChatResumeCommand(args: {
     },
     [
       agent,
+      ownConversation,
       setActiveSuggestion,
       setCaret,
       setDraft,
