@@ -33,7 +33,6 @@ function FleetNetworkBranch({ node, now }: { node: FleetNode; now: number }): Re
   )
 }
 
-/** Org chart whose connectors are pseudo-element borders, so it never measures layout. */
 export function FleetNetworkTree({
   root,
   now

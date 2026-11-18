@@ -70,13 +70,15 @@ export function FleetTimelineRow({
           aria-hidden
           className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-foreground/5"
         />
-        <span
-          className={cn(
-            'absolute top-1/2 h-1.5 min-w-1.5 -translate-y-1/2 rounded-full',
-            FLEET_BUCKET_BAR_CLASS[card.bucket]
-          )}
-          style={{ left: `${start}%`, width: `${end - start}%` }}
-        />
+        {card.startedAt > 0 ? (
+          <span
+            className={cn(
+              'absolute top-1/2 h-1.5 min-w-1.5 -translate-y-1/2 rounded-full',
+              FLEET_BUCKET_BAR_CLASS[card.bucket]
+            )}
+            style={{ left: `${start}%`, width: `${end - start}%` }}
+          />
+        ) : null}
       </div>
       <span className="text-right text-2xs tabular-nums text-muted-foreground">
         {fleetCardElapsed(card, timeWindow.to)}

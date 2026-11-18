@@ -1,5 +1,4 @@
-import { useTranslate } from '@/i18n/use-translate'
-import type { Translate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { fleetTimelineGridClass } from './fleet-timeline-grid'
 import type { FleetTimelineTick } from './fleet-timeline-ticks'

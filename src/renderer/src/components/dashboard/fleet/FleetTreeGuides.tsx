@@ -8,14 +8,12 @@ const GEOMETRY = {
   card: { cell: 'w-5', line: 'left-2.5', elbow: 'h-5' }
 } as const
 
-export type FleetTreeGuideGeometry = keyof typeof GEOMETRY
-
 export function FleetTreeGuides({
   row,
   geometry
 }: {
   row: FleetTreeRow
-  geometry: FleetTreeGuideGeometry
+  geometry: keyof typeof GEOMETRY
 }): React.JSX.Element | null {
   if (row.depth === 0) {
     return null

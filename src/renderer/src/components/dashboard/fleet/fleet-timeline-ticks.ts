@@ -7,7 +7,6 @@ const MAX_TICK_GAPS = 4
 
 export type FleetTimelineTick = { minutesAgo: number; percent: number }
 
-/** Ticks count back from now in a round step, so the last tick is always "now". */
 export function buildFleetTimelineTicks(window: FleetView['window']): FleetTimelineTick[] {
   const span = window.to - window.from
   if (span <= 0) {

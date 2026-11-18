@@ -57,11 +57,13 @@ function collectNodes(node: FleetNode, into: DashboardCard[]): DashboardCard[] {
 function buildTeam(root: FleetNode): FleetTeam {
   const members = collectNodes(root, [])
   const counts = emptyCounts()
-  let startedAt = Number.POSITIVE_INFINITY
+  let startedAt = 0
   let endedAt: number | null = 0
   for (const card of members) {
     counts[card.bucket] += 1
-    startedAt = Math.min(startedAt, card.startedAt)
+    if (card.startedAt > 0) {
+      startedAt = startedAt === 0 ? card.startedAt : Math.min(startedAt, card.startedAt)
+    }
     endedAt =
       endedAt === null || isLive(card) || card.finishedAt === null
         ? null
