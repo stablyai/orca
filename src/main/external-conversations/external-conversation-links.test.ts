@@ -63,7 +63,13 @@ function realStore(): Store {
 }
 
 function link(paneKey: string) {
-  return { ...KEY, paneKey, agent: 'claude' as const, createdAt: 1 }
+  return {
+    ...KEY,
+    paneKey,
+    sessionId: `session-${paneKey}`,
+    agent: 'claude' as const,
+    createdAt: 1
+  }
 }
 
 describe('external conversation link lookups', () => {

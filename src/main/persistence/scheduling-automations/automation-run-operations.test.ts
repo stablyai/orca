@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 
-import { listAutomationRunsPage } from './automation-run-operations'
+import { listAutomationRunsByAutomation, listAutomationRunsPage } from './automation-run-operations'
 
 function stateWithRuns(runs: { id: string; createdAt: number }[]): PersistedState {
   return {
@@ -56,5 +56,27 @@ describe('listAutomationRunsPage', () => {
     ])
 
     expect(listAutomationRunsPage(state, 'a1', 2, '2').runs.map((run) => run.id)).toEqual(['r1'])
+  })
+})
+
+describe('listAutomationRunsByAutomation', () => {
+  it('gives each named automation its own runs newest first, and leaves out the rest', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the grouped read uses only automationRuns and the run fields set here.
+    const state = {
+      automationRuns: [
+        { id: 'a1-old', automationId: 'a1', createdAt: 1 },
+        { id: 'other', automationId: 'a3', createdAt: 2 },
+        { id: 'a2-only', automationId: 'a2', createdAt: 3, precheckResult: { command: '  ' } },
+        { id: 'a1-new', automationId: 'a1', createdAt: 4 }
+      ]
+    } as PersistedState
+
+    const grouped = listAutomationRunsByAutomation(state, ['a1', 'a2', 'none'])
+
+    expect([...grouped.keys()]).toEqual(['a1', 'a2'])
+    expect(grouped.get('a1')?.map((run) => run.id)).toEqual(['a1-new', 'a1-old'])
+    expect(grouped.get('a2')).toEqual([
+      { id: 'a2-only', automationId: 'a2', createdAt: 3, precheckResult: null }
+    ])
   })
 })

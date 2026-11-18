@@ -23,6 +23,9 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     this.agentOrchestrationProjection
   )
 
+  /** A serve or orcad host: no owner window here ever answers a card. */
+  servesWithoutWindow = (): boolean => this.servesHeadlessGraph
+
   shouldRelayTerminalBrowserOpens(): boolean {
     return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
   }

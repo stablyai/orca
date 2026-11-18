@@ -63,7 +63,9 @@ export function claudeStructuredSpawnOptions(input: {
         !Object.hasOwn(sdkOptions.extraArgs ?? {}, 'settings')
       ) {
         options.set('fastMode', fastMode)
-        sdkOptions.settings = { fastMode: decoded }
+        // Laid over the launch's own overlay: a tidy-up's turns every configured hook off there.
+        const overlay = typeof sdkOptions.settings === 'object' ? sdkOptions.settings : {}
+        sdkOptions.settings = { ...overlay, fastMode: decoded }
       } else if (input.flagSettingsControl !== 'unsupported') {
         options.set('fastMode', fastMode)
         fastModeAtStart = true

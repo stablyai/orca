@@ -7,6 +7,7 @@ import type { TelemetrySettings } from '../telemetry/telemetry-settings-types'
 
 export type FeatureTipId =
   | 'chat-ui-here'
+  | 'bots-teammate'
   | 'voice-dictation'
   | 'orca-cli'
   | 'cmd-j-palette'
@@ -64,6 +65,7 @@ export type FeatureTipPriority = 'new' | 'unseen'
 
 export type FeatureTipAction =
   | 'use-chat-ui'
+  | 'create-bot'
   | 'enable-voice'
   | 'setup-cli'
   | 'learn-cmd-j-palette'
@@ -87,6 +89,8 @@ export type CompletedFeatureTipState = {
   sessionSearchTipCompleted: boolean
   /** Main's once-decided record leaves this profile out, or this client has no such profile. */
   chatUiLaunchTipCompleted: boolean
+  /** Bots are off, this client cannot make one, or this computer already has one. */
+  botsTipCompleted: boolean
   featureInteractions?: FeatureInteractionState
 }
 
@@ -100,6 +104,17 @@ export const FEATURE_TIPS = [
     description: 'Agents can now open as a chat, with rich messages, visuals and images.',
     action: 'use-chat-ui',
     ctaLabel: 'Use Chat UI',
+    completedByFeatureInteractions: []
+  },
+  {
+    id: 'bots-teammate',
+    priority: 'new',
+    eyebrow: 'New',
+    title: 'Your AI teammate',
+    description:
+      'It works where your team works, takes on tasks from anyone, and sees them through. It remembers everything you teach it.',
+    action: 'create-bot',
+    ctaLabel: 'Create your first bot',
     completedByFeatureInteractions: []
   },
   {
@@ -188,6 +203,9 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   }
   if (state.chatUiLaunchTipCompleted) {
     completedIds.add('chat-ui-here')
+  }
+  if (state.botsTipCompleted) {
+    completedIds.add('bots-teammate')
   }
   for (const tip of FEATURE_TIPS) {
     if (
