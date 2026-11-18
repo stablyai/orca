@@ -7,13 +7,17 @@ const IDLE_TEARDOWN_MS = 60_000
 const RESPONSE_DEADLINE_MS = 30_000
 // A file whose checkpoints keep failing or stopping short goes back to checkpointing itself.
 const MAX_CONSECUTIVE_FAILURES = 3
+// SQLite's own auto-checkpoint size: each full checkpoint lets the next commit restart the WAL,
+// and a restart syncs its header on main, so checkpointing more often would add main-thread syncs.
+const CHECKPOINT_FRAMES = 1000
 
 type CheckpointResult = { id: number; ok: boolean }
 
 /**
  * Evaluated source. `mode=rw` never creates a removed cache; a PASSIVE checkpoint never waits on
  * the writer, and counts as done only when it folded every frame. The handle lives for one
- * checkpoint, so a closed cache's file is free again within milliseconds.
+ * request, so a closed cache's file is free again within milliseconds. NOOP needs SQLite 3.51;
+ * an older one fails every request and hands checkpoints back.
  */
 export const rowCacheCheckpointWorkerSource = `
 const { parentPort } = require('node:worker_threads');
@@ -27,8 +31,13 @@ parentPort.on('message', ({ id, path }) => {
     url.searchParams.set('mode', 'rw');
     db = new DatabaseSync(url);
     db.exec('PRAGMA busy_timeout = 1000');
-    const state = db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get();
-    ok = state.busy === 0 && state.log === state.checkpointed;
+    const pending = db.prepare('PRAGMA wal_checkpoint(NOOP)').get();
+    if (pending.log - pending.checkpointed < ${CHECKPOINT_FRAMES}) {
+      ok = true;
+    } else {
+      const state = db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get();
+      ok = state.busy === 0 && state.log === state.checkpointed;
+    }
   } catch {
     ok = false;
   } finally {

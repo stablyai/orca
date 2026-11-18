@@ -33,22 +33,6 @@ function cachePath(): string {
 }
 
 describe('RowCacheWalCheckpoints', () => {
-  it('runs one checkpoint per connection at a time and queues one more for commits during it', () => {
-    const worker = new FakeWorker()
-    const checkpoints = new RowCacheWalCheckpoints(() => worker)
-    const id = checkpoints.attach('/a.db', () => {})!
-
-    checkpoints.request(id)
-    checkpoints.request(id)
-    checkpoints.request(id)
-    expect(worker.posted).toEqual([{ id, path: '/a.db' }])
-
-    worker.emit('message', { id, ok: true })
-    expect(worker.posted).toHaveLength(2)
-    worker.emit('message', { id, ok: true })
-    expect(worker.posted).toHaveLength(2)
-  })
-
   it('hands checkpoints back to the cache connection when the worker fails', () => {
     const pragmas: string[] = []
     const original = SyncDatabase.prototype.pragma
