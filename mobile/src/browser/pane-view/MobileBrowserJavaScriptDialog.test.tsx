@@ -33,10 +33,15 @@ describe('MobileBrowserJavaScriptDialog', () => {
         })
       )
     })
-    const field = renderer.root.findByType('FieldTextInput')
+    const field = renderer.root.find((node) => String(node.type) === 'FieldTextInput')
     expect(field.props.value).toBe('Ada')
     act(() => field.props.onChangeText('Grace'))
-    act(() => renderer.root.findAllByType('Pressable').at(-1)!.props.onPress())
+    act(() =>
+      renderer.root
+        .findAll((node) => String(node.type) === 'Pressable')
+        .at(-1)!
+        .props.onPress()
+    )
     expect(sendDialogCommand).toHaveBeenCalledWith('browser.dialogAccept', 'Grace')
     act(() => renderer.unmount())
   })
