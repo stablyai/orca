@@ -28,16 +28,21 @@ export function isCopyModeModalOpen(): boolean {
 export function createTerminalCopyModeSessions({
   scope,
   platform,
-  managerRef
+  managerRef,
+  isVisible = () => true
 }: {
   scope: HTMLElement
   platform: NodeJS.Platform
   managerRef: React.RefObject<PaneManager | null>
+  isVisible?: () => boolean
 }) {
   let session: TerminalCopyModeSession | null = null
   let stopped = false
   let focusFrame: number | null = null
   const currentPane = (): ManagedPane | null => {
+    if (!isVisible()) {
+      return null
+    }
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
     return pane &&
@@ -125,6 +130,7 @@ export function createTerminalCopyModeSessions({
     current: (): TerminalCopyModeSession | null => session,
     available: (): boolean => enterablePane() !== null,
     enter,
+    close: () => end(),
     validate,
     ownedMenuView: (): TerminalCopyModeView | null => {
       if (!session || isCopyModeModalOpen() || !sessionIsCurrent(session)) {

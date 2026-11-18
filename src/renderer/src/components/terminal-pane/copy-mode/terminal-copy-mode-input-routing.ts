@@ -1,4 +1,6 @@
 import { useAppStore } from '@/store'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { isInsideNativeChatCover } from '../chat/native-chat-covered-pane'
 import { KEYBINDING_DEFINITIONS } from '../../../../../shared/keybindings/definitions'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingActionId } from '../../../../../shared/keybindings/types'
@@ -72,6 +74,8 @@ export function installTerminalCopyModeInputRouting({
     if (!owner) {
       if (
         event.isComposing ||
+        isEditableTarget(event.target) ||
+        isInsideNativeChatCover(event.target) ||
         !keybindingMatchesAction(
           'terminal.enterCopyMode',
           event,

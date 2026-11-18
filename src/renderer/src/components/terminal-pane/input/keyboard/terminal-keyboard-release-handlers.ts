@@ -5,6 +5,7 @@ import { isEditableTarget } from './terminal-keyboard-shortcut-matching'
 import { hasPendingTerminalImeComposition } from '../ime/terminal-ime-composition-route'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
+import { isInsideTerminalCopyMode } from '../../copy-mode/terminal-copy-mode-pane'
 
 type Runtime = ReturnType<typeof createTerminalKeyboardRuntime>
 type ReleaseContext = KeyboardHandlersDeps &
@@ -100,6 +101,7 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
         !wasObserved &&
         manager &&
         !isEditableTarget(e.target) &&
+        !isInsideTerminalCopyMode(e.target) &&
         (!scope || keyboardEventBelongsToScope(e, scope))
       ) {
         const pane = synchronizeTerminalKeyboardPane(manager, e.target)
