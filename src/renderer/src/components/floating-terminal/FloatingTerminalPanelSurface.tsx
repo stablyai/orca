@@ -192,6 +192,7 @@ export function renderFloatingTerminalPanelSurface(
                 aria-hidden
               />
               <FloatingTerminalWindowControls
+                activeTabId={activeTerminalId}
                 maximized={maximized}
                 onToggleMaximized={toggleMaximized}
                 onMinimize={() => onOpenChange(false)}

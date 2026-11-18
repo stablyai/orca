@@ -16979,7 +16979,8 @@
             "1c79cba25d": "Restore floating workspace",
             "648352c51f": "Open {{value0}} in floating workspace",
             "109870e023": "Maximize",
-            "b5686fee1e": "Restore"
+            "b5686fee1e": "Restore",
+            "openInSeparateWindow": "Open in separate window"
           }
         }
       },
@@ -26138,7 +26139,8 @@
       "importGhosttyConfig": "Import Ghostty Config",
       "importKittyConfig": "Import Kitty Config",
       "pickAppIcon": "Choose app icon",
-      "appIconImage": "App icon image"
+      "appIconImage": "App icon image",
+      "terminalPopoutTitle": "Orca Terminal"
     }
   },
   "taskProviders": {

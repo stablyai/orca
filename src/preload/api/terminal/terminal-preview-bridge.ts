@@ -32,3 +32,7 @@ export const terminalPreviewApi = {
     return () => ipcRenderer.removeListener('terminalPreview:data', listener)
   }
 } satisfies PreloadApi['terminalPreview']
+
+export const terminalPopoutApi = {
+  open: (ptyId: string): Promise<void> => ipcRenderer.invoke('terminalPopout:open', { ptyId })
+} satisfies PreloadApi['terminalPopout']

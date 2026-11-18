@@ -49,7 +49,7 @@ import { backgroundWorkerApi } from './api/diagnostics/background-worker-bridge'
 import { notificationsApi } from './api/notifications/notifications-bridge'
 import { onboardingApi } from './api/onboarding/onboarding-bridge'
 import { dashboardApi } from './api/window-ui/dashboard-bridge'
-import { terminalPreviewApi } from './api/terminal/terminal-preview-bridge'
+import { terminalPopoutApi, terminalPreviewApi } from './api/terminal/terminal-preview-bridge'
 import { macosTccPromptsApi } from './api/desktop-permissions/macos-tcc-prompts-bridge'
 import { developerPermissionsApi } from './api/desktop-permissions/developer-permissions-bridge'
 import { computerUsePermissionsApi } from './api/desktop-permissions/computer-use-permissions-bridge'
@@ -164,6 +164,7 @@ const api = {
   onboarding: onboardingApi,
   dashboard: dashboardApi,
   terminalPreview: terminalPreviewApi,
+  terminalPopout: terminalPopoutApi,
   macosTccPrompts: macosTccPromptsApi,
   developerPermissions: developerPermissionsApi,
   computerUsePermissions: computerUsePermissionsApi,
