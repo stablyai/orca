@@ -33,11 +33,7 @@ export function NativeChatOlderHistoryRow({
       ref={olderHistory.sentinelRef}
       className="absolute inset-x-0 top-0 flex h-10 items-center justify-center"
     >
-      {olderHistory.isAutoLoadEnabled ? (
-        <span role="status" aria-live="polite" className="text-xs text-chat-foreground-faint">
-          {loadingEarlier ? <DelayedLoadingLabel /> : null}
-        </span>
-      ) : olderHistory.loadFailed && !loadingEarlier ? (
+      {olderHistory.loadFailed && !loadingEarlier ? (
         <span className="flex max-w-full min-w-0 items-center gap-2 px-3 text-xs">
           <span role="alert" className="min-w-0 truncate text-destructive">
             {t('components.native-chat.loadEarlierFailed', "Couldn't load earlier messages.")}
@@ -50,6 +46,10 @@ export function NativeChatOlderHistoryRow({
           >
             {t('components.native-chat.loadEarlierRetry', 'Retry')}
           </Button>
+        </span>
+      ) : olderHistory.isAutoLoadEnabled ? (
+        <span role="status" aria-live="polite" className="text-xs text-chat-foreground-faint">
+          {loadingEarlier ? <DelayedLoadingLabel /> : null}
         </span>
       ) : (
         <Button

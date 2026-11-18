@@ -1,6 +1,6 @@
 // Reobserve the prefetch sentinel after each page/reset to keep loading until prepends move it out; the virtualizer preserves position.
 
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 
 export const NATIVE_CHAT_OLDER_HISTORY_PREFETCH_PX = 600
@@ -16,8 +16,6 @@ export type NativeChatOlderHistoryAutoload = {
   /** The lane's load, recording a failure so any caller's (a history jump's) shows the error. */
   loadEarlier: () => Promise<NativeChatOlderPageResult>
 }
-
-const NO_FAILURES: ReadonlySet<string> = new Set()
 
 export function useNativeChatOlderHistoryAutoload({
   scrollRef,
@@ -43,14 +41,18 @@ export function useNativeChatOlderHistoryAutoload({
   const [sentinel, setSentinel] = useState<HTMLElement | null>(null)
   // A swapped transcript must not inherit another history’s failure.
   const [failedHistoryKey, setFailedHistoryKey] = useState<string | null>(null)
-  // Keyed per history, so a late failure from an older key never replaces the current key's.
-  const [readFailedKeys, setReadFailedKeys] = useState(NO_FAILURES)
+  const [readFailedHistoryKey, setReadFailedHistoryKey] = useState<string | null>(null)
+  // A result for a history that's no longer shown must not touch the current one's state.
+  const currentKey = useRef(historyKey)
+  useEffect(() => {
+    currentKey.current = historyKey
+  })
   // Any page load (a retry, a history jump) starts fresh; only a failure brings the error back.
   const [wasLoading, setWasLoading] = useState(loadingEarlier)
   if (loadingEarlier !== wasLoading) {
     setWasLoading(loadingEarlier)
     if (loadingEarlier) {
-      setReadFailedKeys(NO_FAILURES)
+      setReadFailedHistoryKey(null)
     }
   }
 
@@ -62,18 +64,18 @@ export function useNativeChatOlderHistoryAutoload({
   const loadRecorded = (): Promise<NativeChatOlderPageResult> => {
     const key = historyKey
     return loadEarlier().then((result) => {
-      if (result === 'failed') {
-        setReadFailedKeys((failed) => (failed.has(key) ? failed : new Set(failed).add(key)))
+      // Any caller's failure stops auto-load too, so the row shows the error instead of retrying.
+      if (key === currentKey.current && (result === 'failed' || result === 'unchanged')) {
+        setFailedHistoryKey(key)
+        if (result === 'failed') {
+          setReadFailedHistoryKey(key)
+        }
       }
       return result
     })
   }
   const loadPage = (): void => {
-    void loadRecorded().then((result) => {
-      if (result === 'failed' || result === 'unchanged') {
-        setFailedHistoryKey(historyKey)
-      }
-    })
+    void loadRecorded()
   }
   // Lane callbacks change identity with their state; the observer must not.
   const loadPageFromObserver = useEffectEvent(loadPage)
@@ -81,7 +83,7 @@ export function useNativeChatOlderHistoryAutoload({
   const loadEarlierManually = (): void => {
     onManualLoad?.()
     setFailedHistoryKey(null)
-    setReadFailedKeys(NO_FAILURES)
+    setReadFailedHistoryKey(null)
     loadPage()
   }
 
@@ -106,7 +108,7 @@ export function useNativeChatOlderHistoryAutoload({
   return {
     sentinelRef: setSentinel,
     isAutoLoadEnabled,
-    loadFailed: readFailedKeys.has(historyKey),
+    loadFailed: readFailedHistoryKey === historyKey,
     loadEarlierManually,
     loadEarlier: loadRecorded
   }
