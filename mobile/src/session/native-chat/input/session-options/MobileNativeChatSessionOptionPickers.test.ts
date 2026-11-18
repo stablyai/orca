@@ -181,7 +181,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       transport: 'agent-session',
       settable: true
     }
-    mount([MODEL_DESCRIPTOR, effort], false, 'effort')
+    mount([MODEL_DESCRIPTOR, effort], 'effort')
     const levels = ['Low', 'Medium', 'High', 'Extra high']
     const shown = findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text')
       .map((node) => node.props.children)

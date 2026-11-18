@@ -60,7 +60,6 @@ export const grokComposerPicker = defineFixture({
           setOption: async () => ({ snapshot: SNAPSHOT }),
           invokeAction: async () => ({ snapshot: SNAPSHOT })
         }}
-        isWorking={false}
         snapshot={SNAPSHOT}
       />
     </div>
