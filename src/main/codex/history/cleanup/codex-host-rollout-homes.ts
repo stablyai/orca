@@ -8,8 +8,8 @@ import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { configuredAdditionalCodexHomePaths } from '../../../ai-vault/discovery/ai-vault-scan-roots'
 import { codexHomeSessionsDir } from '../../../ai-vault/discovery/session-scanner-roots'
 import {
-  assertOwnedHostCodexManagedHomePath,
-  UntrustedManagedCodexHomeError
+  ownedCodexAccountHomes,
+  type CodexAccountHomeCandidate
 } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import { GUEST_CODEX_ACCOUNTS_ROOT_SEGMENTS } from '../../../codex-accounts/managed-homes/guest-codex-account-homes'
 import {
@@ -19,8 +19,10 @@ import {
 } from '../../configuration/homes/codex-home-paths'
 import { resolveHostCodexSessionSourceHome } from '../rollouts/codex-session-source-home'
 
-/** Every Orca account home in a root; throws while one can't be read, since its copy may be in use. */
-async function listAccountHomes(accountsRoot: string): Promise<string[]> {
+/** Each account folder in a root, before its ownership is checked (a sync read, so done off main). */
+async function listAccountHomeCandidates(
+  accountsRoot: string
+): Promise<CodexAccountHomeCandidate[]> {
   let entries
   try {
     entries = await readdir(accountsRoot, { withFileTypes: true })
@@ -30,49 +32,12 @@ async function listAccountHomes(accountsRoot: string): Promise<string[]> {
     }
     throw error
   }
-  const homes: string[] = []
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue
-    }
-    const home = join(accountsRoot, entry.name, 'home')
-    try {
-      assertOwnedHostCodexManagedHomePath({
-        candidatePath: home,
-        managedAccountsRoot: accountsRoot,
-        systemCodexHomePath: getSystemCodexHomePath(),
-        expectedAccountId: entry.name
-      })
-    } catch (error) {
-      // Not Orca's (redirected or never set up): Orca neither launches nor links into it.
-      if (error instanceof UntrustedManagedCodexHomeError) {
-        continue
-      }
-      throw error
-    }
-    homes.push(home)
-  }
-  return homes
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({ accountsRoot, accountId: entry.name }))
 }
 
-/**
- * Every host Codex home a rollout can have a name in, since history passes link it across all of
- * them: the user's, a custom history source, Orca's shared home and each account's. A WSL distro
- * keeps its own homes, and reading them can boot it.
- */
-export async function listHostCodexRolloutHomes(
-  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
-): Promise<string[]> {
-  const candidates = [
-    dirname(codexHomeSessionsDir()),
-    getSystemCodexHomePath(),
-    resolveHostCodexSessionSourceHome(settings),
-    resolveOrcaManagedCodexHomePath(),
-    ...(await listAccountHomes(join(getOrcaUserDataPath(), 'codex-accounts'))),
-    // A headless host keeps its own accounts under the user's home.
-    ...(await listAccountHomes(join(homedir(), ...GUEST_CODEX_ACCOUNTS_ROOT_SEGMENTS))),
-    ...configuredAdditionalCodexHomePaths()
-  ]
+function uniqueHostHomes(candidates: readonly string[]): string[] {
   const seen = new Set<string>()
   const homes: string[] = []
   for (const home of candidates) {
@@ -86,4 +51,39 @@ export async function listHostCodexRolloutHomes(
     }
   }
   return homes
+}
+
+/**
+ * The host Codex homes besides Orca's account homes, plus those account folders unchecked, so a
+ * caller can verify their ownership (sync reads) where blocking is fine.
+ */
+export async function listHostCodexRolloutHomeSources(
+  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
+): Promise<{ homes: string[]; accounts: CodexAccountHomeCandidate[] }> {
+  return {
+    homes: uniqueHostHomes([
+      dirname(codexHomeSessionsDir()),
+      getSystemCodexHomePath(),
+      resolveHostCodexSessionSourceHome(settings),
+      resolveOrcaManagedCodexHomePath(),
+      ...configuredAdditionalCodexHomePaths()
+    ]),
+    accounts: [
+      ...(await listAccountHomeCandidates(join(getOrcaUserDataPath(), 'codex-accounts'))),
+      // A headless host keeps its own accounts under the user's home.
+      ...(await listAccountHomeCandidates(join(homedir(), ...GUEST_CODEX_ACCOUNTS_ROOT_SEGMENTS)))
+    ]
+  }
+}
+
+/**
+ * Every host Codex home a rollout can have a name in, since history passes link it across all of
+ * them: the user's, a custom history source, Orca's shared home and each account's. A WSL distro
+ * keeps its own homes, and reading them can boot it.
+ */
+export async function listHostCodexRolloutHomes(
+  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
+): Promise<string[]> {
+  const { homes, accounts } = await listHostCodexRolloutHomeSources(settings)
+  return uniqueHostHomes([...homes, ...ownedCodexAccountHomes(accounts, getSystemCodexHomePath())])
 }

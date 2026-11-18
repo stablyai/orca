@@ -4,6 +4,7 @@ import { parentPort } from 'node:worker_threads'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import type { CodexHistoryDiskUsage } from '../../../../shared/workspace-cleanup/codex-history-disk-usage'
 import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
+import { ownedCodexAccountHomes } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import type {
   CodexHistoryDiskUsageBudget,
   CodexHistoryDiskUsageWorkerRequest,
@@ -189,10 +190,24 @@ if (port) {
   port.on('message', (request: CodexHistoryDiskUsageWorkerRequest) => {
     let response: CodexHistoryDiskUsageWorkerResponse
     try {
+      const accountHomes: string[] = []
+      let unreadableAccount = false
+      for (const account of request.accounts) {
+        try {
+          accountHomes.push(...ownedCodexAccountHomes([account], request.systemCodexHomePath))
+        } catch {
+          unreadableAccount = true
+        }
+      }
+      const usage = measureCodexHistoryDiskUsage(
+        [...request.homes, ...accountHomes],
+        request.budget
+      )
       response = {
         id: request.id,
         ok: true,
-        usage: measureCodexHistoryDiskUsage(request.homes, request.budget)
+        // An account home that couldn't be checked may hold history this total misses.
+        usage: unreadableAccount ? { ...usage, complete: false } : usage
       }
     } catch (error) {
       response = {

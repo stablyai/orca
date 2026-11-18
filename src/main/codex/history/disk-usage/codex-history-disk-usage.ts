@@ -7,7 +7,8 @@ import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../../../worker-threads/worker-thread-entry-path'
-import { listHostCodexRolloutHomes } from '../cleanup/codex-host-rollout-homes'
+import { listHostCodexRolloutHomeSources } from '../cleanup/codex-host-rollout-homes'
+import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import type {
   CodexHistoryDiskUsageWorkerRequest,
   CodexHistoryDiskUsageWorkerResponse
@@ -56,11 +57,13 @@ async function measure(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
   signal: AbortSignal
 ): Promise<CodexHistoryDiskUsage> {
-  const homes = await listHostCodexRolloutHomes(settings)
+  const { homes, accounts } = await listHostCodexRolloutHomeSources(settings)
   const response = await getQueue().dispatch(
     (id) => ({
       id,
       homes,
+      accounts,
+      systemCodexHomePath: getSystemCodexHomePath(),
       budget: { maxEntries: MAX_ENTRIES, timeMs: WALK_BUDGET_MS }
     }),
     WORKER_TIMEOUT_MS,

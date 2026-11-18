@@ -55,10 +55,7 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
   })
   const query = useAppStateValue((state) => state.settingsSearchQuery)
   // The row stays mounted while search hides it, so the size is read only when it can be seen.
-  const diskUsage = useCodexHistoryDiskUsage(
-    hostScope.target,
-    matchesSettingsSearch(query, search)
-  )
+  const diskUsage = useCodexHistoryDiskUsage(hostScope.target, matchesSettingsSearch(query, search))
   const [confirming, setConfirming] = useState(false)
   const enabled = setting.state === 'ready' && setting.enabled
 
