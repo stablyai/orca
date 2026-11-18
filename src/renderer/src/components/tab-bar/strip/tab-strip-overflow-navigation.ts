@@ -26,9 +26,11 @@ import {
 import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTabDragActive } from '../../tab-group/drag/tab-drag-context'
 import {
+  notifyTabStripListeners,
   revealFirstUnmountedTabStripSlot,
   useNotifyTabStripScrollAfterCommit,
-  useTabStripListeners
+  useTabStripCommitStartScroll,
+  useTabStripListenerSubscribe
 } from './tab-strip-window'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
@@ -78,8 +80,9 @@ export function useTabStripOverflowNavigation({
   const isTabDragActive = useTabDragActive()
   const tabStripRef = useRef<HTMLDivElement>(null)
   // Why first: this hook's effects below are the ones that scroll the strip.
-  const stripListeners = useTabStripListeners(tabStripRef)
-  const stripResizeListenersRef = stripListeners.listenersRef
+  const commitStartScrollRef = useTabStripCommitStartScroll(tabStripRef)
+  const stripResizeListenersRef = useRef<Set<() => void>>(new Set())
+  const subscribeToStripResize = useTabStripListenerSubscribe(stripResizeListenersRef)
   const prevStripRef = useRef<{ worktreeId: string; tabIds: ReadonlySet<string> } | null>(null)
   const stickToEndRef = useRef(false)
   const tabClosedThisCommitRef = useRef(false)
@@ -161,9 +164,7 @@ export function useTabStripOverflowNavigation({
         el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
       }
       recordScrollAnchor()
-      for (const listener of stripResizeListenersRef.current) {
-        listener()
-      }
+      notifyTabStripListeners(stripResizeListenersRef)
     }
 
     const disconnectResizeObservers = bindTabStripContentResizeObservers(el, handleStripResize)
@@ -172,7 +173,7 @@ export function useTabStripOverflowNavigation({
       el.removeEventListener('scroll', onScroll)
       disconnectResizeObservers()
     }
-  }, [recordScrollAnchor, stripResizeListenersRef, updateTabStripOverflowState])
+  }, [recordScrollAnchor, updateTabStripOverflowState])
 
   useEffect(() => {
     const el = tabStripRef.current
@@ -198,6 +199,8 @@ export function useTabStripOverflowNavigation({
       stickToEndRef.current = isTabStripScrolledToEnd(el)
       updateTabStripOverflowState()
       recordScrollAnchor()
+      // Why: this scroll happens outside a commit, so the commit-end notify can't see it.
+      notifyTabStripListeners(stripResizeListenersRef)
     }
     el.addEventListener('pointerleave', onPointerLeave)
     return () => el.removeEventListener('pointerleave', onPointerLeave)
@@ -318,13 +321,13 @@ export function useTabStripOverflowNavigation({
     tabClosedThisCommitRef.current = false
   })
   // Why last: it must follow every effect above that scrolls the strip.
-  useNotifyTabStripScrollAfterCommit(tabStripRef, stripListeners)
+  useNotifyTabStripScrollAfterCommit(tabStripRef, stripResizeListenersRef, commitStartScrollRef)
 
   return {
     tabStripRef,
     tabStripOverflowState,
     activeTabDockSide,
     scrollTabStrip,
-    subscribeToStripResize: stripListeners.subscribe
+    subscribeToStripResize
   }
 }

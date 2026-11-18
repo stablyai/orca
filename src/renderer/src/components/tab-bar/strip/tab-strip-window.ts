@@ -144,42 +144,49 @@ export function useTabStripWindowState(
   return state
 }
 
-export type TabStripListeners = {
-  listenersRef: RefObject<Set<() => void>>
-  /** The strip's offset before this commit's own scrolling effects. */
-  commitStartScrollRef: RefObject<number | null>
-  subscribe: (listener: () => void) => () => void
+export function notifyTabStripListeners(listenersRef: RefObject<Set<() => void>>): void {
+  for (const listener of listenersRef.current) {
+    listener()
+  }
 }
 
-/** Call before the strip owner's scrolling effects; listeners hear resizes and scrolls a commit made. */
-export function useTabStripListeners(stripRef: RefObject<HTMLElement | null>): TabStripListeners {
-  const listenersRef = useRef<Set<() => void>>(new Set())
-  const commitStartScrollRef = useRef<number | null>(null)
+/** Call before the strip owner's scrolling effects: the strip's offset before this commit's own scrolls. */
+export function useTabStripCommitStartScroll(
+  stripRef: RefObject<HTMLElement | null>
+): RefObject<number | null> {
+  const startRef = useRef<number | null>(null)
   useLayoutEffect(() => {
-    commitStartScrollRef.current = stripRef.current?.scrollLeft ?? null
+    startRef.current = stripRef.current?.scrollLeft ?? null
   })
-  // Why share these observers: each one watches every tab, so a second set doubles that work.
-  const subscribe = useCallback((listener: () => void): (() => void) => {
-    listenersRef.current.add(listener)
-    return () => {
-      listenersRef.current.delete(listener)
-    }
-  }, [])
-  return { listenersRef, commitStartScrollRef, subscribe }
+  return startRef
+}
+
+/** Subscribe to the strip's shared resize observers: each one watches every tab, so a second set doubles that work. */
+export function useTabStripListenerSubscribe(
+  listenersRef: RefObject<Set<() => void>>
+): (listener: () => void) => () => void {
+  return useCallback(
+    (listener: () => void): (() => void) => {
+      listenersRef.current.add(listener)
+      return () => {
+        listenersRef.current.delete(listener)
+      }
+    },
+    [listenersRef]
+  )
 }
 
 /** Call last: re-notify strip listeners when this commit's effects scrolled the strip, since child listeners ran first. */
 export function useNotifyTabStripScrollAfterCommit(
   stripRef: RefObject<HTMLElement | null>,
-  { listenersRef, commitStartScrollRef }: TabStripListeners
+  listenersRef: RefObject<Set<() => void>>,
+  startRef: RefObject<number | null>
 ): void {
   useLayoutEffect(() => {
     const strip = stripRef.current
-    const start = commitStartScrollRef.current
+    const start = startRef.current
     if (strip && start !== null && strip.scrollLeft !== start) {
-      for (const listener of listenersRef.current) {
-        listener()
-      }
+      notifyTabStripListeners(listenersRef)
     }
   })
 }
