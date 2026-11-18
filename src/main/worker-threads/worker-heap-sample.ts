@@ -35,7 +35,9 @@ export async function readWorkerHeap(
     ])
     return { bytes: stats.total_heap_size, estimated: false }
   } catch {
-    return { bytes: ledger ? ledger.heapUsedMB * MB : null, estimated: true }
+    // The ledger's heap field stays 0 until the worker's first send writes it.
+    const recorded = ledger && ledger.heapUsedMB > 0 ? ledger.heapUsedMB * MB : null
+    return { bytes: recorded, estimated: true }
   } finally {
     clearTimeout(timer)
   }

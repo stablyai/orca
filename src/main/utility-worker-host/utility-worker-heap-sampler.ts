@@ -69,13 +69,18 @@ export function sampleUtilityWorkerHeaps(
           ...(await readWorkerHeap(worker, ledger.get(worker.threadId)))
         }))
       )
+      // Readers that exited during the reads no longer count; ones that arrived get sampled soon.
+      const live = readings.filter((reading) => workers.has(reading.id))
       // After the worker reads, which can take seconds, so the host's figure is current.
       const report = {
         sampledAt: Date.now(),
         hostBytes: getHeapStatistics().total_heap_size,
-        workers: readings
+        workers: live
       }
-      if (utilityWorkerHeapTotal(report) >= WORKER_HEAP_PRESSURED_BYTES) {
+      if (
+        live.length < workers.size ||
+        utilityWorkerHeapTotal(report) >= WORKER_HEAP_PRESSURED_BYTES
+      ) {
         delayMs = WORKER_HEAP_PRESSURED_SAMPLE_INTERVAL_MS
       }
       if (utilityWorkerHeapReportChanged(last, report)) {
@@ -94,6 +99,15 @@ export function sampleUtilityWorkerHeaps(
       if (workers.size === 0) {
         clearTimeout(timer)
         timer = undefined
+        // An idle host can live 30 s more; its exit must not report readers that already left.
+        if (last && last.workers.length > 0) {
+          last = {
+            sampledAt: Date.now(),
+            hostBytes: getHeapStatistics().total_heap_size,
+            workers: []
+          }
+          post(last)
+        }
       } else if (!timer && !sampling) {
         // The first report comes soon, so a host that dies young still says what it held.
         schedule(WORKER_HEAP_PRESSURED_SAMPLE_INTERVAL_MS)

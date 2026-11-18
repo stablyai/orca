@@ -25,7 +25,9 @@ export function utilityWorkerHeapData(
     // Reports post only on change: later samples stayed within 64 MB of these figures.
     heapReportAgeS: Math.round((Date.now() - report.sampledAt) / 1000),
     hostHeapMB: Math.round(report.hostBytes / MB),
-    totalHeapMB: Math.round(utilityWorkerHeapTotal(report) / MB)
+    totalHeapMB: Math.round(utilityWorkerHeapTotal(report) / MB),
+    // The total covers the readers sampled then; some may have exited before this breadcrumb.
+    heapReportWorkers: report.workers.length
   }
   workers.forEach((worker, index) => {
     const heap = heaps.get(worker.id)
