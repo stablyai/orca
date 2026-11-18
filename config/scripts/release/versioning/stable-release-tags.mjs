@@ -1,4 +1,6 @@
 // Stable desktop release tags (vX.Y.Z); shared by the cross-version harness and the R1 protocol gate.
+import { isZotzReleaseTag } from './zotz-release-tags.mjs'
+
 export const STABLE_DESKTOP_RELEASE_TAG = /^v\d+\.\d+\.\d+$/
 
 export function compareReleaseTags(a, b) {
@@ -25,6 +27,7 @@ export function selectLatestStableReleaseTag(tags) {
   for (const tag of tags) {
     if (
       STABLE_DESKTOP_RELEASE_TAG.test(tag) &&
+      !isZotzReleaseTag(tag) &&
       (latest === null || compareReleaseTags(latest, tag) <= 0)
     ) {
       latest = tag
