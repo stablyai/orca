@@ -20375,6 +20375,24 @@
       "ssh": "SSH 호스트",
       "remoteNamed": "원격 Orca 호스트 · {{host}}",
       "remote": "원격 Orca 호스트"
+    },
+    "fleet": {
+      "view": {
+        "label": "대시보드 보기",
+        "board": "보드",
+        "fleet": "플릿"
+      },
+      "empty": "에이전트 없음",
+      "solo": {
+        "title": "독립 에이전트"
+      },
+      "summary": {
+        "agents": "에이전트",
+        "teams": "팀"
+      },
+      "team": {
+        "members_other": "에이전트 {{count}}개"
+      }
     }
   },
   "dashboard": {

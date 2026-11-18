@@ -31,6 +31,7 @@ import {
   workspaceStatusOptions
 } from './agent-dashboard-filter-options'
 import { AgentDashboardFilterChips } from './AgentDashboardFilterChips'
+import { AgentDashboardViewToggle, type AgentDashboardView } from './AgentDashboardViewToggle'
 import { FilterOptionCount } from './FilterOptionCount'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 
@@ -43,6 +44,8 @@ type AgentDashboardToolbarProps = {
   filters: DashboardFilters
   onFiltersChange: (filters: DashboardFilters) => void
   searchInputRef: React.RefObject<HTMLInputElement | null>
+  view: AgentDashboardView
+  onViewChange: (view: AgentDashboardView) => void
   /** Use a popover for range sliders; Radix menus consume their arrow keys. */
   filterControl?: React.ReactNode
 }
@@ -56,6 +59,8 @@ export function AgentDashboardToolbar({
   filters,
   onFiltersChange,
   searchInputRef,
+  view,
+  onViewChange,
   filterControl
 }: AgentDashboardToolbarProps): React.JSX.Element {
   const t = useTranslate()
@@ -216,6 +221,7 @@ export function AgentDashboardToolbar({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+        <AgentDashboardViewToggle view={view} onViewChange={onViewChange} />
       </div>
       {!filterControl && activeCount > 0 ? (
         <AgentDashboardFilterChips

@@ -20794,6 +20794,24 @@
       "ssh": "SSH 主機",
       "remoteNamed": "遠端 Orca 主機 · {{host}}",
       "remote": "遠端 Orca 主機"
+    },
+    "fleet": {
+      "view": {
+        "label": "看板檢視",
+        "board": "看板",
+        "fleet": "艦隊"
+      },
+      "empty": "沒有代理程式",
+      "solo": {
+        "title": "獨立代理程式"
+      },
+      "summary": {
+        "agents": "代理程式",
+        "teams": "團隊"
+      },
+      "team": {
+        "members_other": "{{count}} 個代理程式"
+      }
     }
   },
   "dashboard": {

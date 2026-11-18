@@ -20961,6 +20961,26 @@
       "sshNamed": "Host SSH · {{host}}",
       "remoteNamed": "Host remoto de Orca · {{host}}",
       "remote": "Host remoto de Orca"
+    },
+    "fleet": {
+      "view": {
+        "label": "Vista del panel",
+        "board": "Tablero",
+        "fleet": "Flota"
+      },
+      "empty": "Ningún agente",
+      "solo": {
+        "title": "Agentes independientes"
+      },
+      "summary": {
+        "agents": "Agentes",
+        "teams": "Equipos"
+      },
+      "team": {
+        "members_one": "{{count}} agente",
+        "members_many": "{{count}} agentes",
+        "members_other": "{{count}} agentes"
+      }
     }
   },
   "dashboard": {

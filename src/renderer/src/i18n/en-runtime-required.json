@@ -2692,6 +2692,12 @@
     "card": {
       "subagents_one": "{{count}} subagent",
       "subagents_other": "{{count}} subagents"
+    },
+    "fleet": {
+      "team": {
+        "members_one": "{{count}} agent",
+        "members_other": "{{count}} agents"
+      }
     }
   },
   "editor": {

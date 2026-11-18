@@ -21114,6 +21114,25 @@
       "ssh": "SSH-Host",
       "remoteNamed": "Entfernter Orca-Host · {{host}}",
       "remote": "Entfernter Orca-Host"
+    },
+    "fleet": {
+      "view": {
+        "label": "Dashboard-Ansicht",
+        "board": "Board",
+        "fleet": "Flotte"
+      },
+      "empty": "Keine Agenten",
+      "solo": {
+        "title": "Unabhängige Agenten"
+      },
+      "summary": {
+        "agents": "Agenten",
+        "teams": "Teams"
+      },
+      "team": {
+        "members_one": "{{count}} Agent",
+        "members_other": "{{count}} Agenten"
+      }
     }
   },
   "dashboard": {

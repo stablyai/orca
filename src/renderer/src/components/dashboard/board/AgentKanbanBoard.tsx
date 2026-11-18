@@ -13,6 +13,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { AgentKanbanLaneCardList } from './AgentKanbanLaneCardList'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
+import type { AgentDashboardView } from './AgentDashboardViewToggle'
+import { AgentFleetView } from '../fleet/AgentFleetView'
 import { AgentTerminalDialog } from '../terminal-preview/AgentTerminalDialog'
 import {
   EMPTY_DASHBOARD_FILTERS,
@@ -146,6 +148,7 @@ export function AgentKanbanBoard({
   const [query, setQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_DASHBOARD_FILTERS)
+  const [view, setView] = useState<AgentDashboardView>('board')
   const filteredCards = useMemo(
     () => filterDashboardCards(visibleCards, query, filters),
     [visibleCards, filters, query]
@@ -270,23 +273,37 @@ export function AgentKanbanBoard({
           filters={filters}
           onFiltersChange={setFilters}
           searchInputRef={searchInputRef}
+          view={view}
+          onViewChange={setView}
         />
-        <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
-          {/* Auto margins center the capped board and collapse during horizontal overflow. */}
-          <div className="mx-auto flex w-full max-w-[1280px] gap-3">
-            {visibleBuckets.map((bucket) => (
-              <KanbanColumn
-                key={bucket}
-                bucket={bucket}
-                cards={grouped[bucket]}
-                repoIconsByRepoId={snapshot.repoIconsByRepoId}
-                now={now}
-                dialogPaneKey={openedCard?.paneKey ?? null}
-                onOpenTerminal={handleOpenTerminal}
-              />
-            ))}
+        {view === 'board' ? (
+          <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
+            {/* Auto margins center the capped board and collapse during horizontal overflow. */}
+            <div className="mx-auto flex w-full max-w-[1280px] gap-3">
+              {visibleBuckets.map((bucket) => (
+                <KanbanColumn
+                  key={bucket}
+                  bucket={bucket}
+                  cards={grouped[bucket]}
+                  repoIconsByRepoId={snapshot.repoIconsByRepoId}
+                  now={now}
+                  dialogPaneKey={openedCard?.paneKey ?? null}
+                  onOpenTerminal={handleOpenTerminal}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto p-3">
+            <AgentFleetView
+              cards={filteredCards}
+              buckets={visibleBuckets}
+              now={now}
+              onOpenCard={handleOpenTerminal}
+              className="mx-auto w-full max-w-[1280px]"
+            />
+          </div>
+        )}
         <AgentTerminalDialog
           card={dialogCard}
           onOpenChange={handleDialogOpenChange}

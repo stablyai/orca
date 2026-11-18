@@ -22147,6 +22147,24 @@
       "ssh": "SSH 主机",
       "remoteNamed": "远程 Orca 主机 · {{host}}",
       "remote": "远程 Orca 主机"
+    },
+    "fleet": {
+      "view": {
+        "label": "仪表盘视图",
+        "board": "看板",
+        "fleet": "舰队"
+      },
+      "empty": "没有代理",
+      "solo": {
+        "title": "独立代理"
+      },
+      "summary": {
+        "agents": "代理",
+        "teams": "团队"
+      },
+      "team": {
+        "members_other": "{{count}} 个代理"
+      }
     }
   },
   "dashboard": {
