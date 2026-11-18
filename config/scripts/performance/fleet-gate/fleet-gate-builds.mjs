@@ -91,6 +91,9 @@ export function ensureBuild(repoRoot, sha) {
   return dir
 }
 
+// Gate runs on one machine share the cache; never delete what a run started within this window may still use.
+const IN_USE_MS = 6 * 60 * 60 * 1000
+
 export function pruneCache(parentDir, markerName, keepCount, keep) {
   const entries = fs
     .readdirSync(parentDir, { withFileTypes: true })
@@ -98,11 +101,14 @@ export function pruneCache(parentDir, markerName, keepCount, keep) {
     .map((entry) => path.join(parentDir, entry.name))
     .map((dir) => ({
       dir,
-      mtime: fs.statSync(path.join(dir, markerName), { throwIfNoEntry: false })?.mtimeMs ?? 0
+      mtime: Math.max(
+        fs.statSync(path.join(dir, markerName), { throwIfNoEntry: false })?.mtimeMs ?? 0,
+        fs.statSync(dir).mtimeMs
+      )
     }))
     .sort((a, b) => b.mtime - a.mtime)
-  for (const { dir } of entries.slice(keepCount)) {
-    if (!keep.has(dir)) {
+  for (const { dir, mtime } of entries.slice(keepCount)) {
+    if (!keep.has(dir) && Date.now() - mtime > IN_USE_MS) {
       fs.rmSync(dir, { recursive: true, force: true })
     }
   }

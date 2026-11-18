@@ -229,9 +229,9 @@ async function dismissOverlays(page) {
   }
 }
 
-async function switchWorkspaces({ page, windowMs }) {
-  await dismissOverlays(page)
-  const pair = await page.evaluate(() => {
+// Two workspace cards whose centres a tip or notice doesn't cover: the click must land on the card itself.
+function uncoveredCardPair(page) {
+  return page.evaluate(() => {
     const active = window.__store.getState().activeWorktreeId
     const ids = []
     for (const card of document.querySelectorAll('[data-worktree-id]')) {
@@ -240,7 +240,6 @@ async function switchWorkspaces({ page, windowMs }) {
       if (id && id !== active && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight) {
         const surface = card.querySelector('[data-worktree-card-surface]')
         const box = surface?.getBoundingClientRect()
-        // Skip cards a tip or notice covers: the click must land on the card itself.
         const hit = box
           ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
           : null
@@ -251,6 +250,11 @@ async function switchWorkspaces({ page, windowMs }) {
     }
     return ids.slice(0, 2)
   })
+}
+
+async function switchWorkspaces({ page, windowMs }) {
+  await dismissOverlays(page)
+  let pair = await uncoveredCardPair(page)
   if (pair.length < 2) {
     return { note: 'fewer than two visible workspace cards', undriven: 'no two clickable cards' }
   }
@@ -289,6 +293,9 @@ async function switchWorkspaces({ page, windowMs }) {
     }
     if (!landed) {
       missed += 1
+      // A tip can open over the chosen cards mid-window (e.g. the setup-command tip); move to cards it leaves clear.
+      const fresh = await uncoveredCardPair(page)
+      pair = fresh.length === 2 ? fresh : pair
     }
     switches += 1
     // One click per tick, so a slow click doesn't shrink the workload unnoticed.
