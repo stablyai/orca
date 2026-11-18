@@ -217,9 +217,9 @@ export function constrainSavedHistoryItem(
   if (
     item.type === 'fileChange' &&
     cut &&
-    // Only a saved diff keeps the paths its changes named.
+    // Only a completed change is projected as the saved diff, which keeps its paths.
     body.kind === 'diff' &&
-    codexItemRunState(item) !== 'running' &&
+    codexItemRunState(item) === 'completed' &&
     isCutJournalOutputOf(cut, codexFileChangePatch(item))
   ) {
     // The row holds this patch whole: drop the source copy so the saved cut is borrowed.
