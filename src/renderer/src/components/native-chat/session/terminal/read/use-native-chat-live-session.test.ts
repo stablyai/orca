@@ -363,20 +363,32 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.hasMore).toBe(false)
   })
 
-  it('keeps the full reread on routes that do not page by cursor', async () => {
-    const transport = getMockTransport('env-1')
+  it('rereads when appends evict the live overlap while a cursor page is in flight', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
     const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
     const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
     await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    let resolvePage: (result: unknown) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolvePage = resolve))
+    )
+    let pending: Promise<unknown> | undefined
+    await act(async () => {
+      pending = latest?.loadEarlier()
+    })
+    const live = Array.from({ length: 301 }, (_unused, n) => at(`live-${n}`, 5000 + n))
+    await act(async () => transport.emit({ type: 'appended', messages: live }))
 
     await act(async () => {
-      await latest?.loadEarlier()
+      resolvePage({ messages: [at('older-0', 10)], hasMore: false })
+      await pending
     })
 
     expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 500, undefined, {
       wakeWslDistro: true
     })
+    expect(latest?.messages.map((m) => m.id)).not.toContain('older-0')
   })
 
   it('repairs a live-tail gap with a full reread, then resumes cursor paging', async () => {

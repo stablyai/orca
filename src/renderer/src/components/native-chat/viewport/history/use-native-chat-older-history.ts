@@ -123,7 +123,7 @@ export function useNativeChatOlderHistory({
           ...USER_PAGING,
           beforeOffset: before
         })
-        .then((result): NativeChatOlderPageResult => {
+        .then((result): Promise<NativeChatOlderPageResult> | NativeChatOlderPageResult => {
           if (!isCurrent()) {
             return 'superseded'
           }
@@ -137,6 +137,10 @@ export function useNativeChatOlderHistory({
           ) {
             return 'superseded'
           }
+          // Appends during the read can evict the live tail's overlap; only a full reread fills that gap.
+          if (!nativeChatLiveTailJoinsBase(agent, held.messages, liveTailRef.current.list)) {
+            return reread()
+          }
           const page = result.messages
           // Keep every source row; the assembler resolves shared ids exactly as a full reread would.
           // A rewrite racing this page is corrected by the replacement frame that follows it.
@@ -148,10 +152,12 @@ export function useNativeChatOlderHistory({
           return page.length > 0 ? 'applied' : more ? 'unchanged' : 'exhausted'
         })
 
+    const heldAtRequest = heldRef.current
     const cursor =
       transport.pagesByCursor &&
-      nativeChatLiveTailJoinsBase(agent, read.messages, liveTailRef.current.list)
-        ? nativeChatHistoryCursor(agent, read.messages[0])
+      heldAtRequest.phase === 'ready' &&
+      nativeChatLiveTailJoinsBase(agent, heldAtRequest.messages, liveTailRef.current.list)
+        ? nativeChatHistoryCursor(agent, heldAtRequest.messages[0])
         : undefined
 
     setLoadingEarlier(true)
