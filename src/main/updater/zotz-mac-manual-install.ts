@@ -1,4 +1,3 @@
-import { runProcess } from '@orca/process-host'
 import { ZOTZ_RELEASES_URL } from '../../shared/zotz/zotz-app-identity'
 
 declare global {
@@ -35,6 +34,9 @@ export async function probeZotzMacSigningIdentity(): Promise<void> {
     return
   }
   try {
+    // Loaded here, not at module scope: this file sits on the updater's import path, and an
+    // eager import replaces the process host that other suites mock.
+    const { runProcess } = await import('@orca/process-host')
     const result = await runProcess({
       program: '/usr/bin/codesign',
       args: ['-dvv', process.execPath],
