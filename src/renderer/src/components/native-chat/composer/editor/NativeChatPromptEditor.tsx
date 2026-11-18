@@ -36,6 +36,7 @@ import type {
   NativeChatComposerInput,
   NativeChatPromptEditorProps
 } from './native-chat-composer-input'
+import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
 import { NativeChatHardBreakParagraphs } from './native-chat-hard-break-paragraphs'
@@ -44,6 +45,7 @@ import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
 import { useNativeChatPromptEditorHandle } from '../../native-chat-prompt-editor-handle'
 import { useAppStore } from '@/store'
 
+const NO_IMAGES: readonly string[] = []
 const NOT_COMPOSING = (): boolean => false
 
 // `initialValue` only seeds the editor at mount; keep the other props referentially stable or this memo stops helping.
@@ -56,7 +58,7 @@ export const NativeChatPromptEditor = memo(
 function NativePromptEditor({
   scopeKey,
   positionTarget,
-  imageRow: _imageRow,
+  imageRow,
   inputRef,
   isComposing = NOT_COMPOSING,
   initialValue,
@@ -67,9 +69,11 @@ function NativePromptEditor({
   className,
   ...events
 }: NativeChatPromptEditorProps): React.JSX.Element {
+  // Only an editor given its image row holds image chips; chat keeps images in its tray.
+  const imageChips = imageRow !== undefined
   const adopted = useRef(readNativeChatDraftSnapshot(scopeKey, initialValue))
   const [initialContent] = useState(() =>
-    openingPromptContent(adopted.current?.document, initialValue)
+    openingPromptContent(adopted.current?.document, initialValue, imageChips)
   )
   const spellcheck = useAppStore((s) => s.settings?.nativeChatComposerSpellcheck !== false)
   const claimSelection = () => {
@@ -100,7 +104,9 @@ function NativePromptEditor({
         trailingNode: false
       }),
       NativeChatAgentReference,
-      ...nativeChatPromptPills.filter((pill) => pill.name !== NativeChatImageReference.name),
+      ...nativeChatPromptPills.filter(
+        (pill) => imageChips || pill.name !== NativeChatImageReference.name
+      ),
       NativeChatUnkernedRunDecorations,
       NativeChatHardBreakParagraphs,
       // A disabled box still says why it is disabled, as the plain text box's placeholder does.
@@ -135,7 +141,7 @@ function NativePromptEditor({
         if (text == null) {
           return false
         }
-        const content = editor?.schema.nodeFromJSON(promptTextContent(text))
+        const content = editor?.schema.nodeFromJSON(promptTextContent(text, imageChips))
         if (!content) {
           return false
         }
@@ -248,7 +254,7 @@ function NativePromptEditor({
         ? {
             insertAgentReferences: (references) => insertAgentReferences(editor, references),
             insertText: (text) => {
-              const content = editor.schema.nodeFromJSON(promptTextContent(text))
+              const content = editor.schema.nodeFromJSON(promptTextContent(text, imageChips))
               editor.view.dispatch(
                 editor.state.tr.replaceSelection(new Slice(content.content, 1, 1))
               )
@@ -270,7 +276,9 @@ function NativePromptEditor({
               adopted.current = readNativeChatDraftSnapshot(scopeKey, value)
               const stored = adopted.current?.document
               if (stored || !value) {
-                editor.commands.setContent(openingPromptContent(stored, ''), { emitUpdate: false })
+                editor.commands.setContent(openingPromptContent(stored, '', imageChips), {
+                  emitUpdate: false
+                })
                 applyPosition(previousRange)
                 return
               }
@@ -292,7 +300,7 @@ function NativePromptEditor({
               start = promptTextOffset(doc, from)
               end = old.length - promptTextOffset(doc, to)
               const content = editor.schema.nodeFromJSON(
-                promptTextContent(value.slice(start, value.length - end))
+                promptTextContent(value.slice(start, value.length - end), imageChips)
               )
               editor.commands.command(({ tr }) => {
                 tr.replaceRange(from, to, new Slice(content.content, 1, 1))
@@ -357,6 +365,24 @@ function NativePromptEditor({
               editor.view.dispatch(closeHistory(editor.state.tr))
             },
             insertMention: (from, to, token) => insertPromptMention(editor, from, to, token),
+            removeImageReferences: (attachmentId) => {
+              const { tr } = editor.state
+              editor.state.doc.descendants((node, position) => {
+                if (
+                  node.type.name === NativeChatImageReference.name &&
+                  node.attrs.attachmentId === attachmentId
+                ) {
+                  // With the space inserted after it, so no gap is left where it sat.
+                  const from = tr.mapping.map(position)
+                  const to = from + node.nodeSize
+                  tr.delete(from, tr.doc.textBetween(to, to + 1) === ' ' ? to + 1 : to)
+                }
+              })
+              // Undo must not bring back a chip whose image is gone.
+              if (tr.docChanged) {
+                editor.view.dispatch(tr.setMeta('addToHistory', false))
+              }
+            },
             stagePastedText: (token) => {
               const pill = { type: NativeChatFileReference.name, attrs: { token } }
               editor.view.dispatch(closeHistory(editor.state.tr))
@@ -373,20 +399,22 @@ function NativePromptEditor({
             }
           }
         : null,
-    [editor, scopeKey, applyPosition]
+    [editor, scopeKey, applyPosition, imageChips]
   )
   useNativeChatPromptEditorHandle(inputRef, editor, input)
   useNativeChatComposerMount(scopeKey ?? '', input, isComposing, disabled)
 
   return (
     <NativeChatPastedTextScopeProvider value={scopeKey ?? ''}>
-      <EditorContent
-        editor={editor}
-        {...events}
-        onCompositionStartCapture={claimSelection}
-        data-disabled={disabled || undefined}
-        className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-      />
+      <NativeChatImageRowProvider value={imageRow ?? NO_IMAGES}>
+        <EditorContent
+          editor={editor}
+          {...events}
+          onCompositionStartCapture={claimSelection}
+          data-disabled={disabled || undefined}
+          className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+        />
+      </NativeChatImageRowProvider>
     </NativeChatPastedTextScopeProvider>
   )
 }

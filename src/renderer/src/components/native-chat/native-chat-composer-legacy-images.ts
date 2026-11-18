@@ -1,6 +1,9 @@
 import type { JSONContent } from '@tiptap/react'
 import { splitImageReferences } from '../../../../shared/native-chat/attachments/native-chat-image-reference'
-import { IMAGE_REFERENCE_NODE } from './composer/editor/native-chat-prompt-document-text'
+import {
+  IMAGE_REFERENCE_NODE,
+  promptLeafString
+} from './composer/editor/native-chat-prompt-document-text'
 
 function textWithoutImageTokens(text: string): string {
   let afterImage = false
@@ -22,11 +25,8 @@ function cleanDocument(
   literal: boolean
 ): { node: JSONContent; text: string; changed: boolean } {
   if (!node.content) {
-    return {
-      node,
-      text: node.type === 'hardBreak' ? '\n' : (node.text ?? String(node.attrs?.token ?? '')),
-      changed: false
-    }
+    // The editor's own serialization: agent and bot pills carry no token attribute.
+    return { node, text: promptLeafString(node.type, node.attrs, node.text), changed: false }
   }
   let afterImage = false
   let changed = false
