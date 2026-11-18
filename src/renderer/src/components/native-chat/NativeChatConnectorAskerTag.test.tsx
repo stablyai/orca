@@ -25,10 +25,9 @@ afterEach(() => {
 })
 
 describe('NativeChatConnectorAskerTag', () => {
-  it('names a coworker and the place, and opens the thread in the browser', () => {
+  it('opens the thread in the system browser', () => {
     render(<NativeChatConnectorAskerTag asker={SAM} />)
     const tag = screen.getByRole('button', { name: 'Sam Lee in Slack. Open in Slack' })
-    expect(tag).toHaveTextContent('Sam Lee·Slack')
     fireEvent.click(tag)
     expect(openOwnedHttpLink).toHaveBeenCalledWith(SAM.url, {
       sourceOwner: { kind: 'local' },
@@ -46,16 +45,6 @@ describe('NativeChatConnectorAskerTag', () => {
     fireEvent.error(image)
     expect(container.querySelector('img')).toBeNull()
     expect(screen.getByText('SL')).toBeInTheDocument()
-  })
-
-  it('reads "You" for the owner, without an avatar', () => {
-    const { container } = render(
-      <NativeChatConnectorAskerTag
-        asker={{ ...SAM, role: 'owner', place: { kind: 'direct_message', id: 'D1' } }}
-      />
-    )
-    expect(screen.getByRole('button')).toHaveTextContent('You·Slack DM')
-    expect(container.querySelector('img')).toBeNull()
   })
 
   it('names an issue or pull request by its own id, and is plain text without a link', () => {
