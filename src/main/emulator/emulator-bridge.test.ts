@@ -108,7 +108,7 @@ describe('EmulatorBridge helper ownership', () => {
         await new Promise<void>((resolve) => {
           finish = resolve
         })
-        await shutdown?.()
+        await shutdown?.(() => {})
       })
     let expired = false
     try {
@@ -237,6 +237,55 @@ describe('EmulatorBridge helper ownership', () => {
       'emulator-5554',
       expect.objectContaining({ instanceId: 'owned-stream', requireInstanceId: true })
     )
+  })
+
+  it('preserves workspace owners when a stale census overlaps an Android replacement', async () => {
+    const bridge = new EmulatorBridge()
+    const android = bridge.listBackends().find((backend) => backend.kind === 'android')!
+    const old = {
+      deviceUdid: 'emulator-5554',
+      streamUrl: 'scrcpy://emulator-5554',
+      wsUrl: '',
+      backend: 'android' as const,
+      instanceId: 'old'
+    }
+    const replacement = { ...old, instanceId: 'new' }
+    bridge.registerActiveEmulator('wt-1', old, { managed: true })
+    bridge.registerActiveEmulator('wt-2', old, { managed: true })
+    let censusDone!: (ids: string[]) => void
+    let startDone!: (info: EmulatorSessionInfo) => void
+    vi.spyOn(android, 'listRunningDeviceIds').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          censusDone = resolve
+        })
+    )
+    vi.spyOn(android, 'startSession').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          startDone = resolve
+        })
+    )
+    vi.spyOn(android, 'ownedSessionInfo').mockReturnValue(replacement)
+    const stop = vi.spyOn(android, 'stopHelperForDevice').mockResolvedValue()
+    const census = bridge.hasLiveManagedSessions()
+    const starting = bridge.acquireHelperForDevice('emulator-5554')
+    await vi.waitFor(() => {
+      expect(censusDone).toBeDefined()
+      expect(startDone).toBeDefined()
+    })
+    censusDone([])
+    await census
+    expect(bridge.getActiveForWorktree('wt-2')?.instanceId).toBe('old')
+    startDone(replacement)
+    const lease = await starting
+    expect(bridge.registerActiveEmulator('wt-1', replacement, { managed: true })).toEqual([
+      'wt-1',
+      'wt-2'
+    ])
+    await lease.release()
+    expect(bridge.getActiveForWorktree('wt-2')?.instanceId).toBe('new')
+    expect(stop).not.toHaveBeenCalled()
   })
 
   it('rejects reuse when a delayed readiness probe observes a replaced workspace', async () => {
@@ -371,7 +420,9 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     const bridge = new EmulatorBridge()
     const info = session('device-1')
     vi.spyOn(bridge, 'acquireHelperForDevice').mockResolvedValue({ info, release: async () => {} })
-    vi.spyOn(bridge, 'isOwnedSessionReusable').mockResolvedValue(false)
+    vi.spyOn(bridge, 'isOwnedSessionReusable')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(),
@@ -382,6 +433,33 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     await expect(commands.emulatorAttach({ device: 'device-1' })).rejects.toMatchObject({
       code: 'emulator_attach_superseded'
     })
+  })
+
+  it('does not publish a dead scoped helper to shared owners', async () => {
+    const bridge = new EmulatorBridge()
+    const old = session('device-1')
+    bridge.registerActiveEmulator('wt-1', old, { managed: true })
+    bridge.registerActiveEmulator('wt-2', old, { managed: true })
+    vi.spyOn(bridge, 'getReusableActiveForWorktree').mockResolvedValue(null)
+    vi.spyOn(bridge, 'stopActiveForSwitch').mockResolvedValue(null)
+    vi.spyOn(bridge, 'acquireHelperForDevice').mockResolvedValue({
+      info: { ...old, helperPid: 4321 },
+      release: async () => {}
+    })
+    vi.spyOn(bridge, 'isOwnedSessionReusable').mockResolvedValue(false)
+    const send = vi.fn()
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
+      getAuthoritativeWindow: () => ({ webContents: { send } }) as never,
+      getSettings: () => ({ mobileEmulatorEnabled: true })
+    })
+    await expect(
+      commands.emulatorAttach({ device: 'device-1', worktree: 'wt-1' })
+    ).rejects.toMatchObject({ code: 'emulator_attach_superseded' })
+    expect(send).not.toHaveBeenCalled()
+    expect(bridge.getActiveForWorktree('wt-2')?.helperPid).toBe(1234)
   })
 
   it('reports when the requested iOS device differs from the active session', async () => {
@@ -427,7 +505,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     bridge.registerActiveEmulator('wt-1', old, { managed: true })
     bridge.registerActiveEmulator('wt-2', old, { managed: true })
     const ios = bridge.listBackends().find((backend) => backend.kind === 'ios')!
-    vi.spyOn(ios, 'isSessionReusable').mockResolvedValue(false)
+    vi.spyOn(ios, 'isSessionReusable').mockImplementation(async (info) => info.helperPid === 4321)
     vi.spyOn(ios, 'startSession').mockResolvedValue(replacement)
     const send = vi.fn()
     const commands = new RuntimeEmulatorCommands({
@@ -473,6 +551,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       info: replacement,
       release: async () => {}
     })
+    vi.spyOn(bridge, 'isOwnedSessionReusable').mockResolvedValue(true)
     const send = vi.fn()
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
@@ -512,6 +591,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
           finishRelease = resolve
         })
     })
+    vi.spyOn(bridge, 'isOwnedSessionReusable').mockResolvedValue(true)
     const send = vi.fn()
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
@@ -578,6 +658,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
         bridge.unregisterActiveEmulator('wt-1')
       }
     })
+    vi.spyOn(bridge, 'isOwnedSessionReusable').mockResolvedValue(true)
     const send = vi.fn()
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,

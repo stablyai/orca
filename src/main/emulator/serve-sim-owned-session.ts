@@ -9,8 +9,8 @@ import { EmulatorError } from './emulator-errors'
 import { SERVE_SIM_OWNED_SERVER } from './serve-sim-owned-server'
 import { simulatorOwnershipRoot, stopOwnedSimulatorChild } from './serve-sim-owned-process'
 import { ownedSimulatorStateRoot, stopOwnedSimulatorHelpers } from './serve-sim-owned-process'
+import { stopOwnedSimulatorSession } from './serve-sim-owned-process'
 import { ownsSimulatorSession, ownsSimulatorEndpoint } from './serve-sim-owned-process'
-import { SimulatorShutdownError } from './simctl-simulator-devices'
 import { getServeSimEnv, type ServeSimExecutable } from './serve-sim-execution'
 import type { EmulatorSessionInfo } from './emulator-types'
 
@@ -21,13 +21,18 @@ type OwnedSession = {
   lock: string
   stopping: boolean
   stopInProgress: boolean
+  uncertainShutdown: boolean
 }
 
 export class ServeSimOwnedSessions {
-  constructor(private readonly ownershipRoot: () => string = simulatorOwnershipRoot) {}
+  constructor(
+    private readonly ownershipRoot: () => string = simulatorOwnershipRoot,
+    private readonly stopChild: typeof stopOwnedSimulatorChild = stopOwnedSimulatorChild
+  ) {}
 
   private readonly sessions = new Map<string, OwnedSession>()
   private readonly starting = new Map<string, Promise<EmulatorSessionInfo>>()
+  private readonly retainedStarts = new Set<ChildProcess>()
 
   async start(
     udid: string,
@@ -178,7 +183,8 @@ export class ServeSimOwnedSessions {
         stateRoot,
         lock,
         stopping: false,
-        stopInProgress: false
+        stopInProgress: false,
+        uncertainShutdown: false
       }
       this.sessions.set(udid, session)
       child.once('exit', () => {
@@ -199,17 +205,24 @@ export class ServeSimOwnedSessions {
     } catch (error) {
       if (child && child.pid && child.exitCode === null && child.signalCode === null) {
         try {
-          await stopOwnedSimulatorChild(child)
+          await this.stopChild(child)
         } catch (stopError) {
           const root = stateRoot
-          child.once('exit', () => {
+          const retainedChild = child
+          this.retainedStarts.add(retainedChild)
+          const release = () => {
             try {
               if (root) {
                 rmSync(root, { recursive: true, force: true })
               }
               rmSync(lock, { recursive: true, force: true })
+              this.retainedStarts.delete(retainedChild)
             } catch {}
-          })
+          }
+          retainedChild.once('exit', release)
+          if (retainedChild.exitCode !== null || retainedChild.signalCode !== null) {
+            release()
+          }
           throw stopError
         }
       }
@@ -236,72 +249,28 @@ export class ServeSimOwnedSessions {
     return ownedSimulatorStateRoot(this.sessions.get(udid), udid)
   }
 
-  stopOwnedHelpers(): Promise<void> {
-    return stopOwnedSimulatorHelpers([...this.sessions.values()], this.stop.bind(this))
+  async stopOwnedHelpers(): Promise<void> {
+    await stopOwnedSimulatorHelpers([...this.sessions.values()], this.stop.bind(this))
+    if (this.retainedStarts.size) {
+      throw new Error('Unpublished simulator helper ownership retained; cleanup is incomplete.')
+    }
   }
 
-  async stop(
+  stop(
     udid: string,
     helperPid?: number,
-    shutdown?: () => Promise<void>,
+    shutdown?: (markIssued: () => void) => Promise<void>,
     releaseOnShutdownFailure = false,
     onHelperStopped?: () => void
   ): Promise<void> {
-    const session = this.sessions.get(udid)
-    if (!session) {
-      if (helperPid !== undefined && !shutdown) {
-        return
-      }
-      throw new EmulatorError('emulator_no_active', `No owned simulator helper for ${udid}.`)
-    }
-    if (helperPid !== undefined && session.info.helperPid !== helperPid) {
-      throw new EmulatorError(
-        'emulator_helper_failed',
-        `Simulator ${udid} helper changed before it could be stopped.`
-      )
-    }
-    if (session.stopInProgress) {
-      throw new EmulatorError('emulator_helper_failed', `Simulator ${udid} is already stopping.`)
-    }
-    session.stopping = true
-    session.stopInProgress = true
-    let stopped = false
-    let shutdownSettled = false
-    try {
-      await stopOwnedSimulatorChild(session.child)
-      stopped = true
-      onHelperStopped?.()
-      if (shutdown) {
-        try {
-          await shutdown()
-        } finally {
-          shutdownSettled = true
-        }
-      }
-      rmSync(session.stateRoot, { recursive: true, force: true })
-      rmSync(session.lock, { recursive: true, force: true })
-      if (this.sessions.get(udid) === session) {
-        this.sessions.delete(udid)
-      }
-    } catch (error) {
-      if (
-        releaseOnShutdownFailure &&
-        stopped &&
-        shutdownSettled &&
-        error instanceof SimulatorShutdownError &&
-        error.completed
-      ) {
-        rmSync(session.stateRoot, { recursive: true, force: true })
-        rmSync(session.lock, { recursive: true, force: true })
-        if (this.sessions.get(udid) === session) {
-          this.sessions.delete(udid)
-        }
-      } else if (session.child.exitCode === null && session.child.signalCode === null) {
-        session.stopping = false
-      }
-      throw error
-    } finally {
-      session.stopInProgress = false
-    }
+    return stopOwnedSimulatorSession(
+      this.sessions,
+      this.stopChild,
+      udid,
+      helperPid,
+      shutdown,
+      releaseOnShutdownFailure,
+      onHelperStopped
+    )
   }
 }

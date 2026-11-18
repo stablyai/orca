@@ -6,6 +6,7 @@ import { ServeSimOwnedSessions } from './serve-sim-owned-session'
 import { execServeSimCommand } from './serve-sim-execution'
 import { SimulatorShutdownError } from './simctl-simulator-devices'
 import { simulatorOwnershipRoot } from './serve-sim-owned-process'
+import type { ChildProcess } from 'node:child_process'
 
 const A = 'A0000000-0000-0000-0000-000000000001'
 const B = 'B0000000-0000-0000-0000-000000000002'
@@ -187,6 +188,33 @@ describe('owned iOS helper sessions', () => {
       await sessions.stop(A, afterTeardown.helperPid)
       await sessions.stopOwnedHelpers()
       expect(sessions.owns(second)).toBe(false)
+      const uncertain = await sessions.start(
+        A,
+        executable,
+        async () => {},
+        async () => true
+      )
+      await expect(
+        sessions.stop(
+          A,
+          uncertain.helperPid,
+          async (issued) => {
+            issued()
+            throw new SimulatorShutdownError('timeout', false)
+          },
+          true
+        )
+      ).rejects.toThrow('timeout')
+      await expect(sessions.stop(A, uncertain.helperPid)).rejects.toThrow('uncertain shutdown')
+      await expect(
+        foreign.start(
+          A,
+          executable,
+          async () => {},
+          async () => true
+        )
+      ).rejects.toThrow('claimed')
+      await expect(sessions.stopOwnedHelpers()).rejects.toThrow('cleanup is incomplete')
     } finally {
       if (first && sessions.owns(first)) {
         await sessions.stop(A, first.helperPid)
@@ -244,6 +272,49 @@ describe('owned iOS helper sessions', () => {
       )
       await sessions.stop(A, replacement.helperPid)
     } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reports an unpublished helper whose startup cleanup did not confirm exit', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-middleware-retained-'))
+    writeFileSync(
+      join(dir, 'middleware.js'),
+      `export function simMiddleware() { const handler = (_req, res) => res.end('ok'); handler.handleUpgrade = () => {}; return handler }`
+    )
+    writeFileSync(join(dir, 'package.json'), '{"type":"module"}')
+    let child: ChildProcess | undefined
+    const sessions = new ServeSimOwnedSessions(
+      () => join(dir, 'claims'),
+      async (value) => {
+        child = value
+        throw new Error('stop timed out')
+      }
+    )
+    const executable = {
+      command: process.execPath,
+      baseArgs: [join(dir, 'serve-sim.js')],
+      usesElectronAsNode: false
+    }
+    try {
+      await expect(
+        sessions.start(
+          A,
+          executable,
+          async () => {},
+          async () => false
+        )
+      ).rejects.toThrow('stop timed out')
+      await expect(sessions.stopOwnedHelpers()).rejects.toThrow('Unpublished simulator helper')
+      expect(child?.pid).toBeTruthy()
+      const exited = new Promise<void>((resolve) => child!.once('exit', () => resolve()))
+      child!.kill()
+      await exited
+      await expect(sessions.stopOwnedHelpers()).resolves.toBeUndefined()
+    } finally {
+      if (child && child.exitCode === null && child.signalCode === null) {
+        child.kill()
+      }
       rmSync(dir, { recursive: true, force: true })
     }
   })

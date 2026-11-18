@@ -195,11 +195,15 @@ function installWillQuitHandler(): void {
     browserManager.setBrowserGuestStateChangedListener(null)
     browserManager.setOffscreenTabOpener(null)
     const emulatorShutdownController = new AbortController()
-    const emulatorShutdown =
+    const emulatorShutdown = (
       state.runtime?.getEmulatorBridge()?.destroyAllSessions({
         deadline: performance.now() + WILL_QUIT_TEARDOWN_DEADLINE_MS,
         signal: emulatorShutdownController.signal
       }) ?? Promise.resolve()
+    ).catch((error) => {
+      console.error('[emulator] Shutdown incomplete; ownership may be retained:', error)
+      throw error
+    })
     const finalStore = state.store
     const beginSshShutdownAndFinalSave = (removalStopped: boolean) => {
       // Mark SSH leases detached synchronously immediately before final flush; no await may separate mutation from save.

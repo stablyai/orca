@@ -4,17 +4,38 @@ import { EmulatorError } from './emulator-errors'
 import type { EmulatorSessionRegistry } from './emulator-session-registry'
 import type { EmulatorStartLeaseRegistry } from './emulator-start-lease-registry'
 import type { EmulatorSessionInfo } from './emulator-types'
+import type { EmulatorSessionState } from './emulator-bridge-types'
 
 export function censusCleanup(
   registry: EmulatorSessionRegistry,
   leases: EmulatorStartLeaseRegistry,
   backendForKind: (kind: EmulatorBackendKind) => EmulatorBackend | null
-): (kind: EmulatorBackendKind, info: EmulatorSessionInfo) => void {
-  return (kind, info) => {
+): (kind: EmulatorBackendKind, session: EmulatorSessionState) => void {
+  return (kind, session) => {
     const backend = backendForKind(kind)
     if (backend) {
+      const info = registry.toSessionInfo(session)
       void leases
-        .cleanupWhenIdle(backend, info, (item) => !!registry.getSession(item.deviceUdid))
+        .cleanupWhenIdle(backend, info, () => false, {
+          force: true,
+          validate: () => {
+            if (registry.getSession(info.deviceUdid) !== session) {
+              throw new Error('The emulator changed during device census.')
+            }
+            if (kind === 'android') {
+              const owned = backend.ownedSessionInfo?.(info.deviceUdid)
+              if (owned && (!info.instanceId || owned.instanceId !== info.instanceId)) {
+                throw new Error('The Android emulator stream changed during device census.')
+              }
+              registry.clearIfUnchanged(info.deviceUdid, session)
+              if (!owned) {
+                throw new Error('The Android emulator stream is already gone.')
+              }
+              return
+            }
+            registry.clearIfUnchanged(info.deviceUdid, session)
+          }
+        })
         .catch(() => {})
     }
   }
@@ -200,7 +221,7 @@ export async function stopWorkspaceSession(
     throw error
   }
   if (!registry.hasActiveWorktreeForSession(key)) {
-    registry.clearSessionAndWorktrees(key)
+    registry.clearIfUnchanged(key, session)
   }
   return session.deviceUdid
 }

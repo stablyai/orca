@@ -233,8 +233,9 @@ export class IosEmulatorBackend implements EmulatorBackend {
       deviceId,
       options.helperPid,
       options.shutdownDevice
-        ? () => {
+        ? (markIssued) => {
             options.assertShutdownAllowed?.()
+            markIssued()
             return this.shutdownDevice(deviceId)
           }
         : undefined,

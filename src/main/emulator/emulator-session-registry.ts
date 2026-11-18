@@ -131,7 +131,7 @@ export class EmulatorSessionRegistry {
   async listLiveActive(
     worktreeId: string | undefined,
     backendForKind: CensusBackendForKind,
-    cleanup?: (kind: EmulatorBackendKind, info: EmulatorSessionInfo) => void
+    cleanup?: (kind: EmulatorBackendKind, session: EmulatorSessionState) => void
   ): Promise<EmulatorActiveSession[]> {
     await this.pruneGoneManagedSessions(backendForKind, cleanup)
     const rows: EmulatorActiveSession[] = []
@@ -170,7 +170,7 @@ export class EmulatorSessionRegistry {
   /** Drop managed records whose device stopped outside Orca; true while any managed device still runs. */
   async pruneGoneManagedSessions(
     backendForKind: CensusBackendForKind,
-    cleanup?: (kind: EmulatorBackendKind, info: EmulatorSessionInfo) => void
+    cleanup?: (kind: EmulatorBackendKind, session: EmulatorSessionState) => void
   ): Promise<boolean> {
     const managed = this.listSessions().filter((session) => session.managed)
     let live = false
@@ -185,11 +185,12 @@ export class EmulatorSessionRegistry {
         if (running === null || replaced || running.includes(session.deviceUdid)) {
           live = live || this.sessions.has(session.deviceUdid)
         } else {
-          this.clearSessionAndWorktrees(session.deviceUdid)
           const info = toSessionInfo(session)
           if (cleanup) {
-            cleanup(kind, info)
+            cleanup(kind, session)
+            live = true
           } else {
+            this.clearSessionAndWorktrees(session.deviceUdid)
             void backend
               ?.stopHelperForDevice(session.deviceUdid, {
                 helperPid: info.helperPid,

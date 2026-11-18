@@ -154,6 +154,13 @@ export class RuntimeEmulatorAttach {
           throw new EmulatorError('emulator_no_active', emulatorFailureText('workspaceChanged'))
         }
         assertCurrent()
+        if (!(await bridge.isOwnedSessionReusable(info))) {
+          throw new EmulatorError(
+            'emulator_attach_superseded',
+            'The emulator changed before attachment completed.'
+          )
+        }
+        assertCurrent()
       } catch (error) {
         await lease.release({ cleanupIfUnused: true }).catch(() => {})
         if (error instanceof Error && error.message === 'selector_not_found') {
@@ -175,6 +182,13 @@ export class RuntimeEmulatorAttach {
       }
       await lease.release()
       assertCurrent()
+      if (!(await bridge.isOwnedSessionReusable(info))) {
+        throw new EmulatorError(
+          'emulator_attach_superseded',
+          'The emulator changed before attachment completed.'
+        )
+      }
+      assertCurrent()
       remember()
       if (worktreeId) {
         if (!bridge.isCurrentEmulatorOwner(worktreeId, info.deviceUdid, generation)) {
@@ -184,11 +198,6 @@ export class RuntimeEmulatorAttach {
           )
         }
         this.notify(worktreeId, info, params.focus)
-      } else if (!(await bridge.isOwnedSessionReusable(info))) {
-        throw new EmulatorError(
-          'emulator_attach_superseded',
-          'The emulator changed before attachment completed.'
-        )
       }
       assertCurrent()
       return { attached: true, info }
