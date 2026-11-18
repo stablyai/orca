@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  botGroupMissing,
-  botGroupNameSuggestion,
-  botGroupPickOrder,
-  botGroupUnchanged
-} from './bot-group-pick'
+import { botGroupMissing, botGroupPickOrder, botGroupUnchanged } from './bot-group-pick'
 
 describe('botGroupPickOrder', () => {
   it('keeps saved members where they were, then adds new picks in pick order', () => {
@@ -28,16 +23,5 @@ describe('botGroupUnchanged', () => {
     expect(botGroupUnchanged(saved, 'Crew ', ['a', 'b'])).toBe(true)
     expect(botGroupUnchanged(saved, 'Crew', ['a'])).toBe(false)
     expect(botGroupUnchanged(saved, 'Team', ['a', 'b'])).toBe(false)
-  })
-})
-
-describe('botGroupNameSuggestion', () => {
-  it('names two, three, then two and a count', () => {
-    expect(botGroupNameSuggestion(['Fern'])).toBeNull()
-    expect(botGroupNameSuggestion(['Fern', 'Moss'])?.values).toEqual({ a: 'Fern', b: 'Moss' })
-    expect(botGroupNameSuggestion(['Fern', 'Moss', 'Ivy', 'Sage'])).toMatchObject({
-      key: 'suggestMore',
-      values: { count: 2 }
-    })
   })
 })
