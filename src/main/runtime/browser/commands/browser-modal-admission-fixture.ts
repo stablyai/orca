@@ -70,6 +70,7 @@ export function createModalAdmissionFixture(
       getTitle: () => 'Modal',
       isDestroyed: () => destroyed,
       isLoading: () => loading,
+      isLoadingMainFrame: () => loading,
       isDevToolsOpened: () => false,
       debugger: Object.assign(new EventEmitter(), { isAttached: () => false }),
       loadURL: load,

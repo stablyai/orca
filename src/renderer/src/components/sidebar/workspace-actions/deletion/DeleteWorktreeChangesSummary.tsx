@@ -9,10 +9,7 @@ import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-la
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
-import {
-  DeleteWorktreeLocalFilesDetails,
-  DeleteWorktreeLocalFilesHint
-} from './DeleteWorktreeLocalFilesHint'
+import { DeleteWorktreeLocalFilesDetails } from './DeleteWorktreeLocalFilesHint'
 import { DeleteWorktreeRelativePath } from './delete-worktree-relative-path'
 import type {
   DeleteWorktreeChangeCheckState,
@@ -98,12 +95,13 @@ export function DeleteWorktreeChangesSummary({
     t,
     (atRiskLocalFiles?.count ?? 0) > 0
   )
+  const changesChecking = changeCount === undefined && checkState === 'checking'
   const status =
-    changeCount !== undefined || !checkState || checkState === 'complete'
-      ? null
-      : checkState === 'unavailable'
+    changesChecking || localFilesState?.status === 'checking'
+      ? t('components.workspace.delete.changes.checking', 'Checking for changes…')
+      : changeCount === undefined && checkState === 'unavailable'
         ? t('components.workspace.delete.changes.unavailable', 'Changes could not be checked')
-        : t('components.workspace.delete.changes.checking', 'Checking for changes…')
+        : null
   const ignoredNames =
     atRiskLocalFiles && (atRiskLocalFiles.count > 0 || !atRiskLocalFiles.complete)
       ? formatAtRiskLocalFileNames(atRiskLocalFiles, t)
@@ -127,19 +125,21 @@ export function DeleteWorktreeChangesSummary({
   const hasIgnoredPaths =
     (atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []).length > 0
   const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || hasIgnoredPaths
-  if (!loss && !status && !localFilesState) {
+  const ignoredUnchecked = localFilesState?.status === 'unsupported'
+  if (!loss && !status && !ignoredUnchecked && !ignoredNote && !hasDetails) {
     return null
   }
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {loss ? <DialogWarning>{loss}</DialogWarning> : null}
-      {status ? <p className="text-[12.5px] text-muted-foreground">{status}</p> : null}
-      {localFilesState &&
-      (!atRiskLocalFiles || (atRiskLocalFiles.complete && atRiskLocalFiles.count === 0)) ? (
-        <DeleteWorktreeLocalFilesHint state={localFilesState} />
+      {status ? <p className="text-[13px] text-muted-foreground">{status}</p> : null}
+      {ignoredUnchecked ? (
+        <p className="text-[13px] text-muted-foreground">
+          {t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')}
+        </p>
       ) : null}
       {!hasDetails && ignoredNote ? (
-        <p className="text-settings-detail text-muted-foreground">{ignoredNote}</p>
+        <p className="text-[13px] text-muted-foreground">{ignoredNote}</p>
       ) : null}
       {hasDetails ? (
         <DialogDisclosure label={t('worktree.delete.showChanges', 'Show changes')} variant="code">

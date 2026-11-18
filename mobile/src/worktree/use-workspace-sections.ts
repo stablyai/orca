@@ -7,10 +7,10 @@ import type {
   WorkspaceSortBy
 } from '../../../src/shared/workspace-view/workspace-view-options'
 import {
-  buildSectionRepoMap,
   buildMobileWorkspacePlan,
   type ProjectSectionCatalog
 } from './workspace-list/workspace-list-sections'
+import { buildSectionRepoMap } from './workspace-list/section-repo-map'
 import type {
   FilterState,
   Section,

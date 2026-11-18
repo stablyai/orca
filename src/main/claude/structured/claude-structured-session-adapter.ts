@@ -51,6 +51,7 @@ import { claudePromptCancelRoute } from './journal/claude-structured-prompt-repl
 import { claudeForkForRewind } from '../transcripts/claude-rewind-fork'
 import { copyClaudeConversation } from '../transcripts/claude-conversation-copy'
 import { ClaudeConversationNaming } from '../conversation-naming/claude-conversation-naming'
+import { syncClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, ClaudeSession>()
@@ -60,6 +61,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   private readonly endings = new AgentSessionStartEndings()
   private readonly exitLifecycle: ClaudeExitLifecycle
   private readonly naming: ClaudeConversationNaming | undefined
+  /** Sessions a reader shows prompt suggestions for; a process for any other is paused. */
+  private readonly suggestionReaders = new Set<string>()
 
   constructor(private readonly deps: ClaudeStructuredSessionAdapterDeps) {
     const { namingInputs: snapshot, requestTimeoutMs: timeoutMs } = deps
@@ -122,6 +125,18 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       naming?.failed()
       throw claudeAcquireFailure(error)
     })
+  }
+
+  promptSuggestionInterestChanged(sessionId: string, wanted: boolean): void {
+    if (wanted) {
+      this.suggestionReaders.add(sessionId)
+    } else {
+      this.suggestionReaders.delete(sessionId)
+    }
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      syncClaudePromptSuggestionPause(session, wanted)
+    }
   }
 
   /** Await exit publication after cleanup/cursor writes; unproven exits stay indexed for retry. */
@@ -230,7 +245,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       exits: this.exits,
       endings: this.endings,
       deps: this.deps,
-      emit: (session, event) => this.emit(session, event)
+      emit: (session, event) => this.emit(session, event),
+      promptSuggestionsWanted: (sessionId) => this.suggestionReaders.has(sessionId)
     })
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId))

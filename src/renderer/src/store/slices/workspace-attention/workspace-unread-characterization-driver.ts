@@ -1,6 +1,6 @@
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
-import { acknowledgeViewedAutoAckTarget } from '@/hooks/agent-auto-ack-surfaces'
+import { acknowledgeViewedAutoAckTarget } from '@/attention/agent-auto-ack-surfaces'
 import {
   screenOf,
   type AttentionStore,

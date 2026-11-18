@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { blocksCodexPaneInput } from '../../../codex-restart-notice-state'
+import { blocksCodexPaneInput } from '../../account-restart/codex-restart-notice-state'
 
 let codexRestartNoticePresenceSource: Record<
   string,

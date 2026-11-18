@@ -5,7 +5,7 @@ import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { getPtyIdForPaneKey } from '@/hooks/pane-key-pty-id'
+import { getPtyIdForPaneKey } from '@/lib/pane-manager/pane-layout/pane-key-pty-id'
 import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import { mainAgentDoneAt } from '../../../../../../shared/agent-status/lifecycle/main-agent-status'
 import {

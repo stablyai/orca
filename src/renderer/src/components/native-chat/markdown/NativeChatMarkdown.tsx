@@ -11,9 +11,9 @@ import {
 } from 'react'
 import CommentMarkdown, {
   type CommentMarkdownExtension
-} from '@/components/sidebar/CommentMarkdown'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/comment-markdown-element-renderers'
-import { createDocumentCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
+} from '@/components/comment-markdown/CommentMarkdown'
+import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
+import { createDocumentCommentMarkdownComponents } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { cn } from '@/lib/class-names'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { NativeChatMarkdownRowKeyContext } from './native-chat-markdown-row-identity'
@@ -43,7 +43,7 @@ function useWordFadeArmed(fadeWords: boolean): boolean {
 
 type NativeChatMarkdownProps = Omit<
   ComponentProps<typeof CommentMarkdown>,
-  'fileLinkExists' | 'onLinkClick' | 'allowFileUriLinks'
+  'fileLinkExists' | 'onLinkClick' | 'allowFileUriLinks' | 'singleTildeStrikethrough'
 > & {
   /** Underline file paths in the text that exist in the chat's workspace, when the chat can open them. */
   linkifyFilePaths?: boolean
@@ -183,6 +183,7 @@ export function NativeChatMarkdown({
         renderMermaid={!streaming}
         keepMermaidSourceWhilePending
         unknownHtmlAsText
+        singleTildeStrikethrough={false}
         data-word-fade={wordFadeArmed ? '' : undefined}
         data-block-fade={wordFadeArmed && streaming ? '' : undefined}
         className={cn('native-chat-markdown', className)}

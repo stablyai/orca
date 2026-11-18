@@ -26,7 +26,7 @@ import { shutdownBufferCaptures } from '../../components/terminal-pane/snapshots
 import {
   dispatchWindowCloseRequest,
   isWindowCloseCheckpointInProgress
-} from '../../components/window-close-request-coordinator'
+} from '../shutdown/window-close-request-coordinator'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT

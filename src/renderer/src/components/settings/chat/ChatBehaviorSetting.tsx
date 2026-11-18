@@ -15,7 +15,8 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import {
   nativeChatMarksNewMessages,
-  nativeChatScrollsToLatestOnSend
+  nativeChatScrollsToLatestOnSend,
+  nativeChatShowsPromptSuggestions
 } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
@@ -59,6 +60,8 @@ export function ChatBehaviorSetting({
     entries.scrollToLatestOnSend,
     entries.markNewMessages,
     entries.linkPreviews,
+    entries.composerSpellcheck,
+    entries.promptSuggestions,
     entries.shellEnvironment
   ]
   if (!forceVisible && !matchesSettingsSearch(query, rows)) {
@@ -70,6 +73,8 @@ export function ChatBehaviorSetting({
   const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
   const markNewMessages = nativeChatMarksNewMessages(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
+  const composerSpellcheckEnabled = settings.nativeChatComposerSpellcheck !== false
+  const promptSuggestions = nativeChatShowsPromptSuggestions(settings)
   return (
     <SettingsGroup id="chat-behavior" title={getChatBehaviorTitle(t)}>
       <ChatPermissionSetting
@@ -190,6 +195,36 @@ export function ChatBehaviorSetting({
             'Toggle link previews'
           )}
           onChange={() => updateSettings({ nativeChatLinkPreviews: !linkPreviewsEnabled })}
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.composerSpellcheck}
+        id={entries.composerSpellcheck.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.composerSpellcheck.title}
+          description={entries.composerSpellcheck.description}
+          checked={composerSpellcheckEnabled}
+          ariaLabel={entries.composerSpellcheck.title}
+          onChange={() =>
+            updateSettings({ nativeChatComposerSpellcheck: !composerSpellcheckEnabled })
+          }
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.promptSuggestions}
+        id={entries.promptSuggestions.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.promptSuggestions.title}
+          description={entries.promptSuggestions.description}
+          checked={promptSuggestions}
+          ariaLabel={entries.promptSuggestions.title}
+          onChange={() => updateSettings({ nativeChatPromptSuggestions: !promptSuggestions })}
         />
       </SearchableSetting>
       <SearchableSetting
