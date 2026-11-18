@@ -6,10 +6,13 @@ import {
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { callAntigravityChatAuthConfig } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import {
+  ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY
+} from '../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   resolveAntigravityChatAuthConfig,
@@ -18,7 +21,11 @@ import {
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import {
+  AntigravityChatAuthMethodItems,
+  antigravityChatAuthMethodLabel
+} from './AntigravityChatAuthMethodItems'
+import { Select, SelectContent, SelectTrigger, SelectValue } from '../ui/select'
 
 export type AntigravityChatAuthAction = {
   disabled: boolean
@@ -102,6 +109,11 @@ function AuthForm({
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const t = useTranslate()
   const id = useId()
+  const keyAndAdc =
+    useStructuredAgentSessionHostCapabilityState(
+      owner,
+      ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY
+    ) === 'supported'
   const edited = useRef(false)
   const reads = useRef(0)
   const observation = useSyncExternalStore(subscribeAntigravityChatSignIns, () =>
@@ -298,7 +310,8 @@ function AuthForm({
       event.currentTarget.blur()
     }
   }
-  const methodName = methodLabel(method, t)
+  const methodName = antigravityChatAuthMethodLabel(method, t)
+  const usesGcp = method === 'oauth-business' || method === 'agent-platform'
   return (
     <>
       {heading}
@@ -324,28 +337,11 @@ function AuthForm({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem
-                    value="oauth-personal"
-                    description={t(
-                      'accounts.antigravity.personalOption',
-                      'Your personal Google AI plan'
-                    )}
-                  >
-                    {methodLabel('oauth-personal', t)}
-                  </SelectItem>
-                  <SelectItem
-                    value="oauth-business"
-                    description={t(
-                      'accounts.antigravity.enterpriseOption',
-                      "Your organization's license"
-                    )}
-                  >
-                    {methodLabel('oauth-business', t)}
-                  </SelectItem>
+                  <AntigravityChatAuthMethodItems keyAndAdc={keyAndAdc} />
                 </SelectContent>
               </Select>
             </AntigravityChatAuthSettingRow>
-            {method === 'oauth-business' && (
+            {usesGcp && (
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="min-w-0 space-y-1.5">
                   <Label htmlFor={`${id}-project`}>
@@ -394,15 +390,8 @@ function AuthForm({
         start,
         reauth: authenticatedMethod !== null && authenticatedMethod !== method,
         method: unavailable || !loaded ? null : methodName,
-        incomplete: loaded && !unavailable && !valid && method === 'oauth-business'
+        incomplete: loaded && !unavailable && !valid && usesGcp
       })}
     </>
   )
-}
-
-function methodLabel(method: string, t: Translate = translate): string | null {
-  if (method === 'oauth-business') {
-    return t('accounts.antigravity.enterprise', 'Gemini Enterprise')
-  }
-  return method === 'oauth-personal' ? t('accounts.antigravity.personal', 'Google account') : null
 }

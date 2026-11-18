@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import {
+  antigravityChatAuthUsesGcp,
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
 } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
@@ -101,7 +102,7 @@ export const antigravityChatAccount = {
     const path = join(home, ANTIGRAVITY_ACP_HOME, 'settings.json')
     const projection = {
       auth: { type: auth.method },
-      ...(auth.method === 'oauth-business'
+      ...(antigravityChatAuthUsesGcp(auth)
         ? { gcp: { project: auth.gcpProject, location: auth.gcpLocation } }
         : {})
     }
