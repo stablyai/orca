@@ -178,7 +178,7 @@ export function firstWorkRenameDeps(
 export function firstWorkRetryDeps(
   store: Parameters<typeof firstWorkRenameDeps>[0],
   runtime: Parameters<typeof firstWorkRenameDeps>[1] &
-    Pick<OrcaRuntimeService, 'listWorkspaceStructuredSessionIds' | 'openAgentSessionRecordStore'>
+    Pick<OrcaRuntimeService, 'listWorkspaceStructuredSessions' | 'openAgentSessionRecordStore'>
 ): FirstWorkRetryDeps {
   const localMeta = (worktreeId: string) =>
     store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
@@ -195,7 +195,7 @@ export function firstWorkRetryDeps(
     },
     getBaseRef: (worktreeId) => localMeta(worktreeId)?.baseRef,
     nativeReads: (worktreeId) => ({
-      listSessionIds: () => runtime.listWorkspaceStructuredSessionIds(worktreeId),
+      listSessions: () => runtime.listWorkspaceStructuredSessions(worktreeId),
       readFirst: async (sessionId, sinceMs) =>
         (await runtime.openAgentSessionRecordStore()).firstSubmittedUserPrompt(sessionId, sinceMs)
     })

@@ -132,7 +132,7 @@ describe('native first-message ordering', () => {
       await expect(
         readNativeFirstMessage(
           {
-            listSessionIds: async () => [...order],
+            listSessions: async () => ({ sessionIds: [...order], hasUnreadable: false }),
             readFirst: async (id) => firsts[id] ?? { kind: 'none' }
           },
           0
@@ -145,7 +145,7 @@ describe('native first-message ordering', () => {
     await expect(
       readNativeFirstMessage(
         {
-          listSessionIds: async () => ['a', 'b'],
+          listSessions: async () => ({ sessionIds: ['a', 'b'], hasUnreadable: false }),
           readFirst: async (id) => (id === 'a' ? found('Found', 100, 1) : { kind: 'incomplete' })
         },
         0

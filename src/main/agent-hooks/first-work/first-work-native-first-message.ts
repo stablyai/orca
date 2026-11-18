@@ -3,13 +3,14 @@ import type { JournalFirstSubmittedPrompt } from '../../native-chat/agent-sessio
 export type NativeFirstMessageLookup =
   | { kind: 'found'; prompt: string; submittedAt: number }
   | { kind: 'none' }
-  /** A session hit the scan bound: no earliest message can be certified, so name from changes. */
+  /** A session hit the scan bound or cannot be read by this build: no earliest message can be
+   *  certified, so name from changes. */
   | { kind: 'incomplete' }
   /** Read failed, the scan was abandoned, or the feature's read capacity is full: retryable. */
   | { kind: 'unreadable' }
 
 export type NativeFirstMessageReads = {
-  listSessionIds: () => Promise<string[]>
+  listSessions: () => Promise<{ sessionIds: string[]; hasUnreadable: boolean }>
   readFirst: (sessionId: string, sinceMs: number) => Promise<JournalFirstSubmittedPrompt>
 }
 
@@ -75,8 +76,12 @@ export async function readNativeFirstMessage(
   sinceMs: number,
   stillWanted: () => boolean = () => true
 ): Promise<NativeFirstMessageLookup> {
+  const { sessionIds, hasUnreadable } = await reads.listSessions()
+  if (hasUnreadable) {
+    return { kind: 'incomplete' }
+  }
   let earliest: Candidate | null = null
-  for (const sessionId of await reads.listSessionIds()) {
+  for (const sessionId of sessionIds) {
     // Abandoned: submit no further reads, and never report a partial scan as complete.
     if (!stillWanted()) {
       return { kind: 'unreadable' }

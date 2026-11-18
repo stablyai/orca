@@ -45,6 +45,7 @@ import {
   getAgentSessionConversation,
   selectWritableAgentSessionRecord,
   listAgentSessionConversations,
+  listAgentSessionWorkspaceSessions,
   requireWritableAgentSessionRecord,
   heldAgentSessionIds,
   type AgentSessionStoreState
@@ -176,6 +177,10 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     const scope = agentSessionScopeKey(location)
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
   }
+
+  /** Readable chats of exactly this workspace, and whether one this build cannot validate is also there. */
+  listWorkspaceSessions = (location: AgentSessionExecutionLocation) =>
+    listAgentSessionWorkspaceSessions(this.state, location)
 
   updateRecord = <C extends AgentSessionRecordCommand>(
     sessionId: string,

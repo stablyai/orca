@@ -59,7 +59,7 @@ function deferred<T>() {
 }
 
 const noNativeChat: Reads = () => ({
-  listSessionIds: async () => [],
+  listSessions: async () => ({ sessionIds: [], hasUnreadable: false }),
   readFirst: async () => ({ kind: 'none' })
 })
 
@@ -110,7 +110,7 @@ describe('retryFirstWorkRename', () => {
     generateBranchNameMock.mockResolvedValue({ success: true, slug: 'fix-login' })
     const { deps } = makeRetryDeps({
       nativeReads: () => ({
-        listSessionIds: async () => ['later', 'earlier'],
+        listSessions: async () => ({ sessionIds: ['later', 'earlier'], hasUnreadable: false }),
         readFirst: async (sessionId) =>
           sessionId === 'earlier'
             ? { kind: 'found', prompt: 'Fix the login form', submittedAt: 110, sequence: 9 }
@@ -131,9 +131,29 @@ describe('retryFirstWorkRename', () => {
     const { deps } = makeRetryDeps({
       runGit: changesGit(' src/login.tsx | 4 ++--\n'),
       nativeReads: () => ({
-        listSessionIds: async () => ['long-chat'],
+        listSessions: async () => ({ sessionIds: ['long-chat'], hasUnreadable: false }),
         // 513 unmatched submissions precede the first real message.
         readFirst: async () => ({ kind: 'incomplete' })
+      })
+    })
+    await expect(retryFirstWorkRename(WORKTREE_ID, deps)).resolves.toMatchObject({
+      outcome: { kind: 'renamed' }
+    })
+    expect(generateBranchNameMock.mock.calls[0][0]).toMatchObject({ fromChanges: true })
+  })
+
+  it('names from the changes when a chat in the workspace cannot be read by this build', async () => {
+    generateBranchNameMock.mockResolvedValue({ success: true, slug: 'login-form' })
+    const { deps } = makeRetryDeps({
+      runGit: changesGit(' src/login.tsx | 4 ++--\n'),
+      nativeReads: () => ({
+        listSessions: async () => ({ sessionIds: ['readable'], hasUnreadable: true }),
+        readFirst: async () => ({
+          kind: 'found',
+          prompt: 'Polish the README',
+          submittedAt: 120,
+          sequence: 1
+        })
       })
     })
     await expect(retryFirstWorkRename(WORKTREE_ID, deps)).resolves.toMatchObject({
@@ -171,11 +191,11 @@ describe('retryFirstWorkRename', () => {
 
   it('defers after the lookup deadline and never generates from a late read', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const sessions = deferred<string[]>()
-    const listSessionIds = vi.fn(() => sessions.promise)
+    const sessions = deferred<{ sessionIds: string[]; hasUnreadable: boolean }>()
+    const listSessions = vi.fn(() => sessions.promise)
     const { deps } = makeRetryDeps({
       nativeReads: () => ({
-        listSessionIds,
+        listSessions,
         readFirst: async () => ({
           kind: 'found',
           prompt: 'Late message',
@@ -191,9 +211,9 @@ describe('retryFirstWorkRename', () => {
     })
     // A second click while the read drains joins it rather than reading again.
     const second = retryFirstWorkRename(WORKTREE_ID, deps)
-    expect(listSessionIds).toHaveBeenCalledTimes(1)
+    expect(listSessions).toHaveBeenCalledTimes(1)
     generateBranchNameMock.mockResolvedValue({ success: true, slug: 'late-message' })
-    sessions.resolve(['chat'])
+    sessions.resolve({ sessionIds: ['chat'], hasUnreadable: false })
     await expect(second).resolves.toMatchObject({ outcome: { kind: 'renamed' } })
     expect(generateBranchNameMock).toHaveBeenCalledTimes(1)
   })
@@ -205,7 +225,10 @@ describe('retryFirstWorkRename', () => {
       sessionId === 'chat-1' ? firstRead.promise : Promise.resolve({ kind: 'none' as const })
     )
     const { deps } = makeRetryDeps({
-      nativeReads: () => ({ listSessionIds: async () => ['chat-1', 'chat-2'], readFirst })
+      nativeReads: () => ({
+        listSessions: async () => ({ sessionIds: ['chat-1', 'chat-2'], hasUnreadable: false }),
+        readFirst
+      })
     })
     const expired = retryFirstWorkRename(WORKTREE_ID, deps)
     await vi.advanceTimersByTimeAsync(FIRST_WORK_RETRY_LOOKUP_DEADLINE_MS)
@@ -224,7 +247,10 @@ describe('retryFirstWorkRename', () => {
         : Promise.resolve({ kind: 'found', prompt: 'Add audit log', submittedAt: 300, sequence: 1 })
     )
     const { deps } = makeRetryDeps({
-      nativeReads: () => ({ listSessionIds: async () => ['chat-1', 'chat-2'], readFirst })
+      nativeReads: () => ({
+        listSessions: async () => ({ sessionIds: ['chat-1', 'chat-2'], hasUnreadable: false }),
+        readFirst
+      })
     })
     const expired = retryFirstWorkRename(WORKTREE_ID, deps)
     await vi.advanceTimersByTimeAsync(FIRST_WORK_RETRY_LOOKUP_DEADLINE_MS)

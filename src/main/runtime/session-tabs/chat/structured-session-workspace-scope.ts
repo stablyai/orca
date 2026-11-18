@@ -1,8 +1,5 @@
 import { prepareStructuredWorkspaceAuthority } from './structured-workspace-authority'
-import {
-  agentSessionExecutionLocationsEqual,
-  type AgentSessionExecutionLocation
-} from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { OrcaRuntimeWithStructuredSessionAccountHome } from './structured-session-account-home'
 import {
   isNativeLocalLocation,
@@ -65,13 +62,9 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
   }
 
   /** This host's native-chat sessions of one workspace, matched on host, distro, id and kind. */
-  async listWorkspaceStructuredSessionIds(worktreeId: string): Promise<string[]> {
+  async listWorkspaceStructuredSessions(worktreeId: string) {
     const location = await this.resolveStructuredAgentSessionLocation(`id:${worktreeId}`)
-    const store = await this.openAgentSessionRecordStore()
-    return store
-      .listByScope(location)
-      .filter((record) => agentSessionExecutionLocationsEqual(record.location, location))
-      .map((record) => record.sessionId)
+    return (await this.openAgentSessionRecordStore()).listWorkspaceSessions(location)
   }
 
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
