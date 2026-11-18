@@ -12660,7 +12660,6 @@
           "74fc00776f": "Detalhes do erro",
           "ca3b225195": "Falha na renomeação automática da branch",
           "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente.",
-          "dismissError": "Ignorar erro",
           "dismissing": "Descartando…"
         },
         "CreateProjectLocationField": {

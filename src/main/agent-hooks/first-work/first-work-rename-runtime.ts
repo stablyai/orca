@@ -3,6 +3,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
+import type { FirstWorkRetryDeps } from './first-work-rename-retry'
 import { rememberBranchRenameFailureOutput } from './branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './first-work-folder-rename'
 import { moveWorktree } from '../../git/worktrees/movement/worktree-move'
@@ -36,7 +37,27 @@ export function firstWorkRenameDeps(
     | 'notifyWorktreeFolderRenamed'
   >
 ): FirstWorkBranchRenameDeps {
+  // Renames run on this host only, so read this host's row, not a same-id twin's.
+  const localMeta = (worktreeId: string) =>
+    store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
+    store.getWorktreeMeta(worktreeId)
   return {
+    readIncarnation: (worktreeId) => {
+      const scope = parseWorkspaceKey(worktreeId)
+      if (scope?.type === 'folder') {
+        const folder = store.getFolderWorkspace!(scope.folderWorkspaceId)
+        return folder ? `${worktreeId}\u0000${folder.createdAt}` : null
+      }
+      const meta = localMeta(worktreeId)
+      return meta
+        ? [
+            worktreeId,
+            meta.createdAt ?? '',
+            meta.orcaCreatedAt ?? '',
+            meta.orcaCreationSource ?? ''
+          ].join('\u0000')
+        : null
+    },
     getSettings: () => store.getSettings(),
     getRepo: (repoId) => store.getRepo(repoId),
     getAgentEnvResolvers: () => runtime.getCommitMessageAgentEnvironmentResolvers(),
@@ -66,10 +87,7 @@ export function firstWorkRenameDeps(
         : store.getWorktreeMeta(worktreeId)?.pendingFirstAgentMessageRename === true
     },
     canRenameOrcaCreatedBranch: (worktreeId) => {
-      // Renames run on this host only, so read this host's row, not a same-id twin's.
-      const meta =
-        store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
-        store.getWorktreeMeta(worktreeId)
+      const meta = localMeta(worktreeId)
       // A creature-like name alone cannot prove Orca owns the branch.
       return (
         !!meta?.orcaCreationSource &&
@@ -150,5 +168,32 @@ export function firstWorkRenameDeps(
       }
       runtime.notifyBranchRenamed(repoIdOrWorktreeId)
     }
+  }
+}
+
+export function firstWorkRetryDeps(
+  store: Parameters<typeof firstWorkRenameDeps>[0],
+  runtime: Parameters<typeof firstWorkRenameDeps>[1] &
+    Pick<OrcaRuntimeService, 'listWorkspaceStructuredSessionIds' | 'openAgentSessionRecordStore'>
+): FirstWorkRetryDeps {
+  const localMeta = (worktreeId: string) =>
+    store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
+    store.getWorktreeMeta(worktreeId)
+  return {
+    ...firstWorkRenameDeps(store, runtime),
+    getWorkspaceCreatedAt: (worktreeId) => {
+      const scope = parseWorkspaceKey(worktreeId)
+      if (scope?.type === 'folder') {
+        return store.getFolderWorkspace!(scope.folderWorkspaceId)?.createdAt
+      }
+      const meta = localMeta(worktreeId)
+      return meta?.createdAt ?? meta?.orcaCreatedAt
+    },
+    getBaseRef: (worktreeId) => localMeta(worktreeId)?.baseRef,
+    nativeReads: (worktreeId) => ({
+      listSessionIds: () => runtime.listWorkspaceStructuredSessionIds(worktreeId),
+      readFirst: async (sessionId, sinceMs) =>
+        (await runtime.openAgentSessionRecordStore()).firstSubmittedUserPrompt(sessionId, sinceMs)
+    })
   }
 }

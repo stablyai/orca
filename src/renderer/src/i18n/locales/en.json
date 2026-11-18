@@ -6860,14 +6860,31 @@
           "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
-          "dismissError": "Dismiss error",
           "dismissing": "Dismissing…",
           "aed1623b1e": "Close",
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
           "ca3b225195": "Branch auto-name failed",
-          "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message."
+          "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
+          "dismiss": "Dismiss",
+          "tryAgain": "Try again",
+          "namingBranch": "Naming branch…",
+          "errorDetailsAt": "Error details · {{time}}",
+          "reasonNothingYet": "No changes to name this branch from yet.",
+          "reasonBranchChanged": "The branch changed while Orca was naming it.",
+          "reasonProjectMoving": "A project move is in progress.",
+          "reasonHistoryUnreadable": "Orca couldn't read this workspace's history. Try again.",
+          "reasonInterrupted": "Orca couldn't finish naming the branch. Try again.",
+          "reasonBranchPushed": "The branch was pushed, so Orca kept its name.",
+          "reasonBranchRenamed": "The branch was renamed, so Orca kept its name.",
+          "reasonNameChosen": "This branch name was chosen by hand, so Orca kept it.",
+          "reasonSettingOff": "Branch auto-naming is off in Settings.",
+          "reasonNoDistinctName": "The generated name matched the current one.",
+          "reasonFirstMessageUnavailable": "Orca couldn't find this workspace's first message.",
+          "reasonAlreadyNamed": "This workspace was already renamed.",
+          "reasonUnavailable": "Orca can't name this branch anymore.",
+          "branchNameKept": "Branch name kept"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Choose parent folder...",
