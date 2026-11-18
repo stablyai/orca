@@ -172,8 +172,13 @@ function absorbChats(
       revision = journalLegacyChatRevision(source, id) ?? 'null'
       absorbChat(source, db, id, revision, adoption, pass)
     } catch (error) {
-      // Corruption past the original's own revision read may be this file's: never absorb it.
-      if (isSqliteStorageFailure(error) || (revision !== undefined && isSqliteCorruption(error))) {
+      // Corruption past the original's own revision read may be this file's: never absorb it. A
+      // rollback that failed leaves this connection mid-transaction for every later chat.
+      if (
+        isSqliteStorageFailure(error) ||
+        (revision !== undefined && isSqliteCorruption(error)) ||
+        db.isTransaction
+      ) {
         console.warn('[agent-session-journal] keeping chats an older Orca saved paused', error)
         return false
       }

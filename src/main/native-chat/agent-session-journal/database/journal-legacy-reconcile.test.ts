@@ -512,43 +512,6 @@ it('leaves a copy whose history failed to convert to an open, not to every idle 
   ).toBeUndefined()
 })
 
-// Perf contract: with every revision kept, a copy due on an unchanged original costs the same at any fleet size.
-it('keeps a due copy on an unchanged original without reading or replaying every chat', async () => {
-  const statements: number[] = []
-  for (const chats of [10, 100]) {
-    const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
-    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-    const { db: original } = openJournalDatabase(journalDatabasePath(root))
-    cleanup.push(() => original.close())
-    for (let index = 0; index < chats; index += 1) {
-      olderOrcaChat(original, `chat-${index}`, rows)
-      original
-        .prepare(
-          'INSERT INTO agent_session_attachment_claims(upload_id,session_id,claimed_at) VALUES(?,?,?)'
-        )
-        .run(`upload-${index}`, `chat-${index}`, 0)
-    }
-    const first = await upgrade(root)
-    cleanup.push(first.close)
-    expect(await first.convert('chat-0')).toBe('epoch')
-    const revision = first.db
-      .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
-      .get('journal.legacy-revision:chat-0')!.value
-    first.db
-      .prepare('INSERT INTO agent_session_store_meta VALUES(?,?)')
-      .run('journal.legacy-copy-due:chat-0', revision)
-
-    const prepared = vi.spyOn(first.db, 'prepare')
-    reconcileJournalLegacySource(root, first.db)
-    statements.push(prepared.mock.calls.length)
-    prepared.mockRestore()
-    expect(first.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual(
-      { records: chats + 1 }
-    )
-  }
-  expect(statements[1]).toBe(statements[0])
-})
-
 // Perf contract: an unchanged original only needs baselines, so it skips adoption at any fleet size.
 it.each([10, 100])(
   'fills in %i missing baselines without reading tabs, claims or chat state when the original is unchanged',

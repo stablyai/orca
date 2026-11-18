@@ -1,5 +1,5 @@
 import type Database from '../../../sqlite/sync-database'
-import { isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
+import { isSqliteCorruption, isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
 import { isUnsettledQueuedMessage } from '../queued-messages/queued-message-table'
 import { prepareJournalDomainImport, type JournalDomainImportPage } from '../journal-domain-import'
 import { journalLegacyChatRevision, recordJournalLegacyChatRevision } from './journal-legacy-source'
@@ -45,6 +45,10 @@ export function compareJournalLegacyChat(
   try {
     source = openSource()
   } catch (error) {
+    // An original that won't open is no chat's answer; it ends the pass until it opens again.
+    if (isSqliteCorruption(error)) {
+      return null
+    }
     return originalFailure(error)
   }
   // With no original there is nothing to compare, so this file isn't read.
