@@ -1,5 +1,4 @@
 import type Database from '../../../sqlite/sync-database'
-import { runJournalTransaction } from './journal-database'
 
 // IF NOT EXISTS keeps old trigger bodies: rename a changed trigger and DROP the old name.
 const PENDING_OBJECTS = [
@@ -15,9 +14,12 @@ const PENDING_OBJECTS = [
  * catch every head epoch change and every item written beside a ready head (a fork stage, which an
  * abort or crash can strand), so writes from released builds are tracked too. Imports are covered
  * by the head write that makes them ready. Created without a user_version change: released builds
- * never read it.
+ * never read it. The caller passes its transaction runner: importing it here would close a cycle.
  */
-export function ensureJournalRetirePending(db: Database.Database): void {
+export function ensureJournalRetirePending(
+  db: Database.Database,
+  inTransaction: (run: () => void) => void
+): void {
   const present = db
     .prepare(
       `SELECT count(*) AS present FROM sqlite_master WHERE name IN (SELECT value FROM json_each(?))`
@@ -27,7 +29,7 @@ export function ensureJournalRetirePending(db: Database.Database): void {
     return
   }
   // Anything missing means epoch changes may have gone unseen, so every ready head is re-enqueued.
-  runJournalTransaction(db, () =>
+  inTransaction(() =>
     db.exec(`CREATE TABLE IF NOT EXISTS journal_retire_pending (
         session_id TEXT PRIMARY KEY,
         generation INTEGER NOT NULL

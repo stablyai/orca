@@ -26,7 +26,7 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
   ensureJournalStoredOutputColumn(db)
   ensureJournalTextTailTable(db)
   db.exec(JOURNAL_CONNECTOR_REPLIES_SCHEMA)
-  ensureJournalRetirePending(db)
+  ensureJournalRetirePending(db, (run) => runJournalTransaction(db, run))
 }
 
 /** Added without a user_version change: released builds name their columns and never read it. */
