@@ -1,4 +1,9 @@
 import { webContents } from 'electron'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type {
   BrowserPage,
@@ -142,32 +147,47 @@ export function setSavedBrowserTabsSource(
   source = next
   resolveKnownPartition = resolvePartition
   stopWatchingWrites =
-    next?.onWorkspaceSessionWritten((hostId) => {
-      if (unloadedPageIds.size === 0 && assignedByPageId.size === 0) {
-        return
+    next?.onWorkspaceSessionWritten((hostId) => reconcileSavedBrowserPages(next, hostId)) ?? null
+}
+
+/**
+ * A window save that equals the stored partition is skipped, but it still proves the window keeps
+ * that host's pages, so an evicted guest's page is listed again as a saved write would.
+ */
+export function noteWindowSessionSaveUnchanged(hostId: string | null | undefined): void {
+  if (source) {
+    reconcileSavedBrowserPages(source, normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID)
+  }
+}
+
+function reconcileSavedBrowserPages(
+  next: SavedBrowserTabsSource,
+  hostId: ExecutionHostId | null
+): void {
+  if (unloadedPageIds.size === 0 && assignedByPageId.size === 0) {
+    return
+  }
+  const allHostIds = next.getWorkspaceSessionHostIds()
+  const anywhere = savedPageIdsIn(allHostIds)
+  if (unloadedPageIds.size > 0) {
+    // Why reuse: a write to every host, or to the only one, saves exactly `anywhere`.
+    const written =
+      !hostId || (allHostIds.length === 1 && allHostIds[0] === hostId)
+        ? anywhere
+        : savedPageIdsIn([hostId])
+    for (const pageId of unloadedPageIds) {
+      if (written.has(pageId) || !anywhere.has(pageId)) {
+        unloadedPageIds.delete(pageId)
       }
-      const allHostIds = next.getWorkspaceSessionHostIds()
-      const anywhere = savedPageIdsIn(allHostIds)
-      if (unloadedPageIds.size > 0) {
-        // Why reuse: a write to every host, or to the only one, saves exactly `anywhere`.
-        const written =
-          !hostId || (allHostIds.length === 1 && allHostIds[0] === hostId)
-            ? anywhere
-            : savedPageIdsIn([hostId])
-        for (const pageId of unloadedPageIds) {
-          if (written.has(pageId) || !anywhere.has(pageId)) {
-            unloadedPageIds.delete(pageId)
-          }
-        }
-      }
-      // A listed page no save keeps was closed before its guest ever loaded.
-      for (const [pageId, assigned] of assignedByPageId) {
-        if (!anywhere.has(pageId)) {
-          assignedByPageId.delete(pageId)
-          emitDiscardedBrowserTabRemoved(assigned)
-        }
-      }
-    }) ?? null
+    }
+  }
+  // A listed page no save keeps was closed before its guest ever loaded.
+  for (const [pageId, assigned] of assignedByPageId) {
+    if (!anywhere.has(pageId)) {
+      assignedByPageId.delete(pageId)
+      emitDiscardedBrowserTabRemoved(assigned)
+    }
+  }
 }
 
 /** Saved pages without a live guest, in saved order, each with its synthetic tab id. */

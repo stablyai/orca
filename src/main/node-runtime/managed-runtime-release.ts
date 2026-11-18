@@ -12,6 +12,8 @@ export type ManagedRuntimePin = {
   url: string
   archiveSha256: string
   archiveBytes: number
+  /** `file`: the download is the single member itself, not a zip. */
+  format?: 'zip' | 'file'
   members: readonly { path: string; sha256: string; bytes: number }[]
 }
 
@@ -19,6 +21,8 @@ export type ManagedRuntime = {
   label: string
   root(dataDirectory: string): string
   pin(): ManagedRuntimePin | null
+  /** Runtimes that follow a published latest release look it up here; pin() answers from it. */
+  refreshPin?(signal?: AbortSignal): Promise<void>
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
 }
@@ -129,11 +133,14 @@ export async function writeRuntimeReleaseReceipt(
 }
 
 /** Exclusive writer only: keep must match launch resolution so reclamation cannot remove a running release. */
-export async function reclaimRuntimeReleases(root: string, keep: string | null): Promise<string[]> {
+export async function reclaimRuntimeReleases(
+  root: string,
+  keep: readonly string[]
+): Promise<string[]> {
   const names = await readdir(root).catch((error: NodeJS.ErrnoException) =>
     error.code === 'ENOENT' ? [] : Promise.reject(error)
   )
-  const stale = names.filter((name) => name !== keep)
+  const stale = names.filter((name) => !keep.includes(name))
   const results = await Promise.allSettled(
     stale.map((name) => rm(join(root, name), { recursive: true, force: true }))
   )

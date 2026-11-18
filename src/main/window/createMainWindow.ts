@@ -51,11 +51,7 @@ import { installWindowsPathRegistryChangeListener } from '../pty/environment/win
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 import { installNativeUnloadCoordinator } from './renderer-relays/native-unload-coordinator'
 import { MAIN_THREAD_ANIMATION_ARGUMENTS } from './presentation/main-thread-animation-arguments'
-
-// Node warns past this many listeners per event name. Headroom above normal subsystem fan-out,
-// still low enough that a real leak warns. Per-request listeners belong on addFanoutListener,
-// not a higher cap.
-const MAIN_WINDOW_MAX_LISTENERS_PER_EVENT = 30
+import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from './web-contents-listener-budget'
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
   installRendererHangStackPolicy(
@@ -179,8 +175,8 @@ export function createMainWindow(
     }
   })
   rememberWindowMaterial(mainWindow, windowMaterial)
-  mainWindow.setMaxListeners(MAIN_WINDOW_MAX_LISTENERS_PER_EVENT)
-  mainWindow.webContents.setMaxListeners(MAIN_WINDOW_MAX_LISTENERS_PER_EVENT)
+  mainWindow.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
+  mainWindow.webContents.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Native paste fallback is privileged; trust only the top-level renderer.

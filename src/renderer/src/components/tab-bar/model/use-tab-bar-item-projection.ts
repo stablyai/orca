@@ -76,6 +76,13 @@ export function useTabBarItemProjection({
         .map((tab) => tab.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const roomTabIds = useMemo(
+    () =>
+      unifiedTabs
+        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'room')
+        .map((tab) => tab.id),
+    [unifiedTabs, resolvedGroupId]
+  )
   const agentSessionTabIds = useMemo(
     () => agentSessionTabs?.map((tab) => tab.id) ?? [],
     [agentSessionTabs]
@@ -88,6 +95,7 @@ export function useTabBarItemProjection({
         editorFileIds,
         browserTabIds,
         simulatorTabIds,
+        roomTabIds,
         agentSessionTabIds,
         terminalMap,
         editorMap,
@@ -101,6 +109,7 @@ export function useTabBarItemProjection({
       editorFileIds,
       browserTabIds,
       simulatorTabIds,
+      roomTabIds,
       agentSessionTabIds,
       terminalMap,
       editorMap,

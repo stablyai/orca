@@ -5,6 +5,10 @@ import {
 } from '../worker-threads/worker-thread-entry-path'
 import { JOURNAL_SQL_READER_HOST_NAME } from '../native-chat/agent-session-journal/journal-sql-reader-host-name'
 import { setJournalSqlReaderSpawner } from '../native-chat/agent-session-journal/journal-sql-reader-spawn'
+import {
+  journalReaderRequestData,
+  readJournalReaderRequests
+} from '../native-chat/agent-session-journal/journal-sql-reader-requests'
 import { join } from 'node:path'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { resolveObservabilityConsent } from '../observability'
@@ -21,7 +25,8 @@ export function installElectronJournalReaderHost(): void {
         'utility-worker-host-entry.js'
       ),
     ({ filename, name, workerData }) =>
-      spawnWorkerThread(filename, { name, workerData, execArgv: [] })
+      spawnWorkerThread(filename, { name, workerData, execArgv: [] }),
+    (workers) => journalReaderRequestData(readJournalReaderRequests(workers))
   )
   setJournalSqlReaderSpawner((filename, workerData) =>
     host.spawn({
