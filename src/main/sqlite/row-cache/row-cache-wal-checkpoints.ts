@@ -1,3 +1,4 @@
+import { unrefTimer } from '../../../shared/timers/unref-timer'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../../worker-threads/lazy-worker-thread-host'
 import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-transport'
@@ -186,7 +187,7 @@ export class RowCacheWalCheckpoints {
     }
     this.host.clearIdleTimer()
     const deadline = setTimeout(() => this.fail(), RESPONSE_DEADLINE_MS)
-    deadline.unref?.()
+    unrefTimer(deadline)
     this.inFlight.set(id, { deadline, path: registration.path })
     try {
       worker.postMessage({ id, path: registration.path, force })
@@ -228,7 +229,7 @@ export class RowCacheWalCheckpoints {
           this.catchUps.delete(id)
           this.send(id, true)
         }, CATCH_UP_IDLE_MS)
-        timer.unref?.()
+        unrefTimer(timer)
         this.catchUps.set(id, timer)
       }
     }
