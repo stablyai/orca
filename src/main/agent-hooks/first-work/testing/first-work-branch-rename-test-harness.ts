@@ -28,7 +28,10 @@ export function gitResponder(opts: {
       }
       throw noUpstreamError
     }
-    if (args[0] === 'symbolic-ref') {
+    if (
+      args[0] === 'symbolic-ref' ||
+      (args[0] === 'rev-parse' && args[1] === '--symbolic-full-name' && args[2] === 'HEAD')
+    ) {
       return { stdout: `refs/heads/${opts.currentBranch}\n`, stderr: '' }
     }
     if (args[0] === 'show-ref') {
