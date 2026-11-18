@@ -243,11 +243,8 @@ describe('RelayControlOrigin two-path failover', () => {
 
     const alternateConnection = alternate.nextConnection()
     await vi.advanceTimersByTimeAsync(36_000)
-    const alternateSocket = await alternateConnection
-    const alternateHello = new Promise<void>((resolve) =>
-      alternateSocket.once('message', () => resolve())
-    )
-    await alternateHello
+    await alternateConnection
+    await untilLoopback(() => expect(alternate.hellos).toHaveLength(1))
     expect(onClose).not.toHaveBeenCalled()
 
     // The alternate's 15s connect deadline expires, then the primary is dropped as today.
