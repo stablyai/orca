@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     accounts: vi.fn<() => ProviderAccountsSnapshot>(),
     owner: { kind: 'environment', environmentId: 'laptop' } satisfies RuntimeClientTarget,
     fetchInactive: vi.fn(),
+    consumeHostReset: vi.fn(async () => {}),
     watchers
   }
 })
@@ -49,6 +50,12 @@ vi.mock(
     }
   })
 )
+
+vi.mock('@/runtime/provider-accounts/usage/runtime-codex-reset-credit-client', () => ({
+  hostSupportsCodexResetCredit: async () => true,
+  hasUnansweredHostCodexReset: () => false,
+  consumeHostCodexResetCredit: mocks.consumeHostReset
+}))
 
 function usage(usedPercent: number): ProviderRateLimits {
   return {
@@ -229,5 +236,25 @@ describe('Codex account usage on a paired host', () => {
     const active = screen.getByRole('menuitem', { name: /active@laptop.test/ })
     expect(within(active).getByRole('img').getAttribute('aria-label')).toContain('4%')
     expect(screen.queryByRole('menuitem', { name: /linux@laptop.test/ })).toBeNull()
+  })
+
+  it('redeems a reset on the host for the host account it shows', async () => {
+    mocks.state.mockReturnValue({
+      ...localState(),
+      settings: { ...getDefaultSettings('/viewer'), skipCodexRateLimitResetConfirm: true }
+    })
+    const owned = ownerUsage()
+    const codex = { ...usage(4), rateLimitResetCredits: { availableCount: 1, nextExpiresAt: null } }
+    owned.rateLimits.codex = codex
+    render(<CodexSwitcherMenu codex={codex} ownerUsage={owned} compact={false} iconOnly={false} />)
+    await openMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Reset now' }))
+    await vi.waitFor(() => expect(mocks.consumeHostReset).toHaveBeenCalledTimes(1))
+    expect(mocks.consumeHostReset).toHaveBeenCalledWith('laptop', {
+      target: { runtime: 'host', wslDistro: null },
+      accountId: 'active-id',
+      accountRevision: 1,
+      offerRevision: expect.stringMatching(/^v1:/)
+    })
   })
 })

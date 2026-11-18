@@ -5436,6 +5436,7 @@
             "e159fc1fd7": "Reset now",
             "972a1ff497": "Reset Codex limits?",
             "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "confirmHostReset": "This uses one Codex rate-limit reset credit for {{account}} on {{host}} and resets any eligible usage windows immediately.",
             "f077f586db": "Don't ask again",
             "c0e972d726": "Cancel",
             "3bbf140864": "MiniMax Usage",
@@ -23990,6 +23991,7 @@
     "new": "New sparse preset",
     "edit": "Edit sparse preset",
     "saveFailed": "Could not save the preset. Try again.",
+    "updateServerToRemove": "Update Orca on this project’s server to remove its presets.",
     "nameRequired": "Name is required.",
     "nameTooLong": "Name must be 80 characters or fewer.",
     "nameExists": "A preset named “{{name}}” already exists.",
@@ -24831,7 +24833,8 @@
       "review": "Back to projects",
       "browserLoginsHostUnknown": "Browser logins were not copied, because Orca could not identify the host’s browser profile. Sign in again in the host’s browser tabs.",
       "browserLoginsConflict": "Browser logins were not copied, because the host’s browser profile is already in use. Sign in again in the host’s browser tabs.",
-      "browserLoginsNotCopied": "Browser logins were not copied to the host. Sign in again in the host’s browser tabs."
+      "browserLoginsNotCopied": "Browser logins were not copied to the host. Sign in again in the host’s browser tabs.",
+      "droppedForMappedDrives": "Not moved, because their drive letter no longer points into {{distro}}: {{names}}. Check the drive, then move them again."
     },
     "runtime": {
       "label": "Project runtime",
@@ -24861,7 +24864,9 @@
       "pauseFailed": "Orca could not pause the terminals in these projects, so nothing was moved. Paused terminals start again when you open them. Try again.",
       "scopeChanged": "A project changed while the move was getting ready, so nothing was moved. Check the projects and try again.",
       "cancelled": "Move cancelled. Nothing was moved.",
-      "finishedEarlierMove": "Orca first finished an earlier move into {{distro}}. Reload the window, then start this move again."
+      "finishedEarlierMove": "Orca first finished an earlier move into {{distro}}. Reload the window, then start this move again.",
+      "mappedDriveUnverifiable": "Orca could not check a drive letter some projects are saved on. Make sure the drive is connected, then try again.",
+      "nothingMovable": "None of these projects can move to the {{distro}} host yet. Each one says why."
     },
     "step": {
       "preparing": "Preparing",
@@ -24899,7 +24904,11 @@
       "windowsDrive": "Its folder is on a Windows drive, so it stays on this computer.",
       "mixedLocations": "Some of its folders are outside this distro, so it stays on this computer.",
       "notLocal": "It already runs on another host.",
-      "other": "It cannot move."
+      "other": "It cannot move.",
+      "windowsGitWorktrees": "Git for Windows recorded some of its worktrees, including any since deleted, and Git on the WSL host can’t use those records. Remove those worktrees, or run git worktree repair from WSL, then move it.",
+      "windowsGitDir": "Its Git folder is linked by a Windows path (a worktree or a separate Git folder Git for Windows set up), which Git on the WSL host can’t follow.",
+      "gitUnreadable": "Orca couldn’t read its Git details in time to check them, so it stays on this computer. Check again in a moment.",
+      "mappedDriveUnverifiable": "Orca couldn’t check where its drive letter points just now. Make sure the drive is connected, then check again."
     },
     "reloadToast": {
       "title": "Reload to finish the move"

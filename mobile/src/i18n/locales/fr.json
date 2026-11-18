@@ -3468,15 +3468,7 @@
       "confirmGitHubRebase": "Rebaser et fusionner la PR nº {{number}} ?",
       "confirmGitLabMerge": "Fusionner la demande de fusion nº {{number}} ?",
       "confirmGitLabSquash": "Compresser les commits et fusionner la demande de fusion nº {{number}} ?",
-      "confirmGitLabRebase": "Rebaser et fusionner la demande de fusion nº {{number}} ?",
-      "merged": "Fusionné",
-      "closed": "Fermé",
-      "conflicts": "Conflits",
-      "behind": "En retard",
-      "blocked": "Bloqué",
-      "checksPending": "Vérifications en attente",
-      "ableToMerge": "Fusion possible",
-      "unknown": "Inconnu"
+      "confirmGitLabRebase": "Rebaser et fusionner la demande de fusion nº {{number}} ?"
     },
     "pagination": {
       "pageUnreachable": "La page {{page}} dépasse la limite des résultats de recherche GitHub.",
@@ -3889,7 +3881,6 @@
       "title": "Tâches"
     },
     "searchControl": {
-      "jiraPlaceholder": "JQL Jira, p. ex. project = ABC AND statusCategory != Done",
       "projectPlaceholder": "Rechercher dans la vue du projet…",
       "providerPlaceholder": "Rechercher des tâches {{provider}}…"
     },
@@ -4335,6 +4326,64 @@
             }
           }
         }
+      },
+      "TaskPage": {
+        "99c2755218": "Recherchez des issues ou saisissez du JQL, ex. project = ABC",
+        "jiraTextMatchesNotice": "Résultats textuels affichés. Jira n'a pas pu exécuter cette recherche en JQL."
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "Annulé"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Fusionnés",
+              "4f976d3450": "Fermé",
+              "1f8eb81c0e": "Approbation requise",
+              "c606463dc2": "Modifications demandées",
+              "7e8bbe3cd7": "Conflits",
+              "b169f943e1": "Merger quand prêt",
+              "autoMergeOn": "Fusion automatique activée",
+              "039c072f94": "En retard",
+              "bf5e4c6c92": "Bloquée",
+              "87fa36ac83": "Vérifications échouées",
+              "4e2507176b": "Vérifications en attente",
+              "def355ff38": "Peut merger",
+              "f958920f3a": "Vérification"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Fusionnés",
+                  "88d044c42f": "Fermé",
+                  "96b05e374c": "Conflits",
+                  "5105b0e584": "Approbation requise",
+                  "893a999c8c": "Modifications demandées",
+                  "01ab632a21": "Fils non résolus",
+                  "bf628700f6": "Les vérifications doivent passer",
+                  "65c847ad1e": "Vérifications en attente",
+                  "382c70faeb": "En retard",
+                  "195917574e": "Vérification",
+                  "4ecc0d90ee": "Bloquée",
+                  "49ac4fec10": "Vérifications échouées",
+                  "04a3015a12": "Peut être fusionné"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira n’a pas pu exécuter cette requête JQL. Vérifiez la syntaxe et réessayez."
       }
     }
   }
