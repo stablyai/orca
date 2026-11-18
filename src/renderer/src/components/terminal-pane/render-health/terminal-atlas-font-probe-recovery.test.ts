@@ -5,6 +5,7 @@ import {
 } from './terminal-atlas-font-probe-recovery'
 
 const MISMATCH_WINDOW_MS = 2_000
+const MISMATCH_BURST_COOLDOWN_MS = 5_000
 const scheduleBurst = vi.hoisted(() => vi.fn())
 
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
@@ -34,5 +35,23 @@ describe('noteAtlasFontProbeMismatch', () => {
     noteAtlasFontProbeMismatch()
     noteAtlasFontProbeMismatch()
     expect(scheduleBurst).not.toHaveBeenCalled()
+  })
+
+  it('does not schedule a second burst during the cooldown window', () => {
+    vi.useFakeTimers()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    expect(scheduleBurst).toHaveBeenCalledOnce()
+    scheduleBurst.mockClear()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    expect(scheduleBurst).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(MISMATCH_BURST_COOLDOWN_MS)
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    expect(scheduleBurst).toHaveBeenCalledOnce()
   })
 })
