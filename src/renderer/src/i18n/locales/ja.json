@@ -1870,7 +1870,9 @@
         "noSavedConversation": "このチャットにはコピーできる保存済みの会話がありません。"
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "プロジェクトの場所が設定されていません"
+        "locationNotSet": "プロジェクトの場所が設定されていません",
+        "hostLocalGitProject": "このプロジェクトには一致する Git リモートがありません",
+        "hostLocalFolderProject": "フォルダープロジェクトは他のホストにリンクできません"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+クリックで最新の RC を、{{perfKey}}+クリックで最新の perf ビルドを確認します。",

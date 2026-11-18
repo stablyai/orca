@@ -2595,7 +2595,9 @@
         "noSavedConversation": "This chat has no saved conversation to copy."
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Project location not set"
+        "locationNotSet": "Project location not set",
+        "hostLocalGitProject": "No matched Git remote for this project",
+        "hostLocalFolderProject": "Folder projects can't link to other hosts"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+click checks the latest RC; {{perfKey}}+click checks the latest perf build.",

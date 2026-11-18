@@ -1935,7 +1935,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "尚未設定專案位置"
+        "locationNotSet": "尚未設定專案位置",
+        "hostLocalGitProject": "此專案沒有相符的 Git 遠端儲存庫",
+        "hostLocalFolderProject": "資料夾專案無法連結到其他主機"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "請更新伺服器以查看其 SSH 主機上的連接埠。",

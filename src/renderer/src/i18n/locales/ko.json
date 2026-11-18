@@ -1488,6 +1488,10 @@
         "mergeRequest": "MR",
         "linkedIssue": "연결된 이슈",
         "listeningPort": "수신 대기 포트"
+      },
+      "projectHostSetupOptions": {
+        "hostLocalGitProject": "이 프로젝트에 일치하는 Git 원격이 없습니다",
+        "hostLocalFolderProject": "폴더 프로젝트는 다른 호스트에 연결할 수 없습니다"
       }
     },
     "hooks": {

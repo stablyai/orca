@@ -1980,7 +1980,9 @@
         "noSavedConversation": "此聊天没有可复制的已保存对话"
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "尚未设置项目位置"
+        "locationNotSet": "尚未设置项目位置",
+        "hostLocalGitProject": "此项目没有匹配的 Git 远程仓库",
+        "hostLocalFolderProject": "文件夹项目无法关联到其他主机"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+ 点击检查最新候选发布版(RC)，{{perfKey}}+ 点击检查最新性能测试构建",

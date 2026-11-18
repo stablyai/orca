@@ -2104,6 +2104,10 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Bağlı sorun",
         "listeningPort": "Dinlenen port"
+      },
+      "projectHostSetupOptions": {
+        "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
+        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
       }
     },
     "hooks": {
