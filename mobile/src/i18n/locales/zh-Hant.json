@@ -934,7 +934,9 @@
       "label": "設定指令碼",
       "run": "執行",
       "runSetupCommand": "執行設定命令",
-      "skip": "跳過"
+      "skip": "跳過",
+      "waitForSetup": "等待設定完成後再啟動代理程式",
+      "waitForSetupSaveFailed": "儲存設定啟動行為失敗"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "連線",

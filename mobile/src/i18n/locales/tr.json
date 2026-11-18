@@ -938,7 +938,9 @@
       "label": "Kurulum betiği",
       "run": "Çalıştır",
       "runSetupCommand": "Kurulum komutunu çalıştır",
-      "skip": "Atla"
+      "skip": "Atla",
+      "waitForSetup": "Ajanı başlatmadan önce setup'ın tamamlanmasını bekle",
+      "waitForSetupSaveFailed": "Kurulum başlangıç davranışı kaydedilemedi."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Bağlan",
