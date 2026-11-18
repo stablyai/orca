@@ -249,7 +249,11 @@ export function ClaudeSwitcherForOwner({
   }
 
   const rows = (selectedGroup?.targets ?? []).map((target) => ({
-    target,
+    // Why: accounts.selectClaude takes no runtime, so clearing a remote WSL slot would clear the host's.
+    target:
+      hasActiveRuntimeEnvironment && target.id === null && target.runtimeTarget.runtime === 'wsl'
+        ? { ...target, disabled: true }
+        : target,
     inactiveUsage: target.id ? inactiveClaudeAccounts.find((a) => a.accountId === target.id) : null,
     // Why local only: the hidden sign-in runs on this device, not a remote server.
     signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
@@ -381,7 +385,9 @@ export function ClaudeSwitcherForOwner({
             pane: 'accounts',
             repoId: null,
             sectionId: 'accounts-claude',
-            ...(chatAction ? { hostScope: chatAction.target, intent: 'native-accounts' } : {})
+            // Why: without a scope Settings opens on the default host, not the one these rows belong to.
+            hostScope: runtimeTarget,
+            ...(chatAction ? { intent: 'native-accounts' } : {})
           })
           openSettingsPage()
         }}

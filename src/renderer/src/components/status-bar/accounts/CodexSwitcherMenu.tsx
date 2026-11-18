@@ -206,7 +206,8 @@ export function CodexSwitcherMenu({
           openSettingsTarget({
             pane: 'accounts',
             repoId: null,
-            sectionId: 'accounts-codex'
+            sectionId: 'accounts-codex',
+            hostScope: ownerUsage.owner.target
           })
           openSettingsPage()
         }}
