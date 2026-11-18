@@ -217,6 +217,8 @@ export function constrainSavedHistoryItem(
   if (
     item.type === 'fileChange' &&
     cut &&
+    // Only a saved diff keeps the paths its changes named.
+    body.kind === 'diff' &&
     codexItemRunState(item) !== 'running' &&
     isCutJournalOutputOf(cut, codexFileChangePatch(item))
   ) {

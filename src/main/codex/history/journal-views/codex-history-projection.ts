@@ -10,6 +10,7 @@ import type {
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import { codexItemRunState } from '../../structured/items/codex-item-run-state'
 import type { CodexThreadItem } from '../../structured/items/codex-thread-item-identity'
+import { cutJournalOutput } from '../../../native-chat/agent-session-journal/journal-cut-output'
 import { generatedImageBlocks } from '../../../../shared/native-chat/transcript/images/native-chat-generated-image'
 
 export function preserveSavedHistoryPayload(
@@ -33,8 +34,9 @@ export function preserveSavedHistoryPayload(
     if (patch && old) {
       // Retained bytes never override authoritative application status.
       const state = codexItemRunState(item)
+      // A running call keeps only a bounded head, so it never replaces a patch read cut.
       translated =
-        item.status == null
+        item.status == null || (state === 'running' && cutJournalOutput(saved))
           ? old
           : state === 'completed'
             ? old.kind === 'diff'
