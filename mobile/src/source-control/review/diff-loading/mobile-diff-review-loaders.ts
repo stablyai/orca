@@ -196,9 +196,10 @@ export async function loadMobileDiffReviewDiff(
     )
   }
   if (result.kind === 'binary') {
-    // Branch and commit diffs don't flag deletion; the queue's status already proves it.
+    // Branch and commit diffs don't flag deletion; their fixed status proves it. Worktree diffs flag it.
+    const provenDeleted = input.deleted && (input.scope === 'branch' || input.scope === 'commit')
     const dataUri = mobileDiffImageDataUri(
-      input.deleted ? { ...result, modifiedDeleted: true } : result
+      provenDeleted ? { ...result, modifiedDeleted: true } : result
     )
     return dataUri
       ? { kind: 'image', itemKey: input.itemKey, dataUri }
