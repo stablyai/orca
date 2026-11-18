@@ -106,8 +106,8 @@ export async function sessionCandidatesFromDiscoveries(
   })
   for (const named of canonical.values()) {
     const group = named.length > 1 ? dropCodexHardlinkAliases(named) : named
-    const outrankedCopies =
-      group === named ? [] : named.filter((candidate) => !group.includes(candidate))
+    const kept = group === named ? null : new Set(group)
+    const outrankedCopies = kept ? named.filter((candidate) => !kept.has(candidate)) : []
     group.sort(
       (a, b) =>
         Number(a.file.sizeBytes === 0) - Number(b.file.sizeBytes === 0) ||
@@ -115,11 +115,11 @@ export async function sessionCandidatesFromDiscoveries(
         Number(a.file.path.endsWith('.zst')) - Number(b.file.path.endsWith('.zst')) ||
         (a.file.path < b.file.path ? -1 : a.file.path > b.file.path ? 1 : 0)
     )
-    candidates.push({
-      ...group[0],
-      ...(group.length > 1 || outrankedCopies.length > 0 ? { alternatives: group } : {}),
-      ...(outrankedCopies.length > 0 ? { outrankedCopies } : {})
-    })
+    if (outrankedCopies.length > 0) {
+      candidates.push({ ...group[0], alternatives: group, outrankedCopies })
+    } else {
+      candidates.push(group.length === 1 ? group[0] : { ...group[0], alternatives: group })
+    }
   }
   candidates.sort((a, b) => b.file.mtimeMs - a.file.mtimeMs)
   return prioritizeAntigravityTranscriptCandidates(
