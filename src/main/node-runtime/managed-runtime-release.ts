@@ -133,11 +133,14 @@ export async function writeRuntimeReleaseReceipt(
 }
 
 /** Exclusive writer only: keep must match launch resolution so reclamation cannot remove a running release. */
-export async function reclaimRuntimeReleases(root: string, keep: string | null): Promise<string[]> {
+export async function reclaimRuntimeReleases(
+  root: string,
+  keep: readonly string[]
+): Promise<string[]> {
   const names = await readdir(root).catch((error: NodeJS.ErrnoException) =>
     error.code === 'ENOENT' ? [] : Promise.reject(error)
   )
-  const stale = names.filter((name) => name !== keep)
+  const stale = names.filter((name) => !keep.includes(name))
   const results = await Promise.allSettled(
     stale.map((name) => rm(join(root, name), { recursive: true, force: true }))
   )

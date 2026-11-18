@@ -1,4 +1,6 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
+// v59 lets the signed macOS host start native provider owners whose pipes stay with the app;
+// it skips v58, which ad hoc builds of an earlier host route used.
 // v57 starts a session's output sequence at its first attach, so a Windows restore snapshot no longer lands 20 chars past the stream.
 // v56 accepts `reportFocusLost`; v55 daemons from 1.4.251 predate it and reject the request.
 // v55 observes the foreground group at the physical PTY owner.
@@ -15,7 +17,7 @@
 // v43 dropped it with the revert); v41 stages long startup commands as sourced scripts; v40 rolled
 // the #25130/#24636 shell-wrapper changes and the wider agent list into a fresh daemon; older owners
 // stay attachable.
-export const PROTOCOL_VERSION = 57
+export const PROTOCOL_VERSION = 59
 export const FOCUS_LOSS_REPORT_PROTOCOL_VERSION = 56
 export const PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION = 55
 export const FENCED_TERMINATION_PROTOCOL_VERSION = 51
@@ -53,7 +55,7 @@ export const MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION = 29
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  52, 53, 54, 55, 56
+  52, 53, 54, 55, 56, 57, 58
 ] as const
 
 export function supportsColorQueryReplyColors(protocolVersion: number): boolean {
