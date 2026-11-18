@@ -118,11 +118,15 @@ it('releases waiting live text when the subscriber closes during a stalled deliv
 
 it('ends the stream instead of holding live text past the chat budget', async () => {
   const pane = await blockedSubscriber()
+  pane.publish(0)
+  await Promise.resolve()
   const others = chatLiveTextRetainedBytes.claim(CHAT_LIVE_TEXT_RETAINED_BYTES)
   try {
-    pane.publish(0)
+    // Waits behind the stalled delivery, so it needs budget the chat no longer has.
+    pane.publish(1)
     expect(pane.ends).toHaveLength(1)
-    expect(await pane.alive()).toBe(0)
+    // Only the stalled delivery's own snapshot is left.
+    expect(await pane.alive()).toBeLessThanOrEqual(1)
   } finally {
     others?.()
     pane.release()

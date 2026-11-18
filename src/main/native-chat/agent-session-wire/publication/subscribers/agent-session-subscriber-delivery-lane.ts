@@ -4,8 +4,9 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../age
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import {
   ChatRetainedBytesRefused,
-  chatLiveTextRetainedBytes,
-  noteChatRetainedBytesRefused
+  claimSharedLiveText,
+  noteChatRetainedBytesRefused,
+  serializedBytesOf
 } from '../../../retention/chat-path-retained-bytes'
 
 /** Reads every row after the subscriber's cursor when it runs, so a later one covers an earlier one. */
@@ -24,15 +25,20 @@ export type SubscriberLiveText = {
   fence: number
   items: readonly AgentJournalRenderItem[]
   hostNow: number
-  /** Measured once per publication; every subscriber of the chat shares the items. */
-  bytes: number
 }
 
 type LaneEntry =
   | { kind: 'ordered'; since: number; run: () => Promise<unknown> }
   | { kind: 'catch-up'; since: number; catchUp: SubscriberCatchUp }
   | { kind: 'background-tasks'; since: number; fence: number }
-  | { kind: 'live-text'; since: number; liveText: SubscriberLiveText; release: () => void }
+  | {
+      kind: 'live-text'
+      since: number
+      liveText: SubscriberLiveText
+      /** Charged only while it waits behind other work; 0 when it starts at once. */
+      bytes: number
+      release: () => void
+    }
 
 export type SubscriberDeliveryLaneRunners = {
   catchUp: (catchUp: SubscriberCatchUp) => Promise<unknown>
@@ -110,14 +116,25 @@ export class SubscriberDeliveryLane {
     if (replaced?.kind === 'live-text') {
       replaced.release()
     }
-    const release = chatLiveTextRetainedBytes.claim(liveText.bytes)
+    const since = replaced?.since ?? this.runners.now()
+    if (this.idle) {
+      this.add({ kind: 'live-text', since, liveText, bytes: 0, release: () => {} })
+      return
+    }
+    const release = claimSharedLiveText(liveText.items)
     if (!release) {
       // Over the chat budget: the client resumes from its cursor and reads the text again.
       noteChatRetainedBytesRefused()
       this.runners.failed(new ChatRetainedBytesRefused('subscriber live text'))
       return
     }
-    this.add({ kind: 'live-text', since: replaced?.since ?? this.runners.now(), liveText, release })
+    this.add({
+      kind: 'live-text',
+      since,
+      liveText,
+      bytes: serializedBytesOf(liveText.items),
+      release
+    })
   }
 
   /** Releases waiting work and withdraws queued reads; the active delivery gets no more frames. */
@@ -136,7 +153,7 @@ export class SubscriberDeliveryLane {
     let liveTextBytes = 0
     for (const entry of entries) {
       if (entry.kind === 'live-text') {
-        liveTextBytes += entry.liveText.bytes
+        liveTextBytes += entry.bytes
       }
     }
     const oldest = entries.reduce((since, entry) => Math.min(since, entry.since), now)

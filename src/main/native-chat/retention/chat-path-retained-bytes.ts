@@ -1,12 +1,12 @@
-import { describeWorkerMessage } from '../../worker-threads/worker-message-shape'
 import { createRetainedBytesBudget, observeRetainedBytes } from '../../memory/retained-bytes-budget'
 
-/** Everything main holds for chats between producers and consumers that have not taken it. */
+/**
+ * Serialized bytes main may hold for chats between producers and the consumers that haven't
+ * taken them yet. A payload budget, not a heap bound: decoded objects cost more than this counts.
+ */
 export const CHAT_PATH_RETAINED_BYTES = 256 * 2 ** 20
-/** Live text waiting behind subscriber deliveries, at most two snapshots per subscriber. */
+/** Live text waiting behind subscriber deliveries; each shared snapshot is charged once. */
 export const CHAT_LIVE_TEXT_RETAINED_BYTES = 128 * 2 ** 20
-/** Chat frames sent to renderers that have not acknowledged them. */
-export const CHAT_RENDERER_RETAINED_BYTES = 192 * 2 ** 20
 
 export const chatPathRetainedBytes = createRetainedBytesBudget({
   maxBytes: CHAT_PATH_RETAINED_BYTES
@@ -15,20 +15,51 @@ export const chatLiveTextRetainedBytes = createRetainedBytesBudget({
   maxBytes: CHAT_LIVE_TEXT_RETAINED_BYTES,
   parent: chatPathRetainedBytes
 })
-export const chatRendererRetainedBytes = createRetainedBytesBudget({
-  maxBytes: CHAT_RENDERER_RETAINED_BYTES,
-  parent: chatPathRetainedBytes
-})
 
 observeRetainedBytes('live', chatLiveTextRetainedBytes.reading)
-observeRetainedBytes('frames', chatRendererRetainedBytes.reading)
+
+const sizes = new WeakMap<object, number>()
+
+/** Exact serialized size, measured once per immutable payload however many holders share it. */
+export function serializedBytesOf(payload: object): number {
+  let bytes = sizes.get(payload)
+  if (bytes === undefined) {
+    bytes = Buffer.byteLength(JSON.stringify(payload) ?? '')
+    sizes.set(payload, bytes)
+  }
+  return bytes
+}
+
+const shared = new WeakMap<object, { holders: number; release: () => void }>()
 
 /**
- * Never below the structured-clone size: the bounded walk counts characters, which a two-byte
- * string clones at twice. A walk cut short counts what it reached.
+ * Charges a live-text snapshot once while any subscriber holds it, released after the last.
+ * Null when the chat budget is full: the holder ends its stream and the client resumes.
  */
-export function retainedBytesOf(value: unknown): number {
-  return describeWorkerMessage(value).bytes * 2
+export function claimSharedLiveText(payload: object): (() => void) | null {
+  let claim = shared.get(payload)
+  if (!claim) {
+    const release = chatLiveTextRetainedBytes.claim(serializedBytesOf(payload))
+    if (!release) {
+      return null
+    }
+    claim = { holders: 0, release }
+    shared.set(payload, claim)
+  }
+  const held = claim
+  held.holders += 1
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    held.holders -= 1
+    if (held.holders === 0) {
+      shared.delete(payload)
+      held.release()
+    }
+  }
 }
 
 let refusals = 0

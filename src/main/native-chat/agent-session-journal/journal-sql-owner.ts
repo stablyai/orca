@@ -32,7 +32,7 @@ export class JournalSqlOwner {
     }
   >()
   private nextId = 0
-  /** Write commands waiting on the writer; counted only, since each write is already admitted. */
+  /** Writes waiting on the writer; each is posted at once, so main keeps only its callbacks, no bytes. */
   private readonly stopObserving = observeRetainedBytes('writes', () => ({
     bytes: 0,
     items: this.pending.size
