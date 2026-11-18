@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '../../types'
 import { createUIStore } from './ui-slice-test-harness'
+import { AcceptedAgentStatuses } from '../agent-status/status-ownership/accepted-agent-statuses'
 
 const NOW = 1_800_000_000_000
 
@@ -18,10 +18,10 @@ describe('acknowledging agents', () => {
     const dayOld = NOW - 25 * 60 * 60 * 1000
     const store = createUIStore()
     store.setState({
-      agentStatusByPaneKey: new Map(),
+      agentStatusByPaneKey: new AcceptedAgentStatuses(),
       migrationUnsupportedByPtyId: {},
       acknowledgedAgentsByPaneKey: { 'tab-1:leaf-1': recent, 'tab-3:leaf-1': dayOld }
-    } as Partial<AppState>)
+    })
 
     store.getState().acknowledgeAgents(['tab-1:leaf-1', 'tab-2:leaf-1', 'tab-3:leaf-1'])
 
