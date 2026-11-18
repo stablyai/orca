@@ -3,7 +3,7 @@ import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-u
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFullCycleApplication {
   protected async runFetchCodexOnlyCycle(signal: AbortSignal): Promise<void> {
@@ -40,6 +40,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
         ? Promise.resolve(missingWslCodexHome)
         : fetchCodexRateLimits({
             codexHomePath,
+            readingAccount: codexHome.readingAccount,
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })

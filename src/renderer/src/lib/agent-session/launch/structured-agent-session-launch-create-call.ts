@@ -2,8 +2,8 @@ import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
-} from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
   isAgentSessionForkSourceAdmissionRefusal,
@@ -41,7 +41,7 @@ import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 

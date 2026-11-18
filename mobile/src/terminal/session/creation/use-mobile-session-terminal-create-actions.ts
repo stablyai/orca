@@ -35,9 +35,9 @@ import {
   withoutPendingHandle
 } from '../../../session/tabs/pending-session-selection'
 import { releaseTerminalCreateLock } from './terminal-create-lock'
-import { placeCreatedSessionTab } from '../../../../../src/shared/session-tab-placement'
-import '../../../../../src/shared/protocol-version'
-import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/session-tabs-runtime-capabilities'
+import { placeCreatedSessionTab } from '../../../../../src/shared/workspace-layout/tab-groups/session-tab-placement'
+import '../../../../../src/shared/remote-runtime/protocol/protocol-version'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {
@@ -68,7 +68,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
   type CreateOutcome = 'created' | 'accepted' | 'busy' | 'unavailable' | 'reported-failure'
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
-    options?: MobileSessionTerminalCreateOptions
+    options?: MobileSessionTerminalCreateOptions,
+    nativeChatDefault?: boolean
   ): Promise<CreateOutcome | undefined> {
     const sourceFork = options?.sourceChatFork
     const sourceOutcome = (value: CreateOutcome): CreateOutcome | undefined =>
@@ -112,6 +113,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           worktreeId,
           agent,
           options,
+          nativeChatDefault,
           lock: clientMutationId,
           activeSessionTabId,
           pendingSelectionRef,

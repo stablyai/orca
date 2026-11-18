@@ -7,10 +7,10 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { isCodexSharedServerWarningEnabled } from '../../../../../../shared/codex-terminal-server-isolation'
-import type { CodexSharedServerStatus } from '../../../../../../shared/codex-shared-server-command'
+import { isCodexSharedServerWarningEnabled } from '../../../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
+import type { CodexSharedServerStatus } from '../../../../../../shared/agent-launch/startup/codex-shared-server-command'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
+import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
 import { OldTerminalDialog } from '../terminal-upgrade/OldTerminalDialog'
 import { CodexSharedServerFixDialog } from './CodexSharedServerFixDialog'
 import { openTerminalBesideTab } from '../../context-menu/open-terminal-beside-tab'
@@ -104,7 +104,7 @@ export function CodexSharedServerBanner({
   const codexInPane = useAppStore(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'codex' ||
-      state.agentStatusByPaneKey[paneKey]?.agentType === 'codex'
+      state.agentStatusByPaneKey.get(paneKey)?.agentType === 'codex'
   )
   // Why a recheck: after the fix stops the server, the banner hides unless a new one is joined.
   const [recheck, setRecheck] = useState(0)

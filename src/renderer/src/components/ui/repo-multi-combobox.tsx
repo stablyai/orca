@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { cn } from '@/lib/class-names'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

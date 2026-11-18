@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildExecutionHostRegistry } from './execution-host-registry'
 import { pickerExecutionHosts, widenSavedExecutionHostIds } from './managed-orcad-execution-host'
-import type { SshConnectionState } from '../ssh-types'
+import type { SshConnectionState } from '../remote-runtime/ssh/ssh-types'
 
 const SSH_TARGETS = new Map([['omarchy-target', 'Omarchy']])
 const MANAGED_SERVER = {

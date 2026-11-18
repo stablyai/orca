@@ -7,8 +7,8 @@ import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionSelectedOptionId,
   type AgentSessionQuestionAnswer
-} from '../../../../../../src/shared/agent-session/agent-session-question-answer'
-import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-question-answer'
+import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
@@ -82,7 +82,7 @@ export function useMobileStructuredPromptResponses(args: {
         if (questionAnswersSupported === null) {
           return send({ answers })
         }
-        onSendError('Update Orca on your computer to send answers this long')
+        onSendError('Update Orca on this host to send answers this long')
         return Promise.resolve(null)
       }
       return send({ optionId })

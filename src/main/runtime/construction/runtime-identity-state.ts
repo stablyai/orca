@@ -1,6 +1,6 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
 import * as savedChatOpen from '../agent-session/records/local-agent-session-record-store-startup-open'
-import type { SessionTitlePublisher } from '../session-tabs/session-title-publisher'
+import type { SessionTitlePublisher } from '../session-tabs/publication/session-title-publisher'
 import { randomUUID } from 'node:crypto'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -17,12 +17,12 @@ import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalFocus,
   RuntimeTerminalResolvePane,
   RuntimeWorktreeTerminalSleepResult
-} from '../../../shared/runtime-terminal-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle
@@ -179,6 +179,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   )
 
   // Main touches advance stored versions; compare renderer resends against the last accepted renderer stamp.
+  // Its occupant and inventory let a later frame name that inventory instead of resending every row.
   protected acceptedRendererMobileSnapshotByWorktree = new Map<
     string,
     {
@@ -187,7 +188,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       rendererTabCount: number
       rendererTabIdentityKeys: ReadonlySet<string>
       titlePublisher?: SessionTitlePublisher
-    }
+    } & Pick<RuntimeMobileSessionTabsSnapshot, 'worktreeInstanceId' | 'browserPageInventory'>
   >()
 
   // Recreated path ids need occupant fences against pre-delete renderer frames.
@@ -255,7 +256,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   // The candidate receipt owns its exit evidence until publication or cancellation.
   protected pendingPtyRegistrationIncarnations = new Map<string, PtyRegistrationClaim>()
 
-  readonly intentionalPtyStops = new TerminalIntentionalStops()
+  readonly intentionalPtyStops = new TerminalIntentionalStops((...s) => this.onPtyStopSettled(...s))
 
   readonly terminalRunFacts = new TerminalRunFactsRegister()
 

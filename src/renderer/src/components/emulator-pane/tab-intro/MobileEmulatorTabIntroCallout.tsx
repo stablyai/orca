@@ -1,15 +1,25 @@
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { useMobileEmulatorTabIntroActions } from './use-mobile-emulator-tab-intro-actions'
+import { CREATE_ROW_MOBILE_EMULATOR_ID } from '../../tab-bar/create-menu/tab-bar-create-row-item'
+import { useIntroArrow, type IntroArrowAnchor } from './use-intro-arrow'
 
-export function MobileEmulatorTabIntroCallout(): React.JSX.Element {
+export function MobileEmulatorTabIntroCallout({
+  anchor
+}: {
+  anchor: IntroArrowAnchor
+}): React.JSX.Element {
   const t = useTranslate()
+  const [callout, setCallout] = useState<HTMLDivElement | null>(null)
+  useIntroArrow(callout, anchor, CREATE_ROW_MOBILE_EMULATOR_ID)
   const { keepIntro, hideIntro, dismissIntro } = useMobileEmulatorTabIntroActions()
 
   return (
     <div
+      ref={setCallout}
       className="mobile-emulator-tab-intro-callout--menu mt-1 flex items-center gap-2 rounded-lg border-x border-b border-border/70 bg-muted px-2 py-1.5 dark:bg-accent/80"
       // Prevent Radix outside-selection so Keep/Hide/Dismiss actions leave the callout’s menu open.
       onPointerDown={(event) => event.preventDefault()}

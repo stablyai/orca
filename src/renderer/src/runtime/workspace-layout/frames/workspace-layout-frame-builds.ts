@@ -14,7 +14,10 @@ import { layoutViewAndFactsOfStore } from '@/store/workspace-layout/frames/works
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { buildUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { splitWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-split'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type {
   DesktopLayoutView,
   LayoutContentFacts

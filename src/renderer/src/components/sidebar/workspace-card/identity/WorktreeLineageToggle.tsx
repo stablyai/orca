@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
-import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { cn } from '@/lib/class-names'
 import StatusIndicator from '../surface/StatusIndicator'
 import { useWorktreeActivityStatuses } from '../activity/use-worktree-activity-statuses'
@@ -16,9 +16,7 @@ const STATUS_ORDER: readonly WorktreeStatus[] = [
   'working',
   'monitoring',
   'unconfirmed',
-  'interrupted',
-  'done',
-  'active'
+  'interrupted'
 ]
 
 export function WorktreeLineageToggle({

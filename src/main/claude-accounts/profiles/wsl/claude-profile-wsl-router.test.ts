@@ -13,9 +13,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ClaudeManagedAccount } from '../../../../shared/managed-account-types'
+import type { ClaudeManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import type { WslSpec } from '../../../wsl/execution/wsl-runner'
-import type * as WslPaths from '../../../../shared/wsl-paths'
+import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 
 const guest = vi.hoisted(
   (): { home: string; failure: { code: number; stdout: string } | null } => ({
@@ -24,13 +24,14 @@ const guest = vi.hoisted(
   })
 )
 // Emulate the guest with local POSIX paths and /bin/sh.
-vi.mock('../../../../shared/wsl-paths', async (original) => ({
+vi.mock('../../../../shared/file-access/wsl-paths', async (original) => ({
   ...(await original<typeof WslPaths>()),
   toWindowsWslPath: (linuxPath: string) => linuxPath
 }))
+const listRunning = vi.hoisted(() => vi.fn(async () => ['Ubuntu']))
 vi.mock('../../../wsl/discovery/distro-catalog', () => ({
   getWslHomeAsync: async (distro: string) => `\\\\wsl.localhost\\${distro}${guest.home}`,
-  listRunningWslDistrosAsync: async () => ['Ubuntu']
+  listRunningWslDistrosAsync: listRunning
 }))
 const gate = vi.hoisted(() => ({
   blocked: vi.fn(
@@ -113,6 +114,14 @@ function fixture() {
 }
 
 describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
+  it('lists no running distros without a WSL account', async () => {
+    const f = fixture()
+    f.settings.claudeManagedAccounts = [{ ...f.account('h'), managedAuthRuntime: 'host' }]
+    listRunning.mockClear()
+    await expect(f.router.runningDistros()).resolves.toEqual([])
+    expect(listRunning).not.toHaveBeenCalled()
+  })
+
   it('writes the guest pointer per build, sets up even a missing folder, and removes it with the last account', async () => {
     const f = fixture()
     await f.router.publish('Ubuntu')

@@ -1,5 +1,5 @@
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../agent-launch/catalog/tui-agent-display-names'
-import type { AgentSessionAccountKind } from '../../agent-session-availability'
+import type { AgentSessionAccountKind } from '../../failures/agent-session-availability'
 import {
   quoteStartupArg,
   type AgentStartupShell
@@ -43,6 +43,17 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     agent: 'kimi',
     loginCommand: ['kimi', 'login'],
     installCommand: 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash'
+  },
+  {
+    agent: 'cursor',
+    loginCommand: ['cursor-agent', 'login'],
+    installCommand: 'curl https://cursor.com/install -fsS | bash'
+  },
+  // `hermes model` picks a provider and signs in to it; Hermes has no separate login.
+  {
+    agent: 'hermes',
+    loginCommand: ['hermes', 'model'],
+    installCommand: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
   },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
   { agent: 'antigravity', loginCommand: [] }

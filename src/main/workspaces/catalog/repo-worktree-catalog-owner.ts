@@ -1,5 +1,5 @@
-import type { Repo } from '../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { onWorktreeScanGenerationBump } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { preserveFolderUpgradeWorktreePath } from './folder-upgrade-worktree-path'

@@ -8,7 +8,7 @@ import type {
   ArtifactPublishResult,
   ArtifactWriteRequest
 } from '../../../shared/artifacts/artifacts'
-import { SharingUnavailableOnHostError } from '../../../shared/sharing-unavailable-on-host'
+import { SharingUnavailableOnHostError } from '../../../shared/remote-runtime/host-status/sharing-unavailable-on-host'
 import type { ArtifactCloudService } from '../../artifacts/artifact-cloud-service'
 
 export class RuntimeArtifactController {

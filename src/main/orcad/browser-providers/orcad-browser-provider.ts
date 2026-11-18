@@ -11,8 +11,11 @@ import { ExternalChromiumBrowserProcess } from './chromium/external-chromium-bro
 import type { ExternalChromiumLaunch } from './chromium/external-chromium-browser-session'
 import { resolveOrcadAgentBrowserBinary } from './orcad-agent-browser-binary'
 import { ElectronServeBrowserProcess } from './electron/electron-serve-browser-process'
-import { openOrcadBrowserInstallPark } from './orcad-browser-install-park'
-import { errorMessage } from '../../../shared/error-message'
+import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
+import { openServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
+import { ORCAD_BROWSER_PARK_LABEL } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
+import { errorMessage } from '../../../shared/errors/error-message'
+import { ORCA_SERVE_APPIMAGE_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 
 export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
@@ -88,11 +91,14 @@ export function installedElectronCandidates(
       ...(environment.ProgramFiles ? [joinPath(environment.ProgramFiles, 'Orca', 'Orca.exe')] : [])
     ]
   }
+  const servedAppImage = environment[ORCA_SERVE_APPIMAGE_ENV]
   return [
     joinPath(homePath, '.local', 'bin', 'orca-ide'),
     '/usr/local/bin/orca-ide',
     '/usr/bin/orca-ide',
-    '/opt/Orca/orca-ide'
+    '/opt/Orca/orca-ide',
+    // Last: hosts where an installer copy already works keep it.
+    ...(servedAppImage && posix.isAbsolute(servedAppImage) ? [servedAppImage] : [])
   ]
 }
 
@@ -111,7 +117,7 @@ async function isScriptShim(path: string): Promise<boolean> {
   }
 }
 
-/** Require installer-owned paths; arbitrary AppImage locations cannot establish ownership. */
+/** Require installer-owned paths or the AppImage serve runs from; never guess other AppImage locations. */
 export async function resolveInstalledElectronExecutable(
   candidates: string[] = installedElectronCandidates(process.platform, homedir(), process.env)
 ): Promise<string | null> {
@@ -149,15 +155,21 @@ async function startElectronServeProvider(
   signal?: AbortSignal
 ): Promise<OrcadBrowserProvider> {
   const processHandle = new ElectronServeBrowserProcess(executablePath, userDataPath)
-  try {
-    await processHandle.start(signal)
-  } catch (error) {
-    return cleanupFailedProvider(processHandle, error)
+  // Only helpers launched from macOS app bundles register.
+  const park = openServeBundlePark({ executable: executablePath, label: ORCAD_BROWSER_PARK_LABEL })
+  // Launching the bundle ShipIt is replacing aborts the install; the watcher starts it once the hold ends.
+  const parked = park?.holds() ?? false
+  if (!parked) {
+    try {
+      await processHandle.start(signal)
+    } catch (error) {
+      return cleanupFailedProvider(processHandle, error)
+    }
   }
-  const installPark = openOrcadBrowserInstallPark(executablePath, {
+  const helper = {
     pid: () => processHandle.pid(),
     stop: () => processHandle.stop(),
-    start: async (restartSignal) => {
+    start: async (restartSignal: AbortSignal) => {
       try {
         await processHandle.start(restartSignal)
       } catch (error) {
@@ -165,7 +177,8 @@ async function startElectronServeProvider(
         throw error
       }
     }
-  })
+  }
+  const installPark = park ? watchOrcadBrowserInstallPark(helper, { park, parked }) : null
   return {
     kind: 'electron',
     supportsGoogleCookieClear: () => processHandle.supportsGoogleCookieClear(),

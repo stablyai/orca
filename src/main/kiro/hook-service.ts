@@ -6,7 +6,7 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'

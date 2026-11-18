@@ -26,6 +26,7 @@ function makeProject({ sourceText, enCatalog = {}, esCatalog = {} }) {
 
   mkdirSync(rendererDir, { recursive: true })
   mkdirSync(mainDir, { recursive: true })
+  mkdirSync(path.join(root, 'src', 'shared', 'agent-usage', 'status-copy'), { recursive: true })
   mkdirSync(localesDir, { recursive: true })
 
   writeFileSync(path.join(rendererDir, 'Example.tsx'), sourceText, 'utf8')

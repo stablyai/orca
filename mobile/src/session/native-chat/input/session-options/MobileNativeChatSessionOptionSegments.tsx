@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { MobileSegmentedControl } from '../../../../components/MobileSegmentedControl'
+import { MobileSegmentedControl } from '../../../../components/controls/MobileSegmentedControl'
 import { SectionHeader } from '../../../../components/list/ListGroup'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import {
@@ -13,6 +13,7 @@ import {
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { SessionOptionCaption } from './MobileNativeChatSessionOptionRows'
+import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 
 export function showsSessionOptionAsSegments(descriptor: SessionOptionDescriptor): boolean {
   return (
@@ -41,7 +42,7 @@ export function SessionOptionSegments({
     <View>
       <SectionHeader title={nativeChatSessionOptionLabel(descriptor, say)} />
       <MobileSegmentedControl
-        segments={choices.map((choice) => ({
+        segments={orderEffortLevels(choices).map((choice) => ({
           value: choice.value,
           label: nativeChatSessionChoiceShortLabel(choice, say, descriptor.id)
         }))}

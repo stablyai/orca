@@ -1,7 +1,7 @@
 // Launch APPIMAGE to give the daemon its own FUSE mount; the window's mount dies with its runtime.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../shared/file-access/cross-platform-path'
 import { resolveAppImageRuntimeIdentity } from '../../../updater/linux-package/appimage-runtime-identity'
 import type { DurableDaemonScopeCommand } from '../../process-scopes/daemon-cgroup-scope'
 import { envWithoutAppImageRuntime } from '../../../pty/shell-startup/appimage-terminal-env'

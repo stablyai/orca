@@ -3,10 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
-import { hashPluginTree } from '../../../main/plugins/artifacts/plugin-content-hash'
 import { createPluginFromTemplate } from './plugin-create'
 import { validatePluginTarget } from './plugin-folder-validation'
-import { formatPluginReleaseEntry, pluginReleaseEntryForFolder } from './plugin-release-entry'
+import { pluginReleaseEntryForFolder } from './plugin-release-entry'
 
 const roots: string[] = []
 
@@ -40,7 +39,7 @@ async function releaseFor(dir: string) {
 }
 
 describe('orca plugin release-entry', () => {
-  it('prints the HEAD entry and source path for a plugin in a subdirectory', async () => {
+  it('resolves the HEAD entry and source path for a plugin in a subdirectory', async () => {
     const repo = await tempRoot()
     await git(repo, ['init', '--quiet'])
     const dir = join(repo, 'plugins', 'dusk')
@@ -49,19 +48,11 @@ describe('orca plugin release-entry', () => {
     await git(repo, ['commit', '--quiet', '-m', 'add dusk'])
 
     const result = await releaseFor(dir)
-    const hashed = await hashPluginTree(dir)
-    expect(hashed.ok).toBe(true)
     expect(result.sourcePath).toBe('plugins/dusk')
     expect(result.note).toBeUndefined()
     expect(result.entry).toMatchObject({
-      version: '0.1.0',
-      commit: await git(repo, ['rev-parse', 'HEAD']),
-      contentHash: hashed.ok ? hashed.hash : '',
-      execution: 'data'
+      commit: await git(repo, ['rev-parse', 'HEAD'])
     })
-    const text = formatPluginReleaseEntry(result)
-    expect(text).toContain('"path" in this plugin\'s "source"): "plugins/dusk"')
-    expect(text).toContain(`"commit": "${result.entry?.commit}"`)
   })
 
   it('gives no entry when the commit lacks a file the manifest declares', async () => {

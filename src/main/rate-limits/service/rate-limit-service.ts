@@ -1,7 +1,7 @@
 import {
   localAccountRuntimeTargetKey,
   type LocalAccountRuntimeTarget
-} from '../../../shared/local-account-runtime'
+} from '../../../shared/agent-accounts/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
@@ -11,7 +11,7 @@ import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/a
 import {
   type CodexAccountSelectionTarget,
   normalizeCodexAccountSelectionTarget
-} from '../../../shared/codex-selection-lane'
+} from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type {
   CodexHomePathResolver,
   KimiHomeResolver,
@@ -30,8 +30,8 @@ import {
   normalizeClaudeAccountSelectionTarget
 } from '../../claude-accounts/selection/runtime-selection'
 import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-account-usage'
-import type { RateLimitState } from '../../../shared/rate-limit-types'
-import type { NetworkProxySettings } from '../../../shared/network-proxy'
+import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
 
 export class RateLimitService extends RateLimitServiceAccountRefresh {
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {

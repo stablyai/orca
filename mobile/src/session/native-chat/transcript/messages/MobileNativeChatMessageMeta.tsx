@@ -7,13 +7,15 @@ import { MobileNativeChatResponseActions } from '../message-actions/MobileNative
 import { mobileNativeChatRowHoldsForkSlot } from '../../history/use-mobile-native-chat-fork'
 import { styles } from './mobile-native-chat-message-styles'
 
-/** A chat turn's time, then its actions together: copy, and rewind on a user row the chat can rewind to. */
+/** A chat turn's time, then its actions together: copy, fork and scroll-to-top, and rewind on a user row the chat can rewind to. */
 export function MobileNativeChatMessageMeta({
   message,
+  rowKey,
   fontScale,
   rewindable
 }: {
   message: NativeChatMessage
+  rowKey: string
   fontScale: number
   rewindable?: true
 }): React.JSX.Element {
@@ -24,7 +26,7 @@ export function MobileNativeChatMessageMeta({
       {/* An empty wrapper would still pull the time over by the icons' edge margin. */}
       {copyText.length > 0 || rewindable || mobileNativeChatRowHoldsForkSlot(message) ? (
         <View style={styles.metaActions}>
-          <MobileNativeChatResponseActions message={message} copyText={copyText} />
+          <MobileNativeChatResponseActions message={message} rowKey={rowKey} copyText={copyText} />
           {rewindable ? <MobileNativeChatRewindButton itemId={message.id} /> : null}
         </View>
       ) : null}

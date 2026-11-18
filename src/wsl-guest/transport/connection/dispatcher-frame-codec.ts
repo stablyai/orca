@@ -1,4 +1,4 @@
-import { HEADER_LENGTH } from '../../../shared/relay-frame-decoder'
+import { HEADER_LENGTH } from '../../../shared/remote-runtime/relay/relay-frame-decoder'
 import {
   MessageType,
   encodePreparedJsonRpcFrame,
@@ -8,7 +8,7 @@ import {
   type JsonRpcRequest,
   type JsonRpcResponse
 } from '../wire/protocol'
-import type { DecodedFrame } from '../../../shared/relay-frame-decoder-contract'
+import type { DecodedFrame } from '../../../shared/remote-runtime/relay/relay-frame-decoder-contract'
 import type { DispatcherWriterLane } from '../writer/dispatcher-writer-admission'
 import type { SinkWriteSettlement } from '../writer/dispatcher-writer-sink'
 import type { OutgoingJsonRpcMessage, PreparedRelayFrame, RelayClient } from './dispatcher-contract'

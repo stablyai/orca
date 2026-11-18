@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   getStructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusFeedOwner
@@ -32,6 +32,8 @@ export function useStructuredAgentSessionPermissionStatus(
   fence: number | null
 ): {
   permissionReport: ReturnType<typeof runtimePermissionReport>
+  launchPermissionMode: string | undefined
+  runningPermissionMode: string | undefined
   observation: 'live' | 'unverifiable'
 } {
   const { feed, subscribe } = useSessionFeed(sessionId, target)
@@ -45,7 +47,17 @@ export function useStructuredAgentSessionPermissionStatus(
     () => feed.getSessionObservation(sessionId),
     () => 'unverifiable' as const
   )
-  return { permissionReport, observation }
+  const launchPermissionMode = useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.launchPermissionMode,
+    () => undefined
+  )
+  const runningPermissionMode = useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.runningPermissionMode,
+    () => undefined
+  )
+  return { permissionReport, launchPermissionMode, runningPermissionMode, observation }
 }
 
 export function useStructuredAgentSessionOptionStamp(

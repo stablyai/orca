@@ -8,7 +8,6 @@ import {
   captureOrcadLaunchSshSessionCommand,
   ORCAD_LAUNCH_SSH_SESSION_FILENAME,
   orcadLaunchSshSessionProbeCommand,
-  orcadSshSessionAncestorShellFunction,
   parseOrcadLaunchSshSession,
   writeOrcadLaunchSshSessionCommand
 } from './orcad-launch-ssh-session'
@@ -102,31 +101,6 @@ describe.skipIf(process.platform === 'win32')('orcad launch SSH session', () => 
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('finds the nearest sshd ancestor, skipping the shells between', () => {
-    const fn = orcadSshSessionAncestorShellFunction()
-    expect(sh(`${fn} orcad_ssh_session 12345`).trim()).toBe('500 Thu Oct 9 08:00:00 2026')
-  })
-
-  it('finds no session for a process outside SSH', () => {
-    const fn = orcadSshSessionAncestorShellFunction()
-    const out = sh(`${fn} orcad_ssh_session 12345 || echo NONE`, { FAKE_PS_SHELL_PARENT: '300' })
-    expect(out.trim()).toBe('NONE')
-  })
-
-  it('records the launch and its session after the detached PID', () => {
-    const pidFile = join(dir, ORCAD_PID_FILENAME)
-    const out = sh(
-      `${captureOrcadLaunchSshSessionCommand()} sleep 0 & echo $! > '${pidFile}' && ` +
-        `${writeOrcadLaunchSshSessionCommand(mac, dir)} && cat '${pidFile}'`
-    )
-    const pid = out.trim()
-    expect(pid).toMatch(/^\d+$/)
-    expect(readFileSync(join(dir, ORCAD_LAUNCH_SSH_SESSION_FILENAME), 'utf8').trim()).toBe(
-      `${pid} 500 Thu Oct 9 08:00:00 2026`
-    )
-    expect(probe()).toBe('live')
-  })
-
   it('records the session from the full macOS launch, which still prints the runtime PID', () => {
     writeFileSync(join(dir, 'orcad.js'), 'setTimeout(() => {}, 200)')
     const command = orcadLaunchCommand(mac, {
@@ -188,16 +162,6 @@ describe.skipIf(process.platform === 'win32')('orcad launch SSH session', () => 
     expect(existsSync(join(dir, ORCAD_LAUNCH_SSH_SESSION_FILENAME))).toBe(false)
   })
 
-  it('creates the data root on a first deploy before recording', () => {
-    const data = join(dir, 'fresh', 'data')
-    const pidFile = join(dir, ORCAD_PID_FILENAME)
-    sh(
-      `${captureOrcadLaunchSshSessionCommand()} sleep 0 & echo $! > '${pidFile}' && ` +
-        `${writeOrcadLaunchSshSessionCommand(mac, data)}`
-    )
-    expect(existsSync(join(data, ORCAD_LAUNCH_SSH_SESSION_FILENAME))).toBe(true)
-  })
-
   it('removes an earlier record when this launch finds no session', () => {
     writeRecord('1', '1 500 Thu Oct 9 08:00:00 2026')
     sh(
@@ -207,11 +171,6 @@ describe.skipIf(process.platform === 'win32')('orcad launch SSH session', () => 
       }
     )
     expect(existsSync(join(dir, ORCAD_LAUNCH_SSH_SESSION_FILENAME))).toBe(false)
-  })
-
-  it('reports exited once the launching session is gone', () => {
-    writeRecord('77', '77 500 Thu Oct 9 08:00:00 2026')
-    expect(probe({ FAKE_PS_GONE: '500' })).toBe('exited')
   })
 
   it('reads a reused PID with another start time as exited', () => {

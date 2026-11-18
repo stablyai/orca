@@ -1,6 +1,6 @@
 import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 const HOST_A_HOST_ID: ExecutionHostId = 'local'
 const HOST_B_HOST_ID: ExecutionHostId = 'ssh:ssh-1'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultUIState } from '../../../../../shared/constants'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import { getDefaultUIState } from '../../../../../shared/orca-profiles/constants'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { CollapseWriteOrder } from '../../../client/settings/workspace-view-collapse-writes'
 import type { RpcRequest } from '../../core'

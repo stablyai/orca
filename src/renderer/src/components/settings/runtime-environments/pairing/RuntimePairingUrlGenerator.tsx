@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { RuntimeAccessGrant } from '../../../../../../shared/runtime-access-grants'
+import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { Label } from '../../../ui/label'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 import { translate } from '@/i18n/i18n'

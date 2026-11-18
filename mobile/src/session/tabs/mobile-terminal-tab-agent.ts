@@ -2,11 +2,11 @@ import { stripLeadingAgentTitleDecorationOrEmpty } from '../../../../src/shared/
 import { isClaudeManagementTitle } from '../../../../src/shared/agent-status/title/agent-title-core'
 import { isShellProcess } from '../../../../src/shared/agent-status/process/shell-process-detection'
 import { agentTypeToIconAgent } from '../../../../src/shared/agent-status/presentation/agent-type-icon-agent'
-import { resolveTabAgentFromSignalSnapshot } from '../../../../src/shared/tab-agent-from-signals'
-import { resolveTabNameSource } from '../../../../src/shared/tab-title-resolution'
+import { resolveTabAgentFromSignalSnapshot } from '../../../../src/shared/agent-status/identity/tab-agent-from-signals'
+import { resolveTabNameSource } from '../../../../src/shared/workspace-layout/tab-groups/tab-title-resolution'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   resolveAgentSmartKeys,
   type AgentSmartKeySet

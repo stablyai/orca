@@ -11,7 +11,7 @@ import { editorTabDocumentFolderAccess } from '@/lib/files/access/local-file-acc
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { captureDirectSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mutation-expectation'
 import { translate } from '@/i18n/i18n'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
 import { buildRichMarkdownImageInsertContent } from './rich-markdown-image-insert-content'
 import { showRichMarkdownImageInsertionCanceled } from './rich-markdown-image-insertion-feedback'

@@ -8,7 +8,7 @@ import {
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
-import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import {
   hostTestMessage,
   hostTestOperationId,

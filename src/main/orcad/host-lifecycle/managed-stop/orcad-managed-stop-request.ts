@@ -9,7 +9,7 @@ import {
   type OrcadManagedStopContext,
   type OrcadManagedStopInstance,
   type OrcadManagedStopRequest
-} from '../../../../shared/orcad-stop-request'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import {
   readOrcadInstanceLockRecord,
   type OrcadLockRecord

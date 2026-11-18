@@ -52,7 +52,7 @@ const CODEX_ALIAS_ACCESSORS = {
 
 /** Keeps one rollout per hardlink, in its preferred Codex home; reads no files. */
 export function dropCodexHardlinkAliases(
-  candidates: readonly SessionFileCandidate[]
+  candidates: SessionFileCandidate[]
 ): SessionFileCandidate[] {
   return dedupeCodexRolloutFileAliases(candidates, CODEX_ALIAS_ACCESSORS)
 }
@@ -73,13 +73,10 @@ export async function sessionCandidatesFromDiscoveries(
   discoveries: SessionFileDiscovery[],
   options: AiVaultScanOptions
 ): Promise<SessionFileChoice[]> {
-  const physical = dropCodexHardlinkAliases(
-    dropOmpCandidatesListedByPi(
-      discoveries.flatMap((discovery) =>
-        discoveryFileCandidates(discovery, discovery.files, options)
-      )
-    ).sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
-  )
+  const physical = dropOmpCandidatesListedByPi(
+    discoveries.flatMap((discovery) => discoveryFileCandidates(discovery, discovery.files, options))
+  ).sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
+  // Hardlink aliases share a file name, so inodes are compared only within a name group.
   const canonical = new Map<string, SessionFileCandidate[]>()
   const legacy: SessionFileCandidate[] = []
   for (const candidate of physical) {
@@ -101,7 +98,8 @@ export async function sessionCandidatesFromDiscoveries(
     (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
     options.signal
   )
-  for (const group of canonical.values()) {
+  for (const named of canonical.values()) {
+    const group = named.length > 1 ? dropCodexHardlinkAliases(named) : named
     group.sort(
       (a, b) =>
         Number(a.file.sizeBytes === 0) - Number(b.file.sizeBytes === 0) ||

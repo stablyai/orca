@@ -1,96 +1,134 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayControlLiveness } from './relay-control-liveness'
 
-const KEEPALIVE_INTERVAL_MS = 30_000
-
-function keepaliveControl() {
+function harness(options: { onStall?: () => void; random?: () => number } = {}) {
   const ping = vi.fn()
-  const send = vi.fn()
   const terminate = vi.fn()
   const liveness = new RelayControlLiveness({
-    cellUrl: 'https://relay-c1.example',
+    cellUrl: 'https://relay.example.test',
     ping,
-    send,
-    isLive: () => terminate.mock.calls.length === 0,
+    send: vi.fn(),
+    isLive: () => true,
     terminate,
-    random: () => 0.5
+    random: options.random ?? (() => 0.5),
+    ...(options.onStall ? { onStall: options.onStall } : {})
   })
-  liveness.start()
-  liveness.startKeepalive(KEEPALIVE_INTERVAL_MS)
-  return { liveness, ping, send, terminate }
+  return { liveness, ping, terminate }
 }
 
-describe('RelayControlLiveness keepalive acks', () => {
+describe('RelayControlLiveness', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
+
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
-  it('never probes a control whose keepalives are answered', async () => {
-    const { liveness, send, ping, terminate } = keepaliveControl()
-    // The edge answers each keepalive within a round trip.
-    send.mockImplementation(() => setTimeout(() => liveness.noteInbound(), 300))
-    await vi.advanceTimersByTimeAsync(10 * 60_000)
-    expect(send.mock.calls.length).toBeGreaterThanOrEqual(19)
-    expect(ping).not.toHaveBeenCalled()
-    expect(terminate).not.toHaveBeenCalled()
-    liveness.stop()
-  })
+  describe('without an alternate path (stall detector off)', () => {
+    it('sends no pings and keeps the 75s silence bound, checked every 15s', async () => {
+      const { liveness, ping, terminate } = harness()
+      liveness.start()
 
-  it('probes once a reply is 10s overdue and tears down after three unanswered pings', async () => {
-    const { liveness, ping, terminate } = keepaliveControl()
-    // Blackhole from the start: the first keepalive goes out at 30s.
-    await vi.advanceTimersByTimeAsync(KEEPALIVE_INTERVAL_MS + 9_999)
-    expect(ping).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(ping).toHaveBeenCalledTimes(1)
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /^\[relay\] control keepalive overdue cell=\S+ sinceInboundMs=40000 probe=armed$/
-      )
-    )
-    // Three 8s probe intervals: torn down at 64s, well before the 75s silence bound.
-    await vi.advanceTimersByTimeAsync(24_000)
-    expect(terminate).toHaveBeenCalledTimes(1)
-    expect(console.warn).toHaveBeenCalledWith(
-      '[relay] control torn down cell=https://relay-c1.example reason=probe-unanswered'
-    )
-    liveness.stop()
-  })
-
-  it('keeps a control whose one lost ack is followed by a pong', async () => {
-    const { liveness, send, ping, terminate } = keepaliveControl()
-    await vi.advanceTimersByTimeAsync(KEEPALIVE_INTERVAL_MS + 10_000)
-    expect(ping).toHaveBeenCalledTimes(1)
-    liveness.notePong()
-    // Later keepalives are answered again.
-    send.mockImplementation(() => setTimeout(() => liveness.noteInbound(), 300))
-    await vi.advanceTimersByTimeAsync(5 * 60_000)
-    expect(ping).toHaveBeenCalledTimes(1)
-    expect(terminate).not.toHaveBeenCalled()
-    liveness.stop()
-  })
-
-  it('does not watch acks on relays that never offered keepalive', async () => {
-    const ping = vi.fn()
-    const terminate = vi.fn()
-    const liveness = new RelayControlLiveness({
-      cellUrl: 'https://relay-c1.example',
-      ping,
-      isLive: () => true,
-      terminate
+      await vi.advanceTimersByTimeAsync(89_999)
+      expect(terminate).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(terminate).toHaveBeenCalledOnce()
+      expect(ping).not.toHaveBeenCalled()
     })
-    liveness.start()
-    // Relay pings arrive every 15s as before.
-    const relayPing = setInterval(() => liveness.noteInbound(), 15_000)
-    await vi.advanceTimersByTimeAsync(5 * 60_000)
-    clearInterval(relayPing)
-    expect(ping).not.toHaveBeenCalled()
-    expect(terminate).not.toHaveBeenCalled()
-    liveness.stop()
+
+    it('stays up on relay traffic alone and never pings', async () => {
+      const { liveness, ping, terminate } = harness()
+      liveness.start()
+      for (let elapsed = 0; elapsed < 300_000; elapsed += 25_000) {
+        await vi.advanceTimersByTimeAsync(25_000)
+        liveness.noteInbound()
+      }
+      expect(ping).not.toHaveBeenCalled()
+      expect(terminate).not.toHaveBeenCalled()
+      liveness.stop()
+    })
+  })
+
+  describe('with an alternate path (stall detector on)', () => {
+    it('reports a dark path once, after two unanswered pings and 30s of silence', async () => {
+      const onStall = vi.fn()
+      const { liveness, ping, terminate } = harness({ onStall })
+      liveness.start()
+
+      await vi.advanceTimersByTimeAsync(29_999)
+      expect(onStall).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(onStall).toHaveBeenCalledOnce()
+      // The pings at 10s and 20s went unanswered.
+      expect(ping).toHaveBeenCalledTimes(2)
+      // The detector only reports; the caller decides. The legacy bound still owns teardown.
+      expect(terminate).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(onStall).toHaveBeenCalledOnce()
+      expect(terminate).toHaveBeenCalledOnce()
+    })
+
+    it('detects within 36s at any ping jitter', async () => {
+      for (const random of [0, 0.999]) {
+        const onStall = vi.fn()
+        const { liveness } = harness({ onStall, random: () => random })
+        liveness.start()
+        await vi.advanceTimersByTimeAsync(36_000)
+        expect(onStall).toHaveBeenCalledOnce()
+        liveness.stop()
+      }
+    })
+
+    it('never reports while pings are answered', async () => {
+      const onStall = vi.fn()
+      const { liveness, ping } = harness({ onStall })
+      ping.mockImplementation(() => liveness.notePong())
+      liveness.start()
+      await vi.advanceTimersByTimeAsync(70_000)
+      expect(ping.mock.calls.length).toBeGreaterThanOrEqual(6)
+      expect(onStall).not.toHaveBeenCalled()
+      liveness.stop()
+    })
+
+    it('never reports when pongs are dropped but the 25s edge ping still arrives', async () => {
+      const onStall = vi.fn()
+      const { liveness } = harness({ onStall })
+      liveness.start()
+      for (let elapsed = 0; elapsed < 300_000; elapsed += 25_000) {
+        await vi.advanceTimersByTimeAsync(25_000)
+        liveness.noteInbound()
+      }
+      expect(onStall).not.toHaveBeenCalled()
+      liveness.stop()
+    })
+
+    it('treats one lost pong as inconclusive', async () => {
+      const onStall = vi.fn()
+      const { liveness, ping } = harness({ onStall })
+      let calls = 0
+      ping.mockImplementation(() => {
+        calls += 1
+        if (calls !== 2) {
+          liveness.notePong()
+        }
+      })
+      liveness.start()
+      await vi.advanceTimersByTimeAsync(70_000)
+      expect(onStall).not.toHaveBeenCalled()
+      liveness.stop()
+    })
+
+    it('stops with the control', async () => {
+      const onStall = vi.fn()
+      const { liveness, ping } = harness({ onStall })
+      liveness.start()
+      liveness.stop()
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(ping).not.toHaveBeenCalled()
+      expect(onStall).not.toHaveBeenCalled()
+    })
   })
 })

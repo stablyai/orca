@@ -2,10 +2,10 @@ import type { AppState } from '../../../types'
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
-import { remapBrowserPageDocLocation } from '../../../../../../shared/browser-page-doc-location'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../../../../../shared/browser/workspaces/browser-page-doc-location'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeIdFromVisitKey } from '@/lib/workspace/activation/worktree-visit-recency'
 import {
   remapClosedTerminalTabSnapshotCwds,
@@ -13,7 +13,7 @@ import {
 } from '../../../terminals/tabs/recently-closed-terminal-tabs'
 import '../../tabs/worktree-layout-lifecycle'
 import { renameWorktreeLayoutKeys } from '../../tabs/rename-worktree-layout'
-import { replaceRecordEntries } from '../../../keyed-record-transitions'
+import { replaceRecordEntries } from '../../../record-transitions/keyed-record-transitions'
 import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 
 // Inventory non-layout worktree-keyed maps; layout migrates separately, while surviving tab/file IDs keep their keys.
@@ -41,6 +41,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'explorerDisplayRootByWorktree',
   'showDotfilesByWorktree',
   'gitGraphFiltersByWorktree',
+  'notificationsMutedByWorktree',
   'expandedDirs',
   'defaultTerminalTabsAppliedByWorktreeId',
   'recentlyClosedTabKindsByWorktree'

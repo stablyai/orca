@@ -258,6 +258,8 @@ export type HostedReviewCreationEligibilityArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  /** Worktree HEAD; a merged review whose head differs is not the branch's review. */
+  currentHeadOid?: string | null
   /** The user's Create PR: it may start the repo's stopped WSL distro (E9). */
   wakeWslDistro?: boolean
 }

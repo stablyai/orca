@@ -15,10 +15,10 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import {
   isBareStructuredAgentSessionGoalCommand,
-  isStructuredAgentSessionHostCommand,
-  structuredAgentSessionGoalObjective
+  isStructuredAgentSessionHostCommand
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import {
+  structuredAgentSessionGoalObjective,
   structuredAgentSessionModePickDraft,
   structuredAgentSessionPickEntersGoalMode
 } from '../../../../../../shared/agent-session/view/structured-agent-session-goal-mode'
@@ -268,7 +268,8 @@ export function useNativeChatComposerSubmit(args: {
         commandText,
         threadGoal !== undefined,
         args.agent,
-        structuredTransport.optionSnapshot
+        structuredTransport.optionSnapshot,
+        structuredTransport.mcpPanel !== undefined
       )
     )
   return { send, goalMode, messageDelivery }

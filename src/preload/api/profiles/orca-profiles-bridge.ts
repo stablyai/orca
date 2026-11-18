@@ -7,7 +7,7 @@ import {
   type OrcaProfileListResult,
   type SwitchOrcaProfileResult,
   type TransferOrcaProfileProjectResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import { prepareAndInvokeAppRestart } from '../../renderer/restart/renderer-restart-wiring'
 import { awaitBeforeUnloadCheckpoint } from '../../renderer/renderer-runtime'
 

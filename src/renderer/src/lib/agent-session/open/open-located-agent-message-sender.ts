@@ -22,8 +22,8 @@ import { activateWorktreeAgentPane } from '@/components/sidebar/workspace-card/a
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '@/store/types'
-import type { RuntimeTerminalResolvePane } from '../../../../../shared/runtime-terminal-contracts'
-import type { LocatedAgentSender } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
+import type { RuntimeTerminalResolvePane } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { LocatedAgentSender } from '@/runtime/native-chat/agent-senders/agent-sender-index'
 
 /** older-host identifies the chat host; update may mean either side, and unreachable proves nothing. */
 export type LookupFailure = 'older-host' | 'update' | 'unreachable'
@@ -107,7 +107,7 @@ async function openUnheldTerminal(
   const environmentId = host.kind === 'environment' ? host.environmentId : null
   const gone = () =>
     toast.info(agentMessageSenderUnavailableText({ kind: 'gone', sender: 'terminal' }, name))
-  const row = useAppStore.getState().agentStatusByPaneKey[location.paneKey]
+  const row = useAppStore.getState().agentStatusByPaneKey.get(location.paneKey)
   let handle =
     row?.worktreeId === location.worktreeId && (row.connectionId ?? null) === environmentId
       ? row.terminalHandle

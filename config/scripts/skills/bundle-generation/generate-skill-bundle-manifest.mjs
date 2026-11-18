@@ -4,7 +4,7 @@ import { lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { resolvePullRequestDiffBase } from '../../git/pr-diff-base/git-pull-request-diff-base.mjs'
-import skillRenames from '../../../../src/shared/bundled-skill-renames.json' with { type: 'json' }
+import skillRenames from '../../../../src/shared/skills/bundled/bundled-skill-renames.json' with { type: 'json' }
 
 // Schema 3 removed revision/tree identity with snapshot registry; freshness compares installed bytes only.
 const CURRENT_MANIFEST_SCHEMA_VERSION = 3

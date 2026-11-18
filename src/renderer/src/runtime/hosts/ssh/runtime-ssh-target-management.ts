@@ -1,10 +1,10 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY,
   type SshEditableTarget,
   type SshEditableTargetAddResult,
   type SshEditableTargetInput
-} from '../../../../../shared/ssh-target-management'
+} from '../../../../../shared/remote-runtime/ssh/ssh-target-management'
 import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'

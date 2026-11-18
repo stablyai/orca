@@ -22,16 +22,16 @@ import {
 } from '../../../agent-session/launch/routing/agent-session-launch-plan'
 import type { AgentSessionLaunchRequest } from '../../../agent-session/launch/routing/agent-session-launch-plan'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/source-control/review/github-pr-start-point'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import '../setup/workspace-setup-preparation'
 import type { AppState } from '@/store/types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight/preflight-params'
 
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
 import type {
   DirectWorkItemLaunchInputs,

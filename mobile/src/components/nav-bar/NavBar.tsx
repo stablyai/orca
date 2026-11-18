@@ -13,7 +13,8 @@ import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduce
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useWorkingSweep } from '../use-working-motion'
+import { useWorkingSweep } from '../motion/use-working-motion'
+import { NAV_BAR_BUTTON_SIZE } from './NavBarButton'
 
 export const NAV_BAR_HEIGHT = 52
 
@@ -202,10 +203,12 @@ const styles = themedStyleSheet(() => ({
     width: '100%',
     opacity: 0.45
   },
-  // Equal sides keep the title centred whatever the buttons on either side.
+  // Equal sides keep the title centred whatever the buttons on either side; the floor fits two
+  // buttons, so a long title truncates instead of covering them.
   side: {
     flex: 1,
     flexBasis: 0,
+    minWidth: NAV_BAR_BUTTON_SIZE * 2 + spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm

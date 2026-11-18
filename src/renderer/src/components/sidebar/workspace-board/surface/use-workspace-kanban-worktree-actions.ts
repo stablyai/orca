@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { switchSortToManualAfterDrop } from '../../worktree-list/listing/manual-sort-switch-toast'
 import { resolveFullLaneDropIndex } from '../drag/workspace-kanban-filtered-drop-index'
 import {

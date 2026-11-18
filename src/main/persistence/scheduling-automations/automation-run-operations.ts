@@ -9,7 +9,7 @@ import type {
   AutomationRunsPage,
   AutomationRunTrigger
 } from '../../../shared/automations/history/automation-run'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   nextAutomationRunNumber,
   pruneAutomationRuns
@@ -19,7 +19,7 @@ import {
   paginateAutomationRuns
 } from '../../../shared/automations/history/automation-run-cursor'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,

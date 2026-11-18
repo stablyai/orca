@@ -5,12 +5,12 @@ import { confirmCreatedWorktreeSetupContent } from '@/runtime/repo-hooks/ensure-
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY
-} from '../../../../../../shared/worktree-runtime-capabilities'
+} from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type {
   CreateWorktreeResult,
   RunApprovedWorktreeSetupArgs,
@@ -27,14 +27,15 @@ export function reviewSetupTrustMismatch(
   repoId: string,
   hostId: ExecutionHostId | undefined,
   result: Pick<CreateWorktreeResult, 'setupTrustMismatch' | 'worktree'>,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  context: 'workspace' | 'vm' = 'workspace'
 ): void {
   const mismatch = result.setupTrustMismatch
   if (!mismatch) {
     return
   }
   reviewCreatedWorktreeSetup(
-    { getState, repoId, hostId, worktreeId: result.worktree.id, target },
+    { getState, repoId, hostId, worktreeId: result.worktree.id, target, context },
     mismatch.scriptContent
   )
 }
@@ -45,6 +46,7 @@ type CreatedWorktreeSetupReview = {
   hostId: ExecutionHostId | undefined
   worktreeId: string
   target: RuntimeClientTarget
+  context: 'workspace' | 'vm'
 }
 
 function reviewCreatedWorktreeSetup(
@@ -56,7 +58,9 @@ function reviewCreatedWorktreeSetup(
       review.getState,
       review.repoId,
       scriptContent,
-      review.hostId
+      review.hostId,
+      'created-branch',
+      review.context
     )
     if (approval.decision !== 'run' || approval.approvedContentHash === undefined) {
       showSetupSkippedToast(review, scriptContent)

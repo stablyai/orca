@@ -9,7 +9,7 @@ import type {
 import {
   CLAUDE_TASK_NOTIFICATION_MARKER,
   readClaudeTaskNotification
-} from '../../../../shared/claude-task-notification-text'
+} from '../../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-task-notification-text'
 import {
   openTranscriptReadStream,
   wslGatedReaddir,
@@ -26,7 +26,7 @@ import {
   SUBAGENT_TRANSCRIPT_PREFIX
 } from './session-scanner-subagent-transcripts'
 import { asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 

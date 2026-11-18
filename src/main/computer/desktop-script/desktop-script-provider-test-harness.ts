@@ -100,7 +100,7 @@ export function sampleBridgeSnapshot(name: string, value: string) {
     windowTitle: name,
     windowId: 99,
     windowBounds: { x: 10, y: 20, width: 300, height: 200 },
-    screenshotPngBase64: 'iVBORw0KGgo=',
+    screenshotBase64: 'iVBORw0KGgo=',
     coordinateSpace: 'window',
     truncation: { truncated: false, maxNodes: 1200, maxDepth: 64, maxDepthReached: false },
     treeLines: [`0 text entry area, Value: ${value}`],

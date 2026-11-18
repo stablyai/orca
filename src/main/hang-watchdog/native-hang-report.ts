@@ -1,5 +1,5 @@
 import { basename } from 'node:path/posix'
-import { sanitizeCrashReportString } from '../../shared/crash-report-redaction'
+import { sanitizeCrashReportString } from '../../shared/crash-reporting/crash-report-redaction'
 import { redactString } from '../observability/redactor'
 
 export const MAX_NATIVE_HANG_REPORT_BYTES = 2 * 1024 * 1024

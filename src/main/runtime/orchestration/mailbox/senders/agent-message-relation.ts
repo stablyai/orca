@@ -1,4 +1,4 @@
-import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'

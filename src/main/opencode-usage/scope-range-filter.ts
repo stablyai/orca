@@ -1,4 +1,7 @@
-import type { OpenCodeUsageRange, OpenCodeUsageScope } from '../../shared/opencode-usage-types'
+import type {
+  OpenCodeUsageRange,
+  OpenCodeUsageScope
+} from '../../shared/agent-usage/analytics/opencode-usage-types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from './types'
 import {
   getLocalUsageDay,

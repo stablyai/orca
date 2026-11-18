@@ -1,6 +1,6 @@
 import { useRef, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
-import { useAudioCapture } from '@/hooks/use-audio-capture'
+import { useAudioCapture } from '@/components/dictation/use-audio-capture'
 import { DictationIndicator } from './DictationIndicator'
 import { captureInsertionTarget } from './dictation-insertion-target'
 import { captureDictationContext } from './dictation-context'
@@ -30,7 +30,7 @@ import {
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { publishDictationMeter } from './dictation-meter-store'
 import { useDictationSilenceStop } from './use-dictation-silence-stop'
-import { stopAfterSilenceSeconds } from '../../../../shared/dictation-silence-stop'
+import { stopAfterSilenceSeconds } from '../../../../shared/speech/dictation/dictation-silence-stop'
 import { useDictationSpeechEvents } from './use-dictation-speech-events'
 import { useDictationSpeechModelSetup } from './use-dictation-speech-model-setup'
 import { shouldHoldForCleanup, useDictationCleanup } from './use-dictation-cleanup'
@@ -42,7 +42,7 @@ import {
   transitionDictationSession,
   type DictationSession,
   type DictationSessionEvent
-} from '../../../../shared/dictation-session-machine'
+} from './dictation-session-machine'
 
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)

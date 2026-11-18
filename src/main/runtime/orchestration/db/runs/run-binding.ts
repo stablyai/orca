@@ -3,7 +3,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { findCallerWorkerDispatches, workerRunBindingRefusal } from './worker-run-binding'
 import {
   mailboxAddressOf,
@@ -191,6 +191,23 @@ export function bindRun(
           params.runId
         )
       this.fenceUnacknowledgedMailboxDeliveries(`run:${params.runId}`)
+      const previous = runCoordinatorKey(run)
+      if (
+        previous.orcaSessionId !== coordinator.orcaSessionId ||
+        previous.terminalHandle !== coordinator.terminalHandle
+      ) {
+        // A pointer the old coordinator was handed points the new one at nothing: unread mail
+        // it never took is pointed at again. Cards still in a chat move by their own custody.
+        this.db
+          .prepare(
+            `UPDATE messages
+             SET delivered_at = NULL, pointer_pty_id = NULL, pointer_process_incarnation = NULL
+             WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+               AND delivered_at IS NOT NULL AND pointer_enter_pending = 0
+               AND id NOT IN (SELECT message_id FROM structured_mail_sends WHERE mailbox_handle = ?)`
+          )
+          .run(`run:${params.runId}`, `run:${params.runId}`)
+      }
       if (params.takeoverLegacy || replacesLegacyCoordinator) {
         this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)
       }

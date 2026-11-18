@@ -1,10 +1,13 @@
 import { resolve } from 'node:path'
-import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../src/shared/orcad-local-serve-selection'
+import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../src/shared/remote-runtime/serve-supervisor/orcad-local-serve-selection'
 import { CLI_MAIN_ENTRY_NAMES } from './cli-main-entry-names'
 
 /** Main-build Rollup inputs: output file name (without .js) to its source entry. */
 export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   index: resolve('src/main/index.ts'),
+  'runtime-environment-store-worker-entry': resolve(
+    'src/shared/remote-runtime/host-store/runtime-environment-store-worker-entry.ts'
+  ),
   'backend-entry': resolve('src/main/backend/backend-entry.ts'),
   'browser-extension-native-host-supervisor-entry': resolve(
     'src/main/browser/extensions/native-messaging/browser-extension-native-host-supervisor-entry.ts'
@@ -29,6 +32,8 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'journal-sql-reader-entry': resolve(
     'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts'
   ),
+  // Chat reader threads run here so their heaps stay out of main's V8 cage.
+  'utility-worker-host-entry': resolve('src/main/utility-worker-host/utility-worker-host-entry.ts'),
   'journal-sql-worker-entry': resolve(
     'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts'
   ),

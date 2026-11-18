@@ -1,8 +1,8 @@
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
-import { resolveChatTabActivation } from '../../../agent-session/agent-session-tab-identity'
+import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import { resolveChatTabActivation } from '../../../session-tabs/chat/agent-session-tab-identity'
 import { commitLeafMoveAndRekey } from '../../../../ipc/pty/ipc/leaf-move'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { MovedPanePlacement } from '../../../session-tabs/headless-pane-move-to-new-tab'
+import type { MovedPanePlacement } from '../../../session-tabs/layout/headless-pane-move-to-new-tab'
 import { defineMethod } from '../../core'
 import {
   assertProjectedSessionTabVisible,
