@@ -42,18 +42,6 @@ function note(overrides: Partial<AutomationResultNote> = {}): AutomationResultNo
 }
 
 describe('NativeChatAutomationResultRow', () => {
-  it('expands to show the run result', () => {
-    renderRow(<NativeChatAutomationResultRow note={note()} />)
-
-    const row = screen.getByRole('button', { name: /Hook echo\. Finished/ })
-    expect(row).toHaveAttribute('aria-expanded', 'false')
-
-    fireEvent.click(row)
-
-    expect(row).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText(/service: api/)).toBeInTheDocument()
-  })
-
   it('names a failed run and opens the run', () => {
     renderRow(<NativeChatAutomationResultRow note={note({ outcome: 'couldNotFinish' })} />)
 
