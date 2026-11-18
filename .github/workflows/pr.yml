@@ -69,9 +69,8 @@ jobs:
             /package.json
             /README.md
             /docs/readme/
-            /.github/scripts/check-root-directory-entries.mjs
-            /.github/scripts/check-required-pr-context.mjs
-            /.github/scripts/check-pull-request-job-timeouts.mjs
+            /.github/scripts/
+            /.github/actions/
             /.github/workflows/
             /config/.bun-version
             /config/scripts/static-analysis/repository-layout/check-readme-local-links.mjs
@@ -112,6 +111,9 @@ jobs:
 
       - name: Check PR job time limits
         run: bun .github/scripts/check-pull-request-job-timeouts.mjs
+
+      - name: Keep manual-only perf runs out of CI
+        run: node .github/scripts/check-manual-only-perf-runs.mjs
 
       # Readiness changes eligibility for advisory tests, not the already-tested source.
       - name: Find identical successful required checks

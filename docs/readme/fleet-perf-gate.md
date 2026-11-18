@@ -1,5 +1,8 @@
 # Fleet perf gate
 
+> [!IMPORTANT]
+> **Manual only, never in CI.** Someone starts it by hand on a QA machine. It refuses to start when `CI` or `GITHUB_ACTIONS` is `true` unless you pass `--allow-ci`. A repository guard (`.github/scripts/check-manual-only-perf-runs.mjs`) fails the PR if a workflow, composite action or package script invokes it.
+
 A real-app OLD vs NEW check at fleet scale (~1,900 workspaces, ~1,800 chat tabs, synthetic). It exists because some regressions only show when every workspace pays: an idle desktop that sends itself 143 tab-update frames per second looks fine with 10 workspaces.
 
 ```sh
@@ -71,13 +74,12 @@ For example, `--old v1.4.262 --new v1.4.263`.
 
 ## Launch bursts and macOS
 
-On Linux, a launch's process-ownership check reads `/proc` directly and can't time out. The 2 s read timeout that broke #42760's restart burst exists only on macOS (`provider-process-row-read.ts`). The Linux burst therefore guards launches at fleet scale, but it can't reproduce that timeout. Three layers cover it:
+On Linux, a launch's process-ownership check reads `/proc` directly and can't time out. The 2 s read timeout that broke #42760's restart burst exists only on macOS (`provider-process-row-read.ts`). The Linux burst therefore guards launches at fleet scale, but it can't reproduce that timeout. Two layers cover it:
 
-| Layer                                                                                                                                                                                                                                                                                  | Runs                                         | Triggered by                                                                                                                 |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Contract tests: 25 concurrent ownership proofs whose first reads are all unverifiable must all publish (`provider-ownership-journal.test.ts`); a restart burst starts at most six continuations at once on a many-core host (`structured-agent-session-restart-resume-runner.test.ts`) | CI, every PR whose unit tests select them    | Changes to those modules or what they import                                                                                 |
-| Linux launch burst (`burst` scenario)                                                                                                                                                                                                                                                  | This gate, on the Linux QA machine           | Any hot-path change (above)                                                                                                  |
-| macOS launch burst: `pnpm perf:fleet-gate --scenarios burst --force` on a Mac                                                                                                                                                                                                          | On demand, and in every release run on a Mac | Launch, restart or process-ownership changes (`fleet-gate-hot-paths.mjs --launch-paths` exits 11 when a change touches them) |
+| Layer                                                                         | Runs                                         | Triggered by                                                                                                                 |
+| ----------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Linux launch burst (`burst` scenario)                                         | This gate, on the Linux QA machine           | Any hot-path change (above)                                                                                                  |
+| macOS launch burst: `pnpm perf:fleet-gate --scenarios burst --force` on a Mac | On demand, and in every release run on a Mac | Launch, restart or process-ownership changes (`fleet-gate-hot-paths.mjs --launch-paths` exits 11 when a change touches them) |
 
 ## Seed
 
