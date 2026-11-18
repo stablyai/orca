@@ -10,6 +10,10 @@ one. Placement is not inherited:
 ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <placement> --agent <agent>
 ```
 
+`--retry-of` names the newest failed attempt. Retry only after the cause
+changes; the same start against an unchanged failure (an unreachable host)
+fails the same way, so report it instead.
+
 `worker-stop` exits 1 with `stop_unknown` when it cannot prove the agent
 stopped; check `worker-show` before acting again.
 

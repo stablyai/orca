@@ -6,12 +6,19 @@ import {
 } from '../../github/pr-watch/pr-watch-storage'
 import { loadAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type { AgentSessionStoreState } from '../../runtime/agent-session/records/agent-session-store-state'
+import {
+  storedAgentSessionBackground,
+  type StoredAgentSessionBackground
+} from '../../runtime/agent-session/records/agent-session-tab-table'
 import { readCommandReceipt } from './writing/command-receipt-table'
 import type { CommandReceiptScope } from './writing/command-receipt-schema'
 import { readForgottenJournalChats } from './journal-forgotten-chats'
+import { readJournalConnectorReplies } from './connector-replies/journal-connector-replies'
+import type { JournalConnectorReplyRow } from '../../../shared/agent-session/journal/journal-connector-reply'
 
 export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
   sessionTabs: [tabId: string, sessionId: string][] | null
+  backgroundSessions: StoredAgentSessionBackground | null
 }
 
 export type JournalSqlDatabaseRead =
@@ -24,6 +31,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
   | { kind: 'forgotten-chats'; after: string | null }
+  | { kind: 'connector-replies'; sessionId?: string }
 
 export type JournalSqlDatabaseReadResult =
   | { kind: 'pr-watch'; value: PRWatchReadValues[PRWatchRead['kind']] }
@@ -42,6 +50,7 @@ export type JournalSqlDatabaseReadResult =
     }
   | { kind: 'attachment-sweeps'; uploadIds: string[] }
   | { kind: 'forgotten-chats'; sessionIds: string[] }
+  | { kind: 'connector-replies'; rows: JournalConnectorReplyRow[] }
 
 /** Profile metadata has no chat projection prerequisite; all reads still share one WAL snapshot. */
 export function readJournalSqlDatabase(
@@ -70,13 +79,22 @@ function read(
       const records = loadAgentSessionStoreRows(db, operation.unreconciled)
       return {
         kind: 'records',
-        records: { ...records, sessionTabs: records.sessionTabs?.entries() ?? null }
+        records: {
+          ...records,
+          sessionTabs: records.sessionTabs?.entries() ?? null,
+          backgroundSessions: storedAgentSessionBackground(records.sessionTabs)
+        }
       }
     }
     case 'receipt':
       return {
         kind: 'receipt',
         receipt: readCommandReceipt(db, operation.scope, operation.operationId)
+      }
+    case 'connector-replies':
+      return {
+        kind: 'connector-replies',
+        rows: readJournalConnectorReplies(db, operation.sessionId)
       }
     case 'epoch':
       return {

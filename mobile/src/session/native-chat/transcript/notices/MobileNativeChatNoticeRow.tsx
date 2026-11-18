@@ -27,6 +27,8 @@ import {
   type MobileNativeChatNoticeView
 } from './mobile-native-chat-notice-context'
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
+import { MobileNativeChatAutomationResultRow } from '../MobileNativeChatAutomationResultRow'
+import { MobileNativeChatDivider, mobileNativeChatDividerStyles } from '../MobileNativeChatDivider'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -39,6 +41,7 @@ import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
 import { sayMobileAgentSessionFailure } from '../../agent-session/agent-session-failure-copy'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { mobileNativeChatBotCard } from '../bot-cards/mobile-native-chat-bot-cards'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-stopped-before-start'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
@@ -95,11 +98,14 @@ function noticeLineText(
 export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
-  onLongPress
+  onLongPress,
+  cardId
 }: {
   blocks: readonly NativeChatBlock[]
   fontScale: number
   onLongPress?: () => void
+  /** The row's message id, for a bot card's fold and answer. */
+  cardId?: string
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -120,6 +126,24 @@ export function MobileNativeChatNoticeRow({
         {text}
       </Text>
     ) : null
+  }
+  if (notice.automationResult) {
+    return (
+      <MobileNativeChatAutomationResultRow
+        note={notice.automationResult}
+        cleared={notice.automationResultCleared === true}
+        fontScale={fontScale}
+      />
+    )
+  }
+  const botCard = mobileNativeChatBotCard(notice, {
+    cardId: cardId ?? '',
+    timestamp: null,
+    fallback: notice.text,
+    fontScale
+  })
+  if (botCard) {
+    return botCard
   }
   const look = nativeChatNoticeLook(notice)
   const lineText = noticeLineText(notice, names, t)
@@ -180,23 +204,15 @@ export function MobileNativeChatNoticeRow({
         </View>
       )
     }
-    case 'divider': {
-      const label = copy[look.label]
-      return (
-        <View style={styles.divider} accessibilityRole="text" accessibilityLabel={label}>
-          <View style={styles.rule} />
-          <Text style={styles.dividerLabel}>{label}</Text>
-          <View style={styles.rule} />
-        </View>
-      )
-    }
+    case 'divider':
+      return <MobileNativeChatDivider label={copy[look.label]} />
     case 'forked-from': {
       const { sourceName, sourceSessionId } = look
       return (
         // No label on the row: it would replace the text and hide the source link from screen readers.
-        <View style={styles.divider}>
-          <View style={styles.rule} />
-          <Text style={styles.dividerLabel}>
+        <View style={mobileNativeChatDividerStyles.divider}>
+          <View style={mobileNativeChatDividerStyles.rule} />
+          <Text style={mobileNativeChatDividerStyles.dividerLabel}>
             {copy.forkedFrom}{' '}
             {openForkSource ? (
               <Text
@@ -210,7 +226,7 @@ export function MobileNativeChatNoticeRow({
               sourceName
             )}
           </Text>
-          <View style={styles.rule} />
+          <View style={mobileNativeChatDividerStyles.rule} />
         </View>
       )
     }
@@ -335,21 +351,6 @@ export function MobileNativeChatNoticeRow({
 }
 
 const styles = themedStyleSheet(() => ({
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  rule: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
-  },
-  dividerLabel: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
   dividerLink: {
     textDecorationLine: 'underline'
   },

@@ -1,5 +1,6 @@
 import { automationCanonicalLaunchSetup } from '../../../../../shared/automations/launch/automation-canonical-launch-setup'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
+import { hasAutomationSchedule } from '../../../../../shared/automation-event-triggers'
 import { translate } from '@/i18n/i18n'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import {
@@ -12,8 +13,10 @@ import { getAutomationSetupDecisionDraftValue } from './automation-setup-decisio
 
 export function buildAutomationEditDraft(automation: Automation): AutomationDraft {
   const setup = automationCanonicalLaunchSetup(automation)
-  const schedule = tryParseAutomationRrule(automation.rrule)
-  const hasCustomSchedule = !schedule && isRunnableAutomationSchedule(automation.rrule)
+  // An events-only automation's sentinel schedule is no cadence: picking one starts from a new one's.
+  const scheduled = hasAutomationSchedule(automation)
+  const schedule = scheduled ? tryParseAutomationRrule(automation.rrule) : null
+  const hasCustomSchedule = scheduled && !schedule && isRunnableAutomationSchedule(automation.rrule)
   return {
     name: automation.name,
     prompt: automation.prompt,
@@ -24,6 +27,7 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
       ? { launchPreferences: setup.launchPreferences }
       : {}),
     ...(setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}),
+    bot: automation.bot ?? null,
     projectId: getAutomationRunRepoId(automation),
     workspaceMode: automation.workspaceMode,
     workspaceId: automation.workspaceId ?? '',
@@ -39,10 +43,20 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     time: schedule ? formatTimeInput(schedule.hour, schedule.minute) : AUTOMATION_DEFAULT_TIME,
     dayOfWeek: String(schedule?.dayOfWeek ?? 1),
     customSchedule: hasCustomSchedule ? automation.rrule : '',
-    savedSchedule: automation.rrule,
+    savedSchedule: scheduled ? automation.rrule : null,
     missedRunGraceMinutes: String(automation.missedRunGraceMinutes),
+    ...(automation.bot
+      ? {
+          savedBotAutomation: {
+            name: automation.name,
+            botId: automation.bot.botId,
+            on: automation.on ?? []
+          }
+        }
+      : {}),
+    eventsOnly: !scheduled,
     scheduleWarning:
-      schedule || hasCustomSchedule
+      schedule || hasCustomSchedule || !scheduled
         ? null
         : translate(
             'auto.components.automations.editDraft.unsupportedSchedule',

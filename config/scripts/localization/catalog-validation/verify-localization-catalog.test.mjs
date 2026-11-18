@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   collectLocalizationReferences,
+  LOCALIZATION_SOURCE_ROOTS,
   main as verifyLocalizationCatalog
 } from './verify-localization-catalog.mjs'
 import { collectRuntimeRequiredKeys } from './generate-runtime-required-english-catalog.mjs'
@@ -31,6 +32,11 @@ function makeProject({ sourceText, enCatalog = {}, esCatalog = {} }) {
 
   writeFileSync(path.join(rendererDir, 'Example.tsx'), sourceText, 'utf8')
   writeFileSync(path.join(mainDir, 'empty.ts'), 'export {}\n', 'utf8')
+  // Single-file roots (shared copy the desktop draws) must exist too.
+  for (const sourceRoot of LOCALIZATION_SOURCE_ROOTS.filter((root) => path.extname(root))) {
+    mkdirSync(path.dirname(path.join(root, sourceRoot)), { recursive: true })
+    writeFileSync(path.join(root, sourceRoot), 'export {}\n', 'utf8')
+  }
   writeJson(path.join(localesDir, 'en.json'), enCatalog)
   writeJson(path.join(localesDir, 'es.json'), esCatalog)
 
