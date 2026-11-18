@@ -72,12 +72,9 @@ export function NativeChatTurnDiffRollup({
   diff: NativeChatTurnDiff
 }): React.JSX.Element {
   const t = useTranslate()
-  const { open, setOpen } = useNativeChatDisclosure(
-    `turn-diff-summary:${diff.files[0]?.edits[0]?.target.messageId}`,
-    false
-  )
+  const { open, setOpen } = useNativeChatDisclosure(`turn-diff-summary:${diff.turnKey}`, false)
   const { open: showAll, setOpen: setShowAll } = useNativeChatDisclosure(
-    `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
+    `turn-diff-files:${diff.turnKey}`,
     false
   )
   const files = showAll ? diff.files : diff.files.slice(0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT)

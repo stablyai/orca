@@ -80,12 +80,9 @@ export function MobileNativeChatTurnDiffRollup({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const [open, setOpen] = useMobileNativeChatDisclosure(
-    `turn-diff-summary:${diff.files[0]?.edits[0]?.target.messageId}`,
-    false
-  )
+  const [open, setOpen] = useMobileNativeChatDisclosure(`turn-diff-summary:${diff.turnKey}`, false)
   const [showAll, setShowAll] = useMobileNativeChatDisclosure(
-    `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
+    `turn-diff-files:${diff.turnKey}`,
     false
   )
   const files = showAll ? diff.files : diff.files.slice(0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT)
