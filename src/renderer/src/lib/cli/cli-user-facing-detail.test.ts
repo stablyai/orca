@@ -27,3 +27,21 @@ it('localizes the detail after Register replaced the link of another Orca app', 
     '[auto.lib.cli.detail.replacedOtherAppLink] Replaced the /usr/local/bin/orca link to /Applications/Orca.app. To switch back, register the CLI again in that app.'
   )
 })
+
+it('localizes the status of a link that a non-Orca app owns', () => {
+  expect(
+    formatCliUserFacingDetail(
+      '/usr/local/bin/orca belongs to another app (/Applications/Tool.app). Register replaces it.'
+    )
+  ).toBe(
+    '[auto.lib.cli.detail.nonOrcaAppOwnsLink] /usr/local/bin/orca belongs to another app (/Applications/Tool.app). Register replaces it.'
+  )
+})
+
+it('localizes the detail after Register replaced the link of a non-Orca app', () => {
+  expect(
+    formatCliUserFacingDetail('Replaced the /usr/local/bin/orca link to /Applications/Tool.app.')
+  ).toBe(
+    '[auto.lib.cli.detail.replacedNonOrcaAppLink] Replaced the /usr/local/bin/orca link to /Applications/Tool.app.'
+  )
+})
