@@ -3,7 +3,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
-import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
+import {
+  refreshLocalStructuredSessionTabs,
+  refreshLocalStructuredSessionWorktreeTabs
+} from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 
 import {
@@ -68,7 +71,8 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-abandon', ()
 }))
 
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
-  refreshLocalStructuredSessionTabs: vi.fn()
+  refreshLocalStructuredSessionTabs: vi.fn(),
+  refreshLocalStructuredSessionWorktreeTabs: vi.fn()
 }))
 
 vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
@@ -239,6 +243,7 @@ describe('a blank chat whose first start never answers', () => {
     resetStructuredAgentSessionSendsForTests()
     mocks.retryIntent.mockImplementation((intent: StructuredAgentSessionLaunchIntent) => intent)
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([publishedSnapshot()])
+    vi.mocked(refreshLocalStructuredSessionWorktreeTabs).mockResolvedValue(publishedSnapshot())
     mocks.callRuntimeRpc.mockResolvedValue({
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
@@ -280,24 +285,26 @@ describe('a blank chat whose first start never answers', () => {
     vi.useRealTimers()
   })
 
-  // Deadlines that expire together must not each rewrite every saved launch.
-  it.each([10, 100])('saves %i starts that time out together in one write', async (count) => {
+  // A start's deadline changes nothing a reload reads, so it never rewrites the saved launches.
+  it.each([10, 100])('writes no saved launches when %i starts time out apart', async (count) => {
     for (let i = 0; i < count; i += 1) {
       mocks.createIntent.mockReturnValueOnce(launchIntent(`session-stalled-${i}`))
       mocks.launch.mockReturnValueOnce(new Promise<Receipt>(() => {}))
       startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: `request-stalled-${i}` })
+      await vi.advanceTimersByTimeAsync(1_000)
     }
-    await flushLaunchSettlement()
     const setItem = vi.spyOn(localStorage, 'setItem')
 
-    await vi.advanceTimersByTimeAsync(30_001)
+    await vi.advanceTimersByTimeAsync(30_000)
 
-    const launchWrites = setItem.mock.calls.filter(
-      ([key]) => key === 'orca:structuredAgentLaunches:v1'
-    )
-    expect(launchWrites).toHaveLength(1)
-    const saved: { lifecycle: string }[] = JSON.parse(launchWrites[0][1])
-    expect(saved.filter((record) => record.lifecycle === 'visibility-unknown')).toHaveLength(count)
+    expect(
+      setItem.mock.calls.filter(([key]) => key === 'orca:structuredAgentLaunches:v1')
+    ).toHaveLength(0)
+    for (let i = 0; i < count; i += 1) {
+      expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, `session-stalled-${i}`)).toBe(
+        'visibility-unknown'
+      )
+    }
     setItem.mockRestore()
     vi.useRealTimers()
   })

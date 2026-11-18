@@ -9,7 +9,6 @@ import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-cha
 import {
   notifyStructuredLaunchListeners,
   publishStructuredLaunchChange,
-  publishStructuredLaunchStateChange,
   type StructuredLaunchState
 } from './structured-agent-session-launch-state-store'
 
@@ -59,7 +58,6 @@ export function trackStructuredLaunchConfirmationDeadline(
     state.errorText = `No answer within ${STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS / 1000} s from ${awaiting}.`
     console.warn('[structured-agent-launch] start did not answer', { awaiting })
     if (state.callers.outcome !== 'pending') {
-      // Only the unpersisted cause changed; the outcome's own transition already saved the record.
       publishStructuredLaunchChange(state.intent.sessionId)
       return
     }
@@ -70,7 +68,8 @@ export function trackStructuredLaunchConfirmationDeadline(
     }
     state.visibilityUnknown = true
     state.callers.outcome = 'unknown'
-    publishStructuredLaunchStateChange(state)
+    // Not saved: a reload already reads a saved pending start as unconfirmed, so this adds no write.
+    publishStructuredLaunchChange(state.intent.sessionId)
   }, STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS)
   const clear = (): void => clearTimeout(deadline)
   void promise.then(clear, clear)
