@@ -123,4 +123,25 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
       rmSync(home, { recursive: true, force: true })
     }
   })
+
+  itWithZsh('binds Ctrl+Left/Right to word motion unless .zshrc rebinds them', async () => {
+    const home = makeZshHome({ '.zshrc': "bindkey -M emacs '^[[1;5C' end-of-line\n" })
+    try {
+      const { values } = await runZshPty({
+        env: wrappedEnv(home),
+        commands: [
+          `ORCA_TEST_LEFT="$(bindkey -M emacs '^[[1;5D')"`,
+          `ORCA_TEST_RIGHT="$(bindkey -M emacs '^[[1;5C')"`,
+          `ORCA_TEST_VI_RIGHT="$(bindkey -M viins '^[[1;5C')"`
+        ],
+        report: ['ORCA_TEST_LEFT', 'ORCA_TEST_RIGHT', 'ORCA_TEST_VI_RIGHT']
+      })
+
+      expect(values.ORCA_TEST_LEFT).toBe('"^[[1;5D" backward-word')
+      expect(values.ORCA_TEST_RIGHT).toBe('"^[[1;5C" end-of-line')
+      expect(values.ORCA_TEST_VI_RIGHT).toBe('"^[[1;5C" forward-word')
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
 })

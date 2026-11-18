@@ -38,7 +38,7 @@ export function resolvePreviewShortcutAction(
     context.optionKeyLocations,
     context.clientPlatform === 'win32',
     context.keybindings,
-    // Why: a local ConPTY reads \eb/\ef as Alt+B/F (stray b/f in PSReadLine), so Ctrl/Alt+←/→ defer.
+    // Why: a local ConPTY reads \eb/\ef as Alt+B/F (stray b/f in PSReadLine), so Alt+←/→ defer.
     () => context.terminalInput?.localWindowsConpty === true,
     context.getKittyKeyboardFlags,
     getLayoutCharacterForCode,

@@ -54,6 +54,11 @@ export const ZSH_USER_ZSHENV_SOURCE_BLOCK = `{
     builtin typeset -ag precmd_functions
     (( \${precmd_functions[(Ie)__orca_deferred_init]} )) || precmd_functions+=(__orca_deferred_init)
     __orca_arm_deferred_line_init
+    # Why: stock zsh leaves xterm's Ctrl+Left/Right unbound; bind word motion before .zshrc so user bindings win.
+    builtin bindkey -M emacs '^[[1;5D' backward-word
+    builtin bindkey -M emacs '^[[1;5C' forward-word
+    builtin bindkey -M viins '^[[1;5D' backward-word
+    builtin bindkey -M viins '^[[1;5C' forward-word
   fi
 }`
 

@@ -78,7 +78,7 @@ export function resolveTerminalShortcutAction(
   optionKeyLocations: OptionKeyLocationState = 0,
   isWindows: boolean = false,
   keybindings?: KeybindingOverrides,
-  // Why: lazy so local ConPTY lookup runs only for Ctrl/Alt+Arrow and Ctrl+Enter.
+  // Why: lazy so local ConPTY lookup runs only for Alt+Arrow and Ctrl+Enter.
   isLocalWindowsConptyPane?: () => boolean,
   // Why: exact flags distinguish ordinary kitty negotiation from report-all mode.
   getKittyKeyboardFlagsActivePane?: () => number,
@@ -291,22 +291,6 @@ export function resolveTerminalShortcutAction(
       return null
     }
     // Why: readline doesn't bind xterm's \e[1;3D/C for alt+←/→, so translate to \eb/\ef for word-nav (iTerm2 "Esc+" behavior).
-    return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
-  }
-
-  if (
-    !isMac &&
-    !event.metaKey &&
-    event.ctrlKey &&
-    !event.altKey &&
-    !event.shiftKey &&
-    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-  ) {
-    // Why: local Windows ConPTY (PSReadLine) binds Ctrl+←/→ itself; sending \eb/\ef prints stray b/f. Remote/WSL run readline.
-    if (isLocalWindowsConptyPane?.()) {
-      return null
-    }
-    // Why: readline ignores xterm's \e[1;5D/C, so translate Ctrl+←/→ to \eb/\ef for word-nav; !isMac since Mac reserves Ctrl+Arrow.
     return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
 
