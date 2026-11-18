@@ -7,6 +7,7 @@ import {
   resolveZotzMachineMode
 } from '../../shared/zotz/zotz-machine-mode'
 import { configureZotzUpdateAutomation } from '../updater/zotz-update-automation'
+import { startZotzMemoryGovernor } from '../zotz/memory-governor/zotz-memory-governor-startup'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
@@ -94,6 +95,11 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
+  const stopZotzMemoryGovernor = startZotzMemoryGovernor({
+    store,
+    server: agentHookServer,
+    userDataPath: getCanonicalUserDataPath()
+  })
   const unsubscribeStatusChanges = agentHookServer.subscribeStatusRowMutations(
     ({ before, after }) => {
       for (const paneKey of new Set([before?.paneKey, after?.paneKey])) {
@@ -128,6 +134,7 @@ export function initializeMainProcessObservers(): void {
   state.unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
     disposeZotzUpdateAutomation()
+    stopZotzMemoryGovernor()
     unsubscribeStatusFreshness()
     uninstallHookStatusRepublish()
   }

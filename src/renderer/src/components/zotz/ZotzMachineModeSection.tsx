@@ -1,7 +1,8 @@
 import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
-import { SettingsRow } from '../settings/form-controls/SettingsFormControls'
+import { SettingsRow, SettingsSwitchRow } from '../settings/form-controls/SettingsFormControls'
+import { useAppStore } from '../../store/index'
 import { SettingsGroup } from '../settings/section-layout/SettingsGroup'
 import { isZotzMachineModeHost, openZotzMachineModeWizard } from './zotz-machine-mode-wizard-event'
 
@@ -12,6 +13,8 @@ export function ZotzMachineModeSection({
   mode: GlobalSettings['zotzMachineMode']
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const queueEnabled = useAppStore((state) => state.settings?.zotzAgentQueueEnabled !== false)
+  const updateSettings = useAppStore((state) => state.updateSettings)
   if (!isZotzMachineModeHost()) {
     return null
   }
@@ -34,6 +37,15 @@ export function ZotzMachineModeSection({
             {t('zotz.machineMode.change', 'Change')}
           </Button>
         }
+      />
+      <SettingsSwitchRow
+        label={t('zotz.agentQueue.settingLabel', 'Agent queue by memory')}
+        description={t(
+          'zotz.agentQueue.settingDescription',
+          'Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting.'
+        )}
+        checked={queueEnabled}
+        onChange={() => void updateSettings({ zotzAgentQueueEnabled: !queueEnabled })}
       />
     </SettingsGroup>
   )

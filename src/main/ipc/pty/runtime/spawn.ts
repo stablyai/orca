@@ -11,6 +11,7 @@ import {
   markRuntimeSpawnHiddenBeforeSpawn,
   releaseRuntimeSpawnPreSpawnHiddenMark
 } from './spawn-hidden-delivery'
+import { holdZotzAgentSpawn } from '../../../zotz/memory-governor/zotz-agent-launch-hold'
 
 /** Runtime projection stays inside the admitted start, so a rejected start withdraws its new pane. */
 export async function spawnPtyFromRuntimeController(
@@ -21,6 +22,7 @@ export async function spawnPtyFromRuntimeController(
   const ctx = createRuntimePtySpawnState(deps, args)
   const outcome = await runPtySpawn({
     state: ctx,
+    admission: holdZotzAgentSpawn(args, 'runtime'),
     prepare: async () => {
       ctx.args = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
       await prepareRuntimePtySpawn(ctx)

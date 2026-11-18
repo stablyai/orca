@@ -20,6 +20,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { refuseClosedPaneSpawn } from './closed-pane-spawn-refusal'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
+import { holdZotzAgentSpawn } from '../../../zotz/memory-governor/zotz-agent-launch-hold'
 
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpcArgs) {
   const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
@@ -28,7 +29,10 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
     triggerPtySpawnPushTargetMaterialization(deps, args)
     return checkPtyIpcLaunchPane(ctx)
   }
-  const admission = args.replacesPtyId === undefined ? admit() : undefined
+  const admission =
+    args.replacesPtyId === undefined
+      ? admit().then(() => holdZotzAgentSpawn(args, 'ui'))
+      : undefined
   const outcome = await runPtySpawn({
     state: ctx,
     admission,

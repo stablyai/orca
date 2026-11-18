@@ -25889,6 +25889,59 @@
         "preparing": "Preparing…",
         "output": "Setup output"
       }
+    },
+    "agentQueue": {
+      "titleNext": "Queued · next to start",
+      "title": "Queued · {{ahead}} ahead",
+      "waitConcurrency": "{{running}} of {{max}} agents are already working on this machine.",
+      "waitMemory": "Needs ~{{need}} GB and {{free}} GB are free; Zotz always keeps {{min}} GB for the system.",
+      "waitBudget": "Agents already use {{used}} of their {{budget}} GB budget.",
+      "waitPressure": "The machine is low on memory; nothing new starts until some is freed.",
+      "waitStarting": "Checking memory…",
+      "autoStart": "The agent starts on its own when there is room. Nothing is lost if you wait.",
+      "cancel": "Cancel",
+      "forceStart": "Launch anyway",
+      "board": {
+        "priorityManual": "Manual",
+        "priorityRemote": "Remote",
+        "priorityAutomation": "Automation",
+        "free": "{{free}} GB free of {{total}} GB",
+        "limits": "{{running}} of {{max}} agents · always keeps {{min}} GB free",
+        "minFreeMarker": "Always free",
+        "legendSystem": "System and other apps",
+        "legendAgents": "Agents",
+        "legendMinFree": "Always free",
+        "reviewDone": "Finished · the session is still open and holds its memory",
+        "reviewWaiting": "Needs your answer",
+        "runningFor": "{{minutes}} min · peak {{peak}} GB",
+        "openPane": "Go to tab",
+        "backlog": "Backlog",
+        "backlogHint": "Turn order: manual › remote › automation",
+        "backlogEmpty": "Nothing waiting",
+        "waitingFor": "{{minutes}} min waiting",
+        "inProgress": "In Progress",
+        "inProgressHint": "Working · memory against its cap",
+        "inProgressEmpty": "No agent is working",
+        "review": "Review",
+        "reviewHint": "Waiting on you",
+        "reviewEmpty": "Nothing to review",
+        "done": "Done",
+        "doneHint": "Closed · peaks improve the estimates",
+        "doneEmpty": "No finished runs yet",
+        "doneRun": "{{minutes}} min · peak {{peak}} GB",
+        "title": "Agent queue",
+        "description": "Agents start when they fit in memory; the rest wait their turn here.",
+        "gbAmount": "{{gb}} GB",
+        "gbEstimate": "~{{gb}} GB"
+      },
+      "segment": {
+        "withQueue": "{{free}} GB free · {{queued}} queued",
+        "free": "{{free}} GB free",
+        "idle": "Agent queue",
+        "tooltip": "Agent queue and memory"
+      },
+      "settingLabel": "Agent queue by memory",
+      "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting."
     }
   }
 }

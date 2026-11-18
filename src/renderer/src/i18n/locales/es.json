@@ -24263,6 +24263,59 @@
         "preparing": "Preparando…",
         "output": "Salida de la configuración"
       }
+    },
+    "agentQueue": {
+      "titleNext": "En cola · es la siguiente",
+      "title": "En cola · {{ahead}} antes",
+      "waitConcurrency": "Ya hay {{running}} de {{max}} agentes trabajando en esta máquina.",
+      "waitMemory": "Necesita ~{{need}} GB y hay {{free}} GB libres; Zotz siempre deja {{min}} GB para el sistema.",
+      "waitBudget": "Los agentes ya usan {{used}} de su presupuesto de {{budget}} GB.",
+      "waitPressure": "La máquina tiene poca memoria; nada nuevo arranca hasta que se libere.",
+      "waitStarting": "Revisando la memoria…",
+      "autoStart": "El agente arranca solo cuando haya lugar. No se pierde nada si esperas.",
+      "cancel": "Cancelar",
+      "forceStart": "Lanzar de todos modos",
+      "board": {
+        "priorityManual": "Manual",
+        "priorityRemote": "Remota",
+        "priorityAutomation": "Automatización",
+        "free": "{{free}} GB libres de {{total}} GB",
+        "limits": "{{running}} de {{max}} agentes · siempre deja {{min}} GB libres",
+        "minFreeMarker": "Siempre libre",
+        "legendSystem": "Sistema y otras apps",
+        "legendAgents": "Agentes",
+        "legendMinFree": "Siempre libre",
+        "reviewDone": "Terminó · la sesión sigue abierta y ocupa memoria",
+        "reviewWaiting": "Necesita tu respuesta",
+        "runningFor": "{{minutes}} min · pico {{peak}} GB",
+        "openPane": "Ir a la pestaña",
+        "backlog": "Backlog",
+        "backlogHint": "Turno: manual › remota › automatización",
+        "backlogEmpty": "Nada en espera",
+        "waitingFor": "{{minutes}} min esperando",
+        "inProgress": "In Progress",
+        "inProgressHint": "Trabajando · memoria contra su tope",
+        "inProgressEmpty": "Ningún agente trabajando",
+        "review": "Review",
+        "reviewHint": "Esperan por ti",
+        "reviewEmpty": "Nada que revisar",
+        "done": "Done",
+        "doneHint": "Cerradas · sus picos mejoran las estimaciones",
+        "doneEmpty": "Todavía no hay corridas terminadas",
+        "doneRun": "{{minutes}} min · pico {{peak}} GB",
+        "title": "Cola de agentes",
+        "description": "Los agentes arrancan cuando caben en memoria; los demás esperan su turno aquí.",
+        "gbAmount": "{{gb}} GB",
+        "gbEstimate": "~{{gb}} GB"
+      },
+      "segment": {
+        "withQueue": "{{free}} GB libres · {{queued}} en cola",
+        "free": "{{free}} GB libres",
+        "idle": "Cola de agentes",
+        "tooltip": "Cola de agentes y memoria"
+      },
+      "settingLabel": "Cola de agentes por memoria",
+      "settingDescription": "Los agentes arrancan solo cuando caben en memoria; los demás esperan su turno. Al apagarla arranca todo lo que esperaba."
     }
   }
 }

@@ -8,4 +8,6 @@ export type ZotzGlobalSettings = {
   zotzSeenTuiAgents?: TuiAgent[]
   /** Check, download and offer releases of the fork; off only when set to false. */
   zotzUpdatesEnabled?: boolean
+  /** Hold agent launches until they fit in memory; off only when set to false. */
+  zotzAgentQueueEnabled?: boolean
 }
