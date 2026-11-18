@@ -136,6 +136,10 @@ export function TabBarCreateRow({
           )}
           onPointerEnter={() => {
             pointerInside.current = true
+            // Pointer takeover closes the keyboard label; reaching an icon must not restart a cold wait.
+            if (keyboardActive) {
+              hoverTooltip.startSkipWindow()
+            }
             setKeyboardNav(false)
           }}
           onPointerLeave={() => {
@@ -180,7 +184,7 @@ export function TabBarCreateRow({
                 setKeyboardNav(false)
               }
               setHoveredIndex(index)
-              hoverTooltip.hover(index, { pressed, labelShowing: keyboardActive })
+              hoverTooltip.hover(index, pressed)
             }}
             onPress={hoverTooltip.press}
             onRun={run}

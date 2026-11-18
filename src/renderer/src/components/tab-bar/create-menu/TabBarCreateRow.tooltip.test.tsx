@@ -101,13 +101,15 @@ it('shows no label for a touch or a press dragged onto another icon', () => {
   expect(tooltip()).toBeNull()
 })
 
-it('keeps the keyboard label open when the pointer moves onto it', () => {
+it('hands a keyboard label to the pointer without a cold wait', () => {
   renderRow()
   const row = screen.getByRole('menuitem', { name: /New tab actions/ })
   act(() => row.focus())
   fireEvent.keyDown(row, { key: 'ArrowRight' })
   expect(tooltip()).toHaveTextContent('New Browser')
 
+  fireEvent.pointerEnter(row)
+  advance(100)
   fireEvent.pointerMove(icon('browser'))
   expect(tooltip()).toHaveTextContent('New Browser')
 })
