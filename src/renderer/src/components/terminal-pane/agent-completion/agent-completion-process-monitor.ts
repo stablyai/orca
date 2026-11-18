@@ -114,18 +114,25 @@ export function createAgentCompletionProcessMonitor({
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
+          const steadyState = priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
+          // Child evidence matters only while an agent is tracked; skip the Windows table read otherwise.
+          const jobMembershipOnly =
+            steadyState && !(state.lastForegroundAgent && state.hasAgentRunEvidence)
           // Only local cadence reads may omit evidence; pending-title and remote decisions require the full capture.
           const inspectOptions = {
             ...(expectedIncarnationIdAtRequest
               ? { expectedIncarnationId: expectedIncarnationIdAtRequest }
               : {}),
-            ...(priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
-              ? { steadyState: true }
-              : {})
+            ...(steadyState ? { steadyState: true } : {}),
+            ...(jobMembershipOnly ? { jobMembershipOnly: true } : {})
           }
           let result = await (Object.keys(inspectOptions).length > 0
             ? options.inspectProcess(ptyId, inspectOptions)
             : options.inspectProcess(ptyId))
+          // An agent tracked while a job-only read was in flight needs full child evidence; the next poll gets it.
+          if (jobMembershipOnly && state.lastForegroundAgent && state.hasAgentRunEvidence) {
+            return
+          }
           // A stale shell cache must not retire a live agent and disable its mouse reporting (#29996).
           if (
             options.isRemotePtyId?.(ptyId) !== true &&

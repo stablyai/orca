@@ -68,7 +68,7 @@ export class AgentSessionSubscribers {
     return this.lanes.retention(this.bySession, this.now(), measured)
   }
 
-  subscriberCountForTests(sessionId: string): number {
+  subscriberCount(sessionId: string): number {
     return this.bySession.get(sessionId)?.size ?? 0
   }
 

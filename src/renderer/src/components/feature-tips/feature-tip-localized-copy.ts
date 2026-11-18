@@ -6,6 +6,15 @@ type FeatureTipCopy = Pick<FeatureTip, 'eyebrow' | 'title' | 'description' | 'ct
 
 const getFeatureTipCopyById = createLocalizedCatalog(
   (): Partial<Record<FeatureTipId, FeatureTipCopy>> => ({
+    'bots-teammate': {
+      eyebrow: translate('featureTips.eyebrowNew', 'New'),
+      title: translate('featureTips.botsTeammate.title', 'Your AI teammate'),
+      description: translate(
+        'featureTips.botsTeammate.description',
+        'It works where your team works, takes on tasks from anyone, and sees them through. It remembers everything you teach it.'
+      ),
+      ctaLabel: translate('featureTips.botsTeammate.cta', 'Create your first bot')
+    },
     // The Chat UI tip's dialog renders its own translated copy for each variant.
     'agent-session-search': {
       eyebrow: translate('featureTips.eyebrowNew', 'New'),

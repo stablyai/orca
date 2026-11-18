@@ -104,13 +104,15 @@ function settledView(
     note
   })
   const install = t('components.managed-runtime.installShort', 'Install')
-  // A copy found outside Orca already runs; Orca's own, once installed, runs first.
+  // A copy found outside Orca runs; with Orca's already installed, installing again changes nothing.
   if (state.source === 'external') {
     return view(
       t('components.managed-runtime.external', 'Uses the copy of {{agent}} found on this host.', {
         agent
       }),
-      state.available ? t('components.managed-runtime.installManaged', "Install Orca's copy") : null
+      state.available && state.installedVersion === null
+        ? t('components.managed-runtime.installManaged', "Install Orca's copy")
+        : null
     )
   }
   if (state.installedVersion !== null) {

@@ -6,6 +6,10 @@ import {
   formatReportFollowUpLine,
   type ReportFollowUpAction
 } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
+import {
+  formatBotItemReportHint,
+  type BotItemReportFact
+} from '../../../../../shared/bots/bot-item-report-hint'
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
@@ -23,6 +27,8 @@ export type MessageFormattingOptions = {
   cliCommand?: OrchestrationCliCommand
   /** A finished task's report offers its follow-up instead of a reply its worker would never read. */
   followUp?: ReportFollowUpAction
+  /** The open item a finished worker was started for, read when the report is shown. */
+  reportItem?: BotItemReportFact
 }
 
 function resolveAuthority(
@@ -113,6 +119,9 @@ export function formatMessageBannerWithContent(
       `[Reply: ${options.cliCommand ?? 'orca'} orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`
     )
   }
+  if (authority === 'current' && options.reportItem) {
+    lines.push(`[${formatBotItemReportHint(options.reportItem, options.cliCommand ?? 'orca')}]`)
+  }
   lines.push(SEPARATOR)
 
   return {
@@ -131,17 +140,22 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
   return `\n--- Orchestration Messages (${messages.length}) ---\n${banners}\n---\n`
 }
 
+/** A Run mailbox's `check` must name its Run: a plain check reads only the terminal's newest Run. */
+export function orchestrationCheckRunFlag(mailboxHandle: string | undefined): string {
+  return mailboxHandle?.startsWith('run:') ? ` --run ${mailboxHandle.slice('run:'.length)}` : ''
+}
+
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,
   cliCommand: OrchestrationCliCommand = 'orca',
   heldDeliveryId?: string,
-  terminalHandle?: string
+  terminalHandle?: string,
+  /** Named so a check that comes back empty is still traceable to the mail it was woken for. */
+  messageIds?: readonly string[]
 ): string {
-  const noun = count === 1 ? 'message' : 'messages'
-  const runFlag = mailboxHandle?.startsWith('run:')
-    ? ` --run ${mailboxHandle.slice('run:'.length)}`
-    : ''
+  const noun = `${count === 1 ? 'message' : 'messages'}${messageIds?.length ? ` (${messageIds.join(', ')})` : ''}`
+  const runFlag = orchestrationCheckRunFlag(mailboxHandle)
   const checkCommand = `${cliCommand} orchestration check${runFlag}${terminalHandle ? ` --terminal ${terminalHandle}` : ''}`
   if (heldDeliveryId) {
     return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${checkCommand}\` to see it again; once it is handled, run \`${checkCommand} --ack ${heldDeliveryId}\`, then \`${checkCommand}\` for the new mail.\n`
