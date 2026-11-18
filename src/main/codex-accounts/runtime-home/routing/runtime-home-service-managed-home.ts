@@ -24,20 +24,27 @@ import {
 } from '../../../codex/history/backfill/codex-session-backfill-marker'
 import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { WslCodexAccountHistoryLaunches } from '../../../codex/history/shared-store/wsl-codex-account-history'
+import {
+  hostCodexHistoryStoreHome,
+  wslCodexHistoryStoreHome
+} from '../../../codex/history/shared-store/codex-history-store-home'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { CodexRuntimeHomeSync } from '../runtime-home-service-sync'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
-  private readonly accountHistoryPasses = new CodexAccountHistoryPasses((home) => {
-    const key = normalizeRuntimePathForComparison(home)
-    return (
-      isCodexHistorySharedAcrossAccounts(this.store.getSettings()) &&
-      this.getManagedHostAccountHomesForSessionDiscovery().some(
-        (candidate) => normalizeRuntimePathForComparison(candidate) === key
+  private readonly accountHistoryPasses = new CodexAccountHistoryPasses(
+    (home) => {
+      const key = normalizeRuntimePathForComparison(home)
+      return (
+        isCodexHistorySharedAcrossAccounts(this.store.getSettings()) &&
+        this.getManagedHostAccountHomesForSessionDiscovery().some(
+          (candidate) => normalizeRuntimePathForComparison(candidate) === key
+        )
       )
-    )
-  })
+    },
+    () => hostCodexHistoryStoreHome(this.store.getSettings())
+  )
   private readonly wslAccountHistory = new WslCodexAccountHistoryLaunches()
 
   // Host accounts refresh auth in separate homes so concurrent accounts cannot race one auth.json.
@@ -147,7 +154,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     return perAccountHome
   }
 
-  /** Links this home's history into ~/.codex (fresh private folders when sharing is off). */
+  /** Links this home's history into the Codex history folder (private folders when sharing is off). */
   prepareAccountHistory(accountHome: string): Promise<void> {
     return this.accountHistoryPasses.run(
       accountHome,
@@ -290,7 +297,8 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     return this.prepareHostSystemDefaultSessionMigrationPass()
   }
 
-  // Inside the distro its ~/.codex is the store; host and guest stores stay separate.
+  // Inside the distro its Codex history folder (else its ~/.codex) is the store; host and guest
+  // stores stay separate.
   /** The launched WSL account home's pass is awaited; the distro's other homes run behind it. */
   protected prepareWslAccountHistory(
     target: CodexAccountSelectionTarget,
@@ -302,7 +310,8 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     const distro =
       target.wslDistro?.trim() || parseWslUncPath(runtimeHomePath)?.distro || getDefaultWslDistro()
     const storeHome = distro
-      ? this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
+      ? (wslCodexHistoryStoreHome(this.store.getSettings(), distro) ??
+        this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro }))
       : null
     if (!distro || !storeHome) {
       return Promise.resolve()

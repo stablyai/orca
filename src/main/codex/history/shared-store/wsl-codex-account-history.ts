@@ -172,7 +172,7 @@ async function clearPendingMarkers(
   }
 }
 
-type QueuedPass = { shared: boolean; pass: Promise<void> }
+type QueuedPass = { shared: boolean; store: string; pass: Promise<void> }
 
 /**
  * WSL account history passes, one at a time per distro in request order (homes merging into its
@@ -195,8 +195,8 @@ export class WslCodexAccountHistoryLaunches {
   >()
   private readonly activePasses = new Map<string, number>()
   private readonly startedPasses = new Map<string, number>()
-  // A home settled in a mode this run skips later guest passes in it.
-  private readonly settledThisRun = new Map<string, boolean>()
+  // A home settled in a mode into a store this run skips later guest passes for the same both.
+  private readonly settledThisRun = new Map<string, { shared: boolean; store: string }>()
   // Shared homes whose left-behind rollouts await a content check, one guest check per distro.
   private readonly owedChecks = new Map<string, WslCodexAccountHistoryTarget>()
   private readonly checks = new Set<string>()
@@ -210,7 +210,7 @@ export class WslCodexAccountHistoryLaunches {
     const distroKey = target.distro.toLowerCase()
     const key = `${distroKey}\0${target.accountHome}`
     const previous = this.latest.get(key)
-    if (previous?.shared === target.shared) {
+    if (previous?.shared === target.shared && previous.store === target.storeHome) {
       return previous.pass
     }
     const pass = (this.tails.get(distroKey) ?? Promise.resolve())
@@ -219,8 +219,9 @@ export class WslCodexAccountHistoryLaunches {
         if (isCodexAccountHistoryWorkStopping()) {
           return
         }
-        if (this.settledThisRun.get(key) === target.shared) {
-          this.retryFailedHeal(distroKey)
+        const settled = this.settledThisRun.get(key)
+        if (settled?.shared === target.shared && settled.store === target.storeHome) {
+          this.retryFailedHeal(distroKey, target.storeHome)
           return
         }
         this.settledThisRun.delete(key)
@@ -229,7 +230,7 @@ export class WslCodexAccountHistoryLaunches {
         try {
           const output = await linkInGuest(target, this.dependencies)
           if (output && output.result === (target.shared ? 'shared' : 'unshared')) {
-            this.settledThisRun.set(key, target.shared)
+            this.settledThisRun.set(key, { shared: target.shared, store: target.storeHome })
           }
           if (output && output.pending.length > 0) {
             this.oweHeal(distroKey, { target, output })
@@ -247,7 +248,7 @@ export class WslCodexAccountHistoryLaunches {
         console.warn('[codex-account-history] WSL account history pass failed:', error)
       })
     this.tails.set(distroKey, pass)
-    this.latest.set(key, { shared: target.shared, pass })
+    this.latest.set(key, { shared: target.shared, store: target.storeHome, pass })
     void pass.finally(() => {
       if (this.latest.get(key)?.pass === pass) {
         this.latest.delete(key)
@@ -256,20 +257,22 @@ export class WslCodexAccountHistoryLaunches {
     return pass
   }
 
-  // Passes in one distro share its marker folder and may report in any order: keep every name.
+  // Passes in one distro share its marker folder and may report in any order: keep every name. An
+  // earlier store's names stay in its own marker folder, healed once it is the store again.
   private oweHeal(
     distroKey: string,
     owed: { target: WslCodexAccountHistoryTarget; output: HelperOutput }
   ): void {
-    const earlier = this.owedHeals.get(distroKey)?.output.pending ?? []
-    const pending = [...new Set([...earlier, ...owed.output.pending])]
+    const earlier = this.owedHeals.get(distroKey)?.output
+    const kept = earlier?.pendingDir === owed.output.pendingDir ? earlier.pending : []
+    const pending = [...new Set([...kept, ...owed.output.pending])]
     this.owedHeals.set(distroKey, { ...owed, output: { ...owed.output, pending } })
   }
 
-  private retryFailedHeal(distroKey: string): void {
+  private retryFailedHeal(distroKey: string, storeHome: string): void {
     const failed = this.failedHeals.get(distroKey)
-    if (failed) {
-      this.failedHeals.delete(distroKey)
+    this.failedHeals.delete(distroKey)
+    if (failed?.target.storeHome === storeHome) {
       this.oweHeal(distroKey, failed)
       this.startOwedHeal(distroKey)
     }

@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { access, readdir } from 'node:fs/promises'
+import { access, readdir, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
@@ -110,6 +110,18 @@ export async function hasThreadWriter(home: string): Promise<boolean> {
   const folder = await lstatIfPresent(locks)
   if (!folder || folder.isSymbolicLink()) {
     return false
+  }
+  return sweepCodexThreadLocks(locks)
+}
+
+/** For a store, whose lock folder may itself be a link: probes the folder it resolves to. */
+export async function hasThreadWriterInStore(storeHome: string): Promise<boolean> {
+  let locks: string
+  try {
+    locks = await realpath(join(storeHome, WRITER_LOCKS))
+  } catch (error) {
+    // No lock folder means no writer; one that can't be read might hold one.
+    return (error as NodeJS.ErrnoException).code !== 'ENOENT'
   }
   return sweepCodexThreadLocks(locks)
 }

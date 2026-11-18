@@ -1,10 +1,9 @@
-import { mkdir, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 import {
   DirectoryLinkError,
-  MERGE_PENDING_SUFFIX,
   isLinkedDirectory,
   lstatIfPresent,
   mergeDirectoryIntoLink,
@@ -18,6 +17,7 @@ import {
   COORDINATION_LOCK,
   hasThreadLockConflict,
   hasThreadWriter,
+  hasThreadWriterInStore,
   WRITER_LOCKS
 } from './codex-thread-writer-locks'
 import { writeSharedSqliteHome } from './codex-account-sqlite-home-config'
@@ -33,34 +33,16 @@ import {
   isRolloutTwinKeptFromStore
 } from '../rollouts/codex-rollout-compressed-twin'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
-
-// Created in the store when missing, so a first account still links its history.
-const STORE_DIRECTORIES = ['sessions', 'archived_sessions', 'rollout-migrations']
-
-// Local logs and scratch; per-home process endpoints (a linked daemon socket would attach an
-// account to the ~/.codex login's daemon); state keyed to the home's own path (encrypted secrets
-// whose keyring passphrase is named from CODEX_HOME, the Windows sandbox setup); resources Orca
-// links or copies itself, including the home's own bundled marketplaces inside `.tmp`.
-const PRIVATE_DIRECTORIES = new Set([
-  'log',
-  'tmp',
-  '.tmp',
-  'app-server-control',
-  'app-server-daemon',
-  'ipc',
-  'secrets',
-  '.sandbox',
-  '.sandbox-bin',
-  '.sandbox-secrets',
-  'skills',
-  'hooks',
-  'plugins',
-  'plugin-state',
-  'profile-v2',
-  'themes',
-  'prompts',
-  'rules'
-])
+import {
+  earlierStoreOf,
+  isLinkInto,
+  isSameDirectory,
+  isSharedDirectoryName,
+  linksIntoStore,
+  readDirectoryEntries,
+  sharedDirectoryNames,
+  STORE_DIRECTORIES
+} from './codex-shared-history-folders'
 
 const HISTORY_DIRECTORIES = new Set(['sessions', 'archived_sessions'])
 // Linked before any history, so a home never writes shared rollouts under private locks.
@@ -82,51 +64,6 @@ export type CodexAccountHistoryShareArgs = {
   indexPendingDir: string
   platform: NodeJS.Platform
   onWarning: (error: unknown) => void
-}
-
-function isSharedDirectoryName(name: string): boolean {
-  return (
-    !PRIVATE_DIRECTORIES.has(name) &&
-    !name.startsWith('.orca') &&
-    !name.endsWith(MERGE_PENDING_SUFFIX)
-  )
-}
-
-async function readDirectoryEntries(path: string) {
-  try {
-    return await readdir(path, { withFileTypes: true })
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return []
-    }
-    throw error
-  }
-}
-
-/** Every folder of the store or the home is shared; files (login, config, prompt recall) stay. */
-async function sharedDirectoryNames(storeHome: string, accountHome: string): Promise<string[]> {
-  const names = new Set(STORE_DIRECTORIES)
-  for (const home of [storeHome, accountHome]) {
-    for (const entry of await readDirectoryEntries(home)) {
-      if (entry.isDirectory()) {
-        names.add(entry.name)
-      }
-    }
-  }
-  names.delete(WRITER_LOCKS)
-  return [...names].filter(isSharedDirectoryName)
-}
-
-async function isSameDirectory(left: string, right: string): Promise<boolean> {
-  const resolve = (path: string): Promise<string | null> =>
-    realpath(path).catch((error: unknown) => {
-      if (isDefinitiveAbsence(error)) {
-        return null
-      }
-      throw error
-    })
-  const [a, b] = await Promise.all([resolve(left), resolve(right)])
-  return a !== null && a === b
 }
 
 // Recorded before the move, so a crash mid-move cannot strand a rollout without its marker.
@@ -172,7 +109,8 @@ export async function isCodexAccountHistoryLinked(
 }
 
 /**
- * Replaces the account home's folders with links into the store (the user's ~/.codex), moving
+ * Replaces the account home's folders with links into the store (the Codex history folder, ~/.codex
+ * by default), moving
  * the home's own entries there first; the store's copy wins a name conflict and the home's copy
  * stays in `<folder>.orca-profile-merge`, and a rollout form the store must not hold beside its
  * twin waits in `.orca-set-aside-rollouts`. Nothing is deleted. Codex's databases follow once the
@@ -191,6 +129,22 @@ export async function shareCodexAccountHistory(
   }
   if (await hasThreadWriter(args.accountHome)) {
     return (await isCodexAccountHistoryLinked(args.accountHome, args.storeHome)) ? 'shared' : 'busy'
+  }
+  // The Codex history folder changed: an idle home's links follow it, and what the earlier folder
+  // holds stays there.
+  const earlierStore = await earlierStoreOf(args.accountHome, args.storeHome)
+  if (earlierStore) {
+    // The home's lock folder is that folder's: a writer anywhere in it may be this home's Codex.
+    if (await hasThreadWriterInStore(earlierStore)) {
+      console.info(
+        '[codex-account-history] Waiting for Codex to stop in the earlier history folder:',
+        earlierStore
+      )
+      return 'busy'
+    }
+    for (const link of await linksIntoStore(args.accountHome, earlierStore)) {
+      await removeDirectoryLink(link)
+    }
   }
   // Also clears the store's free locks, so a lock taken in the account from now on has no twin.
   await hasThreadWriter(args.storeHome)
@@ -285,13 +239,20 @@ export async function unshareCodexAccountHistory(args: {
 }): Promise<boolean> {
   let unlinked = false
   let complete = true
+  // Links into an earlier Codex history folder are the home's too.
+  const earlierStore = await earlierStoreOf(args.accountHome, args.storeHome)
+  // By resolved folder too: the configured folder may be another path to the same one.
+  const isLinkedToStore = async (link: string): Promise<boolean> =>
+    (await isLinkInto(link, args.storeHome)) ||
+    (await isLinkedDirectory(link, join(args.storeHome, basename(link)))) ||
+    (earlierStore !== null && (await isLinkInto(link, earlierStore)))
   for (const entry of await readDirectoryEntries(args.accountHome)) {
     const link = join(args.accountHome, entry.name)
     if (
       !isSharedDirectoryName(entry.name) ||
       // Lock folders stay shared: swapping them could split a live writer's namespace.
       entry.name.endsWith('-locks') ||
-      !(await isLinkedDirectory(link, join(args.storeHome, entry.name)))
+      !(await isLinkedToStore(link))
     ) {
       continue
     }
@@ -330,7 +291,12 @@ export async function unshareCodexAccountHistory(args: {
   }
   await recordCodexHistoryLeftBehind({
     accountHome: args.accountHome,
-    storeHome: args.storeHome,
+    // The kept lock link still points into the earlier folder; a later share moves it from there.
+    storeHome:
+      earlierStore !== null &&
+      (await isLinkInto(join(args.accountHome, WRITER_LOCKS), earlierStore))
+        ? earlierStore
+        : args.storeHome,
     outcome: 'unshared',
     databasesMovedToStore: false
   }).catch(args.onWarning)

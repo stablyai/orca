@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto'
+import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   listCodexIndexPendingRollouts,
   shareCodexAccountHistory,
@@ -21,7 +23,15 @@ async function main(): Promise<void> {
     console.error(error instanceof Error ? error.message : String(error))
   }
   // Beside the guest's account homes, so it is per store and never inside the user's ~/.codex.
-  const pendingDir = join(homedir(), '.local', 'share', 'orca', 'codex-index-pending')
+  const pendingRoot = join(homedir(), '.local', 'share', 'orca')
+  // Markers name rollouts of one store, so each store has its own; ~/.codex keeps earlier builds'.
+  const isDefaultStore = resolve(storeHome) === join(homedir(), '.codex')
+  const pendingDir = isDefaultStore
+    ? join(pendingRoot, 'codex-index-pending')
+    : join(
+        pendingRoot,
+        `codex-index-pending-${createHash('sha256').update(resolve(storeHome)).digest('hex').slice(0, 16)}`
+      )
   let result: string
   if (mode === 'check') {
     const deadline = Date.now() + CHECK_BUDGET_MS
@@ -38,6 +48,9 @@ async function main(): Promise<void> {
   if (mode === 'unshare') {
     const complete = await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })
     result = complete ? 'unshared' : 'incomplete'
+  } else if (!isDefaultStore && !(await stat(storeHome).catch(() => null))?.isDirectory()) {
+    // A configured folder that isn't there (a typo, an unmounted drive) is never created.
+    result = 'failed'
   } else {
     result = await shareCodexAccountHistory({
       accountHome,

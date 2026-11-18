@@ -8513,9 +8513,9 @@
           "8fbe1f37c1": "Environment",
           "2d133152fa": "No default environment",
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
-          "codexSessionSource": "Codex home to import from",
-          "codexSessionSourceInfo": "About importing Codex history",
-          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
+          "codexHistoryFolder": "Codex history folder",
+          "codexHistoryFolderInfo": "About the Codex history folder",
+          "codexHistoryFolderTooltip": "Where every Codex account keeps and resumes its conversations. Defaults to ~/.codex.",
           "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
           "9f30095d49": "Agent permissions"
         },

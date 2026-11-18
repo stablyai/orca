@@ -87,7 +87,7 @@ export async function checkCodexHistoryLeftBehind(args: {
   }
   await inventoryCodexHistoryLeftBehind(args)
   const manifest = await readManifest(args.accountHome)
-  if (!manifest || manifest === 'newer') {
+  if (!manifest || manifest === 'newer' || manifest.storeHome !== args.storeHome) {
     return true
   }
   const checks = new Map<string, { rollout: LeftBehindRollout; check: ContentCheck }>()
@@ -96,6 +96,9 @@ export async function checkCodexHistoryLeftBehind(args: {
     checks.clear()
     await updateManifest(args.accountHome, async (current) => {
       const base = current ?? manifest
+      if (base.storeHome !== args.storeHome) {
+        return base
+      }
       return {
         ...base,
         rollouts: base.rollouts.map((rollout) => {

@@ -305,7 +305,8 @@ export async function recordCodexHistoryLeftBehind(args: {
   await updateManifest(args.accountHome, async (current) => {
     const now = new Date().toISOString()
     const sharedNow = args.outcome === 'shared'
-    const streak = args.outcome !== 'unshared' && current?.storeHome === args.storeHome
+    const sameStore = current?.storeHome === args.storeHome
+    const streak = args.outcome !== 'unshared' && sameStore
     return {
       version: MANIFEST_VERSION,
       storeHome: args.storeHome,
@@ -316,8 +317,9 @@ export async function recordCodexHistoryLeftBehind(args: {
         args.accountHome,
         args.outcome !== 'unshared' && args.databasesMovedToStore
       ),
-      rollouts: current?.rollouts ?? [],
-      storeTwinPairs: current?.storeTwinPairs ?? [],
+      // A check proved content against the earlier store, not this one.
+      rollouts: (current?.rollouts ?? []).map((r) => (sameStore ? r : { ...r, check: null })),
+      storeTwinPairs: sameStore ? (current?.storeTwinPairs ?? []) : [],
       updatedAt: now
     }
   })
@@ -329,7 +331,7 @@ export async function inventoryCodexHistoryLeftBehind(args: {
   storeHome: string
 }): Promise<void> {
   const before = await readManifest(args.accountHome)
-  if (!before || before === 'newer') {
+  if (!before || before === 'newer' || before.storeHome !== args.storeHome) {
     return
   }
   // Walked outside the write, which then touches only these fields: a pass (or, in WSL, another
@@ -342,10 +344,15 @@ export async function inventoryCodexHistoryLeftBehind(args: {
       `[codex-account-history] ${pairs.length} rollouts are in ${args.storeHome} as both .jsonl and .jsonl.zst; both kept`
     )
   }
-  await updateManifest(args.accountHome, async (current) => ({
-    ...(current ?? before),
-    rollouts,
-    storeTwinPairs: pairs,
-    updatedAt: new Date().toISOString()
-  }))
+  // A pass meanwhile may have moved the home to another store; this walk's facts are of this one.
+  await updateManifest(args.accountHome, async (current) =>
+    current && current.storeHome !== args.storeHome
+      ? current
+      : {
+          ...(current ?? before),
+          rollouts,
+          storeTwinPairs: pairs,
+          updatedAt: new Date().toISOString()
+        }
+  )
 }
