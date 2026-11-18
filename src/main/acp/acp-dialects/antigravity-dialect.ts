@@ -197,6 +197,9 @@ function promptErrorDetail(error: AcpAgentError): string | undefined {
   }
 }
 
+// agy 1.5+ retries an empty model reply until it gets output, sending this text each time.
+const RETRY_NOTICE = /^\s*\u26a0 (Model produced invalid output\.)\s*$/
+
 const EFFORT_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 
 // Model options list families; availableModels lists each level as "<family>-<level>".
@@ -255,6 +258,7 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   promptErrorDetail,
   toolPlan,
   toolSubagents: antigravityToolSubagents,
+  providerRetry: (text) => RETRY_NOTICE.exec(text)?.[1],
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.

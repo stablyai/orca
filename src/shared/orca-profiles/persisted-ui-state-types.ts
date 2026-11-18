@@ -229,6 +229,8 @@ export type PersistedUIState = {
   browserKagiSessionLink?: string | null
   /** Side and size of DevTools docked in a browser pane; one choice for every page, like Chrome. */
   browserDevToolsDock?: BrowserDevToolsDockLayout
+  /** Width of extension side panels, in CSS px; one width for every extension, like Chrome. */
+  browserExtensionSidePanelWidth?: number
   /** Saved window bounds so the app restores last position/size instead of maximizing each launch. */
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */

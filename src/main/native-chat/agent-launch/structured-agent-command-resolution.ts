@@ -20,6 +20,7 @@ import {
   guestNativePathEnv,
   resolveGuestNativeProgram
 } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
+import { managedClaudeCommand } from '../../claude/managed-runtime/claude-managed-runtime'
 
 export type StructuredAgentResolutionOperation = {
   deadline?: number
@@ -91,6 +92,14 @@ export function resolveStructuredAgentCommand(
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
+    // The user's own install wins; Orca's copy serves hosts that have none.
+    const managed =
+      agent === 'claude' && !stock.command && (resolved === null || !isAbsolute(resolved))
+        ? managedClaudeCommand()
+        : null
+    if (managed) {
+      return { command: managed, prefixArgs: [] }
+    }
     if (resolved === null) {
       throw new AgentSessionPreSpawnError(
         `${command} is installed only on Windows, not in WSL ${process.env.WSL_DISTRO_NAME ?? 'distro'}`,

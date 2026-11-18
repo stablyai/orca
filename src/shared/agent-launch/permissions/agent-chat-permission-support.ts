@@ -27,6 +27,11 @@ const ANTIGRAVITY_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'accept-edits', 'auto', 'full-access']
 }
 
+// No Auto: the agent has no reviewer that answers approvals for the person.
+const EDIT_ACCEPTING_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
+  modes: ['ask', 'accept-edits', 'full-access']
+}
+
 const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermissionModeSupport>([
   ['claude', CLAUDE_CHAT_PERMISSION_MODES],
   ['codex', CODEX_CHAT_PERMISSION_MODES],
@@ -37,7 +42,8 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermission
   ['copilot', ACP_CHAT_PERMISSION_MODES],
   ['cursor', ACP_CHAT_PERMISSION_MODES],
   ['kimi', KIMI_CHAT_PERMISSION_MODES],
-  ['antigravity', ANTIGRAVITY_CHAT_PERMISSION_MODES]
+  ['antigravity', ANTIGRAVITY_CHAT_PERMISSION_MODES],
+  ['hermes', EDIT_ACCEPTING_CHAT_PERMISSION_MODES]
 ])
 
 /** The one table of which agents' chats offer which modes; null keeps following Agent Permissions. */

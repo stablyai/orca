@@ -27,6 +27,7 @@ import {
   setBrowserExtensionListChangedListener
 } from './installation/browser-extension-list-changes'
 import { getBrowserExtensionMainWindow } from './tabs-and-windows/browser-extension-window-model'
+import { isBrowserExtensionSidePanelGuest } from './side-panel/browser-extension-side-panel-guests'
 import {
   setSavedBrowserTabsSource,
   type SavedBrowserTabsSource
@@ -128,8 +129,11 @@ function observeExtensionContents(contents: Electron.WebContents): void {
     return
   }
   observedContents.add(contents)
-  observeBrowserExtensionWebNavigation(contents)
-  observeBrowserExtensionTabLifecycle(contents)
+  // Side panels are extension views, not tabs: no tab or webNavigation events, but DNR and commands.
+  if (!isBrowserExtensionSidePanelGuest(contents)) {
+    observeBrowserExtensionWebNavigation(contents)
+    observeBrowserExtensionTabLifecycle(contents)
+  }
   observeBrowserExtensionDnrContents(contents)
   observeBrowserExtensionCommands(contents)
 }

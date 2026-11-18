@@ -4,6 +4,7 @@ import type {
   ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import { claudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import {
   claudeEffortLevel,
   restoredClaudeStructuredSessionOptions
@@ -88,6 +89,7 @@ export function adoptClaudeStructuredSpawnOptions(
     | 'appliedInputOptions'
     | 'cliFlag'
     | 'flagSettingsControl'
+    | 'promptSuggestionPause'
   >,
   spawn: ClaudeStructuredSpawnOptions
 ): void {
@@ -103,6 +105,9 @@ export function adoptClaudeStructuredSpawnOptions(
   session.fastModeAtStart = spawn.fastModeAtStart
   session.cliFlag = spawn.cliFlag
   session.flagSettingsControl = spawn.flagSettingsControl
+  session.promptSuggestionPause = spawn.sdkOptions.promptSuggestions
+    ? claudePromptSuggestionPause()
+    : undefined
   const fastMode = spawn.options.get('fastMode')
   if (fastMode !== undefined && !spawn.fastModeAtStart) {
     session.appliedInputOptions.set('fastMode', fastMode)

@@ -298,7 +298,8 @@ export class AcpStructuredOptions {
     if (!values) {
       return this.applied.get('permissionMode') ?? null
     }
-    const current = this.select('mode')?.currentValue
+    const mode = this.select('mode')?.currentValue
+    const current = mode === 'plan' ? this.buildMode : mode
     return current
       ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
       : null

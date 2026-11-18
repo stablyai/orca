@@ -162,6 +162,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'browserDefaultZoomLevel',
   'browserKagiSessionLink',
   'browserDevToolsDock',
+  'browserExtensionSidePanelWidth',
   'windowBounds',
   'windowMaximized',
   'windowFullScreen',

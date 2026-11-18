@@ -33,6 +33,8 @@ export type NativeChatGlobalSettings = {
   nativeChatCiResultLines?: boolean
   /** A "New" line above what arrived while the reader was away. Absent follows the default below. */
   nativeChatMarkNewMessages?: boolean
+  /** The agent's suggested next prompt in an empty composer. Absent means on. */
+  nativeChatPromptSuggestions?: boolean
 }
 
 /** Not written into default settings, so flipping this reaches everyone who never chose. */
@@ -157,4 +159,11 @@ export function resetNativeChatAppearanceSettings(
       )
     )
   )
+}
+
+/** Only explicit OFF stops this client asking for, and showing, suggested next prompts. */
+export function nativeChatShowsPromptSuggestions(
+  settings: { readonly nativeChatPromptSuggestions?: unknown } | null | undefined
+): boolean {
+  return settings?.nativeChatPromptSuggestions !== false
 }

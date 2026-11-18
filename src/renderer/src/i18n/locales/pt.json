@@ -3105,7 +3105,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Local do projeto não definido"
+        "locationNotSet": "Local do projeto não definido",
+        "hostLocalGitProject": "Este projeto não tem um remoto Git correspondente",
+        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Atualize o servidor para ver as portas nos hosts SSH dele.",
@@ -12658,7 +12660,6 @@
           "74fc00776f": "Detalhes do erro",
           "ca3b225195": "Falha na renomeação automática da branch",
           "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente.",
-          "dismissError": "Ignorar erro",
           "dismissing": "Descartando…"
         },
         "CreateProjectLocationField": {
@@ -12721,6 +12722,9 @@
           "removeDescriptionSsh": "Isso remove {{name}} apenas do Orca. Seus arquivos permanecem em {{host}} — adicione novamente esse host SSH para recuperá-lo.",
           "removeDescriptionLocal": "Isso remove {{name}} apenas do Orca. Ele ainda está no seu disco.",
           "removeDescriptionVmRecipe": "Isso remove {{name}} do Orca. A receita de VM determina se o ambiente e seus arquivos são excluídos permanentemente.",
+          "linkedWorkspaceWarning_one": "{{count}} espaço de trabalho deste projeto também será removido do Orca.",
+          "linkedWorkspaceWarning_other": "{{count}} espaços de trabalho deste projeto também serão removidos do Orca.",
+          "linkedWorkspaceWarning_many": "{{count}} espaços de trabalho deste projeto também serão removidos do Orca.",
           "openTerminalWarning_one": "{{count}} terminal aberto neste projeto será fechado.",
           "openTerminalWarning_other": "{{count}} terminais abertos neste projeto serão fechados.",
           "openTerminalWarning_many": "{{count}} terminais abertos neste projeto serão fechados."
@@ -14247,8 +14251,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Fechar",
           "64c71cf7b9": "O Orca ainda não instalou nenhuma skill nesta máquina.",
-          "0900db719a": "— desconectado",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Este computador",
           "3677ae58e7": "Skills que o Orca instalou a partir de um link. Reinstale, volte para uma versão anterior ou remova-as.",
           "44d118a8f7": "Instaladas pelo Orca",
@@ -14379,8 +14381,6 @@
           "a4dfd33095": "Um espaço de trabalho",
           "c779621aa0": "Skills globais",
           "63cc9e31fe": "Destino",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— desconectado",
           "0785d0a503": "— atualização necessária",
           "8562dd1e6e": "Este computador",
           "b8a0b706ad": "Máquina"
@@ -20691,6 +20691,7 @@
         "availableAfterSessionStarts": "Disponível após a sessão começar.",
         "optionUpdateFailed": "Não foi possível atualizar a opção",
         "optionValue": {
+          "none": "Nenhum",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Baixo",
@@ -21222,6 +21223,7 @@
         "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
         "historyUnusable": "Não foi possível carregar este chat.",
         "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+        "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
         "savedByNewerOrca": "Os chats foram salvos por uma versão mais recente do Orca.",
         "updateOrcaToKeepUsing": "Atualize o Orca para continuar usando-os.",
         "chatSavedByNewerOrca": "Este chat foi salvo por uma versão mais recente do Orca.",
@@ -21686,18 +21688,13 @@
         "unavailable": "Nenhuma visualização para esta página."
       },
       "usageLimitActions": {
-        "continueNow": "Continuar agora",
-        "leadIn": "Continue este bate-papo sem esperar:",
         "switchAccount": "Trocar de conta",
         "addAccount": "Adicionar conta…",
         "accountUnavailable": "Este chat não pode ser transferido para outra conta. Passe-o para outro agente."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Não foi possível cancelar a continuação automática. Tente novamente.",
-        "openSetting": "Continuar automaticamente quando os limites forem redefinidos",
-        "cancelled": "Orca não continuará este bate-papo automaticamente.",
-        "scheduled": "Orca continuará este bate-papo às {{time}}.",
-        "cancel": "Não continue"
+        "scheduled": "Orca continuará este bate-papo às {{time}}."
       },
       "creationChatNotOpened": "O worktree está pronto, mas o chat não pôde ser aberto. Tente abri-lo novamente com sua mensagem.",
       "usage": {
@@ -22178,7 +22175,11 @@
         "usageLimitContinueSearchLimit": "limite de uso",
         "usageLimitContinueSearchReset": "reiniciar",
         "usageLimitContinueToggleLabel": "Alternar a continuação dos bate-papos quando um limite de uso for redefinido",
-        "openedPullRequestsSearchPr": "PR"
+        "openedPullRequestsSearchPr": "PR",
+        "promptSuggestionsTitle": "Prompts sugeridos",
+        "promptSuggestionsCopy": "Depois que o Claude responde, o palpite dele para a sua próxima mensagem aparece na caixa de mensagem vazia. Pressione Tab para usá-lo. Cada palpite é uma solicitação extra que conta para o seu uso do Claude.",
+        "promptSuggestionsSearchNext": "próximo prompt",
+        "promptSuggestionsSearchGhost": "texto fantasma"
       },
       "voice": {
         "dictationLanguage": {

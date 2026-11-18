@@ -1989,7 +1989,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Projektverzeichnis nicht festgelegt"
+        "locationNotSet": "Projektverzeichnis nicht festgelegt",
+        "hostLocalGitProject": "Kein passendes Git-Remote für dieses Projekt",
+        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",
@@ -5590,8 +5592,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Schließen",
           "64c71cf7b9": "Orca hat auf diesem Rechner noch keine Skills installiert.",
-          "0900db719a": "— nicht verbunden",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Dieser Computer",
           "3677ae58e7": "Skills, die Orca über einen Link installiert hat. Erneut installieren, zu einer früheren Version zurückkehren oder entfernen.",
           "44d118a8f7": "Von Orca installiert",
@@ -5625,8 +5625,6 @@
           "a4dfd33095": "Ein Arbeitsbereich",
           "c779621aa0": "Globale Skills",
           "63cc9e31fe": "Ziel",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— nicht verbunden",
           "0785d0a503": "— Aktualisierung erforderlich",
           "8562dd1e6e": "Dieser Computer",
           "b8a0b706ad": "Rechner"
@@ -6244,6 +6242,8 @@
           "removeDescriptionSsh": "Dies entfernt {{name}} nur aus Orca. Die Dateien bleiben auf {{host}} — zum Wiederherstellen diesen SSH-Host erneut hinzufügen.",
           "removeDescriptionLocal": "Dies entfernt {{name}} nur aus Orca. Es bleibt auf dem Datenträger erhalten.",
           "removeDescriptionVmRecipe": "Dies entfernt {{name}} aus Orca. Das zugehörige VM-Rezept legt fest, ob die Umgebung und ihre Dateien dauerhaft gelöscht werden.",
+          "linkedWorkspaceWarning_one": "{{count}} Arbeitsbereich in diesem Projekt wird ebenfalls aus Orca entfernt.",
+          "linkedWorkspaceWarning_other": "{{count}} Arbeitsbereiche in diesem Projekt werden ebenfalls aus Orca entfernt.",
           "openTerminalWarning_one": "{{count}} offenes Terminal in diesem Projekt wird geschlossen.",
           "openTerminalWarning_other": "{{count}} offene Terminals in diesem Projekt werden geschlossen."
         },
@@ -19329,6 +19329,7 @@
         "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
         "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
         "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
+        "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
         "savedByNewerOrca": "Die Chats wurden mit einer neueren Orca-Version gespeichert.",
         "updateOrcaToKeepUsing": "Orca aktualisieren, um sie weiter zu verwenden.",
         "chatSavedByNewerOrca": "Dieser Chat wurde mit einer neueren Orca-Version gespeichert.",
@@ -19520,6 +19521,7 @@
         "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
         "optionUpdateFailed": "Option konnte nicht aktualisiert werden",
         "optionValue": {
+          "none": "Keine",
           "fast": "Schnell",
           "minimal": "Minimal",
           "low": "Niedrig",
@@ -20637,7 +20639,11 @@
         "turnDiffsTitle": "Durchgangsänderungen",
         "turnDiffsCopy": "Zeigt unter der Antwort die in jedem Durchgang geänderten Dateien mit Zeilenzahlen an.",
         "turnDiffsSearchChangedFiles": "geänderte Dateien",
-        "turnDiffsSearchEdits": "Änderungen"
+        "turnDiffsSearchEdits": "Änderungen",
+        "promptSuggestionsTitle": "Vorgeschlagene Prompts",
+        "promptSuggestionsCopy": "Nachdem Claude geantwortet hat, erscheint sein Vorschlag für deine nächste Nachricht im leeren Eingabefeld. Drücke Tab, um ihn zu übernehmen. Jeder Vorschlag ist eine zusätzliche Anfrage, die auf deine Claude-Nutzung angerechnet wird.",
+        "promptSuggestionsSearchNext": "nächster Prompt",
+        "promptSuggestionsSearchGhost": "Geistertext"
       },
       "voice": {
         "dictationLanguage": {

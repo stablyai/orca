@@ -69,6 +69,11 @@ export class ChecksDetailPollingPolicy {
     this.failed = true
   }
 
+  /** The last read succeeded and still had checks running, so they may have finished since. */
+  checksRunning(): boolean {
+    return this.hasDetails && !this.failed && this.status === 'pending'
+  }
+
   /** `cadence`: the setting of the host that reads these checks; null means no timed read, which
    *  under "off" includes the retry after a failure. */
   delayMs(

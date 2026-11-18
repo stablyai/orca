@@ -5,19 +5,21 @@ import {
   type AgentStartupShell
 } from '../../../agent-launch/startup/tui-agent-startup-shell'
 
-/** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line. */
+/** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer. */
 export const AGENT_SESSION_SETUP_COMMANDS = [
   {
     agent: 'claude',
     loginCommand: ['claude', 'auth', 'login'],
-    installCommand: 'curl -fsSL https://claude.ai/install.sh | bash'
+    installCommand: 'curl -fsSL https://claude.ai/install.sh | bash',
+    windowsInstallScript: 'https://claude.ai/install.ps1'
   },
   // Why device auth from another device: these browser logins redirect to the host's localhost.
   {
     agent: 'codex',
     loginCommand: ['codex', 'login'],
     remoteLoginCommand: ['codex', 'login', '--device-auth'],
-    installCommand: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh'
+    installCommand: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
+    windowsInstallScript: 'https://chatgpt.com/codex/install.ps1'
   },
   {
     agent: 'grok',
@@ -48,6 +50,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     agent: 'cursor',
     loginCommand: ['cursor-agent', 'login'],
     installCommand: 'curl https://cursor.com/install -fsS | bash'
+  },
+  // `hermes model` picks a provider and signs in to it; Hermes has no separate login.
+  {
+    agent: 'hermes',
+    loginCommand: ['hermes', 'model'],
+    installCommand: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
   },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
   { agent: 'antigravity', loginCommand: [] }
@@ -104,13 +112,20 @@ function claudeSystemSignInCommand(shell: AgentStartupShell): string {
   return `sh -c ${quoteStartupArg(script, shell)}`
 }
 
-/** The shell line that installs `agent` on a host of `hostPlatform`; null when unknown, Windows, or without one. */
+/** The shell line that installs `agent` on a host of `hostPlatform`; null when unknown or without one. */
 export function agentSessionInstallCommand(
   agent: string | undefined,
   hostPlatform: string | null | undefined
 ): string | null {
   const entry = agentSessionSetupFor(agent)
-  return hostPlatform && hostPlatform !== 'win32' && entry && 'installCommand' in entry
-    ? entry.installCommand
-    : null
+  if (!hostPlatform || !entry) {
+    return null
+  }
+  if (hostPlatform === 'win32') {
+    // Why powershell.exe: one line that runs the same from PowerShell, cmd and Git Bash terminals.
+    return 'windowsInstallScript' in entry
+      ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm ${entry.windowsInstallScript} | iex"`
+      : null
+  }
+  return 'installCommand' in entry ? entry.installCommand : null
 }

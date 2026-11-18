@@ -42,7 +42,10 @@ export class RuntimeBrowserTabQueries {
     >,
     private readonly catalog: Pick<
       RuntimeBrowserTabCatalog,
-      'listLogicalBrowserTabs' | 'assertClientPageWorkspace' | 'describeBrowserTab'
+      | 'listLogicalBrowserTabs'
+      | 'assertClientPageWorkspace'
+      | 'describeBrowserTab'
+      | 'describeClientHostedBrowserTab'
     >
   ) {}
 
@@ -70,16 +73,7 @@ export class RuntimeBrowserTabQueries {
     const clientPage = this.host.getRuntimeBrowserPageRegistry().getPage(params.page)
     if (clientPage) {
       await this.catalog.assertClientPageWorkspace(clientPage, params.worktree)
-      const tab = this.catalog
-        .listLogicalBrowserTabs(
-          clientPage.workspaceId,
-          this.host.getRuntimeBrowserPageRegistry().listPages(clientPage.workspaceId)
-        )
-        .find((candidate) => candidate.browserPageId === clientPage.browserPageId)
-      if (!tab) {
-        throw new BrowserError('browser_tab_not_found', `Browser page ${params.page} was not found`)
-      }
-      return { tab }
+      return { tab: this.catalog.describeClientHostedBrowserTab(clientPage) }
     }
     const target = await this.targets.resolveBrowserCommandTarget(params)
     return { tab: this.catalog.describeBrowserTab(params.page, target.worktreeId) }

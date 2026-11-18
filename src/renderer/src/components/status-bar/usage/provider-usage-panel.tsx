@@ -21,9 +21,12 @@ import {
   type UsageWindowSection
 } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
-import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
+import {
+  getProviderUsageErrorMessage,
+  getProviderUsageStatusLabel
+} from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { recomputeOn } from '@/lib/recompute-on'
 import { ProviderExtraUsageSection } from './provider-extra-usage-section'
 import { formatWindowLabel } from './rate-limit-window-localized-label'

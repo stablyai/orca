@@ -7,6 +7,7 @@ import {
 } from '@/components/task-page/github/cache/task-page-github-resume-cache'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { getTaskPageRepoSourceContext } from '../../../../lib/work-items/task-repo-source-context'
+import { getTaskPageGitHubRepoArgs } from '@/components/task-page/task-page-source-context'
 import { sortWorkItemsByNumber } from '../../../../../../shared/work-items/work-item-order'
 import { taskPageToGitHubApiPage } from '../../../../../../shared/work-items/work-item-pagination'
 import {
@@ -67,7 +68,9 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
     countWorkItemsAcrossRepos,
     retryingSourceKeys,
     setRetryingSourceKeys,
-    githubWorkItemMutationQueryKey
+    githubWorkItemMutationQueryKey,
+    unreachableTaskSourceHostIds,
+    recheckUnreachableTaskSourceHosts
   } = model
   if (!taskResumeApplied) {
     return
@@ -191,12 +194,8 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
   const forcedFetchAuthorityGeneration = forcedFetch
     ? getOrCreateQuietRevalidateState(githubWorkItemMutationQueryKey).dirtyGeneration
     : null
-  const repoArgs = selectedRepos.map((r) => ({
-    repoId: r.id,
-    path: r.path,
-    executionHostId: r.executionHostId,
-    sourceContext: getTaskPageRepoSourceContext(r, 'github')
-  }))
+  const repoArgs = getTaskPageGitHubRepoArgs(selectedRepos, unreachableTaskSourceHostIds)
+  recheckUnreachableTaskSourceHosts()
   const landingRefreshKey = `${repoArgs.map((r) => `${r.repoId}:${r.path}`).join('|')}::${q}`
   const shouldProbeOnLanding =
     !forcedFetch &&
