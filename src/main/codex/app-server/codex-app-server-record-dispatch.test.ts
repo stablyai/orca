@@ -11,13 +11,12 @@ it('ends the session with a named error when a notification is over the line lim
   dispatcher.rejectOversized({
     kind: 'line-too-long',
     maxLineBytes: 128 * 2 ** 20,
-    observedBytes: 130 * 2 ** 20,
+    observedBytes: 128 * 2 ** 20 + 65_536,
     prefix: '{"method":"item/completed","params":{"threadId":"t"}'
   })
   expect(failures).toHaveLength(1)
   expect(failures[0]).toMatchObject({
     name: 'CodexAppServerFrameSizeError',
-    message:
-      'A Codex item/completed notification was at least 130 MB, over the 128 MB limit for one message'
+    message: 'A Codex item/completed notification was over the 128 MB limit for one message'
   })
 })

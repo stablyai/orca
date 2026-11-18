@@ -7,7 +7,10 @@ import {
   CodexAppServerUnsupportedError,
   isCodexMethodNotFoundError
 } from './codex-app-server-session'
-import { classifyJsonRpcPrefix } from '../../../shared/json-stream/json-rpc-record-prefix'
+import {
+  classifyJsonRpcPrefix,
+  type JsonRpcPrefix
+} from '../../../shared/json-stream/json-rpc-record-prefix'
 
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
 const MAX_REMEMBERED_TIMEOUTS = 64
@@ -128,7 +131,10 @@ export function createCodexAppServerRecordDispatcher(input: {
   }
 
   const rejectOversized = (rejected: NdjsonRejectedRecord & { kind: 'line-too-long' }): void => {
-    const classification = classifyJsonRpcPrefix(rejected.prefix)
+    // Whole records were lost with it, so no single request can absorb the failure.
+    const classification: JsonRpcPrefix = rejected.droppedCompleteRecords
+      ? { kind: 'unknown' }
+      : classifyJsonRpcPrefix(rejected.prefix)
     const payload = {
       reason: 'record-too-large',
       observedBytes: rejected.observedBytes,

@@ -15,7 +15,7 @@ export class CodexAppServerFrameSizeError extends Error {
     kind: 'response' | 'notification' | 'message' = 'response'
   ) {
     super(
-      `A Codex ${method ? `${method} ` : ''}${kind} was at least ${size(observedBytes)}, over the ${size(maxBytes)} limit for one message`
+      `A Codex ${method ? `${method} ` : ''}${kind} was over the ${size(maxBytes)} limit for one message`
     )
     this.name = 'CodexAppServerFrameSizeError'
   }
