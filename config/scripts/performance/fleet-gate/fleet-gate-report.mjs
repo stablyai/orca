@@ -90,6 +90,7 @@ export function burstRows(bursts) {
   const byArm = Object.fromEntries(bursts.map((burst) => [burst.arm, burst]))
   const metrics = [
     {
+      phase: 'mid-turn',
       label: 'mid-turn chats quit',
       read: (burst) => burst.midTurnLaunched,
       bad: (burst) =>
@@ -99,11 +100,13 @@ export function burstRows(bursts) {
     },
     {
       // Every chat that quit mid-turn must be offered again; a partial resume is the regression this guards.
+      phase: 'mid-turn',
       label: 'restart offers',
       read: (burst) => burst.continuation?.offered,
       bad: (burst) => (burst.continuation?.offered ?? 0) < (burst.midTurn?.requested ?? 1)
     },
     {
+      phase: 'mid-turn',
       label: 'continuations started',
       read: (burst) => burst.continuationLaunched,
       bad: (burst) =>
@@ -111,6 +114,7 @@ export function burstRows(bursts) {
         (burst.continuation?.problems?.length ?? 0) > 0
     },
     {
+      phase: 'cold',
       label: 'cold launches started',
       read: (burst) => burst.coldLaunched,
       bad: (burst) =>
@@ -125,8 +129,9 @@ export function burstRows(bursts) {
   return metrics.map((metric) => {
     const oldBurst = byArm.old
     const newBurst = byArm.new
-    // A batch that couldn't be filled has no workload to judge: INCOMPLETE (via n/a), never FAIL.
-    if (newBurst?.undersized) {
+    // A phase whose batch couldn't be filled has no workload to judge: its rows are n/a (INCOMPLETE), never FAIL.
+    // Rows of a full phase, and ownership refusals, are still judged.
+    if (metric.phase && newBurst?.undersizedPhases?.includes(metric.phase)) {
       return {
         scenario: 'burst',
         metric: { label: metric.label },
