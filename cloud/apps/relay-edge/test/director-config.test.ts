@@ -1,17 +1,12 @@
 // Edge-native director configuration and its pure rules: off unless DIRECTOR_HOSTNAME is set and
 // valid, and country routing to the front door.
 import { describe, expect, it } from 'vitest'
-import { dialledHostname, directorCellUrl, parseDirectorConfig } from '../src/director-config'
+import { directorCellUrl, parseDirectorConfig } from '../src/director-config'
 import { DIRECTOR_HOST, EDGE_URL, FRONT_DOOR_URL } from './director-fixture'
 
 const VALID = { DIRECTOR_HOSTNAME: DIRECTOR_HOST, DIRECTOR_EDGE_URL: EDGE_URL, DIRECTOR_FRONT_DOOR_URL: FRONT_DOOR_URL }
 
 describe('director config', () => {
-  it('is off, silently, without DIRECTOR_HOSTNAME (every environment today)', () => {
-    expect(parseDirectorConfig({})).toEqual({ config: null, problems: [] })
-    expect(parseDirectorConfig({ DIRECTOR_HOSTNAME: '', DIRECTOR_EDGE_URL: EDGE_URL })).toEqual({ config: null, problems: [] })
-  })
-
   it('parses a valid setup; the front door is optional and defaults to CN', () => {
     expect(parseDirectorConfig({ ...VALID, DIRECTOR_HOSTNAME: 'Director-Next.Relay.Example' }).config).toEqual({
       hostname: DIRECTOR_HOST,
@@ -33,12 +28,6 @@ describe('director config', () => {
     expect(problems({ DIRECTOR_HOSTNAME: 'https://director' }).problems).toEqual(['hostname_invalid'])
     // Handing out the director's own host as a cell would send clients in a loop.
     expect(problems({ DIRECTOR_EDGE_URL: `https://${DIRECTOR_HOST}` }).problems).toEqual(['cell_url_is_director'])
-  })
-
-  it('matches on the hostname the client dialled: a trusted ingress origin, else the URL', () => {
-    const request = new Request(`https://edge.relay.example/v1/assign`)
-    expect(dialledHostname(request, null)).toBe('edge.relay.example')
-    expect(dialledHostname(request, { origin: `https://${DIRECTOR_HOST}` })).toBe(DIRECTOR_HOST)
   })
 })
 

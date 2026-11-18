@@ -300,6 +300,10 @@ describe('failing looks', () => {
         .runs.slice(-2)
         .map((run) => run.alerted)
     ).toEqual([true, undefined])
+    // The host's turn-end notice follows the same rule.
+    const [first, second] = store.get('b1').runs.slice(-2)
+    expect(store.lookTurnIsQuiet(first!.sessionId, 'failure', true)).toBe(false)
+    expect(store.lookTurnIsQuiet(second!.sessionId, 'failure', true)).toBe(true)
   })
 
   it("starts no look for a usage-limited look's owed slot while Orca continues that look's chat", async () => {
