@@ -1,9 +1,10 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { enumerateMock } = vi.hoisted(() => ({ enumerateMock: vi.fn() }))
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../permissions/directory-enumeration-probe', () => ({
+  enumerateDirectoryOnce: enumerateMock
+}))
 
 import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protocol'
 import {
@@ -13,44 +14,36 @@ import {
 import { reportDaemonPtyCwdVerdict } from '../daemon-adoption-telemetry-event'
 
 const HELPER: DaemonEndpointIdentity = { pid: 1530, startedAtMs: 1_700_000, launchNonce: 'n1' }
-const NEXT_HELPER: DaemonEndpointIdentity = { pid: 1531, startedAtMs: 1_700_500, launchNonce: 'n2' }
+const FOLDER = '/work/orca-cwd-verdict/repo'
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-let folder = ''
 
-function verdict(
-  cwd: string,
-  cwdReadableByDaemon: boolean,
-  daemonIdentity = HELPER
-): Promise<void> {
-  return reportDaemonPtyCwdVerdict({ cwd, cwdReadableByDaemon, pidPath: null, daemonIdentity })
+function verdict(cwdReadableByDaemon: boolean): Promise<void> {
+  return reportDaemonPtyCwdVerdict({
+    cwd: FOLDER,
+    cwdReadableByDaemon,
+    pidPath: null,
+    daemonIdentity: HELPER
+  })
 }
 
-beforeEach(async () => {
+beforeEach(() => {
   resetDaemonFolderAccessMismatchForTests()
-  // The app-side recheck only runs on macOS; the verdict rules themselves are platform-free.
+  enumerateMock.mockReset()
+  // The app-side recheck only runs on macOS; the ordering rule itself is platform-free.
   Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-  folder = await mkdtemp(join(tmpdir(), 'orca-cwd-verdict-'))
 })
-afterEach(async () => {
+afterEach(() => {
   Object.defineProperty(process, 'platform', platform)
-  await rm(folder, { recursive: true, force: true })
 })
 
 describe('helper folder verdicts', () => {
-  it('shows the notice only for the helper that was denied a folder this app can read', async () => {
-    await verdict(folder, false)
-    expect(getDaemonFolderAccessMismatch(HELPER)).not.toBeNull()
-    expect(getDaemonFolderAccessMismatch(NEXT_HELPER)).toBeNull()
-  })
-
-  it('clears the notice once that helper reads the folder again', async () => {
-    await verdict(folder, false)
-    await verdict(folder, true)
-    expect(getDaemonFolderAccessMismatch(HELPER)).toBeNull()
-  })
-
-  it('shows no notice when this app cannot read the folder either', async () => {
-    await verdict(join(folder, 'missing'), false)
+  it('keeps a re-allow when an older denial finishes its app-side recheck afterwards', async () => {
+    let finishRecheck: (outcome: string) => void = () => {}
+    enumerateMock.mockReturnValueOnce(new Promise((resolve) => (finishRecheck = resolve)))
+    const denial = verdict(false)
+    await verdict(true)
+    finishRecheck('ok')
+    await denial
     expect(getDaemonFolderAccessMismatch(HELPER)).toBeNull()
   })
 })

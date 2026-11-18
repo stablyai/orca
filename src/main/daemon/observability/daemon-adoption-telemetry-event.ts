@@ -116,6 +116,10 @@ export async function trackDaemonPtyCwdVerdict(
   }
 }
 
+// An older denial's app-side read can finish after a newer verdict for the same folder class.
+const latestVerdicts = new Map<string, number>()
+let verdictCount = 0
+
 /** Do not await: the app-side directory read can wait indefinitely on a macOS permission prompt. */
 export async function reportDaemonPtyCwdVerdict(args: {
   cwd: string | undefined
@@ -132,6 +136,9 @@ export async function reportDaemonPtyCwdVerdict(args: {
     const cwdClass = classifyDaemonPtyCwd(cwd, homedir())
     const tccFolderClass =
       process.platform === 'darwin' && isMacTccFolderClass(cwdClass) ? cwdClass : null
+    const verdictKey = `${args.daemonIdentity?.pid}:${args.daemonIdentity?.launchNonce}:${cwdClass}`
+    const verdict = ++verdictCount
+    latestVerdicts.set(verdictKey, verdict)
     if (args.cwdReadableByDaemon === true) {
       clearDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
       // TCC-gated folders only: elsewhere a readable cwd says nothing about the theory.
@@ -146,7 +153,8 @@ export async function reportDaemonPtyCwdVerdict(args: {
       tccFolderClass && args.cwdReadableByDaemon === false
         ? await prepareTccDenialCapture(args.daemonIdentity, tccFolderClass, deniedAtMs)
         : null
-    if (!(await hasDaemonPtyCwdDenialDiverged(cwd, args.cwdReadableByDaemon))) {
+    const diverged = await hasDaemonPtyCwdDenialDiverged(cwd, args.cwdReadableByDaemon)
+    if (!diverged || latestVerdicts.get(verdictKey) !== verdict) {
       if (capture) {
         releaseTccDenialCapture(capture)
       }

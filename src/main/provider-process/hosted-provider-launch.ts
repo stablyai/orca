@@ -113,7 +113,9 @@ export type ProviderHostRoute = {
   reportCwd: HostedCwdReporter
 }
 
-const START_TIMEOUT_MS = 10_000
+// The owner's 15 s bootstrap deadline starts with the launch; a failed hosted start must leave a
+// direct launch enough of it.
+const HOSTED_START_BUDGET_MS = 8_000
 
 async function connectedHost(route: ProviderHostRoute): Promise<DaemonClient | null> {
   try {
@@ -165,6 +167,8 @@ export async function launchProviderOwner(
   route: ProviderHostRoute,
   spawnHere: () => ChildProcess
 ): Promise<void> {
+  const deadline = performance.now() + HOSTED_START_BUDGET_MS
+  const remainingMs = (): number => Math.max(0, deadline - performance.now())
   const client = await connectedHost(route)
   const identity =
     client && !owner.canceled
@@ -189,10 +193,13 @@ export async function launchProviderOwner(
     if (!isCurrentHostedIdentity(client, identity)) {
       throw new Error('Provider host changed before launch')
     }
+    if (remainingMs() === 0) {
+      throw new Error('Provider host start ran out of time')
+    }
     const result = await client.request<HostedProviderSpawnResult>(
       'spawnProvider',
       hostedLaunch(spec, path, listener.nonce),
-      START_TIMEOUT_MS
+      remainingMs()
     )
     if ('spawnError' in result) {
       const { code, path: failedPath } = result.spawnError
@@ -205,7 +212,7 @@ export async function launchProviderOwner(
     if (!Number.isSafeInteger(pid) || pid <= 1) {
       throw new Error('Provider host returned no process')
     }
-    const pipes = await withProviderStartDeadline(listener.ready, START_TIMEOUT_MS)
+    const pipes = await withProviderStartDeadline(listener.ready, remainingMs())
     // Only attaching can open the owner's gate, so until here no CLI ran and no input left this app.
     attached = true
     owner.attach(pid, pipes)

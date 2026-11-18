@@ -98,11 +98,19 @@ async function runChat(): Promise<{ closed: unknown[]; output: string }> {
 describe.runIf(process.platform !== 'win32')('hosted native provider owner', () => {
   it('delivers input, output and the real exit through pipes only this app holds', async () => {
     const spawns: HostedProviderSpawn[] = []
-    installProviderProcessHost(async () => hostClient(spawns))
+    const verdicts: unknown[] = []
+    installProviderProcessHost(
+      async () => hostClient(spawns),
+      (verdict) => verdicts.push(verdict)
+    )
     // A host that kept its pipe copies would hold output open, so close would never arrive.
     await expect(runChat()).resolves.toEqual({ closed: [7, null], output: 'CHAT REPLY' })
     expect(spawns).toHaveLength(1)
     expect(spawns[0]?.args).toContain(process.execPath)
+    // A readable verdict is what clears a folder-access notice after access is allowed again.
+    expect(verdicts).toEqual([
+      expect.objectContaining({ cwd: state.root, cwdReadableByDaemon: true })
+    ])
   })
 
   it('launches here and reports the denial when the host cannot read the folder', async () => {
