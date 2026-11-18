@@ -46,9 +46,11 @@ function dispatchIdentityLines(params: PreambleParams): string {
         ? `Your coordinator's Orca session ID is: ${params.coordinatorHandle}`
         : 'Your coordinator receives mail you send with no recipient.',
     `Your task ID is: ${params.taskId}`,
-    ...(isSessionHandle(params.workerHandle)
-      ? [`Your Orca session ID is: ${params.workerHandle}`]
-      : [])
+    // Name the worker's own handle too: every command uses it as --from, and sessions already
+    // get this line, so terminal workers otherwise have to work out which handle is theirs.
+    isSessionHandle(params.workerHandle)
+      ? `Your Orca session ID is: ${params.workerHandle}`
+      : `Your terminal handle is: ${params.workerHandle}`
   ].join('\n')
 }
 
