@@ -22,8 +22,9 @@ export function setAgentSessionRecordConversationName(
 
 /** How a user's name write lands: `rename` always wins; `legacy-alias` (a window's tab rename
  *  from before names were saved here) only replaces a name Orca chose, so a late or replayed
- *  upload never overwrites a rename the user made since. */
-export type AgentSessionUserNameWrite = 'rename' | 'legacy-alias'
+ *  upload never overwrites a rename the user made since. `release` drops a user name the chat
+ *  still bears as `name`, handing it back to automatic naming. */
+export type AgentSessionUserNameWrite = 'rename' | 'legacy-alias' | 'release'
 
 export function setAgentSessionRecordUserName(
   record: AgentSessionRecord,
@@ -32,6 +33,10 @@ export function setAgentSessionRecordUserName(
   now: number
 ): { record: AgentSessionRecord; applied: boolean } {
   const normalized = normalizeAgentSessionConversationName(name)
+  if (write === 'release') {
+    const released = releaseAgentSessionRecordUserName(record, name, now)
+    return { record: released, applied: released !== record }
+  }
   if (
     normalized === null ||
     (write === 'legacy-alias' && record.conversationNameSource === 'user')
@@ -50,6 +55,19 @@ export function setAgentSessionRecordUserName(
     },
     applied: true
   }
+}
+
+/** Only while the chat still bears `name`, so a rename the user made since stays. */
+function releaseAgentSessionRecordUserName(
+  record: AgentSessionRecord,
+  name: string,
+  now: number
+): AgentSessionRecord {
+  if (record.conversationNameSource !== 'user' || record.conversationName !== name) {
+    return record
+  }
+  const { conversationName: _name, conversationNameSource: _source, ...rest } = record
+  return { ...rest, updatedAt: now }
 }
 
 export async function setAgentSessionRecordUserNameThrough(

@@ -47,6 +47,9 @@ function isSkippedFile(root, filePath) {
 }
 
 export async function collectSourceFiles(root, dir) {
+  if (SOURCE_EXTENSIONS.has(path.extname(dir))) {
+    return isSkippedFile(root, dir) ? [] : [dir]
+  }
   const entries = await fs.readdir(dir, { withFileTypes: true })
   const files = []
 

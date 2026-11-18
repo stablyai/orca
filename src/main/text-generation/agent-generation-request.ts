@@ -135,7 +135,8 @@ export async function runGenerationRequest(input: {
     !result.success ||
     !isCustomAgentId(input.params.agentId) ||
     input.operation === 'pull-request-fields' ||
-    input.operation === 'jira-issue-summary'
+    input.operation === 'jira-issue-summary' ||
+    input.operation === 'bot-suggestions'
   ) {
     return result
   }

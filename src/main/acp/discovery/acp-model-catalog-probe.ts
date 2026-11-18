@@ -128,7 +128,7 @@ export function createAcpModelCatalogProbe(
         }
         const launch = {
           command,
-          args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDir: null })],
+          args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDirs: [] })],
           cwd,
           env,
           envToDelete
@@ -170,7 +170,7 @@ export function createAcpModelCatalogProbe(
               assertStructuredAgentResolutionCurrent(operation)
               const args = [
                 ...prefixArgs,
-                ...spec.args({ fullAccess: false, pluginDir: null, model }),
+                ...spec.args({ fullAccess: false, pluginDirs: [], model }),
                 ...(folderArgs && folder ? folderArgs(folder.path) : [])
               ]
               return await runAgentModelCatalogSession<

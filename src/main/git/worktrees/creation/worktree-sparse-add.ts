@@ -1,6 +1,8 @@
 import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { retryOnGitLockContention } from '../../../../shared/git/commands/git-lock-contention'
+import { gitConfigWrite } from './worktree-config-write'
 import { addWorktreeDeferringLocalBaseUpdate } from './worktree-add'
 import type {
   AddWorktreeOptions,
@@ -38,12 +40,15 @@ export async function addSparseWorktree(
     const longPathArgs = windowsLongPathGitArgs(worktreePath)
     const [checkoutWorkersArgs] = await Promise.all([
       checkoutWorkersGitArgs(worktreePath, options),
+      // Why: init is a multi-step config migration that skips itself once begun, so it is never retried.
       gitExecFileAsync(['sparse-checkout', 'init', '--cone'], gitExecOptions(worktreePath, options))
     ])
-    await gitExecFileAsync([...longPathArgs, 'sparse-checkout', 'set', '--', ...directories], {
-      ...gitExecOptions(worktreePath, options),
-      admissionClass: 'checkout'
-    })
+    await retryOnGitLockContention(() =>
+      gitExecFileAsync([...longPathArgs, 'sparse-checkout', 'set', '--', ...directories], {
+        ...gitExecOptions(worktreePath, options),
+        admissionClass: 'checkout'
+      })
+    )
     await gitExecFileAsync([...checkoutWorkersArgs, ...longPathArgs, 'checkout', branch], {
       ...gitExecOptions(worktreePath, options),
       admissionClass: 'checkout'
@@ -86,8 +91,10 @@ async function unsetWorktreeCreationBase(
   options: GitWorktreeExecOptions = {}
 ): Promise<void> {
   try {
-    await gitExecFileAsync(['config', '--local', '--unset-all', `branch.${branch}.base`], {
-      ...gitExecOptions(worktreePath, options)
-    })
+    await gitConfigWrite(
+      ['config', '--local', '--unset-all', `branch.${branch}.base`],
+      worktreePath,
+      options
+    )
   } catch {}
 }
