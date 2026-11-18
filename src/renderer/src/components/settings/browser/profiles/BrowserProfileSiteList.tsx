@@ -1,36 +1,42 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Button } from '../../../ui/button'
-import { Textarea } from '../../../ui/textarea'
-import { useTranslate } from '@/i18n/use-translate'
+import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   MAX_BROWSER_SITE_LIST_ENTRIES,
-  parseBrowserSiteList
+  normalizeBrowserSiteListEntries
 } from '../../../../../../shared/browser/profiles/browser-profile-site-list'
+import { Button } from '../../../ui/button'
+import { Label } from '../../../ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
+import { Textarea } from '../../../ui/textarea'
+import { useTranslate } from '@/i18n/use-translate'
 
-export function BrowserProfileSiteList({ profileId }: { profileId: string }): React.JSX.Element {
+export function BrowserProfileSiteList({
+  profiles
+}: {
+  profiles: Pick<BrowserSessionProfile, 'id' | 'label'>[]
+}): React.JSX.Element {
   const t = useTranslate()
+  const [profileId, setProfileId] = useState(profiles[0]?.id ?? 'default')
   const [saved, setSaved] = useState<string[] | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
-  const [loadFailed, setLoadFailed] = useState(false)
-  const [loadAttempt, setLoadAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+    setSaved(null)
     setLoadFailed(false)
+    setText('')
     window.api.browser
       .sessionGetAllowedHosts({ profileId })
       .then((hosts) => {
         if (cancelled) {
           return
         }
-        if (hosts === null) {
-          setLoadFailed(true)
-          return
-        }
         setSaved(hosts)
-        setText(hosts.join('\n'))
+        setLoadFailed(hosts === null)
+        setText(hosts?.join('\n') ?? '')
       })
       .catch(() => {
         if (!cancelled) {
@@ -40,37 +46,20 @@ export function BrowserProfileSiteList({ profileId }: { profileId: string }): Re
     return () => {
       cancelled = true
     }
-  }, [profileId, loadAttempt])
+  }, [profileId])
 
-  const parsed = parseBrowserSiteList(text)
-  let error: string | null = null
-  if (!parsed.ok) {
-    const line = parsed.line ?? 0
-    if (parsed.error === 'too-many') {
-      error = t('browser.siteList.errorTooMany', 'At most {{max}} sites are allowed.', {
-        max: MAX_BROWSER_SITE_LIST_ENTRIES
-      })
-    } else if (parsed.error === 'ip-address') {
-      error = t('browser.siteList.errorIp', 'Line {{line}}: IP addresses are not supported.', {
-        line
-      })
-    } else if (parsed.error === 'single-label') {
-      error = t(
-        'browser.siteList.errorSingleLabel',
-        'Line {{line}}: enter a full host name such as example.com (only localhost may be a single word).',
-        { line }
-      )
-    } else if (parsed.error === 'port-path-or-scheme') {
-      error = t(
-        'browser.siteList.errorForm',
-        'Line {{line}}: enter only a host name, without a scheme, port or path.',
-        { line }
-      )
-    } else {
-      error = t('browser.siteList.errorInvalid', 'Line {{line}}: not a valid host name.', { line })
-    }
-  }
-  const dirty = saved !== null && text !== saved.join('\n')
+  const parsed = normalizeBrowserSiteListEntries(text.split('\n').filter((line) => line.trim()))
+  const error = parsed.ok
+    ? null
+    : parsed.invalid === undefined
+      ? t('browser.siteList.errorTooMany', 'At most {{max}} sites are allowed.', {
+          max: MAX_BROWSER_SITE_LIST_ENTRIES
+        })
+      : t(
+          'browser.siteList.errorInvalid',
+          '"{{entry}}" is not a host name such as example.com or *.example.com.',
+          { entry: parsed.invalid }
+        )
 
   const save = async (): Promise<void> => {
     if (!parsed.ok) {
@@ -82,28 +71,11 @@ export function BrowserProfileSiteList({ profileId }: { profileId: string }): Re
         profileId,
         hosts: parsed.entries
       })
-      if (result?.ok) {
+      if (result.ok) {
         setSaved(result.hosts)
         setText(result.hosts.join('\n'))
         toast.success(t('browser.siteList.saved', 'Site list saved.'))
-      } else if (result?.reason === 'save-failed') {
-        toast.error(
-          t(
-            'browser.siteList.writeFailed',
-            'Could not write the site list to disk, so it was not applied. The previous list is still in effect.'
-          )
-        )
-      } else if (result?.reason === 'load-failed') {
-        setSaved(null)
-        setLoadFailed(true)
-      } else if (result?.reason === 'changed') {
-        toast.error(
-          t(
-            'browser.siteList.changed',
-            'The site list changed while you were confirming, so nothing was saved. Review it and save again.'
-          )
-        )
-      } else if (result?.reason !== 'cancelled') {
+      } else if (result.reason !== 'cancelled') {
         toast.error(t('browser.siteList.saveFailed', 'Could not save the site list.'))
       }
     } catch {
@@ -114,38 +86,54 @@ export function BrowserProfileSiteList({ profileId }: { profileId: string }): Re
   }
 
   return (
-    <div className="mt-1.5 space-y-1.5 rounded-md border border-border/70 px-3 py-2.5">
-      <p className="text-[11px] text-muted-foreground">
-        {t(
-          'browser.siteList.description',
-          'Only these sites load in this profile. One host per line, such as example.com or *.example.com (subdomains only; example.com itself needs its own line). IP addresses and single-word names other than localhost cannot be listed. Leave empty to allow every site.'
-        )}
-      </p>
+    <div className="space-y-2 pt-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 space-y-0.5">
+          <Label>{t('browser.siteList.label', 'Site list')}</Label>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'browser.siteList.description',
+              'Only these sites load in the selected profile. One host per line, such as example.com or *.example.com (subdomains only; example.com itself needs its own line). IP addresses and single-word names other than localhost cannot be listed. Leave empty to allow every site.'
+            )}
+          </p>
+        </div>
+        <Select value={profileId} onValueChange={setProfileId}>
+          <SelectTrigger size="sm" className="max-w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            {profiles.map((profile) => (
+              <SelectItem key={profile.id} value={profile.id}>
+                {profile.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <Textarea
         variant="code"
         rows={4}
         value={text}
-        disabled={saved === null || loadFailed || saving}
+        disabled={saved === null || saving}
         spellCheck={false}
         aria-invalid={error !== null}
         aria-label={t('browser.siteList.label', 'Site list')}
         onChange={(e) => setText(e.target.value)}
       />
-      {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
-      {loadFailed ? (
-        <div className="flex items-center gap-2">
-          <p className="text-[11px] text-destructive">
-            {t(
+      {error || loadFailed ? (
+        <p className="text-2xs text-destructive">
+          {error ??
+            t(
               'browser.siteList.loadFailed',
-              "Couldn't read the saved site lists, so editing is disabled until they can be read."
+              "Couldn't read the saved site lists, so editing is disabled."
             )}
-          </p>
-          <Button size="xs" variant="outline" onClick={() => setLoadAttempt((n) => n + 1)}>
-            {t('browser.siteList.retry', 'Retry')}
-          </Button>
-        </div>
+        </p>
       ) : null}
-      <Button size="xs" disabled={!dirty || error !== null || saving} onClick={() => void save()}>
+      <Button
+        size="xs"
+        disabled={saved === null || text === saved.join('\n') || error !== null || saving}
+        onClick={() => void save()}
+      >
         {t('browser.siteList.save', 'Save')}
       </Button>
     </div>

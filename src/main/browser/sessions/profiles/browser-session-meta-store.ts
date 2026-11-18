@@ -1,9 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import {
-  MAX_BROWSER_SITE_LIST_ENTRIES,
-  normalizeBrowserSiteListEntry
-} from '../../../../shared/browser/profiles/browser-profile-site-list'
+import { normalizeBrowserSiteListEntry } from '../../../../shared/browser/profiles/browser-profile-site-list'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 export type PendingBrowserCookieImport =
@@ -24,7 +21,6 @@ export type BrowserSessionMeta = {
   enabledExtensionIdsByProfileId: Record<string, string[]>
   /** Browser-profile id → extension ids pinned to the browser toolbar, in pin order. */
   pinnedExtensionIdsByProfileId: Record<string, string[]>
-  /** Browser-profile id → hostname site list. Absent or empty means unrestricted. */
   allowedHostsByProfileId: Record<string, string[]>
 }
 
@@ -43,24 +39,18 @@ function parseEnabledExtensionIds(value: unknown): Record<string, string[]> {
   return result
 }
 
-export function parseAllowedHosts(value: unknown): Record<string, string[]> {
+function parseAllowedHosts(value: unknown): Record<string, string[]> {
   const result: Record<string, string[]> = {}
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return result
-  }
-  for (const [profileId, entries] of Object.entries(value)) {
-    if (!Array.isArray(entries)) {
-      continue
-    }
+  for (const [profileId, entries] of Object.entries(parseEnabledExtensionIds(value))) {
     const valid = new Set<string>()
     for (const entry of entries) {
-      const normalized = typeof entry === 'string' ? normalizeBrowserSiteListEntry(entry) : null
-      if (normalized?.ok) {
-        valid.add(normalized.entry)
+      const normalized = normalizeBrowserSiteListEntry(entry)
+      if (normalized !== null) {
+        valid.add(normalized)
       }
     }
     if (valid.size > 0) {
-      result[profileId] = [...valid].slice(0, MAX_BROWSER_SITE_LIST_ENTRIES)
+      result[profileId] = [...valid]
     }
   }
   return result
@@ -76,11 +66,23 @@ function copyIdLists(byProfileId: Record<string, string[]>): Record<string, stri
   return Object.fromEntries(Object.entries(byProfileId).map(([id, ids]) => [id, [...ids]]))
 }
 
-// Resolve the path inside the load error boundary.
-export function loadBrowserSessionMeta(
+function emptyBrowserSessionMeta(): BrowserSessionMeta {
+  return {
+    defaultSource: null,
+    pendingCookieDbPath: null,
+    pendingCookieImports: {},
+    profiles: [],
+    enabledExtensionIdsByProfileId: {},
+    pinnedExtensionIdsByProfileId: {},
+    allowedHostsByProfileId: {}
+  }
+}
+
+/** Null when the file exists but is unreadable; a missing file reads as empty. */
+export function readBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string
-): BrowserSessionMeta {
+): BrowserSessionMeta | null {
   try {
     const path = resolveMetadataPath()
     const raw = readFileSync(path, 'utf-8')
@@ -118,17 +120,17 @@ export function loadBrowserSessionMeta(
     // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
     enabledExtensionIdsByPath.set(path, copyIdLists(meta.enabledExtensionIdsByProfileId))
     return meta
-  } catch {
-    return {
-      defaultSource: null,
-      pendingCookieDbPath: null,
-      pendingCookieImports: {},
-      profiles: [],
-      enabledExtensionIdsByProfileId: {},
-      pinnedExtensionIdsByProfileId: {},
-      allowedHostsByProfileId: {}
-    }
+  } catch (error) {
+    return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? emptyBrowserSessionMeta() : null
   }
+}
+
+// Resolve the path inside the load error boundary.
+export function loadBrowserSessionMeta(
+  resolveMetadataPath: () => string,
+  defaultPartition: string
+): BrowserSessionMeta {
+  return readBrowserSessionMeta(resolveMetadataPath, defaultPartition) ?? emptyBrowserSessionMeta()
 }
 
 /**

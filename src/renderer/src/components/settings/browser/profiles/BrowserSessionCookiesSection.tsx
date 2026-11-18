@@ -6,8 +6,11 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { BrowserProfileRow, type BrowserProfileRowProps } from './BrowserProfileRow'
-import { BrowserProfileSiteLists } from './BrowserProfileSiteLists'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { BrowserProfileSiteList } from './BrowserProfileSiteList'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 
@@ -168,8 +171,8 @@ export function BrowserSessionCookiesSection({
           />
         ))}
       </div>
-      {selectedHostId === 'local' ? (
-        <BrowserProfileSiteLists
+      {selectedHostId === LOCAL_EXECUTION_HOST_ID ? (
+        <BrowserProfileSiteList
           profiles={[
             { id: 'default', label: defaultProfile?.label ?? 'Default' },
             ...nonDefaultProfiles

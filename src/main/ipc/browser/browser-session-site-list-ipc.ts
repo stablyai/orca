@@ -2,10 +2,11 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { translateMain } from '../../i18n/main-i18n'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import {
-  areBrowserProfileSiteListsReadable,
+  ensureBrowserProfileSiteListsLoaded,
   saveBrowserProfileSiteList
 } from '../../browser/sessions/site-list/browser-profile-site-list-store'
 import { getBrowserProfileSiteListEntries } from '../../browser/sessions/site-list/browser-session-site-list'
+import { canConfirmInWindow } from '../../plugins/consent/plugin-action-confirmation'
 import {
   compileBrowserSiteList,
   isSiteListEntryCovered,
@@ -16,15 +17,10 @@ import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
 const MAX_HOSTS_IN_DIALOG = 15
 
-// One edit at a time: the dialog is async, so two edits must not both judge against the same list.
+// Edits run one at a time: the dialog is async, so a second must see the first's result.
 let editQueue: Promise<unknown> = Promise.resolve()
-function runSerialized<T>(task: () => Promise<T>): Promise<T> {
-  const run = editQueue.then(task, task)
-  editQueue = run.catch(() => undefined)
-  return run
-}
 
-/** Hosts an edit adds beyond the list enforced right now; null when it does not widen. */
+/** Hosts an edit adds beyond the enforced list; [] when it clears it, null when it only narrows. */
 function wideningAgainstCurrent(profileId: string, entries: string[]): string[] | null {
   const current = getBrowserProfileSiteListEntries(profileId)
   if (current.length === 0) {
@@ -42,14 +38,16 @@ function describeWidening(added: string[]): string {
       'The site list will be removed, so this profile can open any site.'
     )
   }
-  const shown = added.slice(0, MAX_HOSTS_IN_DIALOG).join('\n')
-  const more =
-    added.length > MAX_HOSTS_IN_DIALOG
-      ? `\n${translateMain('browser.siteList.confirmMore', 'and {{extra}} more', {
-          extra: added.length - MAX_HOSTS_IN_DIALOG
-        })}`
-      : ''
-  return `${translateMain('browser.siteList.confirmAddDetail', 'This profile will also be able to open:')}\n\n${shown}${more}`
+  const more = added.length - MAX_HOSTS_IN_DIALOG
+  const lines = added.slice(0, MAX_HOSTS_IN_DIALOG)
+  if (more > 0) {
+    lines.push(translateMain('browser.siteList.confirmMore', 'and {{more}} more', { more }))
+  }
+  const intro = translateMain(
+    'browser.siteList.confirmAddDetail',
+    'This profile will also be able to open:'
+  )
+  return `${intro}\n\n${lines.join('\n')}`
 }
 
 async function confirmWidening(
@@ -57,7 +55,7 @@ async function confirmWidening(
   profileLabel: string,
   added: string[]
 ): Promise<boolean> {
-  if (!window || window.isDestroyed()) {
+  if (!canConfirmInWindow(window)) {
     return false
   }
   const { response } = await dialog.showMessageBox(window, {
@@ -82,35 +80,25 @@ async function confirmWidening(
 async function applyEdit(
   event: Electron.IpcMainInvokeEvent,
   profileId: string,
+  profileLabel: string,
   entries: string[]
 ): Promise<BrowserSiteListSetResult> {
-  if (!areBrowserProfileSiteListsReadable()) {
-    return { ok: false, reason: 'load-failed' }
+  if (!ensureBrowserProfileSiteListsLoaded()) {
+    return { ok: false, reason: 'save-failed' }
   }
-  const profile = browserSessionRegistry.getProfile(profileId)
-  if (!profile) {
+  const added = wideningAgainstCurrent(profileId, entries)
+  if (
+    added !== null &&
+    !(await confirmWidening(BrowserWindow.fromWebContents(event.sender), profileLabel, added))
+  ) {
+    return { ok: false, reason: 'cancelled' }
+  }
+  if (!browserSessionRegistry.getProfile(profileId)) {
     return { ok: false, reason: 'unavailable' }
   }
-  const added = wideningAgainstCurrent(profile.id, entries)
-  if (added !== null) {
-    if (!(await confirmWidening(BrowserWindow.fromWebContents(event.sender), profile.label, added))) {
-      return { ok: false, reason: 'cancelled' }
-    }
-    // The owner approved exactly `added`. If the list or profile changed during the dialog and the
-    // edit now widens by anything else, refuse instead of prompting again.
-    const after = wideningAgainstCurrent(profile.id, entries)
-    if (!browserSessionRegistry.getProfile(profile.id)) {
-      return { ok: false, reason: 'unavailable' }
-    }
-    if (after !== null && !after.every((host) => added.includes(host))) {
-      return { ok: false, reason: 'changed' }
-    }
-  }
-  const saved = saveBrowserProfileSiteList(profile.id, entries)
-  if (saved === 'unreadable') {
-    return { ok: false, reason: 'load-failed' }
-  }
-  return saved === 'saved' ? { ok: true, hosts: entries } : { ok: false, reason: 'save-failed' }
+  return saveBrowserProfileSiteList(profileId, entries)
+    ? { ok: true, hosts: entries }
+    : { ok: false, reason: 'save-failed' }
 }
 
 // Renderer-only: agents driving the browser (runtime RPC, CLI) must not be able to edit the list.
@@ -120,17 +108,12 @@ export function registerBrowserSessionSiteListHandlers(): void {
 
   ipcMain.handle(
     'browser:session:getAllowedHosts',
-    (event, args: { profileId: string }): string[] | null => {
-      // null: the caller is untrusted, the profile is gone, or the saved lists cannot be read.
-      if (
-        !isTrustedBrowserRenderer(event.sender) ||
-        !browserSessionRegistry.getProfile(args.profileId) ||
-        !areBrowserProfileSiteListsReadable()
-      ) {
-        return null
-      }
-      return getBrowserProfileSiteListEntries(args.profileId)
-    }
+    (event, args: { profileId: string }): string[] | null =>
+      isTrustedBrowserRenderer(event.sender) &&
+      browserSessionRegistry.getProfile(args.profileId) &&
+      ensureBrowserProfileSiteListsLoaded()
+        ? getBrowserProfileSiteListEntries(args.profileId)
+        : null
   )
 
   ipcMain.handle(
@@ -145,14 +128,17 @@ export function registerBrowserSessionSiteListHandlers(): void {
       if (!profile) {
         return { ok: false, reason: 'unavailable' }
       }
-      if (!Array.isArray(args.hosts) || !args.hosts.every((host) => typeof host === 'string')) {
+      const hosts = args.hosts
+      const parsed =
+        Array.isArray(hosts) && hosts.every((host) => typeof host === 'string')
+          ? normalizeBrowserSiteListEntries(hosts)
+          : null
+      if (!parsed?.ok) {
         return { ok: false, reason: 'invalid' }
       }
-      const parsed = normalizeBrowserSiteListEntries(args.hosts)
-      if (!parsed.ok) {
-        return { ok: false, reason: 'invalid' }
-      }
-      return runSerialized(() => applyEdit(event, profile.id, parsed.entries))
+      const run = editQueue.then(() => applyEdit(event, profile.id, profile.label, parsed.entries))
+      editQueue = run.catch(() => undefined)
+      return run
     }
   )
 }

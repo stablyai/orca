@@ -1,102 +1,59 @@
 export const MAX_BROWSER_SITE_LIST_ENTRIES = 256
 
-export type BrowserSiteListEntryError =
-  | 'empty'
-  | 'invalid'
-  | 'ip-address'
-  | 'port-path-or-scheme'
-  | 'single-label'
-
 export type BrowserSiteListParseResult =
   | { ok: true; entries: string[] }
-  | { ok: false; error: BrowserSiteListEntryError | 'too-many'; line?: number }
+  | { ok: false; invalid?: string }
 
 export type CompiledBrowserSiteList = {
   exact: ReadonlySet<string>
-  /** Bases of `*.base` entries: they match subdomains of `base`, never `base` itself. */
+  /** `*.base` entries match subdomains of base, never base itself. */
   wildcardBases: ReadonlySet<string>
 }
 
 const LABEL = /^[a-z0-9-]{1,63}$/
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/
 const NETWORK_PROTOCOLS = new Set(['http:', 'https:', 'ws:', 'wss:'])
-// file: can read local disk and ftp: is not a hostname-matched protocol, so a list shuts both.
 const BLOCKED_PROTOCOLS = new Set(['file:', 'ftp:'])
 
-// A single label (`com`, `*.com`) would admit a whole top-level domain; only `localhost` stays.
-const SINGLE_LABEL_EXCEPTION = 'localhost'
-
-function normalizeHostname(raw: string, wildcard: boolean): string | BrowserSiteListEntryError {
+function normalizeHostname(raw: string, wildcard: boolean): string | null {
   if (/[:/\\?#@\s%[\]]/.test(raw)) {
-    return 'port-path-or-scheme'
+    return null
   }
   let hostname: string
   try {
     hostname = new URL(`http://${raw}/`).hostname
   } catch {
-    return 'invalid'
-  }
-  if (IPV4.test(hostname)) {
-    return 'ip-address'
+    return null
   }
   const labels = hostname.split('.')
-  if (hostname.length > 253 || !labels.every((label) => LABEL.test(label))) {
-    return 'invalid'
+  if (IPV4.test(hostname) || hostname.length > 253 || !labels.every((l) => LABEL.test(l))) {
+    return null
   }
-  if (labels.length === 1 && (wildcard || hostname !== SINGLE_LABEL_EXCEPTION)) {
-    return 'single-label'
-  }
-  return hostname
+  // A single label would admit a whole top-level domain; only exact localhost is allowed.
+  return labels.length === 1 && (wildcard || hostname !== 'localhost') ? null : hostname
 }
 
-/**
- * Normalizes one `host` or `*.host` entry to lowercase punycode, or says why it is not one.
- * IP literals and single-label names (except exact `localhost`) are rejected.
- */
-export function normalizeBrowserSiteListEntry(
-  raw: string
-): { ok: true; entry: string } | { ok: false; error: BrowserSiteListEntryError } {
+export function normalizeBrowserSiteListEntry(raw: string): string | null {
   const trimmed = raw.trim().toLowerCase()
-  if (!trimmed) {
-    return { ok: false, error: 'empty' }
-  }
   const wildcard = trimmed.startsWith('*.')
   const hostname = normalizeHostname(wildcard ? trimmed.slice(2) : trimmed, wildcard)
-  if (
-    hostname === 'port-path-or-scheme' ||
-    hostname === 'invalid' ||
-    hostname === 'ip-address' ||
-    hostname === 'single-label'
-  ) {
-    return { ok: false, error: hostname }
-  }
-  return { ok: true, entry: wildcard ? `*.${hostname}` : hostname }
-}
-
-/** One entry per non-blank line; duplicates collapse. */
-export function parseBrowserSiteList(text: string): BrowserSiteListParseResult {
-  return normalizeBrowserSiteListEntries(text.split(/\r?\n/), true)
+  return hostname === null ? null : wildcard ? `*.${hostname}` : hostname
 }
 
 export function normalizeBrowserSiteListEntries(
-  rawEntries: readonly string[],
-  skipBlank = false
+  rawEntries: readonly string[]
 ): BrowserSiteListParseResult {
   const entries = new Set<string>()
-  for (const [index, raw] of rawEntries.entries()) {
-    if (skipBlank && !raw.trim()) {
-      continue
+  for (const raw of rawEntries) {
+    const entry = normalizeBrowserSiteListEntry(raw)
+    if (entry === null) {
+      return { ok: false, invalid: raw }
     }
-    const result = normalizeBrowserSiteListEntry(raw)
-    if (!result.ok) {
-      return { ok: false, error: result.error, line: index + 1 }
-    }
-    entries.add(result.entry)
+    entries.add(entry)
   }
-  if (entries.size > MAX_BROWSER_SITE_LIST_ENTRIES) {
-    return { ok: false, error: 'too-many' }
-  }
-  return { ok: true, entries: [...entries] }
+  return entries.size > MAX_BROWSER_SITE_LIST_ENTRIES
+    ? { ok: false }
+    : { ok: true, entries: [...entries] }
 }
 
 export function compileBrowserSiteList(entries: readonly string[]): CompiledBrowserSiteList {
@@ -124,10 +81,7 @@ function hostnameAllowed(list: CompiledBrowserSiteList, hostname: string): boole
   return false
 }
 
-/**
- * Hostname check for http(s)/ws(s) only. Non-network schemes (data:, blob:, about:, devtools:,
- * extension and Orca-internal schemes) stay allowed; file: and ftp: are blocked.
- */
+/** Non-network schemes stay allowed; file: and ftp: are blocked. */
 export function isUrlAllowedBySiteList(list: CompiledBrowserSiteList, url: string): boolean {
   let parsed: URL
   try {
@@ -145,7 +99,6 @@ export function isUrlAllowedBySiteList(list: CompiledBrowserSiteList, url: strin
   return hostnameAllowed(list, hostname)
 }
 
-/** Whether an already-normalized entry only admits hosts the list admits today. */
 export function isSiteListEntryCovered(list: CompiledBrowserSiteList, entry: string): boolean {
   if (!entry.startsWith('*.')) {
     return hostnameAllowed(list, entry)
@@ -156,15 +109,4 @@ export function isSiteListEntryCovered(list: CompiledBrowserSiteList, entry: str
 
 export type BrowserSiteListSetResult =
   | { ok: true; hosts: string[] }
-  | {
-      ok: false
-      reason:
-        | 'unavailable'
-        | 'invalid'
-        | 'cancelled'
-        | 'save-failed'
-        // The saved lists could not be read, so edits are refused rather than risk overwriting them.
-        | 'load-failed'
-        // The list changed while the confirmation dialog was open; the edit was not applied.
-        | 'changed'
-    }
+  | { ok: false; reason: 'unavailable' | 'invalid' | 'cancelled' | 'save-failed' }

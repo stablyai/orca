@@ -3,11 +3,7 @@ import type { Session } from 'electron'
 import { toSecureCertificateEndpoint } from '../../../shared/browser/navigation/browser-url'
 import { getProxySessionApplicationReadiness } from '../../network/proxy-settings'
 import { MAX_CERTIFICATE_GRANTS, type CertificateTrustGrant } from './browser-certificate-challenge'
-import {
-  answerBrowserSessionBeforeRequest,
-  noteBlockedMainFrame
-} from '../sessions/requests/browser-session-request-decisions'
-import { isBrowserSessionRequestOutsideSiteList } from '../sessions/site-list/browser-session-site-list'
+import { answerBrowserSessionBeforeRequest } from '../sessions/requests/browser-session-request-decisions'
 import { reportBrowserSessionWebRequest } from '../sessions/requests/browser-session-web-request-observer'
 
 type CertificateIdentity = Pick<
@@ -55,10 +51,7 @@ export class BrowserCertificateRequestGuard {
       reportBrowserSessionWebRequest(session, 'onBeforeRequest', details)
       const readiness = getProxySessionApplicationReadiness(session)
       const answer = (ready: boolean): void => {
-        if (ready && isBrowserSessionRequestOutsideSiteList(session, details.url)) {
-          noteBlockedMainFrame(details, { cancel: true })
-          callback({ cancel: true })
-        } else if (!ready || this.shouldBlockRequest(session, details)) {
+        if (!ready || this.shouldBlockRequest(session, details)) {
           callback({ cancel: true })
         } else {
           answerBrowserSessionBeforeRequest(session, details, callback)

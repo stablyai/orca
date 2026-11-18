@@ -1,3 +1,4 @@
+import { isBrowserSessionRequestOutsideSiteList } from '../site-list/browser-session-site-list'
 import {
   reportBrowserSessionWebRequest,
   type ObservedWebRequestDetails
@@ -61,7 +62,7 @@ export function watchDecisionBlockedMainFrames(
   }
 }
 
-export function noteBlockedMainFrame(
+function noteBlockedMainFrame(
   details: Electron.OnBeforeRequestListenerDetails,
   response: Electron.CallbackResponse
 ): void {
@@ -83,6 +84,10 @@ export function answerBrowserSessionBeforeRequest(
   const answer = (response: Electron.CallbackResponse): void => {
     noteBlockedMainFrame(details, response)
     callback(response)
+  }
+  if (isBrowserSessionRequestOutsideSiteList(session, details.url)) {
+    answer({ cancel: true })
+    return
   }
   let decision: ReturnType<BrowserSessionRequestDecider['beforeRequest']> = null
   try {
