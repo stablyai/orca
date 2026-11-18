@@ -1,4 +1,8 @@
 import type { NdjsonRejectedRecord } from '../../../shared/json-stream/main-process-ndjson-framer'
+import {
+  providerDiagnostic,
+  type ProviderDiagnostic
+} from '../../../shared/agent-session/failures/agent-session-failure'
 
 const MB = 2 ** 20
 
@@ -8,6 +12,9 @@ function size(bytes: number): string {
 
 /** A Codex line over the size limit: a reply fails its request, anything else ends the session. */
 export class CodexAppServerFrameSizeError extends Error {
+  /** Shown in the chat's failure notice, so the person learns why Codex stopped. */
+  readonly providerDiagnostic?: ProviderDiagnostic
+
   constructor(
     readonly method: string | null,
     readonly observedBytes: number,
@@ -18,6 +25,7 @@ export class CodexAppServerFrameSizeError extends Error {
       `A Codex ${method ? `${method} ` : ''}${kind} was over the ${size(maxBytes)} limit for one message`
     )
     this.name = 'CodexAppServerFrameSizeError'
+    this.providerDiagnostic = providerDiagnostic(this.message, 'person')
   }
 }
 
