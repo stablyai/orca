@@ -6,6 +6,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { getLocalExecutionHostLabel } from '../../../../../../shared/execution-host/execution-host'
 import { Button } from '../../../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,10 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
   const diskUsage = useCodexHistoryDiskUsage(hostScope.target, matchesSettingsSearch(query, search))
   const [confirming, setConfirming] = useState(false)
   const enabled = setting.state === 'ready' && setting.enabled
+  const historySize =
+    diskUsage && diskUsage.rollouts > 0 && setting.state !== 'unsupported'
+      ? formatBytes(diskUsage.bytes)
+      : null
 
   return (
     <>
@@ -72,35 +77,54 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
                   'Recommended'
                 )}
               </SettingsBadge>
+              {historySize && diskUsage ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {/* Focusable so keyboard users reach the explanation too. */}
+                    <span
+                      tabIndex={0}
+                      className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <SettingsBadge tone="muted">
+                        {diskUsage.complete
+                          ? t(
+                              'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryBadge',
+                              'Codex history: {{size}}',
+                              { size: historySize }
+                            )
+                          : t(
+                              'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryBadgeAtLeast',
+                              'Codex history: {{size}}+',
+                              { size: historySize }
+                            )}
+                      </SettingsBadge>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-72">
+                    {diskUsage.complete
+                      ? t(
+                          'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryTooltip',
+                          'Space Codex uses for its own chat history on {{host}}, including chats from workspaces you still have. This setting removes only chats from workspaces that no longer exist.',
+                          { host: hostLabel }
+                        )
+                      : t(
+                          'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryTooltipAtLeast',
+                          'Codex uses at least this much space for its own chat history on {{host}}, including chats from workspaces you still have. This setting removes only chats from workspaces that no longer exist.',
+                          { host: hostLabel }
+                        )}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
             </span>
           }
           description={
-            setting.state === 'unsupported' ? (
-              t(
-                'components.settings.agents.deleteHistoryWithWorkspace.unsupported',
-                'Update Orca on {{host}} to use this setting there.',
-                { host: hostLabel }
-              )
-            ) : (
-              <>
-                {search.description}
-                {diskUsage && diskUsage.rollouts > 0 ? (
-                  <span className="block">
-                    {diskUsage.complete
-                      ? t(
-                          'components.settings.agents.deleteHistoryWithWorkspace.codexDiskUsage',
-                          'All Codex chat history on {{host}} takes {{size}}.',
-                          { host: hostLabel, size: formatBytes(diskUsage.bytes) }
-                        )
-                      : t(
-                          'components.settings.agents.deleteHistoryWithWorkspace.codexDiskUsageAtLeast',
-                          'All Codex chat history on {{host}} takes at least {{size}}.',
-                          { host: hostLabel, size: formatBytes(diskUsage.bytes) }
-                        )}
-                  </span>
-                ) : null}
-              </>
-            )
+            setting.state === 'unsupported'
+              ? t(
+                  'components.settings.agents.deleteHistoryWithWorkspace.unsupported',
+                  'Update Orca on {{host}} to use this setting there.',
+                  { host: hostLabel }
+                )
+              : search.description
           }
           checked={enabled}
           disabled={setting.state !== 'ready' || !hostScope.available}

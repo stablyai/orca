@@ -37,24 +37,36 @@ export const confirm = defineFixture({
   }
 })
 
+function mockCodexHistorySize(): void {
+  const call = window.api.runtime.call
+  Object.assign(window.api, {
+    runtime: {
+      ...window.api.runtime,
+      call: async ({ method }: { method: string }) =>
+        method === 'workspaceCleanup.codexHistoryDiskUsage'
+          ? {
+              id: 'fixture',
+              ok: true,
+              result: { bytes: 53_500_000_000, rollouts: 41_905, complete: true }
+            }
+          : call({ method })
+    }
+  })
+}
+
 export const withCodexHistorySize = defineFixture({
   width: 640,
   store: { settings },
-  setup: () => {
-    const call = window.api.runtime.call
-    Object.assign(window.api, {
-      runtime: {
-        ...window.api.runtime,
-        call: async ({ method }: { method: string }) =>
-          method === 'workspaceCleanup.codexHistoryDiskUsage'
-            ? {
-                id: 'fixture',
-                ok: true,
-                result: { bytes: 53_500_000_000, rollouts: 41_905, complete: true }
-              }
-            : call({ method })
-      }
-    })
-  },
+  setup: mockCodexHistorySize,
   render: () => <Setting />
+})
+
+export const codexHistorySizeTooltip = defineFixture({
+  width: 640,
+  store: { settings },
+  setup: mockCodexHistorySize,
+  render: () => <Setting />,
+  interact: async (frame) => {
+    frame.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
+  }
 })
