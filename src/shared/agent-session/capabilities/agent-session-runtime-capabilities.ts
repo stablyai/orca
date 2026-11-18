@@ -92,6 +92,9 @@ export const AGENT_SESSION_REWIND_RECOVERY_CAPABILITY = 'agent-session.rewind-re
 // Why: hosts before this advertise rewind.v1 but refuse agentSession.rewind from a phone.
 export const AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY =
   'agent-session.rewind.phone.v1' as const
+// Hosts before this refuse a phone's restart-offer reads and its Resume all.
+export const AGENT_SESSION_PHONE_RESTART_RESUME_RUNTIME_CAPABILITY =
+  'agent-session.restart-resume.phone.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
 // Downgrade turn items to legacy status rows for incapable clients; remove only after every supported release understands turn items.
 export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' as const
@@ -176,6 +179,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
     AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
     AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PHONE_RESTART_RESUME_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
     AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
