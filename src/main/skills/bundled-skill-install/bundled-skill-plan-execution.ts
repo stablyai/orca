@@ -120,6 +120,8 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
   }
   switch (op.kind) {
     case 'keep':
+      // Former placements and agent links rely on this copy; report it if it changed since planning.
+      await requireUnchanged(run, op.path, op.observed)
       return undefined
     case 'leave':
       // Agent links may depend on another build's shared copy; skip them if it changed since planning.

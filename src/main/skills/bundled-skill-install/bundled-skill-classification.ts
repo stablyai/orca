@@ -6,6 +6,7 @@ import type { BundledSkillSource } from './bundled-skill-sources'
 import { bundledSkillTreeSignature } from './bundled-skill-tree-signature'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 
+/** `current`/`released`: the folder holds only Orca's SKILL.md, so it is safe to replace or delete. */
 export type BundledSkillFolderClass = 'absent' | 'current' | 'released' | 'edited' | 'other'
 
 export type ClassifiedBundledSkillPath = {
@@ -120,4 +121,17 @@ export async function classifyBundledSkillPath(
         : 'other',
     observed: await observeTree(filesystem, path, observed, includeTreeDigest)
   }
+}
+
+/** Freshness judges only the SKILL.md Orca ships: this build's exact text beside an agent's files is current. */
+export function bundledSkillFreshnessClass(
+  classified: ClassifiedBundledSkillPath,
+  currentDigest: string
+): BundledSkillFolderClass {
+  const { folderClass, observed } = classified
+  return folderClass === 'edited' &&
+    observed.kind === 'folder' &&
+    observed.skillDigest === currentDigest
+    ? 'current'
+    : folderClass
 }

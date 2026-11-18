@@ -88,7 +88,12 @@ export async function planFormerSkillPlacements(
               ? 'other'
               : // A build from before the rename recorded these bytes under the former name.
                 !cloud &&
-                  (await isOtherBuildCopy(filesystem, input.destination, { name }, observed))
+                  (await isOtherBuildCopy(
+                    filesystem,
+                    input.destination,
+                    { name, releasedDigests: source.releasedDigests },
+                    observed
+                  ))
                 ? 'other-build'
                 : 'edited')
       })

@@ -14,6 +14,7 @@ import {
 import {
   bundledSkillTextDigest,
   classifyBundledSkillPath,
+  bundledSkillFreshnessClass,
   type BundledSkillFolderClass
 } from './bundled-skill-classification'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
@@ -106,10 +107,11 @@ async function planTarget(
     context.digest,
     context.sharedRoot
   )
-  let folderClass: PlannedFolderClass = classified.folderClass
+  const retiresFormer = former.previous.some((previous) => !previous.retain)
+  let folderClass: PlannedFolderClass = bundledSkillFreshnessClass(classified, context.digest)
   // Cloud receipts identify a different package; a current replaced copy must settle as keep.
   if (
-    (folderClass === 'released' || folderClass === 'edited') &&
+    (classified.folderClass === 'released' || classified.folderClass === 'edited') &&
     (await hasCloudReceipt(stateDirectory, stateKeys))
   ) {
     folderClass = 'other'
@@ -176,8 +178,9 @@ async function planTarget(
       observed.kind === 'link' &&
       (await linkPointsAt(filesystem, path, observed.target, shared.realPath))
     ) {
+      // Retiring former placements into this link waits on the shared copy's own check.
       return shared.current || shared.otherBuild
-        ? { ...base, kind: 'keep', cleanup }
+        ? { ...base, kind: 'keep', ...(retiresFormer ? { requires: shared.path } : {}), cleanup }
         : leave('shared-not-current', false)
     }
     if (context.force !== 'all' && !context.force.has(bundledSkillPathKey(path))) {
@@ -194,10 +197,9 @@ async function planTarget(
   const holdsOrcaCopy =
     former.installed || Boolean(restoreFrom) || ORCA_COPY_CLASSES.has(folderClass)
   const decision = await decide()
+  // Only a folder holding just Orca's SKILL.md; a swap would move an agent's files to backups.
   const decided =
-    decision.kind === 'keep' &&
-    observed.kind === 'folder' &&
-    former.previous.some((previous) => !previous.retain)
+    decision.kind === 'keep' && classified.folderClass === 'current' && retiresFormer
       ? files('update')
       : decision
   const op =

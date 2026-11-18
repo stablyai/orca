@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { appendFile, lstat, readFile } from 'node:fs/promises'
+import { appendFile, lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -114,6 +114,18 @@ describe("another Orca build's copy on the same host", () => {
     const edited = await previewBundledSkillInstall(asBuild(home, NEW_SOURCE))
     expect(edited.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'edited' })
     expect(bundledSkillNudgeEntries(edited).map((entry) => entry.name)).toEqual([NAME])
+  })
+
+  it('is not reported out of date when an agent added a sidecar file beside it', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, OLD_TEXT)
+    await previewAndInstall(asBuild(home, NEWER_SOURCE))
+    await mkdir(join(home.shared, 'agents'))
+    await writeFile(join(home.shared, 'agents', 'openai.yaml'), 'policy: {}\n')
+
+    const plan = await previewBundledSkillInstall(asBuild(home, NEW_SOURCE))
+    expect(plan.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'other-build' })
+    expect(bundledSkillNudgeEntries(plan)).toEqual([])
   })
 
   it('marks a current copy during its keep-only update after a read-only preview', async () => {
