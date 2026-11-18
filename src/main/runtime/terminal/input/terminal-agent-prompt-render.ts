@@ -17,6 +17,16 @@ const AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS = 300
 const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 
 export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
+  /** A wait on an Agent-slept pane, answered as for an idle agent; null when the handle isn't slept. */
+  protected abstract waitForSleptAgent(
+    handle: string,
+    options?: {
+      condition?: RuntimeTerminalWaitCondition
+      timeoutMs?: number
+      signal?: AbortSignal
+    }
+  ): Promise<RuntimeTerminalWait> | null
+
   protected createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number,
@@ -200,6 +210,11 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       acceptsMidTurnInput?: boolean
     }
   ): Promise<RuntimeTerminalWait> {
+    // A slept agent waits as an idle one rather than waking for a read.
+    const slept = this.waitForSleptAgent(handle, options)
+    if (slept) {
+      return slept
+    }
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN
       ? this.startRestoredHandlePane(handle, options ?? {})

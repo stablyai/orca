@@ -24,4 +24,5 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'readTerminal'
     | 'notifyMessageArrived'
     | 'isWorkerAgentInTurn'
+    | 'sleptAgentHandleForPane'
   >
