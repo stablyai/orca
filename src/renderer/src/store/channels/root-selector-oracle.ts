@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 type Entry = { read: () => unknown; last: unknown }
 
@@ -6,9 +6,7 @@ const entries = new Set<Entry>()
 
 /** Development only: records what each mounted root selector last returned to React. */
 export function useRecordedRootSelection<U>(read: () => U): () => U {
-  const entryRef = useRef<Entry | null>(null)
-  entryRef.current ??= { read, last: undefined }
-  const entry = entryRef.current
+  const [entry] = useState<Entry>(() => ({ read, last: undefined }))
   useEffect(() => {
     entries.add(entry)
     return () => {
