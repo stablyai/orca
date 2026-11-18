@@ -109,6 +109,7 @@ it('rebuilds the screen from a provider snapshot plus the output after it, cutti
     expect(await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')).toBeNull()
     capture.land({ data: '\x1b[H\x1b[2Jfresh\r\nta', ...grid, seq: 18, source: 'headless' })
     // Main's own model, not a provider read that could share the landed capture.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits this protected method with exactly this signature.
     const headless = runtime as unknown as {
       serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
     }

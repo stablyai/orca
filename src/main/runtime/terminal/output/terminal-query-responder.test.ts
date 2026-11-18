@@ -406,11 +406,11 @@ describe('dropped output', () => {
         })
     })
     markHiddenRendererPty('pty-gap')
-    runtime.onPtyData('pty-gap', 'before\r\n', Date.now())
+    runtime.onPtyData('pty-gap', 'before\r\n', 1)
     runtime.notePtyDataGap('pty-gap', 4)
     await vi.waitFor(() => expect(land).toBeDefined())
     // Seq 12 -> 15, journaled after the capture was asked for.
-    runtime.onPtyData('pty-gap', '\x1b[c', Date.now())
+    runtime.onPtyData('pty-gap', '\x1b[c', 2)
     await vi.waitFor(() => expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c']))
     expect(await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')).toBeNull()
 
@@ -418,7 +418,7 @@ describe('dropped output', () => {
     await vi.waitFor(async () => {
       expect(await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')).not.toBeNull()
     })
-    runtime.onPtyData('pty-gap', '\x1b[c', Date.now())
+    runtime.onPtyData('pty-gap', '\x1b[c', 3)
     await settle(runtime, 'pty-gap')
     // The rebuild replays the first query silently; only the new one is answered.
     expect(replies).toHaveLength(2)
