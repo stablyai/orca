@@ -441,3 +441,19 @@ it.each(['success', 'failure'] as const)(
     expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
   }
 )
+
+it('asks a signed-in host to replace its account, not reuse the cached sign-in', async () => {
+  const target = { kind: 'environment', environmentId: 'change-account' } as const
+  streams.initial.set(key(target), { revision: 1, auth: 'signedIn', flow: null })
+  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(
+    async (_owner, config) => config ?? personal
+  )
+  const user = userEvent.setup()
+  renderSurface('accounts', target)
+  await user.click(await screen.findByRole('button', { name: 'Change account' }))
+  await waitFor(() =>
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', {
+      intent: 'changeAccount'
+    })
+  )
+})
