@@ -268,7 +268,7 @@ it('shows hookless work the user submits after a resumed agent starts', async ()
   expect(read()).toMatchObject({ state: 'done' })
   vi.setSystemTime(Date.now() + 1_000)
   // A hookless command such as /compact is.
-  server.observeClaudeTerminalEvidence(PANE, { kind: 'input', data: '/compact\r' })
+  server.notePaneInputSubmitted(PANE)
   ingestProgramStatusOsc(server, working)
   expect(read()).toMatchObject({ state: 'working' })
 })

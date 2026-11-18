@@ -13,6 +13,10 @@ export abstract class AgentHookServerStatusRowMutation extends AgentHookServerSt
   /** When the user last submitted a line in each pane; a resumed CLI's startup ends there. */
   protected readonly lastSubmittedAtByPaneKey = new Map<string, number>()
 
+  notePaneInputSubmitted(paneKey: string): void {
+    this.lastSubmittedAtByPaneKey.set(this.resolvePaneKeyAlias(paneKey), Date.now())
+  }
+
   protected preserveAcceptedTurn(
     previous: EnrichedAgentHookEventPayload | undefined,
     incoming: AgentHookEventPayload,

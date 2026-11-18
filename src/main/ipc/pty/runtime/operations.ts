@@ -48,6 +48,9 @@ export function writePtyFromRuntimeController(
     if (isDrivingInputKind(inputKind) && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
       deps.runtime?.observeClaudeTerminalEvidence?.(ptyId, { kind: 'input', data })
     }
+    if (isDrivingInputKind(inputKind)) {
+      deps.runtime?.notePtyInputSubmitted?.(ptyId, data)
+    }
   }
   let provider: IPtyProvider
   try {

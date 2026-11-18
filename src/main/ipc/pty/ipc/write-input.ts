@@ -241,6 +241,9 @@ export function createPtyWriteInput(deps: {
       ) {
         runtime?.observeClaudeTerminalEvidence?.(args.id, { kind: 'input', data: args.data })
       }
+      if (accepted && args.inputKind === 'driving') {
+        runtime?.notePtyInputSubmitted?.(args.id, args.data)
+      }
       return accepted
     }
     const result = writePtyProviderInput(provider, args, verify)
