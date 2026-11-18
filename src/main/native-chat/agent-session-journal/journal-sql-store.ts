@@ -210,6 +210,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           throw new Error('a committed journal replacement has no physical epoch')
         }
         this.target = { ...this.target, epoch }
+        this.database.conversions.rememberReady(this.identity.sessionId, epoch)
       }
       if (commit.goals) {
         this.goalAttachments.adopt(commit.goals)

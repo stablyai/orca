@@ -29,7 +29,7 @@ type JournalSqlDatabaseOptions = {
 
 export class JournalSqlDatabase {
   readonly readers: JournalSqlReaderPool
-  private readonly conversions: JournalSqlConversions
+  readonly conversions: JournalSqlConversions
   private readonly activity = new JournalSqlActivity()
   private readonly maintenance: JournalSqlBackgroundMaintenance
   private readonly sessions = new Map<string, Promise<unknown>>()
