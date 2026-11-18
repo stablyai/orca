@@ -27,6 +27,7 @@ describe('the binary lane is served only to a route granted it', () => {
           'rpcEnvelope',
           'hostCatalogs',
           'sessionPaneReturn',
+          'chatVisualFrame',
           'navigate',
           'storage',
           'native.browser.local',
