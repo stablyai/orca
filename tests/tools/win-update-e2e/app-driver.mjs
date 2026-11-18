@@ -213,7 +213,7 @@ export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_
     return
   }
   await createWorkspaceFromSeededRepo(page, timeoutMs)
-  await createTerminalTab(page)
+  await waitForTerminalReady(page, timeoutMs)
 }
 
 // Use seeded-project composer’s Blank Terminal path so probes reach a shell rather than an agent/native folder dialog.
