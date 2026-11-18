@@ -1,5 +1,3 @@
-import { isTextBlock, type NativeChatBlock } from './native-chat/native-chat-types'
-
 /** A bot's final message ending with this has nothing worth reporting, so nobody is told. */
 export const BOT_QUIET_MARKER = 'NO_REPLY'
 
@@ -41,25 +39,5 @@ export function quietBotAnswer(
     quiet: true,
     words: text,
     nothingToReport: !text && !row.inAutomationTurn && !row.inActingTurn
-  }
-}
-
-/** `quietBotAnswer` for a row drawn block by block: the marker ends its last text block. */
-export function quietBotAnswerBlocks(
-  blocks: NativeChatBlock[],
-  row: QuietBotAnswerRow
-): { blocks: NativeChatBlock[]; nothingToReport: boolean } {
-  const last = blocks.findLastIndex(isTextBlock)
-  const block = blocks[last]
-  const answer = block && isTextBlock(block) ? quietBotAnswer(block.text, row) : null
-  if (!answer?.quiet) {
-    return { blocks, nothingToReport: false }
-  }
-  const text = answer.words
-  return {
-    blocks: blocks.flatMap((each, index) =>
-      index !== last ? [each] : text && isTextBlock(each) ? [{ ...each, text }] : []
-    ),
-    nothingToReport: answer.nothingToReport
   }
 }

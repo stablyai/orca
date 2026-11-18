@@ -2,8 +2,9 @@ import type { NativeChatMessage } from '../../native-chat-types'
 import { isQuietBotResult } from '../../../bot-quiet-result'
 import { nativeChatBotMessageCardOf } from '../../bot-cards/native-chat-bot-card-kind'
 
-// The bot CLI's commands that post where someone else reads them.
-const POSTS = /\b(?:slack\s+(?:post|attach)|bot\s+reply|linear\s+(?:comment|create))\b/
+// The commands that post where someone else reads them.
+const POSTS =
+  /\b(?:slack\s+(?:post|attach)|bot\s+reply|linear\s+(?:comment|create|save-issue)|gh\s+(?:pr|issue)\s+(?:comment|review|create))\b/
 
 function toolCommand(input: unknown): string {
   const command =
@@ -18,7 +19,10 @@ function rowActs(message: NativeChatMessage): boolean {
     message.automationSaved !== undefined ||
     nativeChatBotMessageCardOf(message) !== null ||
     message.blocks.some(
-      (block) => block.type === 'tool-call' && POSTS.test(toolCommand(block.input))
+      (block) =>
+        block.type === 'tool-call' &&
+        block.state !== 'failed' &&
+        POSTS.test(toolCommand(block.input))
     )
   )
 }
