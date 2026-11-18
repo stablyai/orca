@@ -59,6 +59,8 @@ export type PRInfo = {
   updatedAt: string
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
+  /** Latest approval or change request per author; github.com sidebar reads only, absent elsewhere. */
+  latestReviews?: GitHubPRReviewSummary[]
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
