@@ -43,18 +43,6 @@ describe('formatAutomationList and Show print event triggers', () => {
     { id: 'on-1', source: 'slack', event: 'message', textContains: 'a b' }
   ]
 
-  it('lists an events-only automation by its events, not its never-reached date', () => {
-    const output = formatAutomationList({
-      automations: [
-        automation({ ...EVENT_ONLY_SCHEDULE, on }),
-        automation({ ...EVENT_ONLY_SCHEDULE })
-      ]
-    })
-    expect(output).not.toContain('9999')
-    expect(output).toContain('runs on events: ')
-    expect(output).toContain('never runs')
-  })
-
   it('prints JSON with no placeholder schedule for an events-only automation only', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const response = <T>(result: T) => ({

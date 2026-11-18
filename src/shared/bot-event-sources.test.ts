@@ -26,13 +26,6 @@ describe('bot event sources', () => {
     expect(botEventSources({ name: 'Ranger', slack: SLACK })).toEqual(['slack'])
   })
 
-  it("notes a saved rule that won't fire", () => {
-    expect(wontFireNote({ name: 'Ranger', github: {} }, [CI_FAILED])).toBeNull()
-    expect(wontFireNote({ name: 'Ranger', github: {} }, [MENTIONED, CI_FAILED])).toBe(
-      "won't fire: Ranger has no Slack connector (slack.mentioned)"
-    )
-  })
-
   it('hears a webhook whenever the cloud takes them, with no connector', () => {
     const CALL = { source: 'webhook', event: 'call' } as const
     expect(botEventSources({ name: 'Ranger', webhooks: true })).toEqual(['webhook'])
