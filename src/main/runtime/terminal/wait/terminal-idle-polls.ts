@@ -68,6 +68,8 @@ type QuietForegroundRead = {
   outputClockAt: number | null
   /** When the read began; a failed (null) read is retried only after the retry interval. */
   readAt: number
+  /** Still awaiting its answer; every wait on the pane shares it rather than reading again. */
+  pending: boolean
 }
 
 export class RuntimeTerminalIdlePolls {
@@ -261,7 +263,9 @@ export class RuntimeTerminalIdlePolls {
     // stretch; a failed read says nothing, so it is retried after the interval, not every sweep.
     if (
       last?.outputClockAt === outputClockAt &&
-      (last.process !== null || Date.now() - last.readAt < FAILED_FOREGROUND_RETRY_MS)
+      (last.pending ||
+        last.process !== null ||
+        Date.now() - last.readAt < FAILED_FOREGROUND_RETRY_MS)
     ) {
       return
     }
@@ -269,16 +273,17 @@ export class RuntimeTerminalIdlePolls {
     if (!foregroundRead) {
       return
     }
-    const read = { pty: entry.pty, process: null, outputClockAt, readAt: Date.now() }
+    const read = { pty: entry.pty, process: null, outputClockAt, readAt: Date.now(), pending: true }
     this.quietForegroundByPtyId.set(ptyId, read)
     entry.foregroundPollInFlight = true
     try {
-      const process = await foregroundRead
-      if (!this.entries.has(entry) || this.quietForegroundByPtyId.get(ptyId) !== read) {
+      // Why kept when this wait ended: the pane's other waits read the answer from the cache.
+      const process = await foregroundRead.catch(() => null)
+      if (this.quietForegroundByPtyId.get(ptyId) !== read) {
         return
       }
-      this.quietForegroundByPtyId.set(ptyId, { ...read, process })
-      if (process !== null && isPagerProcess(process)) {
+      this.quietForegroundByPtyId.set(ptyId, { ...read, process, pending: false })
+      if (process !== null && isPagerProcess(process) && this.entries.has(entry)) {
         const resample = this.sample(entry)
         if (resample.verdict.kind === 'ready-weak' && resample.isQuiet('closed')) {
           this.settle(entry, resample.ready())

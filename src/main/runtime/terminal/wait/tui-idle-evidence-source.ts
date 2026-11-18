@@ -178,10 +178,13 @@ export function ptyTuiIdleEvidence(
   // agent's own explicit rest title must not speak for it.
   const statusRetired =
     !titleIsCurrent && !isShellInFront(pty) && fullRecord.lastAgentStatus === 'idle'
+  // With the shell in front, an exited agent's rest title must not leave its idle behind either.
   const record =
     titleIsCurrent || !hasExplicitIdleTitle(fullRecord)
       ? fullRecord
-      : { ...fullRecord, lastOscTitle: null }
+      : isShellInFront(pty)
+        ? { ...fullRecord, lastOscTitle: null, lastAgentStatus: null }
+        : { ...fullRecord, lastOscTitle: null }
   const firstPartyStatus = source.getFirstPartyAgentStatus(pty.ptyId)
   // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
   const readCommandPainted = () =>
