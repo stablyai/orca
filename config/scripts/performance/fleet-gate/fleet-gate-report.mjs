@@ -53,6 +53,8 @@ export function compareRuns(runs, scenarios) {
       const values = (arm) =>
         runs
           .filter((run) => run.arm === arm)
+          // An undriven window's numbers are kept for diagnosis but never judged.
+          .filter((run) => !run.windows[scenario]?.undriven)
           .map((run) => run.windows[scenario]?.metrics?.[metric.key])
           .filter((value) => typeof value === 'number' && Number.isFinite(value))
       const oldValues = values('old')

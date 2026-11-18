@@ -207,7 +207,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     await pointClaudeAtStub(first.page, stub.command)
     // The stub keeps a prompt containing "slow" running until interrupted, so these chats quit mid-turn.
     result.midTurn = await createChatBurst(first.page, BURST_CHATS, 0, 'slow fleet gate turn')
-    result.midTurnLaunched = await waitForLaunches(stub.launchLog, BURST_CHATS)
+    result.midTurnLaunched = await waitForLaunches(stub.launchLog, result.midTurn.requested)
     await new Promise((resolve) => setTimeout(resolve, 3_000))
   } finally {
     stderrOwnership += first.ownershipText()
@@ -220,7 +220,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     try {
       const before = countLaunches(stub.launchLog)
       result.continuation = await continueAfterRestart(second.page, result.midTurn.sessionIds)
-      const expected = result.continuation.offered || BURST_CHATS
+      const expected = result.continuation.offered
       result.continuationLaunched =
         (await waitForLaunches(stub.launchLog, before + expected)) - before
       const coldBefore = countLaunches(stub.launchLog)
@@ -231,14 +231,19 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
         'fleet gate cold turn'
       )
       result.coldLaunched =
-        (await waitForLaunches(stub.launchLog, coldBefore + BURST_CHATS)) - coldBefore
+        (await waitForLaunches(stub.launchLog, coldBefore + result.cold.requested)) - coldBefore
     } finally {
       stderrOwnership += second.ownershipText()
       await second.close()
     }
   } finally {
-    stopLoad()
+    const earlyExits = stopLoad()
     liveCleanups.delete(stopLoad)
+    if (earlyExits > 0) {
+      result.incomplete.push(
+        `${String(earlyExits)} CPU-load worker(s) exited before the burst ended`
+      )
+    }
   }
   for (const [phase, batch] of [
     ['mid-turn', result.midTurn],
@@ -343,15 +348,20 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       const elapsed = Date.now() - started
       const main = await snapshotMainProbe(app)
       const rendererSnapshot = await renderer.snapshot()
-      if (driven.undriven) {
-        result.incomplete.push(`${name}: ${driven.undriven}`)
-      } else if ((main.inByChannel['pty:write']?.n ?? 0) < (driven.ptyWritesNeeded ?? 0)) {
-        result.incomplete.push(
-          `${name}: ${String(main.inByChannel['pty:write']?.n ?? 0)} of ${String(driven.ptyWritesNeeded)} typed keys reached the terminal`
-        )
+      // After the snapshot, so a scenario's cleanup (e.g. typing's backspaces) is never measured or counted.
+      await driven.cleanup?.()
+      const ptyWrites = main.inByChannel['pty:write']?.n ?? 0
+      const undriven =
+        driven.undriven ??
+        (ptyWrites < (driven.ptyWritesNeeded ?? 0)
+          ? `${String(ptyWrites)} of ${String(driven.ptyWritesNeeded)} typed keys reached the terminal`
+          : null)
+      if (undriven) {
+        result.incomplete.push(`${name}: ${undriven}`)
       }
       result.windows[name] = {
-        driven,
+        driven: { ...driven, cleanup: undefined },
+        undriven,
         elapsedMs: elapsed,
         metrics: windowMetrics(
           main,

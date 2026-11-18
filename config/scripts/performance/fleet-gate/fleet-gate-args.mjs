@@ -27,7 +27,8 @@ export function parseArgs(argv) {
     const arg = argv[index]
     const value = () => {
       index += 1
-      if (argv[index] === undefined) {
+      // A following option is a missing value, not the value (`./--x` still names a path).
+      if (argv[index] === undefined || argv[index].startsWith('--')) {
         throw new Error(`${arg} needs a value`)
       }
       return argv[index]
@@ -48,7 +49,7 @@ export function parseArgs(argv) {
       '--new-app': packagedAppUnsupported,
       '--': () => {}
     }
-    if (!setters[arg]) {
+    if (!Object.hasOwn(setters, arg)) {
       throw new Error(`unknown argument ${arg}`)
     }
     setters[arg]()
@@ -69,7 +70,7 @@ export function parseArgs(argv) {
     throw new Error('--scenarios names no scenario')
   }
   for (const name of options.scenarios ?? []) {
-    if (!SCENARIOS[name] && name !== 'burst') {
+    if (!Object.hasOwn(SCENARIOS, name) && name !== 'burst') {
       throw new Error(
         `unknown scenario ${String(name)}; known: ${Object.keys(SCENARIOS).join(', ')}`
       )

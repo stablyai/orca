@@ -248,27 +248,33 @@ async function typeIntoComposer({ page, windowMs }) {
     }
   })
   const lengthBefore = await textLength()
-  const deadline = Date.now() + windowMs
+  const typingStarted = Date.now()
+  const deadline = typingStarted + windowMs
   let typed = 0
   while (Date.now() < deadline) {
     await page.keyboard.type(typed % 20 === 19 ? ' ' : 'a')
     typed += 1
-    await sleep(1_000 / TYPING_CHARS_PER_SECOND)
+    await sleep(Math.max(0, typingStarted + (typed * 1_000) / TYPING_CHARS_PER_SECOND - Date.now()))
   }
   const grew = (await textLength()) - lengthBefore
-  // Leave the draft empty so the next window starts from the same state.
-  for (let index = 0; index < typed; index += 1) {
-    await page.keyboard.press('Backspace')
-  }
+  const planned = Math.floor((windowMs / 1_000) * TYPING_CHARS_PER_SECOND)
   const enough = typed * (1 - MAX_MISSED_SHARE)
   // Receipts: a terminal's keys reach main as pty:write (checked by the runner); a composer's land in its text.
   return {
     note: `${String(typed)} keys into ${target.label}`,
     ptyWritesNeeded: target.terminal ? Math.ceil(enough) : 0,
     undriven:
-      !target.terminal && grew < enough
-        ? `${String(grew)} of ${String(typed)} typed keys reached the input`
-        : null
+      typed < planned * (1 - MAX_MISSED_SHARE)
+        ? `${String(typed)} of ${String(planned)} planned keys typed`
+        : !target.terminal && grew < enough
+          ? `${String(grew)} of ${String(typed)} typed keys reached the input`
+          : null,
+    // Run by the runner after its snapshot: leave the draft empty so the next window starts the same way.
+    cleanup: async () => {
+      for (let index = 0; index < typed; index += 1) {
+        await page.keyboard.press('Backspace')
+      }
+    }
   }
 }
 

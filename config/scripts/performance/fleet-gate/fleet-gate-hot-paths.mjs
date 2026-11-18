@@ -63,7 +63,8 @@ export function isLaunchPath(file) {
 /** endpoints: what differs between the two trees (two builds); otherwise what the head branch changed since base. */
 export function changedFiles(base, head, cwd, endpoints = false) {
   const range = endpoints ? [base, head] : [`${base}...${head}`]
-  const output = execFileSync('git', ['diff', '--name-only', ...range], {
+  // --no-renames: a file moved out of a hot path shows as its deletion too, not only its new home.
+  const output = execFileSync('git', ['diff', '--name-only', '--no-renames', ...range], {
     cwd,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024

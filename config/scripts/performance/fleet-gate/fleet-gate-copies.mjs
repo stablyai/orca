@@ -22,6 +22,33 @@ export function copyProfile(seedDir, targetDir) {
       return Boolean(stat) && (stat.isFile() || stat.isDirectory())
     }
   })
+  copyInternalLinkedFiles(sourceDir, targetDir, daemonDir)
+}
+
+/** A link to a file inside the seed (e.g. a linked orca-data.json) becomes a real copy of its target, never a link back. */
+function copyInternalLinkedFiles(sourceDir, targetDir, daemonDir) {
+  const visit = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (full === daemonDir) {
+        continue
+      }
+      if (entry.isDirectory()) {
+        visit(full)
+      } else if (entry.isSymbolicLink()) {
+        let real = ''
+        try {
+          real = fs.realpathSync(full)
+        } catch {
+          continue
+        }
+        if (real.startsWith(`${sourceDir}${path.sep}`) && fs.statSync(real).isFile()) {
+          fs.copyFileSync(real, path.join(targetDir, path.relative(sourceDir, full)))
+        }
+      }
+    }
+  }
+  visit(sourceDir)
 }
 
 function processInfo(pid) {
@@ -119,7 +146,8 @@ function processStartTimes() {
       }
     }
   } catch {
-    // No table: nothing counts as the same process, so nothing is escalated.
+    // A failed read is no evidence either way: the caller keeps waiting and never escalates on it.
+    return null
   }
   return table
 }
@@ -132,8 +160,12 @@ export async function stopCopyDaemons(userDataDir) {
   for (const root of readDaemonPids(userDataDir)) {
     const pids = [...descendantPids(root), root]
     // Start times now, so the SIGKILL below never reaches a process that reused one of these pids.
-    const startedAt = processStartTimes()
-    const same = (table) => (pid) => startedAt.has(pid) && table.get(pid) === startedAt.get(pid)
+    const startedAt = processStartTimes() ?? new Map()
+    const same = (table) => (pid) => startedAt.has(pid) && table?.get(pid) === startedAt.get(pid)
+    const stillRunning = () => {
+      const table = processStartTimes()
+      return table === null ? pids : pids.filter(same(table))
+    }
     for (const pid of pids.toReversed()) {
       try {
         process.kill(pid, 'SIGTERM')
@@ -142,10 +174,12 @@ export async function stopCopyDaemons(userDataDir) {
       }
     }
     const deadline = Date.now() + KILL_WAIT_MS
-    while (pids.some(same(processStartTimes())) && Date.now() < deadline) {
+    while (stillRunning().length > 0 && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    for (const pid of pids.filter(same(processStartTimes()))) {
+    // Escalate only on a fresh, successful read.
+    const latest = processStartTimes()
+    for (const pid of latest === null ? [] : pids.filter(same(latest))) {
       try {
         process.kill(pid, 'SIGKILL')
       } catch {
