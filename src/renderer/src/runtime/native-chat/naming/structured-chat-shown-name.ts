@@ -1,7 +1,7 @@
 import {
   agentSessionForkSourceSavedName,
   agentSessionShownName
-} from '../../../../../shared/agent-session/agent-session-fork-name'
+} from '../../../../../shared/agent-session/conversation-naming/agent-session-fork-name'
 import type { AgentSessionConversationName } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionStatusFeedOwner } from '../status/structured-agent-session-status-feed'
 

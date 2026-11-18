@@ -5,14 +5,14 @@ import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-
 
 import type { Repo } from '../../../../shared/repository/repo-types'
 
-import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   store
-} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
+} from '../../construction/test-context/orca-runtime-test-fixtures.spec'
 
 describe('project removal on the execution host', () => {
   it('refuses a spawn that reaches its lease after the project is gone', async () => {

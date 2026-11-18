@@ -12,7 +12,7 @@ vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
 import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { getStructuredAgentSessionPendingSends } from './structured-agent-session-pending-sends'
 
 const QUEUEING = {

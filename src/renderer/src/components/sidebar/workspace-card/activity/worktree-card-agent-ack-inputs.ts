@@ -1,8 +1,8 @@
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { isAgentSubjectUnread } from '@/attention/agent-attention-acknowledgement'
 import type { AppState } from '@/store/types'
-import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
-import { recordChangeReaches } from '@/store/keyed-record-change-reads'
+import type { AgentStatusProjection } from '@/store/slices/agent-status/projection/agent-status-projection'
+import { recordChangeReaches } from '@/store/record-transitions/keyed-record-change-reads'
 import {
   readAgentRowTurnRecords,
   type AgentRowUnreadState

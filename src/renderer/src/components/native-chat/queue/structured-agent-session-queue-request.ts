@@ -1,5 +1,5 @@
 import { nativeChatSendFollowUp } from '../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
-import type { StructuredAgentSessionHostCapabilityState } from '../../../../../shared/agent-session/structured-agent-session-host-capability'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../shared/agent-session/capabilities/structured-agent-session-host-capability'
 import {
   structuredAgentSessionFollowUpsQueue,
   structuredAgentSessionQueueEnabled

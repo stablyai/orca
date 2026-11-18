@@ -6,7 +6,7 @@ import type {
 } from '../sections/project-section-grouping'
 import type { RepoIcon } from '../../repository/appearance/repo-icon'
 import type { Repo } from '../../repository/repo-types'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 
 // Desktop owns the sidebar grouping inputs the phone must match.
 export const MOBILE_PROJECT_SECTIONS_METHOD = 'mobileRelay.projectSections'

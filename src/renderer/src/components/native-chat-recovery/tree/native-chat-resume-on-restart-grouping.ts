@@ -1,6 +1,9 @@
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { AgentSessionWorkspaceKind } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { projectGroupIdFromRepoId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import type { AgentSessionRestartActivity } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
@@ -216,4 +219,14 @@ export function resolveResumeGroupHeader(
 
 export function allResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
   return candidates.map((candidate) => candidate.sessionId)
+}
+
+/** Its saved approval or question died with the agent; resuming only makes the agent ask again. */
+function waitedOnPerson(candidate: ResumeCandidate): boolean {
+  return candidate.activity?.state === 'blocked' && candidate.activity.prompts.length > 0
+}
+
+/** Chats that were working; chats waiting on the person stay offered until they choose. */
+export function launchResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
+  return allResumeSessionIds(candidates.filter((candidate) => !waitedOnPerson(candidate)))
 }

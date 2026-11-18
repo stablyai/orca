@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
-import { agentMessageSendersShown } from '../../../../../../shared/agent-session/agent-session-message-source'
+import { agentMessageSendersShown } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   AgentMessageSender,
   AgentMessageSource
-} from '../../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   unnamedSenderLabel,
   useAgentMessageSenderLabel

@@ -27,7 +27,6 @@ export function SkillInstallTargetFields(props: {
   onExecutionTargetChange(value: { kind: 'wsl'; distro: string } | null): void
   runtimeEnvironments: readonly { id: string; name: string }[]
   runtimeStatus: Map<string, { status: { capabilities?: string[] } | null }>
-  sshConnections: readonly { id: string; label: string; connected: boolean }[]
   workspaceChoices: readonly SkillInstallWorkspaceChoice[]
   requiredCapability?: string
   providers: ReadonlySet<SkillInstallProviderId>
@@ -41,12 +40,6 @@ export function SkillInstallTargetFields(props: {
 
   useEffect(() => {
     let active = true
-    if (props.environmentId.startsWith('ssh:')) {
-      setWslDistros([])
-      return () => {
-        active = false
-      }
-    }
     void window.api.skills
       .listWslDistros(props.environmentId === 'local' ? undefined : props.environmentId)
       .then((distros) => {
@@ -182,7 +175,6 @@ function skillInstallMachineOptions(
   props: {
     runtimeEnvironments: readonly { id: string; name: string }[]
     runtimeStatus: Map<string, { status: { capabilities?: string[] } | null }>
-    sshConnections: readonly { id: string; label: string; connected: boolean }[]
     requiredCapability?: string
   },
   t: Translate = translate
@@ -206,13 +198,5 @@ function skillInstallMachineOptions(
         : undefined
     }
   })
-  const ssh = props.sshConnections.map((connection): HostComboboxOption => ({
-    id: `ssh:${connection.id}`,
-    label: connection.label,
-    disabled: !connection.connected,
-    detail: connection.connected
-      ? t('auto.components.skills.SkillInstallTargetFields.85d85880df', '· SSH')
-      : t('auto.components.skills.SkillInstallTargetFields.71eefd7660', '— disconnected')
-  }))
-  return [local, ...environments, ...ssh]
+  return [local, ...environments]
 }

@@ -30,9 +30,9 @@ const NON_UNIT_TEST_RUNNERS = [
   },
   {
     name: 'computer-use e2e',
-    include: ['tests/e2e/computer-*.e2e.ts'],
+    include: ['tests/e2e/desktop/computer-use/computer-*.e2e.ts'],
     sources: ['tests/e2e/vitest.config.ts'],
-    mirrors: ["'tests/e2e/computer-*.e2e.ts'"]
+    mirrors: ["'tests/e2e/desktop/computer-use/computer-*.e2e.ts'"]
   },
   {
     name: 'mobile',

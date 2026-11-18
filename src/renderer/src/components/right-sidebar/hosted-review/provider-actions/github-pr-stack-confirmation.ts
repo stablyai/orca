@@ -1,4 +1,4 @@
-import type { ConfirmationDialogOptions } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogOptions } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import type {
   GitHubPRMergeMethod,

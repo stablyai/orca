@@ -13,6 +13,7 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   speed: 'Speed',
   thinking: 'Thinking',
   standard: 'Standard',
+  none: 'None',
   minimal: 'Minimal',
   low: 'Low',
   medium: 'Medium',
@@ -47,6 +48,7 @@ export const sayNativeChatSessionOptionEnglish: NativeChatSessionOptionSay = (id
     : NATIVE_CHAT_SESSION_OPTION_COPY[id].replaceAll('{{value0}}', () => values.value0)
 
 const LEVEL_IDS = {
+  none: 'none',
   minimal: 'minimal',
   low: 'low',
   medium: 'medium',
@@ -124,6 +126,9 @@ export function nativeChatSessionChoiceShortLabel(
   say: NativeChatSessionOptionSay,
   optionId?: string
 ): string {
+  if (choice.shortLabel) {
+    return choice.shortLabel
+  }
   const id = levelId(SHORT_LEVEL_IDS, choice.value)
   return id ? say(id) : nativeChatSessionChoiceLabel(choice, say, optionId)
 }

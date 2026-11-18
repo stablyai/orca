@@ -12,10 +12,10 @@ export abstract class AgentSessionRecordPublication {
     return () => this.transactions.deathEvidenceListeners.delete(listener)
   }
 
-  /** Notify first committed record; listeners must not throw. */
-  onFirstRecord(listener: () => void): () => void {
-    this.transactions.firstRecordListeners.add(listener)
-    return () => this.transactions.firstRecordListeners.delete(listener)
+  /** Notify when committed records start or stop holding any chat; listeners must not throw. */
+  onHeldChange(listener: () => void): () => void {
+    this.transactions.heldChangeListeners.add(listener)
+    return () => this.transactions.heldChangeListeners.delete(listener)
   }
 
   protected commitRecordCommand<C extends AgentSessionRecordCommand>(

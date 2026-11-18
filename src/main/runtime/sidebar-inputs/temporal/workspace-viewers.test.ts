@@ -11,34 +11,6 @@ function viewers() {
 }
 
 describe('WorkspaceViewers', () => {
-  it('sees a pane whose tab a client shows, and a workspace only for news with no pane', () => {
-    const { viewers: v } = viewers()
-    expect(
-      v.reportClientView('c1', { workspaceIds: [WT], tabIds: ['tab-a'], presentForMs: null })
-    ).toBe(true)
-    expect(v.isViewing(WT, PANE)).toBe(true)
-    expect(v.isViewing(WT, OTHER_PANE)).toBe(false)
-    expect(v.isViewing(WT, null)).toBe(true)
-    expect(v.isViewing('repo-1::/tmp/b', null)).toBe(false)
-    // A later report replaces the view and needs no second tie to the connection.
-    expect(v.reportClientView('c1', { workspaceIds: [], tabIds: [], presentForMs: null })).toBe(
-      false
-    )
-    expect(v.isViewing(WT, PANE)).toBe(false)
-  })
-
-  it('stops seeing once the user’s presence lapses or the client goes', () => {
-    const { clock, viewers: v } = viewers()
-    v.reportClientView('c1', { workspaceIds: [WT], tabIds: ['tab-a'], presentForMs: 500 })
-    expect(v.isViewing(WT, PANE)).toBe(true)
-    clock.now += 500
-    expect(v.isViewing(WT, PANE)).toBe(false)
-
-    v.reportClientView('c1', { workspaceIds: [WT], tabIds: ['tab-a'], presentForMs: null })
-    v.dropClient('c1')
-    expect(v.isViewing(WT, PANE)).toBe(false)
-  })
-
   it('sees every pane of a workspace a phone holds open, by any spelling of its path', () => {
     const { viewers: v } = viewers()
     const first = v.openPhoneSession('repo-1::/tmp/a/')

@@ -4,7 +4,7 @@ import { mobileForkAccessibleName } from '../../../session/fork/mobile-fork-mark
 import { memo, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
-import { withoutNativeChatVisualDirectiveLines } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'

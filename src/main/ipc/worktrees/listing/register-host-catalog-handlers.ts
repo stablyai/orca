@@ -1,4 +1,7 @@
-import { getRepoDialableSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { ipcMain } from 'electron'
 import type {
   ListKnownWorktreesForExecutionHostArgs,

@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { HostSectionRow } from './host-section-rows'
 import { PINNED_GROUP_KEY } from '../sections/group-keys'
 

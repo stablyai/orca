@@ -9,12 +9,12 @@ import {
   getUnavailableWorkspacePortHosts,
   type WorkspacePortHostRef
 } from '@/lib/workspace-ports/workspace-port-host-availability'
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host/execution-host'
 import {
   getExternalWorkspacePorts,
   getWorkspacePortGroups
 } from '@/lib/workspace-ports/workspace-port-groups'
-import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
+import { SelectedTextCopyMenu } from '@/components/clipboard/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../composition/status-bar-context-menu-policy'
 import { PortRow, WorkspaceGroupRows } from './ports-status-popover-rows'
 import { useTranslate } from '@/i18n/use-translate'

@@ -1,3 +1,4 @@
+import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
@@ -154,7 +155,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     () => createStructuredAgentSessionOptionsWriteOwner(() => writeContextRef.current()),
     []
   )
-  useLayoutEffect(() => () => writer.detach(), [writer])
+  useNativeChatPaneLifetimeEffect(useCallback(() => () => writer.detach(), [writer]))
   const setStructuredOption = writer.setOption
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {

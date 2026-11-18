@@ -10,7 +10,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
 import { Switch } from '@/components/ui/switch'
-import type { AgentDashboardMode } from '../../../../../shared/ui-chrome-types'
+import type { AgentDashboardMode } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { canOpenAgentDashboardPopout } from './agent-dashboard-open-mode'
 

@@ -1,9 +1,9 @@
-import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-permission-modes-capability'
+import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/options/permissions/agent-session-permission-modes-capability'
 // @vitest-environment happy-dom
 import { act, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {

@@ -38,12 +38,30 @@ const AssignmentResponseSchema = z
       .string()
       .min(1)
       .max(8 * 1024),
-    regionCorrection: RelayRegionCorrectionResponseSchema.optional().catch(undefined)
+    regionCorrection: RelayRegionCorrectionResponseSchema.optional().catch(undefined),
+    // Validated per entry in relayAlternateCellUrls so a bad entry never rejects the assignment.
+    alternateCellUrls: z.unknown().optional()
   })
   .strict()
 
+// Mirror relay-contract RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES. A header, not a body key, so an
+// older director ignores it; a director sends alternateCellUrls only when it sees this.
+export const RELAY_ASSIGN_CAPABILITY_HEADERS = {
+  'x-orca-host-capabilities': 'origin-alternates-v1'
+} as const
+
+// Mirror relay-contract AssignmentResponse.alternateCellUrls: at most two origins.
+const RELAY_MAX_ALTERNATE_CELL_URLS = 2
+
 export type RelayAuthorization = z.infer<typeof RelayTokenResponseSchema>
-export type RelayAssignment = z.infer<typeof AssignmentResponseSchema>
+export type RelayAssignment = Omit<
+  z.infer<typeof AssignmentResponseSchema>,
+  'alternateCellUrls'
+> & {
+  // Other origins reaching the same host session as cellUrl, in preference order; never cellUrl.
+  // RelayControlOrigin resumes the control on these when the cellUrl path stalls (desktop only).
+  alternateCellUrls?: string[]
+}
 
 export class RelayHttpError extends Error {
   constructor(
@@ -97,6 +115,35 @@ function isAllowedRelayOrigin(value: string): boolean {
   } catch {
     return false
   }
+}
+
+function isCanonicalHttpsOrigin(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.origin === value
+  } catch {
+    return false
+  }
+}
+
+// Drop entries that are invalid, duplicate, or equal to cellUrl instead of failing the answer.
+function relayAlternateCellUrls(value: unknown, cellUrl: string): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+  const kept: string[] = []
+  for (const entry of value.slice(0, RELAY_MAX_ALTERNATE_CELL_URLS)) {
+    if (
+      typeof entry === 'string' &&
+      entry.length <= 2048 &&
+      entry !== cellUrl &&
+      !kept.includes(entry) &&
+      isCanonicalHttpsOrigin(entry)
+    ) {
+      kept.push(entry)
+    }
+  }
+  return kept.length > 0 ? kept : undefined
 }
 
 export async function exchangeRelayAuthorization(input: {
@@ -175,7 +222,8 @@ async function sendRelayAssignment(
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.relayToken}`,
-      'content-type': 'application/json'
+      'content-type': 'application/json',
+      ...RELAY_ASSIGN_CAPABILITY_HEADERS
     },
     signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
     body: JSON.stringify({
@@ -207,5 +255,7 @@ async function sendRelayAssignment(
   if (!parsed.success || !isAllowedRelayOrigin(parsed.data.cellUrl)) {
     throw new RelayHttpError('assignment', 502)
   }
-  return parsed.data
+  const { alternateCellUrls: rawAlternateCellUrls, ...assignment } = parsed.data
+  const alternateCellUrls = relayAlternateCellUrls(rawAlternateCellUrls, assignment.cellUrl)
+  return alternateCellUrls ? { ...assignment, alternateCellUrls } : assignment
 }

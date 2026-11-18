@@ -3,15 +3,15 @@ import type { WindowMaterial } from '../../shared/app-lifecycle/windows/window-m
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
 import type { E2EConfig } from '../../shared/app-lifecycle/launch/e2e-config'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
 } from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import type { MacCapturedDigitRowChord } from '../../shared/keybindings/macos-symbolic-hotkeys'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
-import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
+import type { PersistedUIState } from '../../shared/orca-profiles/persisted-ui-state-types'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { KeyboardLayoutSnapshot } from '../../shared/keybindings/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keybindings/keyboard-layout-events'

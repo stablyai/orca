@@ -8,7 +8,7 @@ import type {
 } from '@/attention/agent-attention-contract'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isTabOnScreen, isWorkspaceOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'

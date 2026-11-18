@@ -17,6 +17,11 @@ import { encodePairingOffer, parsePairingCode } from '../pairing/pairing'
 import '../requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../requests/remote-runtime-subscription-transport'
 import type { RemoteRuntimeTransportSubscription } from '../requests/remote-runtime-subscription-contract'
+import {
+  REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES,
+  REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES,
+  serializeRemoteRuntimeRpcRequest
+} from '../remote-runtime-memory-limits'
 
 const servers: WebSocketServer[] = []
 
@@ -45,6 +50,36 @@ describe('remote runtime subscription JSON requests', () => {
 
     await expect(first).resolves.toMatchObject({ result: { accepted: true, index: 1 } })
     await expect(second).resolves.toMatchObject({ result: { accepted: true, index: 2 } })
+    subscription.close()
+  })
+
+  it('sends a request at the host request limit and refuses one byte more', async () => {
+    const server = await createServer()
+    const onClose = vi.fn<() => void>()
+    const subscription = await subscribe(server.pairing, { onClose })
+    const sendRequest = requireSender(subscription)
+    const paramsAtLimit = (extraBytes: number) => {
+      const params = { index: 1, data: '' }
+      const emptyBytes = serializeRemoteRuntimeRpcRequest({
+        // Same length as the channel's randomUUID request id.
+        requestId: '00000000-0000-0000-0000-000000000000',
+        deviceToken: 'device-token',
+        method: 'browser.clientHost.commandResult',
+        params
+      }).length
+      return {
+        ...params,
+        data: 'x'.repeat(REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES - emptyBytes + extraBytes)
+      }
+    }
+
+    await expect(
+      sendRequest('browser.clientHost.commandResult', paramsAtLimit(1), 1000)
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    await expect(
+      sendRequest('browser.clientHost.commandResult', paramsAtLimit(0), 1000)
+    ).resolves.toMatchObject({ result: { accepted: true, index: 1 } })
+    expect(onClose).not.toHaveBeenCalled()
     subscription.close()
   })
 
@@ -115,9 +150,15 @@ async function createServer(options: ServerOptions = {}): Promise<{
     resolveRequest = resolve
   })
   // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
-  const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
+  const wss = new WebSocketServer({
+    host: '127.0.0.1',
+    port: 0,
+    maxPayload: REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES
+  })
   servers.push(wss)
   wss.on('connection', (ws) => {
+    // An oversized frame closes the socket with 1009, as a real host does.
+    ws.on('error', () => {})
     let sharedKey: Uint8Array | null = null
     let authenticated = false
     const responses: { id: string; index?: number }[] = []

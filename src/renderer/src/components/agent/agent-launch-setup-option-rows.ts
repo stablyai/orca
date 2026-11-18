@@ -6,9 +6,13 @@ import {
   TEXT_ACTION_DEFAULT_MODEL,
   textActionArgumentsOwnEffort
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
+import { withLaunchEffortDefault } from './agent-launch-setup-default-effort'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionSelectChoice
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import type {
   agentPickerEntryOptions,
   agentPickerModels
@@ -58,20 +62,24 @@ function argumentsOwnedRow(
   }
 }
 
-/** Clearing Effort keeps the selected model, so its default is that model's inherited effort. */
-function textEffortDefaultLabel(
+/** Clearing Effort keeps the selected model, so its default is that model's inherited effort.
+ *  Why short: it sits in the effort row beside every level; its name still says what it inherits. */
+function textEffortDefaultChoice(
   kind: {
     choices: readonly { value: string; label: string }[]
     defaultValue: string
   },
   t: Translate = translate
-): string {
+): SessionOptionSelectChoice {
   const effort = kind.choices.find((choice) => choice.value === kind.defaultValue)?.label
-  return effort
-    ? t('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', {
-        value0: effort
-      })
-    : t('settings.sourceControl.actionModel.effortDefault', 'Default')
+  const short = t('settings.sourceControl.actionModel.effortDefault', 'Default')
+  return {
+    value: TEXT_ACTION_DEFAULT_MODEL,
+    label: effort
+      ? t('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', { value0: effort })
+      : short,
+    shortLabel: short
+  }
 }
 
 export function agentLaunchSetupOptionRows(
@@ -145,12 +153,7 @@ export function agentLaunchSetupOptionRows(
                           ]
                         : []),
                       ...(entry.textGeneration.defaultLabel !== undefined
-                        ? [
-                            {
-                              value: TEXT_ACTION_DEFAULT_MODEL,
-                              label: textEffortDefaultLabel(option.kind, t)
-                            }
-                          ]
+                        ? [textEffortDefaultChoice(option.kind, t)]
                         : []),
                       ...option.kind.choices
                     ]
@@ -185,87 +188,63 @@ export function agentLaunchSetupOptionRows(
           }
     )
   }
-  return rows
-}
-
-/** Speed rows sit apart from the rest; launch also lifts level rows onto speed's line. */
-export function agentLaunchSetupRowGroups(rows: SessionOptionDescriptor[], launch: boolean) {
-  const isSpeed = (row: SessionOptionDescriptor) =>
-    row.id === 'fastMode' || row.id === 'serviceTier'
-  const isLevel = (row: SessionOptionDescriptor) =>
-    launch && !isSpeed(row) && row.category === 'thought_level' && row.kind.type === 'select'
-  return {
-    level: rows.filter(isLevel),
-    speed: rows.filter(isSpeed),
-    rest: rows.filter((row) => !isSpeed(row) && !isLevel(row))
-  }
+  return withLaunchEffortDefault(rows, entry, draft, t)
 }
 
 export function agentLaunchSetupCatalogState(
   entry: AgentPickerEntry,
   models: readonly { id: string; hidden?: true }[],
   currentModel: string | undefined,
-  mode: 'launch' | 'select',
   t: Translate = translate
 ) {
   const hasModels = models.some((model) => !model.hidden)
   const hasUsableModels =
     hasModels || Boolean(currentModel && !models.some((model) => model.id === currentModel))
   const catalogPending = !hasUsableModels && entry.catalogRead === 'pending'
-  const catalogMessage =
-    hasUsableModels || catalogPending
+  const settled = !hasUsableModels && !catalogPending
+  const unsupported =
+    settled &&
+    (entry.catalogRead === 'unsupported' ||
+      (!hasModels && entry.catalog.origin === 'unknown' && entry.catalogRead === undefined))
+  const missing =
+    !settled || unsupported
       ? null
-      : entry.catalogRead === 'unsupported' ||
-          (!hasModels && entry.catalog.origin === 'unknown' && entry.catalogRead === undefined)
-        ? mode === 'launch'
-          ? t(
-              'agentPicker.catalogUnsupportedLaunch',
-              '{{agent}} models are unavailable on this host. Your current choices still apply.',
-              { agent: entry.label }
-            )
-          : t(
-              'agentPicker.catalogUnsupported',
-              '{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.',
-              { agent: entry.label }
-            )
-        : entry.catalogRead === 'failed'
-          ? t(
-              'agentPicker.catalogFailed',
-              'Could not load {{agent}} models. Close and reopen the agent picker to try again.',
-              { agent: entry.label }
-            )
-          : entry.catalog.unavailable?.reason === 'notSignedIn'
+      : entry.catalogRead === 'failed'
+        ? t('agentPicker.catalogLoadFailed', 'Could not load {{agent}} models.', {
+            agent: entry.label
+          })
+        : entry.catalog.unavailable?.reason === 'notSignedIn'
+          ? t('agentPicker.catalogSignInToLoad', 'Sign in to {{agent}} to load its models.', {
+              agent: entry.label
+            })
+          : entry.catalog.unavailable?.reason === 'cliMissing'
             ? t(
-                'agentPicker.catalogSignIn',
-                'Sign in to {{agent}} to load its models, then close and reopen the agent picker.',
+                'agentPicker.catalogInstallToLoad',
+                'Install {{agent}} on this host to load its models.',
                 { agent: entry.label }
               )
-            : entry.catalog.unavailable?.reason === 'cliMissing'
-              ? t(
-                  'agentPicker.catalogInstall',
-                  'Install {{agent}} on this host to load its models, then close and reopen the agent picker.',
-                  { agent: entry.label }
-                )
-              : entry.catalog.unavailable
-                ? t(
-                    'agentPicker.catalogUnresolved',
-                    '{{agent}} models have not loaded. Close and reopen the agent picker to try again.',
-                    { agent: entry.label }
-                  )
-                : entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress
-                  ? !hasModels
-                    ? t(
-                        'agentPicker.catalogUnresolved',
-                        '{{agent}} models have not loaded. Close and reopen the agent picker to try again.',
-                        { agent: entry.label }
-                      )
-                    : null
-                  : !hasModels
-                    ? t('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
-                        agent: entry.label
-                      })
-                    : null
-  return { hasModels, catalogPending, catalogMessage }
+            : entry.catalog.unavailable ||
+                ((entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress) &&
+                  !hasModels)
+              ? t('agentPicker.catalogNotLoaded', '{{agent}} models have not loaded.', {
+                  agent: entry.label
+                })
+              : null
+  const catalogMessage = unsupported
+    ? t(
+        'agentPicker.catalogUnsupportedLaunch',
+        '{{agent}} models are unavailable on this host. Your current choices still apply.',
+        { agent: entry.label }
+      )
+    : (missing ??
+      (settled && !hasModels
+        ? t('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
+            agent: entry.label
+          })
+        : null))
+  // Retry reads the models again in place; an empty or unsupported answer would just repeat.
+  const catalogRetryable = missing !== null
+  return { hasModels, catalogPending, catalogMessage, catalogRetryable }
 }
 
 /** Visible model rows, the expanded legacy rows below their toggle, and the model the list starts on. */

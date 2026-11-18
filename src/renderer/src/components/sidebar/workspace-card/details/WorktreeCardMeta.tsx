@@ -5,7 +5,7 @@ import { getWorkspaceAttachments } from '../../../../../../shared/workspace-atta
 import { WorktreeCardLinkedItemsSection } from '../review/WorktreeCardLinkedItemsSection'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Pencil, StickyNote } from 'lucide-react'
-import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
+import { SelectedTextCopyMenu } from '@/components/clipboard/SelectedTextCopyMenu'
 import '../../workspace-actions/context-menu/WorktreeContextMenu'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '../../workspace-actions/context-menu/worktree-context-menu-policy'
 import {
@@ -24,8 +24,11 @@ import { WorktreeCardCliDetailSection } from './WorktreeCardCliDetailSection'
 import { WorktreeCardTaskDetailSection } from '../review/WorktreeCardTaskDetailSection'
 import { getWorktreeCardTaskActions } from '../review/worktree-card-task-actions'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
-import { CommentMarkdownAsync, preloadCommentMarkdown } from '../../comment-markdown-lazy'
-import { useActivityThreadHoverCardIntent } from '@/components/activity/activity-thread-hover-card-intent'
+import {
+  CommentMarkdownAsync,
+  preloadCommentMarkdown
+} from '../../../comment-markdown/comment-markdown-lazy'
+import { useActivityThreadHoverCardIntent } from '@/components/activity/thread-preview/activity-thread-hover-card-intent'
 
 const COMMENT_MARKDOWN_CLASS_NAME =
   'text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1'

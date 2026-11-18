@@ -14,7 +14,7 @@ import {
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../../../shared/agent-session/view/structured-agent-session-stop-control'
-import type { AgentSessionPromptResponse } from '../../../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import {
   respondToStructuredAgentSessionPrompt,
   cancelStructuredAgentSessionPrompt
@@ -36,7 +36,7 @@ import { useStructuredAgentSessionContextUsage } from '../../usage/use-structure
 import { useStructuredAgentSessionRailOutline } from '../../viewport/rail/use-structured-agent-session-rail-outline'
 import { useStructuredAgentSessionQueuedMessages } from '../../queue/use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './writes/structured-conversation-command-send'
-import { pendingSendsOutsideQueuedCards } from '../../queue/structured-agent-session-sending-queued-cards'
+import { useStructuredAgentSessionTranscriptPending } from './delivery/use-structured-agent-session-transcript-pending'
 import { hostStatesTurnScopes } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { withNativeChatCutTurnNotices } from '../../../../../../shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from '../../conversation/projection/use-native-chat-context-clear-floor'
@@ -197,10 +197,6 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     send,
     agent
   })
-  const transcriptPending = useMemo(
-    () => pendingSendsOutsideQueuedCards(pending, queuedMessageIds, isWorking),
-    [isWorking, pending, queuedMessageIds]
-  )
   const contextClear = useNativeChatContextClearFloor(state.epoch, journalItems)
   // Project since the latest /clear and add a notice only for cut turns without an explaining row.
   const transcriptItems = useMemo(
@@ -209,7 +205,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   )
   const messages = useStructuredAgentSessionMessages(
     transcriptItems,
-    transcriptPending,
+    useStructuredAgentSessionTranscriptPending(transportState, pending, isWorking),
     transportState.submissions
   )
   const editTransport = useQueuedMessageEditTransport(target, sessionId, write)
@@ -286,6 +282,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     workingStartedAt: transportState.turnTiming.workingStartedAt,
     settledTurns: transportState.turnTiming.settledTurns,
     turnActivity: transportState.turnActivity,
+    promptSuggestion: transportState.promptSuggestion,
     backgroundTasks: transportState.backgroundTasks,
     turnId: transportState.turnId,
     ...structuredAgentSessionStopControl({

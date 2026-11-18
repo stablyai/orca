@@ -1,4 +1,10 @@
 import { useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { useAppStore } from '@/store/index'
+import {
+  readWslHostChatOfferForLaunch,
+  useWslHostChatOfferSettingUp
+} from '@/lib/agent-session/launch/structured-chat-wsl-host-offer'
 import { useNativeChatHostSetup } from '../../host-access/native-chat-host-setup'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
@@ -85,6 +91,10 @@ export function useNativeChatStructuredPaneNotices({
     submissions: controller.submissions,
     deliveryNotices
   })
+  const wslHostOffer = useAppStore(
+    useShallow((s) => readWslHostChatOfferForLaunch(s, provisionalLaunch, ownerWorktreeId))
+  )
+  const wslHostOfferSettingUp = useWslHostChatOfferSettingUp(wslHostOffer?.distro)
   // While Install shows, it says what to do; a start failure's "send again" or Retry can't help.
   const notices = structuredSessionNotices(
     {
@@ -97,7 +107,9 @@ export function useNativeChatStructuredPaneNotices({
       composerError: composerError ?? continuation.continueError,
       setup,
       availability,
-      hostPermission: hostSendGate.notice
+      hostPermission: hostSendGate.notice,
+      wslHostOffer,
+      wslHostOfferSettingUp
     },
     t
   )

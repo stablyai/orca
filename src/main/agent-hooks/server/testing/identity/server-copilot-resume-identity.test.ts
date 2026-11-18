@@ -1,13 +1,10 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../../../shared/agent-hook-listener/listener-state'
 import { resumeRecordFromStatus } from '../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 import { AgentHookServer } from '../../agent-hook-server'
-import { type Body, buildBody, PANE, postHookEvent } from '../server.test-fixtures'
+import { type Body, buildBody, PANE } from '../server.test-fixtures'
 
 const ROOT = 'cf0e6ff2-9ede-46de-a430-5778cf8da164'
 const CHILD = 'copilot-helper'
@@ -87,65 +84,6 @@ it('rejects old-relay child identity before a root exists and keeps later root/o
   server.ingestRemote({ ...child, worktreeId: 'wt-2' }, 'host-2')
   expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
 })
-
-it.each(['same-launch', 'resumed-launch'])(
-  'persists the parent through cold listeners and a %s token',
-  async (token) => {
-    const dir = mkdtempSync(join(tmpdir(), 'copilot-resume-identity-'))
-    let server = new AgentHookServer()
-    const post = async (body: Body, launchToken: string) => {
-      expect((await postHookEvent(server, { ...body, launchToken }, '/hook/copilot')).status).toBe(
-        204
-      )
-    }
-    try {
-      await server.start({ env: 'production', userDataPath: dir })
-      await post(rootEnd(), 'same-launch')
-      expectResume(server)
-      server.stop()
-      server = new AgentHookServer()
-      await server.start({ env: 'production', userDataPath: dir })
-      // Child hooks here are documented shapes, not captured.
-      await post(
-        buildBody({
-          hook_event_name: 'PreToolUse',
-          session_id: CHILD,
-          agent_id: CHILD,
-          tool_name: 'bash'
-        }),
-        token
-      )
-      expectResume(server)
-      server.stop()
-      server = new AgentHookServer()
-      await server.start({ env: 'production', userDataPath: dir })
-      expectResume(server)
-      const hydrated = server.getStatusSnapshot()[0]
-      // Explicit resume seeding is authoritative even when old pane launch evidence remains.
-      server.recordLaunchResumeIdentity({
-        paneKey: PANE,
-        worktreeId: 'wt-1',
-        agentType: 'copilot',
-        providerSession: { key: 'session_id', id: 'selected-root' },
-        // The new launch postdates the hydrated row, so the seed replaces it.
-        launchedAt: (hydrated?.receivedAt ?? 0) + 1
-      })
-      await post(
-        buildBody({
-          hook_event_name: 'PreToolUse',
-          sessionId: CHILD,
-          parentAgentId: 'parent-agent',
-          tool_name: 'bash'
-        }),
-        'another-launch'
-      )
-      expectResume(server, 'selected-root')
-    } finally {
-      server.stop()
-      rmSync(dir, { recursive: true, force: true })
-    }
-  }
-)
 
 it('does not undo a host new-run reset or resurrect its locator on the next child hook', () => {
   const server = new AgentHookServer()

@@ -1,6 +1,9 @@
 // Bind panes before registration so main can resolve them immediately; unbound registration throws in tests/dev and ships without a pane.
 
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 
 export function assertPaneBoundAtRegistration(
   ptyId: string,

@@ -8,6 +8,7 @@ import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalSqlScope } from './journal-sql-scope'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { readJournalDomainGeneration } from './journal-domain-generation-reads'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalGenerationRead = {
   startKey?: string
@@ -78,7 +79,11 @@ export function readJournalGeneration(
       )
       .get(...scope.prefix, itemId)
     if (row) {
-      const item: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
+      const item: AgentJournalRenderItem = readJournalStoredItem(
+        scope.db,
+        scope.prefix,
+        row.payload_json
+      )
       items.set(item.itemId, item)
     }
   }

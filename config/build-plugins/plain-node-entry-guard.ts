@@ -21,6 +21,7 @@ const PLAIN_NODE_ENTRY_NAMES = [
   'parcel-watcher-process-entry',
   // Utility process on desktop, forked child in orcad.
   'stt-worker',
+  'utility-worker-host-entry',
   'session-scanner-service-entry',
   'computer-sidecar',
   'wsl-transcript-fs-process-entry',
