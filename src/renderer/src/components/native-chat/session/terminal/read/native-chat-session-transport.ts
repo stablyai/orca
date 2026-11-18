@@ -48,12 +48,19 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
   const target: RuntimeClientTarget = { kind: 'environment', environmentId }
 
   return {
-    readSession: async (agent, sessionId, limit, transcriptPath) => {
+    readSession: async (agent, sessionId, limit, transcriptPath, options) => {
       try {
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          { agent, sessionId, limit, transcriptPath, capabilities: { transcriptSourceOrder: 1 } },
+          {
+            agent,
+            sessionId,
+            limit,
+            transcriptPath,
+            beforeOffset: options?.beforeOffset,
+            capabilities: { transcriptSourceOrder: 1 }
+          },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)

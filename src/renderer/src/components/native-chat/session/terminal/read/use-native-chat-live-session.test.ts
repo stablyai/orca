@@ -336,6 +336,66 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
     expect(latest?.status).toBe('ready')
   })
+
+  it('pages older history by cursor and prepends it to the held window', async () => {
+    const transport = getMockTransport('env-1')
+    const at = (id: string, offset: number) => ({
+      ...assistant(id, 't'),
+      transcriptOrder: offset
+    })
+    const held = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
+      at(`held-${n}`, 1000 + n)
+    )
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    transport.readSession.mockResolvedValueOnce({
+      messages: [at('older-0', 10), at('older-1', 20)],
+      hasMore: false,
+      beforeOffset: 10
+    })
+
+    let result: unknown
+    await act(async () => {
+      result = await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 200, undefined, {
+      wakeWslDistro: true,
+      beforeOffset: 1000
+    })
+    expect(result).toBe('applied')
+    expect(latest?.messages.slice(0, 3).map((m) => m.id)).toEqual(['older-0', 'older-1', 'held-0'])
+    expect(latest?.hasMore).toBe(false)
+  })
+
+  it('rereads the whole window when the live tail has dropped its overlap with history', async () => {
+    const transport = getMockTransport('env-1')
+    const at = (id: string, offset: number) => ({
+      ...assistant(id, 't'),
+      transcriptOrder: offset
+    })
+    const held = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
+      at(`held-${n}`, 1000 + n)
+    )
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    const live = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT + 1 }, (_unused, n) =>
+      at(`live-${n}`, 5000 + n)
+    )
+    await act(async () => transport.emit({ type: 'appended', messages: live }))
+
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(
+      AGENT,
+      SESSION,
+      NATIVE_CHAT_INITIAL_LIMIT + 200,
+      undefined,
+      { wakeWslDistro: true }
+    )
+  })
 })
 
 // New sessions can take minutes to flush; a first-read miss must remain recoverable (#8401).
