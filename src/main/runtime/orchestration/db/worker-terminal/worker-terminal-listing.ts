@@ -54,7 +54,7 @@ export function listSettledWorkerTerminalsStillOwned(
   this: OrchestrationDb,
   afterRowid: number,
   limit: number,
-  notUpdatedAfter: string
+  updatedBefore: string
 ): (WorkerTerminalResourceRow & { row_id: number })[] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: res.* plus its rowid.
   return this.db
@@ -63,10 +63,10 @@ export function listSettledWorkerTerminalsStillOwned(
         JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
         WHERE res.rowid > ? AND w.state IN ('succeeded', 'failed', 'stopped', 'abandoned')
           AND res.ownership_state = 'owned' AND res.release_state = 'not_requested'
-          AND res.process_incarnation IS NOT NULL AND res.updated_at <= ?
+          AND res.process_incarnation IS NOT NULL AND res.updated_at < ?
         ORDER BY res.rowid LIMIT ?`
     )
-    .all(afterRowid, notUpdatedAfter, limit) as (WorkerTerminalResourceRow & { row_id: number })[]
+    .all(afterRowid, updatedBefore, limit) as (WorkerTerminalResourceRow & { row_id: number })[]
 }
 
 export const WORKER_LIST_CURSOR_EXPIRED_MESSAGE =

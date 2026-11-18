@@ -9,6 +9,7 @@ import type {
   WorkerTerminalRetainedReason
 } from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
+import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import { parseWorkerTerminalPriorOwnerIds } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 
@@ -126,7 +127,13 @@ export function releaseExitedWorkerTerminalInTransaction(
   dispatchId: string
 ): void {
   const resource = database.getWorkerTerminalResourceByOwner(dispatchId)
-  if (resource?.release_state === 'not_requested' && resource.process_incarnation) {
+  if (
+    resource?.release_state === 'not_requested' &&
+    resource.process_incarnation &&
+    // A chat worker's history stays readable through its unreleased row until a reference is saved.
+    (!isStructuredWorkerHandle(resource.terminal_handle) ||
+      database.hasWorkerTerminalArchive(dispatchId))
+  ) {
     releaseDeadWorkerTerminalInTransaction(database, {
       requestingDispatchId: dispatchId,
       resourceId: resource.id,

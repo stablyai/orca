@@ -38,7 +38,8 @@ function leftOwnedStoppedWorker(d: OrchestrationDb, name: string): string {
   d.db
     .prepare(
       `UPDATE worker_terminal_resources SET ownership_state = 'owned', release_state = 'not_requested',
-         release_completed_at = NULL WHERE owner_dispatch_id = ?`
+         release_completed_at = NULL, updated_at = datetime('now', '-1 minute')
+       WHERE owner_dispatch_id = ?`
     )
     .run(started.dispatch.id)
   return started.dispatch.id

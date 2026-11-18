@@ -1,6 +1,5 @@
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
 import type { WorkerTerminalProcessIndex } from './worker-terminal-process-liveness'
-import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestration/worker/stop/worker-stop-archive'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 
 const PAGE_ROWS = 50
@@ -46,10 +45,8 @@ async function releaseExitedWorkerTerminals(
     return 0
   }
   const inventories = new Map<string, Promise<WorkerTerminalProcessIndex | null>>()
-  // A row written after the first listing could be judged by a list that predates its process.
-  const fence = String(
-    (db.db.prepare("SELECT datetime('now') AS now").get() as { now: string }).now
-  )
+  // Timestamps are whole seconds: only rows written before the sweep's second predate every listing.
+  const fence = String(db.db.prepare("SELECT datetime('now') AS now").get()?.now)
   const exited: { requestingDispatchId: string; resourceId: string; processIncarnation: string }[] =
     []
   let structuredHostReady = false
@@ -65,10 +62,16 @@ async function releaseExitedWorkerTerminals(
       if (!processIncarnation) {
         continue
       }
-      if (!structuredHostReady && isStructuredWorkerHandle(resource.terminal_handle)) {
-        // Structured liveness reads the session host's durable records.
-        structuredHostReady = true
-        await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+      if (isStructuredWorkerHandle(resource.terminal_handle)) {
+        // Without a saved reference its chat history is read through the live row; keep that.
+        if (!db.hasWorkerTerminalArchive(resource.owner_dispatch_id)) {
+          continue
+        }
+        if (!structuredHostReady) {
+          // Structured liveness reads the session host's durable records.
+          structuredHostReady = true
+          await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+        }
       }
       const liveness = await runtime
         .inspectTerminalProcessIncarnationLiveness(
@@ -80,14 +83,6 @@ async function releaseExitedWorkerTerminals(
       if (liveness !== 'exited') {
         continue
       }
-      // Record where its output still lives, as a stop does, so release keeps it readable.
-      archiveWorkerOutputBeforeStop({
-        runtime,
-        db,
-        dispatchId: resource.owner_dispatch_id,
-        terminalHandle: resource.terminal_handle,
-        attachedAt: db.getWorkerDispatch(resource.owner_dispatch_id)?.created_at ?? resource.created_at
-      })
       exited.push({
         requestingDispatchId: resource.owner_dispatch_id,
         resourceId: resource.id,
@@ -98,6 +93,6 @@ async function releaseExitedWorkerTerminals(
       break
     }
   }
-  // One write, so Crew readers wake once per sweep; it re-checks owner, incarnation and ownership.
+  // One write, so Crew readers wake once per sweep; it re-checks owner, incarnation and archive.
   return exited.length > 0 && !stopped() ? db.settleDeadWorkerTerminalReleases(exited) : 0
 }
