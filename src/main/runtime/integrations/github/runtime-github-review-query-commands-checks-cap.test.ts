@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { setPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { setPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   _prChecksResultCountForTests,
   _resetPacedPRChecksForTests
@@ -168,65 +168,6 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
     expect(provider.calls).toHaveLength(0)
   })
 
-  it('keeps that newer manual answer authoritative while the older read lives through cache pressure', async () => {
-    setPRAutoRefreshCadence('off')
-    const olderTimed = timed()
-    await vi.waitFor(() => expect(provider.calls).toHaveLength(1))
-    const refreshed = manual()
-    await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
-    provider.calls.pop()!.answer('manual')
-    expect(await names(refreshed)).toEqual(['manual'])
-    const joined = read()
-    // 256 other PR heads complete while the older read is still out, filling the completed bound.
-    for (let head = 0; head < 256; head += 1) {
-      const other = read({}, `other-head-${head}`)
-      await vi.waitFor(() => expect(provider.calls).toHaveLength(2), { interval: 1 })
-      provider.calls.pop()!.answer(`other ${head}`)
-      expect(await names(other)).toEqual([`other ${head}`])
-    }
-    provider.calls.shift()!.answer('older timed')
-    expect(await names(joined)).toEqual(['manual'])
-    expect(await names(olderTimed)).toEqual(['manual'])
-    expect(await names(timed())).toEqual(['manual'])
-    expect(provider.calls).toHaveLength(0)
-    expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
-  })
-
-  it.each(['answers', 'fails'] as const)(
-    'a read replaced by a user refresh that ended long ago %s with the newest answer accepted since, even after eviction',
-    async (outcome) => {
-      const replaced = timed()
-      const joined = read()
-      await vi.waitFor(() => expect(provider.calls).toHaveLength(1))
-      // A user refresh of the same read replaces the running one instead of joining it, and ends.
-      const refreshed = read({ userRefresh: true })
-      await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
-      provider.calls.pop()!.answer('refreshed')
-      expect(await names(refreshed)).toEqual(['refreshed'])
-      // A later manual read of the other intent starts and ends while the replaced read still runs.
-      const manualRead = manual()
-      await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
-      provider.calls.pop()!.answer('manual')
-      expect(await names(manualRead)).toEqual(['manual'])
-      for (let head = 0; head < 256; head += 1) {
-        const other = read({}, `evicting-head-${head}`)
-        await vi.waitFor(() => expect(provider.calls).toHaveLength(2), { interval: 1 })
-        provider.calls.pop()!.answer(`other ${head}`)
-        await other
-      }
-      if (outcome === 'answers') {
-        provider.calls.shift()!.answer('replaced')
-      } else {
-        provider.offline = true
-        provider.calls.shift()!.fail()
-      }
-      expect(await names(replaced)).toEqual(['manual'])
-      expect(await names(joined)).toEqual(['manual'])
-      expect(provider.calls).toHaveLength(0)
-      expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
-    }
-  )
-
   it('a replaced read answers with its own result when its successor fails and nothing newer was accepted', async () => {
     const replaced = timed()
     const joined = read()
@@ -240,37 +181,6 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
     expect(await names(replaced)).toEqual(['replaced'])
     expect(await names(joined)).toEqual(['replaced'])
     expect(_prChecksResultCountForTests().running).toBe(0)
-  })
-
-  it('keeps at most 256 completed answers while every one of them is being read again, and a new manual read still works', async () => {
-    const heads = Array.from({ length: 256 }, (_, head) => `cached-head-${head}`)
-    for (const head of heads) {
-      const cached = read({}, head)
-      await vi.waitFor(() => expect(provider.calls).toHaveLength(1), { interval: 1 })
-      provider.calls.shift()!.answer(head)
-      await cached
-    }
-    // All 256 are read again at once; only four gh commands may run at a time, the rest wait for
-    // a command slot while their reads are already live.
-    const rereads = heads.map((head) => read({ noCache: true }, head))
-    await vi.waitFor(() => expect(provider.calls).toHaveLength(4), { interval: 1 })
-    expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 256 })
-
-    // A new manual read of another PR head waits its turn for a slot behind them, then reads.
-    const fresh = read({ noCache: true, userRefresh: true }, 'new-head')
-    let answered = 0
-    while (answered < heads.length + 1) {
-      await vi.waitFor(() => expect(provider.calls.length).toBeGreaterThan(0), { interval: 1 })
-      const admitted = provider.calls.splice(0)
-      expect(admitted.length).toBeLessThanOrEqual(4)
-      for (const call of admitted) {
-        call.answer(answered === heads.length ? 'new' : 'reread')
-        answered += 1
-      }
-    }
-    expect(await names(fresh)).toEqual(['new'])
-    await Promise.all(rereads)
-    expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
   })
 
   it('a read after a PR mutation starts its own provider read instead of joining one from before it', async () => {

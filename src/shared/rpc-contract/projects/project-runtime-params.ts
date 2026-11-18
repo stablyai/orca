@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 
 export const ProjectProviderIdentity = z.object({
   provider: z.literal('github'),

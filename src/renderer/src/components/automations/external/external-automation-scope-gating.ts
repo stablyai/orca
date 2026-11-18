@@ -3,7 +3,7 @@
 import {
   EXTERNAL_AUTOMATION_SCOPE_CODES,
   type ExternalAutomationScopeCode
-} from '../../../../../shared/external-automation-scope'
+} from '../../../../../shared/automations/external/external-automation-scope'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import type { AutomationHostFilterResolution } from '../hosts/automation-host-filter-resolution'

@@ -28,7 +28,7 @@ import {
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
+import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/pane-actions/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'

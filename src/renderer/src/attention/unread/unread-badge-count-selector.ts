@@ -2,7 +2,7 @@ import { getVisibleWorkspaceHostIdSet } from '@/components/sidebar/worktree-list
 import { getPairedDeviceIdsByEnvironment } from '../../../../shared/workspace-view/workspace-creator-visibility'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import type { AppState } from '@/store/types'
-import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { sameBucketRecords } from './unread-bucket-record-equality'
 import { getUnreadBadgeCount } from './unread-badge-count'

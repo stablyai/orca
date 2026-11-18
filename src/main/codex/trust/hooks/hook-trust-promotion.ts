@@ -5,7 +5,7 @@ import {
 } from '../../../filesystem/file-content-observation'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { createManagedCommandMatcher } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
 import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'

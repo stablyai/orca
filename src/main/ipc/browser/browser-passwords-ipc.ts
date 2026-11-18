@@ -4,7 +4,7 @@ import type {
   BrowserPasswordSavePromptResponse,
   BrowserPasswordsStatus
 } from '../../../shared/browser/passwords/browser-passwords-types'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
   configureBrowserPasswords,

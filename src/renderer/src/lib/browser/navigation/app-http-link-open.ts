@@ -1,7 +1,5 @@
-import {
-  canNativeChatOpenOwnedBrowser,
-  resolveNativeChatHttpLinkSourceOwner
-} from '@/components/native-chat/links/actions/native-chat-http-link-source-owner'
+import { resolveNativeChatHttpLinkSourceOwner } from '@/components/native-chat/links/actions/native-chat-http-link-source-owner'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '../workspace/workspace-browser-route-eligibility'
 import { getWorkspaceClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import { openOwnedHttpLink } from './http-link-routing'
 import type { HttpLinkDestination, HttpLinkSourceOwner } from './http-link-routing'
@@ -80,7 +78,7 @@ function resolveBrowserHost(
     owner.kind === 'local'
       ? getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state ===
         'enabled'
-      : canNativeChatOpenOwnedBrowser(state, worktreeId, owner)
+      : canOpenRemoteLinkInWorkspaceBrowser(state, worktreeId, owner)
   return canHost ? { worktreeId, owner } : null
 }
 

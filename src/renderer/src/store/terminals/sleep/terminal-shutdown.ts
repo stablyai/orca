@@ -3,15 +3,15 @@ import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shu
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import '../../slices/agent-status/agent-status'
-import { collectSleepingAgentSessionRecordsForWorktree } from '../../slices/agent-status/agent-status-recovery-collection'
-import type { AgentStatusWorktreeShutdownReason } from '../../slices/agent-status/agent-status-contract'
+import { collectSleepingAgentSessionRecordsForWorktree } from '../../slices/agent-status/sleep-recovery/agent-status-recovery-collection'
+import type { AgentStatusWorktreeShutdownReason } from '../../slices/agent-status/contracts/agent-status-contract'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from '../pty/terminal-pty-identities'
 import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
 import { createTerminalShutdownGuardController } from './terminal-shutdown-guards'
 import { commitTerminalShutdownState } from './terminal-shutdown-state'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { recordPaneSleepThroughLayoutOwner } from './terminal-sleep-layout-owner'
 
 type ExactTerminalStopResult = {

@@ -21,7 +21,7 @@ import {
   githubPRTransportFailureOutcome
 } from '../../../../../shared/github/pull-requests/refresh/pull-request-for-branch-outcome'
 import { isPRRevalidationOnly } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
 import { getRuntimeRepoTarget } from '../repositories/repository-routing'
@@ -30,6 +30,7 @@ import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
 import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import { findWorktreeById, isStaleExactLinkedPRLookup } from '../refresh/worktree-refresh'
+import { getWorktreeGitHubPRUrl } from '../../../../../shared/worktree/github-linked-item-url'
 import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
@@ -94,6 +95,10 @@ export function startPullRequestLookup(args: {
           ? captureLinkedReviewClearScope(get(), options?.worktreeId, repo)
           : undefined
       const requestHeadOid = candidateWorktree?.head ?? null
+      const linkedPRUrl =
+        candidateWorktree?.linkedPR === linkedPRNumber
+          ? getWorktreeGitHubPRUrl(candidateWorktree, linkedPRNumber)
+          : undefined
       let transportFailed = false
       const response = runtimeRepo
         ? callRuntimeRpc<PRSnapshotReply | PRInfo | null>(
@@ -103,6 +108,7 @@ export function startPullRequestLookup(args: {
               repo: runtimeRepo.repo.id,
               branch,
               linkedPRNumber,
+              ...(linkedPRUrl ? { linkedPRUrl } : {}),
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
               ...(options?.reason === 'swr'
@@ -132,6 +138,7 @@ export function startPullRequestLookup(args: {
               worktreeId: options?.worktreeId,
               currentHeadOid: requestHeadOid,
               linkedPRNumber,
+              ...(linkedPRUrl ? { linkedPRUrl } : {}),
               fallbackPRNumber,
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,

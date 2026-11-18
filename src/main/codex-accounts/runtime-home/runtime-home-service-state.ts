@@ -15,7 +15,6 @@ import type {
   CodexSharedRuntimeAuthProvenanceStatus,
   CodexSystemDefaultSnapshot
 } from './runtime-home-service-types'
-import type { CodexSessionBackfillDate } from '../../codex/history/backfill/codex-session-backfill-types'
 import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { LegacyWslRuntimeAuthDestination } from '../legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain'
 import type { WslCodexAuthRead } from './wsl/wsl-codex-auth-batch-reader'
@@ -52,7 +51,8 @@ export abstract class CodexRuntimeHomeState {
   ): boolean | null
   abstract isHostSystemDefaultSessionMigrationEligible(): boolean
   abstract prepareHostSystemDefaultSessionMigrationPass(
-    scanDates?: readonly CodexSessionBackfillDate[]
+    fullScanRequired?: boolean,
+    newFullScanRequest?: boolean
   ): boolean
   abstract finishHostSystemDefaultSessionMigrationPass(): void
 
@@ -63,8 +63,6 @@ export abstract class CodexRuntimeHomeState {
     account: CodexManagedAccount,
     unavailableManagedHomePath?: string
   ): string | null
-  protected abstract startSelfContainedSessionBridgeForLaunch(perAccountHome: string): void
-  protected abstract getSelfContainedSessionBridgeSourceHomes(): string[]
   protected abstract syncSelfContainedManagedSelection(account: CodexManagedAccount): void
   protected abstract resolveSelfContainedManagedHome(
     account: CodexManagedAccount
@@ -79,10 +77,10 @@ export abstract class CodexRuntimeHomeState {
   protected abstract invalidateBackfillAfterManagedSystemDefaultLaunch(
     launchEnv?: NodeJS.ProcessEnv
   ): boolean | null
-  protected abstract startWslSessionBridgeForLaunch(
+  protected abstract prepareWslAccountHistory(
     target: CodexAccountSelectionTarget,
     runtimeHomePath: string | null
-  ): void
+  ): Promise<void>
 
   abstract getHostCodexHomePathsForSessionDiscovery(): string[]
   abstract getSelectedHostAccountCodexHomePath(): string | null
@@ -132,9 +130,10 @@ export abstract class CodexRuntimeHomeState {
   protected abstract getWslManagedHomeIdentity(
     account: CodexManagedAccount | null
   ): { distro: string; linuxHomePath: string } | null
-  protected abstract getPreparedWslRateLimitHomePath(
-    target: CodexAccountSelectionTarget
-  ): string | null
+  protected abstract getPreparedWslRateLimitHome(
+    target: CodexAccountSelectionTarget,
+    pinnedWslDistro?: string
+  ): CodexRateLimitHomeResolution
   protected abstract getWslCodexHomePathForSelection(
     target: CodexAccountSelectionTarget
   ): string | null

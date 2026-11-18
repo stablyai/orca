@@ -1,7 +1,7 @@
 // Derive shutdown reconnect facts from main-owned layout, terminal records and SSH connections, matching window capture rules without depending on window saves.
 
 import { isPaneSleepRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isOwnedSshTargetId } from '../../../../shared/execution-host'
+import { isOwnedSshTargetId } from '../../../../shared/execution-host/execution-host'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'

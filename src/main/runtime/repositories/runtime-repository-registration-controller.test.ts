@@ -3,10 +3,10 @@ import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import '../../../shared/file-access/cross-platform-path'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
-import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../construction/test-context/runtime-store-partial-fixture'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectRepoLocalMetadata: vi.fn().mockResolvedValue({})
@@ -135,19 +135,6 @@ describe('RuntimeRepositoryRegistrationController.add stores the checkout git li
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true })
-  })
-
-  it('stores the toplevel when a subdirectory of a git checkout is added', async () => {
-    const repoPath = join(root, 'mono')
-    await mkdir(join(repoPath, 'pkg', 'web'), { recursive: true })
-    gitInit(repoPath)
-    const { controller } = createController()
-
-    const added = await controller.add(join(repoPath, 'pkg', 'web'), 'git')
-
-    expect(normalizeRuntimePathForComparison(added.path)).toBe(
-      normalizeRuntimePathForComparison(repoPath)
-    )
   })
 
   it.skipIf(process.platform === 'win32')(

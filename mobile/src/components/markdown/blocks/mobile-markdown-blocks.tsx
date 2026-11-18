@@ -15,7 +15,7 @@ import {
   type StyleProp,
   type TextStyle
 } from 'react-native'
-import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { mobileMathMeasureText } from '../math/mobile-markdown-math-nodes'
 import { mobileMarkdownTableColumnWidths } from './mobile-markdown-table-columns'
@@ -45,6 +45,10 @@ const MERMAID_BASE = 13
 export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
+  /** Multiplies prose line heights; code keeps its own. */
+  lineSpacing: number
+  /** The prose's face; undefined keeps the system font. */
+  fontFamily?: string
   listText: StyleProp<TextStyle>
   listMarker: StyleProp<TextStyle>
   /** Interactive children own their touches and must forward the row action. */
@@ -99,7 +103,10 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
               role="checkbox"
               aria-checked={Boolean(item.checked)}
               aria-disabled
-              style={[styles.taskMarker, { height: styles.listText.lineHeight * ctx.textScale }]}
+              style={[
+                styles.taskMarker,
+                { height: styles.listText.lineHeight * ctx.textScale * ctx.lineSpacing }
+              ]}
             >
               {item.checked ? (
                 <SquareCheck size={14 * ctx.textScale} color={colors.accentBlue} strokeWidth={2} />
@@ -151,7 +158,8 @@ function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): React
                 style={[
                   styles.tableCell,
                   rowIndex === 0 ? styles.tableHeader : null,
-                  scaledMarkdownText(styles.tableCell, ctx.textScale),
+                  scaledMarkdownText(styles.tableCell, ctx.textScale, ctx.lineSpacing),
+                  ctx.fontFamily ? { fontFamily: ctx.fontFamily } : null,
                   { width, textAlign: node.align?.[cellIndex] ?? 'left' }
                 ]}
               >
@@ -242,8 +250,10 @@ function renderBlock(
                 : node.depth === 2
                   ? styles.headingLarge
                   : styles.heading,
-              ctx.textScale
+              ctx.textScale,
+              ctx.lineSpacing
             ),
+            ctx.fontFamily ? { fontFamily: ctx.fontFamily } : null,
             ctx.tone.text
           ]}
         >
@@ -264,7 +274,8 @@ function renderBlock(
             {
               style: [
                 styles.quoteText,
-                scaledMarkdownText(styles.quoteText, ctx.textScale),
+                scaledMarkdownText(styles.quoteText, ctx.textScale, ctx.lineSpacing),
+                ctx.fontFamily ? { fontFamily: ctx.fontFamily } : null,
                 ctx.tone.secondary
               ],
               selectable: true

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
 import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
-import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import { useSettingsNavigationMetadata } from '@/components/settings/navigation/useSettingsNavigationMetadata'
 import type { SettingsNavInstallStatus } from '@/components/settings/navigation/settings-navigation-types'
 import {
   COMPUTER_USE_SKILL_NAME,

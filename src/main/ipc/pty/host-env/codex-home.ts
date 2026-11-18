@@ -1,5 +1,5 @@
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
@@ -19,7 +19,7 @@ import {
 } from '../../../pty/shell-startup/codex-home-wsl-env'
 import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
-import { isWslTerminalSpawn } from '../wsl-terminal-spawn'
+import { isWslTerminalSpawn } from './wsl-terminal-spawn'
 
 export function shouldSkipCodexHomeEnvForWindowsShell(
   shellPath: string | undefined,

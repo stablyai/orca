@@ -1,5 +1,5 @@
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
-import { isRepoHidden } from '../../../shared/hidden-projects'
+import { isRepoHidden } from '../../../shared/project/catalog/hidden-projects'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'

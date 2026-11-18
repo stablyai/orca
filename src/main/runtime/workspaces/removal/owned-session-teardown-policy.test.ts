@@ -5,14 +5,14 @@ import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
 const {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+} = await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
 
 async function makeRuntime() {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(

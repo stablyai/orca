@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FolderOpen, Puzzle, RotateCw, Settings2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type {
   BrowserExtensionActionResult,
   BrowserExtensionListing,
@@ -11,9 +11,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
-import { useConfirmationDialog } from '../../../confirmation-dialog-context'
-import { describeUnsupportedBrowserExtensionFeatures } from '../../../browser-extension-permission-messages'
-import { browserExtensionRemovalDescription } from '../../../browser-extension-removal-description'
+import { useConfirmationDialog } from '../../../dismiss/confirmation/confirmation-dialog-context'
+import { describeUnsupportedBrowserExtensionFeatures } from '../../../browser-pane/assemble-chrome/extensions/browser-extension-permission-messages'
+import { browserExtensionRemovalDescription } from '../../../browser-pane/assemble-chrome/extensions/browser-extension-removal-description'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { Switch } from '@/components/ui/switch'
 import { getBrowserExtensionsSearchEntry } from './browser-extensions-search'

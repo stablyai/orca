@@ -1,7 +1,7 @@
 import { app, session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -42,6 +42,7 @@ import {
   getBrowserExtensionSessionForProfile
 } from '../../extensions/profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../../extensions/browser-extension-support'
+import { trackBrowserSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
 type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
@@ -272,6 +273,7 @@ class BrowserSessionRegistry {
     }
     this.profiles.set(id, profile)
     this.persistProfiles()
+    trackBrowserSessionCookies(profile)
     this.onProfilesChanged?.()
     return profile
   }

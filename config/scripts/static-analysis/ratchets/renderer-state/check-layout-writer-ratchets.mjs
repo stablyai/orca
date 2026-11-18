@@ -139,7 +139,7 @@ export const RATCHETS = [
     // the frozen setters for remote-server workspaces.
     allowed: (rel) =>
       rel === 'src/renderer/src/store/workspace-layout/workspace-layout-cache.ts' ||
-      rel === 'src/renderer/src/runtime/web-session-tabs-sync/store-patch.ts' ||
+      rel === 'src/renderer/src/runtime/web-session-tabs-sync/snapshots/store-patch.ts' ||
       rel.startsWith('src/renderer/src/runtime/remote-workspace-frozen/'),
     header: [
       '# Renderer writes of the window layout and per-view selection fields, per file: assignments,',

@@ -3,12 +3,14 @@ import { createHash } from 'node:crypto'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
-import { ORCAD_SERVER_ENTRY_FILENAME } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 
 const root = join(import.meta.dirname, '../../..', '..')
-const { turnedOnDarkBuildDefines } = createRequire(import.meta.url)(
-  '../../../dark-build-switches.cjs'
-)
+const require = createRequire(import.meta.url)
+// require avoids MODULE_TYPELESS_PACKAGE_JSON from ESM-importing TS under typeless package.json.
+const {
+  ORCAD_SERVER_ENTRY_FILENAME
+} = require('../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts')
+const { turnedOnDarkBuildDefines } = require('../../../dark-build-switches.cjs')
 
 export const ORCAD_ENTRY_POINT = 'src/main/orcad/main.ts'
 export const ORCAD_LAUNCHER_ENTRY_POINT = 'src/main/orcad/launcher.ts'

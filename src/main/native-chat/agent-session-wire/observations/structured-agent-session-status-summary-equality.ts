@@ -1,10 +1,10 @@
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
-import { agentSessionBackgroundTasksEqual } from '../../../../shared/agent-session/agent-session-background-task-wire'
+import { agentSessionBackgroundTasksEqual } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import { structuredAgentSessionAgentStatus } from '../../../../shared/agent-session/view/structured-agent-session-agent-status'
 import { structuredStatusChildrenEqual } from './structured-agent-session-status-child-work'
-import { agentSessionForkNamingEqual } from '../../../../shared/agent-session/agent-session-fork-name'
+import { agentSessionForkNamingEqual } from '../../../../shared/agent-session/conversation-naming/agent-session-fork-name'
 
 export function structuredStatusSummariesEqual(
   a: AgentSessionStatusSummary,
@@ -30,6 +30,8 @@ export function structuredStatusSummariesEqual(
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
     a.permissionMode === b.permissionMode &&
+    a.launchPermissionMode === b.launchPermissionMode &&
+    a.runningPermissionMode === b.runningPermissionMode &&
     a.runtimePermission?.fence === b.runtimePermission?.fence &&
     a.runtimePermission?.mode === b.runtimePermission?.mode &&
     (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&
@@ -51,6 +53,7 @@ export function structuredStatusSummariesEqual(
     a.turnOutcome === b.turnOutcome &&
     a.stopping === b.stopping &&
     a.awaitsAnswer === b.awaitsAnswer &&
+    a.asyncQuestionsSkippedThrough === b.asyncQuestionsSkippedThrough &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     structuredStatusChildrenEqual(a.children, b.children) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)

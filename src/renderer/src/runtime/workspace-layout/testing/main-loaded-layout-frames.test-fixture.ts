@@ -1,6 +1,6 @@
 // Feed switch-on tests main’s loaded partition frames instead of the window’s own restore.
 
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'

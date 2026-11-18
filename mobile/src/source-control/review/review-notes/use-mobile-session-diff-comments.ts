@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
-import { formatDiffComments } from '../../../../../src/shared/diff-comments-format'
+import { formatDiffComments } from '../../../../../src/shared/file-review/diff-comments-format'
 import { translate } from '../../../i18n/mobile-i18n'
 import { useClipboardWriter } from '../../../platform/clipboard/clipboard'
 import { interpretOrThrowRefusalMessage } from '../../../transport/rpc/rpc-refusal-message'
@@ -14,14 +14,14 @@ import {
   removeMobileDiffComments,
   sendableMobileDiffComments
 } from './mobile-diff-comments'
-import { mergeDiffCommentMutation } from '../../../../../src/shared/diff-comment-mutation'
+import { mergeDiffCommentMutation } from '../../../../../src/shared/file-review/diff-comment-mutation'
 import {
   createReviewNotesSync,
   enqueueReviewNotesRequest,
   reviewNotesView,
   type ReviewNotesSync
 } from './mobile-review-notes-sync'
-import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import type { DiffNotesDelivery } from './mobile-review-comment-state'
 import type { MobileSessionDocumentReadersModel } from '../../../files/session-documents/use-mobile-session-document-readers'
 
@@ -96,9 +96,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       try {
         await enqueueReviewNotesRequest(sync, async () => {
           if (!client || connState !== 'connected') {
-            throw new Error(
-              translate('session.useDiffComments.waitingForDesktop', 'Waiting for desktop...')
-            )
+            throw new Error(translate('common.waitingForHost', 'Waiting for host…'))
           }
           // Why: send the host's list plus only this change; an older host stores the list whole.
           const base = sync.host

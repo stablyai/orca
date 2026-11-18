@@ -9,7 +9,7 @@ import {
   type ReleaseBuild,
   type ReleaseChannel
 } from '../../../shared/updater/release-channel'
-import { parseRetryAfterHeaderMs } from '../../../shared/retry-after-header'
+import { parseRetryAfterHeaderMs } from '../../../shared/network/retry-after-header'
 import {
   getGhRateLimitBlockedUntilMs,
   recordGhPrimaryRateLimit

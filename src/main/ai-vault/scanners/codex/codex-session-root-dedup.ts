@@ -59,7 +59,8 @@ export function codexRolloutHardlinkIdentity(file: {
     !Number.isSafeInteger(ino) ||
     !Number.isSafeInteger(nlink) ||
     nlink <= 1 ||
-    (dev === 0 && ino === 0)
+    // No filesystem assigns inode 0 to a file, so it cannot prove two paths share one.
+    ino === 0
   ) {
     return null
   }
@@ -77,9 +78,12 @@ export function codexSessionRootRank(codexHome: string | null): number {
   return isSharedRuntimeHome || isPerAccountManagedHome ? 1 : 2
 }
 
-/** Proven hardlink aliases must not consume parse budget; same-name copies still need session-ID proof. */
+/**
+ * Proven hardlink aliases must not consume parse budget; same-name copies still need session-ID proof.
+ * Returns `candidates` itself when none is an alias.
+ */
 export function dedupeCodexRolloutFileAliases<T>(
-  candidates: readonly T[],
+  candidates: T[],
   accessors: {
     isCodex: (candidate: T) => boolean
     getFilePath: (candidate: T) => string
@@ -87,7 +91,8 @@ export function dedupeCodexRolloutFileAliases<T>(
     getHardlinkIdentity: (candidate: T) => string | null
   }
 ): T[] {
-  const bestByAlias = new Map<string, { candidate: T; rank: number; filePath: string }>()
+  let bestByAlias: Map<string, { candidate: T; rank: number; filePath: string }> | undefined
+  let aliased = false
   for (const candidate of candidates) {
     if (!accessors.isCodex(candidate)) {
       continue
@@ -103,11 +108,17 @@ export function dedupeCodexRolloutFileAliases<T>(
     }
     const aliasKey = `${sessionFileExecutionNamespace(filePath)}\0${fileName}\0${hardlinkIdentity}`
     const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
+    bestByAlias ??= new Map()
     const best = bestByAlias.get(aliasKey)
+    aliased ||= best !== undefined
     if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
       bestByAlias.set(aliasKey, { candidate, rank, filePath })
     }
   }
+  if (!aliased || !bestByAlias) {
+    return candidates
+  }
+  const aliases = bestByAlias
   return candidates.filter((candidate) => {
     if (!accessors.isCodex(candidate)) {
       return true
@@ -117,26 +128,11 @@ export function dedupeCodexRolloutFileAliases<T>(
     if (!hardlinkIdentity) {
       return true
     }
-    const best = bestByAlias.get(
+    const best = aliases.get(
       `${sessionFileExecutionNamespace(accessors.getFilePath(candidate))}\0${fileName}\0${hardlinkIdentity}`
     )
     return !best || best.candidate === candidate
   })
-}
-
-export async function dedupeCodexRolloutAliases<T>(
-  candidates: readonly T[],
-  accessors: {
-    isCodex: (candidate: T) => boolean
-    getFilePath: (candidate: T) => string
-    getCodexHome: (candidate: T) => string | null
-    getHardlinkIdentity: (candidate: T) => string | null
-  },
-  readSessionMetaId: (filePath: string) => Promise<string | null>,
-  signal?: AbortSignal
-): Promise<T[]> {
-  const hardlinkDeduped = dedupeCodexRolloutFileAliases(candidates, accessors)
-  return dedupeCodexRolloutCopyAliases(hardlinkDeduped, accessors, readSessionMetaId, signal)
 }
 
 // Match parse batch width; the WSL transcript gate separately serializes UNC reads.
@@ -149,6 +145,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     isCodex: (candidate: T) => boolean
     getFilePath: (candidate: T) => string
     getCodexHome: (candidate: T) => string | null
+    getHardlinkIdentity: (candidate: T) => string | null
   },
   readSessionMetaId: (filePath: string) => Promise<string | null>,
   signal?: AbortSignal
@@ -172,10 +169,32 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     }
   }
 
-  // Batch across same-name groups so large mirrored histories do not serialize thousands of two-file reads.
-  const contested = [...groups.values()].filter((group) => group.length > 1).flat()
+  // Proven hardlinks need no read; compare inodes only within same-name groups.
+  const aliasesToDrop = new Set<T>()
+  const contested: T[] = []
+  for (const [key, group] of groups) {
+    if (group.length < 2) {
+      continue
+    }
+    const physical = dedupeCodexRolloutFileAliases(group, accessors)
+    if (physical !== group) {
+      const kept = new Set(physical)
+      for (const candidate of group) {
+        if (!kept.has(candidate)) {
+          aliasesToDrop.add(candidate)
+        }
+      }
+      groups.set(key, physical)
+    }
+    // Batch across same-name groups so large mirrored histories do not serialize thousands of two-file reads.
+    if (physical.length > 1) {
+      contested.push(...physical)
+    }
+  }
   if (contested.length === 0) {
-    return [...candidates]
+    return aliasesToDrop.size === 0
+      ? [...candidates]
+      : candidates.filter((candidate) => !aliasesToDrop.has(candidate))
   }
   const identifiedIds = await mapWithConcurrency(
     contested,
@@ -189,7 +208,6 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     contested.map((candidate, index) => [candidate, identifiedIds[index]])
   )
 
-  const aliasesToDrop = new Set<T>()
   for (const group of groups.values()) {
     if (group.length < 2) {
       continue
