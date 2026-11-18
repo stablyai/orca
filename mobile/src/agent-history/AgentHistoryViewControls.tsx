@@ -41,12 +41,13 @@ export function AgentHistoryViewControls({
   const shownAgents = listedAgents.filter((agent) => agents.includes(agent))
   const agentsLabel = allAgents
     ? t('agentHistory.viewControls.allAgents', 'All agents')
-    : shownAgents.length === 0
+    : agents.length === 0
       ? t('agentHistory.viewControls.noAgents', 'No agents')
       : shownAgents.length === 1
         ? aiVaultAgentLabel(shownAgents[0]!)
         : t('agentHistory.viewControls.agentCount', '{{count}} agents', {
-            count: shownAgents.length
+            // Agents with no history here still count, so the chip never reads 0 while it filters.
+            count: shownAgents.length || agents.length
           })
   const sortOptions: { value: AiVaultSort; label: string; icon: LucideIcon }[] = [
     {

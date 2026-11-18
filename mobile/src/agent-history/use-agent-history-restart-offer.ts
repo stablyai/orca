@@ -9,10 +9,9 @@ import { useRouteRelaysCapability } from '../worktree/execution-hosts/workspace-
 import { agentHistoryCapabilityRead } from './mobile-agent-history-operations'
 import { AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS } from '../../../src/shared/agent-session/lifecycle/resume/agent-session-restart-continue-timeout'
 
-// Only counts are shown; rows stay opaque so a newer host's row shapes still count.
-const restartOfferSchema = z.looseObject({ sessions: salvagingArray(z.unknown()) })
-// Absent lists mean the host couldn't re-read its offers after acting, not that none are left.
-const restartContinueSchema = z.looseObject({
+// Only counts are shown; rows stay opaque so a newer host's row shapes still count. After Resume all,
+// absent lists mean the host couldn't re-read its offers, not that none are left.
+const restartOfferSchema = z.looseObject({
   sessions: salvagingArray(z.unknown()).optional(),
   failed: salvagingArray(z.unknown()).optional()
 })
@@ -34,7 +33,7 @@ const restartContinueRun = bindDeferredRpcOperation(
     method: 'agentSession.restartContinue',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('agent-history-restart-continue', restartContinueSchema)
+    read: rpcResultVariant('agent-history-restart-continue', restartOfferSchema)
   })
 )
 
@@ -50,9 +49,17 @@ export type AgentHistoryRestartOffer = {
   dismiss: () => void
 }
 
-async function readOfferCount(client: RpcClient): Promise<number | null> {
+type OfferCounts = { count: number; failedCount: number }
+
+function offerCounts(value: z.output<typeof restartOfferSchema>): OfferCounts | null {
+  return value.sessions
+    ? { count: value.sessions.length, failedCount: value.failed?.length ?? 0 }
+    : null
+}
+
+async function readOfferCounts(client: RpcClient): Promise<OfferCounts | null> {
   const offer = restartOfferRead.interpret(await restartOfferRead.request(client))
-  return offer.accepted ? offer.value.sessions.length : null
+  return offer.accepted ? offerCounts(offer.value) : null
 }
 
 /** Desktop's resume-after-restart offer, read once per visit on hosts that let a phone act on it. */
@@ -61,13 +68,13 @@ export function useAgentHistoryRestartOffer(
   connected: boolean
 ): AgentHistoryRestartOffer {
   const relayed = useRouteRelaysCapability(AGENT_SESSION_PHONE_RESTART_RESUME_RUNTIME_CAPABILITY)
-  const [count, setCount] = useState(0)
+  const [counts, setCounts] = useState<OfferCounts>({ count: 0, failedCount: 0 })
   const [resuming, setResuming] = useState(false)
-  const [failedCount, setFailedCount] = useState(0)
   const [requestFailed, setRequestFailed] = useState(false)
   // Like closing desktop's dialog: a snooze for this visit, the host keeps the offer.
   const [dismissed, setDismissed] = useState(false)
 
+  // Re-read on reconnect too: a Resume all cut off by a dropped socket may still have run on the host.
   useEffect(() => {
     if (!client || !connected || !relayed) {
       return
@@ -84,9 +91,10 @@ export function useAgentHistoryRestartOffer(
         ) {
           return
         }
-        const offered = await readOfferCount(client)
-        if (!cancelled && offered !== null) {
-          setCount(offered)
+        const read = await readOfferCounts(client)
+        if (!cancelled && read) {
+          setCounts(read)
+          setRequestFailed(false)
         }
       } catch {
         // No offer is shown when the host can't be asked.
@@ -98,7 +106,7 @@ export function useAgentHistoryRestartOffer(
   }, [client, connected, relayed])
 
   const resumeAll = useCallback(() => {
-    if (!client || resuming) {
+    if (!client || !connected || resuming) {
       return
     }
     setResuming(true)
@@ -109,17 +117,17 @@ export function useAgentHistoryRestartOffer(
           await restartContinueRun.request(
             client,
             {},
-            { timeoutMs: AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS }
+            // Never queue a bulk resume to run whenever the phone next reconnects.
+            { timeoutMs: AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS, failWhenDisconnected: true }
           )
         )
         if (!answer.accepted) {
           setRequestFailed(true)
           return
         }
-        setFailedCount(answer.value.failed?.length ?? 0)
-        const remaining = answer.value.sessions?.length ?? (await readOfferCount(client))
-        if (remaining !== null) {
-          setCount(remaining)
+        const after = offerCounts(answer.value) ?? (await readOfferCounts(client))
+        if (after) {
+          setCounts(after)
         }
       } catch {
         setRequestFailed(true)
@@ -127,11 +135,11 @@ export function useAgentHistoryRestartOffer(
         setResuming(false)
       }
     })()
-  }, [client, resuming])
+  }, [client, connected, resuming])
 
   const dismiss = useCallback(() => setDismissed(true), [])
 
   return dismissed
     ? { count: 0, resuming, failedCount: 0, requestFailed: false, resumeAll, dismiss }
-    : { count, resuming, failedCount, requestFailed, resumeAll, dismiss }
+    : { ...counts, resuming, requestFailed, resumeAll, dismiss }
 }
