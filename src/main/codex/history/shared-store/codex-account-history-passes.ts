@@ -39,8 +39,9 @@ export class CodexAccountHistoryPasses {
 
   private readonly requests = new CodexHistoryPassRequests()
   private readonly settledThisRun = new Map<string, boolean>()
-  // Homes whose lock folder can't link (another volume, a user's own link): retried next app start.
-  private readonly privateThisRun = new Set<string>()
+  // When a home's lock folder last failed to link (another volume, a user's own link, a full
+  // disk): a pass starts the helper again only after the busy retry's interval.
+  private readonly lockFolderFailedAt = new Map<string, number>()
   private readonly busyRetries = new Map<string, ReturnType<typeof setTimeout>>()
   private activePasses = 0
   // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
@@ -71,7 +72,8 @@ export class CodexAccountHistoryPasses {
         if (options.stillWanted && !options.stillWanted()) {
           return
         }
-        if (shared && this.privateThisRun.has(key)) {
+        const failedAt = this.lockFolderFailedAt.get(key)
+        if (shared && failedAt !== undefined && Date.now() - failedAt < BUSY_RETRY_MS) {
           return
         }
         if (this.settledThisRun.get(key) === shared) {
@@ -117,7 +119,7 @@ export class CodexAccountHistoryPasses {
     this.cancelRetry(key)
     try {
       if (!shared) {
-        this.privateThisRun.delete(key)
+        this.lockFolderFailedAt.delete(key)
         if (await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })) {
           this.settledThisRun.set(key, false)
           return 'unshared'
@@ -148,7 +150,7 @@ export class CodexAccountHistoryPasses {
         result === 'private' &&
         !(await isLinkedDirectory(join(accountHome, WRITER_LOCKS), join(storeHome, WRITER_LOCKS)))
       ) {
-        this.privateThisRun.add(key)
+        this.lockFolderFailedAt.set(key, Date.now())
       }
       return result
     } catch (error) {
