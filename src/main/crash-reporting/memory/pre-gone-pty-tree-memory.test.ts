@@ -44,6 +44,8 @@ describe('pre-gone PTY tree memory', () => {
           row(102, 101, 'node', 300, 1_200),
           row(200, 50, 'cmd', 5, 4),
           row(300, 50, 'conhost', 12, 20),
+          // A PTY the registry has no PID for.
+          row(400, 50, 'codex', 700, 2_000),
           row(999, 1, 'chrome', 2_000, 9_000)
         ],
         null,
@@ -69,34 +71,41 @@ describe('pre-gone PTY tree memory', () => {
     expect(preGonePtyTreeMemoryDetails(0)).toEqual({})
   })
 
-  it('sweeps under pressure, then again only as headroom falls or every 5 min', async () => {
-    const tick = async (atMs: number, freeMB: number) => {
+  it('sweeps once per pressure episode, then only at new lows', async () => {
+    let atMs = 0
+    const tick = async (freeMB: number) => {
       notePreGoneHostMemorySample(commitFree(freeMB), atMs, 'win32')
+      atMs += 10_000
       await new Promise((resolve) => setImmediate(resolve))
     }
-    // A steady 900 MB plateau for 4.5 min: one sweep.
-    for (let atMs = 0; atMs < 270_000; atMs += 10_000) {
-      await tick(atMs, 900)
+    // An hour on a 900 MB plateau, with a sawtooth back up to 1,500 MB: one sweep.
+    for (let i = 0; i < 360; i += 1) {
+      await tick(i % 6 === 3 ? 1_500 : 900)
     }
     expect(enumerateHostProcesses).toHaveBeenCalledTimes(1)
-    // Falling by at least min(512 MB, 25%) sweeps again; within 30 s it waits.
-    await tick(270_000, 650)
-    await tick(280_000, 300)
+    // A new low of at least min(512 MB, 25%) sweeps again.
+    await tick(650)
     expect(enumerateHostProcesses).toHaveBeenCalledTimes(2)
-    // Plateau again: next sweep 5 min after the last.
-    for (let atMs = 290_000; atMs <= 570_000; atMs += 10_000) {
-      await tick(atMs, 650)
-    }
+    // Hovering just above the threshold stays in the same episode.
+    await tick(4_200)
+    await tick(800)
+    expect(enumerateHostProcesses).toHaveBeenCalledTimes(2)
+    // Recovery ends the episode, so the next slide sweeps even from higher headroom.
+    await tick(12_000)
+    await tick(2_000)
     expect(enumerateHostProcesses).toHaveBeenCalledTimes(3)
-    expect(preGonePtyTreeMemoryDetails(575_000)).toEqual({
+    const sweptAtMs = atMs - 10_000
+    expect(preGonePtyTreeMemoryDetails(sweptAtMs + 5_000)).toEqual({
       ptyTreeMemoryPreGoneSampleAgeMs: 5_000,
       ptyTreeMemoryPreGonePtyCount: 2,
       ptyTreeMemoryPreGoneProcessCount: 4,
       ptyTreeMemoryPreGoneMemoryMetric: 'working-set',
       ptyTreeMemoryPreGoneMemoryMB: 1_245,
       ptyTreeMemoryPreGoneCommitMB: 7_234,
-      ptyTreeMemoryPreGoneDaemonMemoryMB: 132,
-      ptyTreeMemoryPreGoneDaemonCommitMB: 170,
+      ptyTreeMemoryPreGoneDaemonMemoryMB: 120,
+      ptyTreeMemoryPreGoneDaemonCommitMB: 150,
+      ptyTreeMemoryPreGoneUnattributedMemoryMB: 712,
+      ptyTreeMemoryPreGoneUnattributedCommitMB: 2_020,
       ptyTreeMemoryPreGoneTop1Name: 'claude',
       ptyTreeMemoryPreGoneTop1MemoryMB: 900,
       ptyTreeMemoryPreGoneTop1CommitMB: 6_000,
