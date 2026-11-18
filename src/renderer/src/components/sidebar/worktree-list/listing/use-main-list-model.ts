@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
+import { useBotListedWorktreeIdentities } from '@/components/bots/use-bot-listed-worktree-identities'
 import { useDesktopSidebarFeed } from '@/components/sidebar/sidebar-feed/desktop-sidebar-feed'
 import {
   overlaySidebarPendingLayer,
@@ -24,7 +25,7 @@ import {
   getLocalExecutionHostLabel,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { EMPTY_SIDEBAR_FEED_DOMAINS } from '../../../../../../shared/sidebar-feed-client/sidebar-feed-snapshot'
 import {
@@ -171,12 +172,15 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     filterRepoIds: filterState.filterRepoIds
   })
   const { importedWorktreesByRepo, newExternalWorktreesInboxByRepo } = externalWorktreeCards
+  // The window-model list leaves these out too (compute-visible-worktrees.ts).
+  const botListedWorktreeIdentities = useBotListedWorktreeIdentities()
   const planned = useMemo(
     () =>
       planSidebarFeedRows(domains, index, catalog, view, rankedIds, {
         forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
           ? [args.agentSendTargetWorktreeId]
           : undefined,
+        botListedWorktreeIdentities,
         importedWorktreesByRepo,
         newExternalWorktreesInboxByRepo
       }),
@@ -187,6 +191,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       view,
       rankedIds,
       args.agentSendTargetWorktreeId,
+      botListedWorktreeIdentities,
       importedWorktreesByRepo,
       newExternalWorktreesInboxByRepo
     ]

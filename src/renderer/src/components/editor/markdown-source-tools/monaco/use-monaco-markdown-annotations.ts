@@ -21,6 +21,7 @@ import { useAppStore } from '@/store/index'
 import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   formatMarkdownReviewNotes,
+  getMarkdownReviewHighlightedText,
   type MarkdownReviewNote
 } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
@@ -137,7 +138,10 @@ export function useMonacoMarkdownAnnotations(params: {
         top,
         left: mountedEditor
           ? (getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current) ?? undefined)
-          : undefined
+          : undefined,
+        // Snapshot at open so edits above the composer or later can't re-point the note's excerpt.
+        selectedText:
+          getMarkdownReviewHighlightedText(content, { lineNumber, startLine }) || undefined
       })
     },
     onDeleteComment: (id) => {

@@ -165,6 +165,8 @@ settings:
 patchedDependencies:
   braces@3.0.3: c07bb14cec04bc891e1fe529720444cc9729a25117f9aaf24253cfe3132a34fd
   minimatch@10.2.6: 4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6
+  picomatch@2.3.2: 1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254
+  picomatch@4.0.7: 7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c
 
 importers:
 
@@ -2328,7 +2330,7 @@ snapshots:
       minimist: 1.2.8
       oxc-resolver: 11.24.2
       picocolors: 1.1.1
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       smol-toml: 1.9.1
       strip-json-comments: 5.0.3
       typescript: 5.9.3
@@ -2409,7 +2411,7 @@ snapshots:
   micromatch@4.0.8:
     dependencies:
       braces: 3.0.3(patch_hash=c07bb14cec04bc891e1fe529720444cc9729a25117f9aaf24253cfe3132a34fd)
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254)
 
   mimic-function@5.0.1: {}
 
@@ -2527,9 +2529,9 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@2.3.2: {}
+  picomatch@2.3.2(patch_hash=1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254): {}
 
-  picomatch@4.0.7: {}
+  picomatch@4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c): {}
 
   playwright-core@1.64.1: {}
 

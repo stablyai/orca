@@ -4,8 +4,8 @@ import { isWorkspaceBoardKeepOpenTarget } from './use-workspace-kanban-outside-d
 import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
-} from '../../workspace-chrome-metrics'
-import { trackSidebarLiveWidth } from '../../sidebar-live-width'
+} from '../../../../app-shell/chrome/workspace-chrome-metrics'
+import { trackSidebarLiveWidth } from '../../chrome/sidebar-live-width'
 
 type WorkspaceKanbanSheetProps = {
   boardRef: React.RefObject<HTMLDivElement | null>

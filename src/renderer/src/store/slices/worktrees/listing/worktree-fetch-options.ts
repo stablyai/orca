@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 import type { SshExecutionHostId } from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { DirectSshAuthority } from '../../../../../../shared/remote-runtime/ssh/ssh-types'

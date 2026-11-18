@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import { expect, test } from './helpers/orca-app'
-import { disablePluginSystem, enableDevPlugins } from './helpers/plugin-smoke'
+import { expect, test } from './desktop/electron-fixtures/orca-app'
+import { disablePluginSystem, enableDevPlugins } from './plugins/plugin-smoke'
 
 test('left-navigation panels open a main page, support history and revoke mounted content', async ({
   orcaPage

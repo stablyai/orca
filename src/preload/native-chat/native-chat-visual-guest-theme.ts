@@ -3,7 +3,7 @@ import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_READ,
   NATIVE_CHAT_VISUAL_GUEST_THEME_UPDATE,
   type NativeChatVisualGuestTheme
-} from '../../shared/native-chat/native-chat-visual-shell'
+} from '../../shared/native-chat/visuals/native-chat-visual-shell'
 
 export function installNativeChatVisualGuestTheme(
   ipc: Pick<IpcRenderer, 'sendSync' | 'on'>,

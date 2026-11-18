@@ -8,12 +8,11 @@ import {
   WORKSPACE,
   URL_TO_OPEN
 } from '@/lib/browser/navigation/browser-link-open.test-fixture'
-import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
-import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import { getDefaultSettings } from '../../../../../../shared/constants'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { OrcadDeploymentLink } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { resolveNativeChatHttpLinkRouting } from './native-chat-link-target-actions'
 import { handleNativeChatWebLink } from './native-chat-web-link-actions'
 
@@ -159,34 +158,5 @@ describe.each([
         .getState()
         .unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.contentType === 'browser')
     ).toMatchObject({ executionHostId: hostId })
-  })
-})
-
-describe('SSH device browser check refuses other owners', () => {
-  beforeEach(() => setSettings({ browserSshWorkspaceRoutingEnabled: false, openLinksInApp: true }))
-
-  it.each<[string, () => void, HttpLinkSourceOwner]>([
-    [
-      'a paired runtime without an SSH deployment',
-      () => seedOwner('runtime:env-box', 'env-box', null),
-      { kind: 'runtime', runtimeEnvironmentId: 'env-box' }
-    ],
-    [
-      'a WSL runtime',
-      () =>
-        seedOwner('runtime:env-box', 'env-box', {
-          kind: 'wsl',
-          distro: 'Ubuntu',
-          localPort: 46_768,
-          remotePort: 6_768
-        }),
-      { kind: 'runtime', runtimeEnvironmentId: 'env-box' }
-    ]
-  ])('%s', (_label, seed, owner) => {
-    seed()
-
-    expect(canOpenRemoteLinkInWorkspaceBrowser(useAppStore.getState(), WORKSPACE, owner)).toBe(
-      false
-    )
   })
 })

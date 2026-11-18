@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { ButtonKeyHint } from '@/components/ButtonKeyHint'
+import { ButtonKeyHint } from '@/components/ui/ButtonKeyHint'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
 type NewWorkspaceComposerFooterProps = Pick<

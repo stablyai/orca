@@ -89,10 +89,10 @@ export function renderMobileTasksSupportState(
     return (
       <MobileStateView
         icon={CircleAlert}
-        title={translate('tasks.listSurface.updateDesktopTitle', 'Update Orca desktop')}
+        title={translate('tasks.listSurface.updateDesktopTitle', 'Update Orca on this host')}
         message={translate(
           'tasks.listSurface.updateDesktopMessage',
-          'This mobile Tasks view needs a newer desktop runtime.'
+          'This mobile Tasks view needs a newer Orca on this host.'
         )}
         bottomInset={bottomBarHeight}
       />

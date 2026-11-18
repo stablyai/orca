@@ -1,7 +1,7 @@
 import React from 'react'
 import { LoaderCircle, PanelRight, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import type { GitLabProjectRef } from '../../../../../../shared/gitlab/gitlab-types'

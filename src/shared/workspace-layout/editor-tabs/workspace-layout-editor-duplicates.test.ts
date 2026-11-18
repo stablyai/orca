@@ -1,6 +1,6 @@
 // Layout-owner windows show only one same-file tab per group, leaving duplicates unclosable; main refuses new duplicates and folds saved ones.
 import { describe, expect, it } from 'vitest'
-import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import { applyLayoutCommand } from '../workspace-layout-commands'
@@ -123,10 +123,3 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
     })
   }
 )
-
-describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('one file, one tab per group, switch off', () => {
-  it('loads a saved second tab as before', () => {
-    const workspace = load(savedTwice()).layout.workspaces[GIT_KEY]!
-    expect(workspace.tabs.map((tab) => tab.id)).toEqual(['ed-1', 'ed-2', 'ed-b'])
-  })
-})

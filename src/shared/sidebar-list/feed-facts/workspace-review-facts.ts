@@ -5,7 +5,7 @@ import { getGitHubPRCacheKeyCandidates } from '../../github/cache/github-cache-k
 import { isGitHubPRSuppressed } from '../../worktree/hosted-review/github-pr-suppression'
 import { getPRGroupKeyForState, type PRGroupKey } from '../../workspace-view/workspace-pr-groups'
 import type { PairedServerWorkspaceRow } from './paired-server-rows'
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey

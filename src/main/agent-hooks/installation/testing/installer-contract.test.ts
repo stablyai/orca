@@ -99,6 +99,8 @@ describe('writeHooksJson', () => {
   })
 })
 
+const paneEnv = { ...process.env, ORCA_PANE_KEY: 'tab-1:leaf-1' }
+
 describe('wrapPosixHookCommand', () => {
   it.skipIf(process.platform === 'win32')(
     'executes a script whose path contains a single quote literally',
@@ -109,6 +111,7 @@ describe('wrapPosixHookCommand', () => {
       const result = runProcessSync({
         program: '/bin/sh',
         args: ['-c', wrapPosixHookCommand(scriptPath)],
+        env: paneEnv,
         timeoutMs: 5000
       })
       expect(result.code).toBe(0)
@@ -129,7 +132,7 @@ describe('wrapPosixHookCommand', () => {
       const result = runProcessSync({
         program: '/bin/sh',
         args: ['-c', `${command}; printf '\n%s' "$ORCA_COPILOT_HOOK_EVENT"`],
-        env: { ...process.env, ORCA_COPILOT_HOOK_EVENT: 'parent-value' },
+        env: { ...paneEnv, ORCA_COPILOT_HOOK_EVENT: 'parent-value' },
         timeoutMs: 5000
       })
       expect(result.code).toBe(0)
@@ -161,7 +164,12 @@ describe('wrapPosixHookCommand', () => {
       writeFileSync(scriptPath, '#!/bin/sh\nexit 7\n', 'utf-8')
       chmodSync(scriptPath, 0o755)
       const cmd = wrapPosixHookCommand(scriptPath)
-      const result = runProcessSync({ program: '/bin/sh', args: ['-c', cmd], timeoutMs: 5000 })
+      const result = runProcessSync({
+        program: '/bin/sh',
+        args: ['-c', cmd],
+        env: paneEnv,
+        timeoutMs: 5000
+      })
       expect(result.code).toBe(7)
     }
   )
@@ -225,7 +233,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
       program: shell,
       args: ['-c', wrapRuntimeHomeHookCommand('claude-hook')],
       env: {
-        ...process.env,
+        ...paneEnv,
         HOME: destinationHome.replaceAll('\\', '/'),
         USERPROFILE: destinationHome
       },

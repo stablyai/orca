@@ -1,14 +1,15 @@
 import type { MutableRefObject } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { SpeechModelState } from '../../../../../shared/speech/speech-types'
 import type { SourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
-import { getDefaultVoiceSettings } from '../../../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../../../shared/orca-profiles/constants'
 import type {
   SettingsNavSection,
   SettingsNavTarget
 } from '@/components/settings/navigation/settings-navigation-types'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
+import { botSettingsSectionId } from '../bots/bot-settings-section-ids'
 import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
 import { parseSettingsTitleTargetId } from '../section-layout/settings-target-highlight'
 
@@ -48,7 +49,9 @@ export const SETTINGS_NAV_GROUPS = [
     id: 'experimental',
     titleKey: 'auto.components.settings.Settings.8b017f2506',
     titleDefault: 'Experimental'
-  }
+  },
+  // Last, so it sits directly above Projects, as bots sit above the projects in the sidebar.
+  { id: 'bots', titleKey: 'settings.bots.title', titleDefault: 'Bots' }
 ] as const
 
 export type SettingsNavGroupDefinition = (typeof SETTINGS_NAV_GROUPS)[number]
@@ -64,8 +67,12 @@ export const SETTINGS_TARGET_HIGHLIGHT_MS = 3_000
 export function getSettingsSectionId(
   pane: SettingsNavTarget,
   repoId: string | null,
-  repoIdToRepresentative: Map<string, string>
+  repoIdToRepresentative: Map<string, string>,
+  sectionId?: string
 ): string {
+  if (pane === 'bots' && sectionId) {
+    return botSettingsSectionId(sectionId)
+  }
   if (pane === 'repo' && repoId) {
     // Each project has one pane; map every host’s repo ID to its representative.
     return `repo-${repoIdToRepresentative.get(repoId) ?? repoId}`

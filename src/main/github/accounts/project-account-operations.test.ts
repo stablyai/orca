@@ -39,7 +39,7 @@ vi.mock('../../source-control/forge-provider-detection', () => ({
 }))
 vi.mock('../../source-control/hosted-review-creation-git-state', async (original) => ({
   ...(await original()),
-  getCurrentBranch: async () => 'feature',
+  getCurrentBranchAndHead: async () => ({ branch: 'feature', headOid: null }),
   hasUncommittedChanges: async () => false,
   getHostedReviewUpstreamStatus: async () => ({ hasUpstream: true, ahead: 0, behind: 0 }),
   baseRefExistsOnRemote: async () => true,

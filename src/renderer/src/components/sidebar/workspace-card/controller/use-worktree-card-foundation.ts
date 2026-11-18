@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/constants'
+import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { getWorktreeCardDetails } from '../../../../../../shared/worktree/row-display/card-properties'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
@@ -24,8 +24,9 @@ import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-st
 
 export function useWorktreeCardFoundation({
   worktree,
-  repo
-}: Pick<WorktreeCardProps, 'worktree' | 'repo'>) {
+  repo,
+  compactLine = false
+}: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'compactLine'>) {
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
@@ -44,8 +45,10 @@ export function useWorktreeCardFoundation({
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
-  const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
-  const compactWorktreeCards = settings?.compactWorktreeCards === true
+  // A one-line card is always the Compact card, which only the default style has.
+  const drawsNewCards = useAppStore(selectDrawsNewWorktreeCards)
+  const newCardStyle = drawsNewCards && !compactLine
+  const compactWorktreeCards = compactLine || settings?.compactWorktreeCards === true
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),
     [cardProps, compactWorktreeCards, newCardStyle]
@@ -243,6 +246,7 @@ export function useWorktreeCardFoundation({
     isSshDisconnected,
     sshTargetRemoved,
     parsedRepoHost,
+    runtimeHostId,
     runtimeHostLabel,
     isRuntimeDisconnected,
     titleRenaming,

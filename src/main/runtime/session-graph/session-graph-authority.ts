@@ -5,7 +5,7 @@ import {
   getRepoSshConnectionId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as ResolveBrowserNetworkExecutionHostForWorktreeMethods } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithHasTerminalsForWorktree } from './session-graph-reload-lifecycle'
@@ -75,9 +75,10 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalIdentity.clearHandles()
     this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
-    this.terminalWaiters.rejectAll('terminal_handle_stale')
+    this.terminalWaiters.rejectRendererBound('terminal_handle_stale')
     this.refreshWritableFlags()
     this.releaseUnseededPhoneFrames()
+    this.releaseAgentSenderHistoryIfUnobserved()
   }
 
   protected shouldRestoreHeadlessGraph(windowId: number): boolean {
@@ -96,10 +97,11 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalIdentity.clearHandles()
     this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
-    this.terminalWaiters.rejectAll('terminal_handle_stale')
+    this.terminalWaiters.rejectRendererBound('terminal_handle_stale')
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
     this.releaseUnseededPhoneFrames()
+    this.releaseAgentSenderHistoryIfUnobserved()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       this.headlessGraphFallbackAvailable = true
       startedMainTerminalSurfaces(this)?.republish({ force: true })

@@ -9,7 +9,7 @@ import { relayBundleCandidates } from '../../../wsl/execution/relay-bundle-paths
 import { ensureWslPinnedRuntime } from '../../../wsl/execution/wsl-pinned-runtime'
 import { runWslProcess, type WslSpec } from '../../../wsl/execution/wsl-runner'
 import { describeWslProcessFailure } from '../../../wsl/execution/wsl-process-failure'
-import { translateArgsForWsl } from '../../../git/command-runner/host-routing/wsl-path-translation'
+import { resolveWslGuestPaths } from '../../../wsl/filesystem/wsl-guest-drive-path'
 import { spawnSourceControlAgent } from '../../../text-generation/execution/source-control-agent-launch'
 import { killSourceControlAgentProcess } from '../../../text-generation/execution/source-control-agent-termination'
 import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../../text-generation/execution/source-control-generation-limits'
@@ -52,6 +52,7 @@ export type OpenCodeWslTextTaskDeps = {
   prepare?: (distro: string) => Promise<OpenCodeWslGuestRuntime>
   spawnAgent?: SpawnSourceControlAgent
   stop?: (child: SpawnedSourceControlAgentProcess) => Promise<void>
+  resolveGuestPaths?: typeof resolveWslGuestPaths
 }
 
 const PREPARATION_TIMEOUT_MS = 180_000
@@ -127,6 +128,26 @@ async function prepareOpenCodeWslTextTask(
   }
 }
 
+async function guestArgs(
+  input: OpenCodeWslTextTask,
+  signal: AbortSignal,
+  deps: OpenCodeWslTextTaskDeps
+): Promise<[string[], string[]]> {
+  try {
+    const all = await (deps.resolveGuestPaths ?? resolveWslGuestPaths)(
+      input.distro,
+      [...input.prefixArgs, ...input.runArgs],
+      signal
+    )
+    return [all.slice(0, input.prefixArgs.length), all.slice(input.prefixArgs.length)]
+  } catch (error) {
+    if (signal.aborted) {
+      throw signal.reason
+    }
+    throw new OpenCodeTextTaskError('startup', { cause: error })
+  }
+}
+
 export async function runOpenCodeWslTextTask(
   input: OpenCodeWslTextTask,
   deps: OpenCodeWslTextTaskDeps = {}
@@ -135,6 +156,8 @@ export async function runOpenCodeWslTextTask(
   const { signal } = input
   const runtime = await prepareOpenCodeWslTextTask(input.distro, signal, deps)
   signal.throwIfAborted()
+  // Existing WSL launches translate Windows paths in every argument, e.g. `--file C:\x`.
+  const [prefixArgs, runArgs] = await guestArgs(input, signal, deps)
   if (input.shouldExecute?.() === false) {
     throw new OpenCodeTextTaskError('superseded')
   }
@@ -189,10 +212,9 @@ export async function runOpenCodeWslTextTask(
       `${JSON.stringify({
         nonce,
         binary: input.binary,
-        prefixArgs: translateArgsForWsl([...input.prefixArgs]),
+        prefixArgs,
         prompt: input.prompt,
-        // Existing WSL launches translate Windows paths in every argument, e.g. `--file C:\x`.
-        runArgs: translateArgsForWsl([...input.runArgs]),
+        runArgs,
         legacyVariantFlag: input.legacyVariantFlag,
         operation: input.operation,
         commandEnv: input.commandEnv,

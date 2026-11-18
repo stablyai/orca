@@ -10,7 +10,7 @@ import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-la
 import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentLaunchProfileSettings } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { buildAiVaultResumeStartupForWorktree } from './ai-vault-resume-command'
 import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 

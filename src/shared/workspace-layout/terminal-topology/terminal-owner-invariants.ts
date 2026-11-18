@@ -1,4 +1,4 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
 import { parseAppSshPtyId } from '../../remote-runtime/ssh/ssh-pty-id'
 import { isTerminalLeafId } from '../stable-pane-id'
 import type { TerminalTab } from '../terminal-tab-types'

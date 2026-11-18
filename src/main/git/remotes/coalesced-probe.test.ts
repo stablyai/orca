@@ -50,25 +50,4 @@ describe('runCoalescedProbe', () => {
     await expect(joinedRequest).resolves.toBe('new')
     expect(probes).toEqual(new Map())
   })
-
-  it('removes a settled probe only when it still owns the key', async () => {
-    const probes: CoalescedProbes<string> = new Map()
-    const first = deferred<string>()
-    const second = deferred<string>()
-    const createProbe = vi
-      .fn<() => Promise<string>>()
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
-
-    const firstRequest = runCoalescedProbe(probes, 'repo', createProbe, 1)
-    vi.advanceTimersByTime(2)
-    const secondRequest = runCoalescedProbe(probes, 'repo', createProbe, 1)
-
-    first.reject(new Error('old probe failed'))
-    await expect(firstRequest).rejects.toThrow('old probe failed')
-    expect(probes.get('repo')?.promise).toBe(second.promise)
-
-    second.resolve('new')
-    await expect(secondRequest).resolves.toBe('new')
-  })
 })

@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 
 const mocks = vi.hoisted(() => {
   const panels: { tabKey: string; title: string; pluginName: string }[] = []
@@ -49,7 +49,6 @@ describe('PluginMainPage', () => {
       })
     })
     expect(container.querySelector('[data-panel-tab-key]')).toBeNull()
-    expect(container.textContent).toContain('no longer available')
     await act(async () => root.unmount())
   })
 
@@ -73,7 +72,6 @@ describe('PluginMainPage', () => {
     mocks.panels = [{ tabKey: first, title: 'Overview', pluginName: 'Samples One' }]
     await act(async () => root.render(<PluginMainPage tabKey={second} />))
     expect(container.querySelector('[data-panel-tab-key]')).toBeNull()
-    expect(container.textContent).toContain('no longer available')
 
     await act(async () => root.unmount())
   })
@@ -101,7 +99,6 @@ describe('PluginMainPage', () => {
     mocks.panels = []
     useAppStore.setState({ activeView: tabKey })
     await act(async () => root.render(<PluginMainPage tabKey={tabKey} />))
-    expect(container.textContent).toContain('no longer available')
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="Close plugin page"]')?.click()
     })

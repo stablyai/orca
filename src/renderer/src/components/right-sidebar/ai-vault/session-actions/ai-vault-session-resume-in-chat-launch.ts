@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
-import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'

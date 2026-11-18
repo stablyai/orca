@@ -1,5 +1,5 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultUIState } from '../../../shared/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { getDefaultUIState } from '../../../shared/orca-profiles/constants'
 import { isPluginPanelTabKey } from '../../../shared/plugins/manifest/plugin-manifest'
 
 export function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
@@ -79,7 +79,11 @@ export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['ri
     tab === 'pr-checks' ||
     tab === 'source-control' ||
     tab === 'checks' ||
-    tab === 'ports'
+    tab === 'ports' ||
+    tab === 'bot-activity' ||
+    tab === 'bot-automations' ||
+    tab === 'bot-connectors' ||
+    tab === 'bot-chats'
   ) {
     return tab
   }

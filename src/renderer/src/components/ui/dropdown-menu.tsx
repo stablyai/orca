@@ -133,7 +133,7 @@ function DropdownMenuItem({
   inset?: boolean
   /** `launch`: rows in the shared agent menu; at least 36px tall in either density.
    *  `sortable`: compact drag-handle rows that lift while `data-dragging` is set. */
-  variant?: 'default' | 'destructive' | 'launch' | 'sortable'
+  variant?: 'default' | 'destructive' | 'launch' | 'sortable' | 'create'
   density?: MenuDensity
 }) {
   const rowDensity = useMenuDensity(density)
@@ -142,7 +142,11 @@ function DropdownMenuItem({
       data-slot="dropdown-menu-item"
       data-inset={inset}
       data-variant={variant}
-      className={cn(menuItemVariants({ density: rowDensity, menu: 'dropdown' }), className)}
+      className={cn(
+        menuItemVariants({ density: rowDensity, menu: 'dropdown' }),
+        'data-[variant=create]:rounded-[7px] data-[variant=create]:px-2 data-[variant=create]:py-1.5 data-[variant=create]:text-[12px] data-[variant=create]:leading-5 data-[variant=create]:font-medium',
+        className
+      )}
       onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}
       onPointerLeave={keepFocusWhileMenuCloses(onPointerLeave)}
       {...props}

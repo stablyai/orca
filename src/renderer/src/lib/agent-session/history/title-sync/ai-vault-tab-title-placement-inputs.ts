@@ -1,8 +1,16 @@
 import type { AppState } from '@/store/types'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+
+type PlacementInputs = Pick<
+  AppState,
+  | 'agentStatusByPaneKey'
+  | 'sleepingAgentSessionsByPaneKey'
+  | 'agentConversationsByPaneKey'
+  | 'terminalLayoutsByTabId'
+>
 
 type TitleFact =
   | NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>
@@ -17,7 +25,7 @@ export function titleRelevant(entry: TitleFact | undefined): boolean {
   )
 }
 
-function paneHasTitleFact(state: AppState, key: string): boolean {
+function paneHasTitleFact(state: PlacementInputs, key: string): boolean {
   return [
     state.agentStatusByPaneKey.get(key),
     state.sleepingAgentSessionsByPaneKey[key],
@@ -25,7 +33,7 @@ function paneHasTitleFact(state: AppState, key: string): boolean {
   ].some(titleRelevant)
 }
 
-export function placedPanesEqual(current: AppState, previous: AppState): boolean {
+export function placedPanesEqual(current: PlacementInputs, previous: PlacementInputs): boolean {
   const changes = readRecordChanges(current.terminalLayoutsByTabId, previous.terminalLayoutsByTabId)
   const tabs =
     changes?.kind === 'addressed'
