@@ -213,7 +213,6 @@
 2 src/main/daemon/launch/daemon-protocol-cleanup.ts
 11 src/main/daemon/launch/daemon-spawner.ts
 1 src/main/daemon/launch/daemon-stale-kill.ts
-1 src/main/daemon/observability/daemon-adoption-telemetry-event.ts
 1 src/main/daemon/observability/daemon-file-log.ts
 3 src/main/daemon/permissions/daemon-tcc-attribution.ts
 5 src/main/daemon/process-scopes/daemon-cgroup-scope.ts
