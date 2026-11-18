@@ -6,6 +6,7 @@ import { spawnJournalSqlReader, type JournalSqlReaderWorker } from './journal-sq
 
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import {
   claimJournalReaderRecord,
   describeJournalReaderOperation,
@@ -187,10 +188,7 @@ export class ReaderSlot {
   private send(
     operation: JournalSqlReaderOperation,
     { signal, chat }: { signal?: AbortSignal; chat?: string | null } = {}
-  ): {
-    id: number
-    result: Promise<JournalSqlReaderResult>
-  } {
+  ): { id: number; result: Promise<JournalSqlReaderResult> } {
     const id = ++this.nextId
     if (this.closing) {
       return {
@@ -233,7 +231,8 @@ export class ReaderSlot {
         }
       })
       this.recordRunning()
-      void this.ready.promise
+      // A read withdrawn while its reader is still opening leaves at once.
+      void waitForPromiseWithSignal(this.ready.promise, admits ? signal : undefined)
         .then(async () => {
           if (!admits || !this.pending.has(id)) {
             return

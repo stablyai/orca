@@ -101,7 +101,10 @@ port.on('message', ({ data: request }) => {
       )
       worker.once('exit', (code) => {
         workers.delete(id)
-        budget.after(id, () => port.postMessage({ type: 'exit', id, code }))
+        budget.after(id, () => {
+          budget.forget(id)
+          port.postMessage({ type: 'exit', id, code })
+        })
       })
     } catch (error) {
       port.postMessage({ type: 'error', id, error: failure(error) })

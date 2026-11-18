@@ -108,11 +108,12 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
     }))
   )
   heaps.sort((a, b) => b.heap - a.heap)
-  // After the worker reads, which can take seconds, so main's figure is current.
+  // After the worker reads, which can take seconds, so main's and the ledger's figures are current.
+  const sent = new Map(readWorkerSendLedger().map((slot) => [slot.threadId, slot]))
   const mainHeap = getHeapStatistics().total_heap_size
   const total = heaps.reduce((sum, { heap }) => sum + heap, mainHeap)
   const retention = readRetention()
-  annotateCrashReport(mainHeap, total, heaps, ledger, retention)
+  annotateCrashReport(mainHeap, total, heaps, sent, retention)
   noteMainCageHeap(total, mainHeap)
   if (total >= BREADCRUMB_BYTES) {
     const data: CrashReportBreadcrumbData = {
