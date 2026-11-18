@@ -1,10 +1,16 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { captureBrowserLinkReveal } from '@/lib/browser/navigation/browser-link-reveal'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import type { AddRepoDefaultCheckoutHandoffSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { EventProps } from '../../../../../../shared/telemetry/telemetry-event-classification'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
+import {
+  splitPathSegments,
+  relativePathInsideRoot
+} from '../../../../../../shared/file-access/cross-platform-path'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { worktreeMatchesHost } from '@/store/slices/worktrees/listing/worktree-host-ownership'
@@ -25,6 +31,8 @@ import {
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
 
+let handoffGeneration = 0
+
 function findProjectRepo(repoId: string, executionHostId?: ExecutionHostId): Repo | null {
   const matches = useAppStore
     .getState()
@@ -38,7 +46,11 @@ function getProjectInitialCheckout<T extends Worktree>(
   worktrees: readonly T[],
   selectedPath: string
 ): T | null {
-  if (selectedPath.split(/[\\/]/).some((segment) => segment === '.' || segment === '..')) {
+  if (
+    splitPathSegments(selectedPath, selectedPath).some(
+      (segment) => segment === '.' || segment === '..'
+    )
+  ) {
     return null
   }
   let containing: T | null = null
@@ -144,37 +156,91 @@ export async function openProjectDefaultCheckout({
   selectedPath?: string
   executionHostId?: ExecutionHostId
 }): Promise<void> {
-  const repo = findProjectRepo(repoId, executionHostId)
-  const ownerHostId = executionHostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
-  const { worktree: defaultCheckout, reason } =
-    repo && ownerHostId
-      ? await resolveInitialCheckout(repo, selectedPath ?? repo.path, ownerHostId)
-      : { worktree: null, reason: 'no_default_checkout' as const }
+  const generation = ++handoffGeneration
+  const reveal = captureBrowserLinkReveal(
+    useAppStore.getState,
+    useAppStore.subscribe,
+    () => generation === handoffGeneration && useAppStore.getState().activeModal === null
+  )
+  try {
+    const repo = findProjectRepo(repoId, executionHostId)
+    const ownerHostId = executionHostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+    const { worktree: defaultCheckout, reason } =
+      repo && ownerHostId
+        ? await resolveInitialCheckout(repo, selectedPath ?? repo.path, ownerHostId)
+        : { worktree: null, reason: 'no_default_checkout' as const }
 
-  if (defaultCheckout) {
+    if (!reveal.canReveal()) {
+      return
+    }
+    if (defaultCheckout) {
+      track('add_repo_default_checkout_handoff', {
+        source,
+        result: defaultCheckout.isMainWorktree
+          ? 'opened_default_checkout'
+          : 'opened_selected_checkout',
+        reason
+      })
+      const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
+      // Why user-open: adding the project is the user's open, so its first tab follows their Chat UI/Terminal choice.
+      activateAndRevealWorktree(defaultCheckout.id, {
+        navigationIntent: 'user-open',
+        ...(initialCwd ? { initialCwd } : {}),
+        ...(ownerHostId ? { executionHostId: ownerHostId } : {})
+      })
+      return
+    }
+
     track('add_repo_default_checkout_handoff', {
       source,
-      result: defaultCheckout.isMainWorktree
-        ? 'opened_default_checkout'
-        : 'opened_selected_checkout',
+      result: 'revealed_project',
       reason
     })
-    const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
-    // Why user-open: adding the project is the user's open, so its first tab follows their Chat UI/Terminal choice.
-    activateAndRevealWorktree(defaultCheckout.id, {
-      navigationIntent: 'user-open',
-      ...(initialCwd ? { initialCwd } : {}),
-      ...(ownerHostId ? { executionHostId: ownerHostId } : {})
-    })
-    return
+    finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
+    const description =
+      !repo || !ownerHostId
+        ? translate(
+            'projectAdmission.checkout.ownerUnavailable',
+            'The project host could not be identified. Add the project again from the intended host.'
+          )
+        : reason === 'show_detected_default_failed'
+          ? translate(
+              'projectAdmission.checkout.saveFailed',
+              'Could not save the selected checkout’s visibility. Retry to open it.'
+            )
+          : reason === 'no_default_checkout' || reason === 'refreshed_default_missing'
+            ? translate(
+                'projectAdmission.checkout.missing',
+                'The selected folder could not be matched to an available checkout on this host.'
+              )
+            : translate(
+                'projectAdmission.checkout.refreshFailed',
+                'Could not refresh checkouts on the selected host. Retry when the host is available.'
+              )
+    toast.error(
+      translate('projectAdmission.checkout.openFailed', 'Could not open selected checkout'),
+      {
+        description,
+        ...(repo && ownerHostId
+          ? {
+              action: {
+                label: translate('common.retry', 'Retry'),
+                onClick: () => {
+                  void openProjectDefaultCheckout({
+                    repoId,
+                    source,
+                    selectedPath,
+                    executionHostId: ownerHostId
+                  })
+                }
+              }
+            }
+          : {})
+      }
+    )
+  } finally {
+    reveal.dispose()
   }
-
-  track('add_repo_default_checkout_handoff', {
-    source,
-    result: 'revealed_project',
-    reason
-  })
-  finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
 }
 
 export async function finishProjectAddWithDefaultCheckout({

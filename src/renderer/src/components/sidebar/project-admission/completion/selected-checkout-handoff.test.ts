@@ -8,12 +8,23 @@ import { keepImportedWorktreesHiddenCard } from '../../worktree-list/listing/imp
 import { importNewExternalWorktreeInboxPaths } from '../../worktree-list/listing/new-external-worktrees-inbox-actions'
 import { openProjectDefaultCheckout } from './project-added-default-checkout'
 
-const harness = vi.hoisted(() => ({
-  state: null as AppState | null,
+const harness: {
+  state: AppState | null
+  activate: ReturnType<typeof vi.fn>
+  persist: ReturnType<typeof vi.fn>
+  subscribe: ReturnType<typeof vi.fn>
+  error: ReturnType<typeof vi.fn>
+} = vi.hoisted(() => ({
+  state: null,
   activate: vi.fn(),
-  persist: vi.fn()
+  persist: vi.fn(),
+  subscribe: vi.fn(),
+  error: vi.fn()
 }))
-vi.mock('@/store/index', () => ({ useAppStore: { getState: () => harness.state! } }))
+vi.mock('@/store/index', () => ({
+  useAppStore: { getState: () => harness.state!, subscribe: harness.subscribe }
+}))
+vi.mock('sonner', () => ({ toast: { error: harness.error } }))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: harness.activate
 }))
@@ -38,15 +49,25 @@ function checkout(path: string, extra: Partial<DetectedWorktree> = {}): Detected
     id: `project::${path}`,
     repoId: 'project',
     path,
-    name: path,
+    displayName: path,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
     branch: 'topic',
     head: 'abc',
+    isBare: false,
+    ownership: 'external',
+    selectedCheckout: path === '/repo',
     isMainWorktree: path === '/repo',
     isArchived: false,
     lastActivityAt: 0,
     visible: true,
     ...extra
-  } as DetectedWorktree
+  }
 }
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -66,17 +87,22 @@ function setup(rows: DetectedWorktree[], repos: Repo[] = [repo], confirmationFai
   vi.stubGlobal('window', { api: { repos: { update: harness.persist } } })
   const store = createStore<AppState>()(
     (set, get) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies every field read by the handoff and updater; unrelated app slices are not exercised.
       ({
         repos,
         projects: [],
         projectHostSetups: [],
         settings: {},
+        activeModal: null,
+        activeView: 'terminal',
+        activeWorktreeId: null,
+        activeWorkspaceExecutionHostId: null,
         worktreesByRepo: {},
         detectedWorktreesByRepo: {},
         hideDefaultBranchWorkspace: true,
         filterRepoIds: [],
         showSleepingWorkspaces: true,
-        setHideDefaultBranchWorkspace: vi.fn(),
+        setHideDefaultBranchWorkspace: (hide: boolean) => set({ hideDefaultBranchWorkspace: hide }),
         setActiveRepo: vi.fn(),
         setProjectFilterIds: vi.fn(),
         ...createRepoUpdateActions(set, get),
@@ -107,6 +133,7 @@ function setup(rows: DetectedWorktree[], repos: Repo[] = [repo], confirmationFai
   const synchronize = () => {
     harness.state = store.getState()
   }
+  harness.subscribe.mockImplementation((listener) => store.subscribe(listener))
   store.subscribe(synchronize)
   synchronize()
   return { store, persisted }
@@ -154,15 +181,92 @@ describe('selected checkout handoff', () => {
     }
   )
 
-  it('retains imported intent without activating a substitute when confirmation fails', async () => {
-    const { persisted } = setup(
-      [checkout('/repo'), checkout('/selected', { visible: false })],
-      [repo],
-      true
+  it('retains saved intent and offers a working retry when confirmation fails', async () => {
+    const { store, persisted } = setup([
+      checkout('/repo'),
+      checkout('/selected', { visible: false })
+    ])
+    const refresh = store.getState().fetchWorktrees
+    const confirmation = deferred<boolean>()
+    let retry: (() => void) | undefined
+    harness.error.mockImplementation((_message, options) => {
+      retry = options.action?.onClick
+    })
+    harness.subscribe.mockImplementation((listener) => store.subscribe(listener))
+    const scan = vi.spyOn(store.getState(), 'fetchWorktrees')
+    scan.mockImplementationOnce(refresh).mockImplementationOnce(() => confirmation.promise)
+    const handoff = open('/selected', 'local')
+    await vi.waitFor(() =>
+      expect(persisted.get('local')?.importedExternalWorktreePaths).toEqual(['/selected'])
     )
-    await open('/selected', 'local')
+    confirmation.resolve(false)
+    await handoff
     expect(persisted.get('local')?.importedExternalWorktreePaths).toEqual(['/selected'])
     expect(harness.activate).not.toHaveBeenCalled()
+    expect(retry).toEqual(expect.any(Function))
+    retry!()
+    await vi.waitFor(() =>
+      expect(harness.activate).toHaveBeenCalledWith('project::/selected', {
+        navigationIntent: 'user-open',
+        executionHostId: 'local'
+      })
+    )
+  })
+
+  it('offers retry after a failed visibility write without importing siblings', async () => {
+    const { persisted } = setup([
+      checkout('/repo'),
+      checkout('/selected', { visible: false }),
+      checkout('/sibling', { visible: false })
+    ])
+    harness.persist.mockRejectedValueOnce(new Error('save unavailable'))
+    let retry: (() => void) | undefined
+    harness.error.mockImplementation((_message, options) => {
+      retry = options.action?.onClick
+    })
+    await open('/selected', 'local')
+    expect(persisted.get('local')?.importedExternalWorktreePaths).toBeUndefined()
+    expect(harness.activate).not.toHaveBeenCalled()
+    expect(retry).toEqual(expect.any(Function))
+    retry!()
+    await vi.waitFor(() =>
+      expect(persisted.get('local')?.importedExternalWorktreePaths).toEqual(['/selected'])
+    )
+  })
+
+  it('keeps later navigation even when the user returns while a scan is pending', async () => {
+    const { store } = setup([checkout('/repo'), checkout('/selected', { visible: false })])
+    const refresh = store.getState().fetchWorktrees
+    const gate = deferred<boolean>()
+    vi.spyOn(store.getState(), 'fetchWorktrees').mockImplementationOnce(async () => {
+      await gate.promise
+      return refresh('project', { executionHostId: 'local' })
+    })
+    const handoff = open('/selected', 'local')
+    store.setState({ activeWorktreeId: 'project::/elsewhere' })
+    store.setState({ activeWorktreeId: null })
+    gate.resolve(true)
+    await handoff
+    expect(harness.activate).not.toHaveBeenCalled()
+    expect(harness.error).not.toHaveBeenCalled()
+  })
+
+  it('does not clear the hidden-default preference on failure with a loaded main checkout', async () => {
+    const { store } = setup([checkout('/repo')])
+    await store.getState().fetchWorktrees('project', { executionHostId: 'local' })
+    await open('/missing', 'local')
+    expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
+    expect(harness.activate).not.toHaveBeenCalled()
+  })
+
+  it('accepts literal backslashes inside a POSIX checkout name', async () => {
+    setup([checkout('/repo'), checkout('/repo/a\\..\\b')])
+    await open('/repo/a\\..\\b/src', 'local')
+    expect(harness.activate).toHaveBeenCalledWith('project::/repo/a\\..\\b', {
+      navigationIntent: 'user-open',
+      initialCwd: '/repo/a\\..\\b/src',
+      executionHostId: 'local'
+    })
   })
 
   it('ignores a same-id remote checkout and refuses ambiguous owner inference', async () => {

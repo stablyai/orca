@@ -167,7 +167,13 @@ test('runtime reuse and targeted import discard the recent host catalog', async 
     if (!added.ok) {
       throw new Error(added.error.message)
     }
-    const { repo } = added.result as { repo: { id: string } }
+    if (!added.result || typeof added.result !== 'object' || !('repo' in added.result)) {
+      throw new Error('Missing runtime project')
+    }
+    const repo = added.result.repo
+    if (!repo || typeof repo !== 'object' || !('id' in repo) || typeof repo.id !== 'string') {
+      throw new Error('Missing runtime project ID')
+    }
     const primed = await window.api.runtime.call({
       method: 'worktree.detectedList',
       params: { repo: repo.id }
@@ -241,4 +247,67 @@ test('runtime reuse and targeted import discard the recent host catalog', async 
     body: JSON.stringify(result, null, 2),
     contentType: 'application/json'
   })
+})
+
+test('failed confirmation keeps the selected import and lets Retry open it', async ({
+  orcaPage,
+  registerPostElectronShutdownCleanup
+}, testInfo) => {
+  const paths = createFixture()
+  registerPostElectronShutdownCleanup(async () =>
+    rmSync(paths.root, { recursive: true, force: true })
+  )
+  git(paths.primary, 'worktree', 'add', '-b', 'retry-selected', paths.selected)
+  git(paths.primary, 'worktree', 'add', '-b', 'retry-hidden', paths.sibling)
+  await waitForSessionReady(orcaPage)
+  await orcaPage.setViewportSize({ width: 1280, height: 900 })
+  const repoId = await orcaPage.evaluate(async ({ primary, selected }) => {
+    const store = window.__store!
+    const repo = await store.getState().addRepoPath(primary, 'git', { runtimeEnvironmentId: null })
+    if (!repo) {
+      throw new Error('Primary registration failed')
+    }
+    const original = store.getState().fetchWorktrees
+    // Inject one failed local confirmation; the saved import still goes through real persistence.
+    Object.assign(store.getState(), {
+      fetchWorktrees: async (id: string, options?: { forceFresh?: boolean }) => {
+        if (
+          options?.forceFresh &&
+          store
+            .getState()
+            .repos.find((row) => row.id === id)
+            ?.importedExternalWorktreePaths?.includes(selected)
+        ) {
+          store.setState({ fetchWorktrees: original })
+          return false
+        }
+        return original(id, options)
+      }
+    })
+    store.getState().openModal('confirm-add-project-from-folder', { folderPath: selected })
+    return repo.id
+  }, paths)
+  const dialog = orcaPage.getByRole('dialog', { name: 'Add Project', exact: true })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Add Project', exact: true }).click()
+  await expect(dialog).toBeHidden({ timeout: 30_000 })
+  const retry = orcaPage.getByRole('button', { name: 'Retry', exact: true })
+  await expect(retry).toBeVisible()
+  expect(
+    await orcaPage.evaluate(
+      (id) =>
+        window.__store!.getState().repos.find((row) => row.id === id)
+          ?.importedExternalWorktreePaths,
+      repoId
+    )
+  ).toEqual([paths.selected])
+  await orcaPage.screenshot({ path: testInfo.outputPath('failed-confirmation-retry.png') })
+  await retry.click()
+  await expect(
+    orcaPage.locator('[role="option"][data-worktree-id]').filter({ hasText: 'retry-selected' })
+  ).toHaveAttribute('aria-current', 'page')
+  await expect(
+    orcaPage.locator('[role="option"][data-worktree-id]').filter({ hasText: 'retry-hidden' })
+  ).toHaveCount(0)
+  await orcaPage.screenshot({ path: testInfo.outputPath('retry-opened-selected.png') })
 })

@@ -31112,5 +31112,14 @@
     "moveLeft": "Move left",
     "moveRight": "Move right",
     "reset": "Reset tab order"
+  },
+  "projectAdmission": {
+    "checkout": {
+      "ownerUnavailable": "The project host could not be identified. Add the project again from the intended host.",
+      "saveFailed": "Could not save the selected checkout’s visibility. Retry to open it.",
+      "missing": "The selected folder could not be matched to an available checkout on this host.",
+      "refreshFailed": "Could not refresh checkouts on the selected host. Retry when the host is available.",
+      "openFailed": "Could not open selected checkout"
+    }
   }
 }
