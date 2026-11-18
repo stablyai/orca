@@ -8,6 +8,7 @@ const SHADOW_OFFSET_Y = 8
 const SHADOW_SIGMA = 16
 const SHADOW_OPACITY = 0.25
 const CORNER_SAMPLE_RATIO = 0.02
+const OPAQUE_CORNER_ALPHA = 250
 
 export type MacAppIconTileGeometry = {
   side: number
@@ -20,20 +21,24 @@ export function getMacAppIconTileGeometry(side: number): MacAppIconTileGeometry 
   return { side, tileOffset, tileSide: side - 2 * tileOffset }
 }
 
-/** True when the four corners are mostly opaque, i.e. the art is a full-bleed square, not an icon shape. */
+/** True when all four corners are opaque, i.e. the art is a full-bleed square, not an icon shape. */
 export function isFullBleedIconBitmap(bitmap: Uint8Array, side: number): boolean {
   const patch = Math.max(1, Math.round(side * CORNER_SAMPLE_RATIO))
-  let alphaSum = 0
   for (const originY of [0, side - patch]) {
     for (const originX of [0, side - patch]) {
+      let alphaSum = 0
       for (let y = originY; y < originY + patch; y++) {
         for (let x = originX; x < originX + patch; x++) {
           alphaSum += bitmap[(y * side + x) * 4 + 3]
         }
       }
+      // Any see-through corner means the art already carries its own shape.
+      if (alphaSum / (patch * patch) < OPAQUE_CORNER_ALPHA) {
+        return false
+      }
     }
   }
-  return alphaSum / (4 * patch * patch) >= 128
+  return true
 }
 
 function tileSignedDistance(x: number, y: number, half: number, cornerExtent: number): number {

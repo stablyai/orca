@@ -35,7 +35,7 @@ describe('composeMacAppIconBitmap', () => {
 })
 
 describe('isFullBleedIconBitmap', () => {
-  it('shapes opaque squares but leaves art that already has transparent corners', () => {
+  it('shapes opaque squares but leaves art with any transparent corner', () => {
     expect(isFullBleedIconBitmap(solidBitmap(64, [0, 0, 0, 255]), 64)).toBe(true)
     const geometry = getMacAppIconTileGeometry(64)
     const alreadyShaped = composeMacAppIconBitmap(
@@ -43,5 +43,10 @@ describe('isFullBleedIconBitmap', () => {
       geometry
     )
     expect(isFullBleedIconBitmap(alreadyShaped, 64)).toBe(false)
+    const oneClearCorner = solidBitmap(64, [0, 0, 0, 255])
+    for (let y = 0; y < 16; y++) {
+      oneClearCorner.fill(0, y * 64 * 4, (y * 64 + 16) * 4)
+    }
+    expect(isFullBleedIconBitmap(oneClearCorner, 64)).toBe(false)
   })
 })
