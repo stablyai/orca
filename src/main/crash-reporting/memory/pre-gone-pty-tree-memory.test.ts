@@ -6,6 +6,7 @@ vi.mock('../../memory/host-process-index', () => ({
   enumerateHostProcesses: () => enumerateHostProcesses(),
   readExecutableNames: async () => {}
 }))
+vi.mock('../../memory/local-daemon-pid', () => ({ getKnownLocalDaemonPid: () => 50 }))
 
 import { registerPty, unregisterPty } from '../../memory/pty-registry'
 import {
@@ -65,7 +66,7 @@ describe('pre-gone PTY tree memory', () => {
 
   const runTicks = async (freeMBAt: (tick: number) => number, ticks: number) => {
     for (let tick = 0; tick < ticks; tick += 1) {
-      notePreGoneHostMemorySample(commitFree(freeMBAt(tick)), tick * 10_000, 'win32')
+      notePreGoneHostMemorySample(commitFree(freeMBAt(tick)), tick * 10_000, 'win32', tick * 10_000)
       await new Promise((resolve) => setImmediate(resolve))
     }
   }
@@ -87,7 +88,7 @@ describe('pre-gone PTY tree memory', () => {
 
   it('never sweeps processes while the host has headroom', () => {
     for (let tick = 0; tick < 360; tick += 1) {
-      notePreGoneHostMemorySample(healthy, tick * 10_000, 'win32')
+      notePreGoneHostMemorySample(healthy, tick * 10_000, 'win32', tick * 10_000)
     }
     expect(enumerateHostProcesses).not.toHaveBeenCalled()
     expect(preGonePtyTreeMemoryDetails(0)).toEqual({})
@@ -96,7 +97,7 @@ describe('pre-gone PTY tree memory', () => {
   it('sweeps once per pressure episode, then only at new lows', async () => {
     let atMs = 0
     const tick = async (freeMB: number) => {
-      notePreGoneHostMemorySample(commitFree(freeMB), atMs, 'win32')
+      notePreGoneHostMemorySample(commitFree(freeMB), atMs, 'win32', atMs)
       atMs += 10_000
       await new Promise((resolve) => setImmediate(resolve))
     }

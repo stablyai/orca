@@ -47,11 +47,31 @@ async function enumerateUnix(nameColumn: string | undefined): Promise<ProcRow[]>
     if (result.timedOut || result.outputTruncated || result.code !== 0) {
       throw new Error(`ps exited ${result.code ?? 'on timeout'}`)
     }
-    return parsePsOutput(result.stdout)
+    return parsePsOutput(result.stdout, nameColumn !== undefined)
   } catch (err) {
     console.warn('[memory] ps enumeration failed', err)
     return []
   }
+}
+
+const READLINK_TIMEOUT_MS = 1_000
+
+// A wedged /proc read must not hold the crash sampler's single in-flight slot forever.
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(undefined), ms)
+    timer.unref?.()
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      () => {
+        clearTimeout(timer)
+        resolve(undefined)
+      }
+    )
+  })
 }
 
 /** Fill names a sweep could not read safely (Linux) from each executable's own file name. */
@@ -65,7 +85,7 @@ export async function readExecutableNames(
   await Promise.all(
     rows.map(async (row) => {
       // Unreadable (another user's process, exited): leave the name unknown.
-      const target = await readlink(`/proc/${row.pid}/exe`).catch(() => undefined)
+      const target = await withTimeout(readlink(`/proc/${row.pid}/exe`), READLINK_TIMEOUT_MS)
       const name = executableBasename(target?.replace(/ \(deleted\)$/, ''))
       if (name) {
         row.name = name

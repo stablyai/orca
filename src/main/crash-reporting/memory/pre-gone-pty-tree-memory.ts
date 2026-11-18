@@ -1,5 +1,7 @@
+import { performance } from 'node:perf_hooks'
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { enumerateHostProcesses, readExecutableNames } from '../../memory/host-process-index'
+import { getKnownLocalDaemonPid } from '../../memory/local-daemon-pid'
 import { collectSubtree, type ProcIndex, type ProcRow } from '../../memory/process-index'
 import { claimPtyProcessTrees } from '../../memory/pty-process-trees'
 import {
@@ -130,10 +132,6 @@ function admitSweep(nowMs: number): boolean {
     admission.bucketMs = Math.min(FULL_BUCKET_MS, admission.bucketMs + elapsedMs)
   }
   admission.refilledAtMs = nowMs
-  // A wall clock set backwards must not lock sampling out until it catches up.
-  if (admission.lastAttemptAtMs !== null && admission.lastAttemptAtMs > nowMs) {
-    admission.lastAttemptAtMs = nowMs - FAILED_PROBE_INTERVAL_MS
-  }
   const sinceAttemptMs =
     admission.lastAttemptAtMs === null ? Infinity : nowMs - admission.lastAttemptAtMs
   const spacingMs =
@@ -152,7 +150,9 @@ function admitSweep(nowMs: number): boolean {
 export function notePreGoneHostMemorySample(
   hostDetails: CrashReportDetails,
   nowMs: number,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  // Admission spacing uses a monotonic clock so wall-clock changes cannot skip or stall it.
+  monotonicMs: number = performance.now()
 ): void {
   const headroomMB = trackEpisode(hostDetails, platform)
   const current = episode
@@ -162,16 +162,17 @@ export function notePreGoneHostMemorySample(
     !current ||
     !sweepUseful(current, headroomMB) ||
     !hasRegisteredPtyWithPid() ||
-    !admitSweep(nowMs)
+    !admitSweep(monotonicMs)
   ) {
     return
   }
   // Capture what to attribute now: a PTY closing mid-sweep must not erase its evidence.
   const ptys = listRegisteredPtys().filter((pty) => pty.pid != null)
+  const daemonPid = getKnownLocalDaemonPid()
   inFlight = true
   const startedGeneration = generation
   // Skip CPU: it would reset the resource view's CPU baseline.
-  void collectPtyTreeMemory(ptys)
+  void collectPtyTreeMemory(ptys, daemonPid)
     .then((details) => {
       if (startedGeneration !== generation) {
         return
@@ -198,7 +199,8 @@ export function notePreGoneHostMemorySample(
 }
 
 async function collectPtyTreeMemory(
-  ptys: readonly PtyRegistration[]
+  ptys: readonly PtyRegistration[],
+  daemonPid: number | null
 ): Promise<CrashReportDetails | null> {
   const index = await enumerateHostProcesses({ trackCpu: false, withNames: true })
   if (index.byPid.size === 0) {
@@ -207,7 +209,7 @@ async function collectPtyTreeMemory(
   const rows = claimPtyProcessTrees(index, ptys).flatMap((tree) => tree.rows)
   const top = topByCommit(rows)
   await readExecutableNames(top)
-  return summarizePtyTreeMemory(index, ptys, rows, top)
+  return summarizePtyTreeMemory(index, ptys, daemonPid, rows, top)
 }
 
 const toMB = (bytes: number): number => Math.round(Math.max(0, bytes) / BYTES_PER_MB)
@@ -251,32 +253,10 @@ function topByCommit(rows: readonly ProcRow[]): ProcRow[] {
   return top
 }
 
-/** The parent most PTY roots hang from: the terminal daemon. Reparented (orphaned) roots
- * point at init or a subreaper, so require a majority and skip PID 1 and Orca's main. */
-function daemonPidFromPtyRoots(index: ProcIndex, ptys: readonly PtyRegistration[]): number | null {
-  const parents = new Map<number, number>()
-  let roots = 0
-  for (const pty of ptys) {
-    const ppid = pty.pid == null ? undefined : index.byPid.get(pty.pid)?.ppid
-    if (ppid === undefined) {
-      continue
-    }
-    roots += 1
-    if (ppid > 1 && ppid !== process.pid && index.byPid.has(ppid)) {
-      parents.set(ppid, (parents.get(ppid) ?? 0) + 1)
-    }
-  }
-  for (const [pid, count] of parents) {
-    if (count * 2 > roots) {
-      return pid
-    }
-  }
-  return null
-}
-
 function summarizePtyTreeMemory(
   index: ProcIndex,
   ptys: readonly PtyRegistration[],
+  daemonPid: number | null,
   rows: readonly ProcRow[],
   top: readonly ProcRow[]
 ): CrashReportDetails {
@@ -288,7 +268,6 @@ function summarizePtyTreeMemory(
   addMemoryDetails(details, '', sumMemory(rows))
   // getAppMetrics omits the detached daemon. Its other descendants (console hosts, PTYs
   // the registry could not attribute) are reported apart so they never read as daemon memory.
-  const daemonPid = daemonPidFromPtyRoots(index, ptys)
   if (daemonPid !== null) {
     const daemonRow = index.byPid.get(daemonPid)
     if (daemonRow) {

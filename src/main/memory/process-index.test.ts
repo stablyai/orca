@@ -8,7 +8,8 @@ import {
 describe('process sweep executable names', () => {
   it('keeps only the basename of ps comm, including paths with spaces', () => {
     const rows = parsePsOutput(
-      '  10     1   0.0  2048 /Users/me/Library/My Tools/claude\n  11    10  1.5   512 node\n'
+      '  10     1   0.0  2048 /Users/me/Library/My Tools/claude\n  11    10  1.5   512 node\n',
+      true
     )
     expect(rows.map((row) => row.name)).toEqual(['claude', 'node'])
   })

@@ -56,7 +56,7 @@ export function buildProcessIndex(
   }
 }
 
-export function parsePsOutput(stdout: string): ProcRow[] {
+export function parsePsOutput(stdout: string, withName = false): ProcRow[] {
   const rows: ProcRow[] = []
   for (const line of iterateProcessOutputLines(stdout)) {
     const fields = getProcessOutputFields(line, 4)
@@ -70,7 +70,7 @@ export function parsePsOutput(stdout: string): ProcRow[] {
     if (Number.isNaN(pid) || Number.isNaN(ppid)) {
       continue
     }
-    const name = executableBasename(PS_COMM_COLUMN.exec(line)?.[1])
+    const name = withName ? executableBasename(PS_COMM_COLUMN.exec(line)?.[1]) : undefined
     rows.push({
       pid,
       ppid,
