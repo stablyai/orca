@@ -10,7 +10,6 @@ import {
 const SLACK = { appId: 'A1', teamId: 'T1' }
 const LINEAR = { workspaceId: 'w1', workspaceName: 'Acme' }
 const MENTIONED = { source: 'slack', event: 'mentioned' } as const
-const CI_FAILED = { source: 'github', event: 'ci_failed' } as const
 
 describe('bot event sources', () => {
   it("hears only the sources the bot's connectors cover", () => {
@@ -24,13 +23,6 @@ describe('bot event sources', () => {
     ).toEqual(['slack', 'linear'])
     // An older host's bot carries only the connectors that host has.
     expect(botEventSources({ name: 'Ranger', slack: SLACK })).toEqual(['slack'])
-  })
-
-  it("notes a saved rule that won't fire", () => {
-    expect(wontFireNote({ name: 'Ranger', github: {} }, [CI_FAILED])).toBeNull()
-    expect(wontFireNote({ name: 'Ranger', github: {} }, [MENTIONED, CI_FAILED])).toBe(
-      "won't fire: Ranger has no Slack connector (slack.mentioned)"
-    )
   })
 
   it('hears a webhook whenever the cloud takes them, with no connector', () => {

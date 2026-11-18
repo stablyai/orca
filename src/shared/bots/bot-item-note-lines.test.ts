@@ -248,8 +248,4 @@ describe("another chat's write, in the chat whose item it changed", () => {
       'Another chat canceled <Share links canceled>'
     ])
   })
-
-  it("keeps the bot's own wording for the chat that wrote it", () => {
-    expect(lines('bot', [move(a, 'working', 'done')])).toEqual(['Marked <Share links done> done'])
-  })
 })

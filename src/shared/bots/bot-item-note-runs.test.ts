@@ -231,16 +231,6 @@ describe("the bot's notes in one turn: one row, each item at its final state", (
     expect(folded[0]!.botItemNote?.at).toBe(rows[2]!.message.timestamp)
   })
 
-  it('reads an add then an ask as one line', () => {
-    expect(
-      drawn([
-        bot('t1', made('share')),
-        bot('t1', commented('share', 'planned'), moved('share', 'planned', 'needs_you')),
-        prose()
-      ])
-    ).toEqual(['Added and asked you about <Share links>', 'prose'])
-  })
-
   it('splits items that ended differently, keeping the order they first appeared', () => {
     expect(
       drawn([

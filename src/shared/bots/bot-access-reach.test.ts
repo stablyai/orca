@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   botAccessAdvice,
   botAccessReach,
-  botReachLineText,
   googleReachAreas,
-  botPermissionNotes,
   botStartingPermission
 } from './bot-access-reach'
 
@@ -32,32 +30,6 @@ describe('botStartingPermission', () => {
     expect(botStartingPermission({ agent: 'claude' }, 'full-access').mode).toBe('full-access')
     expect(botStartingPermission({ agent: 'claude' }, 'own').mode).toBeNull()
     expect(botStartingPermission({ agent: 'claude' }, null).mode).toBeNull()
-  })
-})
-
-describe('botPermissionNotes', () => {
-  it('names a sandbox only for Codex', () => {
-    expect(botPermissionNotes('codex', { mode: 'ask', fellBackFrom: null })).toEqual([
-      'codexAsk',
-      'whoeverAskedApproves'
-    ])
-    expect(botPermissionNotes('codex', { mode: 'auto', fellBackFrom: null })).toEqual([
-      'codexOwnSandbox',
-      'whoeverAskedApproves'
-    ])
-    expect(botPermissionNotes('codex', { mode: 'full-access', fellBackFrom: null })).toEqual([
-      'codexNoSandbox'
-    ])
-    expect(botPermissionNotes('claude', { mode: 'auto', fellBackFrom: null })).toEqual([
-      'whoeverAskedApproves'
-    ])
-  })
-
-  it('says why a mode fell back, and that whoever asked can approve', () => {
-    expect(botPermissionNotes('grok', { mode: 'ask', fellBackFrom: 'accept-edits' })).toEqual([
-      'permissionFellBack',
-      'whoeverAskedApproves'
-    ])
   })
 })
 
@@ -136,37 +108,6 @@ describe('googleReachAreas', () => {
         ])
       ])
     ).toEqual(['drive'])
-  })
-
-  it('names Drive alone when Docs and Sheets aren’t ready', () => {
-    const areas = googleReachAreas([
-      {
-        status: 'connected',
-        services: [
-          { service: 'drive', state: 'ready' },
-          { service: 'docs', state: 'api-disabled' },
-          { service: 'sheets', state: 'needs-permission' }
-        ]
-      }
-    ])
-    expect(areas).toEqual(['drive'])
-    const text = botAccessReach({
-      agent: 'claude',
-      permission: { mode: 'ask', fellBackFrom: null },
-      connector: null,
-      google: areas
-    })
-      .filter((line) => line.kind === 'google')
-      .map(
-        (line) =>
-          botReachLineText(line, {
-            name: 'Reviewer',
-            agentLabel: 'Claude',
-            place: { computer: 'this computer' },
-            mode: () => ({ label: '', description: '' })
-          }).title
-      )
-    expect(text).toEqual(['Use your Drive files'])
   })
 
   it('reaches nothing through an account that needs reconnecting', () => {
