@@ -192,8 +192,12 @@ export class IosEmulatorBackend implements EmulatorBackend {
     return requestServeSimAccessibilityTree(axUrl)
   }
 
-  async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
+  async startSession(
+    deviceId: string,
+    assertOpen: () => void = () => {}
+  ): Promise<EmulatorSessionInfo> {
     const udid = await this.resolveDeviceId(deviceId)
+    assertOpen()
     return this.sessions.start(
       udid,
       this.serveSimExecutable,
@@ -205,9 +209,12 @@ export class IosEmulatorBackend implements EmulatorBackend {
             `Simulator ${udid} already has an external serve-sim helper.`
           )
         }
-        await ensureSimulatorBooted(udid)
+        assertOpen()
+        await ensureSimulatorBooted(udid, assertOpen)
+        assertOpen()
       },
-      (info) => this.waitForEndpointReady(info.streamUrl)
+      (info) => this.waitForEndpointReady(info.streamUrl),
+      assertOpen
     )
   }
 
@@ -226,6 +233,10 @@ export class IosEmulatorBackend implements EmulatorBackend {
       options.shutdownDevice ? () => this.shutdownDevice(deviceId) : undefined,
       options.releaseOnShutdownFailure
     )
+  }
+
+  async stopOwnedHelpers(): Promise<void> {
+    await this.sessions.stopOwnedHelpers()
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {

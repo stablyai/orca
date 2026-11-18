@@ -8,6 +8,7 @@ export type EmulatorSessionInfo = {
   streamUrl: string
   axUrl?: string
   helperPid?: number
+  instanceId?: string
   streamCodec?: EmulatorStreamCodec
   backend?: EmulatorBackendKind
 }

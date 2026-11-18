@@ -41,7 +41,6 @@ import {
   type StartAndroidStream
 } from '../android/android-stream-session-starter'
 import { AndroidStreamController } from '../android/android-stream-controller'
-import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
 import { ANDROID_AVD_BOOT_TIMEOUT_MS } from '../../../shared/emulator/emulator-attach-timeouts'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
@@ -174,19 +173,30 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     )
   }
 
-  async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
-    return this.streams.start(await this.ensureBooted(deviceId))
+  async startSession(
+    deviceId: string,
+    assertOpen: () => void = () => {}
+  ): Promise<EmulatorSessionInfo> {
+    const serial = await this.ensureBooted(deviceId, assertOpen)
+    assertOpen()
+    return this.streams.start(serial, assertOpen)
   }
 
   async stopHelperForDevice(
     deviceId: string,
-    options: { helperPid?: number; includeOrphaned?: boolean; shutdownDevice?: boolean } = {}
+    options: {
+      helperPid?: number
+      includeOrphaned?: boolean
+      shutdownDevice?: boolean
+      instanceId?: string
+      requireInstanceId?: boolean
+    } = {}
   ): Promise<void> {
-    // Only live handles establish ownership; scrcpy socket names are shared with other tools.
-    this.streams.stop(deviceId)
-    if (options.shutdownDevice) {
-      await this.shutdownDevice(deviceId)
-    }
+    await this.streams.stopForCleanup(deviceId, options, () => this.shutdownDevice(deviceId))
+  }
+
+  async stopOwnedHelpers(): Promise<void> {
+    this.streams.stopAll()
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {
@@ -198,7 +208,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
 
   async isSessionReusable(info: EmulatorSessionInfo): Promise<boolean> {
     // Reuse the registered stream so remounts replay cached video instead of restarting scrcpy.
-    return scrcpyVideoRegistry.has(info.deviceUdid)
+    return this.streams.isCurrent(info)
   }
 
   async tap(deviceId: string, x: number, y: number): Promise<void> {
@@ -285,7 +295,8 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     return run(this.requireSdk(), await this.resolveDeviceId(deviceId))
   }
 
-  async ensureBooted(deviceOrName: string): Promise<string> {
+  async ensureBooted(deviceOrName: string, assertOpen: () => void = () => {}): Promise<string> {
+    assertOpen()
     const inFlight = this.bootsInFlight.get(deviceOrName)
     if (inFlight) {
       return inFlight
@@ -293,7 +304,8 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     const boot = bootAndroidDevice(this.runner, this.requireSdk(), deviceOrName, {
       bootTimeoutMs: this.bootTimeoutMs,
       pollIntervalMs: this.pollIntervalMs,
-      sleep: this.sleep
+      sleep: this.sleep,
+      assertOpen
     }).finally(() => this.bootsInFlight.delete(deviceOrName))
     this.bootsInFlight.set(deviceOrName, boot)
     return boot

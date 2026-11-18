@@ -14,7 +14,14 @@ export function installOrcadEmulatorBridge(
   const bridge = new EmulatorBridge()
   runtime.setEmulatorBridge(bridge)
   // Like desktop quit: stop the helpers and devices Orca started.
-  registerCleanup(() =>
-    withTimeout(bridge.destroyAllSessions(), EMULATOR_TEARDOWN_BUDGET_MS, undefined)
-  )
+  registerCleanup(async () => {
+    const completed = await withTimeout(
+      bridge.destroyAllSessions().then(() => true),
+      EMULATOR_TEARDOWN_BUDGET_MS,
+      false
+    )
+    if (!completed) {
+      console.warn('[emulator] Shutdown drain timed out; ownership may be retained.')
+    }
+  })
 }

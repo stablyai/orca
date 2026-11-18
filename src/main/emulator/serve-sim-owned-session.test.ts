@@ -170,6 +170,8 @@ describe('owned iOS helper sessions', () => {
         async () => true
       )
       await sessions.stop(A, afterTeardown.helperPid)
+      await sessions.stopOwnedHelpers()
+      expect(sessions.owns(second)).toBe(false)
     } finally {
       if (first && sessions.owns(first)) {
         await sessions.stop(A, first.helperPid)
@@ -177,6 +179,56 @@ describe('owned iOS helper sessions', () => {
       if (second && sessions.owns(second)) {
         await sessions.stop(B, second.helperPid)
       }
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not spawn a helper after shutdown closes an in-flight prepare', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-middleware-shutdown-'))
+    writeFileSync(
+      join(dir, 'middleware.js'),
+      `export function simMiddleware() { const handler = (_req, res) => res.end('ok'); handler.handleUpgrade = () => {}; return handler }`
+    )
+    writeFileSync(join(dir, 'package.json'), '{"type":"module"}')
+    const sessions = new ServeSimOwnedSessions(() => join(dir, 'claims'))
+    const executable = {
+      command: process.execPath,
+      baseArgs: [join(dir, 'serve-sim.js')],
+      usesElectronAsNode: false
+    }
+    let finish!: () => void
+    let closed = false
+    const start = sessions.start(
+      A,
+      executable,
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+      async () => true,
+      () => {
+        if (closed) {
+          throw new Error('shutdown')
+        }
+      }
+    )
+    const result = start.then(
+      () => 'started',
+      (error: Error) => error.message
+    )
+    try {
+      await vi.waitFor(() => expect(finish).toBeDefined())
+      closed = true
+      finish()
+      expect(await result).toContain('shutdown')
+      const replacement = await sessions.start(
+        A,
+        executable,
+        async () => {},
+        async () => true
+      )
+      await sessions.stop(A, replacement.helperPid)
+    } finally {
       rmSync(dir, { recursive: true, force: true })
     }
   })

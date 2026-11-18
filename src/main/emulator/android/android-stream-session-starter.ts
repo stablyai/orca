@@ -12,6 +12,7 @@ export type StartAndroidStreamParams = {
   serial: string
   jarPath: string
   maxSize?: number
+  assertOpen?: () => void
 }
 
 export type StartAndroidStream = (
@@ -29,14 +30,15 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
   sdk,
   serial,
   jarPath,
-  maxSize
+  maxSize,
+  assertOpen
 }) => {
   let session: ScrcpyStreamSession | null = null
   // Register before startup so early config/keyframes enter the replay cache.
   scrcpyVideoRegistry.register(serial, () => session?.close())
   try {
     session = await ScrcpyStreamSession.start(
-      { runner, sdk, serial, localJarPath: jarPath, maxSize },
+      { runner, sdk, serial, localJarPath: jarPath, maxSize, assertOpen },
       {
         onMeta: (meta) => scrcpyVideoRegistry.pushMeta(serial, meta),
         onFrame: (frame) =>

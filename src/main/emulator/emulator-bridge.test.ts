@@ -111,6 +111,68 @@ describe('EmulatorBridge helper ownership', () => {
     expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
   })
 
+  it('closes admission and drains an unfinished start before stopping owned helpers', async () => {
+    const bridge = new EmulatorBridge()
+    const ios = bridge.listBackends().find((backend) => backend.kind === 'ios')!
+    vi.spyOn(ios, 'ownsDevice').mockResolvedValue(true)
+    let finish!: (info: EmulatorSessionInfo) => void
+    vi.spyOn(ios, 'startSession').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const cleanup = vi.spyOn(ios, 'stopOwnedHelpers').mockResolvedValue()
+    const starting = bridge.acquireHelperForDevice('device-1')
+    const result = starting.then(
+      () => 'started',
+      (error: Error) => error.message
+    )
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    const destroying = bridge.destroyAllSessions()
+    await expect(bridge.acquireHelperForDevice('device-2')).rejects.toThrow('shutdown')
+    finish(session('device-1'))
+    expect(await result).toContain('shutdown')
+    await destroying
+    expect(cleanup).toHaveBeenCalledOnce()
+  })
+
+  it('stops a workspace association without an asynchronous device lookup', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator(
+      'wt-1',
+      { ...session('emulator-5554'), backend: 'android', instanceId: 'stream-a' },
+      { managed: true }
+    )
+    const android = bridge.listBackends().find((backend) => backend.kind === 'android')!
+    const resolve = vi.spyOn(android, 'resolveDeviceId')
+    const stop = vi.spyOn(android, 'stopHelperForDevice').mockResolvedValue()
+    await expect(bridge.kill(undefined, 'wt-1')).resolves.toBe('emulator-5554')
+    expect(resolve).not.toHaveBeenCalled()
+    expect(stop).toHaveBeenCalledWith(
+      'emulator-5554',
+      expect.objectContaining({ instanceId: 'stream-a' })
+    )
+  })
+
+  it('rejects reuse when a delayed readiness probe observes a replaced workspace', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const ios = bridge.listBackends().find((backend) => backend.kind === 'ios')!
+    let finish!: (value: boolean) => void
+    vi.spyOn(ios, 'isSessionReusable').mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve
+        })
+    )
+    const reuse = bridge.getReusableActiveForWorktree('wt-1')
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    bridge.registerActiveEmulator('wt-1', session('device-2'), { managed: true })
+    finish(true)
+    await expect(reuse).rejects.toMatchObject({ code: 'emulator_attach_superseded' })
+  })
+
   it('does not detach a newer selection when the previous session probe finishes late', async () => {
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
@@ -373,6 +435,60 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     finishRelease()
     await expect(first).rejects.toMatchObject({ code: 'emulator_attach_superseded' })
     expect(send).not.toHaveBeenCalledWith('emulator:pane-focus', { worktreeId: 'wt-1' })
+  })
+
+  it('does not publish a reused session after teardown closes admission', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const ios = bridge.listBackends().find((backend) => backend.kind === 'ios')!
+    let finish!: (value: boolean) => void
+    vi.spyOn(ios, 'isSessionReusable').mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve
+        })
+    )
+    vi.spyOn(ios, 'stopHelperForDevice').mockResolvedValue()
+    vi.spyOn(ios, 'stopOwnedHelpers').mockResolvedValue()
+    const send = vi.fn()
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
+      getAuthoritativeWindow: () => ({ webContents: { send } }) as never,
+      getSettings: () => ({ mobileEmulatorEnabled: true })
+    })
+    const attaching = commands.emulatorAttach({ worktree: 'wt-1' })
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    await bridge.destroyAllSessions()
+    finish(true)
+    await expect(attaching).rejects.toThrow()
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('does not report an attached endpoint after the workspace detached during lease release', async () => {
+    const bridge = new EmulatorBridge()
+    const info = session('device-1')
+    vi.spyOn(bridge, 'getReusableActiveForWorktree').mockResolvedValue(null)
+    vi.spyOn(bridge, 'stopActiveForSwitch').mockResolvedValue(null)
+    vi.spyOn(bridge, 'acquireHelperForDevice').mockResolvedValue({
+      info,
+      release: async () => {
+        bridge.unregisterActiveEmulator('wt-1')
+      }
+    })
+    const send = vi.fn()
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
+      getAuthoritativeWindow: () => ({ webContents: { send } }) as never,
+      getSettings: () => ({ mobileEmulatorEnabled: true })
+    })
+    await expect(
+      commands.emulatorAttach({ worktree: 'wt-1', device: 'device-1' })
+    ).rejects.toMatchObject({ code: 'emulator_attach_superseded' })
+    expect(send).not.toHaveBeenCalled()
   })
 
   it('keeps the live workspace device when reopened without a device', async () => {

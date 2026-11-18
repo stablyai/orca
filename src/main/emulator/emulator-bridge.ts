@@ -5,7 +5,8 @@ import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
 import { EmulatorSessionRegistry } from './emulator-session-registry'
-import { destroySessions, stopForSwitch, stopTargetSession } from './emulator-session-cleanup'
+import { destroySessions, reusableForWorkspace } from './emulator-session-cleanup'
+import { stopForSwitch, stopTargetSession } from './emulator-session-cleanup'
 import {
   EmulatorStartLeaseRegistry,
   type EmulatorStartLease
@@ -35,6 +36,8 @@ export class EmulatorBridge {
     // Register all backends so explicit targets reach their own host-support errors.
     this.backends = [this.iosBackend, this.androidBackend]
   }
+
+  assertEmulatorOpen = (): void => this.startLeases.assertOpen()
 
   listBackends(): EmulatorBackend[] {
     return this.backends
@@ -102,22 +105,12 @@ export class EmulatorBridge {
     worktreeId: string,
     device?: string
   ): Promise<EmulatorSessionInfo | null> {
-    const active = this.getActiveForWorktree(worktreeId)
-    if (!active) {
-      return null
-    }
-    const backend = this.backendForActiveWorktree(worktreeId)
-    if (!backend) {
-      return null
-    }
-    if (device) {
-      // An unbooted AVD cannot resolve yet; let the caller fall through to a fresh attach.
-      const resolved = await backend.resolveDeviceId(device).catch(() => null)
-      if (resolved !== active.deviceUdid) {
-        return null
-      }
-    }
-    return (await backend.isSessionReusable(active)) ? active : null
+    return reusableForWorkspace(
+      this.sessionRegistry,
+      (kind) => this.backendForKind(kind),
+      worktreeId,
+      device
+    )
   }
 
   async stopActiveForWorktree(
@@ -277,11 +270,18 @@ export class EmulatorBridge {
     worktreeId: string | undefined,
     shutdown: boolean
   ): Promise<string> {
+    if (!device && worktreeId) {
+      const stopped = await this.stopActiveForWorktree(worktreeId, { shutdownDevice: shutdown })
+      if (!stopped) {
+        throw new EmulatorError(
+          'emulator_no_active',
+          'No active emulator for this worktree — use orca emulator attach or open the pane'
+        )
+      }
+      return stopped
+    }
     const { backend, device: targetDevice } = await this.resolveTarget({ device, worktreeId })
     const udid = await backend.resolveDeviceId(targetDevice)
-    if (!device && worktreeId) {
-      return (await this.stopActiveForWorktree(worktreeId, { shutdownDevice: shutdown })) ?? udid
-    }
     return stopTargetSession(this.sessionRegistry, this.startLeases, backend, udid, shutdown)
   }
 
@@ -289,9 +289,12 @@ export class EmulatorBridge {
     return this.sessionRegistry.pruneGoneManagedSessions((kind) => this.backendForKind(kind))
   }
 
-  async destroyAllSessions(): Promise<void> {
-    await destroySessions(this.sessionRegistry, this.startLeases, (kind) =>
-      this.backendForKind(kind)
+  destroyAllSessions(): Promise<void> {
+    return destroySessions(
+      this.sessionRegistry,
+      this.startLeases,
+      (kind) => this.backendForKind(kind),
+      this.backends
     )
   }
 

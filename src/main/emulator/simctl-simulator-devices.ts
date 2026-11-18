@@ -116,11 +116,15 @@ export async function resolveSimulatorUdid(deviceOrName: string): Promise<string
   return matches[0]?.udid ?? deviceOrName
 }
 
-export async function ensureSimulatorBooted(udid: string): Promise<void> {
+export async function ensureSimulatorBooted(
+  udid: string,
+  assertOpen: () => void = () => {}
+): Promise<void> {
   if (platform() !== 'darwin') {
     throw new EmulatorError('emulator_not_macos', emulatorFailureText('requiresMacosXcode'))
   }
   const devices = await listSimulatorDevices()
+  assertOpen()
   const device = devices.find((candidate) => candidate.udid === udid)
   if (!device) {
     throw new EmulatorError(
@@ -133,6 +137,7 @@ export async function ensureSimulatorBooted(udid: string): Promise<void> {
   }
 
   try {
+    assertOpen()
     await new Promise<void>((resolve, reject) => {
       execFile('xcrun', ['simctl', 'boot', udid], { timeout: 45_000 }, (error, _stdout, stderr) => {
         if (error) {
@@ -153,6 +158,7 @@ export async function ensureSimulatorBooted(udid: string): Promise<void> {
 
   const deadline = Date.now() + 22_000
   while (Date.now() < deadline) {
+    assertOpen()
     await new Promise((resolve) => setTimeout(resolve, 700))
     try {
       const fresh = await listSimulatorDevices()

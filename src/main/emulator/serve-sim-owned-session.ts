@@ -7,7 +7,14 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { EmulatorError } from './emulator-errors'
 import { SERVE_SIM_OWNED_SERVER } from './serve-sim-owned-server'
-import { simulatorOwnershipRoot, stopOwnedSimulatorChild } from './serve-sim-owned-process'
+import {
+  simulatorOwnershipRoot,
+  stopOwnedSimulatorChild,
+  ownedSimulatorStateRoot,
+  stopOwnedSimulatorHelpers,
+  ownsSimulatorSession,
+  ownsSimulatorEndpoint
+} from './serve-sim-owned-process'
 import { SimulatorShutdownError } from './simctl-simulator-devices'
 import { getServeSimEnv, type ServeSimExecutable } from './serve-sim-execution'
 import type { EmulatorSessionInfo } from './emulator-types'
@@ -31,8 +38,10 @@ export class ServeSimOwnedSessions {
     udid: string,
     executable: ServeSimExecutable,
     prepare: () => Promise<void>,
-    ready: (info: EmulatorSessionInfo) => Promise<boolean>
+    ready: (info: EmulatorSessionInfo) => Promise<boolean>,
+    assertOpen: () => void = () => {}
   ): Promise<EmulatorSessionInfo> {
+    assertOpen()
     const current = this.sessions.get(udid)
     if (current?.stopping) {
       throw new EmulatorError(
@@ -47,6 +56,7 @@ export class ServeSimOwnedSessions {
           'The existing simulator helper is not reachable.'
         )
       }
+      assertOpen()
       return current.info
     }
     if (current) {
@@ -59,7 +69,7 @@ export class ServeSimOwnedSessions {
     if (pending) {
       return pending
     }
-    const start = this.startNew(udid, executable, prepare, ready).finally(() =>
+    const start = this.startNew(udid, executable, prepare, ready, assertOpen).finally(() =>
       this.starting.delete(udid)
     )
     this.starting.set(udid, start)
@@ -70,8 +80,10 @@ export class ServeSimOwnedSessions {
     udid: string,
     executable: ServeSimExecutable,
     prepare: () => Promise<void>,
-    ready: (info: EmulatorSessionInfo) => Promise<boolean>
+    ready: (info: EmulatorSessionInfo) => Promise<boolean>,
+    assertOpen: () => void
   ): Promise<EmulatorSessionInfo> {
+    assertOpen()
     if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(udid)) {
       throw new EmulatorError('emulator_device_not_found', `Invalid simulator UDID: ${udid}`)
     }
@@ -94,6 +106,7 @@ export class ServeSimOwnedSessions {
     let child: ChildProcess | undefined
     try {
       await prepare()
+      assertOpen()
       stateRoot = mkdtempSync(join(tmpdir(), 'orca-simulator-session-'))
       const middleware = pathToFileURL(join(dirname(entry), 'middleware.js')).href
       const token = randomUUID()
@@ -130,6 +143,7 @@ export class ServeSimOwnedSessions {
           }
         })
       })
+      assertOpen()
       if (!child.pid || child.exitCode !== null || child.signalCode !== null) {
         throw new Error('Simulator helper exited during startup')
       }
@@ -162,6 +176,7 @@ export class ServeSimOwnedSessions {
           'Simulator helper stream is not reachable.'
         )
       }
+      assertOpen()
       const session: OwnedSession = {
         info,
         child,
@@ -215,34 +230,19 @@ export class ServeSimOwnedSessions {
   }
 
   owns(info: EmulatorSessionInfo): boolean {
-    const session = this.sessions.get(info.deviceUdid)
-    return (
-      !!session &&
-      session.info.helperPid === info.helperPid &&
-      session.info.streamUrl === info.streamUrl &&
-      session.child.exitCode === null &&
-      session.child.signalCode === null
-    )
+    return ownsSimulatorSession(this.sessions.get(info.deviceUdid), info)
   }
 
   ownsEndpoint(udid: string, endpoint: string | undefined): boolean {
-    const session = this.sessions.get(udid)
-    return (
-      !!session &&
-      this.owns(session.info) &&
-      (endpoint === session.info.wsUrl || endpoint === session.info.axUrl)
-    )
+    return ownsSimulatorEndpoint(this.sessions.get(udid), endpoint)
   }
 
   stateRoot(udid: string): string {
-    const session = this.sessions.get(udid)
-    if (!session || session.child.exitCode !== null || session.child.signalCode !== null) {
-      throw new EmulatorError(
-        'emulator_no_active',
-        `No owned simulator session for ${udid}; attach it first.`
-      )
-    }
-    return session.stateRoot
+    return ownedSimulatorStateRoot(this.sessions.get(udid), udid)
+  }
+
+  stopOwnedHelpers(): Promise<void> {
+    return stopOwnedSimulatorHelpers([...this.sessions.values()], this.stop.bind(this))
   }
 
   async stop(

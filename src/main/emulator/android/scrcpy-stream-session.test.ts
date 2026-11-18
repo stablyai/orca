@@ -62,6 +62,43 @@ beforeEach(() => {
 })
 
 describe('ScrcpyStreamSession video buffering', () => {
+  it('does not forward or spawn after shutdown during server deployment', async () => {
+    let finish!: (result: { code: number; stdout: string; stderr: string }) => void
+    let closed = false
+    const runner = vi.fn(
+      () =>
+        new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
+          finish = resolve
+        })
+    )
+    const callbacks = { onMeta: vi.fn(), onFrame: vi.fn(), onError: vi.fn(), onClose: vi.fn() }
+    const started = ScrcpyStreamSession.start(
+      {
+        runner,
+        sdk: { sdkRoot: 'sdk', adb: 'adb', emulator: 'emulator' },
+        serial: 'test-device',
+        localJarPath: 'server.jar',
+        assertOpen: () => {
+          if (closed) {
+            throw new Error('shutdown')
+          }
+        }
+      },
+      callbacks
+    )
+    const result = started.then(
+      () => 'started',
+      (error: Error) => error.message
+    )
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    closed = true
+    finish({ code: 0, stdout: '', stderr: '' })
+    expect(await result).toBe('shutdown')
+    expect(runner).toHaveBeenCalledTimes(1)
+    expect(io.spawn).not.toHaveBeenCalled()
+    expect(io.connect).not.toHaveBeenCalled()
+  })
+
   it('accepts bytewise handshake and frames, including empty chunks and empty frames', async () => {
     const { video, callbacks, started } = await startSession()
     const header = handshake()

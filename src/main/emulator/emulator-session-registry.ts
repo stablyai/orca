@@ -29,7 +29,9 @@ export class EmulatorSessionRegistry {
       previous &&
       (previous.pid !== info.helperPid ||
         previous.streamUrl !== info.streamUrl ||
-        previous.wsUrl !== info.wsUrl)
+        previous.wsUrl !== info.wsUrl ||
+        ((info.backend ?? options.backend ?? 'ios') === 'android' &&
+          (!previous.instanceId || !info.instanceId || previous.instanceId !== info.instanceId)))
     const affected = replaced
       ? [...this.activeByWorktree].filter(([, activeKey]) => activeKey === key).map(([id]) => id)
       : []
@@ -39,6 +41,7 @@ export class EmulatorSessionRegistry {
       streamUrl: info.streamUrl,
       axUrl: info.axUrl,
       pid: info.helperPid,
+      instanceId: info.instanceId,
       managed: options.managed === true,
       initialized: true,
       // Preserve iOS defaults for callers predating multiple backends.
@@ -199,6 +202,7 @@ function toSessionInfo(session: EmulatorSessionState): EmulatorSessionInfo {
     streamUrl: session.streamUrl,
     axUrl: session.axUrl,
     helperPid: session.pid,
+    ...(session.instanceId ? { instanceId: session.instanceId } : {}),
     streamCodec: session.streamCodec,
     backend: session.backend
   }

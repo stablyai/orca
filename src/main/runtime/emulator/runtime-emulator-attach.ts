@@ -51,6 +51,7 @@ export class RuntimeEmulatorAttach {
       this.pendingByWorkspace.set(params.worktree, ticket)
     }
     const assertCurrent = () => {
+      bridge.assertEmulatorOpen()
       if (ticket && this.pendingByWorkspace.get(params.worktree) !== ticket) {
         throw new EmulatorError(
           'emulator_attach_superseded',
@@ -77,6 +78,7 @@ export class RuntimeEmulatorAttach {
       }
     }
     try {
+      assertCurrent()
       const worktreeId = params.worktree
         ? await this.host.resolveEmulatorWorkspaceId(params.worktree)
         : undefined
@@ -174,7 +176,13 @@ export class RuntimeEmulatorAttach {
       await lease.release()
       assertCurrent()
       remember()
-      if (worktreeId && bridge.isCurrentEmulatorOwner(worktreeId, info.deviceUdid, generation)) {
+      if (worktreeId) {
+        if (!bridge.isCurrentEmulatorOwner(worktreeId, info.deviceUdid, generation)) {
+          throw new EmulatorError(
+            'emulator_attach_superseded',
+            'The emulator changed before attachment completed.'
+          )
+        }
         this.notify(worktreeId, info, params.focus)
       }
       return { attached: true, info }

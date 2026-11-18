@@ -3,6 +3,7 @@ import type { EmulatorBackend, EmulatorBackendKind } from './backends/emulator-b
 import { EmulatorError } from './emulator-errors'
 import type { EmulatorSessionRegistry } from './emulator-session-registry'
 import type { EmulatorStartLeaseRegistry } from './emulator-start-lease-registry'
+import type { EmulatorSessionInfo } from './emulator-types'
 
 export async function stopTargetSession(
   registry: EmulatorSessionRegistry,
@@ -32,8 +33,10 @@ export async function stopTargetSession(
 export async function destroySessions(
   registry: EmulatorSessionRegistry,
   leases: EmulatorStartLeaseRegistry,
-  backendForKind: (kind: EmulatorBackendKind) => EmulatorBackend | null
+  backendForKind: (kind: EmulatorBackendKind) => EmulatorBackend | null,
+  backends: EmulatorBackend[]
 ): Promise<void> {
+  await leases.closeAndDrain()
   const promises = registry
     .listSessions()
     .filter((session) => session.managed)
@@ -57,7 +60,22 @@ export async function destroySessions(
       })
       registry.clearIfUnchanged(session.deviceUdid, session)
     })
-  await Promise.allSettled(promises)
+  const results = await Promise.allSettled(promises)
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.warn(
+        '[emulator] Session shutdown incomplete; ownership may be retained:',
+        result.reason
+      )
+    }
+  }
+  const remaining = await Promise.allSettled(
+    backends.map((backend) => backend.stopOwnedHelpers?.())
+  )
+  const failure = remaining.find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected') {
+    throw failure.reason
+  }
 }
 
 export async function stopForSwitch(
@@ -83,4 +101,39 @@ export async function stopForSwitch(
     )
   }
   return stop(shutdownDevice)
+}
+
+export async function reusableForWorkspace(
+  registry: EmulatorSessionRegistry,
+  backendForKind: (kind: EmulatorBackendKind) => EmulatorBackend | null,
+  worktreeId: string,
+  device?: string
+): Promise<EmulatorSessionInfo | null> {
+  const active = registry.getActiveForWorktree(worktreeId)
+  if (!active) {
+    return null
+  }
+  const backend = backendForKind(active.backend ?? 'ios')
+  if (!backend) {
+    return null
+  }
+  const generation = registry.generationForDevice(active.deviceUdid)
+  const assertOwner = () => {
+    if (!registry.isCurrentOwner(worktreeId, active.deviceUdid, generation)) {
+      throw new EmulatorError(
+        'emulator_attach_superseded',
+        'The active emulator changed during the connection check.'
+      )
+    }
+  }
+  if (device) {
+    const resolved = await backend.resolveDeviceId(device).catch(() => null)
+    assertOwner()
+    if (resolved !== active.deviceUdid) {
+      return null
+    }
+  }
+  const reusable = await backend.isSessionReusable(active)
+  assertOwner()
+  return reusable ? active : null
 }

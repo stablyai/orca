@@ -18,6 +18,7 @@ export type AndroidBootOptions = {
   bootTimeoutMs: number
   pollIntervalMs: number
   sleep: (ms: number) => Promise<void>
+  assertOpen?: () => void
 }
 
 type AvdLaunch = {
@@ -39,15 +40,18 @@ export async function bootAndroidDevice(
   options: AndroidBootOptions
 ): Promise<string> {
   const running = await listRunningAdbDevices(runner, sdk)
+  options.assertOpen?.()
   if (running.some((device) => device.serial === deviceOrName)) {
     return deviceOrName
   }
   const existing = await findRunningAvdSerial(runner, sdk, deviceOrName, running)
+  options.assertOpen?.()
   if (existing) {
     return existing
   }
   // Reject stale serials before launching an invalid AVD and waiting out the boot timeout.
   const avds = await listAvdNames(runner, sdk)
+  options.assertOpen?.()
   if (!sdk.emulator || !avds.includes(deviceOrName)) {
     throw new EmulatorError(
       'emulator_device_not_found',
@@ -107,6 +111,7 @@ async function waitForNewBootedSerial(
   // Wall clock, so adb call time counts toward the timeout the CLI's attach timeout outlasts.
   const deadline = performance.now() + options.bootTimeoutMs
   for (let poll = 0; performance.now() < deadline; poll++) {
+    options.assertOpen?.()
     // Read before polling so an instance that appeared as our launch ended is still seen.
     const failureDetail = launch.failureDetail()
     const devices = await listConfirmedAdbDevices(runner, sdk)

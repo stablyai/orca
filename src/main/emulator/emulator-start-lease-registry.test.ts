@@ -65,7 +65,7 @@ describe('EmulatorStartLeaseRegistry', () => {
       () =>
         new Promise<void>((resolve) => {
           finishCleanup = () => {
-            void shutdownDevice().then(resolve)
+            void backend.shutdownDevice('emulator-5554').then(resolve)
           }
         })
     )
@@ -118,6 +118,80 @@ describe('EmulatorStartLeaseRegistry', () => {
       'emulator-5554',
       expect.objectContaining({ shutdownDevice: true })
     )
+  })
+
+  it('honors kill and shutdown queued for the same stream generation', async () => {
+    const { backend, stopHelperForDevice } = makeBackend()
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'device', () => false)
+    const info = { ...lease.info, instanceId: 'stream-1' }
+    const kill = registry.cleanupWhenIdle(backend, info, () => false, { force: true })
+    const shutdown = registry.cleanupWhenIdle(backend, info, () => false, {
+      force: true,
+      shutdownDevice: true
+    })
+    await lease.release()
+    await Promise.all([kill, shutdown])
+    expect(stopHelperForDevice).toHaveBeenCalledWith(
+      'emulator-5554',
+      expect.objectContaining({ instanceId: 'stream-1', shutdownDevice: true })
+    )
+  })
+
+  it('rejects only a stale request when a valid request for the same generation is queued', async () => {
+    const { backend, stopHelperForDevice } = makeBackend()
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'device', () => false)
+    const info = { ...lease.info, instanceId: 'stream-1' }
+    const stale = registry.cleanupWhenIdle(backend, info, () => false, {
+      force: true,
+      validate: () => {
+        throw new Error('stale')
+      }
+    })
+    const staleResult = stale.then(
+      () => 'ok',
+      (error: Error) => error.message
+    )
+    const valid = registry.cleanupWhenIdle(backend, info, () => false, {
+      force: true,
+      shutdownDevice: true
+    })
+    await lease.release()
+    await valid
+    expect(await staleResult).toBe('stale')
+    expect(stopHelperForDevice).toHaveBeenCalledWith(
+      'emulator-5554',
+      expect.objectContaining({ shutdownDevice: true })
+    )
+  })
+
+  it('closes start admission and waits for an in-flight start to settle', async () => {
+    const { backend, startSession } = makeBackend()
+    const registry = new EmulatorStartLeaseRegistry()
+    let finish!: (info: EmulatorSessionInfo) => void
+    startSession.mockImplementationOnce(
+      () =>
+        new Promise<EmulatorSessionInfo>((resolve) => {
+          finish = resolve
+        })
+    )
+    const starting = registry.acquire(backend, 'device', () => false)
+    const startingResult = starting.then(
+      () => 'started',
+      (error: Error) => error.message
+    )
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    const closing = registry.closeAndDrain()
+    await expect(registry.acquire(backend, 'other', () => false)).rejects.toThrow('shutdown')
+    finish({
+      deviceUdid: 'emulator-5554',
+      streamUrl: 'scrcpy://emulator-5554',
+      wsUrl: '',
+      instanceId: 'stream-1'
+    })
+    expect(await startingResult).toContain('shutdown')
+    await closing
   })
 
   it('preserves a forced stop when a conditional detach is queued later', async () => {
