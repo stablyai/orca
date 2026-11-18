@@ -4186,6 +4186,63 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
 }
 
 /* While an agent drives the page, a soft inner glow breathes at its edge. */
+/* Electron reports no load percentage, so the line eases toward 90% and the real stop finishes it.
+   CSS rather than script animation so retained hidden pages pause it like every other loop. */
+@keyframes browser-load-trickle {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+    animation-timing-function: ease-out;
+  }
+  1% {
+    transform: scaleX(0.15);
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  6.667% {
+    transform: scaleX(0.45);
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  20% {
+    transform: scaleX(0.7);
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  50% {
+    transform: scaleX(0.85);
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  100% {
+    transform: scaleX(0.9);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion: a still, dimmed full-width line that still reads as "working". */
+@keyframes browser-load-still {
+  from {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 0.5;
+  }
+}
+
+/* The delay keeps fast loads (most local dev servers) from showing anything. */
+.browser-load-progress[data-browser-load-progress='loading'] {
+  animation: browser-load-trickle 30s linear 200ms forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-load-progress[data-browser-load-progress='loading'] {
+    animation: browser-load-still 150ms linear 200ms forwards;
+  }
+}
+
 .browser-agent-cursor-layer::before {
   content: '';
   position: absolute;
