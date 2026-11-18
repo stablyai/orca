@@ -57,7 +57,8 @@
       "currentWorktree": "現在のワークツリー",
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
-      "resumeSession": "Agent セッションを再開"
+      "resumeSession": "Agent セッションを再開",
+      "continueInCli": "CLIで続行"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",
