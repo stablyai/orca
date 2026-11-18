@@ -1,6 +1,10 @@
 import { useAppStore } from '@/store'
 import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
-import { readAccountRestartReceipt } from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
+import {
+  formatAccountRestartFailure,
+  readAccountRestartReceipt,
+  withoutAccountRestartReceipt
+} from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import {
   continueCodexAccountRestart,
   dispatchCodexAccountRestart,
@@ -34,9 +38,10 @@ export function captureCodexAccountRestartConnection(session: ConnectPanePtySess
       typeof failure.message === 'string'
         ? failure.message
         : String(failure)
-    error = Object.assign(
-      new Error(message.slice(0, 4096)),
-      receipt ? { data: { accountRestart: receipt } } : {}
+    error = new Error(
+      receipt
+        ? formatAccountRestartFailure(withoutAccountRestartReceipt(message).slice(0, 4096), receipt)
+        : message.slice(0, 4096)
     )
   }
   return {
