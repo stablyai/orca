@@ -22071,7 +22071,8 @@
         "titleHasUsage": "{{agent}} has usage again",
         "statusCanContinueNowAuto": "{{agent}} can continue now. Orca will continue this chat at {{time}}.",
         "statusCanContinueNow": "{{agent}} can continue now.",
-        "titleCanContinueNow": "{{agent}} can continue now"
+        "titleCanContinueNow": "{{agent}} can continue now",
+        "turnOnAutoContinue": "Continue automatically when limits reset"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
@@ -23532,6 +23533,7 @@
       "install": "Install {{agent}}",
       "installManaged": "Install Orca's copy",
       "installed": "Installed",
+      "installedByOrca": "Installed by Orca · {{version}}",
       "notInstalled": "Not installed.",
       "progress": "{{agent}} download",
       "readFailed": "Could not check {{agent}} on this host. Retrying.",
@@ -23980,26 +23982,47 @@
       "demoCookie": "cookie"
     },
     "botsTeammate": {
-      "title": "Your AI teammate",
-      "description": "It works where your team works, takes on tasks from anyone, and sees them through. It remembers everything you teach it.",
-      "alwaysOn": "<b>Always on.</b> Works while you’re away.",
-      "partOfTeam": "<b>Part of the team.</b> Anyone can ask it in <slot/>.",
-      "learns": "<b>Learns as it goes.</b> Suggests what’s next.",
-      "runsOn": "Runs on any computer with <slot/>",
+      "title": "Meet your AI teammate",
+      "description": "Ask from anywhere. It runs a fleet of agents and remembers what it learns.",
       "cta": "Create your first bot",
       "later": "Maybe later",
+      "stepAsk": "Message it from anywhere",
+      "stepFleet": "It runs a fleet of agents",
+      "stepReview": "You review the PR",
+      "storySummary": "You message the bot in Slack from your phone. It runs four coding agents in parallel on your computer, another bot reviews the work, and you get one pull request to review.",
       "demoName": "Scout",
-      "demoWorking": "Working on this computer",
-      "demoActivity": "Activity",
-      "feedAnswered": "Answered Maya’s question",
-      "feedJustNow": "just now",
-      "feedPickedUp": "Picked up a new bug",
-      "feedSuggested": "Suggested 2 things to look at",
-      "feedRemembered": "Remembered: keep changes small",
-      "feedFinished": "Finished a task for Bob",
-      "feedCheckedIn": "Checked in on 3 tasks overnight",
-      "agentsStatic": "Claude Code and more",
-      "orList": "{{items}} or {{last}}"
+      "demoReviewer": "Lens",
+      "you": "You",
+      "youInitial": "Y",
+      "youTyping": "You are typing",
+      "fromPhone": "Slack · from your phone",
+      "ask": "ship dark mode for Settings on desktop and mobile",
+      "onThisComputer": "on this computer",
+      "agents": "Agents",
+      "taskDesktop": "Desktop settings.css",
+      "taskMobile": "Mobile settings screen",
+      "taskScreenshots": "Update screenshot tests",
+      "taskTypes": "Fix 2 type errors",
+      "phaseReading": "Reading files…",
+      "phaseEditing": "Editing…",
+      "phaseTesting": "Running tests…",
+      "testsPass": "tests pass",
+      "statusPlanning": "Planning…",
+      "statusStarting": "Starting {{count}} agents…",
+      "statusRunning": "{{count}} agents running…",
+      "statusAgentsDone": "All agents done",
+      "statusReview": "Asking {{name}} to review…",
+      "statusMemory": "Saving what it learned…",
+      "statusDone": "Done",
+      "reviewedAll": "reviewed all 4 · 1 fix",
+      "remembered": "{{name}} remembered: use color tokens",
+      "prNumber": "PR #{{number}}",
+      "prTitle": "Dark mode for Settings",
+      "reviewedBy": "Reviewed by {{name}}",
+      "review": "Review",
+      "pause": "Pause",
+      "play": "Play",
+      "replay": "Replay"
     }
   },
   "quickOpen": {
@@ -26873,14 +26896,17 @@
       "purposeLabel": "Purpose",
       "purposePlaceholder": "Describe its job (optional)",
       "uploadPasteOrDrop": "or upload, paste or drop your own",
-      "pasteHint": "Paste an image with {{shortcut}}",
-      "nothingUntilCreate": "Nothing is created until you press Create bot."
+      "pasteHint": "Paste an image with {{shortcut}}"
     },
     "section": {
       "title": "Bots",
       "newBot": "New bot",
       "startFromScratch": "Start from scratch",
-      "empty": "No bots yet.",
+      "emptyTitle": "Meet your AI teammate",
+      "emptyBody": "Ask from anywhere. It runs a fleet of agents and remembers what it learns.",
+      "emptySeeHow": "See how it works",
+      "emptyCreate": "Create a bot",
+      "emptyTemplates": "Templates",
       "expand": "Expand Bots",
       "collapse": "Collapse Bots",
       "summary": "{{action}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
@@ -27193,7 +27219,11 @@
         "title": "Add {{name}} to Linear",
         "titleOn": "{{name}} in Linear",
         "isOn": "{{name}} is on Linear",
-        "workspace": "Workspace"
+        "connectTitle": "Connect Linear",
+        "tryIt": "Try it on any Linear issue",
+        "orLabel": "or add the label",
+        "actsOnHost": "Orca acts as that Linear user from {{host}}.",
+        "actsAsYou": "Orca acts as you in Linear from this computer."
       },
       "whoCanAsk": {
         "outsiders": "Everyone else in {{workspace}} gets a public reply to ask you.",
@@ -27228,7 +27258,6 @@
       "howToAsk": "Mention <code>@Orca {{handle}}</code> on an issue, or add the label <code>bot:{{handle}}</code>.",
       "connect": {
         "who": "{{name}} in {{workspace}}",
-        "intro": "Sign in to Linear in your browser and pick the workspace. If Orca is not installed there yet, a workspace admin can install it on the way. Orca can then act as you in Linear from this computer.",
         "button": "Connect Linear",
         "waiting": "Finish signing in to Linear in your browser…",
         "turnOn": "Turn on {{name}}",
@@ -27236,15 +27265,13 @@
         "stuck": "Stuck on a Linear page that says “Could not find OAuth client”? Orca’s Linear app isn’t open to this workspace yet. An admin of the workspace that owns the app must make it public.",
         "another": "Use another workspace",
         "pick": "Choose a Linear workspace.",
-        "introOnHost": "Sign in to Linear in Orca’s browser for {{host}} and pick the workspace. If Orca is not installed there yet, a workspace admin can install it on the way. Orca can then act as that Linear user from {{host}}."
+        "pickWorkspace": "Sign in and pick the Linear workspace {{name}} works in."
       },
       "signOut": {
         "title": "Sign out of {{workspace}}?",
         "one": "{{bots}} answers there now. It stops until you sign in to this workspace again.",
         "many": "{{bots}} answer there now. They stop until you sign in to this workspace again."
-      },
-      "setupIntro": "Mention <code>@Orca {{handle}}</code> on an issue, or add the label <code>bot:{{handle}}</code>, and {{name}} starts working on this computer.",
-      "setupIntroOnHost": "Mention <code>@Orca {{handle}}</code> on an issue, or add the label <code>bot:{{handle}}</code>, and {{name}} starts working on {{host}}."
+      }
     },
     "github": {
       "whoCanAsk": {
@@ -27284,7 +27311,10 @@
         "finishInBrowser": "Finish on GitHub in your browser…",
         "openAgain": "Open again",
         "added": "Added from GitHub: {{names}}.",
-        "pushesOnHost": "{{name}} pushes code from {{host}} with its git login."
+        "pushesOnHost": "{{name}} pushes code from {{host}} with its git login.",
+        "tryIt": "Try it on any issue or pull request",
+        "connectTitle": "Connect GitHub",
+        "manage": "Manage"
       },
       "account": {
         "defaultBot": "Default bot for my requests",
@@ -27314,14 +27344,14 @@
       "howToAsk": "Mention <code>{{mention}} {{handle}} …</code> on an issue or pull request.",
       "allRepositories": "All repositories of {{account}}",
       "connect": {
-        "intro": "Sign in with GitHub in your browser, and install the Orca app on the repositories {{name}} may work in if it is not there yet. Orca only reads your username and id.",
         "button": "Connect GitHub",
         "waiting": "Finish signing in to GitHub in your browser…",
         "requested": "An owner of the organization has been asked to approve the Orca app.",
         "notInstalled": "The Orca app is not on any of your repositories yet.",
         "turnOn": "Turn on {{name}}",
         "connected": "GitHub connected.",
-        "introOnHost": "Sign in with GitHub in Orca’s browser for {{host}}, and install the Orca app on the repositories {{name}} may work in if it is not there yet. Orca only reads the username and id."
+        "pickRepositories": "Sign in and choose which repositories {{name}} can work in.",
+        "readsOnly": "Orca only reads your GitHub username and id."
       },
       "allRepositoriesShort": "all repositories",
       "signOut": {
@@ -27329,7 +27359,6 @@
         "one": "{{bots}} answers on GitHub now. It stops until you sign in as @{{login}} again.",
         "many": "{{bots}} answer on GitHub now. They stop until you sign in as @{{login}} again."
       },
-      "setupIntro": "Mention <code>{{mention}} {{handle}} …</code> on an issue or pull request, and {{name}} starts working on this computer.",
       "pill": {
         "on": "<name/> is on GitHub",
         "saved": "GitHub saved your changes",
@@ -27342,7 +27371,9 @@
         "expand": "Expand",
         "stopTip": "Stop"
       },
-      "setupIntroOnHost": "Mention <code>{{mention}} {{handle}} …</code> on an issue or pull request, and {{name}} starts working on {{host}}."
+      "repositoriesIn": "Repositories in {{accounts}}",
+      "repositoryCount_one": "{{count}} repository in {{accounts}}",
+      "repositoryCount_other": "{{count}} repositories in {{accounts}}"
     },
     "automations": {
       "paused": "Paused",
@@ -28235,6 +28266,7 @@
       "blank": "Blank bot",
       "close": "Close",
       "comesWith": "Comes with",
+      "comesWithHelp": "About template schedules and setup",
       "olderHost": "{{host}} runs an older Orca, so this template’s skills and schedules won’t be added. Update Orca there to get them, or create the bot with just its instructions.",
       "comesWithNote": "Schedules start turned off. Automations and connectors are set up in its first chat, once you pick the repo or channel.",
       "keepSkill": "Add the {{skill}} skill",
@@ -28242,7 +28274,8 @@
       "stateFirstChat": "First chat",
       "stateNotConnected": "Not connected",
       "needsSetup": "Needs setup",
-      "byOrca": "{{category}} · by Orca",
+      "publisher": "by Orca",
+      "official": "Official Orca template",
       "useTemplate": "Use template…",
       "inItsChat": "in its chat",
       "firstChat": "What it does first",
@@ -28252,14 +28285,14 @@
       "noMatchLine": "Start a blank bot and tell it what it’s for in its first chat.",
       "blankFor": "Blank bot for “{{query}}”",
       "clearSearch": "Clear search",
-      "count": "{{count}} templates",
-      "countOf": "{{shown}} of {{count}} templates",
       "closeTooltip": "Close · Esc",
       "fromLink": "From a link",
       "search": "Search templates",
       "originTemplateNamed": "From the {{template}} template",
       "aboutTemplate": "About {{name}}",
       "allTemplates": "All templates",
+      "filterCategory": "Filter by category",
+      "allCategories": "All",
       "category": {
         "coding": "Coding",
         "releases": "Releases & CI",
@@ -28268,8 +28301,6 @@
         "ops": "Ops",
         "personal": "Personal follow-ups"
       },
-      "whenEvents": "On events",
-      "whenAsked": "When you ask",
       "paletteLine": "Bot template"
     },
     "options": {
@@ -28732,7 +28763,6 @@
       "showMoreWorkers_one": "Show {{count}} more worker",
       "showMoreWorkers_other": "Show {{count}} more workers",
       "runningCount": "{{count}} running",
-      "openTab": "Open in a tab",
       "showMoreCount": "Show {{count}} more",
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
@@ -28978,7 +29008,6 @@
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
         "links": "Links",
-        "newEvents": "{{count}} new",
         "showLess": "Show less",
         "showMore": "Show more",
         "sub": "Item {{number}} · {{chat}} · {{when}}",
@@ -29024,6 +29053,11 @@
       "show": "Show",
       "matchCount_one": "{{count}} match",
       "matchCount_other": "{{count}} matches"
+    },
+    "setup": {
+      "copyHowToAsk": "Copy {{text}}",
+      "forOnHost": "for {{name}} on {{host}}",
+      "for": "for {{name}}"
     }
   },
   "plugins": {

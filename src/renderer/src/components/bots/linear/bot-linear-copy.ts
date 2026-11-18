@@ -76,21 +76,21 @@ export function linearWorkspaceLabel(name: string, urlKey: string | undefined): 
   return urlKey ? `${name} (linear.app/${urlKey})` : name
 }
 
-/** A setup dialog's header: how to ask, and that the bot then works on its computer. */
-export function linearSetupIntro(
-  bot: Pick<Bot, 'name' | 'folder'>,
-  hostName: string | null
-): string {
-  if (hostName) {
-    return translate(
-      'bots.linear.setupIntroOnHost',
-      'Mention <code>@Orca {{handle}}</code> on an issue, or add the label <code>bot:{{handle}}</code>, and {{name}} starts working on {{host}}.',
-      { handle: bot.folder, name: bot.name, host: hostName, ...HOW_TO_ASK_ESCAPED }
-    )
-  }
-  return translate(
-    'bots.linear.setupIntro',
-    'Mention <code>@Orca {{handle}}</code> on an issue, or add the label <code>bot:{{handle}}</code>, and {{name}} starts working on this computer.',
-    { handle: bot.folder, name: bot.name, ...HOW_TO_ASK_ESCAPED }
-  )
+/** Who Orca acts as in Linear, and from where. */
+export function linearActsAs(hostName: string | null): string {
+  return hostName
+    ? translate('bots.linear.setup.actsOnHost', 'Orca acts as that Linear user from {{host}}.', {
+        host: hostName
+      })
+    : translate('bots.linear.setup.actsAsYou', 'Orca acts as you in Linear from this computer.')
+}
+
+/** What to type on a Linear issue to ask the bot. */
+export function linearMention(bot: Pick<Bot, 'folder'>): string {
+  return `@Orca ${bot.folder}`
+}
+
+/** The label that asks the bot when added to a Linear issue. */
+export function linearLabel(bot: Pick<Bot, 'folder'>): string {
+  return `bot:${bot.folder}`
 }

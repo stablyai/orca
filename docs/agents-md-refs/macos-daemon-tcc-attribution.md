@@ -58,9 +58,21 @@ folder prompts naming it, and a new Full Disk Access row for every user.
 
 The helper's bundle, executable and display name are `Orca Agents`; its identifier, signing team
 and designated requirement still match Orca.app. This names the existing terminal-agent process
-without changing its privacy client. Native chat providers still run under the GUI process. An
+without changing its privacy client. Supported local macOS native chat providers also start
+under the independent host when it supports provider spawning and its executable can be resolved:
+the host starts the app's native provider owner (`orca-provider-exec`) and connects every owner
+pipe back to the app, so the app owns, stops and recovers the chat exactly as on a direct launch
+and a host restart does not end it. Older or unsupported hosts, an unavailable host executable,
+failed connection or ping checks, fork fallback and remote/server routes keep direct launching. An
 adopted older daemon keeps its original name until it exits; the fork fallback and Windows names
 are unchanged.
+
+Before each hosted provider launch, the actual authenticated host enumerates the working folder.
+Only a successful read permits hosted launching; a denial, unknown result, timeout or unsupported
+probe keeps the existing direct launch before any hosted spawn is sent. Confirmed host denial
+uses the same folder-access notice as terminals when the app itself can read the folder. A later
+successful host read clears stale denial evidence. This checks the working folder at launch time;
+it cannot predict access to other folders a tool might later open or a grant revoked after launch.
 
 ## macOS floor
 

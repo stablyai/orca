@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 
-/** A search no template matches: a blank bot for it, or back to every template. */
+/** A search with no results: start a blank bot or clear the search. */
 export function BotTemplatesEmpty({
   query,
   onBlank,
