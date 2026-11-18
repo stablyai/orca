@@ -33,10 +33,14 @@ export function boundedStoredJsonSql(
  * escaping makes stored and extracted sizes differ.
  */
 function shortenedJsonSql(json: string): string {
+  // A head short enough to stay whole keeps its own truncated flag.
   const cut = (payload: string) => `WHEN json_type(${json},'${payload}.head')='text'
     THEN json_set(${json},'${payload}.head',
       substr(json_extract(${json},'${payload}.head'),1,${SHORTENED_HEAD_CHARS}),
-      '${payload}.truncated',json('true'))`
+      '${payload}.truncated',CASE WHEN json_extract(${json},'${payload}.truncated')
+        OR octet_length(substr(json_extract(${json},'${payload}.head'),1,${SHORTENED_HEAD_CHARS}))
+          <octet_length(json_extract(${json},'${payload}.head'))
+        THEN json('true') ELSE json('false') END)`
   return `(SELECT CASE WHEN octet_length(shortened)<=${LIMIT / 2} THEN shortened END
     FROM (SELECT CASE ${cut('$.body.output')} ${cut('$.body.patch')} END AS shortened LIMIT 1))`
 }

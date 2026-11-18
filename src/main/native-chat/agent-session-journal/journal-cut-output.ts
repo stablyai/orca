@@ -45,33 +45,35 @@ export function restoreCutJournalOutput(
   ) {
     return item
   }
-  const field = body.kind === 'diff' ? 'patch' : 'output'
+  // The row may hold it under the other field: a diff becomes a Diff call and back.
+  const whole = (
+    field: string
+  ) => `CASE WHEN json_extract(payload_json,'$.body.${field}.truncated')=0
+    AND json_extract(payload_json,'$.body.${field}.digest')=?
+    AND json_extract(payload_json,'$.body.${field}.byteLength')=?
+    THEN json(json_extract(payload_json,'$.body.${field}')) END`
   const row = db
-    .prepare(`SELECT json(json_extract(payload_json,?)) AS whole FROM journal_items
-      WHERE session_id=? AND epoch=? AND item_id=? AND output_blob IS NULL
-        AND json_extract(payload_json,?)=0 AND json_extract(payload_json,?)=?
-        AND json_extract(payload_json,?)=?`)
+    .prepare(`SELECT COALESCE(${whole('output')}, ${whole('patch')}) AS whole FROM journal_items
+      WHERE session_id=? AND epoch=? AND item_id=? AND output_blob IS NULL`)
     .get(
-      `$.body.${field}`,
-      ...prefix,
-      item.itemId,
-      `$.body.${field}.truncated`,
-      `$.body.${field}.digest`,
       payload.digest,
-      `$.body.${field}.byteLength`,
-      payload.byteLength
+      payload.byteLength,
+      payload.digest,
+      payload.byteLength,
+      ...prefix,
+      item.itemId
     )
   if (typeof row?.whole !== 'string') {
     return item
   }
-  const whole: AgentJournalBoundedPayload = JSON.parse(row.whole)
+  const saved: AgentJournalBoundedPayload = JSON.parse(row.whole)
   const restored: AgentJournalRenderItem = {
     ...item,
     body:
       body.kind === 'diff'
-        ? { ...body, patch: whole }
+        ? { ...body, patch: saved }
         : body.kind === 'tool-call'
-          ? { ...body, output: whole }
+          ? { ...body, output: saved }
           : body
   }
   delete restored.shortened
