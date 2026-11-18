@@ -27,6 +27,7 @@ import { electronServeEnvironment } from './electron-serve-browser-environment'
 import { reserveLoopbackPort } from './loopback-port-reservation'
 import {
   launchOnElectronSidecarProfile,
+  stopAnsweringElectronSidecar,
   stopElectronSidecar,
   type ElectronSidecarProfile
 } from './electron-sidecar-profile'
@@ -167,16 +168,18 @@ export class ElectronServeBrowserProcess {
   }
 
   async stop(): Promise<void> {
-    // An exited child's pid may already belong to another process.
-    const sidecarPid = this.metadata?.pid ?? this.pid()
-    const profile = this.sidecarProfile
+    const childPid = this.pid()
+    const { metadata, sidecarProfile: profile } = this
     this.child = null
     this.metadata = null
     this.sidecarCapabilities = []
     this.sidecarProfile = null
     this.tabs.clear()
-    if (sidecarPid) {
-      await stopElectronSidecar(sidecarPid)
+    if (childPid !== null) {
+      await stopElectronSidecar(metadata?.pid ?? childPid)
+    } else if (metadata) {
+      // The child is gone, so its pids may be recycled; signal only a sidecar that still answers.
+      await stopAnsweringElectronSidecar(metadata)
     }
     if (profile && !profile.persistent) {
       // Windows helpers may briefly hold this temp profile; cleanup failure must not strand the instance lock.

@@ -8,7 +8,10 @@ import { isProcessAlive } from '../../../../shared/remote-runtime/serve-supervis
 import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import { isDirectChild } from '../../../filesystem/owned-temp-staging-root'
 import { readRuntimeMetadataAsync } from '../../../runtime/rpc/server/runtime-metadata'
-import { getRuntimeMetadataPath } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import {
+  getRuntimeMetadataPath,
+  type RuntimeMetadata
+} from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { unixSocketPathFits } from '../../../../shared/network/unix-socket-path-limit'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { sendOrcadSidecarRequest } from '../orcad-sidecar-runtime-client'
@@ -172,9 +175,21 @@ async function stopOrphanedSidecar(profilePath: string): Promise<boolean> {
   if (!orphan || !isProcessAlive(orphan.pid)) {
     return true
   }
-  // Answering with its own auth token proves the pid is still that sidecar, not a recycled one.
+  if (!(await stopAnsweringElectronSidecar(orphan))) {
+    // Unverified, so never signalled: it may be a sidecar still quitting, or a recycled pid.
+    const deadline = Date.now() + STOP_TIMEOUT_MS
+    while (isProcessAlive(orphan.pid) && Date.now() < deadline) {
+      await delay(50)
+    }
+  }
+  return !isProcessAlive(orphan.pid)
+}
+
+/** Stops the sidecar these metadata name only if it still answers with its own auth token. */
+export async function stopAnsweringElectronSidecar(metadata: RuntimeMetadata): Promise<boolean> {
+  // Answering proves the pid is still that sidecar, not a recycled one.
   const answered = await sendOrcadSidecarRequest(
-    orphan,
+    metadata,
     'status.get',
     undefined,
     ORPHAN_PROBE_TIMEOUT_MS
@@ -183,15 +198,9 @@ async function stopOrphanedSidecar(profilePath: string): Promise<boolean> {
     () => false
   )
   if (answered) {
-    await stopElectronSidecar(orphan.pid)
-  } else {
-    // Unverified, so never signalled: it may be a sidecar still quitting, or a recycled pid.
-    const deadline = Date.now() + STOP_TIMEOUT_MS
-    while (isProcessAlive(orphan.pid) && Date.now() < deadline) {
-      await delay(50)
-    }
+    await stopElectronSidecar(metadata.pid)
   }
-  return !isProcessAlive(orphan.pid)
+  return answered
 }
 
 /** Remove the profile, and any sidecar still on it, that a crashed or killed orcad left behind. */
