@@ -14,9 +14,12 @@ import { dirname, join, resolve } from 'node:path'
 import {
   ORCAD_NODE_PTY_DIR,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
+  ORCAD_PROVIDER_EXEC_FILENAME,
+  ORCAD_PROVIDER_EXEC_SLOT_FILE,
   ORCAD_SERVER_TARGET_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR,
+  isOrcadExecutableArtifact,
   orcadNodePtySlotFiles,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
@@ -43,10 +46,6 @@ import { assertNotDarkBuild, darkBuildMarkers } from '../../../dark-build-switch
 const root = resolve(import.meta.dirname, '../../../..')
 const outputDir = join(root, 'out', 'orcad-template')
 const buildDir = join(root, 'out', '.orcad-template-build')
-
-function isExecutable(filename) {
-  return /(?:^|\/)(?:rg|spawn-helper)$/.test(filename)
-}
 
 function copy(source, destination, executable = false) {
   mkdirSync(dirname(destination), { recursive: true })
@@ -91,7 +90,7 @@ function stageTarget(target, packageDir) {
   const files = {}
   for (const filename of orcadTemplateTargetFilenames(target)) {
     const staged = join(destination, ...filename.split('/'))
-    copy(join(packageDir, ...filename.split('/')), staged, isExecutable(filename))
+    copy(join(packageDir, ...filename.split('/')), staged, isOrcadExecutableArtifact(filename))
     files[filename] = sha256(staged)
   }
   const browserName = orcadAgentBrowserNativeName(
@@ -144,7 +143,11 @@ function stageCompatTarget(compat, basePackageDir) {
     ...Object.entries(COMPAT_SLOT_ADDONS).map(([file, shipped]) => [
       shipped,
       join(ORCAD_PREBUILDS_DIR, compat, ...file.split('/'))
-    ])
+    ]),
+    [
+      ORCAD_PROVIDER_EXEC_FILENAME,
+      join(ORCAD_PREBUILDS_DIR, compat, ...ORCAD_PROVIDER_EXEC_SLOT_FILE.split('/'))
+    ]
   ])
   // Why fatal: the base binary would pass every check here and fail only on a compat host.
   const gaps = findCompatAddonGaps(orcadTemplateTargetFilenames(compat), slotFiles)
@@ -162,7 +165,7 @@ function stageCompatTarget(compat, basePackageDir) {
       writeFileSync(staged, `${pinnedNodeRuntimeAsset(compat).executableSha256}\n`)
     } else {
       const source = slotFiles.get(filename) ?? join(basePackageDir, ...filename.split('/'))
-      copy(source, staged, isExecutable(filename))
+      copy(source, staged, isOrcadExecutableArtifact(filename))
     }
     files[filename] = sha256(staged)
   }
@@ -206,7 +209,7 @@ async function main() {
         throw new Error(`${filename} differs between ${firstTarget} and ${target} packages`)
       }
     }
-    copy(source, join(outputDir, ...filename.split('/')), isExecutable(filename))
+    copy(source, join(outputDir, ...filename.split('/')), isOrcadExecutableArtifact(filename))
   }
   const targets = Object.fromEntries(
     templateTargets.map((target) => [target, stageTarget(target, packages[target])])

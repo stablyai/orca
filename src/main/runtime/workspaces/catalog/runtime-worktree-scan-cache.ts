@@ -3,7 +3,7 @@ import { isAgentScratchRepoRootPath } from '../../../../shared/worktree/visibili
 import {
   getRepoRoutingConnectionId,
   getRepoSshConnectionId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   resolveLocalProjectRuntimeForRepo,

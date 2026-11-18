@@ -45,6 +45,8 @@ export type StructuredAgentSessionStatusFeedDeps = {
     id: string,
     cut: HostUsageLimitCut | null
   ) => AgentSessionStatusSummary['usageLimitContinue']
+  /** Absent: the running child applies the mode it launched with. */
+  runningPermissionMode?: (sessionId: string) => string | undefined
   now: () => number
   /** Observer/sink failure must not block subscriber events. */
   logger: StructuredAgentSessionLogger

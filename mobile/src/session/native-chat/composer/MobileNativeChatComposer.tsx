@@ -1,9 +1,6 @@
-import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
-import {
-  recordMobileNativeChatSkillPick,
-  useMobileNativeChatDraft
-} from './drafts/mobile-native-chat-draft-store'
+import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
 import { useMobileNativeChatComposerDictation } from './dictation/use-mobile-native-chat-composer-dictation'
 import {
   focusMobileNativeChatTextDestination,
@@ -47,12 +44,13 @@ import type { MobileNativeChatStructuredComposer } from './commands/mobile-nativ
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
 import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
+import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
 
-type Props = MobileNativeChatMicProps & {
+export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
   // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
   insertDictation?: (insert: (draft: string) => string) => boolean | void
   draftScopeKey?: string | null
@@ -104,7 +102,10 @@ type Props = MobileNativeChatMicProps & {
 }
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
-export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
+export type MobileNativeChatSendProps = Pick<
+  MobileNativeChatComposerProps,
+  'onSend' | 'sendFollowUp'
+>
 
 export function MobileNativeChatComposer({
   inputRef,
@@ -145,7 +146,7 @@ export function MobileNativeChatComposer({
   stop = null,
   sendFollowUp = null,
   steerHead
-}: Props): React.JSX.Element {
+}: MobileNativeChatComposerProps): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInputInstance>(null)
@@ -291,6 +292,7 @@ export function MobileNativeChatComposer({
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         {editSession ? null : <MobileNativeChatMcpTray panel={structured?.mcpPanel} />}
         {goal.strip}
+        {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
         <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
           <MobileNativeChatComposerAttachments
             images={attachments}
@@ -421,11 +423,4 @@ export function MobileNativeChatComposer({
       {content}
     </MobileNativeChatComposerAllocation>
   )
-}
-
-export function MobileNativeChatDraftComposer({
-  draftKey,
-  ...props
-}: Omit<Props, 'value'> & { draftKey: string | null }): React.JSX.Element {
-  return <MobileNativeChatComposer {...props} value={useMobileNativeChatDraft(draftKey)} />
 }

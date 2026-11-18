@@ -131,8 +131,9 @@ function DropdownMenuItem({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   inset?: boolean
-  /** `launch`: rows in the shared agent menu; at least 36px tall in either density. */
-  variant?: 'default' | 'destructive' | 'launch'
+  /** `launch`: rows in the shared agent menu; at least 36px tall in either density.
+   *  `sortable`: compact drag-handle rows that lift while `data-dragging` is set. */
+  variant?: 'default' | 'destructive' | 'launch' | 'sortable'
   density?: MenuDensity
 }) {
   const rowDensity = useMenuDensity(density)
@@ -268,7 +269,7 @@ function DropdownMenuSubTrigger({
   density?: MenuDensity
   // Why: collision-flipped submenus open leftward, where a right-pointing chevron misleads.
   hideChevron?: boolean
-  variant?: 'default' | 'launch-row' | 'header-chip'
+  variant?: 'default' | 'launch-row' | 'header-chip' | 'icon-row'
 }) {
   const rowDensity = useMenuDensity(density)
   return (

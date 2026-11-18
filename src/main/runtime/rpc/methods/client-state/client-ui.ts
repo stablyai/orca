@@ -9,7 +9,7 @@ import {
   omitPairingLocalUiFields,
   type PairedUiState
 } from '../../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import { isWorkspaceHostScope } from '../../../../../shared/orcad-migration/orcad-migration-client-state-value-validation'
 import { defineMethod, type RpcContext } from '../../core'
 import { isHostOwnPhone } from '../../callers/host-own-phone'

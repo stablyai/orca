@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../agent-session-host-authority'
+} from '../operations/agent-session-host-authority'
 import { ClaimedAgentPtyOwnerRegistry } from './claimed-agent-pty-owner'
 
 function claim(

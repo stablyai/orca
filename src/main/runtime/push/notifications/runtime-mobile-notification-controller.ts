@@ -5,12 +5,12 @@ import {
 } from '../../../../shared/notifications/notification-attention-acknowledgement'
 import type { NotificationAttentionAcknowledgement } from '../../../../shared/notifications/notification-settings-types'
 import { reserveNotificationCooldown } from '../../../../shared/notifications/notification-burst-cooldown'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   StructuredAttentionOrigin,
   StructuredAttentionState
-} from '../../../../shared/agent-session/agent-session-attention'
+} from '../../../../shared/agent-session/view/agent-session-attention'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,

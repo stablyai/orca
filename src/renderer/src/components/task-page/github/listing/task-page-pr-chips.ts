@@ -6,7 +6,7 @@ import {
 } from '../../../../../../shared/work-items/task-query'
 import type { ParsedTaskQuery } from '../../../../../../shared/work-items/task-query'
 import { getTaskPresetQuery } from '../../../../../../shared/work-items/task-preset-query'
-import type { TaskViewPresetId } from '../../../../../../shared/ui-chrome-types'
+import type { TaskViewPresetId } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 
 export type GitHubPRStateChip = 'open' | 'merged' | 'closed' | 'all'
 export type GitHubPRWhoChip = 'everyone' | 'mine' | 'reviewing'

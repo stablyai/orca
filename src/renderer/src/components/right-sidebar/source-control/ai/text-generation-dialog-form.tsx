@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/select'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { commitMessagePickerModel } from '@/components/feature-wall/commit-pr-settings/ai-commit-pr-picker'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { planSourceControlTextGeneration } from '@/lib/source-control/ai/source-control-generation-plan'
@@ -98,7 +97,7 @@ export function SourceControlTextGenerationDialogForm({
   const t = useTranslate()
   const entries = useMemo<AgentPickerEntry[]>(
     () =>
-      listCommitMessageAgentCapabilities().map((capability) => ({
+      listCommitMessageAgentCapabilities(actionId).map((capability) => ({
         agent: capability.id,
         label: agentLabel(capability.id),
         rows: [{ agent: capability.id, kind: 'cli' }],
@@ -109,7 +108,7 @@ export function SourceControlTextGenerationDialogForm({
         catalog: { origin: 'unknown' },
         arguments: ''
       })),
-    []
+    [actionId]
   )
   const pickerModel = useMemo(() => commitMessagePickerModel(entries), [entries])
   const showCustomAgent = Boolean(
@@ -273,22 +272,25 @@ export function SourceControlTextGenerationDialogForm({
               setAgentId(agent)
               setGenerationError(null)
             }}
-          >
-            {showCustomAgent ? (
-              <DropdownMenuItem
-                onSelect={() => {
-                  setAgentId(CUSTOM_AGENT_ID)
-                  setGenerationError(null)
-                }}
-              >
-                <Terminal className="size-3.5 text-muted-foreground" />
-                {t(
-                  'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
-                  'Custom command'
-                )}
-              </DropdownMenuItem>
-            ) : null}
-          </AgentLaunchPicker>
+            choices={
+              showCustomAgent
+                ? [
+                    {
+                      id: CUSTOM_AGENT_ID,
+                      label: t(
+                        'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
+                        'Custom command'
+                      ),
+                      icon: <Terminal className="size-3.5 text-muted-foreground" />,
+                      onSelect: () => {
+                        setAgentId(CUSTOM_AGENT_ID)
+                        setGenerationError(null)
+                      }
+                    }
+                  ]
+                : undefined
+            }
+          />
         </div>
 
         <div className="space-y-2">

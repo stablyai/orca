@@ -6,7 +6,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
@@ -15,7 +15,7 @@ import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey
 } from '../../../../../shared/workspace/identity/workspace-scope'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,

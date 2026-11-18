@@ -91,6 +91,9 @@ export async function sendPromptWithGuardedPasteAndEnter(
       if (send.refusedReason === 'permission') {
         return { status: 'permission', code: 'terminal-send-permission' }
       }
+      if (send.refusedReason === 'approval-unseen') {
+        return { status: 'approval-unseen', code: 'terminal-send-approval-unseen' }
+      }
       if (send.refusedReason === 'no-agent') {
         return { status: 'no-agent', code: 'no-agent' }
       }

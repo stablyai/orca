@@ -24,11 +24,11 @@ import {
   ContextMenuShortcut
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
 import { useTranslate } from '@/i18n/use-translate'
-import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import { LocalOnlyMenuHint } from '@/components/ui/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
   getWorkspaceFileRevealOwner,

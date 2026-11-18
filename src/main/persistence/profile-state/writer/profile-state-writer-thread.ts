@@ -16,7 +16,11 @@ export class ProfileStateWriterThread {
       exit: (code: number) => void
     }
   ) {
-    this.worker = spawnWorkerThread(workerPath, { workerData, execArgv: [] })
+    this.worker = spawnWorkerThread(workerPath, {
+      name: 'orca-profile-state-writer',
+      workerData,
+      execArgv: []
+    })
     this.worker.on('message', handlers.message)
     this.worker.on('error', handlers.error)
     this.worker.once('exit', (code) => {

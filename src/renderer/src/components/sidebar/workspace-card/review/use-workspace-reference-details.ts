@@ -7,7 +7,7 @@ import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-at
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
-import { useWslHostOffForRepo } from '../../use-wsl-host-off-review'
+import { useWslHostOffForRepo } from './use-wsl-host-off-review'
 import {
   getWorkspaceReferenceRequest,
   getWorkspaceReferenceRuntimeVersion,

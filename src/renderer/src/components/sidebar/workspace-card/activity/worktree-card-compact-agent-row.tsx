@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
-import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
-import { AgentChildRowContent } from '@/components/AgentChildRowContent'
+import {
+  AgentStateDot,
+  agentStateLabel,
+  type AgentDotState
+} from '@/components/agent/status/AgentStateDot'
+import { AgentChildRowContent } from '@/components/agent/status/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
@@ -28,7 +32,6 @@ import {
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useHasWorktreeCardUnreadRollup } from '../surface/worktree-card-title-status'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -133,7 +136,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   isUnvisited = false
 }: CompactAgentRowProps) {
   const t = useTranslate()
-  const hasUnreadRollup = useHasWorktreeCardUnreadRollup()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
@@ -244,7 +246,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             tooltipSide="right"
             progress={presentation.progress}
             unread={isUnvisited}
-            unreadDisplay={hasUnreadRollup ? 'label' : 'dot'}
           />
           {!hideIcon && (
             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>

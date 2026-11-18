@@ -233,13 +233,7 @@ export function ResourceUsageStatusSegment({
         },
         t
       )}
-      <DaemonActionDialog
-        api={daemonActions}
-        extraDescription={t(
-          'resourceManager.localDaemonScope',
-          'This affects terminals on this computer.'
-        )}
-      />
+      <DaemonActionDialog api={daemonActions} />
     </Popover>
   )
 }

@@ -7,7 +7,7 @@ import { launchDraftSource } from '@/components/native-chat/drafts/native-chat-l
 import * as chatDrafts from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import {

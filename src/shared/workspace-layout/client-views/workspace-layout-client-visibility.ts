@@ -1,4 +1,4 @@
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../tab-groups/tab-types'
 import type { LayoutTab, WorkspaceLayout } from '../workspace-layout-model'
 
 export type LayoutClientVisibility = (tab: Pick<LayoutTab, 'kind'>) => boolean

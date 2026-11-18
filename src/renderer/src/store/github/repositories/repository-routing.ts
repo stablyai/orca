@@ -14,7 +14,7 @@ import {
   normalizeExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 /** The server-side repo for a request already routed to `target`; `null` when it runs here. */
 export function getRuntimeRepoTarget(

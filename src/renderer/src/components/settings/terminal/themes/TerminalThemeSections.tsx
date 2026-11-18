@@ -35,7 +35,7 @@ import {
 import type { TerminalThemeOption } from '@/lib/terminal/appearance/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 
 let lastEditedTerminalThemeTarget: TerminalThemeSlot | null = null

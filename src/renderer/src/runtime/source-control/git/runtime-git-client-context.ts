@@ -6,12 +6,12 @@ import {
   getCommitMessageModelDiscoveryHostKeyForScope,
   getRepoCommitMessageModelDiscoveryHostKey
 } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { splitWorktreeIdForFilesystem } from '../../../../../shared/worktree/id'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { TextGenerationFailureFields } from '../../../../../shared/text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../../../../../shared/text-generation/text-generation-failure-copy'
 
 export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -127,8 +127,9 @@ export function getRuntimeCommitMessageSettings(
     ...(settings.agentCmdOverrides !== undefined
       ? { agentCmdOverrides: settings.agentCmdOverrides }
       : {}),
+    // Why: hosts before the contract accepted 'blank' reject it; null picks the same fallback agent.
     ...(settings.defaultTuiAgent !== undefined
-      ? { defaultTuiAgent: settings.defaultTuiAgent }
+      ? { defaultTuiAgent: settings.defaultTuiAgent === 'blank' ? null : settings.defaultTuiAgent }
       : {}),
     commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope)
   }

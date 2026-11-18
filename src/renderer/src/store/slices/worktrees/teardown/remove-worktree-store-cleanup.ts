@@ -1,7 +1,7 @@
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/worktree-card-slot-pane-index'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/workspace-card/slots/worktree-card-slot-pane-index'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntries } from '@/lib/workspace/activation/worktree-visit-recency'
@@ -104,6 +104,7 @@ export function applyRemoveWorktreeSuccessState(
       explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
       gitGraphFiltersByWorktree: omitByWorktree(s.gitGraphFiltersByWorktree ?? {}),
+      notificationsMutedByWorktree: omitByWorktree(s.notificationsMutedByWorktree),
       expandedDirs: omitByWorktree(s.expandedDirs),
       gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
       gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),

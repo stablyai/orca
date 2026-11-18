@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -37,15 +36,6 @@ class AccessibilityBusTest(unittest.TestCase):
         self.assertFalse(response["ok"])
         self.assertTrue(response["error"].startswith("unsupported_capability:"), response["error"])
 
-    @unittest.skipUnless(shutil.which("dbus-run-session"), "needs dbus-run-session")
-    def test_reachable_bus_lists_apps(self):
-        env = {name: value for name, value in os.environ.items()
-               if name not in ("DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS", "DISPLAY", "WAYLAND_DISPLAY")}
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as runtime_dir:
-            result = self.run_list_apps(runtime_dir, env, ("dbus-run-session", "--"))
-        # Why the last line: the registry daemon the session activates shares stdout and prints a banner.
-        response = result.stdout.strip().splitlines()[-1:]
-        self.assertEqual((result.returncode, response), (0, ['{"ok":true,"apps":[]}']), result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

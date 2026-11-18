@@ -36,7 +36,7 @@
 
 Supervisa y dirige a tus agentes desde el teléfono — recibe una notificación cuando un agente termine y envía instrucciones de seguimiento desde cualquier lugar.
 
-[App Store de iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [APK para Android](https://orca.dev/download/android) · [Docs →](https://orca.dev/docs/mobile)
+[App Store de iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [APK para Android](https://orca.dev/download/android) · [Docs →](https://orca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -234,7 +234,7 @@ yay -S stably-orca-bin
 Vincúlala con tu app de escritorio para supervisar y dirigir a tus agentes desde el teléfono.
 
 - **iOS:** [Descargar desde App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Descargar el APK](https://orca.dev/download/android)
+- **Android:** [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [Descargar el APK](https://orca.dev/download/android)
 
 ---
 

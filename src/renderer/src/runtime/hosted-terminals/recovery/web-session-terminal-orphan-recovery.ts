@@ -3,7 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remot
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { callRuntimeEnvironmentWithRevision } from '../../rpc/calls/runtime-rpc-environment-call'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
-import { getSessionTabsRuntimeIdFromResponse } from '../../web-session-tabs-sync/publisher-identity-fences'
+import { getSessionTabsRuntimeIdFromResponse } from '../../web-session-tabs-sync/tracking/publisher-identity-fences'
 import {
   cacheRetainedSurfaces,
   claimSurfaces,

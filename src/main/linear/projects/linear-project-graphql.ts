@@ -1,12 +1,30 @@
-export const ORCA_PROJECT_FIELDS = `
+// Why: agent listings read every page, so they skip the heavy fields they never return.
+const ORCA_PROJECT_SUMMARY_FIELDS = `
   id
   slugId
   name
-  description
-  content
   url
   color
   icon
+  updatedAt
+  status {
+    id
+    name
+    type
+    color
+  }
+  teams(first: 10) {
+    nodes {
+      id
+      name
+      key
+    }
+  }
+`
+
+const ORCA_PROJECT_EXTRA_FIELDS = `
+  description
+  content
   health
   priority
   priorityLabel
@@ -17,16 +35,9 @@ export const ORCA_PROJECT_FIELDS = `
   startDate
   targetDate
   createdAt
-  updatedAt
   completedAt
   canceledAt
   startedAt
-  status {
-    id
-    name
-    type
-    color
-  }
   lead {
     id
     displayName
@@ -39,19 +50,24 @@ export const ORCA_PROJECT_FIELDS = `
       avatarUrl
     }
   }
-  teams(first: 10) {
-    nodes {
-      id
-      name
-      key
-    }
-  }
   labels(first: 20) {
     nodes {
       id
       name
       color
     }
+  }
+`
+
+export const ORCA_PROJECT_FIELDS = `
+  ${ORCA_PROJECT_SUMMARY_FIELDS}
+  ${ORCA_PROJECT_EXTRA_FIELDS}
+`
+
+const ORCA_PROJECT_LIST_FIELDS = `
+  ${ORCA_PROJECT_SUMMARY_FIELDS}
+  ... @include(if: $detail) {
+    ${ORCA_PROJECT_EXTRA_FIELDS}
   }
 `
 
@@ -92,6 +108,7 @@ export const ORCA_ISSUE_FIELDS = `
   id
   identifier
   title
+  branchName
   description
   url
   priority
@@ -122,23 +139,35 @@ export const ORCA_ISSUE_FIELDS = `
 `
 
 export const PROJECTS_QUERY = `
-  query OrcaLinearProjects($first: Int, $filter: ProjectFilter, $orderBy: PaginationOrderBy) {
-    projects(first: $first, filter: $filter, orderBy: $orderBy) {
+  query OrcaLinearProjects(
+    $first: Int
+    $after: String
+    $filter: ProjectFilter
+    $orderBy: PaginationOrderBy
+    $detail: Boolean = true
+  ) {
+    projects(first: $first, after: $after, filter: $filter, orderBy: $orderBy) {
       nodes {
-        ${ORCA_PROJECT_FIELDS}
+        ${ORCA_PROJECT_LIST_FIELDS}
       }
       pageInfo {
         hasNextPage
+        endCursor
       }
     }
   }
 `
 
 export const SEARCH_PROJECTS_QUERY = `
-  query OrcaLinearProjectSearch($term: String!, $first: Int, $after: String) {
+  query OrcaLinearProjectSearch(
+    $term: String!
+    $first: Int
+    $after: String
+    $detail: Boolean = true
+  ) {
     searchProjects(term: $term, first: $first, after: $after) {
       nodes {
-        ${ORCA_PROJECT_FIELDS}
+        ${ORCA_PROJECT_LIST_FIELDS}
       }
       pageInfo {
         hasNextPage

@@ -31,6 +31,9 @@ export function parseOsc7(data: string, options: ParseOsc7Options = {}): string 
   if (!path || hasNulCharacter(path)) {
     return null
   }
+  if (path.startsWith('//')) {
+    return path
+  }
   const isWindowsDrivePath = /^\/[A-Za-z]:/.test(path)
   if (options.uncHost && !isWindowsDrivePath) {
     // Only the launch UNC server is a known Windows file host; other hosts may name POSIX shells.

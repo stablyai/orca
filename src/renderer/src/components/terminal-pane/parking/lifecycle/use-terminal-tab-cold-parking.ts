@@ -6,7 +6,7 @@ import { useAppStore } from '../../../../store/index'
 import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
-} from '../../../activity/activity-terminal-portal'
+} from '../../../activity/terminal-portal/activity-terminal-portal'
 import { getTerminalTabColdParkRecheckDelayMs } from '../retention/terminal-cold-park-recheck-deadlines'
 import {
   clearTerminalTabColdParkRecheckTimers,
