@@ -140,7 +140,13 @@ export function journalReaderOperationAdmitted(operation: JournalSqlReaderOperat
       return false
     case 'database':
       return operation.operation.kind !== 'records'
-    default:
+    case 'conversion-page':
+    case 'conversion-prepare':
+    case 'domain-history':
+    case 'fork-next':
+    case 'fork-prepare':
+    case 'import-state':
+    case 'point':
       return true
   }
 }
