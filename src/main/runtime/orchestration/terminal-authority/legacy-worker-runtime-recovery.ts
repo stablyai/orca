@@ -9,6 +9,8 @@ import {
   structuredAgentSessionLaunchContinuationDeps
 } from '../../agent-session/lifecycle/structured-agent-session-launch-continuation'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { reportWorkerStopsAcrossRestart } from '../workers/turn-stops/restart-worker-stop-report'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
@@ -39,6 +41,42 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         throw error
       }
     )
+  }
+
+  protected abstract reportRestingPane: (paneKey: string) => Promise<void>
+
+  private restartWorkerStopReport: Promise<void> | null = null
+
+  /** Once per start, after restored terminal authority: tell coordinators about workers that
+   *  stopped while Orca was down, or that this start did not continue. */
+  reportWorkerStopsAcrossRestartOnce(): Promise<void> {
+    this.restartWorkerStopReport ??= (async () => {
+      // Continued chats are working again, and replayed hooks have been probed once.
+      await Promise.all([
+        this.structuredAgentSessionLaunchContinuation.done,
+        agentHookServer.whenRestoredOwnersChecked()
+      ])
+      const db = this.getExistingOrchestrationDb()
+      if (!db) {
+        return
+      }
+      const host = getStructuredAgentSessionHost()
+      await reportWorkerStopsAcrossRestart({
+        db,
+        reportDeps: this.workerTurnStopReportDeps,
+        reportRestingPane: (paneKey) => this.reportRestingPane(paneKey),
+        chats: host
+          ? {
+              open: (sessionId) => host.revealSession(sessionId).catch(() => null),
+              status: (sessionId) => host.readFreshStatusSummary(sessionId),
+              cutOf: (sessionId) => host.restartResume.cutOf(sessionId)
+            }
+          : null
+      })
+    })().catch((error: unknown) => {
+      console.warn('[orchestration] reporting workers stopped across a restart failed', error)
+    })
+    return this.restartWorkerStopReport
   }
 
   async reconcileLegacyWorkerTerminals(
