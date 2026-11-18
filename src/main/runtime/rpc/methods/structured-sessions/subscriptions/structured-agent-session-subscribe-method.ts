@@ -1,5 +1,5 @@
 import { defineStreamingMethod } from '../../../core'
-import { sendingTextAppends } from '../../../../../../shared/agent-session/agent-session-text-append'
+import { sendingTextAppends } from '../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { recordMobileViewOpened } from '../../../../../telemetry/mobile-client-telemetry'
 import { clientRequestsCommands } from '../structured-agent-session-policy'
 import { clientReadsCurrentRequests } from '../conversation/structured-agent-session-current-requests'
@@ -63,6 +63,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
       },
       ...(params.cursor ? { cursor: params.cursor } : {}),
       snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
+      ...(capabilities?.promptSuggestions === 1 ? { showsPromptSuggestions: true } : {}),
       // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
       ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
     })

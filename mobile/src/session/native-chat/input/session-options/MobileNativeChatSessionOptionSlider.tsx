@@ -17,6 +17,7 @@ import {
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { SessionOptionCaption } from './MobileNativeChatSessionOptionRows'
 import { MobileSessionOptionSliderTrack } from './MobileSessionOptionSliderTrack'
+import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 
 export type MobileSessionOptionSliderTrackProps = {
   count: number
@@ -68,7 +69,8 @@ function Slider({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [preview, setPreview] = useState<number | null>(null)
-  const { choices, currentValue } = descriptor.kind
+  const { currentValue } = descriptor.kind
+  const choices = orderEffortLevels(descriptor.kind.choices)
   const current =
     descriptor.valueSource === 'unknown'
       ? -1

@@ -12,7 +12,6 @@ import {
   closeBrowserMemoryPage,
   waitForBrowserPageReady
 } from '../../browser-page-memory'
-import { reportBrowserSessionWebRequest } from '../../../sessions/requests/browser-session-web-request-observer'
 import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 import {
   browserGuestActivity,
@@ -98,15 +97,6 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
       frame: this.mainFrame,
       isMainFrame: true,
       isSameDocument: false
-    })
-    reportBrowserSessionWebRequest(this.asWebContents().session, 'onBeforeRequest', {
-      id: this.id,
-      url,
-      method: 'GET',
-      frame: this.asWebContents().mainFrame,
-      resourceType: 'mainFrame',
-      webContentsId: this.id,
-      timestamp: 0
     })
     this.emit('did-navigate', {}, url, 200, 'OK')
     this.emit('dom-ready')

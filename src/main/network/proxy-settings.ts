@@ -4,7 +4,7 @@ import {
   normalizeProxyBypassRules,
   normalizeProxyUrl,
   type NetworkProxySettings
-} from '../../shared/network-proxy'
+} from '../../shared/network/network-proxy'
 import {
   clearElectronProxyCredentialsForSession,
   haveSameElectronProxyCredentials,

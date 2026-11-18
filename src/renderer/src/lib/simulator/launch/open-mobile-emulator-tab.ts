@@ -20,7 +20,7 @@ import {
   shutdownManagedSimulatorIfNoPane
 } from '../tabs/simulator-pane-shutdown-scheduler'
 import { assertClientCreationActionAvailable } from '../../workspace/creation/surface-policy/client-creation-action-policy'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type { EmulatorStreamInfo } from '@/components/emulator-pane/session/emulator-pane-types'
 
 type OpenMobileEmulatorTabOptions = {

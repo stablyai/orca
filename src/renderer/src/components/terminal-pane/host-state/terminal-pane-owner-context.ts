@@ -5,8 +5,8 @@ import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-o
 import type { TerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import {
@@ -16,7 +16,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   UNRESOLVED_OWNER_HOST_ID
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   findLocalFolderWorkspaceRuntimeRepo,
   resolveQualifiedFolderWorkspaceResult

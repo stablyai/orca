@@ -20,6 +20,8 @@ import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
+import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
+import { installWorkerTerminalPriorOwnerIndex } from './worker-terminal/worker-terminal-prior-owner-index'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
@@ -39,6 +41,8 @@ class OrchestrationDbCore {
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
+    // Before WAL and any table, so a new file returns free pages in bounded steps; an existing one needs a VACUUM.
+    this.db.pragma('auto_vacuum = INCREMENTAL')
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
@@ -51,6 +55,7 @@ class OrchestrationDbCore {
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
     refreshOutstandingDeliveryTrigger(this.db)
+    installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
       ['federation_relay_items', ['answer_sender_report']]
@@ -76,6 +81,15 @@ class OrchestrationDbCore {
     this.db.exec(`
       DROP INDEX IF EXISTS idx_dispatch_creator_account_work;
       CREATE INDEX IF NOT EXISTS idx_dispatch_contexts_run ON dispatch_contexts(run_id);
+      CREATE INDEX IF NOT EXISTS idx_question_threads_run ON question_threads(run_id);
+      CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_origin
+        ON worker_terminal_resources(origin_dispatch_id);
+      CREATE INDEX IF NOT EXISTS idx_attempt_observation_facts_task
+        ON attempt_observation_facts(task_id);
+      CREATE INDEX IF NOT EXISTS idx_message_dispatch_provenance_dispatch
+        ON message_dispatch_provenance(dispatch_id);
+      CREATE INDEX IF NOT EXISTS idx_remote_run_links_run ON remote_run_links(run_id);
+      CREATE INDEX IF NOT EXISTS idx_remote_placements_run ON remote_placements(run_id);
       CREATE INDEX IF NOT EXISTS idx_worker_dispatches_agent_terminal_handle
         ON worker_dispatches(agent_terminal_handle) WHERE agent_terminal_handle IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_attempt_observation_facts_liveness
@@ -83,6 +97,12 @@ class OrchestrationDbCore {
       CREATE INDEX IF NOT EXISTS idx_dispatch_creator_mailbox_work
         ON dispatch_contexts(creator_dispatch_id, status);
       CREATE INDEX IF NOT EXISTS idx_runs_current_coordinator_handle ON runs(coordinator_handle);
+      CREATE INDEX IF NOT EXISTS idx_runs_current_pane_exact
+        ON runs(coordinator_pane_key) WHERE legacy = 0 AND coordinator_pane_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_runs_current_pane_leaf
+        ON runs(${RUN_PANE_KEY_MATCH_SUFFIX_SQL})
+        WHERE legacy = 0 AND coordinator_pane_key IS NOT NULL
+          AND instr(coordinator_pane_key, ':') > 1;
       CREATE INDEX IF NOT EXISTS idx_messages_native_account_work
         ON messages(run_id, to_handle, type)
         WHERE read = 0 AND delivered_at IS NULL AND delivery_contract <> 'audit_only';

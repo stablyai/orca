@@ -31,7 +31,7 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   opencode2: false,
   zcode: false,
   grok: false, // chat_history.jsonl supplies messages.
-  hermes: true,
+  hermes: false, // state.db supplies messages.
   rovo: false, // session_context.json supplies messages.
   openclaw: true,
   pi: true,

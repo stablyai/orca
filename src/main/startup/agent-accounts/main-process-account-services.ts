@@ -3,8 +3,6 @@ import { createDesktopCodexSessionMigration } from '../../codex/history/backfill
 import { app } from 'electron'
 import { KeybindingService } from '../../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'
-import { startCodexStateDbBackfillRecoveryInBackground } from '../../codex/history/index/codex-state-db-backfill-recovery'
-import { getOrcaManagedCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
 import {
   hasOpenCodeGoApiKey,
   readOpenCodeGoApiKey,
@@ -33,7 +31,6 @@ export function initializeMainProcessAccountServices(): void {
   state.codexAccounts = services.codexAccounts
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
-  void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
   installProviderAccountCatalogWarmup(store)

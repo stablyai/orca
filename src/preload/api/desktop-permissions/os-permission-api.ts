@@ -3,7 +3,7 @@ import type {
   ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
-} from '../../../shared/computer-use-permissions-types'
+} from '../../../shared/computer/computer-use-permissions-types'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionRequestResult,

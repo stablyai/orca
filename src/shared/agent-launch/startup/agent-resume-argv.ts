@@ -3,6 +3,7 @@ import type {
   ResumableTuiAgent
 } from '../../agent-session/lifecycle/agent-session-resume'
 import { ompTranscriptProfileArgs } from './omp-profile'
+import { hermesStateDbProfileArgs } from './hermes-profile'
 
 /** Keep per-agent resume argv separate from session metadata; type-only imports avoid runtime cycles. */
 export function getAgentResumeArgv(
@@ -86,7 +87,9 @@ export function getAgentResumeArgv(
     case 'kiro':
       return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
     case 'hermes':
-      return providerSession.key === 'session_id' ? ['hermes', '--resume', id] : null
+      return providerSession.key === 'session_id'
+        ? ['hermes', ...hermesStateDbProfileArgs(providerSession.transcriptPath), '--resume', id]
+        : null
   }
 }
 

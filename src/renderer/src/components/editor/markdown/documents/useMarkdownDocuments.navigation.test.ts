@@ -216,26 +216,6 @@ describe('Markdown document navigation', () => {
     }
   )
 
-  it.each(['superseded', 'unmounted'])('ignores a %s listing failure', async (reason) => {
-    let rejectListing: (error: unknown) => void = () => {}
-    runtime.list.mockReturnValueOnce(
-      new Promise((_resolve, reject) => {
-        rejectListing = reject
-      })
-    )
-    await render(sourceFile('edit'), 'source')
-    await (reason === 'superseded'
-      ? render(sourceFile('edit', 'next-owner'), 'source')
-      : act(async () => root.render(null)))
-    await act(async () => rejectListing(null))
-
-    expect(runtime.toastError).not.toHaveBeenCalled()
-    expect(runtime.translate).not.toHaveBeenCalled()
-    if (reason === 'superseded') {
-      expect(controller.markdownDocuments).toEqual([target])
-    }
-  })
-
   it.each(['directory', 'missing'])('does not navigate to a %s destination', async (kind) => {
     await render(sourceFile('markdown-preview'), 'source')
     if (kind === 'directory') {

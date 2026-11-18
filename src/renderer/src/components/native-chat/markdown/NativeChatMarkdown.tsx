@@ -11,11 +11,11 @@ import {
 } from 'react'
 import CommentMarkdown, {
   type CommentMarkdownExtension
-} from '@/components/sidebar/CommentMarkdown'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/comment-markdown-element-renderers'
-import { createDocumentCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
+} from '@/components/comment-markdown/CommentMarkdown'
+import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
+import { createDocumentCommentMarkdownComponents } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { cn } from '@/lib/class-names'
-import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/native-chat-visual-directive'
+import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { NativeChatMarkdownRowKeyContext } from './native-chat-markdown-row-identity'
 import { useNativeChatVisualMarkdownExtension } from '../media/visuals/native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-file-link-existence'

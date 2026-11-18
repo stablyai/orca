@@ -1,5 +1,5 @@
 import type { Store } from '../../../persistence/loading-store/store'
-import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
+import { getRepoDialableSshTargetId } from '../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { runAsWslUserAct, wslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'

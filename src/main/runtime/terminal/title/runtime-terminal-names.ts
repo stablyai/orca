@@ -2,7 +2,7 @@ import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { RuntimeWorkspaceArchive } from '../../workspaces/archive/runtime-workspace-archive'
 
 export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {

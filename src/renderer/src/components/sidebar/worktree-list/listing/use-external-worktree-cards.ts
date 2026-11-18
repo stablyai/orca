@@ -19,8 +19,8 @@ import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/worksp
 import {
   indexHiddenProjects,
   withoutHiddenFilterRepoIds
-} from '../../../../../../shared/hidden-projects'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/project/catalog/hidden-projects'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 
 export function useSidebarExternalWorktreeCards(args: {
   repos: readonly Repo[]

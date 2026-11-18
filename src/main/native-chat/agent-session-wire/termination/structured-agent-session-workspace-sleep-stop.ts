@@ -1,9 +1,7 @@
 import {
   agentSessionLeaseIsReleased,
-  agentSessionLeaseOwnerVerdict
+  agentSessionLeasePossiblyWriting
 } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
-import '../../../runtime/agent-session/records/agent-session-record-founding'
-import { agentSessionNeverStarted as structuredSessionNeverStarted } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { StructuredAgentSessionConversations } from '../host/structured-agent-session-conversations'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
 import type {
@@ -85,7 +83,8 @@ export async function stopWorkspaceSleepChat(input: {
   return childStopped || ownedStopped || alreadyStopped
 }
 
-/** Release alone cannot prove a restarted root stopped; require exit evidence or a never-started record. */
+/** Release alone cannot prove a restarted root stopped; require exit evidence or a never-acquired
+ *  lease, which covers an adopted conversation no agent has run for yet. */
 function workspaceSleepChatAtRest(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'adapter'>,
   sessions: StructuredAgentSessionConversations,
@@ -95,8 +94,7 @@ function workspaceSleepChatAtRest(
   return (
     !!record &&
     agentSessionLeaseIsReleased(record.lease) &&
-    (agentSessionLeaseOwnerVerdict(record.lease) === 'exited' ||
-      structuredSessionNeverStarted(record)) &&
+    !agentSessionLeasePossiblyWriting(record.lease) &&
     !sessions.get(sessionId)?.child &&
     deps.adapter.hasOwnedAcquisition?.(sessionId) !== true
   )

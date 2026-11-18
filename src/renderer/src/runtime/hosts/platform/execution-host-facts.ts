@@ -1,5 +1,11 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
-import type { ParsedExecutionHost, ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import type {
+  ParsedExecutionHost,
+  ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostContactForEntry } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
@@ -95,7 +101,7 @@ export type ExecutionHostTarget = {
   sshOwnerEnvironmentId: string | null
 }
 
-function resolveHostPlatform(
+export function resolveHostPlatform(
   state: HostFactsState,
   args: ExecutionHostTarget & {
     workspacePath: string | null | undefined
