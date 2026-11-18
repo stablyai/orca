@@ -24,6 +24,7 @@ import {
   getLocalWorkspacePortSections,
   shouldShowLocalWorkspacePortSections
 } from './local-workspace-port-sections'
+import { useQuietPortScan } from '@/lib/workspace-ports/use-quiet-port-scan'
 import { LocalPortSection } from './local-port-section'
 import { LocalPortDetailsDialog } from './local-port-details-dialog'
 import { SshForwardedPortsSection } from './ssh-forwarded-ports-section'
@@ -125,15 +126,22 @@ export function LocalWorkspacePortsPanel({
   const displayScan = isVisible && scanKey ? (scansByKey[scanKey] ?? null) : null
   const hasDisplayScan = displayScan !== null
   const firstScanRequestedKeyRef = useRef<string | null>(null)
+  const { pending: firstScanPending, scan: scanFirstView } = useQuietPortScan()
 
   // Background scans publish silently, so opening the panel before any result scans once in view.
   useEffect(() => {
-    if (!isVisible || !scanKey || hasDisplayScan || firstScanRequestedKeyRef.current === scanKey) {
+    if (
+      !isVisible ||
+      !runtimeTarget ||
+      !scanKey ||
+      hasDisplayScan ||
+      firstScanRequestedKeyRef.current === scanKey
+    ) {
       return
     }
     firstScanRequestedKeyRef.current = scanKey
-    void refresh()
-  }, [isVisible, scanKey, hasDisplayScan, refresh])
+    scanFirstView(runtimeTarget)
+  }, [isVisible, runtimeTarget, scanKey, hasDisplayScan, scanFirstView])
 
   const toggleSection = useCallback((sectionId: string) => {
     setCollapsedSections((current) => ({ ...current, [sectionId]: !current[sectionId] }))
@@ -307,7 +315,7 @@ export function LocalWorkspacePortsPanel({
             title={t('auto.components.right.sidebar.PortsPanel.935dda7718', 'Active Workspace')}
             ports={activePorts}
             emptyText={
-              refreshing && !displayScan
+              (refreshing || firstScanPending) && !displayScan
                 ? t('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
                 : t('auto.components.right.sidebar.PortsPanel.38b16cfbef', 'No ports detected')
             }
