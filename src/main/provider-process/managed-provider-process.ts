@@ -40,6 +40,8 @@ type ManagedProviderProcessOptions = {
   /** Defaults to the root-only policy; only a provider with its own reaper overrides it. */
   policy?: (supervised: boolean) => ProviderProcessClosePolicy
   spawnImpl?: ProviderProcessSpawner
+  /** False keeps the launch in this app even where the agent host is available. */
+  allowHost?: boolean
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
   /** Defaults to accepting root exit or delivered writer termination without descendant proof. */
@@ -111,7 +113,7 @@ export function spawnManagedProviderProcess(
       `Supervised provider graceful exit must wait at least ${PROVIDER_SUPERVISOR_MAX_STOP_MS} ms; received ${policy.gracefulExitMs} ms`
     )
   }
-  const child = spawnProviderProcess(spec, options.spawnImpl)
+  const child = spawnProviderProcess(spec, options.spawnImpl, options.allowHost)
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
   let spawnFailed = false

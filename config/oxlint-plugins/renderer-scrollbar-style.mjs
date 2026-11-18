@@ -1,7 +1,8 @@
 const STYLED_SCROLLBAR_CLASSES = new Set([
   'scrollbar-sleek',
   'scrollbar-editor',
-  'worktree-sidebar-scrollbar'
+  'worktree-sidebar-scrollbar',
+  'bot-sidebar-scrollbar'
 ])
 const VERTICAL_SCROLL_CLASSES = new Set([
   'overflow-auto',
@@ -286,7 +287,7 @@ export default {
           for (const report of jsxElementReports(node)) {
             this.report({
               node: report.node,
-              message: `Vertical scroll container (${report.detail}) must use scrollbar-sleek, scrollbar-editor, or worktree-sidebar-scrollbar.`
+              message: `Vertical scroll container (${report.detail}) must use scrollbar-sleek, scrollbar-editor, worktree-sidebar-scrollbar, or bot-sidebar-scrollbar.`
             })
           }
         }

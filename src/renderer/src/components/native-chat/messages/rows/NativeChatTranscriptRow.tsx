@@ -1,3 +1,4 @@
+import type { BotChatIdentity } from '../../../bots/use-bot-chat-identity'
 import { memo, useContext } from 'react'
 import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
@@ -24,6 +25,7 @@ import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/nativ
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
 export type NativeChatTranscriptRowContext = {
+  turnBot?: BotChatIdentity | null
   agentName?: string
   /** The prompts the host says still wait on the person; absent from an older host. */
   actionablePromptIds?: readonly string[] | undefined
@@ -72,7 +74,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       />
     )
   }
-  const { message, turnKey, status, receipt, turnDiff, openedPullRequests, workRun } = slot
+  const { message, turnKey, status, receipt, turnDiff, openedPullRequests, workRun, itemNotes } =
+    slot
   const deliveryNotice = context.deliveryNotices?.get(message.id)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
@@ -81,6 +84,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   ) : null
   const statusRow = status ? (
     <NativeChatWorkingStatus
+      bot={context.turnBot}
       startedAt={status.startedAt}
       workedSeconds={status.workedSeconds}
       verdict={status.verdict}
@@ -103,7 +107,18 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {newRowsMarker?.place === 'above-row' ? marker : null}
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
-      {!slot.drawsMessage ? null : receipt ? (
+      {!slot.drawsMessage ? null : itemNotes ? (
+        <div className="flex flex-col gap-1">
+          {itemNotes.map((note) => (
+            <MessageRow
+              key={note.id}
+              message={note}
+              expandSignal={context.expandSignal}
+              onScrollMessageToTop={context.onScrollMessageToTop}
+            />
+          ))}
+        </div>
+      ) : receipt ? (
         <NativeChatResolutionReceipt
           body={receipt}
           disclosureId={message.id}
@@ -127,6 +142,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           activeTurnIsWorking={slot.activeTurnIsWorking}
           trailingRun={slot.trailingRun}
           continuesTurn={slot.continuesTurn}
+          inAutomationTurn={slot.inAutomationTurn === true}
           endsResponse={slot.endsResponse}
           latestResponse={slot.latestResponse === true}
           actionsHang={slot.actionsHang === true && !newRowsMarkerBelow}
@@ -160,9 +176,11 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {openedPullRequests ? (
         <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
       ) : null}
-      {context.timedRows?.get(message.id)?.map(({ key, node }) => (
-        <div key={key}>{node}</div>
-      ))}
+      {(itemNotes ?? [message]).flatMap(
+        (member) =>
+          context.timedRows?.get(member.id)?.map(({ key, node }) => <div key={key}>{node}</div>) ??
+          []
+      )}
     </div>
   )
 })

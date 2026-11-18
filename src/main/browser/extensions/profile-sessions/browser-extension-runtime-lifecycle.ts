@@ -55,5 +55,10 @@ export function fireRuntimeLifecycleEvents(
     }
   }
   // Why after: a crash before the debounced write re-fires the event once rather than never.
-  store.update(profileId, extension.id, (state) => ({ ...state, lastLoaded: current }))
+  if (
+    last?.extensionVersion !== current.extensionVersion ||
+    last?.chromiumVersion !== current.chromiumVersion
+  ) {
+    store.update(profileId, extension.id, (state) => ({ ...state, lastLoaded: current }))
+  }
 }
