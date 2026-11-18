@@ -5,7 +5,7 @@ import { createRetainedBytesBudget, observeRetainedBytes } from '../../memory/re
  * taken them yet. A payload budget, not a heap bound: decoded objects cost more than this counts.
  */
 export const CHAT_PATH_RETAINED_BYTES = 256 * 2 ** 20
-/** Live text waiting behind subscriber deliveries; each shared snapshot is charged once. */
+/** Live text queued behind other deliveries, held until delivered; shared snapshots count once. */
 export const CHAT_LIVE_TEXT_RETAINED_BYTES = 128 * 2 ** 20
 /** One subscriber's live text being delivered plus waiting; past it, that stream ends itself. */
 export const CHAT_LIVE_TEXT_SUBSCRIBER_BYTES = 8 * 2 ** 20

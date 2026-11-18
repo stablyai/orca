@@ -32,7 +32,7 @@ type LaneEntry =
   | { kind: 'ordered'; since: number; run: () => Promise<unknown> }
   | { kind: 'catch-up'; since: number; catchUp: SubscriberCatchUp }
   | { kind: 'background-tasks'; since: number; fence: number }
-  /** Charged only while it waits behind other work; one that starts at once releases nothing. */
+  /** Charged from queueing behind other work until delivered; one that starts at once never is. */
   | { kind: 'live-text'; since: number; liveText: SubscriberLiveText; release: () => void }
 
 export type SubscriberDeliveryLaneRunners = {
