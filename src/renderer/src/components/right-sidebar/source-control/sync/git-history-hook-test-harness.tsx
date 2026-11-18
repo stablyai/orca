@@ -2,9 +2,9 @@
 
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Root } from 'react-dom/client'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
+const mocks: { getRuntimeGitHistory: Mock } = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
 
 export { mocks }
 
