@@ -25,7 +25,16 @@ import {
 } from './journal-domain-import-discard'
 import { discardForgottenJournalChatPage } from './journal-forgotten-chats'
 import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
+import { storedAgentSessionBackground } from '../../runtime/agent-session/records/agent-session-tab-table'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
+import {
+  fillJournalConnectorReplies,
+  sentJournalConnectorReplies
+} from './connector-replies/journal-connector-replies'
+import type {
+  JournalConnectorReplyFill,
+  JournalConnectorReplyKey
+} from '../../../shared/agent-session/journal/journal-connector-reply'
 
 /** Operations the background pass runs a bounded page at a time. */
 export type JournalPagedMaintenanceKind =
@@ -51,6 +60,9 @@ export type JournalSqlMaintenance =
   | { kind: 'import-finish'; header: JournalDomainImportHeader }
   | JournalDomainMaintenance
   | { kind: 'event-tail-prune'; now: number }
+  // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
+  | { kind: 'connector-replies-fill'; fills: readonly JournalConnectorReplyFill[]; now: number }
+  | { kind: 'connector-replies-sent'; keys: readonly JournalConnectorReplyKey[]; now: number }
 
 export type JournalSqlProjectionState = JournalDomainImportState
 
@@ -77,7 +89,11 @@ export function applyJournalSqlMaintenance(
       const records = installAgentSessionStoreRows(db)
       return {
         kind: 'records',
-        records: { ...records, sessionTabs: records.sessionTabs?.entries() ?? null }
+        records: {
+          ...records,
+          sessionTabs: records.sessionTabs?.entries() ?? null,
+          backgroundSessions: storedAgentSessionBackground(records.sessionTabs)
+        }
       }
     }
     case 'fork-source-hold':
@@ -94,6 +110,11 @@ export function applyJournalSqlMaintenance(
       return discardJournalDomainImportPage(db, operation.sessionId)
     case 'chat-discard':
       return discardForgottenJournalChatPage(db, operation.sessionId)
+    case 'connector-replies-fill':
+      return fillJournalConnectorReplies(db, operation.fills, operation.now) > 0
+    case 'connector-replies-sent':
+      sentJournalConnectorReplies(db, operation.keys, operation.now)
+      return true
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':

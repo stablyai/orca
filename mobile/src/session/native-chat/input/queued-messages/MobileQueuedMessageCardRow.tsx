@@ -17,6 +17,7 @@ import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
 import { MobileQueuedCardText } from './MobileQueuedCardText'
 import type { MobileQueuedHeadLight } from './mobile-queued-head-light'
 import { MobileAgentMessageSenders } from '../../transcript/agent-messages/MobileAgentMessageSenders'
+import { MobileQueuedTypedByLine } from '../../transcript/messages/MobileNativeChatUserMessageMarks'
 import {
   QUEUED_ROW_NARROW_WIDTH,
   queuedMessageStyles as styles
@@ -141,6 +142,8 @@ function QueuedMessageCardContents({
               <View style={styles.metaSenders}>
                 <MobileAgentMessageSenders queued bare from={card.from} />
               </View>
+            ) : card.typedByOther ? (
+              <MobileQueuedTypedByLine typist={card.typedByOther} textStyle={styles.metaText} />
             ) : (
               <Text style={styles.metaText} numberOfLines={1}>
                 {t('session.queuedMessageCardRow.you', 'You')}

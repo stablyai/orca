@@ -93,6 +93,7 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
               tabId: request.chatTabId,
               workspaceId: request.workspace.worktreeId,
               agent: request.agent,
+              alongside: request.alongside,
               // A refusal can settle after this opening closed and another modal took the slot.
               dismiss: () => {
                 if (useAppStore.getState().modalData === modalData) {

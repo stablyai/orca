@@ -12,6 +12,8 @@ export function openUsageLimitContinueSetting(): void {
   openSettingsTarget({
     pane: 'chat',
     repoId: null,
+    // Only this machine's chats link here, whatever host the Settings picker last showed.
+    hostScope: { kind: 'local' },
     sectionId: NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID
   })
   openSettingsPage()

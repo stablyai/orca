@@ -6,6 +6,8 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { FederationRelayItemRow } from '../../../../orchestration/db/orchestration-records'
 import { resolveBareOrchestrationRecipient } from '../messaging/recipient-routing'
 import { prepareSessionRecipient } from '../messaging/session-recipient'
+import { deliverPeerMailToBot } from './peer-mail-bot-delivery'
+import { peerMailSenderSnapshot } from '../../../../orchestration/federation/peer-mail/peer-mail-sender-snapshot'
 import { waitForPeerMail } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import {
   PeerMailAckParams,
@@ -88,11 +90,10 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           NOTHING_DELIVERED
         )
       }
-      const to = params.to
-      if (/^(run|dispatch|task):/.test(to) || to.startsWith('@')) {
+      if (/^(run|dispatch|task):/.test(params.to) || params.to.startsWith('@')) {
         throw new OrchestrationError(
           'invalid_argument',
-          `--on sends to one terminal or chat agent on this server; ${to} is a mailbox. Nothing was delivered.`,
+          `--on sends to one agent or bot on this server; ${params.to} is a mailbox. Nothing was delivered.`,
           NOTHING_DELIVERED
         )
       }
@@ -113,13 +114,19 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
             NOTHING_DELIVERED
           )
         }
-        return { message: { id: params.messageId, to } }
+        return { message: { id: params.messageId, to: params.to } }
       }
       // A replay needs no routing, so it never waits on the recipient's preparation.
       const replayed = delivered()
       if (replayed) {
         return replayed
       }
+      const senderSnapshot = peerMailSenderSnapshot(params.senderLabel, params.sender)
+      const routed = await deliverPeerMailToBot(runtime, params, peerFingerprint, senderSnapshot)
+      if (routed === 'delivered') {
+        return { message: { id: params.messageId, to: params.to } }
+      }
+      const { to } = routed
       const terminalRecipient = await prepareSessionRecipient(runtime, to)
       // Read again after the wait: a copy of this delivery may have landed meanwhile.
       const landed = delivered()
@@ -161,13 +168,14 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           type: params.type,
           priority: params.priority,
           threadId: params.threadId,
-          runId: recipient.runId
+          runId: recipient.runId,
+          answerSenderSnapshot: senderSnapshot
         }
       })
       if (!stored.duplicate) {
         runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
       }
-      return { message: { id: params.messageId, to } }
+      return { message: { id: params.messageId, to: params.to } }
     }
   }),
   defineOrchestrationMethod({
