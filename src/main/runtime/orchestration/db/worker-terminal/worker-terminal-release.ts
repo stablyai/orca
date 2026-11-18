@@ -185,7 +185,10 @@ export function releaseDeadWorkerTerminalInTransaction(
   const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
   // Exit proves process death, not a recorded output location; require one whenever recording is reachable.
   // Capture runs only while requested; an unrequested or retained owner settles unavailable instead.
-  const archive = database.getWorkerTerminalArchive(resource.owner_dispatch_id)
+  // Identity only: the saved output can be large and is never needed here.
+  const archive = database.db
+    .prepare('SELECT resource_id FROM worker_terminal_archives WHERE dispatch_id = ?')
+    .get(resource.owner_dispatch_id)
   const archiveUnreachable =
     resource.owner_dispatch_id === params.requestingDispatchId &&
     (resource.release_state === 'not_requested' || resource.release_state === 'retained')

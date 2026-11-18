@@ -3,12 +3,13 @@ import {
   isMintedPtyIncarnation,
   type WorkerTerminalProcessIndex
 } from './worker-terminal-process-liveness'
+import type { WorkerTerminalResourceRow } from './worker-terminal-ownership'
 import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestration/worker/stop/worker-stop-archive'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 
 const PAGE_ROWS = 50
-// The two clocks drift apart by milliseconds over a sweep; more than this is a step.
-const CLOCK_STEP_MS = 50
+// Candidates judged per sweep; the rest wait for the next one.
+const MAX_ROWS_PER_SWEEP = 1000
 
 const activeSweeps = new WeakMap<WorkerTerminalReleaseRuntime, Promise<void>>()
 
@@ -51,10 +52,25 @@ async function releaseExitedWorkerTerminals(
   if (!db) {
     return 0
   }
-  const inventories = new Map<string, Promise<WorkerTerminalProcessIndex | null>>()
-  // Timestamps are whole seconds: only rows written before the sweep's second predate every listing.
+  // Timestamps are whole seconds: only rows written before the sweep's second are listed.
   const fence = readSqliteNow(db)
-  const clockSkew = Date.now() - performance.now()
+  // Every row is listed before any host is: a process alive when its row was read is in the listing.
+  const candidates: { resource: WorkerTerminalResourceRow; processIncarnation: string }[] = []
+  for (let after = 0; candidates.length < MAX_ROWS_PER_SWEEP;) {
+    const page = db.listSettledWorkerTerminalsStillOwned(after, PAGE_ROWS, fence)
+    for (const resource of page) {
+      after = resource.row_id
+      // A legacy runtime:pty:generation fence never appears in a list, so absence proves nothing.
+      const processIncarnation = resource.process_incarnation
+      if (processIncarnation && isMintedPtyIncarnation(processIncarnation)) {
+        candidates.push({ resource, processIncarnation })
+      }
+    }
+    if (page.length < PAGE_ROWS) {
+      break
+    }
+  }
+  const inventories = new Map<string, Promise<WorkerTerminalProcessIndex | null>>()
   const exited: {
     requestingDispatchId: string
     resourceId: string
@@ -62,48 +78,30 @@ async function releaseExitedWorkerTerminals(
     terminalHandle: string
     attachedAt: string
   }[] = []
-  let after = 0
-  for (;;) {
-    const page = db.listSettledWorkerTerminalsStillOwned(after, PAGE_ROWS, fence)
-    for (const resource of page) {
-      after = resource.row_id
-      if (stopped()) {
-        return 0
-      }
-      const processIncarnation = resource.process_incarnation
-      if (!processIncarnation) {
-        continue
-      }
-      // A legacy runtime:pty:generation fence never appears in a list, so absence proves nothing.
-      if (!isMintedPtyIncarnation(processIncarnation)) {
-        continue
-      }
-      const liveness = await runtime
-        .inspectTerminalProcessIncarnationLiveness(
-          processIncarnation,
-          resource.host_scope,
-          inventories
-        )
-        .catch(() => 'unverifiable' as const)
-      if (liveness !== 'exited') {
-        continue
-      }
-      exited.push({
-        requestingDispatchId: resource.owner_dispatch_id,
-        resourceId: resource.id,
+  for (const { resource, processIncarnation } of candidates) {
+    if (stopped()) {
+      return 0
+    }
+    const liveness = await runtime
+      .inspectTerminalProcessIncarnationLiveness(
         processIncarnation,
-        terminalHandle: resource.terminal_handle,
-        attachedAt:
-          db.getWorkerDispatch(resource.owner_dispatch_id)?.created_at ?? resource.created_at
-      })
+        resource.host_scope,
+        inventories
+      )
+      .catch(() => 'unverifiable' as const)
+    if (liveness !== 'exited') {
+      continue
     }
-    if (page.length < PAGE_ROWS) {
-      break
-    }
+    exited.push({
+      requestingDispatchId: resource.owner_dispatch_id,
+      resourceId: resource.id,
+      processIncarnation,
+      terminalHandle: resource.terminal_handle,
+      attachedAt:
+        db.getWorkerDispatch(resource.owner_dispatch_id)?.created_at ?? resource.created_at
+    })
   }
-  // A wall clock stepped since the fence could let a newer row slip under it.
-  const clockStepped = Math.abs(Date.now() - performance.now() - clockSkew) > CLOCK_STEP_MS
-  if (exited.length === 0 || stopped() || clockStepped || readSqliteNow(db) < fence) {
+  if (exited.length === 0 || stopped()) {
     return 0
   }
   for (const release of exited) {
