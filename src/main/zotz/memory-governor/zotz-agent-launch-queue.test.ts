@@ -97,4 +97,17 @@ describe('ZotzAgentLaunchQueue', () => {
     await expect(forced).resolves.toBeUndefined()
     expect(queue.list()).toEqual([])
   })
+
+  it('starts everything waiting when the queue is turned off and holds nothing new', async () => {
+    const governor = fakeGovernor()
+    const queue = new ZotzAgentLaunchQueue(governor, now)
+    governor.sample(3, 0)
+    const waiting = queue.admit({ agent: 'codex', priority: 'manual', paneKey: 'a', label: 'a' })
+    queue.setEnabled(false)
+    await expect(waiting).resolves.toBeUndefined()
+    await expect(
+      queue.admit({ agent: 'codex', priority: 'manual', paneKey: 'b', label: 'b' })
+    ).resolves.toBeUndefined()
+    expect(queue.list()).toEqual([])
+  })
 })

@@ -4,6 +4,7 @@ import { computeZotzMemoryGovernorDefaults } from '../../../shared/zotz/agent-qu
 import type { agentHookServer as AgentHookServerInstance } from '../../agent-hooks/server/agent-hook-server'
 import { collectMemorySnapshot, type MemorySnapshotStore } from '../../memory/collector'
 import { collectHostMemory } from '../../memory/host-memory'
+import type { Store } from '../../persistence/loading-store/store'
 import { listRegisteredPtys } from '../../memory/pty-registry'
 import { ZotzAgentQueueStore } from '../zotz-agent-queue-store'
 import { ZotzAgentMemorySampler, type ZotzLiveAgentPane } from './zotz-agent-memory-sampler'
@@ -52,7 +53,7 @@ async function measureLocalPanes(store: MemorySnapshotStore): Promise<Map<string
 }
 
 export function startZotzMemoryGovernor(input: {
-  store: MemorySnapshotStore
+  store: MemorySnapshotStore & Pick<Store, 'getSettings' | 'onSettingsChanged'>
   server: typeof AgentHookServerInstance
   userDataPath: string
 }): () => void {
@@ -72,12 +73,19 @@ export function startZotzMemoryGovernor(input: {
   governor = service
   const launchQueue = new ZotzAgentLaunchQueue(service)
   setZotzAgentLaunchQueue(launchQueue)
+  launchQueue.setEnabled(input.store.getSettings().zotzAgentQueueEnabled !== false)
+  const stopSettingsSync = input.store.onSettingsChanged((updates) => {
+    if ('zotzAgentQueueEnabled' in updates) {
+      launchQueue.setEnabled(updates.zotzAgentQueueEnabled !== false)
+    }
+  })
   const unregisterIpc = registerZotzAgentQueueHandlers(service, launchQueue)
   void service.start()
   const unsubscribe = input.server.subscribeStatusRowMutations(() => service.wake())
   return () => {
     unsubscribe()
     unregisterIpc()
+    stopSettingsSync()
     service.dispose()
     setZotzAgentLaunchQueue(null)
     if (governor === service) {

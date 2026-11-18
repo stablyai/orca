@@ -25916,7 +25916,9 @@
         "free": "{{free}} GB free",
         "idle": "Agent queue",
         "tooltip": "Agent queue and memory"
-      }
+      },
+      "settingLabel": "Agent queue by memory",
+      "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting."
     }
   }
 }

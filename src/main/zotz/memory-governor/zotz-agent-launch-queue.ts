@@ -61,6 +61,7 @@ export class ZotzAgentLaunchQueue {
   private readonly waiters = new Map<string, Waiter>()
   private reservations: Reservation[] = []
   private readonly listeners = new Set<() => void>()
+  private enabled = true
 
   constructor(
     private readonly governor: Pick<
@@ -73,8 +74,21 @@ export class ZotzAgentLaunchQueue {
     governor.subscribe(() => this.schedule())
   }
 
+  /** Turning the queue off starts everything waiting and stops holding new launches. */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled
+    if (!enabled) {
+      for (const task of orderZotzAgentQueue(this.queue)) {
+        this.release(task.id)
+      }
+    }
+  }
+
   /** Resolves when the launch may start; rejects if it is canceled while waiting. */
   admit(request: ZotzAgentLaunchRequest): Promise<void> {
+    if (!this.enabled) {
+      return Promise.resolve()
+    }
     const id = request.paneKey ?? randomUUID()
     const existing = this.waiters.get(id)
     if (existing) {

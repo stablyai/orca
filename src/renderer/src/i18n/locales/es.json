@@ -24290,7 +24290,9 @@
         "free": "{{free}} GB libres",
         "idle": "Cola de agentes",
         "tooltip": "Cola de agentes y memoria"
-      }
+      },
+      "settingLabel": "Cola de agentes por memoria",
+      "settingDescription": "Los agentes arrancan solo cuando caben en memoria; los demás esperan su turno. Al apagarla arranca todo lo que esperaba."
     }
   }
 }
