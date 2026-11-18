@@ -35,7 +35,12 @@ export function createHangWatchdogDetectionLoop(
       const now = config.now()
       const silentMs = now - lastHeartbeatAt
       if (detected === 'stall' && now - lastTickAt > sleepGapMs) {
-        // Woke before the overdue tick: the silence since detection includes the sleep.
+        // Woke before the overdue tick: report and consume its gap first, in the tick's order, so it attaches to this stall.
+        const tickGap = now - lastTickAt
+        if (tickGap > config.timeoutMs) {
+          config.onWatchdogGap?.(tickGap, lastTickAt)
+        }
+        lastTickAt = now
         detected = null
         config.onStallEndedBySleep?.()
       } else if (detected) {

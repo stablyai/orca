@@ -156,6 +156,7 @@ describe('createHangWatchdogDetectionLoop', () => {
 
   it('ends a stall woken before the overdue tick without reporting the sleep as stall time', () => {
     let now = 0
+    const order: string[] = []
     const onHangResolved = vi.fn()
     const onStallEndedBySleep = vi.fn()
     const loop = createHangWatchdogDetectionLoop({
@@ -166,7 +167,11 @@ describe('createHangWatchdogDetectionLoop', () => {
       onHangDetected: vi.fn(),
       onHangResolved,
       onStallDetected: () => true,
-      onStallEndedBySleep
+      onStallEndedBySleep: () => {
+        order.push('ended')
+        onStallEndedBySleep()
+      },
+      onWatchdogGap: () => order.push('gap')
     })
     loop.recordHeartbeat()
     now += 5_000
@@ -177,6 +182,10 @@ describe('createHangWatchdogDetectionLoop', () => {
     loop.recordHeartbeat()
     expect(onStallEndedBySleep).toHaveBeenCalledTimes(1)
     expect(onHangResolved).not.toHaveBeenCalled()
+    expect(order).toEqual(['gap', 'ended'])
+    now += CHECK_INTERVAL_MS
+    loop.tick()
+    expect(order).toEqual(['gap', 'ended'])
   })
 
   it('restarts the stall clock when a detected silence was a suspend, so a stall after wake is still seen', () => {
