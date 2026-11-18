@@ -207,7 +207,6 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKey)
       this.evidenceObservedAtByPaneKey.delete(paneKey)
       this.programStatusFacets.delete(paneKey)
-      this.lastSubmittedAtByPaneKey.delete(paneKey)
       this.hookSilenceRechecks.cancel(paneKey)
       this.programStatusFacetRepublishes.cancel(paneKey)
     }
@@ -247,7 +246,6 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
   ): void {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-    this.lastSubmittedAtByPaneKey.delete(resolvedPaneKey)
     if (options?.forgetAgentExit) {
       this.forgetAgentExit(paneKey)
     }

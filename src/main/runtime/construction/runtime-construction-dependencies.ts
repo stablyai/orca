@@ -38,8 +38,6 @@ export type RuntimeConstructionDependencies = {
   onTerminalProgramStatusFacet?: (event: RuntimeTerminalProgramStatusFacetEvent) => void
   onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
-  /** A line the user submitted in a pane, on any host. */
-  onPaneInputSubmitted?: (paneKey: string) => void
   getPaneAgentIdentity?: (
     paneKey: string,
     savedRecord?: SleepingAgentSessionRecord

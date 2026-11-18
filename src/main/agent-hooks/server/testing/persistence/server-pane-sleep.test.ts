@@ -207,16 +207,14 @@ it.each(['retained', 'evicted'] as const)(
         providerSession: { key: 'session_id', id: 'claude-session' },
         launchedAt: Date.now()
       })
-      // Startup work precedes SessionStart; neither report opens a user turn.
-      for (const state of ['working', 'idle']) {
-        ingestProgramStatusOsc(server, `\x1b]7501;app=claude-code:state=${state}\x1b\\`)
-        expect(read()).toMatchObject({
-          state: 'done',
-          interrupted: true,
-          prompt: 'Finished work',
-          mainAgent: { state: 'done', outcome: 'cancellation' }
-        })
-      }
+      // A resumed CLI's idle restatement before SessionStart opens no user turn.
+      ingestProgramStatusOsc(server, `\x1b]7501;app=claude-code:state=idle\x1b\\`)
+      expect(read()).toMatchObject({
+        state: 'done',
+        interrupted: true,
+        prompt: 'Finished work',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
       const response = await postHookEvent(
         server,
         buildBody(
@@ -253,23 +251,17 @@ it.each(['retained', 'evicted'] as const)(
   }
 )
 
-it('shows hookless work the user submits after a resumed agent starts', async () => {
-  const working = `\x1b]7501;app=claude-code:state=working\x1b\\`
+it('shows terminal work right after a wake, as for any pane', async () => {
   server.setHookRootEvidenceReader(async () => ({ verdict: 'root' }))
   await agentHook('claude', 'UserPromptSubmit', 4001)
-  await agentHook('claude', 'Stop', 4001)
   await sleepPane('claude', 'pty-1', 4001)
   server.retireSleepingPaneOnSpawn(PANE, {
     agentType: 'claude',
     providerSession: { key: 'session_id', id: 'claude-session' }
   })
-  // The resumed CLI's own startup work is not a new turn.
-  ingestProgramStatusOsc(server, working)
-  expect(read()).toMatchObject({ state: 'done' })
-  vi.setSystemTime(Date.now() + 1_000)
-  // A hookless command such as /compact is.
-  server.notePaneInputSubmitted(PANE)
-  ingestProgramStatusOsc(server, working)
+  expect(read()).toMatchObject({ state: 'done', interrupted: true })
+  // A hookless command such as /compact reports its work only over the terminal.
+  ingestProgramStatusOsc(server, `\x1b]7501;app=claude-code:state=working\x1b\\`)
   expect(read()).toMatchObject({ state: 'working' })
 })
 

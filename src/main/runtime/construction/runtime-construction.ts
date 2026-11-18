@@ -292,7 +292,6 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.onTerminalProgramStatusFacet = deps?.onTerminalProgramStatusFacet ?? null
     this.onClaudeTerminalEvidence = deps?.onClaudeTerminalEvidence ?? null
-    this.onPaneInputSubmitted = deps?.onPaneInputSubmitted ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.headlessTerminalScrollbackRows =
