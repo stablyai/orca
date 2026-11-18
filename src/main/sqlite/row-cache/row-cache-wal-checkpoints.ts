@@ -5,18 +5,21 @@ import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-tra
 const IDLE_TEARDOWN_MS = 60_000
 // A worker that never answers hands checkpoints back rather than letting WALs grow.
 const RESPONSE_DEADLINE_MS = 30_000
-// A file whose checkpoints keep failing or stopping short goes back to checkpointing itself.
+// A file whose checkpoints keep failing goes back to checkpointing itself.
 const MAX_CONSECUTIVE_FAILURES = 3
 // SQLite's own auto-checkpoint size: each full checkpoint lets the next commit restart the WAL,
 // and a restart syncs its header on main, so checkpointing more often would add main-thread syncs.
 const CHECKPOINT_FRAMES = 1000
+// Commits that landed during a checkpoint leave a tail; the WAL restarts only once that drains.
+const CATCH_UP_IDLE_MS = 100
 
-type CheckpointResult = { id: number; ok: boolean; unsupported?: boolean }
+type CheckpointResult = { id: number; ok: boolean; catchUp?: boolean; unsupported?: boolean }
 
 /**
  * Evaluated source. `mode=rw` never creates a removed cache; a PASSIVE checkpoint never waits on
- * the writer, and counts as done only when it folded every frame. The handle lives for one
- * request, so a closed cache's file is free again within milliseconds. Older SQLite runs an unknown
+ * the writer. `catchUp` is set only when a checkpoint ran: whether frames remain for one more once
+ * writes pause (a catch-up asks again only while it makes progress; a reader can pin the tail).
+ * The handle lives for one request, so a closed cache's file is free again within milliseconds. Older SQLite runs an unknown
  * wal_checkpoint mode as PASSIVE, which would checkpoint after every commit, so before 3.51 (NOOP)
  * the worker reports itself unsupported and every connection checkpoints itself again.
  */
@@ -28,31 +31,34 @@ const probe = new DatabaseSync(':memory:');
 const [major, minor] = probe.prepare('SELECT sqlite_version() AS v').get().v.split('.').map(Number);
 probe.close();
 const supported = major > 3 || (major === 3 && minor >= 51);
-parentPort.on('message', ({ id, path }) => {
+parentPort.on('message', ({ id, path, force }) => {
   if (!supported) {
     parentPort.postMessage({ id, ok: false, unsupported: true });
     return;
   }
   let ok = false;
+  let catchUp;
   let db;
   try {
     const url = pathToFileURL(path);
     url.searchParams.set('mode', 'rw');
     db = new DatabaseSync(url);
     db.exec('PRAGMA busy_timeout = 1000');
-    const pending = db.prepare('PRAGMA wal_checkpoint(NOOP)').get();
-    if (pending.log - pending.checkpointed < ${CHECKPOINT_FRAMES}) {
-      ok = true;
-    } else {
-      const state = db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get();
-      ok = state.busy === 0 && state.log === state.checkpointed;
+    const frames = db.prepare('PRAGMA wal_checkpoint(NOOP)');
+    const before = frames.get();
+    const pending = before.log - before.checkpointed;
+    if (pending >= ${CHECKPOINT_FRAMES} || (force && pending > 0)) {
+      db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get();
+      const after = frames.get();
+      catchUp = after.log > after.checkpointed && (!force || after.checkpointed > before.checkpointed);
     }
+    ok = true;
   } catch {
     ok = false;
   } finally {
     try { db?.close(); } catch {}
   }
-  parentPort.postMessage({ id, ok });
+  parentPort.postMessage({ id, ok, catchUp });
 });
 `
 
@@ -68,15 +74,16 @@ type Registration = { path: string; restore: () => void; failures: number }
 /**
  * Row caches commit on main, and a commit that crosses the WAL auto-checkpoint threshold also
  * checkpoints and fsyncs inside the commit; under disk load one agent-status save held main for
- * 346 ms. While this worker is healthy, it checkpoints after registered connections' commits, and
- * they auto-checkpoint only at 10,000 pages, a backstop for commits that keep landing during
- * checkpoints. Any worker failure hands checkpoints back at once.
+ * 346 ms. While this worker is healthy, registered connections never auto-checkpoint and the
+ * worker checkpoints after their commits. Any worker failure hands checkpoints back at once.
  */
 export class RowCacheWalCheckpoints {
   private readonly host: LazyWorkerThreadHost<CheckpointResult> | null
   private readonly registrations = new Map<number, Registration>()
   private readonly inFlight = new Map<number, ReturnType<typeof setTimeout>>()
   private readonly again = new Set<number>()
+  private readonly catchUpOwed = new Set<number>()
+  private readonly catchUps = new Map<number, ReturnType<typeof setTimeout>>()
   private nextId = 1
   private failed = false
 
@@ -112,10 +119,17 @@ export class RowCacheWalCheckpoints {
   detach(id: number): void {
     this.registrations.delete(id)
     this.again.delete(id)
+    this.catchUpOwed.delete(id)
+    this.cancelCatchUp(id)
   }
 
   /** After a commit; one checkpoint per connection at a time, and a commit during it queues one more. */
   request(id: number): void {
+    this.cancelCatchUp(id)
+    this.send(id, false)
+  }
+
+  private send(id: number, force: boolean): void {
     const registration = this.registrations.get(id)
     if (!registration || !this.host || this.failed) {
       return
@@ -134,13 +148,18 @@ export class RowCacheWalCheckpoints {
     deadline.unref?.()
     this.inFlight.set(id, deadline)
     try {
-      worker.postMessage({ id, path: registration.path })
+      worker.postMessage({ id, path: registration.path, force })
     } catch {
       this.fail()
     }
   }
 
-  private settle({ id, ok, unsupported }: CheckpointResult): void {
+  private cancelCatchUp(id: number): void {
+    clearTimeout(this.catchUps.get(id))
+    this.catchUps.delete(id)
+  }
+
+  private settle({ id, ok, catchUp, unsupported }: CheckpointResult): void {
     if (unsupported) {
       this.fail()
       return
@@ -150,11 +169,23 @@ export class RowCacheWalCheckpoints {
     const registration = this.registrations.get(id)
     if (registration) {
       registration.failures = ok ? 0 : registration.failures + 1
+      if (catchUp) {
+        this.catchUpOwed.add(id)
+      } else if (catchUp === false) {
+        this.catchUpOwed.delete(id)
+      }
       if (registration.failures >= MAX_CONSECUTIVE_FAILURES) {
         this.detach(id)
         registration.restore()
       } else if (this.again.delete(id)) {
         this.request(id)
+      } else if (this.catchUpOwed.has(id)) {
+        const timer = setTimeout(() => {
+          this.catchUps.delete(id)
+          this.send(id, true)
+        }, CATCH_UP_IDLE_MS)
+        timer.unref?.()
+        this.catchUps.set(id, timer)
       }
     }
     if (this.inFlight.size === 0) {
@@ -173,6 +204,11 @@ export class RowCacheWalCheckpoints {
     }
     this.inFlight.clear()
     this.again.clear()
+    this.catchUpOwed.clear()
+    for (const timer of this.catchUps.values()) {
+      clearTimeout(timer)
+    }
+    this.catchUps.clear()
     const registrations = [...this.registrations.values()]
     this.registrations.clear()
     for (const registration of registrations) {
