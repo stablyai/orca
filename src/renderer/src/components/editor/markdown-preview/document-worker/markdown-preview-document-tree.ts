@@ -133,7 +133,25 @@ function serializeBlockContent(node: Nodes): string {
   if (isFootnoteBackref) {
     return `<${header}>(footnote-backref)`
   }
-  return `<${header}>(${node.children.map((child) => serializeBlockContent(child)).join(',')})`
+  // Coalesce adjacent text nodes so enabling rehypeRaw on unrelated HTML elsewhere does not change signatures.
+  const serializedChildren: string[] = []
+  let pendingText = ''
+  const flushPendingText = (): void => {
+    if (pendingText) {
+      serializedChildren.push(`T:${JSON.stringify(pendingText)}`)
+      pendingText = ''
+    }
+  }
+  for (const child of node.children) {
+    if (child.type === 'text') {
+      pendingText += child.value
+    } else {
+      flushPendingText()
+      serializedChildren.push(serializeBlockContent(child))
+    }
+  }
+  flushPendingText()
+  return `<${header}>(${serializedChildren.join(',')})`
 }
 
 export function parseMarkdownPreviewDocument(content: string): {

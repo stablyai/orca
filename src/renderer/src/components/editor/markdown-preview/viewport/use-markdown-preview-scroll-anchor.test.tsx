@@ -161,6 +161,13 @@ describe('markdown preview scroll anchor', () => {
       'A.\n\n1. Read\n\n---\n\n10. Read\n\nT.\n',
       112,
       312
+    ],
+    [
+      'raw HTML is introduced for the first time above a multiline paragraph',
+      'A.\n\nRead.\nMore.\n\nT.\n',
+      'A.\n\n<div>New.</div>\n\nRead.\nMore.\n\nT.\n',
+      112,
+      212
     ]
   ])(
     'keeps scrollTop anchored on the reading block when %s',
