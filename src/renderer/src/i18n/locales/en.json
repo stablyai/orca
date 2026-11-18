@@ -24770,7 +24770,6 @@
       "lastReading": "{{reading}} · Read {{time}}",
       "noReading": "Usage unknown: not read yet",
       "chatSeparate": "Separate from your agy terminal account.",
-      "chatAccount": "Chat account",
       "chatBadgeSigningIn": "Signing in",
       "chatBadgeSignedIn": "Signed in",
       "chatBadgeSignedOut": "Not signed in",
@@ -24785,8 +24784,6 @@
       "enterpriseFieldsShort": "Enter a project and location.",
       "chatUseMethod": "Sign in again to use {{method}}",
       "signInEllipsis": "Sign in…",
-      "terminalInfoWindows": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.",
-      "terminalInfo": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.",
       "loadFailed": "Couldn't load agy accounts",
       "loading": "Loading accounts…",
       "notSignedIn": "Not signed in",
@@ -24797,7 +24794,15 @@
       "noEmailNotSaved": "agy didn't report an email · not saved",
       "saveShort": "Save",
       "readAt": "Read {{time}}",
-      "active": "Active"
+      "active": "Active",
+      "account": "Account",
+      "runtime": "Runtime",
+      "chatTitle": "Antigravity Chat",
+      "chatDescription": "Signs in through your browser, so Chat works without agy installed.",
+      "terminalTitle": "agy in the terminal",
+      "terminalDescriptionWindows": "Uses agy's own saved accounts. Switching applies to the host default agy credential.",
+      "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
+      "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",

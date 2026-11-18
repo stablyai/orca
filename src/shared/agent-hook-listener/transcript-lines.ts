@@ -36,11 +36,40 @@ export function extractUserPromptTextFromLine(line: string): string | undefined 
   return undefined
 }
 
+let skippedStopTranscripts: string[] | null = null
+
+/**
+ * Runs one synchronous normalize with the Stop-text transcript fallback skipped and returns the
+ * transcripts it skipped, so a host on the event loop can read them asynchronously afterwards.
+ */
+export function withStopTranscriptReadsSkipped<T>(normalize: () => T): {
+  value: T
+  skipped: readonly string[]
+} {
+  const outer = skippedStopTranscripts
+  const skipped: string[] = []
+  skippedStopTranscripts = skipped
+  try {
+    return { value: normalize(), skipped }
+  } finally {
+    skippedStopTranscripts = outer
+  }
+}
+
+/** Stop-text fallback when the hook carries none; skipped inside withStopTranscriptReadsSkipped. */
 export function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
-  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
+  if (skippedStopTranscripts && typeof transcriptPath === 'string' && transcriptPath.length > 0) {
+    skippedStopTranscripts.push(transcriptPath)
     return undefined
   }
-  return readLastAssistantFromTranscriptOnce(transcriptPath)
+  return readLastAssistantFromTranscriptInline(transcriptPath)
+}
+
+/** Always reads now; for fallbacks whose order against other sources must not change. */
+export function readLastAssistantFromTranscriptInline(transcriptPath: unknown): string | undefined {
+  return typeof transcriptPath === 'string' && transcriptPath.length > 0
+    ? readLastAssistantFromTranscriptOnce(transcriptPath)
+    : undefined
 }
 
 export function readLastUserPromptFromTranscript(transcriptPath: unknown): string | undefined {

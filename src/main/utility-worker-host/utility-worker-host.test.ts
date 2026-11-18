@@ -263,26 +263,6 @@ describe('UtilityWorkerHost', () => {
     await Promise.all([first.terminate(), during.terminate(), after.terminate()])
   })
 
-  it('fails its workers when a running host dies', async () => {
-    const children: ReturnType<typeof threadUtilityProcess>[] = []
-    fork.mockImplementation(() => {
-      const child = threadUtilityProcess()
-      children.push(child)
-      return child
-    })
-    const worker = newHost().spawn({
-      filename: echoEntry,
-      name: 'orca-journal-sql-reader',
-      workerData: { tag: 'c' }
-    })
-    await nextMessage(worker)
-    const failed = new Promise<Error>((resolve) => worker.once('error', resolve))
-    const exited = nextExit(worker)
-    children[0]?.kill()
-    expect((await failed).message).toMatch(/^test host (exited|stopped)/)
-    await exited
-  })
-
   it('fails, never reruns in main, a worker that dies before its first reply', async () => {
     fork.mockImplementation(threadUtilityProcess)
     const host = newHost()
@@ -320,10 +300,12 @@ describe('UtilityWorkerHost', () => {
     for (let crash = 0; crash < 3; crash++) {
       const worker = spawnEcho()
       await nextMessage(worker)
-      worker.on('error', () => undefined)
+      const failed = new Promise<Error>((resolve) => worker.once('error', resolve))
       const hostExited = new Promise((resolve) => children[crash]?.once('exit', resolve))
+      const workerExited = nextExit(worker)
       children[crash]?.kill()
-      await Promise.all([nextExit(worker), hostExited])
+      const [error] = await Promise.all([failed, workerExited, hostExited])
+      expect(error.message).toMatch(/^test host (exited|stopped)/)
     }
     expect(spawnEcho).toThrow('paused')
     expect(onPause).toHaveBeenCalledTimes(1)

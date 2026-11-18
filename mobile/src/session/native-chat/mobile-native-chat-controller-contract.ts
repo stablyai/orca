@@ -135,4 +135,6 @@ export type MobileNativeChatController = {
   /** The structured chat's options read on whether its agent forks; absent until it answers. */
   nativeChatForkSupport?: AgentSessionOptionsResult['forkSupport']
   nativeChatUsageLimit: MobileNativeChatUsageLimit | null
+  /** Rows whose failure no later successful turn resolved. */
+  nativeChatUnresolvedFailureRows: ReadonlySet<string>
 }

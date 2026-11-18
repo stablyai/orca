@@ -938,7 +938,9 @@
       "label": "Einrichtungsskript",
       "run": "Ausführen",
       "runSetupCommand": "Einrichtungsbefehl ausführen",
-      "skip": "Überspringen"
+      "skip": "Überspringen",
+      "waitForSetup": "Vor dem Start des Agenten auf den Abschluss der Einrichtung warten",
+      "waitForSetupSaveFailed": "Das Startverhalten bei der Einrichtung konnte nicht gespeichert werden."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Verbinden",

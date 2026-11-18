@@ -309,6 +309,7 @@ export function MobileSessionActiveContent({
                     : activeTerminalKeyboardLift
               }
               terminalTheme={terminal.terminalTheme}
+              hostSettings={controller.terminalHostSettings}
               textScale={terminalTextScale}
               fontStyle={terminalFontStyle}
               onTextScaleChange={commitPinchedTextScale}

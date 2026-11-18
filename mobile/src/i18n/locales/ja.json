@@ -934,7 +934,9 @@
       "label": "セットアップスクリプト",
       "run": "実行",
       "runSetupCommand": "セットアップコマンドを実行",
-      "skip": "スキップ"
+      "skip": "スキップ",
+      "waitForSetup": "セットアップが完了するまで待ってから Agent を開始してください",
+      "waitForSetupSaveFailed": "セットアップ時の起動設定を保存できませんでした。"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "接続",

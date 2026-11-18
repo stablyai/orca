@@ -24,6 +24,18 @@ Re-run `pnpm -C mobile install --frozen-lockfile` whenever `mobile/pnpm-lock.yam
 
 ## Dev Profiles and Parallel Instances
 
+On macOS, dev instances use Electron's mock keychain by default so native Keychain prompts do
+not block startup or automated tests. Mock-keychain encryption uses a fixed test key and does
+not provide OS keychain protection. Use `ORCA_DEV_USE_KEYCHAIN=1 pnpm dev` to test real Keychain
+access or read credentials previously encrypted with it. Credentials saved in one mode cannot
+be decrypted in the other. Mock-mode session-cookie snapshots are kept separately to preserve
+real-keychain browser sign-ins. Credential stores requiring OS protection refuse the mock key.
+Local account sign-ins stay in memory unless `ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION=1` is explicitly
+enabled. Packaged macOS builds keep the OS keychain. Profiles previously launched with a manually
+enabled mock keychain need fresh test credentials: unmarked legacy ciphertext is rejected
+rather than risk reading real-Keychain credentials with the wrong key. Bot tool secrets
+require a protected store; built-in keys (including Linux `basic_text`) are refused.
+
 `pnpm dev` in a linked Git worktree uses its own profile, renderer port (from 15200), and CDP port (from 9333), so worktrees run side by side. The main checkout uses the shared `orca-dev` profile. The chosen profile and ports are printed on an `ORCA_DEV_INSTANCE` line and written to `out/dev-instance.json`.
 
 | Option                                                                  | Effect                                                     |

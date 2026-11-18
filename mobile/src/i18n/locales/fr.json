@@ -976,7 +976,9 @@
       "label": "Script de setup",
       "run": "Exécuter",
       "runSetupCommand": "Exécuter la commande de setup",
-      "skip": "Ignorer"
+      "skip": "Ignorer",
+      "waitForSetup": "Attendre la fin du setup avant de démarrer l'agent",
+      "waitForSetupSaveFailed": "Échec de l'enregistrement du comportement de démarrage de la configuration."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Se connecter",

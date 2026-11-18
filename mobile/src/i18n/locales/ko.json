@@ -934,7 +934,9 @@
       "label": "설정 스크립트",
       "run": "실행",
       "runSetupCommand": "설정 명령 실행",
-      "skip": "건너뛰기"
+      "skip": "건너뛰기",
+      "waitForSetup": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
+      "waitForSetupSaveFailed": "시작 동작 저장 실패"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "연결",
