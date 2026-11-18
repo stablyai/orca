@@ -12,6 +12,7 @@ import {
   parseMainJsCapture,
   parseNativeHangCapture
 } from './hang-capture-codec'
+import { parseHangWorkerSends } from './hang-worker-sends'
 export { MACHINE_FIELDS, SNAPSHOT_FIELDS } from './hang-observation-schema'
 export type {
   HangSnapshot,
@@ -117,6 +118,7 @@ function parseObservation(value: unknown): HangObservation | null {
     }
   }
   const gap = object(data.watchdogGap)
+  const workerSends = parseHangWorkerSends(data.workerSends)
   return {
     id: data.id,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixed observation-kind allowlist above validates this string union.
@@ -146,9 +148,11 @@ function parseObservation(value: unknown): HangObservation | null {
             snapshot: numericFields(gap.snapshot, SNAPSHOT_FIELDS)
           }
         }
-      : {})
+      : {}),
+    ...(workerSends ? { workerSends } : {})
   }
 }
+
 export function emptyHangObservations(): HangObservationCollection {
   return { version: 1, observations: [], omitted: 0 }
 }
@@ -221,6 +225,7 @@ export function retainHangObservation(
       resolution: old.resolution ?? record.resolution,
       machine: old.machine ?? record.machine,
       completedSpans: old.completedSpans ?? record.completedSpans,
+      workerSends: old.workerSends ?? record.workerSends,
       mainJs: record.mainJs
         ? {
             ...record.mainJs,

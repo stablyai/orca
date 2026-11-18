@@ -1,4 +1,4 @@
-import { useProjectGroupSetup } from './use-project-group-setup'
+import { useProjectGroupSetup } from './workspace-setup/use-project-group-setup'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
@@ -20,10 +20,10 @@ import {
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
   renderIssueCommandTemplate
 } from '@/lib/workspace/creation/new-workspace'
-import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+import { getSetupConfig } from '../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
-import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
+import { useRetiredWorktreeNames } from '@/hooks/composer-state/workspace-identity/useRetiredWorktreeNames'
 import { getSuggestedCreatureName } from '@/components/sidebar/workspace-creation/naming/worktree-name-suggestions'
 const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
 

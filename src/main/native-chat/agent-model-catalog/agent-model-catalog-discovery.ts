@@ -1,5 +1,5 @@
 import type { StructuredAgentResolutionOperation } from '../agent-launch/structured-agent-command-resolution'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
 export type AgentModelCatalogProgress = ((
@@ -61,5 +61,7 @@ export type AgentModelCatalogDiscovery =
       listingNamesConfiguredModel: boolean
       /** Project-dependent catalogs require a chat folder and cannot be prewarmed. */
       listsInChatFolder?: true
+      /** Too heavy to start speculatively; lists only when asked. */
+      listsOnDemand?: true
     }
   | { kind: 'unavailable'; reason: string }

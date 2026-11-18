@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, shell, webContents } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
-import { normalizeBrowserDownloadFilename } from '../../../../shared/browser-download-filename'
+import { normalizeBrowserDownloadFilename } from '../../../../shared/browser/downloads/browser-download-filename'
 import { isPluginExternalUrl } from '../../../../shared/plugins/workers/plugin-host-api'
 import { createPanelMessageBudget } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 import type { PanelMessageBudget } from '../../../../shared/plugins/frames/plugin-panel-message-budget'

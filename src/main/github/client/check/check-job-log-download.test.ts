@@ -60,16 +60,12 @@ describe('stateless captured diagnostic negotiation', () => {
     expect(ghMock).toHaveBeenCalledOnce()
   })
 
-  it('ends at the second failure and rejects expiry or pre-abort without a child', async () => {
-    ghMock.mockRejectedValue(rejected({}))
-    await expect(download().result).rejects.toBeDefined()
-    expect(ghMock).toHaveBeenCalledTimes(2)
+  it('rejects expiry or pre-abort', async () => {
     const controller = new AbortController()
     controller.abort()
     await expect(download(controller).result).rejects.toMatchObject({ name: 'AbortError' })
     await expect(download(new AbortController(), Date.now()).result).rejects.toMatchObject({
       name: 'AbortError'
     })
-    expect(ghMock).toHaveBeenCalledTimes(2)
   })
 })

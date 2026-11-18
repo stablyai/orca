@@ -5,15 +5,18 @@ import {
   ManagedRuntimeAgentParams,
   ManagedRuntimeCancelParams
 } from '../../../../../shared/rpc-contract/host-management/managed-runtime-install-params'
-import { acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
+import { ACP_LAUNCH_SPECS, acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
 import { resolveAcpLaunchCommand } from '../../../../acp/launch/acp-launch-command'
 import { ManagedRuntimeInstallation } from '../../../../node-runtime/managed-runtime-installation'
 import '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import { stopStructuredAgentChats } from '../../../agent-session/lifecycle/structured-agent-chat-stop'
-import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
-import { isPathInsideOrEqual } from '../../../../../shared/cross-platform-path'
+import {
+  resolveHostStructuredAgentLaunchEnvironment,
+  structuredAgentHostAlternativeReady
+} from '../../../agent-session/launch/structured-agent-launch-support'
+import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 
@@ -27,7 +30,7 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
   const dataDirectory = getProfileUserDataPath()
   const releases = spec.managedRuntime.root(dataDirectory)
   // Use the launch's own lookup to find external runtimes.
-  const findExternal = async (): Promise<boolean> => {
+  const findExternalCommand = async (): Promise<boolean> => {
     const settings = runtime.requireStore().getSettings()
     const env = {
       ...(await resolveHostStructuredAgentLaunchEnvironment(agent, settings)),
@@ -47,6 +50,9 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
       throw error
     }
   }
+  // New chats start on a ready host program (e.g. the user's agy) instead, so it needs no install.
+  const findExternal = async (): Promise<boolean> =>
+    (await findExternalCommand()) || (await structuredAgentHostAlternativeReady(agent, runtime))
   const { launchGate } = spec
   const managedRuntime = spec.managedRuntime
   // Chats, starts, copies, sign-ins and children not proven gone all hold the gate's fence.
@@ -64,6 +70,19 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
     })
   installations.set(agent, installation)
   return installation
+}
+
+/** Each installation reclaims stale releases when created, so create them every launch, not only when a client asks. */
+export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
+  for (const spec of ACP_LAUNCH_SPECS) {
+    if (spec.managedRuntime) {
+      try {
+        installationFor(spec.agent, runtime)
+      } catch (error) {
+        console.warn(`[managed-runtime] ${spec.agent} releases not reclaimed at launch:`, error)
+      }
+    }
+  }
 }
 
 export const MANAGED_RUNTIME_INSTALL_METHODS = [

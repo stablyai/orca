@@ -1,4 +1,4 @@
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 /** An explicit empty value clears saved extras. */
 export function getExtraAgentArgsFlag(flags: Map<string, string | boolean>): string | undefined {

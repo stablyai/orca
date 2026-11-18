@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useTranslate } from '@/i18n/use-translate'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
@@ -16,7 +16,7 @@ import {
 } from '../../../lib/provider-accounts/account-runtime-label'
 import type { AgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
-import { structuredChatUnavailableOnPlatform } from '../../../../../shared/agent-session/structured-chat-platform-support'
+import { structuredChatUnavailableOnPlatform } from '../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 
 // The chat choice is this computer's, so the downloaded chat programs are too.

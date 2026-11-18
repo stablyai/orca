@@ -1,4 +1,4 @@
-import { escapeRegex } from '../../../shared/string-utils'
+import { escapeRegex } from '../../../shared/text/regex-escaping'
 import { findStartupDialogBlockedSignals } from '../terminal/wait/startup-dialog-blocked-signals'
 import { startOfLastNonBlankLines } from '../terminal/wait/terminal-wait-tail-window'
 import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'

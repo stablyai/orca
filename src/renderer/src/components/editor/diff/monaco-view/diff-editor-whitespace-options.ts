@@ -1,5 +1,5 @@
 import type { editor } from 'monaco-editor'
-import { shouldIgnoreTrimWhitespace } from '../../../../../../shared/diff-whitespace'
+import { shouldIgnoreTrimWhitespace } from '../../../../../../shared/source-control/diff/diff-whitespace'
 
 export function buildDiffEditorWhitespaceOptions(
   diffShowWhitespace: boolean | undefined

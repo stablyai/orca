@@ -1,4 +1,4 @@
-import { BoundedMap } from '../../../shared/bounded-map'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
 import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../source-control/code-host-read-execution-scope'

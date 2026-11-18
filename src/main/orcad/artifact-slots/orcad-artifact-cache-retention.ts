@@ -2,7 +2,7 @@
 // Unknown machine/boot ownership must preserve slots too.
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { nodeRuntimeAsset } from '../../../shared/node-runtime-pin'
+import { nodeRuntimeAsset } from '../../../shared/node-runtime/node-runtime-pin'
 import { ORCAD_LOCK_FILE_NAME } from '../instance-lock/orcad-instance-lock'
 import { readOrcadInstanceLockRecord } from '../instance-lock/orcad-instance-lock-record'
 import { orcadPeerPidIsJudgeableHere } from '../instance-lock/orcad-lock-holder-locality'

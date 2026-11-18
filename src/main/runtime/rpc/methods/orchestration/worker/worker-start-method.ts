@@ -25,7 +25,7 @@ import {
 } from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration/orchestration-task-display'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './start/admission/worker-start-prompt-budget'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 
@@ -139,9 +139,21 @@ export async function prepareWorkerStart(
   }
   const placement = params.worktree ?? 'current'
   if (
+    params.crossStoreParent &&
+    (orchestrationCaller?.kind !== 'peer' || placement !== 'new-child')
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "Only the paired Orca coordinating a Run names its own workspace as a new-child's parent. No effects were applied.",
+      { effectsApplied: false }
+    )
+  }
+  // A paired Orca's new-child nests under its own workspace, named by the parent it sends.
+  if (
     orchestrationCaller?.kind === 'peer' &&
     !followUp &&
     !params.terminal &&
+    !params.crossStoreParent &&
     /^(current|new-child)$/.test(placement)
   ) {
     throw new OrchestrationError(

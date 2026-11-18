@@ -19,7 +19,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 const PRESET_TRIGGERS = new Set<AutomationSchedulePreset>(['hourly', 'daily', 'weekdays', 'weekly'])
 const SCHEDULE_MODIFIER_FLAGS = ['day', 'time'] as const

@@ -1,5 +1,5 @@
 import { AccessibilityInfo, Platform } from 'react-native'
-import { a11yAnnounceParamsSchema } from '../../mobile-web-shell/bridge/bridge-native-verbs'
+import { a11yAnnounceParamsSchema } from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 
 // VoiceOver ignores the page's live regions inside the shell's WebView, so the shell announces for it; TalkBack reads them, so Android leaves it to the page.
 export function serveNativeAnnounceVerb(params: unknown): { announced: boolean } {

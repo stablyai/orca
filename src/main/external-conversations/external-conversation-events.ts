@@ -7,7 +7,7 @@ import type { AgentTurnOutcome } from '../../shared/agent-status/lifecycle/agent
 import type {
   ConnectorAgent,
   ExternalConversationLink
-} from '../../shared/external-conversation-link'
+} from '../../shared/connectors/external-conversation-link'
 import { judgeIdleAgentTurn } from '../runtime/agent-state-rules/agent-turn-idle-verdict'
 import {
   TerminalAgentTurnNews,

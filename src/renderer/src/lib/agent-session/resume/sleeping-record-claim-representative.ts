@@ -1,7 +1,7 @@
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isHostMirroredSleepingRecord } from './host-mirrored-pane-liveness'
 import './sleeping-agent-pane-ownership'
-import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
+import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 
 function outranks(
   record: SleepingAgentSessionRecord,

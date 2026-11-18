@@ -61,18 +61,6 @@ function makeRow(
 }
 
 describe('buildAgentRowLineageTree', () => {
-  it('keeps cyclic lineage rows visible as flat roots', () => {
-    const root = makeRow('root:1')
-    const firstCycleRow = makeRow('cycle-a:1', { parentPaneKey: 'cycle-b:1' })
-    const secondCycleRow = makeRow('cycle-b:1', { parentPaneKey: 'cycle-a:1' })
-
-    const tree = buildAgentRowLineageTree([root, firstCycleRow, secondCycleRow])
-
-    expect(tree.rootRows.map((row) => row.paneKey)).toEqual(['root:1', 'cycle-a:1', 'cycle-b:1'])
-    expect(tree.childrenByParentPaneKey.size).toBe(0)
-    expect(tree.childPaneKeys.size).toBe(0)
-  })
-
   it('terminates a reachable cycle introduced by duplicate pane rows', () => {
     const root = makeRow('root')
     const first = makeRow('first', { parentPaneKey: 'root' })

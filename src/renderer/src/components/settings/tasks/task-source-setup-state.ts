@@ -1,5 +1,5 @@
 import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
-import type { IntegrationStatusTone } from '@/components/integration-status-pill'
+import type { IntegrationStatusTone } from '@/components/integrations/presentation/integration-status-pill'
 
 export type TaskProviderReadiness = {
   connected: boolean

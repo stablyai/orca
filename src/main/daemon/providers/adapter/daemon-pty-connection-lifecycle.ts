@@ -6,7 +6,7 @@ import {
 import type {
   DaemonAuditTrigger,
   DaemonEvidenceSource
-} from '../../../../shared/daemon-audit-eligibility'
+} from '../../../../shared/terminal/daemon/daemon-audit-eligibility'
 import {
   exactDaemonIncarnationForPidRecord,
   sameEndpointIdentity

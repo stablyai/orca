@@ -7,7 +7,7 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
-import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../shared/remote-runtime/relay/relay-host-close-reason'
 import { readRelayAuthContext } from './authentication/relay-auth-context'
 import { relayIdentityKey } from './authentication/relay-auth-identity'
 import { RelayAuthCoordinator } from './authentication/relay-auth-coordinator'

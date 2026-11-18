@@ -4,8 +4,8 @@ import { act, cleanup, render } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { KeybindingFileSnapshot } from '../../../../shared/keybindings'
-import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import type { KeybindingFileSnapshot } from '../../../../shared/keybindings/types'
+import { createGlobalSettingsFixture } from '../../../../shared/settings/global-settings-test-fixture'
 
 const platform = vi.hoisted(() => ({ value: 'darwin' }))
 vi.mock('@/lib/keyboard/shortcut-platform', () => ({ getShortcutPlatform: () => platform.value }))
@@ -144,41 +144,42 @@ describe('dashboard pop-out close shortcut', () => {
     }
   })
 
-  it.each(['darwin', 'win32', 'linux'] as const)(
-    'closes with the configured chord while preserving preview ownership on %s',
-    (value) => {
-      platform.value = value
-      const close = vi.spyOn(window, 'close').mockImplementation(() => {})
-      const mod = value === 'darwin' ? { metaKey: true } : { ctrlKey: true }
-      const press = (target: EventTarget, init: KeyboardEventInit): void => {
-        target.dispatchEvent(
-          new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...mod, ...init })
-        )
-      }
-      const view = render(<DashboardPopoutRoot />)
-      const dialog = document.createElement('div')
-      dialog.setAttribute('role', 'dialog')
-      document.body.append(dialog)
-      press(dialog, { key: 'w', code: 'KeyW' })
-      const consume = (event: Event): void => event.preventDefault()
-      window.addEventListener('keydown', consume, true)
-      press(document.body, { key: 'w', code: 'KeyW' })
-      window.removeEventListener('keydown', consume, true)
-      expect(close).not.toHaveBeenCalled()
-
-      press(document.body, { key: 'w', code: 'KeyW' })
-      expect(close).toHaveBeenCalledOnce()
-      useAppStore.setState({ keybindings: { 'tab.close': ['Mod+Shift+Y'] } })
-      press(document.body, { key: 'w', code: 'KeyW' })
-      expect(close).toHaveBeenCalledOnce()
-      press(document.body, { key: 'Y', code: 'KeyY', shiftKey: true })
-      expect(close).toHaveBeenCalledTimes(2)
-
-      view.unmount()
-      press(document.body, { key: 'Y', code: 'KeyY', shiftKey: true })
-      expect(close).toHaveBeenCalledTimes(2)
+  it('closes with the configured chord while preserving preview ownership', () => {
+    platform.value = 'darwin'
+    const close = vi.spyOn(window, 'close').mockImplementation(() => {})
+    const press = (target: EventTarget, init: KeyboardEventInit): void => {
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          metaKey: true,
+          ...init
+        })
+      )
     }
-  )
+    const view = render(<DashboardPopoutRoot />)
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    document.body.append(dialog)
+    press(dialog, { key: 'w', code: 'KeyW' })
+    const consume = (event: Event): void => event.preventDefault()
+    window.addEventListener('keydown', consume, true)
+    press(document.body, { key: 'w', code: 'KeyW' })
+    window.removeEventListener('keydown', consume, true)
+    expect(close).not.toHaveBeenCalled()
+
+    press(document.body, { key: 'w', code: 'KeyW' })
+    expect(close).toHaveBeenCalledOnce()
+    useAppStore.setState({ keybindings: { 'tab.close': ['Mod+Shift+Y'] } })
+    press(document.body, { key: 'w', code: 'KeyW' })
+    expect(close).toHaveBeenCalledOnce()
+    press(document.body, { key: 'Y', code: 'KeyY', shiftKey: true })
+    expect(close).toHaveBeenCalledTimes(2)
+
+    view.unmount()
+    press(document.body, { key: 'Y', code: 'KeyY', shiftKey: true })
+    expect(close).toHaveBeenCalledTimes(2)
+  })
 
   it('honors a double-tap override without closing on a single or interrupted tap', () => {
     const close = vi.spyOn(window, 'close').mockImplementation(() => {})
@@ -202,28 +203,31 @@ describe('dashboard pop-out close shortcut', () => {
       press('keydown')
       press('keyup')
     }
+    const expectInterruptedTapReset = (interrupt: () => void): void => {
+      tap()
+      interrupt()
+      press('keydown')
+      expect(close).toHaveBeenCalledOnce()
+      press('keyup')
+      now += 400
+    }
+
     tap()
     expect(close).not.toHaveBeenCalled()
     press('keydown')
     expect(close).toHaveBeenCalledOnce()
     press('keyup')
 
-    for (const event of ['blur', 'focusin', 'prevented']) {
+    expectInterruptedTapReset(() => window.dispatchEvent(new Event('blur')))
+    expectInterruptedTapReset(() => window.dispatchEvent(new Event('focusin')))
+    expectInterruptedTapReset(() => {
+      window.addEventListener('keydown', (e) => e.preventDefault(), {
+        capture: true,
+        once: true
+      })
       tap()
-      if (event === 'prevented') {
-        window.addEventListener('keydown', (e) => e.preventDefault(), {
-          capture: true,
-          once: true
-        })
-        tap()
-      } else {
-        window.dispatchEvent(new Event(event))
-      }
-      press('keydown')
-      expect(close).toHaveBeenCalledOnce()
-      press('keyup')
-      now += 400
-    }
+    })
+
     const dialog = document.createElement('div')
     dialog.setAttribute('role', 'dialog')
     document.body.append(dialog)

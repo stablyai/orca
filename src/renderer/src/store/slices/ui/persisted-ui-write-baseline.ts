@@ -1,5 +1,5 @@
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { ActivityBarPosition } from '../../../../../shared/ui-chrome-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
+import type { ActivityBarPosition } from '../../../../../shared/ui-chrome/ui-chrome-types'
 
 /** Capture hydrated baseline and persist only locally changed fields: shared desktop/web/mobile UI snapshots otherwise overwrite peers’ disjoint updates (STA-5781). */
 export type PersistedUIWriteBaseline = {
@@ -27,6 +27,7 @@ export type PersistedUIWriteBaseline = {
   alwaysShowDefaultBranchWorkspace: boolean
   explorerDisplayRootByWorktree: Record<string, string>
   showDotfilesByWorktree: Record<string, boolean>
+  notificationsMutedByWorktree: Record<string, boolean>
   filterRepoIds: readonly string[]
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
@@ -59,6 +60,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   alwaysShowDefaultBranchWorkspace: true,
   explorerDisplayRootByWorktree: true,
   showDotfilesByWorktree: true,
+  notificationsMutedByWorktree: true,
   filterRepoIds: true,
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,
@@ -112,6 +114,7 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
   if (
     field === 'explorerDisplayRootByWorktree' ||
     field === 'showDotfilesByWorktree' ||
+    field === 'notificationsMutedByWorktree' ||
     field === 'acknowledgedAgentsByPaneKey' ||
     field === 'activityClearedAtByPaneKey' ||
     field === 'manuallyUnreadTurnsByPaneKey'

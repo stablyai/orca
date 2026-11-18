@@ -1,7 +1,7 @@
 import type { AgentMainAgentStatus } from '../../../agent-status/lifecycle/main-agent-status'
 import type { ParsedAgentStatusPayload } from '../../../agent-status/contracts/agent-status-types'
 import { isAskUserQuestionTool } from '../../../agent-status/lifecycle/agent-question-answered-intent'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../native-chat/input/questions/codex-async-question-input'
 import {
   continueMainAgentStatus,
   foldAgentLeadStatus,
@@ -14,12 +14,12 @@ import {
   finishCodexSubagent,
   seedCodexSubagentRoster,
   type CodexSubagentRoster
-} from '../../../codex-subagent-roster'
+} from './codex-subagent-roster'
 import {
   createCodexSubagentTranscriptState,
   hasTrackedCodexTranscriptSubagents,
   type CodexSubagentTranscriptState
-} from '../../../codex-subagent-transcript'
+} from './codex-subagent-transcript'
 import type { HookListenerState } from '../../listener-state'
 import type { CodexLeadTurnState } from '../../main-agent-turn-state'
 

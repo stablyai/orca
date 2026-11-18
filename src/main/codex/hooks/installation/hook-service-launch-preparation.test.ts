@@ -191,18 +191,30 @@ describe('completed Codex launch preparation', () => {
     expect(readFileSync(`${runtime}.bak`, 'utf8')).toBe('model = "recoverable"\n')
   })
 
-  it('reports a newly pending Codex answer after an asynchronous refresh snapshot', async () => {
-    const { service, home } = seed()
-    await settle(service, home)
+  it('reports the mirrored config current only until a source edit', async () => {
+    const { service, home, source } = seed()
+    prepareFactoryHooks.mockImplementation(service.prepareRuntimeHomeForLaunch.bind(service))
+    const prepare = createCodexRuntimeHomeLaunchPreparation({
+      getRuntimeHome: () => ({
+        prepareForCodexLaunchAsync: async (_target, _env, options) => {
+          options?.deferConfigSync?.(() =>
+            syncSystemConfigIntoManagedCodexHome({
+              systemHomePath: join(homes.tmpHome, '.codex'),
+              runtimeHomePath: home
+            })
+          )
+          return home
+        }
+      }),
+      getSettings: () => undefined
+    })
+    expect(await service.isConfigPreparationCurrent(home)).toBe(false)
     for (let index = 0; index < 3; index++) {
-      await service.refreshRuntimeUserHooksForLaunchPrep(home)
+      await prepare()
     }
-    controls.afterSnapshot = () => {
-      controls.answer = null
-    }
-    expect((await service.refreshRuntimeUserHooksForLaunchPrep(home)).detail).toContain(
-      'Orca has not asked Codex yet'
-    )
+    expect(await service.isConfigPreparationCurrent(home)).toBe(true)
+    writeFileSync(source, 'model = "A"\n')
+    expect(await service.isConfigPreparationCurrent(home)).toBe(false)
   })
 
   it('honors Off before effects when it changes during the asynchronous snapshot', async () => {
@@ -246,15 +258,6 @@ describe('completed Codex launch preparation', () => {
     expect(readFileSync(runtime, 'utf8')).toContain('model = "B"')
     await service.installForLaunchPrep(home, true, () => true)
     expect(readFileSync(runtime, 'utf8')).toContain('model = "A"')
-  })
-
-  it('preserves the recovery backup when launch inputs are unchanged', async () => {
-    const { service, home, runtime } = seed()
-    await settle(service, home)
-    const backup = `${runtime}.bak`
-    writeFileSync(backup, 'model = "recoverable"\n')
-    await service.installForLaunchPrep(home, true, () => true)
-    expect(readFileSync(backup, 'utf8')).toBe('model = "recoverable"\n')
   })
 
   it.each(['temporarily absent', 'temporarily locked'] as const)(

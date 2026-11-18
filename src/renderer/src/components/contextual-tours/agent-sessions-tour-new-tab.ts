@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getContextualTour } from '../../../../shared/contextual-tours'
+import { getContextualTour } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 
 /** Finish after the + menu closes so the next lesson follows the selected tab. */
 export function advanceAgentSessionsTourPastNewTab(): void {

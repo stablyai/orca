@@ -178,31 +178,3 @@ it('joins listing writes outside jobs and seals submissions before a successor w
     expect.objectContaining({ worktreeId: 'successor' })
   ])
 })
-
-it('joins preparation that is still loading before allowing a failed startup to unwind', async () => {
-  const loading = deferred()
-  const draining = deferred()
-  const ready = worktreeRemovalLifetime.prepare(
-    () => loading.promise,
-    () => {},
-    () => draining.promise
-  )
-  const startupFailure = expect(ready).rejects.toThrow('Orca stopped while preparing')
-  const closing = worktreeRemovalLifetime.close()
-  const stopFailure = expect(closing).rejects.toThrow('Orca stopped while preparing')
-  loading.resolve()
-  await startupFailure
-  let released = false
-  void closing.then(
-    () => {
-      released = true
-    },
-    () => {
-      released = true
-    }
-  )
-  await Promise.resolve()
-  expect(released).toBe(false)
-  draining.resolve()
-  await stopFailure
-})

@@ -2,7 +2,7 @@ import { getGitHubRepoLookupIndex } from '../repositories/github-repo-lookup-ind
 import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import type { AppState } from '../../types'
 import type { RuntimeFocusSettings } from '../../../../../shared/github/cache/github-cache-key'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type {
   GitHubWorkItem,
   ListWorkItemsResult
@@ -15,7 +15,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { classifyGitHubUnavailable } from '../../../../../shared/github/api/api-availability'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../../runtime/rpc/calls/runtime-rpc-result'
@@ -24,7 +24,7 @@ import {
   runtimeTargetForOwnerEnvironment,
   ipcOrRuntimeTargetForHostId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { workItemsCacheKey } from '../cache/cache-identity'
 import { findRepoForGitHubOwner, getRuntimeRepoTarget } from '../repositories/repository-routing'
 

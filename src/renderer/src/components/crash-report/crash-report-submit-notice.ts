@@ -1,10 +1,10 @@
 import { translate } from '@/i18n/i18n'
-import {
-  sanitizeCrashReportString,
-  type CrashReportCopySubmissionFailure,
-  type CrashReportDiagnosticBundle,
-  type CrashReportSubmitResult
-} from '../../../../shared/crash-reporting'
+import { sanitizeCrashReportString } from '../../../../shared/crash-reporting/crash-report-redaction'
+import type {
+  CrashReportCopySubmissionFailure,
+  CrashReportSubmitResult
+} from '../../../../shared/crash-reporting/crash-reporting'
+import type { CrashReportDiagnosticBundle } from '../../../../shared/crash-reporting/crash-reporting-diagnostic-bundle'
 
 export const CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID = 'crash-report-submit-failure'
 
@@ -96,7 +96,7 @@ export function getCrashReportSubmitFailureNotice(
       ? isFreezeReport
         ? translate(
             'crashReport.freeze.uncheckAttachments',
-            'Uncheck "Attach saved freeze report and diagnostic logs" and try again, or copy the details.'
+            'Uncheck "Include the saved freeze report and recent logs (redacted)" and try again, or copy the details.'
           )
         : translate(
             'auto.components.crash.report.submit.notice.uncheckDiagnostics',

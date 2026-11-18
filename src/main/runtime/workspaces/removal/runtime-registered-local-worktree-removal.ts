@@ -9,7 +9,7 @@ import { pruneGitWorktrees } from '../../../git/worktrees/removal/worktree-prune
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { ArchiveHookOverride } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { assertWorktreeCleanForRemoval } from '../../../git/worktrees/removal/worktree-removal-preflight'
@@ -18,7 +18,7 @@ import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths/worktree-shared-directories'
 import { runHook, getEffectiveHooks } from '../../../workspace-hooks/hooks'
 import { findExistingWorktreeSymlinkPaths } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
-import { removeWorktreeLinkedPaths } from '../../../ipc/worktree-symlinks'
+import { removeWorktreeLinkedPaths } from '../../../ipc/worktrees/linked-paths/worktree-symlinks'
 import { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
 export { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
@@ -26,7 +26,7 @@ import {
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
-} from '../../../ipc/worktree-logic'
+} from '../../../ipc/worktrees/paths/worktree-logic'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../workspaces/removal/local-orphaned-worktree-cleanup'
 import { recoverPartialLocalWorktreeRemoval } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'

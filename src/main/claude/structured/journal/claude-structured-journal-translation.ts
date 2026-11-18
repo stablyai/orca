@@ -1,3 +1,4 @@
+import * as correctionRows from '../../subagents/claude-provisional-row-corrections'
 import { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type * as contract from './claude-journal-translator-contract'
@@ -13,10 +14,10 @@ import {
 } from '../launch/claude-structured-provider-fallback'
 import { ClaudeBackgroundTaskRows } from '../../background-tasks/claude-background-task-rows'
 import { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
-import { ClaudeProvisionalRowCorrections } from '../../subagents/claude-provisional-row-corrections'
 import { createClaudeStreamedThinking } from './claude-streamed-thinking'
 import { ClaudeSubagentIdentities } from '../../subagents/claude-subagent-identities'
 import { ClaudeJournaledSubagents } from '../../subagents/claude-subagent-journaled-identities'
+import type { ClaudeStopCheck } from '../../claude-stop-readings'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import {
@@ -24,7 +25,7 @@ import {
   claudeStreamTurnSource,
   isRootClaudeFrame
 } from '../turns/claude-turn-opening'
-import { ClaudeOpenTurn } from '../turns/claude-open-turn'
+import { ClaudeOpenTurn, withClaudePromptSuggestions } from '../turns/claude-open-turn'
 import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../turns/claude-command-turn'
 import { ClaudeContextFacts } from '../../context-usage/claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
@@ -32,8 +33,8 @@ import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from '../../subagents/claude-child-tool-queries'
 import { journalClaudeMessage, journalClaudeStream } from './claude-message-journaling'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
-import { journalClaudeResult } from './claude-result-journaling'
-import type { ClaudeResultJournalContext } from './claude-result-journaling'
+import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-result-journaling'
+import { endClaudeStreams } from './claude-open-stream-endings'
 import { ClaudeAssistantFailures } from './claude-assistant-failures'
 import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
@@ -62,14 +63,14 @@ export function createClaudeJournalTranslator(
     sink: deps.sink,
     // Keep existing stamps when superseding a turn ends pending attribution corrections.
     turnSuperseded: () => corrections.abandon(),
-    endOpenWork: (completedAt) => streamedThinking.finishOpen(completedAt),
+    endOpenWork: (...e) => endClaudeStreams(streamedThinking, streamedText, streamedBlocks, ...e),
     onOpen: () => context.markActivity()
   })
   const context = new ClaudeContextFacts(turn, deps.sink)
   const fallbackId = deps.fallbackIdPrefix ?? 'acquisition'
   const providerFallback = createClaudeProviderFrameFallback(deps.sink, fallbackId, turnScope)
   const toolOrigins = new ClaudeToolOriginRegistry()
-  const journaled = new ClaudeJournaledSubagents(() => deps.sink.journalLinkage?.() ?? null)
+  const journaled = new ClaudeJournaledSubagents(() => deps.sink.journalSnapshot?.() ?? null)
   const taskInvocations = new ClaudeTaskInvocations(journaled)
   const subagents = new ClaudeSubagentIdentities({
     taskInvocations,
@@ -78,18 +79,10 @@ export function createClaudeJournalTranslator(
     journaled
   })
   const childQueries = claudeChildToolQueries({ tools, toolOrigins, linkage: subagents.linkage })
-  const corrections = new ClaudeProvisionalRowCorrections({
+  const corrections = new correctionRows.ClaudeProvisionalRowCorrections({
     ...subagents.linkage,
     turnScope,
-    rewrite: (identity, body, options) => {
-      // Keep refused corrections pending under backpressure; legacy sinks accept unconditionally.
-      const admission = deps.sink.tryAppendItem?.(identity, body, options)
-      if (admission === undefined) {
-        deps.sink.appendItem(identity, body, options)
-        return true
-      }
-      return admission.accepted
-    },
+    rewrite: correctionRows.claudeProvisionalCorrectionWriter(deps.sink),
     publish: () => deps.sink.publish()
   })
   const backgroundTasks = new ClaudeBackgroundTaskRows({
@@ -143,7 +136,7 @@ export function createClaudeJournalTranslator(
     turn,
     assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
     usageLimits: new ClaudeUsageLimits(),
-    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalLinkage?.()?.threadGoalSource())
+    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalSnapshot?.()?.threadGoal)
   }
 
   const resultContext: ClaudeResultJournalContext = {
@@ -151,15 +144,20 @@ export function createClaudeJournalTranslator(
     prompts,
     context,
     goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable'),
-    acceptStartupFailure: deps.acceptStartupFailure
+    acceptStartupFailure: deps.acceptStartupFailure,
+    steerAwaitingEcho: deps.steerAwaitingEcho ?? (() => false)
   }
 
-  const finish = (observedAt: number, failed: boolean): void => {
+  const finish = (
+    observedAt: number,
+    failed: boolean,
+    stopCheck: ClaudeStopCheck | null = null
+  ): void => {
     prompts.retryPendingCancellations()
     flush()
     corrections.abandon()
     backgroundTasks.settleSession()
-    settleClaudeInterruptedTurn(turn, observedAt, failed)
+    settleClaudeInterruptedTurn(turn, observedAt, failed, stopCheck)
   }
   const handle = withClaudeConversationContent((event) => {
     if (event.type === 'retiring') {
@@ -253,8 +251,9 @@ export function createClaudeJournalTranslator(
       publishClaudeTurnActivity(turn, deps.sink, event)
     }
   })
+  const handleTurnFrames = withClaudePromptSuggestions(turn, deps.sink, handle)
   return {
-    handle: (event) => delivery.interpret(event, handle),
+    handle: (event) => delivery.interpret(event, handleTurnFrames),
     journalPrompts: prompts,
     get currentTurnId() {
       return turn.id
@@ -266,9 +265,7 @@ export function createClaudeJournalTranslator(
     beginCommand: (start) => turn.beginCommand(claudeCommandCurrentTurn(start)),
     forgetCommand: (turnId) => turn.forgetCommand(turnId),
     commandInterruptRequested: (turnId) => turn.commandInterruptRequested(turnId),
-    get openTurnInLiveProviderCycle() {
-      return turn.openedInLiveProviderCycle
-    },
+    turnCycle: turn,
     get openTurnHasInputWork() {
       return turn.isOpen && turn.inputChoiceWorkObserved
     },
@@ -288,6 +285,8 @@ export function createClaudeJournalTranslator(
     get finalOutputAdmitted() {
       return coverage.admitted
     },
+    markContextActivity: () => context.markActivity(),
+    subscribeContextActivity: (listener) => context.subscribeActivity(listener),
     subscribeContextUsageRequests: (listener) => context.subscribeReportRequests(listener),
     recordContextReport: (target, report, askedAt) => context.recordReport(target, report, askedAt),
     modelMayHaveChanged: () => context.modelMayHaveChanged(),

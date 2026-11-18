@@ -49,6 +49,9 @@ export const CONSUMERS = new Map([
         'ownerInputChanged',
         'ownerInputs',
         'createStructuredSessionMembership',
+        'createStructuredSessionStatusBurst',
+        'sameCapturedInput',
+        'sameStatusInput',
         'sameSemanticTab'
       ])
     }
@@ -66,8 +69,8 @@ const ENUMERATING_CALLS = new Set(['keys', 'values', 'entries'])
 
 /** Shared tab-map writers wired to the seam: a raw record literal for these fields bypasses provenance. */
 export const WRITERS = [
-  'src/renderer/src/runtime/web-session-tabs-sync/scoped-patch-annotation.ts',
-  'src/renderer/src/runtime/web-session-tabs-sync/store-patch.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/snapshots/scoped-patch-annotation.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/snapshots/store-patch.ts',
   'src/renderer/src/runtime/workspace-layout/frames/workspace-layout-frame-sync.ts',
   'src/renderer/src/store/slices/browser/pages/browser-page-state-actions.ts',
   'src/renderer/src/store/slices/editor/file-ids/hydrated-editor-file-ids.ts',

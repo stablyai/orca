@@ -1,6 +1,6 @@
 import * as z from 'zod'
-import { getRepoExecutionHostId } from '../../execution-host'
-import type { Repo } from '../../repo-types'
+import { getRepoExecutionHostId } from '../../execution-host/execution-host'
+import type { Repo } from '../../repository/repo-types'
 
 /** Longest data URL one icon may reply with. */
 export const MAX_REPO_ICON_DATA_URL_BYTES = 16 * 1024

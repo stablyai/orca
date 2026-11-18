@@ -6,8 +6,9 @@ import { rekeyFileIdRecord } from './open-file-path-rekey'
 import { rekeyEditorBuffers } from '../buffers/editor-buffer-record'
 import { migrateHydratedEditorTabsAndGroups } from './hydrated-editor-file-ids'
 import { renameEditorFilesThroughLayoutOwner } from '../tabs/editor-file-rename-through-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { rekeyEditorBytesDocuments } from '@/components/editor/save/bytes/editor-bytes-document-boxes'
+import { handOffRenamedEditorModels } from '@/components/editor/model-lifetime/identity/editor-model-rename-handoff'
 
 // The store change is pure, so a layout-owner build applies it in the frame that shows main's rename.
 export type RekeyOpenFilesPatch =
@@ -170,6 +171,7 @@ export function createRekeyOpenFilesAction(
           return s
         }
         rekeyEditorBytesDocuments(rekeys)
+        handOffRenamedEditorModels(s, rekeys)
         return next.patch
       })
       return result

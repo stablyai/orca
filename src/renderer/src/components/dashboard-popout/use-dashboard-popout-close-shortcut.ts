@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store'
-import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../../shared/modifier-double-tap-detector'
+} from '../../../../shared/keybindings/modifier-double-tap-detector'
 
 /** The pop-out has no Window menu or tab routing, so its close-tab chord closes the window. */
 export function useDashboardPopoutCloseShortcut(): void {
