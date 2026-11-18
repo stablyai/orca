@@ -108,6 +108,8 @@ export function useWorktreeJumpPaletteWorktrees({
         hideAutomationGeneratedWorkspaces,
         hideCliCreatedWorkspaces,
         hideDetachedHeadWorkspaces,
+        // The jump palette keeps Done reachable, matching the Workspace Board.
+        hideDoneWorkspaces: false,
         hideWorkspacesFromOtherDevices,
         filterRepoIds: [],
         visibleHostIds: null

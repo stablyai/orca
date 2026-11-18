@@ -1,6 +1,7 @@
 import type React from 'react'
 import {
   CalendarClock,
+  CircleCheck,
   GitBranch,
   GitCommitHorizontal,
   MonitorSmartphone,
@@ -23,6 +24,7 @@ export type WorkspaceFilterOptionKey = Extract<
   | 'hideCliCreatedWorkspaces'
   | 'hideWorkspacesFromOtherDevices'
   | 'hideDetachedHeadWorkspaces'
+  | 'hideDoneWorkspaces'
 >
 
 type FilterRow = {
@@ -115,6 +117,18 @@ const FILTER_ROWS: Record<WorkspaceFilterOptionKey, FilterRow> = {
       ),
     checked: (state) => state.hideDetachedHeadWorkspaces,
     set: (next) => useAppStore.getState().setHideDetachedHeadWorkspaces(next)
+  },
+  hideDoneWorkspaces: {
+    icon: <CircleCheck className="size-3.5" />,
+    label: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceFilterSection.hideDone', 'Hide Done'),
+    ariaLabel: () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceFilterSection.hideDoneAria',
+        'Hide workspaces in the Done status from the sidebar; the workspace board keeps them'
+      ),
+    checked: (state) => state.hideDoneWorkspaces,
+    set: (next) => useAppStore.getState().setHideDoneWorkspaces(next)
   }
 }
 
