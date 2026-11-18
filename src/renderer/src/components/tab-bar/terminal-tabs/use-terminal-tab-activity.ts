@@ -18,7 +18,9 @@ type TerminalTabActivity = {
 type ActivityStatusInput = Parameters<typeof resolveTerminalTabActivityStatus>[0]
 
 /** One tab's status selector; store writes that leave this tab's inputs untouched reuse the last answer. */
-function createActivityStatusSelector(): (input: ActivityStatusInput) => TerminalTabActivityStatus {
+export function createActivityStatusSelector(): (
+  input: ActivityStatusInput
+) => TerminalTabActivityStatus {
   let last: {
     tabId: string
     title: string
