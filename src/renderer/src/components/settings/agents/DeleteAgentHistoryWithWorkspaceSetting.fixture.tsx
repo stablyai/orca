@@ -66,7 +66,9 @@ export const codexHistorySizeTooltip = defineFixture({
   store: { settings },
   setup: mockCodexHistorySize,
   render: () => <Setting />,
+  // A Tab keydown first: tooltips open on keyboard focus, not on script focus alone.
   interact: async (frame) => {
-    frame.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
+    frame.ownerDocument.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    frame.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]')?.focus()
   }
 })
