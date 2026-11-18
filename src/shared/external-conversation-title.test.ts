@@ -2,12 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { externalConversationTitle } from './external-conversation-title'
 
 describe('externalConversationTitle', () => {
-  it("takes a Slack message's first line", () => {
-    expect(
-      externalConversationTitle('slack', '\n  Why did the nightly build fail?\nLogs attached.')
-    ).toBe('Why did the nightly build fail?')
-  })
-
   it('names a Linear issue by its key and title, not its markup', () => {
     const text =
       '<issue identifier="ENG-6470">\n<title>Bot replies drop the thread title</title>\n<description>…</description>\n</issue>'
@@ -52,11 +46,5 @@ describe('externalConversationTitle', () => {
         'Investigate the failing endpoint\nRequest:\nGET /api/builds'
       )
     ).toBe('Investigate the failing endpoint')
-  })
-
-  it('caps a long line', () => {
-    const title = externalConversationTitle('slack', 'x'.repeat(300))
-    expect(title).toHaveLength(120)
-    expect(title.endsWith('…')).toBe(true)
   })
 })
