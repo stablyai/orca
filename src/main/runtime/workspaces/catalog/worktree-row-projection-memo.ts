@@ -2,7 +2,8 @@ import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 /** Everything a projected git-worktree row is computed from. Metadata objects are replaced on
- *  write, except load-time migration filling `instanceId`/`hostId`, so those two are compared too. */
+ *  write; the only in-place edits (read-time identity migration, SSH target reassignment, rename
+ *  history) set `instanceId`, `hostId` or `priorWorktreeIds`, so those are compared too. */
 export type WorktreeRowProjectionInput = {
   repoId: string
   repoDisplayName: string | undefined
@@ -15,6 +16,7 @@ type Entry<Row> = {
   input: WorktreeRowProjectionInput
   instanceId: string | undefined
   hostId: string | undefined
+  priorWorktreeIds: readonly string[] | undefined
   row: Row
 }
 
@@ -38,6 +40,7 @@ function sameInput<Row>(entry: Entry<Row>, input: WorktreeRowProjectionInput): b
     known.meta === input.meta &&
     entry.instanceId === input.meta?.instanceId &&
     entry.hostId === input.meta?.hostId &&
+    entry.priorWorktreeIds === input.meta?.priorWorktreeIds &&
     known.repoId === input.repoId &&
     known.repoDisplayName === input.repoDisplayName &&
     known.expectedHostId === input.expectedHostId &&
@@ -51,7 +54,12 @@ function sameInput<Row>(entry: Entry<Row>, input: WorktreeRowProjectionInput): b
 export class WorktreeRowProjectionMemo<Row> {
   private readonly byRepo = new Map<string, Map<string, Entry<Row>>>()
 
-  rowFor(repoKey: string, worktreeId: string, input: WorktreeRowProjectionInput, build: () => Row): Row {
+  rowFor(
+    repoKey: string,
+    worktreeId: string,
+    input: WorktreeRowProjectionInput,
+    build: () => Row
+  ): Row {
     let rows = this.byRepo.get(repoKey)
     const known = rows?.get(worktreeId)
     if (known && sameInput(known, input)) {
@@ -66,6 +74,7 @@ export class WorktreeRowProjectionMemo<Row> {
       input: { ...input, git: { ...input.git } },
       instanceId: input.meta?.instanceId,
       hostId: input.meta?.hostId,
+      priorWorktreeIds: input.meta?.priorWorktreeIds,
       row
     })
     return row

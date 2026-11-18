@@ -30,7 +30,7 @@ import {
   type WorktreeRemovalWitnessScan
 } from '../../../workspaces/removal/worktree-removal-listing'
 import { pendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
-import { WorktreeRowProjectionMemo } from './worktree-row-projection-memo'
+import type { WorktreeRowProjectionMemo } from './worktree-row-projection-memo'
 
 type RepoWorktreeRowStore = Pick<
   RuntimeStore,
@@ -218,7 +218,13 @@ export function projectRepoWorktreeRows(
       ? deps.rowMemo.rowFor(
           repoKey,
           worktreeId,
-          { repoId: repo.id, repoDisplayName: repo.displayName, expectedHostId, git: gitWorktree, meta },
+          {
+            repoId: repo.id,
+            repoDisplayName: repo.displayName,
+            expectedHostId,
+            git: gitWorktree,
+            meta
+          },
           build
         )
       : build()

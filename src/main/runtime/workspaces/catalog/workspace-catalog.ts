@@ -144,7 +144,10 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
           )
       )
     )
-    this.worktreeRowMemo.retainRepos(new Set(repos.map(worktreeRowMemoRepoKey)))
+    // Repos registered while scans awaited keep their rows.
+    this.worktreeRowMemo.retainRepos(
+      new Set(this.requireStore().getRepos().map(worktreeRowMemoRepoKey))
+    )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
     const worktrees = projectResolvedWorktreeLineage(perRepoWorktrees.flat(), lineageById)
     return { worktrees, platformByRepoId }
@@ -218,7 +221,12 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     if (!this.store) {
       return null
     }
-    return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
+    // Narrowed projections can't prune the memo, so they don't fill it either.
+    return await resolveScopedWorktreeIdRow(
+      { ...this.repoWorktreeRowDeps(), rowMemo: undefined },
+      worktreeId,
+      requiredHostId
+    )
   }
 
   /** The resolution scan plus the checkouts this host's removals own that Git no longer lists. */
