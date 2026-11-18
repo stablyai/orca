@@ -3,6 +3,7 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServer } from '../server/agent-hook-server'
 import { selectFreshExplicitAgentStatusRow } from '../../runtime/workspaces/process-listing/runtime-hook-agent-row-selection'
 import { agentHookRuntimeDeps } from './agent-hook-runtime-deps'
+import { AgentStatusObservedPaneIdentities } from '../../runtime/terminal/identity/agent-status-observed-pane-identity'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
@@ -34,7 +35,7 @@ it('keeps a dismissed running agent out of status readers', () => {
   server.dropStatusEntry(PANE)
   const rows = server.getStatusSnapshot()
   expect(rows).toMatchObject([{ paneKey: PANE, providerSessionOnly: true }])
-  const deps = agentHookRuntimeDeps(server, { read: () => undefined }, () => ({}))
+  const deps = agentHookRuntimeDeps(server, new AgentStatusObservedPaneIdentities(), () => ({}))
   expect(deps.getAgentStatusSnapshot()).toEqual([])
   expect(
     selectFreshExplicitAgentStatusRow({ handles: [], paneKeys: [PANE], hookRows: rows })
