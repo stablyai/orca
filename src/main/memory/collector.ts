@@ -66,7 +66,7 @@ const execFileAsync = promisify(execFile)
 const PS_EXEC_TIMEOUT_MS = 5_000
 const PS_MAX_BUFFER = 10 * 1024 * 1024
 
-async function enumerateProcesses(): Promise<ProcIndex> {
+export async function enumerateProcesses(): Promise<ProcIndex> {
   const platform = os.platform()
   const [rows, footprints] = await Promise.all([
     platform === 'win32' ? enumerateWindows() : enumerateUnix(),
