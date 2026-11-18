@@ -123,38 +123,52 @@ export function bundledSkillFileSiblingKind(entryName: string): 'stage' | 'old' 
 }
 
 /**
- * Replaces only SKILL.md, by an atomic rename within the folder; every other entry is the user's
- * and stays untouched. Returns a hard link to the replaced bytes so the caller can keep an edit
- * that raced the rename; undefined where the filesystem cannot hard-link.
+ * Replaces only SKILL.md; every other entry is the user's and stays untouched. Moving SKILL.md
+ * aside first captures whatever an editor last saved there, even by its own rename, and the new
+ * file goes in by hard link, which refuses to overwrite a SKILL.md an editor recreated meanwhile.
+ * Returns the moved-aside file for the caller to settle. A crash between the two steps leaves
+ * only the moved-aside file, which the next plan restores.
  */
 export async function updateBundledSkillFile(
   filesystem: BundledSkillFilesystem,
   folder: string,
   text: string,
   verify: () => Promise<boolean>
-): Promise<string | undefined> {
+): Promise<string> {
   const target = join(folder, SKILL_FILE)
   const staged = siblingPath(target, BUNDLED_SKILL_STAGE_MARKER)
-  let old: string | undefined = siblingPath(target, BUNDLED_SKILL_OLD_MARKER)
+  const old = siblingPath(target, BUNDLED_SKILL_OLD_MARKER)
+  const isMissing = async (path: string) => (await filesystem.stat(path))?.kind === 'missing'
   try {
     await filesystem.writeFile(staged, text)
-    old = await filesystem.linkFile(target, old).then(
-      () => old,
-      () => undefined
-    )
     await requireUnchanged(verify, folder)
-    await filesystem.rename(staged, target)
-    return old
+    await filesystem.rename(target, old)
   } catch (error) {
-    // A rename that reported failure but committed leaves no stage; then the old link is the only
-    // copy of a racing edit, so it stays for the next plan to settle.
-    const committed = (await filesystem.stat(staged))?.kind === 'missing'
-    await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
-    if (old && !committed) {
-      await removeBundledSkillSibling(filesystem, old).catch(() => undefined)
+    // A move that reported failure but happened is undone, so SKILL.md never goes missing.
+    if ((await isMissing(target)) && !(await isMissing(old))) {
+      await filesystem.rename(old, target).catch(() => undefined)
     }
+    await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
     throw error
   }
+  try {
+    await filesystem.linkFile(staged, target).catch(async (error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw new BundledSkillChangedError(target)
+      }
+      // No hard links here: a rename can only overwrite a save from this instant.
+      await filesystem.rename(staged, target)
+    })
+  } catch (error) {
+    if (await isMissing(target)) {
+      await filesystem.rename(old, target).catch(() => undefined)
+    }
+    await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
+    // An editor's new SKILL.md stays; the moved-aside copy is the next plan's to settle.
+    throw error
+  }
+  await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
+  return old
 }
 
 /** Back up the foreign object itself before replacement; never put user content in disposable .orca-old siblings. */

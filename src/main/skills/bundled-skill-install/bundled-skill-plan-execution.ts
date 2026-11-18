@@ -148,7 +148,7 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
       }
       const old = await updateBundledSkillFile(filesystem, op.path, run.source.text, verify)
       // The new SKILL.md is in; an edit that cannot be preserved surfaces as a stranded failure.
-      return old ? settleReplacedFile(run, old) : undefined
+      return settleReplacedFile(run, old)
     }
     case 'replace': {
       const backupPath = backupFor(run)
@@ -168,7 +168,11 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
       }
       await requireUnchanged(run, from.path, from.observed)
       await requireUnchanged(run, op.path, op.observed)
-      await filesystem.rename(from.path, op.path)
+      // A moved-aside SKILL.md goes back into its folder; an old folder copy replaces the path.
+      await filesystem.rename(
+        from.path,
+        from.observed.kind === 'file' ? join(op.path, 'SKILL.md') : op.path
+      )
       return undefined
     }
   }

@@ -141,6 +141,9 @@ function describeOutcomeOp(op: BundledSkillOpOutcome): string | null {
     case 'skipped':
       return 'Skipped: the shared copy it depends on did not land.'
     case 'failed':
+      if (op.strandedPath) {
+        return `Updated, but an edit saved during the update could not be backed up (${op.error ?? 'unknown error'}); it is still at ${op.strandedPath}`
+      }
       return isBundledSkillFileInUse(op)
         ? BUNDLED_SKILL_FILE_IN_USE_TEXT
         : `Failed: ${op.error ?? 'unknown error'}`

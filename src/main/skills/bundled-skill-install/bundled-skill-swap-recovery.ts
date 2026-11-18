@@ -44,41 +44,58 @@ export async function recoverySiblings(
     const released = old.wholeFolderClass === 'current' || old.wholeFolderClass === 'released'
     cleanup.push({ path: old.path, action: released ? 'delete' : 'backup', observed: old.observed })
   }
-  if (skillFolder) {
-    cleanup.push(...(await strayFileSiblings(filesystem, skillFolder, source, digest)))
-  }
-  return {
-    ...(restore ? { restoreFrom: { path: restore.path, observed: restore.observed } } : {}),
-    cleanup
-  }
+  const strays = skillFolder
+    ? await strayFileSiblings(filesystem, skillFolder, source, digest)
+    : { cleanup: [] }
+  cleanup.push(...strays.cleanup)
+  const restoreFrom = restore
+    ? { path: restore.path, observed: restore.observed }
+    : strays.restoreFrom
+  return { ...(restoreFrom ? { restoreFrom } : {}), cleanup }
 }
 
-/** Only Orca writes these names: a stage is always disposable, a replaced SKILL.md only when shipped. */
+/**
+ * Only Orca writes these names: a stage is always disposable, a moved-aside SKILL.md only when
+ * shipped. A folder an update left without SKILL.md gets its moved-aside copy back.
+ */
 async function strayFileSiblings(
   filesystem: BundledSkillFilesystem,
   folder: string,
   source: BundledSkillSource,
   digest: string
-): Promise<BundledSkillCleanup[]> {
-  const cleanup: BundledSkillCleanup[] = []
+): Promise<{ restoreFrom?: BundledSkillOp['restoreFrom']; cleanup: BundledSkillCleanup[] }> {
   const entries = (await filesystem.listEntries(folder)) ?? []
-  for (const entry of entries) {
+  const strays: { path: string; kind: 'stage' | 'old'; observed: BundledSkillObserved }[] = []
+  for (const entry of [...entries].sort((left, right) => (left.name < right.name ? -1 : 1))) {
     const kind = entry.kind === 'file' ? bundledSkillFileSiblingKind(entry.name) : null
     const path = join(folder, entry.name)
     const stat = kind ? await filesystem.stat(path) : null
-    if (stat?.kind !== 'file') {
+    if (kind && stat?.kind === 'file') {
+      strays.push({ path, kind, observed: { kind: 'file', mtimeMs: stat.mtimeMs } })
+    }
+  }
+  // A folder Orca cannot write keeps its leftovers rather than failing every run.
+  if (strays.length === 0 || !(await filesystem.canWrite(folder))) {
+    return { cleanup: [] }
+  }
+  const missingSkill = !entries.some((entry) => entry.name === 'SKILL.md')
+  const restore = missingSkill ? strays.find((stray) => stray.kind === 'old') : undefined
+  const cleanup: BundledSkillCleanup[] = []
+  for (const stray of strays) {
+    if (stray === restore) {
       continue
     }
     const disposable =
-      kind === 'stage' || (await isShippedBundledSkillFile(filesystem, path, source, digest))
+      stray.kind === 'stage' ||
+      (await isShippedBundledSkillFile(filesystem, stray.path, source, digest))
     cleanup.push({
-      path,
+      path: stray.path,
       action: disposable ? 'delete' : 'backup',
-      observed: { kind: 'file', mtimeMs: stat.mtimeMs }
+      observed: stray.observed
     })
   }
-  // A folder Orca cannot write keeps its leftovers rather than failing every run.
-  return cleanup.length > 0 && (await filesystem.canWrite(folder))
-    ? cleanup.sort((left, right) => (left.path < right.path ? -1 : 1))
-    : []
+  return {
+    ...(restore ? { restoreFrom: { path: restore.path, observed: restore.observed } } : {}),
+    cleanup
+  }
 }

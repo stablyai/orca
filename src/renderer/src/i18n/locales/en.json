@@ -6982,7 +6982,7 @@
           "link": "Link",
           "linked": "Linked",
           "needsAttention": "Needs attention",
-          "fileInUse": "Needs attention · SKILL.md is in use or read-only. Close the program using it or clear read-only, then update again.",
+          "fileInUse": "Needs attention · SKILL.md is in use or locked. Close the program using it, then update again.",
           "other": "A different skill uses this name",
           "replace": "Replace",
           "replacedWithBackup": "Replaced · Your copy was saved as a backup",
