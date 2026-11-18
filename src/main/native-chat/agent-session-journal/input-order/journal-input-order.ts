@@ -189,7 +189,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   private refresh(state: JournalReducerState, id: string): void {
     const entry = state.submissions.get(id)
     this.refreshInputEvidence(state, id, entry)
-    this.echoClaims.refresh(id, entry)
+    this.echoClaims.refresh(state, id, entry)
     this.refreshLink(id)
     const dispatch = entry?.dispatchState
     if (this.unsettled.keep(id, entry, dispatch === 'pending' || dispatch === 'unknown')) {

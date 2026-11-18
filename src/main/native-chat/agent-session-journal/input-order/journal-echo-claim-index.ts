@@ -4,7 +4,13 @@ import type { JournalKeyedMap } from '../journal-keyed-storage'
 import { memoryJournalMap } from '../journal-memory-collections'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isAgentSessionContextClear } from '../../../../shared/agent-session/conversation-context/agent-session-context-clear'
+
+const SUBMISSION_KEY_PREFIX = agentJournalSubmissionKey('')
 
 /** What the echo claimant reads on every provider user message, kept per row instead of rescanned. */
 export class JournalEchoClaimIndex {
@@ -34,18 +40,23 @@ export class JournalEchoClaimIndex {
     }
   }
 
-  refresh(id: string, entry: AgentJournalSubmission | undefined): void {
+  /** Members are the inputs the scan could reach: refreshed by the owner, with their own item present. */
+  refresh(state: JournalReducerState, id: string, entry: AgentJournalSubmission | undefined): void {
     const { echoCandidates, openEchoCandidates, echoFingerprints } = this.facts
+    const member =
+      entry && this.facts.ordinals.has(id) && state.items.has(agentJournalSubmissionKey(id))
+        ? entry
+        : undefined
     const prior = echoFingerprints.get(id)
-    if (prior !== undefined && prior !== entry?.payloadFingerprint) {
+    if (prior !== undefined && prior !== member?.payloadFingerprint) {
       removeFromBucket(echoCandidates, prior, id)
       removeFromBucket(openEchoCandidates, prior, id)
       echoFingerprints.delete(id)
     }
-    if (entry) {
-      this.file(echoCandidates, id, entry)
-      this.file(openEchoCandidates, id, entry)
-      echoFingerprints.set(id, entry.payloadFingerprint)
+    if (member) {
+      this.file(echoCandidates, id, member)
+      this.file(openEchoCandidates, id, member)
+      echoFingerprints.set(id, member.payloadFingerprint)
     }
   }
 
@@ -63,7 +74,7 @@ export class JournalEchoClaimIndex {
     return Math.max(0, dividers.allPlaces().position)
   }
 
-  /** Follow one item write once dividers are seeded; every item set or delete in a fold calls this. */
+  /** Every item set or delete in a fold calls this: dividers once seeded, and a send's own item. */
   noteItem(state: JournalReducerState, itemId: string): void {
     const dividers = this.facts.clearDividers
     const item = dividers && state.items.get(itemId)
@@ -71,6 +82,12 @@ export class JournalEchoClaimIndex {
       dividers.setPosition(itemId, item.sequence)
     } else {
       dividers?.delete(itemId)
+    }
+    const identity = itemId.startsWith(SUBMISSION_KEY_PREFIX)
+      ? parseAgentJournalItemKey(itemId)
+      : null
+    if (identity?.provider === 'orca') {
+      this.refresh(state, identity.clientMessageId, state.submissions.get(identity.clientMessageId))
     }
   }
 
