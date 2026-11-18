@@ -3,7 +3,7 @@
 import {
   isNativeChatPastedImagePath,
   isNativeChatPastedTextPath
-} from '../../native-chat/native-chat-image-label'
+} from '../../native-chat/attachments/native-chat-image-label'
 
 /** Bounds the refusal, whose details a receipt or ledger row may keep; removing these and sending again names any others. */
 export const AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX = 32

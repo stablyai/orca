@@ -134,14 +134,14 @@ vi.mock('../stream-remote/remote-browser-page-viewport', () => ({
   }) => <div ref={remoteViewportRef} tabIndex={-1} data-testid="streamed-viewport" />
 }))
 
-vi.mock('../browser-client-page-renderer-installation', () => ({
+vi.mock('../host-guest/client-pages/browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
 
 import { useAppStore } from '@/store/index'
 import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { installClientHostedPaneApi } from '../client-hosted-browser-pane-test-rig'
+import { installClientHostedPaneApi } from './client-hosted/client-hosted-browser-pane-test-rig'
 import { clearBrowserAddressBarEditSession } from './address-bar/browser-address-bar-edit-session'
 import { clearBrowserPageDeferredNavigation } from '../navigate/browser-page-deferred-navigation'
 import BrowserPane from './browser-workspace-pane'

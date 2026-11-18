@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { EphemeralVmCheckoutMode } from '../workspace-setup/orca-yaml-hook-types'
 import type {

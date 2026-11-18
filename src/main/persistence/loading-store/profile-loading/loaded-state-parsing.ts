@@ -1,10 +1,10 @@
 import { homedir } from 'node:os'
 import { normalizeProxyUrl } from '../../../../shared/network/network-proxy'
 import { normalizeKagiSessionLink } from '../../../../shared/browser/navigation/browser-url'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { ChatUiLaunchTipAudience } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { ChatUiLaunchTipAudience } from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import type { SshPtyConsumerRecovery } from '../../../../shared/remote-runtime/ssh/ssh-types'
-import { getDefaultPersistedState } from '../../../../shared/constants'
+import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../../shared/project/groups/project-groups'
@@ -24,8 +24,7 @@ import {
   gcStaleWorktreeMeta,
   normalizeWorktreeLinkedItemMetadata
 } from '../../tracking-repos/worktree-metadata-normalization'
-import { backfillLegacyAutomationContexts } from '../../scheduling-automations/automation-context-migration'
-import { migrateAutomationOwners } from '../../../automations/ownership/automation-owner-migration'
+import { migrateLoadedAutomations } from './loaded-automation-migrations'
 import {
   ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH,
   normalizeSshPtyConsumerRecovery
@@ -217,38 +216,11 @@ export class LoadedStateParsingOperations {
       this.runtime.loadNeedsSave = true
     }
 
-    const automationContextMigration = backfillLegacyAutomationContexts({
-      ...result,
-      repos,
-      ...projectHostSetupCompatibility
-    })
-    if (automationContextMigration.changed) {
-      this.runtime.loadNeedsSave = true
-    }
-    result = {
-      ...result,
-      automations: automationContextMigration.state.automations,
-      automationRuns: automationContextMigration.state.automationRuns
-    }
-
-    const automationOwnerMigration = migrateAutomationOwners({
-      automations: result.automations,
-      sshTargets: result.sshTargets,
-      repos,
-      folderWorkspaces: result.folderWorkspaces,
-      projectGroups: result.projectGroups,
-      sshTargetGenerationCounter: result.sshTargetGenerationCounter,
-      storageAuthority: this.runtime.storageAuthority
-    })
-    if (automationOwnerMigration.changed) {
-      this.runtime.loadNeedsSave = true
-    }
-    result = {
-      ...result,
-      automations: automationOwnerMigration.automations,
-      sshTargets: automationOwnerMigration.sshTargets,
-      sshTargetGenerationCounter: automationOwnerMigration.sshTargetGenerationCounter
-    }
+    result = migrateLoadedAutomations(
+      result,
+      { repos, ...projectHostSetupCompatibility },
+      this.runtime
+    )
 
     const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({
       ...result,
@@ -279,8 +251,11 @@ export class LoadedStateParsingOperations {
       chatUiLaunchTipAudience ?? this.cohorts.captureChatUiLaunchTipAudience(undefined)
     const migrated = {
       ...this.cohorts.carryChatUiChoices(
-        this.cohorts.keepResumeOnRestartOffForExistingProfiles(
-          this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
+        this.cohorts.seedWorktreeCardStyle(
+          this.cohorts.keepResumeOnRestartOffForExistingProfiles(
+            this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
+            parsed
+          ),
           parsed
         ),
         parsed,

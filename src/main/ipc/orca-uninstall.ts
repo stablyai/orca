@@ -23,6 +23,8 @@ import {
   listOrcaUninstallSshHosts,
   removeOrcaUninstallSshHostHooks
 } from '../uninstall/orca-uninstall-ssh-hosts'
+import { stopTerminalDaemonsForUninstall } from '../daemon/providers/lifecycle/daemon-uninstall-shutdown'
+import { isLocalTerminalDaemonLive } from '../daemon/launch/local-terminal-daemon-stop'
 import { readLocalCliInstallStatus, removeLocalCliRegistration } from './cli'
 
 async function createHost(store: Store): Promise<OrcaUninstallHost> {
@@ -30,6 +32,7 @@ async function createHost(store: Store): Promise<OrcaUninstallHost> {
   return {
     platform: process.platform,
     homeDir: homedir(),
+    userDataPath,
     uid: process.getuid?.() ?? 0,
     identity: await resolveOrcaInstallIdentity({
       platform: process.platform,
@@ -50,7 +53,9 @@ async function createHost(store: Store): Promise<OrcaUninstallHost> {
     getCliStatus: readLocalCliInstallStatus,
     removeCli: removeLocalCliRegistration,
     listHosts: () => listOrcaUninstallSshHosts(userDataPath),
-    removeHostHooks: (hostId) => removeOrcaUninstallSshHostHooks(userDataPath, hostId)
+    removeHostHooks: (hostId) => removeOrcaUninstallSshHostHooks(userDataPath, hostId),
+    isTerminalDaemonLive: () => isLocalTerminalDaemonLive(userDataPath),
+    stopTerminalDaemon: () => stopTerminalDaemonsForUninstall(userDataPath)
   }
 }
 

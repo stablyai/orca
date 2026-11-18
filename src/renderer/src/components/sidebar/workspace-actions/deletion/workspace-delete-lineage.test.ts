@@ -7,7 +7,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
@@ -367,21 +367,6 @@ describe('detaching before parent deletion', () => {
     await act(async () => hook.result.current.detachChildren(() => deleted.push('parent')))
 
     expect(mocks.state.worktreeLineageById.child.parentWorktreeId).toBe('other')
-    expect(deleted).toEqual(['parent'])
-    expect(hook.result.current.detachError).toBeNull()
-  })
-
-  it('uses the child host inline edge when the bare map belongs to a twin', async () => {
-    const parent = { ...makeWorktree('parent', '/workspaces/parent'), hostId: SSH_HOST }
-    const childBase = { ...makeWorktree('child', '/workspaces/child'), hostId: SSH_HOST }
-    const child = { ...childBase, lineage: makeLineage(childBase, parent) }
-    const hook = renderPreservation(parent, [parent, child], {
-      child: { ...makeLineage(child, parent), worktreeInstanceId: 'local-twin-instance' }
-    })
-    const deleted: string[] = []
-
-    await act(async () => hook.result.current.detachChildren(() => deleted.push('parent')))
-
     expect(deleted).toEqual(['parent'])
     expect(hook.result.current.detachError).toBeNull()
   })

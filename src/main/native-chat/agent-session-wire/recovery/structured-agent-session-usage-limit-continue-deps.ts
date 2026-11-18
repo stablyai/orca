@@ -11,6 +11,8 @@ export type UsageLimitContinueDeps = UsageLimitCutReads & {
       | 'getRecord'
       | 'hostId'
       | 'isSessionTabVisible'
+      | 'listBackgroundSessionIds'
+      | 'isSessionInBackground'
       | 'cancelUsageLimitContinue'
     >
   }

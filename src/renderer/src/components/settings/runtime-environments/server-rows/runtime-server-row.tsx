@@ -11,12 +11,13 @@ import type { UpdateCheckOptions } from '../../../../../../shared/updater/update
 import { getRuntimeServerProblemLine, getRuntimeServerRoute } from './runtime-server-row-meta'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import { Button } from '../../../ui/button'
 import type { RuntimeHostDetails } from '../catalog/runtime-environment-host-details'
 import {
   formatRuntimeEndpointAddress,
   getRuntimeServerAvailableUpdateText,
+  getRuntimeServerNewerThanAppText,
   getRuntimeServerStatusIndicator,
   getRuntimeServerVersionText,
   isRemoteServerUpdateInFlight
@@ -187,9 +188,11 @@ export function RuntimeServerRow({
     (managed?.status?.availableUpdate
       ? t('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
       : null)
-  const infoParts = [sshRoute ?? address, versionText].filter((part): part is string =>
-    Boolean(part)
-  )
+  const infoParts = [
+    sshRoute ?? address,
+    versionText,
+    getRuntimeServerNewerThanAppText(remoteUpdate, t)
+  ].filter((part): part is string => Boolean(part))
 
   const meta = (
     <>

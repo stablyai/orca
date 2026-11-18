@@ -5,6 +5,8 @@ export type ScrollToCurrentWorkspaceRevealRequestDetail =
   | {
       target?: { type: 'active-workspace' }
       beginRename?: boolean
+      /** False: scroll to the row without its glow, as an activation's reveal does. */
+      highlight?: boolean
     }
   | {
       target: { type: 'sidebar-row'; rowKey: string }
@@ -22,8 +24,12 @@ function dispatchScrollToCurrentWorkspaceReveal(
   )
 }
 
-export function requestScrollToCurrentWorkspaceReveal(): void {
-  dispatchScrollToCurrentWorkspaceReveal()
+export function requestScrollToCurrentWorkspaceReveal(options?: { highlight?: boolean }): void {
+  dispatchScrollToCurrentWorkspaceReveal(
+    options?.highlight === false
+      ? { target: { type: 'active-workspace' }, highlight: false }
+      : undefined
+  )
 }
 
 export function requestScrollToCurrentWorkspaceRevealAndRename(): void {

@@ -3,10 +3,10 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { applyCommandToSession } from '../persistence/terminal-topology/pane-admission/terminal-pane-admission'
-import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../shared/orca-profiles/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { Store } from '../persistence/loading-store/store'
 import { isFrozenOrcadSourceSessionPartition } from '../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'

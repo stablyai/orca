@@ -1,8 +1,8 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
-} from '@/hooks/requestVirtualizedScrollAnchorRecord'
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
@@ -17,8 +17,11 @@ import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/l
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { translate } from '@/i18n/i18n'
+import {
+  workspaceKeyOfRow,
+  worktreeWorkspaceKey
+} from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Translate } from '@/i18n/use-translate'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 
 export const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
@@ -68,7 +71,7 @@ export function hasWorktreeParentLink(
   const storeKey = lineageStoreKeyOfRow(worktree)
   return Boolean(
     getProjectedWorktreeLineage(worktree, lineageById) ||
-    workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)] ||
+    workspaceLineageByChildKey[workspaceKeyOfRow(worktree.id)] ||
     // A saved parent on another machine is removable even while it can't be found.
     (storeKey !== undefined &&
       crossStoreLineageByStoreKey?.[storeKey]?.[worktreeWorkspaceKey(worktree.id)])

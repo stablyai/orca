@@ -44,7 +44,7 @@ Host API 1.10 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; 
 
 ## Theme variables in frames
 
-HTML panels and custom editors get these CSS variables from Orca's active theme, plus a `light` or `dark` class on `<html>`. A theme change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.
+HTML panels and custom editors get these CSS variables from Orca's active theme and fonts, plus a `light` or `dark` class on `<html>`. A theme or font change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.
 
 - `--orca-background`: App canvas
 - `--orca-foreground`: Body text
@@ -66,6 +66,8 @@ HTML panels and custom editors get these CSS variables from Orca's active theme,
 - `--orca-input`: Input borders
 - `--orca-ring`: Focus rings
 - `--orca-radius`: Corner radius of cards and controls
+- `--orca-font-sans`: Interface font stack. Fonts Orca loads itself (the default Geist, plugin fonts) are not in frames, so the next installed font in the stack is used
+- `--orca-font-mono`: Monospace font stack for code
 
 ## Methods
 
@@ -166,7 +168,7 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
   event `{ workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }`; `next` may change nothing; stop with nothing (observe only)
 - `agent.launch.before` (since 1.4.248): Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. Restores of saved sessions are not hooked.
   event `{ agent: string; workspaceId: string | null; workspaceKind: "worktree" | "folder" | null; terminalId?: string; command: string; env: Record<string, string> }`; `next` may change `command`, `env`; stop with `{ deny: string }`
-- `agent.prompt.before` (since 1.4.248): Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or `orca terminal send` to an agent. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it.
+- `agent.prompt.before` (since 1.4.248): Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or a prompt sent with `orca terminal send`. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it.
   event `{ agent: string | null; terminalId: string; prompt: string; inputKind: "driving" | "orchestration" | "launch" }`; `next` may change `prompt`; stop with `{ deny: string }`
 - `agent.tool.before` (since 1.4.248): An agent in an Orca terminal is about to run a tool. Claude Code waits for the answer: return `{ deny }` to refuse the call (the agent sees the reason) or change `input` with `next`; the person is still asked as usual. Other agents only report the call, so their results are ignored. Agents on SSH or WSL hosts are not hooked yet.
   event `{ agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JSON; callId?: string }`; `next` may change `input`; stop with `{ deny: string }`

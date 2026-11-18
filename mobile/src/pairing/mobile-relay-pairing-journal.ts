@@ -1,6 +1,6 @@
 import * as ExpoCrypto from 'expo-crypto'
 import { sha256 } from '@noble/hashes/sha256'
-import { z } from 'zod'
+import * as z from 'zod'
 import type {
   PairingRelay,
   PairingOffer

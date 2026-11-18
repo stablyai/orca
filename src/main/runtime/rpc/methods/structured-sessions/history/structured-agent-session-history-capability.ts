@@ -1,5 +1,5 @@
 import type { RpcContext } from '../../../core'
-import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { clientReadsCurrentRequests } from '../conversation/structured-agent-session-current-requests'
 
 /** Desktop snapshots require settled send echoes and independent current requests. */

@@ -7,7 +7,7 @@ import {
   formatCrashReportText,
   formatUncapturedCrashReportText
 } from '../../../shared/crash-reporting/crash-reporting'
-import { submitFeedback } from '../feedback'
+import { submitFeedback } from '../feedback/feedback'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import {
   diagnosticBundleForReportOnlyRetry,

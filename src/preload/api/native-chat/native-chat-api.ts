@@ -1,5 +1,5 @@
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { NativeChatVisualTheme } from '../../../shared/native-chat/native-chat-visual-shell'
+import type { NativeChatVisualTheme } from '../../../shared/native-chat/visuals/native-chat-visual-shell'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle

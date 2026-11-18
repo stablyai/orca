@@ -1,10 +1,11 @@
 import type { PaneStyleOptions, ManagedPaneInternal } from '../pane-manager-types'
 import { attachDividerDrag, disposeDividerDrag, type DividerCallbacks } from './pane-divider-drag'
+import { DIVIDER_HIT_PX } from '../../divider-hit-area'
 
 export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
   const thickness = styleOptions.dividerThicknessPx ?? 4
   const HIT_PADDING = 3
-  return thickness + HIT_PADDING * 2
+  return Math.max(DIVIDER_HIT_PX, thickness + HIT_PADDING * 2)
 }
 
 export function createDivider(

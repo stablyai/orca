@@ -19,7 +19,7 @@ import {
   withStoreCrossStoreLineage,
   type HostLineageList
 } from './cross-store-lineage-state'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { replaceWorktreeInRepoLists } from '../listing/worktree-owner-settings'
 import {
   withRepoHostOwnership,
@@ -96,7 +96,7 @@ export async function listWorktreeLineageForRuntime(
 export async function setWorktreeLineageForRuntime(
   route: HostRoute,
   worktreeId: string,
-  args: { parentWorktreeId?: string; noParent?: boolean }
+  args: { parentWorktreeId?: string; noParent?: boolean; ifParentWorkspace?: string }
 ): Promise<WorktreeLineageUpdateResult> {
   const { target } = route
   if (target.kind === 'local') {
@@ -114,7 +114,8 @@ export async function setWorktreeLineageForRuntime(
       ...(args.parentWorktreeId
         ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
         : {}),
-      ...(args.noParent === true ? { noParent: true } : {})
+      ...(args.noParent === true ? { noParent: true } : {}),
+      ...(args.ifParentWorkspace !== undefined ? { ifParentWorkspace: args.ifParentWorkspace } : {})
     },
     { timeoutMs: 15_000 }
   )

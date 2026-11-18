@@ -1,6 +1,6 @@
-import '../../constants'
+import '../../orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../browser-blank-page'
-import { getCurrentLocalPlatform } from '../../execution-host'
+import { getCurrentLocalPlatform } from '../../execution-host/execution-host'
 
 const LOCAL_ADDRESS_PATTERN =
   /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i
@@ -32,6 +32,9 @@ const SEARCH_ENGINE_URLS: Record<SearchEngine, string> = {
 }
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngine = 'google'
+
+// Lone surrogates make encodeURIComponent throw; the phone's Android WebViews before Chromium 111 lack toWellFormed().
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g
 
 export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null {
   const trimmed = rawInput.trim()
@@ -220,7 +223,7 @@ export function buildSearchUrl(
       return sessionSearchUrl
     }
   }
-  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query.toWellFormed())}`
+  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query.replace(LONE_SURROGATE, '\uFFFD'))}`
 }
 
 export function looksLikeSearchQuery(input: string): boolean {

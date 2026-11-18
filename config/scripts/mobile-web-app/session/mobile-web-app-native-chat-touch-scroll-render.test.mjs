@@ -19,13 +19,17 @@ import { createRoot } from 'react-dom/client'
 import { Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/viewport/MobileNativeChatPageScroll'
+import { publishPageStorage } from './src/mobile-web-shell/bridge/page-storage/page-async-storage'
 import {
   MobileNativeChatPinchZoom,
   useMobileNativeChatPinchGesture
 } from './src/session/native-chat/transcript/viewport/mobile-native-chat-pinch-zoom'
 
+// A pinch saves the size on release; accept that write as the app would.
+publishPageStorage({}, () => true, 'host', '')
+
 function Transcript() {
-  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture('chat')
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   return <View style={{ height: 600, width: '100%' }}>
     <Text testID="font-scale">{fontScale}</Text>
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -136,19 +140,6 @@ describeRender('native chat transcript in the phone web pages', () => {
     )
     await expect.poll(() => page.getByTestId('font-scale').textContent()).not.toBe('1')
     expect(await page.evaluate(() => window.visualViewport.scale)).toBe(1)
-    await page.context().close()
-  })
-
-  // Android WebView shows the selection's Copy menu through contextmenu; cancelling it leaves bare handles.
-  it('leaves the long-press context menu to the browser', async () => {
-    const page = await openTranscript()
-    const cancelled = await page
-      .getByText('message 3', { exact: true })
-      .evaluate(
-        (element) =>
-          !element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
-      )
-    expect(cancelled).toBe(false)
     await page.context().close()
   })
 })

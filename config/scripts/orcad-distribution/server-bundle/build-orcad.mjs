@@ -49,6 +49,8 @@ import {
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_PARCEL_WATCHER_ENTRY,
   ORCAD_PARCEL_WATCHER_NATIVE,
+  ORCAD_PROVIDER_EXEC_FILENAME,
+  ORCAD_PROVIDER_EXEC_SLOT_FILE,
   ORCAD_SERVER_TARGET_FILENAME,
   ORCAD_VERSION_FILENAME,
   orcadNodePtySlotFiles,
@@ -132,17 +134,19 @@ async function stageParcelWatcher(target) {
   copyFileSync(nativeSource, join(OUT_DIR, ORCAD_PARCEL_WATCHER_NATIVE))
 }
 
-/** node-pty's JS plus only this target's prebuild slot, laid out the way node-pty's loader looks. */
-function stageNodePty(target) {
+/** node-pty's JS plus only this target's prebuild slot: its addons where node-pty's loader looks,
+ * and on POSIX the provider exec helper. */
+function stagePrebuildSlot(target) {
   const problems = findSlotProblems(readManifest(PREBUILDS_DIR), PREBUILDS_DIR, [target])
   if (problems.length > 0) {
     throw new Error(`[build-orcad] node-pty prebuild for ${target}: ${problems.join('; ')}`)
   }
   const slotFiles = Object.keys(readManifest(PREBUILDS_DIR).slots[target].files).sort()
   const expected = orcadNodePtySlotFiles(target).sort()
-  if (slotFiles.join('\0') !== expected.join('\0')) {
+  const providerExec = targetIsWindows ? [] : [ORCAD_PROVIDER_EXEC_SLOT_FILE]
+  if (slotFiles.join('\0') !== [...expected, ...providerExec].sort().join('\0')) {
     throw new Error(
-      `[build-orcad] ${target} prebuild ships ${slotFiles.join(', ')}; orcad-artifacts.ts expects ${expected.join(', ')}`
+      `[build-orcad] ${target} prebuild ships ${slotFiles.join(', ')}; orcad-artifacts.ts expects ${[...expected, ...providerExec].join(', ')}`
     )
   }
   const sourceDir = dirname(createRequire(import.meta.url).resolve('node-pty/package.json'))
@@ -159,6 +163,13 @@ function stageNodePty(target) {
       chmodSync(destination, 0o755)
     }
   }
+  // Beside the server entry: the server execs every POSIX provider CLI through it.
+  for (const file of providerExec) {
+    const destination = join(OUT_DIR, ...ORCAD_PROVIDER_EXEC_FILENAME.split('/'))
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(join(PREBUILDS_DIR, target, ...file.split('/')), destination)
+    chmodSync(destination, 0o755)
+  }
 }
 
 rmSync(OUT_DIR, { recursive: true, force: true })
@@ -172,7 +183,7 @@ writeFileSync(
   join(OUT_DIR, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
   `${runtimeAsset.executableSha256}\n`
 )
-stageNodePty(BUILD_TARGET)
+stagePrebuildSlot(BUILD_TARGET)
 await stageParcelWatcher(BUILD_TARGET)
 stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)
 stageOrcadWindowsCliLauncher(ROOT, OUT_DIR, BUILD_TARGET)

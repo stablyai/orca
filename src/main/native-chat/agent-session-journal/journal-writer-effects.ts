@@ -8,7 +8,7 @@ import {
 } from '../../github/pr-watch/pr-watch-storage'
 import type { AgentSessionStoreRowWrites } from './journal-writer-store-row-changes'
 import type { AgentSessionStoreMutation } from '../../runtime/agent-session/records/agent-session-store-mutation'
-import type { AgentSessionRuntimeFacts } from '../../runtime/agent-session/agent-session-runtime-attribution'
+import type { AgentSessionRuntimeFacts } from '../../runtime/agent-session/records/agent-session-runtime-attribution'
 import { applyJournalWriterStoreEffect } from './journal-writer-store-effect'
 import {
   claimAgentSessionAttachmentsInTransaction,

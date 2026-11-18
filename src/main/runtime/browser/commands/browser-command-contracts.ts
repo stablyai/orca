@@ -1,5 +1,5 @@
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'

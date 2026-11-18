@@ -9,14 +9,14 @@ import {
   WORKSPACE_ROW_FILTER_UI_FIELDS
 } from '../../../../src/shared/workspace-view/workspace-row-filters'
 import { resolveVisibleWorkspaceHostIds } from '../../../../src/shared/workspace-view/workspace-host-visibility'
-import type { PersistedUIState } from '../../../../src/shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../src/shared/orca-profiles/persisted-ui-state-types'
 import type { WORKSPACE_VIEW_UI_FIELDS } from '../../../../src/shared/workspace-view/workspace-view-ui-fields'
 import type { FilterState } from './workspace-list-types'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
   WorktreeCardProperty
-} from '../../../../src/shared/ui-chrome-types'
+} from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../src/shared/worktree/row-display/card-properties'
 import {
   WORKSPACE_GROUP_BY_CHOICES,

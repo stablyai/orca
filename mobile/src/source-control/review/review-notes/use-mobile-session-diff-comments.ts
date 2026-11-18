@@ -96,9 +96,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       try {
         await enqueueReviewNotesRequest(sync, async () => {
           if (!client || connState !== 'connected') {
-            throw new Error(
-              translate('session.useDiffComments.waitingForDesktop', 'Waiting for desktop...')
-            )
+            throw new Error(translate('common.waitingForHost', 'Waiting for host…'))
           }
           // Why: send the host's list plus only this change; an older host stores the list whole.
           const base = sync.host
