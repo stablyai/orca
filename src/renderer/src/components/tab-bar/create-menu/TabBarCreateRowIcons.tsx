@@ -34,7 +34,7 @@ export function TabBarCreateRowIcons({
   attachScroller: CreateRowScroller['attachScroller']
   /** Controlled tooltips sit above the menu and take Escape first; it must still close the menu. */
   onEscape: () => void
-  onHover: (index: number | null) => void
+  onHover: (index: number | null, pressed?: boolean) => void
   onPress: () => void
   onRun: (item: TabBarCreateRowItem) => void
 }): React.JSX.Element {
@@ -75,7 +75,9 @@ export function TabBarCreateRowIcons({
                     highlighted && CREATE_ROW_HIGHLIGHT_CLASS
                   )}
                   // Why move, not enter: scrolling slides icons under a resting cursor without a real hover.
-                  onPointerMove={() => onHover(index)}
+                  onPointerMove={(event) =>
+                    onHover(index, event.pointerType === 'touch' || event.buttons !== 0)
+                  }
                   onPointerLeave={() => onHover(null)}
                   onPointerDown={onPress}
                   onClick={() => onRun(item)}

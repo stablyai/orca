@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 
-export const CREATE_ROW_TOOLTIP_DELAY_MS = 600
-export const CREATE_ROW_TOOLTIP_SKIP_DELAY_MS = 300
+const CREATE_ROW_TOOLTIP_DELAY_MS = 600
+const CREATE_ROW_TOOLTIP_SKIP_DELAY_MS = 300
+
+type CreateRowHoverOptions = {
+  /** A touch or held button is a press or drag, not hover intent. */
+  pressed?: boolean
+  /** The keyboard cursor's label is showing, so the pointer takes over without a cold wait. */
+  labelShowing?: boolean
+}
 
 /**
  * Which create-row icon shows its pointer tooltip. The row's tooltips are controlled (the keyboard
@@ -11,7 +18,7 @@ export const CREATE_ROW_TOOLTIP_SKIP_DELAY_MS = 300
  */
 export function useCreateRowHoverTooltip(): {
   tooltipIndex: number | null
-  hover: (index: number | null) => void
+  hover: (index: number | null, options?: CreateRowHoverOptions) => void
   press: () => void
 } {
   const [tooltipIndex, setTooltipIndex] = useState<number | null>(null)
@@ -40,7 +47,10 @@ export function useCreateRowHoverTooltip(): {
     []
   )
 
-  const hover = (index: number | null): void => {
+  const hover = (
+    index: number | null,
+    { pressed = false, labelShowing = false }: CreateRowHoverOptions = {}
+  ): void => {
     // Pointermove repeats on one icon; only a change of icon restarts the timing.
     if (index === hovered.current) {
       return
@@ -59,7 +69,14 @@ export function useCreateRowHoverTooltip(): {
       }
       return
     }
-    if (shown.current || warm.current) {
+    if (pressed) {
+      // Hovered stays this icon, so releasing here keeps the label closed until the pointer leaves.
+      if (shown.current) {
+        show(null)
+      }
+      return
+    }
+    if (shown.current || warm.current || labelShowing) {
       show(index)
       return
     }

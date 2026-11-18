@@ -175,12 +175,12 @@ export function TabBarCreateRow({
             scrollerRef={scrollerRef}
             attachScroller={attachScroller}
             onEscape={closeMenu}
-            onHover={(index) => {
+            onHover={(index, pressed) => {
               if (index !== null) {
                 setKeyboardNav(false)
               }
               setHoveredIndex(index)
-              hoverTooltip.hover(index)
+              hoverTooltip.hover(index, { pressed, labelShowing: keyboardActive })
             }}
             onPress={hoverTooltip.press}
             onRun={run}

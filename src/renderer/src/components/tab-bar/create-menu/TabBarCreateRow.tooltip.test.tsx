@@ -82,3 +82,32 @@ it('hides the label on press and keeps it hidden until the pointer leaves', () =
   advance(1000)
   expect(tooltip()).toBeNull()
 })
+
+it('shows no label for a touch or a press dragged onto another icon', () => {
+  renderRow()
+  fireEvent.pointerDown(icon('terminal'), { pointerType: 'touch' })
+  fireEvent.pointerMove(icon('terminal'), { pointerType: 'touch', buttons: 1 })
+  advance(1000)
+  expect(tooltip()).toBeNull()
+
+  fireEvent.pointerLeave(icon('terminal'))
+  fireEvent.pointerMove(icon('browser'))
+  advance(600)
+  expect(tooltip()).toHaveTextContent('New Browser')
+  fireEvent.pointerDown(icon('browser'))
+  fireEvent.pointerLeave(icon('browser'))
+  fireEvent.pointerMove(icon('terminal'), { buttons: 1 })
+  advance(1000)
+  expect(tooltip()).toBeNull()
+})
+
+it('keeps the keyboard label open when the pointer moves onto it', () => {
+  renderRow()
+  const row = screen.getByRole('menuitem', { name: /New tab actions/ })
+  act(() => row.focus())
+  fireEvent.keyDown(row, { key: 'ArrowRight' })
+  expect(tooltip()).toHaveTextContent('New Browser')
+
+  fireEvent.pointerMove(icon('browser'))
+  expect(tooltip()).toHaveTextContent('New Browser')
+})
