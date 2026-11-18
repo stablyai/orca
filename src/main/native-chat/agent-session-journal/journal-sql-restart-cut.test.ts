@@ -53,7 +53,7 @@ const user = (text: string): AgentJournalItemBody => ({
   blocks: [{ type: 'text', text }]
 })
 
-it('reads the newest turn, the rows a restart settled in it and its prompts, not the transcript', () => {
+it('reads the newest turn, and the rows a restart settled in it, not the transcript', () => {
   const { seed, read } = chat()
   seed(row('turn:1', 1, { kind: 'turn', turnId: '1', state: 'completed' }))
   seed(row('user:2', 2, user('second')))
@@ -78,7 +78,6 @@ it('reads the newest turn, the rows a restart settled in it and its prompts, not
   expect(cut.turn?.itemId).toBe('turn:2')
   expect(cut.movedOn).toBe(false)
   expect(cut.recovered.map((item) => item.itemId)).toEqual(['turn:2', 'ask'])
-  expect(cut.promptItemIds).toEqual(['ask'])
 
   seed(row('user:3', 6, user('third')))
   expect(read().movedOn).toBe(true)

@@ -38,6 +38,7 @@ export async function continueStructuredAgentSessionsAtLaunch(
   if (cuts.length > 0) {
     await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
   }
+  const recordedBy = Date.now()
   try {
     if (!deps.resumeWorkOnRestart()) {
       return { continued: new Set() }
@@ -55,7 +56,7 @@ export async function continueStructuredAgentSessionsAtLaunch(
     }
   } finally {
     // Only this launch continues on its own what the last run cut; later launches leave it to a person.
-    await deps.restartResume.passOverAutomatic()
+    await deps.restartResume.passOverAutomatic(recordedBy)
   }
 }
 

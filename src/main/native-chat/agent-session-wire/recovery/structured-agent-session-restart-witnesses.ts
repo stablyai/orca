@@ -25,7 +25,7 @@ export type StructuredAgentSessionRestartWitnesses = {
     settledSince: number
   ) => Promise<number>
   /** Ends a launch's automatic turn; what still waits is left to a person from then on. */
-  passOverAutomatic: () => Promise<void>
+  passOverAutomatic: (recordedBy: number) => Promise<void>
   cutOf: StructuredAgentSessionRestartResume['cutOf']
   /** Explicit actions supersede unwritten witnesses only for readable agents in their audience. */
   clear: (audience?: (agent: string) => boolean) => void
@@ -146,25 +146,23 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
         (await deps.capsule?.listFailed(now))?.find(
           (failure) => failure.marker.sessionId === sessionId
         )?.marker
-      const journal = deps.sessions.get(sessionId)?.journal
       if (offer && offer.work.kind === 'turn') {
-        if (!restartActivityWaitsOnPerson(offer.activity)) {
-          return { cause: offer.trigger, turnId: offer.work.id }
-        }
-        const prompts = journal ? (await journal.reads.restartCut()).promptItemIds : []
         return {
           cause: offer.trigger,
           turnId: offer.work.id,
-          waitingOn: { promptItemId: prompts.at(-1) ?? null }
+          ...(restartActivityWaitsOnPerson(offer.activity)
+            ? { waitingOnPerson: true as const }
+            : {})
         }
       }
+      const journal = deps.sessions.get(sessionId)?.journal
       const cut = journal ? await journal.reads.orcaStopCut() : null
       const turn = cut && journal ? await journal.reads.item(cut.turnItemId) : null
       const turnId = readAgentJournalTurn(turn?.body)?.turnId
       return cut && turnId ? { cause: cut.cause, turnId } : null
     },
-    passOverAutomatic: async () => {
-      await deps.enqueue(async () => deps.capsule?.passOverAutomatic(deps.now()))
+    passOverAutomatic: async (recordedBy) => {
+      await deps.enqueue(async () => deps.capsule?.passOverAutomatic(recordedBy, deps.now()))
     },
     clear
   }

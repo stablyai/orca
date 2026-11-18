@@ -136,11 +136,14 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** Ends a launch's automatic turn: what still waits is left to a person from now on. */
-  passOverAutomatic(now: number): Promise<void> {
+  /** Ends a launch's automatic turn: what it saw that still waits is left to a person from now on.
+   *  A quit during the turn records offers after `recordedBy`; those are the next launch's. */
+  passOverAutomatic(recordedBy: number, now: number): Promise<void> {
     return withFileTransactionLock(this.filePath, async () => {
       const { entries } = normalizeState(await this.readState(), now)
-      const waiting = entries.filter((entry) => entry.state === 'pending')
+      const waiting = entries.filter(
+        (entry) => entry.state === 'pending' && entry.marker.recordedAt <= recordedBy
+      )
       await writeAutomaticRestartLedger(
         this.filePath,
         passOverAutomaticOffers(

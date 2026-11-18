@@ -19,8 +19,6 @@ export type JournalRestartCut = {
   movedOn: boolean
   /** That turn's own row and its rows, when a restart's settlement rewrote them. */
   recovered: AgentJournalRenderItem[]
-  /** The turn's approvals and questions, oldest first: a stop at one of them is keyed by it. */
-  promptItemIds: string[]
 }
 
 export function readJournalDomainRestartCut(
@@ -58,7 +56,7 @@ export function readJournalDomainRestartCut(
     }
   }
   if (!found) {
-    return { cursor, turn: null, movedOn: false, recovered: [], promptItemIds: [] }
+    return { cursor, turn: null, movedOn: false, recovered: [] }
   }
   const movedOn = Boolean(
     db
@@ -73,17 +71,10 @@ export function readJournalDomainRestartCut(
       AND payload_json LIKE '%"recovered":true%'`)
     .all(...prefix, found.item.itemId)
     .map((row) => readJournalStoredItem(db, prefix, row.payload_json))
-  const promptItemIds = db
-    .prepare(`SELECT item_id FROM journal_items INDEXED BY journal_items_stop_turn
-    WHERE session_id=? AND epoch=? AND hidden=0 AND turn_item_id=? AND kind IN ('approval','question')
-    ORDER BY sequence, sequence_index, ordinal`)
-    .all(...prefix, found.item.itemId)
-    .map((row) => String(row.item_id))
   return {
     cursor,
     turn: found.item,
     movedOn,
-    recovered: found.item.recovered ? [found.item, ...recovered] : recovered,
-    promptItemIds
+    recovered: found.item.recovered ? [found.item, ...recovered] : recovered
   }
 }

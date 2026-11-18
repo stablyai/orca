@@ -41,7 +41,7 @@ async function launch(turn: string, at: number, overrides: Partial<AgentSessionR
     reserved.map((offer) => offer.sessionId),
     at
   )
-  await capsule.passOverAutomatic(at)
+  await capsule.passOverAutomatic(at, at)
   return reserved.length
 }
 
@@ -70,7 +70,13 @@ it('leaves a cut that was asking its person to that person', async () => {
 it('continues on its own only what the run that just ended cut', async () => {
   await capsule.record([marker({ teardownId: 'quit-earlier', recordedAt: NOW })], NOW)
   // A launch with the setting off passed over it.
-  await capsule.passOverAutomatic(NOW)
+  await capsule.passOverAutomatic(NOW, NOW)
   expect(await capsule.beginResume(undefined, 'automatic', NOW + MINUTE, true)).toEqual([])
   expect(await capsule.beginResume(undefined, 'person', NOW + MINUTE)).toHaveLength(1)
+})
+
+it('leaves an offer a quit records during the automatic turn to the next launch', async () => {
+  await capsule.record([marker({ teardownId: 'quit-during', recordedAt: NOW + 1 })], NOW + 1)
+  await capsule.passOverAutomatic(NOW, NOW + 2)
+  expect(await capsule.beginResume(undefined, 'next launch', NOW + MINUTE, true)).toHaveLength(1)
 })

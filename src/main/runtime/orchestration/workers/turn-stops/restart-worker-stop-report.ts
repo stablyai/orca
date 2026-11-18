@@ -61,17 +61,22 @@ async function reportCutChat(
   reportWorkerTurnStop(
     deps.db,
     { kind: 'local', dispatch: worker.dispatch },
-    cut.waitingOn
+    cut.waitingOnPerson
       ? {
           from: worker.from,
           reason: 'needs-input',
-          // The key its live report used, so a prompt already reported stays quiet.
-          stopKey: cut.waitingOn.promptItemId
-            ? `prompt:${cut.waitingOn.promptItemId}`
-            : `turn:${cut.turnId}`,
+          // Not its live report's key: the restart cancelled the prompt that report said to wait on.
+          stopKey: `restart-prompt:${cut.turnId}`,
           lastOutput
         }
-      : { from: worker.from, reason: 'exited', cause: CUT_BY[cut.cause], lastOutput },
+      : {
+          from: worker.from,
+          reason: 'exited',
+          stopKey: `cut:${sessionId}:${cut.turnId}`,
+          cause: CUT_BY[cut.cause],
+          restartsOnMail: true,
+          lastOutput
+        },
     deps.reportDeps
   )
 }

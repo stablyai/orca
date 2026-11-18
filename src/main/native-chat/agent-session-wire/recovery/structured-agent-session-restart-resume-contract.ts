@@ -13,7 +13,7 @@ export type StructuredAgentSessionRestartCut = {
   cause: AgentSessionOrcaStopCause
   turnId: string
   /** The turn was asking its person: the prompt's item when known. */
-  waitingOn?: { promptItemId: string | null }
+  waitingOnPerson?: true
 }
 
 export type StructuredAgentSessionRestartResume = {
@@ -33,8 +33,8 @@ export type StructuredAgentSessionRestartResume = {
     cuts: readonly { sessionId: string; crashedRuntime: string }[],
     settledSince: number
   ) => Promise<number>
-  /** Ends this launch's automatic turn: offers still waiting are left to a person from now on. */
-  passOverAutomatic: () => Promise<void>
+  /** Ends this launch's automatic turn: offers recorded by then that still wait are left to a person. */
+  passOverAutomatic: (recordedBy: number) => Promise<void>
   /** The cut a restart left in this chat: its offer, else the journal's own stop row. */
   cutOf: (sessionId: string) => Promise<StructuredAgentSessionRestartCut | null>
   /** Unnamed actions continue visible offers; named actions may also retry selected failures.

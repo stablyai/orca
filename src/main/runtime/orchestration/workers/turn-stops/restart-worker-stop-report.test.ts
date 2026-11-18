@@ -111,23 +111,27 @@ describe('worker stops across a restart', () => {
       }
     })
 
-  it('reports a chat worker a restart cut as stopped by Orca, never one continued or not cut', async () => {
+  it('reports each cut of a chat worker once, never one continued or not cut', async () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
     await chatPass(ctx, 'working', { cause: 'crash', turnId: 'turn-1' })
     await chatPass(ctx, 'idle', null)
     expect(ctx.mail()).toEqual([])
     await chatPass(ctx, 'idle', { cause: 'crash', turnId: 'turn-1' })
+    await chatPass(ctx, 'idle', { cause: 'crash', turnId: 'turn-1' })
     const reports = ctx.mail()
     expect(reports.map((report) => report.subject)).toEqual(['Worker exited without reporting'])
     expect(reports[0]?.body).toContain('Orca crashed during its turn')
-    expect(reports[0]?.body).not.toContain('idle on purpose')
+    expect(reports[0]?.body).toContain('A message restarts it')
+    // Mail continued it, and a later crash cut its next turn.
+    await chatPass(ctx, 'idle', { cause: 'crash', turnId: 'turn-2' })
+    expect(ctx.mail()).toHaveLength(2)
   })
 
-  it('reports a chat cut while asking its person as waiting, unless its live report already did', async () => {
+  it('reports a chat cut while asking its person as waiting, also after its live report said to wait for an answer', async () => {
     const asking = {
       cause: 'quit',
       turnId: 'turn-1',
-      waitingOn: { promptItemId: 'ask-1' }
+      waitingOnPerson: true
     } as const
     const fresh = setup(formatOrcaSessionAddress(CHAT_SESSION))
     await chatPass(fresh, 'idle', asking)
@@ -143,7 +147,11 @@ describe('worker stops across a restart', () => {
       reported.reportDeps
     )
     await chatPass(reported, 'idle', asking)
-    expect(reported.mail()).toHaveLength(1)
+    await chatPass(reported, 'idle', asking)
+    expect(reported.mail().map((report) => report.subject)).toEqual([
+      'Worker is waiting on a prompt',
+      'Worker is waiting on a prompt'
+    ])
   })
 
   it('leaves a Dispatch whose brief has not reached its worker yet', async () => {

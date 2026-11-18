@@ -59,8 +59,7 @@ function derive(items: AgentJournalRenderItem[], movedOn = false) {
       cursor: { epoch: 'epoch-1', sequence: 9 },
       turn: items.find((item) => item.body.kind === 'turn') ?? null,
       movedOn,
-      recovered: items.filter((item) => item.recovered),
-      promptItemIds: []
+      recovered: items.filter((item) => item.recovered)
     },
     record: record(),
     crashedRuntime: 'runtime-crashed',
