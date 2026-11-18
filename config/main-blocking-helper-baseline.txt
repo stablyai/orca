@@ -781,16 +781,20 @@
 1 src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts
 1 src/main/native-chat/agent-model-catalog/agent-model-catalog-refresh.ts
 1 src/main/native-chat/agent-model-catalog/agent-model-catalog-scope.ts
-4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
+6 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts # six-hourly attachment sweep claim pruning, not per send; kept-copy existence check, #43442
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-12 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
+15 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts # one-shot: journal open reconcile of an older Orca's writes (writer worker startup), #43442
 2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 8 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-40 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
+7 src/main/native-chat/agent-session-journal/database/journal-legacy-chat-adoption.ts # one-shot: journal open reconcile of an older Orca's writes (writer worker startup), #43442
+4 src/main/native-chat/agent-session-journal/database/journal-legacy-message-compare.ts # one-shot: journal open reconcile of an older Orca's writes (writer worker startup), #43442
+9 src/main/native-chat/agent-session-journal/database/journal-legacy-older-messages.ts # one-shot: journal open reconcile of an older Orca's writes (writer worker startup), #43442
+45 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts # one-shot: journal open reconcile of an older Orca's writes (writer worker startup), #43442
+25 src/main/native-chat/agent-session-journal/database/journal-legacy-record-edits.ts # one-shot: journal open reconcile of an older Orca's writes (writer worker startup), #43442
 1 src/main/native-chat/agent-session-journal/database/journal-legacy-source-receipt.ts
-4 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
+5 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts # one-shot: journal open reconcile of an older Orca's writes (writer worker startup), #43442
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
@@ -799,7 +803,7 @@
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
 10 src/main/native-chat/agent-session-journal/journal-domain-import-rows.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-submissions.ts
-7 src/main/native-chat/agent-session-journal/journal-domain-import.ts
+8 src/main/native-chat/agent-session-journal/journal-domain-import.ts # one-shot: journal open reconcile of an older Orca's writes (writer worker startup), #43442
 1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
