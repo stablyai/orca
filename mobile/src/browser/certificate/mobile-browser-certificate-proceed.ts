@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
-import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../src/shared/browser/runtime/browser-runtime-capabilities'
+import { useCallback } from 'react'
 import type { BrowserCertificateProceedFailureReason } from '../../../../src/shared/browser/workspaces/browser-workspace-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { startRuntimeCapabilityProbe } from '../../transport/connection/runtime-capability-probe'
 import { isMobileMethodUnavailableError } from '../../transport/rpc/mobile-method-unavailable'
 import { browserCertificateProceed } from '../page-interaction/mobile-browser-command-operations'
 
@@ -11,21 +9,6 @@ export type MobileCertificateProceedFailure =
   | BrowserCertificateProceedFailureReason
   | 'request-failed'
   | 'host-update-needed'
-
-/** Desktop shows Proceed only when the host can trust a certificate; the phone follows the same capability. */
-export function useBrowserCertificateTrustCapability(client: RpcClient | null): boolean {
-  const [supported, setSupported] = useState(false)
-  useEffect(() => {
-    setSupported(false)
-    if (!client) {
-      return
-    }
-    return startRuntimeCapabilityProbe(client, (capabilities) => {
-      setSupported(capabilities.includes(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY))
-    })
-  }, [client])
-  return supported
-}
 
 /** Accepts the host's certificate challenge for this page through the same host path desktop uses. */
 export function useMobileBrowserCertificateProceed(

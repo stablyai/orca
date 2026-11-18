@@ -120,7 +120,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
   })
   const browserProfile = useMobileNewBrowserProfile(
     client,
-    showCreateTabDrawer || browserActionTarget != null
+    (showCreateTabDrawer && !isFloatingWorkspaceRoute && browserScreencastSupported === true) ||
+      browserActionTarget != null
   )
   const browserProfileLabel = useMobileBrowserProfileLabel(browserProfile.profiles)
   return (

@@ -78,6 +78,9 @@ export function MobileBrowserLoadFailure({
     proceed?.challengeId === matchingCertificateFailure?.challengeId ? proceed : null
   const submitting = activeProceed?.state === 'submitting'
   const proceedCertificate = (challengeId: string) => {
+    if (submitting) {
+      return
+    }
     setProceed({ challengeId, state: 'submitting' })
     void onProceedCertificate(challengeId).then((reason) => {
       // On success stay "Connecting…": the host reloads the page and this view goes away.
