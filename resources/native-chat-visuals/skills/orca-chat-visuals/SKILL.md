@@ -23,11 +23,12 @@ clearer.
 - Use `ORCA_CHAT_TEMP_DIR` for disposable build/test data, if set: dependency installs, private
   caches, source checkouts, build output and test environments. It is the same folder for the
   whole chat. Give each task its own subfolder: Orca removes a subfolder once nothing in it has
-  changed for 7 days, whatever it holds, and removes the whole folder with the chat. Move reports
-  and files the user needs into `ORCA_CHAT_SCRATCH_DIR` before replying. If temporary storage is
-  unavailable, use the operating system temporary directory; do not fall back to persistent
-  artifact storage for builds. Keep source changes in the workspace or an Orca worktree: commits
-  that exist only in a temporary checkout are lost with it.
+  changed for 7 days, unless it holds Git data, and removes the whole folder with the chat. Move
+  reports and files the user needs into `ORCA_CHAT_SCRATCH_DIR` before replying. If temporary
+  storage is unavailable, use the operating system temporary directory; do not fall back to
+  persistent artifact storage for builds. Keep source changes in the workspace or an Orca
+  worktree, and delete a temporary checkout when its task is done: it stays until the chat is
+  removed, and is removed with it.
 - Prefer the package manager's normal shared cache. When a task needs an isolated cache or
   dependency tree, keep it in `ORCA_CHAT_TEMP_DIR`. Follow the project's existing dependency
   installation rules.

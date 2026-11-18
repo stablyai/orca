@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  nativeChatVisualsInheritedEnvToDelete,
   nativeChatVisualsWritableFolders,
   withNativeChatVisualsEnv
 } from './native-chat-visuals-delivery'
@@ -32,5 +33,10 @@ describe('chat storage child environment', () => {
     expect(
       withNativeChatVisualsEnv(inherited, { folder: visuals.folder, skill: visuals.skill })
     ).toEqual({ HOME: '/home/user', ORCA_CHAT_SCRATCH_DIR: visuals.folder })
+  })
+  it('drops an inherited temporary path when only the scratch folder could be prepared', () => {
+    expect(
+      nativeChatVisualsInheritedEnvToDelete({ folder: visuals.folder, skill: visuals.skill })
+    ).toEqual(['ORCA_CHAT_TEMP_DIR', 'ORCA_CHAT_VISUALS_DIR'])
   })
 })

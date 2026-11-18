@@ -36,10 +36,7 @@ import type {
   ClaudeCliFlagSupport
 } from '../../cli-capabilities/claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
-import {
-  withNativeChatVisualsEnv,
-  nativeChatVisualsWritableFolders
-} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import { withNativeChatVisualsEnv } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { claudeSessionIdForOrcaSession } from '../lifecycle/claude-structured-session-id'
@@ -229,10 +226,7 @@ export function claudeStructuredLaunchPart(
     const discovery = claudeDiscoveryOptions({
       configuredArgs: launchArgs,
       ...(deps.attachmentDirectory ? { attachmentDirectory: deps.attachmentDirectory } : {}),
-      visuals: visuals && {
-        pluginDir: visuals.pluginDir,
-        scratchDirectories: nativeChatVisualsWritableFolders(visuals.visuals)
-      },
+      visuals: visuals && { pluginDir: visuals.pluginDir, launch: visuals.visuals },
       linkedRoot: linked.root
     })
     const permission = claudeStructuredPermissionOptions(basis.permissionMode ?? 'ask')

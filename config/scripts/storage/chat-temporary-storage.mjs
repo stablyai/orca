@@ -24,7 +24,7 @@ export async function runChatTemporaryStorage(args, output = console.log) {
   const entries = await inspectChatTemporaryStorage(directory)
   if (!json) {
     output(
-      'Temporary chat data on this host. An entry is removed once nothing in it changed for 7 days.'
+      'Temporary chat data on this host. An entry is removed once nothing in it changed for 7 days, unless it holds Git data.'
     )
     for (const entry of entries) {
       output(`${entry.reason}: ${JSON.stringify(entry.path)}`)

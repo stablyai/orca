@@ -112,6 +112,17 @@ export function withNativeChatVisualsEnv(
     : rest
 }
 
+/** Inherited folder keys a launch drops: a folder this chat does not name belongs to another chat. */
+export function nativeChatVisualsInheritedEnvToDelete(
+  visuals: NativeChatVisualsLaunch | null
+): string[] {
+  return [
+    ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
+    ...(visuals?.temporaryFolder ? [] : [NATIVE_CHAT_TEMP_DIR_ENV]),
+    LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
+  ]
+}
+
 export function nativeChatVisualsWritableFolders(visuals: NativeChatVisualsLaunch): string[] {
   return [visuals.folder, ...(visuals.temporaryFolder ? [visuals.temporaryFolder] : [])]
 }

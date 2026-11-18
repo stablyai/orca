@@ -14,18 +14,25 @@ access. Older hosts continue to provide only the scratch path.
 
 Cleanup runs with the existing chat-storage sweep (after two minutes, then every six hours):
 
-- Removing a chat removes its whole temporary directory, like its scratch directory.
+- Removing a chat removes its whole temporary directory, like its scratch directory, including
+  any Git checkouts in it.
 - Inside a retained chat's directory each top-level entry ages on its own. An entry is removed
   once nothing inside it has changed for seven days, even while the chat stays in use. This is
   what bounds a long-lived chat that creates a new environment for every task.
+- An entry with a `.git` file or directory at any depth is kept while its chat is retained, since
+  a checkout can hold the only copy of unfinished work. If the chat's directory is itself a
+  checkout, every entry in it is kept.
 
-Size, file count and Git data never protect an entry: the directory is disposable by contract,
-and those are exactly what the largest abandoned environments consist of. A commit that exists
-only in a temporary checkout is lost with it. Symlinks are never followed, an unreadable entry
-is left alone, and entries Orca did not create in the temporary root are ignored. An entry is
-judged by modification and change times, so reading a cache does not keep it; a cache that is
-only read for seven days is downloaded again. Cleanup is retention-based, not a hard quota: an
-active task can still fill its disk.
+Size and file count never protect an entry: the directory is disposable by contract, and those
+are exactly what the largest abandoned environments consist of. Orca writes an ownership marker
+into each chat directory it creates; a directory without a valid marker is never removed.
+Symlinks are never followed and an unreadable entry is left alone. An entry is judged by
+modification and change times, so reading a cache does not keep it; a cache that is only read
+for seven days is downloaded again. Before removing an idle entry the sweep moves it aside in the
+same directory, so new writes by path cannot reach it, examines it again and puts it back if
+anything changed meanwhile. An entry that cannot be moved, such as one in use on Windows, is
+kept. A process that already has a file open inside the entry can still write to it until it is
+removed. Cleanup is retention-based, not a hard quota: an active task can still fill its disk.
 
 Preview and optionally reclaim the executing host's temporary data:
 

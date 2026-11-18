@@ -1,6 +1,10 @@
 // What decides which commands and skills Claude loads. A chat's launch and its resting `/` probe
 // both take these, so the menu at rest lists what the chat would load.
 import type { NativeChatSkillRoot } from '../../../native-chat/native-chat-skill-roots'
+import {
+  nativeChatVisualsWritableFolders,
+  type NativeChatVisualsLaunch
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
@@ -20,7 +24,7 @@ export function claudeDiscoveryOptions(input: {
   attachmentDirectory?: string
   /** Visuals, when on: the bundled plugin (null when the CLI takes no plugin folders), and the
    *  chat's own writable folders, for its launch only, which holds the chat's output, not skills. */
-  visuals?: { pluginDir: string | null; scratchDirectories?: readonly string[] } | null
+  visuals?: { pluginDir: string | null; launch?: NativeChatVisualsLaunch } | null
   linkedRoot?: NativeChatSkillRoot | null
 }): ClaudeDiscoveryOptions {
   const configured = claudeStructuredLaunchArgs(input.configuredArgs)
@@ -28,7 +32,7 @@ export function claudeDiscoveryOptions(input: {
     additionalDirectories: [
       ...configured.additionalDirectories,
       ...(input.attachmentDirectory ? [input.attachmentDirectory] : []),
-      ...(input.visuals?.scratchDirectories ?? []),
+      ...(input.visuals?.launch ? nativeChatVisualsWritableFolders(input.visuals.launch) : []),
       // The bot's skill-only folder, even empty: Claude loads its .claude/skills links and picks up
       // later ones (checked on 2.1.319), and it holds no project settings, plugins or commands.
       ...(input.linkedRoot ? [input.linkedRoot.pluginDir] : [])
