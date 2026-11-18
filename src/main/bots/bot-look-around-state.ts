@@ -94,6 +94,12 @@ function inRun(state: BotLookState, sessionId: string): LookAroundRun | undefine
   return state.runs.find((run) => run.sessionId === sessionId)
 }
 
+/** The newest look, stopped by its usage limit: continuing its session (at the reset, or by the
+ *  owner) finishes that look, so it may still suggest. An older one would replace a newer list. */
+export function continuable(state: BotLookState, run: LookAroundRun): boolean {
+  return run.endedAt !== undefined && run.usageLimited !== undefined && state.runs.at(-1) === run
+}
+
 /** Open suggestions past their age become replaced; resolved ones past the dismiss window go. */
 export function expired(state: BotLookState, now: number): BotLookState {
   const suggestions = state.suggestions
@@ -156,7 +162,7 @@ export function suggest(
 ): { state: BotLookState; outcome: SuggestOutcome } {
   const refuse = (refusal: string) => ({ state, outcome: { ok: false as const, refusal } })
   const run = inRun(state, sessionId)
-  if (!run || run.endedAt !== undefined) {
+  if (!run || (run.endedAt !== undefined && !continuable(state, run))) {
     return refuse(SUGGEST_REFUSALS.notALook)
   }
   const key = suggestionKey(input)

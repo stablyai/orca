@@ -11,6 +11,7 @@ import {
   LOOK_FAILURES_TO_TURN_OFF
 } from './bot-look-around-failures'
 import { BotLookAroundRunner } from './bot-look-around-runner'
+import { watchContinuedLooks } from './bot-look-around-continued'
 import { runtimeTidyUpRunner } from './bot-memory-tidy-up-runtime'
 
 const LOOK_TURNED_OFF = `Look around turned off: the last ${LOOK_FAILURES_TO_TURN_OFF} looks failed. Turn it back on in Settings.`
@@ -55,6 +56,10 @@ export function runtimeLookAroundRunner(runtime: OrcaRuntimeService): BotLookAro
     now: Date.now
   })
   runners.set(runtime, runner)
+  // A look its usage limit stopped finishes in the turn that continues it, whoever sends it.
+  void requireStructuredHost(runtime)
+    .then((host) => watchContinuedLooks(host, runtime.lookAround, Date.now))
+    .catch((error: unknown) => console.warn('[bots] could not watch continued looks', error))
   return runner
 }
 
