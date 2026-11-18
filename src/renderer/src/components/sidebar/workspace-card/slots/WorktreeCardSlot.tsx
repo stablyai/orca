@@ -50,7 +50,7 @@ export function WorktreeCardSlot({
       data-worktree-card-slot={signal.kind}
       title={slotLabel(signal, t)}
       className={cn(
-        'inline-flex min-w-[22px] shrink-0 items-center justify-end whitespace-nowrap text-3xs leading-none tabular-nums',
+        'inline-flex shrink-0 items-center justify-end whitespace-nowrap text-3xs leading-none tabular-nums',
         signal.kind === 'offline'
           ? 'italic text-muted-foreground/70'
           : timeTone === 'unread'
