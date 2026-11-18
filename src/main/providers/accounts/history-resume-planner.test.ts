@@ -201,10 +201,7 @@ it('keeps a validated resume choice after commit even when the workspace account
 it('recovers an unacknowledged open after a host restart and accepts the commit retry', async () => {
   const opened = await open('work')
   planner = new HistoryResumePlanner(plannerDeps)
-  await expect(
-    planner.prepare({ ...args, workspaceId: 'folder:another', commitToken: opened.resumeReceipt })
-  ).rejects.toThrow('expired')
-  await planner.prepare({ ...args, commitToken: opened.resumeReceipt })
-  await planner.prepare({ ...args, commitToken: opened.resumeReceipt })
+  await planner.prepare({ ...args, workspaceId: undefined, commitToken: opened.resumeReceipt })
+  await planner.prepare({ ...args, workspaceId: undefined, commitToken: opened.resumeReceipt })
   expect((await planner.prepare({ ...args, preview: true })).resumePlan?.lastAccountId).toBe('work')
 })

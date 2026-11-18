@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { describeAiVaultResumeFailure } from './ai-vault-resume-refusal'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
+import { translate } from '@/i18n/i18n'
 
 export async function waitForHistoryTerminalOpen(tabId: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
@@ -67,10 +68,13 @@ export async function commitHistorySessionResume(
     window.dispatchEvent(new Event('orca-history-continuations-changed'))
   } catch (error) {
     toast.error(
-      'The terminal opened, but History could not record its account. Retry saving History.',
+      translate(
+        'historyResume.recordFailed',
+        'The terminal opened, but History could not record its account. Retry saving History.'
+      ),
       {
         action: {
-          label: 'Retry',
+          label: translate('historyResume.retry', 'Retry'),
           onClick: () => {
             void commitHistorySessionResume(session)
           }

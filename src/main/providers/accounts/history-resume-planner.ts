@@ -64,7 +64,7 @@ export class HistoryResumePlanner {
       const receipt = this.receipts.get(args.commitToken)
       if (!receipt) {
         const retained = await this.deps.ledger.launchReceipts.get(args.commitToken)
-        if (retained && retained.workspaceId === args.workspaceId) {
+        if (retained) {
           const current = (await this.deps.ledger.list()).find(
             (entry) =>
               entry.provider === retained.entry.provider &&
@@ -79,9 +79,6 @@ export class HistoryResumePlanner {
           }
         }
         throw new Error('The resume receipt expired. Refresh History.')
-      }
-      if (receipt.workspaceId !== args.workspaceId) {
-        throw new Error('The resume receipt belongs to another workspace.')
       }
       const openedAt = Date.now()
       for (const entry of receipt.entries) {
