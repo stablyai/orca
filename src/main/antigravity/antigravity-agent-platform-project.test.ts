@@ -52,6 +52,16 @@ describe('resolveAgentPlatformProject', () => {
     ).resolves.toEqual({ project: 'saved', location: 'eu' })
   })
 
+  it("uses a service account key's own project", async () => {
+    const config = gcloud({ 'sa.json': JSON.stringify({ project_id: 'from-key' }) })
+    await expect(
+      resolveAgentPlatformProject(
+        {},
+        { CLOUDSDK_CONFIG: config, GOOGLE_APPLICATION_CREDENTIALS: join(config, 'sa.json') }
+      )
+    ).resolves.toEqual({ project: 'from-key', location: 'global' })
+  })
+
   it('reports no project when gcloud has none', async () => {
     await expect(resolveAgentPlatformProject({}, { CLOUDSDK_CONFIG: gcloud({}) })).resolves.toEqual(
       { project: null, location: 'global' }

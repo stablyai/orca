@@ -1,9 +1,9 @@
 // The Gemini API key a person pasted for Orca's Antigravity chat, sealed by the host's OS keyring.
 
-import { readFile, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readFile, rm, stat } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
-import { writeSecureFile } from '../../shared/secure-storage/secure-file'
+import { durableWriteTempPath, writeFileDurable } from '../filesystem/durable-file-write'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 
@@ -16,6 +16,7 @@ export async function hasAntigravityChatApiKey(): Promise<boolean> {
   return (await stat(keyPath()).catch(() => null)) !== null
 }
 
+/** Null when none is saved or it no longer decrypts, so the environment's key can serve instead. */
 export async function readAntigravityChatApiKey(): Promise<string | null> {
   const sealed = await readFile(keyPath(), 'utf8').catch(() => null)
   if (!sealed) {
@@ -23,27 +24,32 @@ export async function readAntigravityChatApiKey(): Promise<string | null> {
   }
   try {
     return getSecretStore().decryptString(Buffer.from(sealed, 'base64')).trim() || null
-  } catch (cause) {
-    throw new Error(
-      "Orca couldn't unlock the saved Gemini API key on this host. Paste it again in Settings.",
-      { cause }
-    )
+  } catch (error) {
+    console.warn('[antigravity] saved Gemini API key could not be decrypted:', error)
+    return null
   }
 }
 
-export function saveAntigravityChatApiKey(apiKey: string): void {
+export async function saveAntigravityChatApiKey(apiKey: string): Promise<void> {
   const trimmed = apiKey.trim()
   if (!trimmed) {
     throw new Error('Enter a Gemini API key.')
   }
   const store = getSecretStore()
-  // Never write the key unsealed; the environment variable remains the alternative.
-  if (!store.isEncryptionAvailable()) {
+  // Never write the key unsealed or weakly sealed; the environment variable remains the alternative.
+  if (!store.isEncryptionAvailable() || store.describeProtectionGap() !== null) {
     throw new Error(
       "This host can't encrypt saved keys. Set GEMINI_API_KEY in your shell or in Antigravity's environment variables instead."
     )
   }
-  writeSecureFile(keyPath(), store.encryptString(trimmed).toString('base64'), { durable: true })
+  const path = keyPath()
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+  await writeFileDurable(
+    durableWriteTempPath(path),
+    path,
+    store.encryptString(trimmed).toString('base64'),
+    0o600
+  )
 }
 
 export async function clearAntigravityChatApiKey(): Promise<void> {

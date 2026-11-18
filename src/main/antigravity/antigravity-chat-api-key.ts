@@ -38,7 +38,7 @@ export async function readAntigravityChatApiKeyStatus(
 
 export async function storeAntigravityChatApiKey(apiKey: string): Promise<void> {
   await assertGoogleAcceptsKey(apiKey.trim())
-  saveAntigravityChatApiKey(apiKey)
+  await saveAntigravityChatApiKey(apiKey)
 }
 
 export { clearAntigravityChatApiKey }

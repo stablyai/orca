@@ -28,8 +28,12 @@ async function readJsonField(path: string, field: string): Promise<string | null
 }
 
 /** `project = …` under [core] of gcloud's active configuration. */
-async function readGcloudProject(configDirectory: string): Promise<string | null> {
+async function readGcloudProject(
+  configDirectory: string,
+  env: Readonly<Record<string, string>>
+): Promise<string | null> {
   const active =
+    env.CLOUDSDK_ACTIVE_CONFIG_NAME ||
     (await readFile(join(configDirectory, 'active_config'), 'utf8').catch(() => '')).trim() ||
     'default'
   const ini = await readFile(
@@ -51,7 +55,7 @@ async function readGcloudProject(configDirectory: string): Promise<string | null
   return null
 }
 
-/** Saved values win, then the launch environment, then ADC's quota project, then gcloud's project. */
+/** Saved values win, then the launch environment, then ADC's project, then gcloud's project. */
 export async function resolveAgentPlatformProject(
   saved: { gcpProject?: string; gcpLocation?: string },
   env: Readonly<Record<string, string>>
@@ -64,9 +68,21 @@ export async function resolveAgentPlatformProject(
     saved.gcpProject ||
     env.GOOGLE_CLOUD_PROJECT ||
     (await readJsonField(adcFile, 'quota_project_id')) ||
-    (await readGcloudProject(configDirectory))
+    // A service account key names its own project.
+    (await readJsonField(adcFile, 'project_id')) ||
+    env.CLOUDSDK_CORE_PROJECT ||
+    (await readGcloudProject(configDirectory, env))
   return {
     project: project || null,
     location: saved.gcpLocation || env.GOOGLE_CLOUD_LOCATION || DEFAULT_LOCATION
   }
+}
+
+/** The server prefers these variables over its settings file, so they carry the resolved values. */
+export async function agentPlatformEnvironment(
+  saved: { gcpProject?: string; gcpLocation?: string },
+  env: Readonly<Record<string, string>>
+): Promise<Record<string, string>> {
+  const { project, location } = await resolveAgentPlatformProject(saved, env)
+  return { ...(project ? { GOOGLE_CLOUD_PROJECT: project } : {}), GOOGLE_CLOUD_LOCATION: location }
 }

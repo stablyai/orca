@@ -137,6 +137,13 @@ function AuthForm({
   const [location, setLocation] = useState('')
   const [pending, setPending] = useState(false)
   const [keyStatus, setKeyStatus] = useState<AntigravityChatApiKeyStatus | null>(null)
+  // A key save can outlive a method switch; sign in only if the key's method is still chosen.
+  const latestStart = useRef<{ start: () => void; method: string } | null>(null)
+  const signInAfterKeySaved = useCallback(() => {
+    if (latestStart.current?.method === 'gemini-api-key') {
+      latestStart.current.start()
+    }
+  }, [])
   const [error, setError] = useState<{
     message: string
     recovery: 'reload' | null
@@ -301,6 +308,9 @@ function AuthForm({
         }
       })
   }
+  useEffect(() => {
+    latestStart.current = { start, method }
+  })
   const commitText = () => {
     if (edited.current && !blocked && valid) {
       void save(draft())
@@ -367,7 +377,7 @@ function AuthForm({
                 owner={owner}
                 disabled={blocked}
                 onStatus={setKeyStatus}
-                onSaved={start}
+                onSaved={signInAfterKeySaved}
               />
             )}
           </div>
