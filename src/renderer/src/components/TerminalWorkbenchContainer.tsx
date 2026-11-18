@@ -1,5 +1,6 @@
 import type React from 'react'
 import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/retention/browser-guest-paint-retention'
+import { ZotzPrChip } from './zotz/source-control/ZotzPrChip'
 
 // Keep hidden browser guests compositing while a phone/agent drives them; display:none silently stops screencasts.
 export function TerminalWorkbenchContainer({
@@ -25,7 +26,14 @@ export function TerminalWorkbenchContainer({
       aria-hidden={!isVisible}
       data-terminal-workbench-container=""
     >
-      {children}
+      {isVisible ? (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1">{children}</div>
+          <ZotzPrChip />
+        </div>
+      ) : (
+        children
+      )}
     </div>
   )
 }

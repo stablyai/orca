@@ -5,6 +5,7 @@ import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { ZotzPrStatusStrip } from '../../../zotz/source-control/ZotzPrStatusStrip'
 
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { model, worktreePath } = props
@@ -116,6 +117,13 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
             handleOpenComment={handleOpenComment}
           />
         )}
+
+        {activeWorktreeId ? (
+          <ZotzPrStatusStrip
+            worktreeId={activeWorktreeId}
+            onCreatePrFallback={() => void handleCreatePrHeaderClick()}
+          />
+        ) : null}
 
         <div
           ref={setFileListScrollElement}

@@ -24329,7 +24329,11 @@
       "duplicate": "Duplicar en un worktree nuevo",
       "archive": "Archivar",
       "delete": "Eliminar",
-      "conversationActions": "Acciones de la conversación"
+      "conversationActions": "Acciones de la conversación",
+      "archivedMerged": "Mergeada y archivada: {{name}}",
+      "viewArchived": "Ver archivadas",
+      "archivedTitle": "Archivadas",
+      "restore": "Restaurar {{name}}"
     },
     "composer": {
       "worktreeLabel": "Worktree",
@@ -24339,6 +24343,41 @@
       "switchFailed": "La carpeta del proyecto no puede cambiar a esa rama",
       "useWorktree": "Usar un worktree",
       "stayOnBranch": "Quedarme en {{branch}}"
+    },
+    "prChecks": {
+      "openPr": "Abrir el pull request",
+      "loading": "Cargando checks…",
+      "none": "Este pull request no tiene checks",
+      "failed": "{{count}} fallaron",
+      "running": "{{count}} corriendo",
+      "passed": "{{count}} pasaron",
+      "more": "+{{count}} más",
+      "autofix": "Autofix",
+      "fix": "Arreglar errores",
+      "sent": "Se mandaron los checks fallidos a la conversación",
+      "launched": "No había agente: se abrió uno para arreglar los checks",
+      "sendFailed": "No se pudieron mandar los checks fallidos"
+    },
+    "pr": {
+      "merged": "Mergeado",
+      "closed": "Cerrado",
+      "draft": "Borrador",
+      "conflicts": "Conflictos de merge",
+      "failing": "Checks fallaron",
+      "pending": "Checks corriendo…",
+      "ready": "Listo para merge",
+      "open": "Abierto",
+      "none": "Todavía no hay pull request",
+      "create": "Crear PR",
+      "createSent": "Se le pidió al agente abrir el pull request",
+      "createFailed": "No se pudo pedir al agente abrir el pull request",
+      "merge": "Merge",
+      "mergedToast": "Pull request #{{number}} mergeado",
+      "mergeFailed": "No se pudo hacer merge del pull request",
+      "number": "PR #{{number}}"
+    },
+    "prChip": {
+      "dismiss": "Ocultar la barra del pull request"
     },
     "orcaPluginCatalog": {
       "settingLabel": "Descargar el catálogo de plugins de Orca",
