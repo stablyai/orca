@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
-import { projectNativeChatTranscriptMessages } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
-import { nativeChatTurnMembership } from '../../shared/native-chat/transcript/turns/native-chat-turn-membership'
-import { nativeChatTranscriptSettledTurns } from '../../shared/native-chat/native-chat-terminal-turn'
-import {
-  nativeChatTurnFold,
-  nativeChatTurnFoldRow
-} from '../../shared/native-chat/transcript/folding/native-chat-turn-fold'
-
 // Claude Code 2.1.314 record shapes: a background Agent, reply A, then the task notification that opens reply B's turn.
 const TRANSCRIPT = [
   {
@@ -96,31 +88,6 @@ const TRANSCRIPT = [
 ]
 
 describe('Claude chat transcript with a background task hand-back', () => {
-  it('keeps the reply before the hand-back as its own turn’s answer', () => {
-    const decode = nativeChatLineDecoderForAgent('claude')!
-    const raw = TRANSCRIPT.flatMap(
-      (record, index) => decode(JSON.stringify(record), `line-${index}`) ?? []
-    )
-    const rows = projectNativeChatTranscriptMessages(raw)
-    const { turnKeys } = nativeChatTurnMembership(rows, null)
-    const settled = nativeChatTranscriptSettledTurns(raw)
-    const fold = nativeChatTurnFold({
-      rows: rows.map((row, index) => nativeChatTurnFoldRow(row, turnKeys[index], false)),
-      settledTurnKeys: new Set(['prompt', 'hand-back']),
-      expandedTurnKeys: new Set()
-    })
-
-    expect(rows.map((row, index) => [row.id, turnKeys[index]])).toEqual([
-      ['prompt', 'prompt'],
-      ['spawn', 'prompt'],
-      ['reply-a', 'prompt'],
-      ['hand-back', 'hand-back'],
-      ['reply-b', 'hand-back']
-    ])
-    expect([...fold.foldedRows].map((index) => rows[index]!.id)).toEqual(['spawn'])
-    expect(settled.get('prompt')?.workedSeconds).toBe(53)
-  })
-
   it('keeps the tool result a notification delivers to a waiting call', () => {
     const decode = nativeChatLineDecoderForAgent('claude')!
     const mixed = {

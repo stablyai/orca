@@ -9,7 +9,6 @@ import {
   renewHeldThrottle,
   type Page
 } from './browser-page-memory-state'
-import { markInitialBrowserGuest } from './manager/registration/browser-guest-discard-protection'
 
 type Attach = { pageId: string; page: Page; url: string; token: string; admitted: boolean }
 const attachments = new Map<string, Attach>()
@@ -114,7 +113,6 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
     return false
   }
   attach.page.token = null
-  markInitialBrowserGuest(guest)
   attach.page.releaseThrottle?.()
   attach.page.releaseThrottle = null
   attach.page.guest = guest

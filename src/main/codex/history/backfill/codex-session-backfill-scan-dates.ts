@@ -1,12 +1,8 @@
-import type { CodexSessionBackfillDate } from './codex-session-backfill-types'
-
-export function getCodexSessionBackfillDate(date = new Date()): CodexSessionBackfillDate {
-  return [
-    String(date.getUTCFullYear()).padStart(4, '0'),
-    String(date.getUTCMonth() + 1).padStart(2, '0'),
-    String(date.getUTCDate()).padStart(2, '0')
-  ]
-}
+import type { CodexSessionBackfillBaseline } from './codex-session-backfill-marker'
+import type {
+  CodexSessionBackfillDate,
+  CodexSessionBackfillOptions
+} from './codex-session-backfill-types'
 
 export function isCodexSessionBackfillDate(value: unknown): value is CodexSessionBackfillDate {
   if (!Array.isArray(value) || value.length !== 3) {
@@ -16,7 +12,7 @@ export function isCodexSessionBackfillDate(value: unknown): value is CodexSessio
   // Validate calendar dates but allow future ones: clock-skewed rollouts still contain real sessions.
   return (
     /^\d{4}-\d{2}-\d{2}$/.test(key) &&
-    toCodexSessionBackfillDateKey(getCodexSessionBackfillDate(toUtcDate(value))) === key
+    toCodexSessionBackfillDateKey(formatUtcCalendarDate(toUtcDate(value))) === key
   )
 }
 
@@ -59,43 +55,54 @@ export function parseCodexSessionBackfillDates(value: unknown): CodexSessionBack
     : []
 }
 
-export function getCodexSessionBackfillDatesBetween(
-  startedAt: Date,
-  finishedAt: Date
-): CodexSessionBackfillDate[] {
-  const dates: CodexSessionBackfillDate[] = []
-  const cursor = toUtcMidnight(startedAt)
-  const last = toUtcMidnight(finishedAt)
-  while (cursor <= last) {
-    dates.push(getCodexSessionBackfillDate(cursor))
-    cursor.setUTCDate(cursor.getUTCDate() + 1)
-  }
-  return dates
-}
-
-/** Cover unrecorded midnight/crash activity; null requests a full scan when the date range is too wide. */
-export function expandCodexSessionBackfillDatesThroughToday(
-  dates: readonly CodexSessionBackfillDate[],
-  today: CodexSessionBackfillDate,
-  maxDates: number
-): CodexSessionBackfillDate[] | null {
-  if (dates.length === 0) {
-    return []
-  }
-  const bounds = mergeCodexSessionBackfillDates(dates, [today])
-  const first = toUtcDate(bounds[0])
-  const last = toUtcDate(bounds.at(-1)!)
-  const dateCount = (last.getTime() - first.getTime()) / 86_400_000 + 1
-  if (dateCount > maxDates) {
-    return null
-  }
-  return getCodexSessionBackfillDatesBetween(first, last)
-}
-
 function toUtcDate([year, month, day]: readonly string[]): Date {
   return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
 }
 
-function toUtcMidnight(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+function formatUtcCalendarDate(date: Date): CodexSessionBackfillDate {
+  return [
+    String(date.getUTCFullYear()).padStart(4, '0'),
+    String(date.getUTCMonth() + 1).padStart(2, '0'),
+    String(date.getUTCDate()).padStart(2, '0')
+  ]
+}
+
+// Launches and recovery share one bounded traversal; only initial baseline certification walks history.
+export function resolveCodexSessionBackfillScanPlan(
+  baseline: CodexSessionBackfillBaseline | null,
+  options: CodexSessionBackfillOptions
+): CodexSessionBackfillOptions | null {
+  if (!baseline) {
+    return {
+      boundedScan: options.ignoreCompletionMarker === true || options.boundedScan === true,
+      scanFrom: options.scanFrom
+    }
+  }
+  if (
+    !options.ignoreCompletionMarker &&
+    !baseline.needsScan &&
+    !options.fullScanRequired &&
+    baseline.hasBaseline
+  ) {
+    return null
+  }
+  const requestedFrom = mergeCodexSessionBackfillDates(
+    baseline.pendingScanDates,
+    baseline.scanFrom ? [baseline.scanFrom] : [],
+    options.scanFrom ? [options.scanFrom] : []
+  )[0]
+  // A cursor without a saved floor belongs to a full-history traversal.
+  const scanFrom = baseline.scanCursor
+    ? baseline.scanCursorFrom && requestedFrom
+      ? mergeCodexSessionBackfillDates([baseline.scanCursorFrom, requestedFrom])[0]
+      : undefined
+    : requestedFrom
+  return {
+    boundedScan: true,
+    scanFrom:
+      options.fullScanRequired || !baseline.hasBaseline || !baseline.scanFrom
+        ? undefined
+        : scanFrom,
+    scanCursor: baseline.scanCursor
+  }
 }

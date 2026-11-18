@@ -2,10 +2,10 @@
 
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute } from 'node:path'
-import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-session-agent-availability'
+import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-runtime-installation'
 import { onAgentsRefreshedOnHost } from '../../../preflight/agents-refreshed-on-host'
 import {
@@ -21,7 +21,7 @@ import {
 import type { StructuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
+import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 
 export type StructuredAgentAvailabilityReader = (
   agents: readonly AgentSessionAgentAvailability[]
@@ -99,7 +99,15 @@ async function observeChatProgram(
       return 'available'
     }
     const path = (env.PATH ?? env.Path ?? '').split(delimiter)
-    if (/[\\/]/.test(command) || path.some((entry) => entry.trim() && !isAbsolute(entry.trim()))) {
+    // A literal `~` entry (e.g. macOS /etc/paths.d/dotnet-cli-tools) practically never names a
+    // workspace dir: execvp/libuv never expand it.
+    if (
+      /[\\/]/.test(command) ||
+      path.some((rawEntry) => {
+        const entry = rawEntry.trim()
+        return entry && !isAbsolute(entry) && !/^~(?:[\\/]|$)/.test(entry)
+      })
+    ) {
       return 'unknown'
     }
   } catch {

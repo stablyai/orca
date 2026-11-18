@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { useAppStore } from '../../../../store'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'

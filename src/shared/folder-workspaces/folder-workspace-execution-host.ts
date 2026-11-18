@@ -14,7 +14,7 @@ import {
   toSshExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from '../execution-host/execution-host'
 
 export type FolderWorkspaceHostState = {
   folderWorkspaces: readonly FolderWorkspace[]

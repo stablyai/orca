@@ -12,7 +12,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import { resolveTerminalTabTitle } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../../../agent-hooks/runtime/agent-status-pane-index'
 import {
   demoteRuntimeMobileAgentStatus,
@@ -28,7 +28,7 @@ import {
   getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
 } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { projectRuntimeMobileSessionTitle } from './runtime-mobile-session-title-projection'
 
 export function projectRuntimeMobileSessionTabs(

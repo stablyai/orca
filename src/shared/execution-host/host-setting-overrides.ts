@@ -1,5 +1,5 @@
-import type { ExecutionHostId } from '../execution-host'
-import type { GlobalSettings } from '../global-settings-types'
+import type { ExecutionHostId } from './execution-host'
+import type { GlobalSettings } from '../settings/global-settings-types'
 
 /** Limit per-host preferences to host-specific values: client-side display labels and filesystem worktree roots.
  * Remote hosts cannot reuse a local workspaceDir unchanged. */

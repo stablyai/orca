@@ -48,7 +48,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { WorktreeCreateTimingRecorder } from '../../../workspaces/creation/worktree-create-timing'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
 import { _resetWorktreeCreateConcurrencyForTests } from '../../../workspaces/creation/worktree-create-concurrency'
-import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../construction/test-context/runtime-store-partial-fixture'
 
 const gitRepo = {
   id: 'repo-1',

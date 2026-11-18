@@ -11,7 +11,7 @@ import {
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
-import { prepareQueuedMessageEditText } from '../../../../../../shared/queued-message-edit-command'
+import { prepareQueuedMessageEditText } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-command'
 import { translate } from '@/i18n/i18n'
 import { registerDictationComposerTarget } from '../../../dictation/dictation-insertion-target'
 import { useSendAfterDictation } from '../../../dictation/use-dictation-queued-send'

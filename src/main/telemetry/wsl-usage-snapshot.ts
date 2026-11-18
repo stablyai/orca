@@ -31,6 +31,8 @@ export type WslUsageSnapshotInput = {
   registeredDistroCount: number | null
   /** User distros (Docker Desktop's excluded) with WSL version and running state. */
   userDistros: readonly WslUsageDistro[]
+  /** False when running state wasn't probed; `distros_running` is then omitted, not reported as 0. */
+  distrosRunningKnown?: boolean
   wslPackageVersion: string | null
   wslAvailableCached: boolean | null
   projects: readonly WslUsageProject[]
@@ -109,7 +111,11 @@ export function buildWslUsageSnapshot(input: WslUsageSnapshotInput): WslUsageSna
     ...(version ? { wsl_version: version } : {}),
     distro_registry_readable: input.registeredDistroCount !== null,
     distros_installed: bucketWslUsageCount(userDistros.length),
-    distros_running: bucketWslUsageCount(count(userDistros, (d) => d.state === 'running')),
+    ...(input.distrosRunningKnown === false
+      ? {}
+      : {
+          distros_running: bucketWslUsageCount(count(userDistros, (d) => d.state === 'running'))
+        }),
     distros_wsl1: bucketWslUsageCount(count(userDistros, (d) => d.version === 1)),
     distros_wsl2: bucketWslUsageCount(count(userDistros, (d) => d.version === 2)),
     projects_wsl_total: bucketWslUsageCount(projects.length),

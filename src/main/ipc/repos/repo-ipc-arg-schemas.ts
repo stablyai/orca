@@ -6,7 +6,7 @@ import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments
 import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/file-review/diff-comment-schema'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   FolderWorkspaceHookCreateShape,
   FolderWorkspaceDelete,

@@ -143,7 +143,7 @@ export class StructuredAgentSessionHost {
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
   loadedSessionIds = this.sessions.loadedSessionIds
   hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
-  private readonly reads = createStructuredAgentSessionConversationReads(() => ({
+  readonly reads = createStructuredAgentSessionConversationReads(() => ({
     ...this.lifetimeContext(),
     serialize: this.serialize,
     seal: (id) => this.runtimeState.sealEventSink(id),
@@ -197,7 +197,6 @@ export class StructuredAgentSessionHost {
   serializeCreateIntent = this.tasks.serializeCreateIntent.bind(this.tasks)
 
   supportsCreate = this.reads.supportsCreate
-  agentDefinitions = this.reads.agentDefinitions
   knownAgentIds = this.reads.knownAgentIds
 
   private readonly tabs = createTabs(this, this.sessions, this.clientDelivery, (ids) =>
@@ -220,7 +219,8 @@ export class StructuredAgentSessionHost {
 
   revealSession = this.reads.revealSession
 
-  private serialize = this.tasks.serialize.bind(this.tasks)
+  /** The chat's conversation lane: opens, attaches and creates hold it, so open-or-absent is exact. */
+  serialize = this.tasks.serialize.bind(this.tasks)
   withForkSourceAdmission = this.serialize
 
   private readonly entry = structuredAgentSessionEntryDelegates(() => this.attachContext())
@@ -253,7 +253,6 @@ export class StructuredAgentSessionHost {
     mutationWiring.createStructuredAgentSessionHostMutationContext({
       deps: this.deps,
       sessions: this.sessions,
-      subscribers: this.clientDelivery.subscribers,
       lifetime: this.lifetime,
       clientDelivery: this.clientDelivery,
       conversationDelivery: this.conversationDelivery,
@@ -282,6 +281,7 @@ export class StructuredAgentSessionHost {
   )
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
+  approveAutoReviewDenial = this.mutations.approveAutoReviewDenial
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
@@ -337,6 +337,7 @@ export class StructuredAgentSessionHost {
   publishConversationName = this.clientDelivery.publishConversationName
   regenerateConversationName = this.reads.regenerateConversationName
   setUserConversationName = this.reads.setUserConversationName
+  skipAsyncQuestions = this.reads.skipAsyncQuestions
 
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary

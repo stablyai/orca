@@ -4,7 +4,7 @@ import { wslGatedReadFile } from '../../../native-chat/transcript-filesystem/wsl
 import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { kiroTranscriptPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   createAccumulator,
   finalizeSession,

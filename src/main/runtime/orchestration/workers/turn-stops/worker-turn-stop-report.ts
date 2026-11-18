@@ -25,6 +25,8 @@ export type WorkerTurnStop = {
   /** Identifies this stop; a later turn's stop has a new one, so each stop is reported once. An idle finish is keyed by the coordinator's latest mail instead, and a worker goes away only once. */
   stopKey?: string
   reason: WorkerTurnStopReason
+  /** Coordinator mail the worker had taken when the stop was seen; mail it takes later is its next turn's. */
+  mailTaken?: number
   lastOutput: string | undefined
   /** For `needs-input`: the turn ended asking for a reply, which a message answers; else a prompt does. */
   awaitsReply?: boolean
@@ -212,7 +214,7 @@ export function reportWorkerTurnStop(
   const stopKey = stop.approval
     ? `approval:${stop.approval.approvalId}`
     : stop.reason === 'finished'
-      ? `finished:${readCoordinatorMailCount(db, dispatchId)}`
+      ? `finished:${stop.mailTaken ?? readCoordinatorMailCount(db, dispatchId)}`
       : isWorkerGone(stop.reason)
         ? 'gone'
         : (stop.stopKey ?? stop.reason)
