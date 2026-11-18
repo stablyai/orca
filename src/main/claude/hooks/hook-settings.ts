@@ -53,8 +53,12 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   usesWindowsCompatLauncher: false
 }
 
-/** Exec form (`args`) is only valid for Claude versions that support it. */
-export type NativeHookFormOptions = { execForm?: boolean }
+/** Exec form (`args`) and `async` are only valid for Claude versions that support them. */
+export type NativeHookFormOptions = {
+  execForm?: boolean
+  /** Mark observational events `async: true` so Claude's turn never waits on their hook process. */
+  asyncObservational?: boolean
+}
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
   return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
@@ -125,23 +129,23 @@ export function getManagedLifecycleHook(
   if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
   }
-  // Native exe plus agent name launches consistently across Git Bash, PowerShell and CreateProcess.
   const nativeCommand = nativeHookPath ? wrapWindowsDirectCmdHookCommand(nativeHookPath) : null
-  if (nativeCommand) {
-    const agent = getWindowsNativeHookAgent(scriptPath)
-    return {
-      type: 'command',
-      command: `${nativeCommand} ${agent}`,
-      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
-    }
-  }
-  // Git Bash needs a spaced path quoted, which the no-Git-Bash PowerShell host cannot parse.
+  // The exec form skips the shell host entirely; a safe-path string command still pays a Git Bash hop per event.
   if (nativeHookPath && options.execForm) {
     return {
       type: 'command',
       command: nativeHookPath,
       // The exe ignores argv[2]; the script path lets builds without exec-form support replace this entry.
       args: [getWindowsNativeHookAgent(scriptPath), scriptPath],
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
+  }
+  // Native exe plus agent name launches consistently across Git Bash, PowerShell and CreateProcess.
+  if (nativeCommand) {
+    const agent = getWindowsNativeHookAgent(scriptPath)
+    return {
+      type: 'command',
+      command: `${nativeCommand} ${agent}`,
       timeout: MANAGED_HOOK_TIMEOUT_SECONDS
     }
   }

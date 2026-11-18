@@ -86,6 +86,15 @@ export function claudeAcceptsExecFormHooks(version: string | null | undefined): 
   return claudeVersionReaches(version, CLAUDE_HOOK_EXEC_FORM_FIRST_VERSION)
 }
 
+// The hook command schema gained `async` here ("runs in background without blocking"); verified by
+// reading each npm release's bundled hook schema (absent through 2.1.14, present from 2.1.15).
+export const CLAUDE_HOOK_ASYNC_FIRST_VERSION = '2.1.15'
+
+// Unknown versions stay synchronous because an older CLI's settings schema may reject the field.
+export function claudeAcceptsAsyncHooks(version: string | null | undefined): boolean {
+  return claudeVersionReaches(version, CLAUDE_HOOK_ASYNC_FIRST_VERSION)
+}
+
 /** Probe with the launch cwd and env so version-manager shims select the same CLI. */
 export async function probeClaudeCliVersion(
   executablePath: string,
