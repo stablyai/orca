@@ -8,7 +8,13 @@ import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-h
 
 import { getWorktreeScanMutationRevision } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
-import { resolveRepoWorktreeRows, type RepoWorktreeRowDeps } from './repo-worktree-row-resolution'
+import {
+  resolveRepoWorktreeRows,
+  worktreeRowMemoRepoKey,
+  type RepoWorktreeRow,
+  type RepoWorktreeRowDeps
+} from './repo-worktree-row-resolution'
+import { WorktreeRowProjectionMemo } from './worktree-row-projection-memo'
 import { resolveScopedWorktreeIdRow } from './scoped-worktree-row-resolution'
 import {
   joinResolvedWorktreeScans,
@@ -48,6 +54,8 @@ import * as ScanCache from './runtime-worktree-scan-cache'
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
+  private readonly worktreeRowMemo = new WorktreeRowProjectionMemo<RepoWorktreeRow>()
+
   protected abstract readRepoWorktreeCatalog(
     ...args: Parameters<RuntimeWorkspaceRepoScanRefresh['readRepoWorktreeCatalog']>
   ): ReturnType<RuntimeWorkspaceRepoScanRefresh['readRepoWorktreeCatalog']>
@@ -136,6 +144,10 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
           )
       )
     )
+    // Repos registered while scans awaited keep their rows.
+    this.worktreeRowMemo.retainRepos(
+      new Set(this.requireStore().getRepos().map(worktreeRowMemoRepoKey))
+    )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
     const worktrees = projectResolvedWorktreeLineage(perRepoWorktrees.flat(), lineageById)
     return { worktrees, platformByRepoId }
@@ -197,7 +209,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       },
       claimLineagePrune: claimRuntimeLineagePrune,
       listFolderWorkspaces: (repo, repoOwnerCount) =>
-        listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
+        listRuntimeFolderWorkspaces(store, repo, repoOwnerCount),
+      rowMemo: this.worktreeRowMemo
     }
   }
 
@@ -208,7 +221,12 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     if (!this.store) {
       return null
     }
-    return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
+    // Narrowed projections can't prune the memo, so they don't fill it either.
+    return await resolveScopedWorktreeIdRow(
+      { ...this.repoWorktreeRowDeps(), rowMemo: undefined },
+      worktreeId,
+      requiredHostId
+    )
   }
 
   /** The resolution scan plus the checkouts this host's removals own that Git no longer lists. */

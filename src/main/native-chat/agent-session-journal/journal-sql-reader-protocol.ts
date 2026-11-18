@@ -16,6 +16,9 @@ import type {
 } from './journal-domain-history-page'
 import type { JournalDomainImportState } from './journal-domain-import-rows'
 
+/** A chat that can't be compared answers with its error. */
+export type JournalLegacyChatComparison = { revision: string; held: boolean } | { error: string }
+
 export type JournalSqlReaderOperation =
   | { kind: 'fork-prepare'; input: JournalForkPreparationInput }
   | { kind: 'fork-next'; preparationId: number }
@@ -31,6 +34,7 @@ export type JournalSqlReaderOperation =
   | { kind: 'import-state'; sessionId: string }
   | { kind: 'conversion-page'; conversionId: number }
   | { kind: 'conversion-release'; conversionId: number }
+  | { kind: 'legacy-compare'; sessionId: string }
 
 export type JournalSqlReaderRequest = { id: number; operation: JournalSqlReaderOperation }
 export type JournalSqlReaderReply =
@@ -44,6 +48,7 @@ export type JournalSqlReaderReply =
   | { type: 'import-state'; id: number; state: JournalDomainImportState }
   | { type: 'rows'; id: number; page: JournalDomainImportPage | null }
   | { type: 'released'; id: number }
+  | { type: 'legacy-compare'; id: number; result: JournalLegacyChatComparison | null }
   | { type: 'failed'; id?: number; error: JournalSqlFailure }
 
 export type JournalSqlReaderResult = Exclude<JournalSqlReaderReply, { type: 'ready' | 'failed' }>

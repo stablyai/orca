@@ -66,7 +66,7 @@ vi.mock('../../../hooks/use-now', () => ({
 
 import { MobileNativeChatMessage } from './messages/MobileNativeChatMessage'
 import { MobileNativeChatBotIdentityContext } from '../mobile-native-chat-bot-identity'
-import { MobileNativeChatAutomationTurnContext } from './message-content/MobileNativeChatAnswerProse'
+import { MobileNativeChatQuietTurnContext } from './message-content/MobileNativeChatAnswerProse'
 
 function textOf(node: ReactTestInstance): string {
   return node.children.map((child) => (typeof child === 'string' ? child : textOf(child))).join('')
@@ -103,8 +103,8 @@ describe('a bot’s quiet result on the phone', () => {
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row reads only the bot id.
           { value: botChat ? (BOT as never) : null },
           createElement(
-            MobileNativeChatAutomationTurnContext.Provider,
-            { value: inAutomationTurn },
+            MobileNativeChatQuietTurnContext.Provider,
+            { value: { inAutomationTurn, inActingTurn: false } },
             createElement(MobileNativeChatMessage, { message: answer(text) })
           )
         )
@@ -125,10 +125,10 @@ describe('a bot’s quiet result on the phone', () => {
     expect(row.texts).toContain('Nothing to report')
   })
 
-  it('keeps what came before the marker, then reads Nothing to report', () => {
+  it('keeps what came before the marker with no caption', () => {
     const row = render('Checked the queue.\n\nNO_REPLY')
     expect(row.markdown).toEqual(['Checked the queue.'])
-    expect(row.texts).toContain('Nothing to report')
+    expect(row.texts).not.toContain('Nothing to report')
   })
 
   it('drops only the marker in a turn an automation’s row opened', () => {

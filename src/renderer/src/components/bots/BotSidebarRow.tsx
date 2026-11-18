@@ -31,6 +31,8 @@ export type BotSidebarRowProps = {
   hostId: ExecutionHostId
   /** Null shows no status on the picture's corner, only the unread mark. */
   status: WorktreeStatus | null
+  /** Its chat, worker or run stopped on a usage limit while the row is quiet: the corner's tooltip. */
+  stopTip?: string | null
   isUnread: boolean
   isActive: boolean
   dimmed?: boolean
@@ -61,6 +63,7 @@ export function BotSidebarRow({
   workspaceId,
   hostId,
   status,
+  stopTip = null,
   isUnread,
   isActive,
   expanded,
@@ -81,7 +84,12 @@ export function BotSidebarRow({
   const [renameRequested, setRenameRequested] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
   const toggleUnread = (): void => setWorkspaceUnreadByUser(workspaceId, !isUnread, hostId)
-  const badge = { status, isUnread, sleeping: useBotAvatarBadgeSleeping(workspaceId, status) }
+  const badge = {
+    status,
+    isUnread,
+    sleeping: useBotAvatarBadgeSleeping(workspaceId, status),
+    stopTip
+  }
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>

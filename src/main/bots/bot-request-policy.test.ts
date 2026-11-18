@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeTestBot } from './bot.test-fixture'
-import { botNotFound, botRequestRefusal, type BotRequestCheck } from './bot-request-policy'
+import { botRequestRefusal, type BotRequestCheck } from './bot-request-policy'
 
 const docs = makeTestBot({ id: 'docs', name: 'Docs' })
 
@@ -36,14 +36,5 @@ describe('botRequestRefusal', () => {
       const refusal = botRequestRefusal(check(overrides))
       expect(refusal?.code).toBe(code)
     }
-  })
-})
-
-describe('botNotFound', () => {
-  it('lists the bots there are, quoted when a shell would split them', () => {
-    expect(botNotFound('Doc', [{ name: 'Docs' }, { name: 'Release Notes' }]).message).toBe(
-      'There is no bot named Doc on this computer (its bots: bot:Docs, "bot:Release Notes"), so pick one of those or do the work yourself.'
-    )
-    expect(botNotFound('Doc', []).message).toMatch(/no other bot on this computer/)
   })
 })

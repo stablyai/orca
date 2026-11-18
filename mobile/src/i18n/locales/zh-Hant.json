@@ -57,7 +57,8 @@
       "currentWorktree": "目前工作樹",
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
-      "resumeSession": "恢復代理程式工作階段"
+      "resumeSession": "恢復代理程式工作階段",
+      "continueInCli": "在 CLI 中繼續"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "無法連上主機",
@@ -655,7 +656,7 @@
       "confirm": "回溯",
       "unsupported": "此聊天無法返回到更早的訊息。",
       "historyNotPaginated": "此舊版 Codex 聊天無法返回到更早的訊息。請開始新聊天以使用「回溯到此處」。",
-      "busy": "當代理程式閒置且此聊天中沒有等待您處理的內容時可用。",
+      "busy": "聊天閒置時可用",
       "staleEpoch": "對話已發生變化。請檢視最新訊息後重試。",
       "invalidTarget": "對話無法返回到此訊息。未做任何更改。",
       "historyLimit": "此對話過長，無法回溯。未做任何更改。",
@@ -2461,6 +2462,11 @@
       "sendReviewNotes": "傳送審查備註",
       "shortcut": "快速鍵",
       "terminal": "終端機",
+      "terminalWithShell": "終端機: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "命令提示字元",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "終端機名稱",
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
       "urlPrompt": "請輸入網址，或留空以開啟新分頁。",

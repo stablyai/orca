@@ -14905,10 +14905,8 @@
             "f61af83316": "New Folder",
             "37c875d827": "New File",
             "b3e288bf41": "Failed to download '{{value0}}'.",
-            "f729bcd97d": "Failed to download folder '{{value0}}'.",
             "1a3df04ae1": "Open",
             "bce4d4e44f": "Downloaded '{{value0}}'",
-            "a4029c996b": "Downloaded folder '{{value0}}'",
             "e26010014a": "Ignored by .gitignore",
             "a06551beee": "Enter",
             "66a29dde82": "Copy Relative Path",
@@ -21628,7 +21626,7 @@
       "rewind": {
         "unsupported": "This chat can't go back to an earlier message.",
         "historyNotPaginated": "This older Codex chat can't go back to an earlier message. Start a new chat to use Rewind to here.",
-        "busy": "Available once the agent is idle and nothing in this chat is waiting on you.",
+        "busy": "Available when chat is idle",
         "staleEpoch": "The conversation changed. Review the latest messages and try again.",
         "invalidTarget": "The conversation can't go back to this message. Nothing was changed.",
         "historyLimit": "This conversation is too long to go back in. Nothing was changed.",
@@ -23426,6 +23424,10 @@
           "turnOn": "Turn on",
           "title": "Delete agent history when a workspace is deleted",
           "description": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered.",
+          "codexHistoryBadge": "Codex history: {{size}}",
+          "codexHistoryBadgeAtLeast": "Codex history: {{size}}+",
+          "codexHistoryTooltip": "Space Codex uses for its own chat history on {{host}}, including chats from workspaces you still have.",
+          "codexHistoryTooltipAtLeast": "Codex uses at least this much space for its own chat history on {{host}}, including chats from workspaces you still have.",
           "chat": "chat",
           "transcripts": "transcripts",
           "diskSpace": "disk space",
@@ -25087,9 +25089,7 @@
     "updateFailed": "Failed to update project field"
   },
   "mediaPreview": {
-    "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec.",
-    "openFailed": "Could not open this file in the default app.",
-    "openDefault": "Open in Default App"
+    "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec."
   },
   "workspace": {
     "branchChoice": {
@@ -29023,6 +29023,15 @@
       "copyHowToAsk": "Copy {{text}}",
       "forOnHost": "for {{name}} on {{host}}",
       "for": "for {{name}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Continues at {{time}}",
+      "hitLimit": "Hit limit · resets {{time}}",
+      "continuesTip": "Continues automatically at {{time}}",
+      "hitTip": "{{agent}} hit its usage limit · resets {{time}}",
+      "continuesShort": "Continues {{time}}",
+      "hitShort": "Hit limit",
+      "stoppedCount": "{{count}} stopped"
     }
   },
   "plugins": {
@@ -29292,5 +29301,39 @@
     "suggestionUse": "Use",
     "browseOnline": "Browse",
     "browseOnlineLabel": "Browse community translations on orca.dev (opens in your browser)"
+  },
+  "agentCliUpdate": {
+    "updating": "Updating…",
+    "tryAgain": "Try again",
+    "update": "Update",
+    "failedTooltip": "Update failed. The status bar has its output.",
+    "versions": "{{installed}} → {{latest}}",
+    "claudeProduct": "Claude Code",
+    "codexProduct": "Codex CLI",
+    "modelPickerRow": "Update {{product}} for new models",
+    "failed": "Update failed",
+    "commandCopied": "Command copied",
+    "commandNotCopied": "Could not copy the command",
+    "hideOutput": "Hide output",
+    "showOutput": "Show output",
+    "copyCommand": "Copy",
+    "manualHint": "Run in a terminal:",
+    "noOutput": "The command printed nothing.",
+    "heading_one": "{{count}} CLI update available",
+    "heading_other": "{{count}} CLI updates available",
+    "updateAll": "Update all",
+    "thisComputer": "This computer",
+    "statusUpdating": "Updating CLIs",
+    "statusUpdatingTooltip": "Agent CLI updates are running",
+    "statusFailed": "CLI update failed",
+    "statusFailedTooltip": "Open to see what went wrong",
+    "statusOne": "CLI update",
+    "statusCount": "{{count}} CLI updates",
+    "statusTooltip": "Newer agent CLI versions are out"
+  },
+  "backgroundWorkerPaused": {
+    "title": "Some background work paused after crashing repeatedly",
+    "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
+    "retry": "Retry"
   }
 }
