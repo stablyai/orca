@@ -57,10 +57,11 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
       })
       break
     case 'write-automation':
-      authority.writeSerializedAutomationRuns(
-        request.replacements,
-        request.runPayloads.map((payload): unknown => JSON.parse(payload))
-      )
+      // Session domains written whole here must refresh the writer's committed copy too.
+      authority.writeSerializedDomains(request.replacements, {
+        automationRunsAfter: request.runPayloads.map((payload): unknown => JSON.parse(payload)),
+        patching: profileStateWriterPatching
+      })
       break
     case 'assert-revision':
       authority.assertCurrentRevision()
