@@ -90,6 +90,8 @@ export class RowCacheWalCheckpoints {
     { deadline: ReturnType<typeof setTimeout>; path: string }
   >()
   private readonly again = new Set<number>()
+  // Files whose checkpoints kept failing stay on SQLite's own checkpointing, across reopens.
+  private readonly failedPaths = new Set<string>()
   private readonly catchUpOwed = new Set<number>()
   private readonly catchUps = new Map<number, ReturnType<typeof setTimeout>>()
   private nextId = 1
@@ -114,8 +116,13 @@ export class RowCacheWalCheckpoints {
   }
 
   /** A registration id when the connection should stop auto-checkpointing; `restore` turns it back on. */
+  /** Whether a connection opening `path` now should leave its checkpoints to the worker. */
+  available(path: string): boolean {
+    return this.host !== null && !this.failed && !this.failedPaths.has(path)
+  }
+
   attach(path: string, restore: () => void): number | null {
-    if (!this.host || this.failed) {
+    if (!this.available(path)) {
       return null
     }
     const id = this.nextId++
@@ -199,6 +206,7 @@ export class RowCacheWalCheckpoints {
         this.catchUpOwed.delete(id)
       }
       if (registration.failures >= MAX_CONSECUTIVE_FAILURES) {
+        this.failedPaths.add(registration.path)
         this.detach(id)
         registration.restore()
       } else if (this.again.delete(id)) {

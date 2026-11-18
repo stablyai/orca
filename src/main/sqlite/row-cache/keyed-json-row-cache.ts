@@ -27,7 +27,10 @@ export type KeyedJsonRowCacheOptions = {
   holdConnection?: boolean
   /** JSON file older builds wrote; see load(). */
   legacyPath?: string
-  walCheckpoints?: Pick<RowCacheWalCheckpoints, 'attach' | 'detach' | 'request' | 'assertRemovable'>
+  walCheckpoints?: Pick<
+    RowCacheWalCheckpoints,
+    'available' | 'attach' | 'detach' | 'request' | 'assertRemovable'
+  >
 }
 
 /**
@@ -67,6 +70,8 @@ export class KeyedJsonRowCache {
   private readonly busyTimeoutMs: number
   private readonly walCheckpoints: NonNullable<KeyedJsonRowCacheOptions['walCheckpoints']>
   private walRegistration: number | null = null
+  // Set when checkpoints were handed back: the next operation reopens with SQLite's own.
+  private reopen = false
 
   constructor(
     readonly path: string,
@@ -301,30 +306,28 @@ export class KeyedJsonRowCache {
   }
 
   private database(busyTimeoutMs: number): SyncDatabase {
+    if (this.reopen) {
+      // Closing can checkpoint; each cache pays that on its own next operation, not all at once.
+      this.reopen = false
+      this.closeDatabase()
+    }
     if (this.db) {
       return this.db
     }
-    // Handing checkpoints back closes the connection; the next operation reopens it checkpointing.
-    const registration = this.walCheckpoints.attach(this.path, () => this.closeDatabase())
-    let db: SyncDatabase
-    try {
-      db = openVersionedCacheDatabase(this.path, {
-        version: this.options.schemaVersion,
-        // The caller's budget covers opening too: schema setup writes, so it can meet the lock.
-        busyTimeoutMs,
-        removal: 'fail-fast',
-        beforeRemove: () => this.walCheckpoints.assertRemovable(this.path),
-        // Rows can hold prompts, PR titles and notification ids; keep them user-only.
-        directoryMode: 0o700,
-        sql: SCHEMA_SQL,
-        walAutocheckpoint: registration === null ? undefined : 0
-      })
-    } catch (error) {
-      this.walCheckpoints.detach(registration)
-      throw error
-    }
+    const offMain = this.walCheckpoints.available(this.path)
+    const db = openVersionedCacheDatabase(this.path, {
+      version: this.options.schemaVersion,
+      // The caller's budget covers opening too: schema setup writes, so it can meet the lock.
+      busyTimeoutMs,
+      removal: 'fail-fast',
+      beforeRemove: () => this.walCheckpoints.assertRemovable(this.path),
+      // Rows can hold prompts, PR titles and notification ids; keep them user-only.
+      directoryMode: 0o700,
+      sql: SCHEMA_SQL,
+      walAutocheckpoint: offMain ? 0 : undefined
+    })
     this.db = db
-    this.walRegistration = registration
+    this.walRegistration = this.walCheckpoints.attach(this.path, () => (this.reopen = true))
     hardenSqliteDatabaseFiles(this.path)
     // A fresh connection cannot vouch for a baseline read through an earlier one.
     this.dataVersion = undefined

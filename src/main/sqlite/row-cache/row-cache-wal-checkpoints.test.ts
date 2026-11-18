@@ -65,6 +65,35 @@ describe('RowCacheWalCheckpoints', () => {
     cache.close()
   })
 
+  it('keeps a file whose checkpoints keep failing on its own checkpointing, across reopens', () => {
+    const opens: string[] = []
+    const original = SyncDatabase.prototype.exec
+    vi.spyOn(SyncDatabase.prototype, 'exec').mockImplementation(function (this: SyncDatabase, sql) {
+      if (sql.includes('journal_size_limit')) {
+        opens.push(sql)
+      }
+      return original.call(this, sql)
+    })
+    const worker = new FakeWorker()
+    const cache = new KeyedJsonRowCache(cachePath(), {
+      schemaVersion: 1,
+      walCheckpoints: new RowCacheWalCheckpoints(() => worker)
+    })
+    for (let i = 0; i < 3; i++) {
+      cache.write([{ key: 'a', json: `"${i}"` }])
+      worker.emit('message', { id: worker.posted.at(-1)!.id, ok: false })
+    }
+    expect(worker.posted).toHaveLength(3)
+
+    for (let i = 3; i < 6; i++) {
+      cache.write([{ key: 'a', json: `"${i}"` }])
+    }
+    expect(opens).toHaveLength(2)
+    expect(opens[1]).not.toContain('wal_autocheckpoint')
+    expect(worker.posted).toHaveLength(3)
+    cache.close()
+  })
+
   it('keeps a damaged file in place until a checkpoint on it, from any instance, has finished', () => {
     const worker = new FakeWorker()
     const walCheckpoints = new RowCacheWalCheckpoints(() => worker)
