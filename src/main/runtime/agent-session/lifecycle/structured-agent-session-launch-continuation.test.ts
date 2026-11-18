@@ -103,8 +103,13 @@ describe('continuing interrupted chats at launch', () => {
     const reserved = Promise.withResolvers<void>()
     const on = launch(true)
     on.restartResume.continueAfterRestart.mockImplementation(async (...args: unknown[]) => {
-      const options = args[3] as { onReserved: (rows: { sessionId: string }[]) => void }
-      options.onReserved([{ sessionId: 'chat-crashed' }])
+      const options = args[3]
+      if (options && typeof options === 'object' && 'onReserved' in options) {
+        const onReserved = options.onReserved
+        if (typeof onReserved === 'function') {
+          onReserved([offer('chat-crashed', 6)])
+        }
+      }
       await reserved.promise
       return { resumed: [], continued: [] }
     })

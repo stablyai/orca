@@ -56,7 +56,7 @@ describe('a host that continues at launch', () => {
     const settled = Promise.withResolvers<unknown>()
     vi.mocked(callStructuredAgentSession).mockImplementation(async (_target, method, params) => {
       if (method === 'agentSession.restartLaunchSettled') {
-        return (params as { until?: string } | undefined)?.until === 'taken'
+        return params && typeof params === 'object' && 'until' in params && params.until === 'taken'
           ? { sessions: [row('working')] }
           : settled.promise
       }
