@@ -1,15 +1,12 @@
 import { useState } from 'react'
 import type { JSX } from 'react'
-import { ChevronRight } from 'lucide-react'
 import {
   getFeatureWallMediaTile,
   type FeatureWallWorkflow
 } from '../../../../../shared/feature-education/explore/feature-wall-workflows'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
-import { track } from '@/diagnostics/telemetry/telemetry'
 import { useTranslate } from '@/i18n/use-translate'
 import { getLocalizedFeatureWallTileTitle } from './feature-wall-tour-localized-copy'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PreviewMedia(props: {
   posterUrl: string | null
@@ -60,7 +57,7 @@ export function RelatedFeatures(props: {
   source: FeatureWallOpenSourceTelemetry
 }): JSX.Element | null {
   const t = useTranslate()
-  const { workflow, source } = props
+  const { workflow } = props
   const items = workflow.relatedTileIds
     .map((id) => getFeatureWallMediaTile(id))
     .filter((tile): tile is NonNullable<typeof tile> => tile !== null)
@@ -75,22 +72,8 @@ export function RelatedFeatures(props: {
       <ul className="flex flex-col gap-1" role="list">
         {items.map((tile) => (
           <li key={tile.id}>
-            <button
-              type="button"
-              onClick={(event) => {
-                track('feature_wall_docs_clicked', {
-                  group_id: workflow.id,
-                  tile_id: tile.id,
-                  source
-                })
-                track('feature_wall_tile_clicked', { tile_id: tile.id })
-                openAppHttpLink(tile.docsUrl, { event })
-              }}
-              className="inline-flex items-center gap-1.5 text-left text-[13px] hover:underline hover:underline-offset-2"
-            >
-              {getLocalizedFeatureWallTileTitle(tile.id)}
-              <ChevronRight className="size-3 text-muted-foreground" />
-            </button>
+            {/* Zotz: tile docs live on orca.dev, so the titles stay plain text. */}
+            <span className="text-[13px]">{getLocalizedFeatureWallTileTitle(tile.id)}</span>
           </li>
         ))}
       </ul>
