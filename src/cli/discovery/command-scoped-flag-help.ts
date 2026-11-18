@@ -85,6 +85,13 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     id: '--id <id>              Plugin id (default: the folder name)',
     name: '--name <display name>  Plugin name shown in Orca'
   },
+  'repo set': {
+    'project-group':
+      '--project-group <id|name|none> Sidebar project group for the repo; none ungroups it'
+  },
+  'repo add': {
+    'project-group': '--project-group <id|name> Sidebar project group to add the repo into'
+  },
   'environment update': {
     force: '--force                Restart over running terminals instead of deferring the update'
   },
