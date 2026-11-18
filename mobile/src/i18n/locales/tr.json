@@ -18,6 +18,10 @@
       "title": "Hesaplar",
       "useReset": "Sıfırlama hakkını kullan",
       "weeklyWindow": "7g"
+    },
+    "claude": {
+      "usageSignInLabel": "Yeniden oturum aç",
+      "usageSignInMessage": "Seçili Claude hesabında yeniden oturum açmanız gerekiyor. Ayarlar > Yapay Zeka Sağlayıcı Hesapları bölümünü açın veya Sistem varsayılanı seçeneğini seçin."
     }
   },
   "agentHistory": {
@@ -4284,6 +4288,58 @@
       },
       "taskPageJiraLoadState": {
         "jqlFailed": "Bu JQL sorgusu Jira'da çalıştırılamadı. Sözdizimini kontrol edip yeniden deneyin."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "{{server}} sunucusundan kullanım bilgisi yok",
+            "remoteOwnerNotConfigured": "{{server}} üzerinde yapılandırılmadı",
+            "claudeUnknownOnHost": "{{server}} sunucusundan Claude kullanım bilgisi alınamıyor. Orada oturum açılmamış olabilir veya API anahtarıyla faturalandırma kullanılıyor olabilir.",
+            "remoteOwnerSignInSavedHere": "Oturum açma bilgileri yalnızca bu bilgisayarda kayıtlı.",
+            "f8b8dbed85": "Kullanım bilgisi yok",
+            "e2c6a4f917": "Yenilemek için Grok'u çalıştırın",
+            "f90b3d7a16": "Yenilemek için Kimi'yi çalıştırın",
+            "0d8d7cfe15": "Claude oturumu bekleniyor",
+            "claude": {
+              "waiting": {
+                "label": "Claude çalıştığında güncellenir",
+                "message": "Claude kullanım bilgisi, Claude bir sonraki çalıştığında güncellenir."
+              }
+            },
+            "1804cd8c3f": "Oturum açma yenileniyor",
+            "bf2e739f18": "Oturum açma kullanılamıyor",
+            "f8f0f9d8cc": "Ağ sorunu",
+            "minimax": {
+              "expired": {
+                "label": "Oturum açma süresi doldu",
+                "apiKey": "MiniMax API anahtarının süresi doldu. Ayarlar bölümünde değiştirin.",
+                "cookie": "MiniMax oturum çerezinin süresi doldu. Ayarlar bölümünde değiştirin."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Oturum açma süresi doldu",
+                "message": "Orca'nın çalıştığı bilgisayarda bir terminalde cursor-agent login komutunu çalıştırın, ardından kullanım bilgilerini yeniden yüklemeyi deneyin."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "Abonelik yok"
+              }
+            },
+            "7ad719c4bf": "Sınırlı",
+            "e740f92596": "Yenileme başarısız oldu",
+            "2c35eca8d4": "Kullanım alınamadı",
+            "d1b7f509ac": "Orca'yı çalıştıran bilgisayarda bir terminalde grok komutunu çalıştırın ve başlamasını bekleyin. İstenirse oturum açmayı tamamlayın, ardından kullanım bilgilerini almayı yeniden deneyin. Sohbet mesajı göndermenize gerek yok.",
+            "a37e8c15d4": "Orca'yı çalıştıran bilgisayarda bir terminalde kimi'yi çalıştırın, başlamasını bekleyin, ardından kullanımı tekrar deneyin.",
+            "3d3c9c0c1f": "Claude kullanımı, canlı Claude terminali kimlik bilgilerini döndürdükten sonra yenilenecek.",
+            "42fdd4da1d": "Claude oturumu yenileniyor. Ajan oturumları hâlâ açık olabilir.",
+            "c06c1d215d": "Ağ isteği başarısız olduğu için Claude kullanımı yenilenemedi.",
+            "cabdc2a9e0": "Claude oturum açma kimlik bilgileri okunamadı.",
+            "a7517cccb6": "Claude kullanımı şu anda kullanılamıyor.",
+            "8418ec448d": "{{value0}} kullanımı yenilenemedi. Ajan oturumları hâlâ açık olabilir."
+          }
+        }
       }
     }
   }

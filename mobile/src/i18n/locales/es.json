@@ -18,6 +18,10 @@
       "title": "Cuentas",
       "useReset": "Usar un restablecimiento",
       "weeklyWindow": "7d"
+    },
+    "claude": {
+      "usageSignInLabel": "Iniciar sesión de nuevo",
+      "usageSignInMessage": "La cuenta de Claude seleccionada necesita que inicies sesión de nuevo. Abre Ajustes > Cuentas de proveedores de IA, o elige Predeterminado del sistema."
     }
   },
   "agentHistory": {
@@ -4384,6 +4388,58 @@
       },
       "taskPageJiraLoadState": {
         "jqlFailed": "Jira no pudo ejecutar esta consulta JQL. Comprueba la sintaxis y vuelve a intentarlo."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "Sin uso desde {{server}}",
+            "remoteOwnerNotConfigured": "No configurado en {{server}}",
+            "claudeUnknownOnHost": "El uso de Claude no está disponible desde {{server}}. Puede que no haya una sesión iniciada allí o que use facturación por clave de API.",
+            "remoteOwnerSignInSavedHere": "Su inicio de sesión solo está guardado en este equipo.",
+            "f8b8dbed85": "Uso no disponible",
+            "e2c6a4f917": "Ejecute Grok para actualizar",
+            "f90b3d7a16": "Ejecute Kimi para actualizar",
+            "0d8d7cfe15": "Esperando sesión de Claude",
+            "claude": {
+              "waiting": {
+                "label": "Se actualiza cuando Claude se ejecuta",
+                "message": "El uso de Claude se actualizará la próxima vez que ejecutes Claude."
+              }
+            },
+            "1804cd8c3f": "Actualizando inicio de sesión",
+            "bf2e739f18": "Inicio de sesión no disponible",
+            "f8f0f9d8cc": "Problema de red",
+            "minimax": {
+              "expired": {
+                "label": "El inicio de sesión expiró",
+                "apiKey": "La clave API MiniMax expiró. Reemplácelo en Configuración.",
+                "cookie": "La cookie de sesión MiniMax expiró. Reemplácelo en Configuración."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Inicio de sesión caducado",
+                "message": "Ejecuta cursor-agent login en una terminal del equipo donde se ejecuta Orca y vuelve a intentar consultar el uso."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "Sin suscripción"
+              }
+            },
+            "7ad719c4bf": "Limitado",
+            "e740f92596": "Error al actualizar",
+            "2c35eca8d4": "No se pudo obtener el uso",
+            "d1b7f509ac": "Ejecute grok en una terminal en la computadora que ejecuta Orca y espere a que se inicie. Si se le solicita, complete el inicio de sesión y luego vuelva a intentar el uso. No es necesario enviar un mensaje de chat.",
+            "a37e8c15d4": "Ejecute kimi en una terminal en la computadora que ejecuta Orca y espere a que se inicie, luego vuelva a intentar usarlo.",
+            "3d3c9c0c1f": "El uso de Claude se actualizará cuando el terminal Claude activo rote sus credenciales.",
+            "42fdd4da1d": "Se está actualizando el inicio de sesión de Claude. Las sesiones de agentes pueden seguir iniciadas.",
+            "c06c1d215d": "No se pudo actualizar el uso de Claude porque falló la solicitud de red.",
+            "cabdc2a9e0": "No se pudieron leer las credenciales de inicio de sesión de Claude.",
+            "a7517cccb6": "El uso de Claude no está disponible ahora.",
+            "8418ec448d": "No se pudo actualizar el uso de {{value0}}. Es posible que las sesiones de agentes sigan iniciadas."
+          }
+        }
       }
     }
   }
