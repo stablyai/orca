@@ -14905,10 +14905,8 @@
             "f61af83316": "New Folder",
             "37c875d827": "New File",
             "b3e288bf41": "Failed to download '{{value0}}'.",
-            "f729bcd97d": "Failed to download folder '{{value0}}'.",
             "1a3df04ae1": "Open",
             "bce4d4e44f": "Downloaded '{{value0}}'",
-            "a4029c996b": "Downloaded folder '{{value0}}'",
             "e26010014a": "Ignored by .gitignore",
             "a06551beee": "Enter",
             "66a29dde82": "Copy Relative Path",
@@ -25090,9 +25088,7 @@
     "updateFailed": "Failed to update project field"
   },
   "mediaPreview": {
-    "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec.",
-    "openFailed": "Could not open this file in the default app.",
-    "openDefault": "Open in Default App"
+    "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec."
   },
   "workspace": {
     "branchChoice": {
