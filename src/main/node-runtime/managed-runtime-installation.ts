@@ -100,7 +100,25 @@ export class ManagedRuntimeInstallation {
       installedCurrent: release?.current ?? false,
       ...(pin && !release?.current && broken.includes(pin.version) && { damaged: true }),
       canRemove: release !== null || broken.length > 0,
-      source
+      source,
+      ...(this.runtime.refreshPin && { updatesAutomatically: true as const })
+    }
+  }
+
+  /** Bring Orca's own copy to the latest release; never installs one nobody asked for or touches a user's own. */
+  async updateIfBehind(): Promise<void> {
+    if (!this.runtime.refreshPin || this.running) {
+      return
+    }
+    const state = await this.status()
+    if (
+      state.source === 'managed' &&
+      state.installedVersion !== null &&
+      state.available &&
+      !state.installedCurrent &&
+      !this.running
+    ) {
+      this.install()
     }
   }
 
@@ -191,6 +209,10 @@ export class ManagedRuntimeInstallation {
   private async runInstall(run: Run): Promise<void> {
     const deadline = AbortSignal.timeout(DEADLINE_MS)
     const signal = AbortSignal.any([run.controller.signal, deadline])
+    // The release chats ran before this install; they may still be running it.
+    const previous = this.runtime.refreshPin
+      ? ((await this.facts?.read.catch(() => null))?.installedVersion ?? null)
+      : null
     try {
       await this.runtime.refreshPin?.(signal)
       const pin = this.runtime.pin()
@@ -210,6 +232,9 @@ export class ManagedRuntimeInstallation {
           run.committed = true
         }
       })
+      if (this.runtime.refreshPin) {
+        await this.reclaimOlderThan(pin.version, previous)
+      }
       this.publish(run, { phase: 'succeeded' })
     } catch (error) {
       if (run.committed) {
@@ -250,9 +275,15 @@ export class ManagedRuntimeInstallation {
       console.warn(`[managed-runtime] ${this.agent} releases unreadable; not reclaiming this run`)
       return
     }
-    const failed = await reclaimRuntimeReleases(this.root, release?.version ?? null).catch(
-      (error: unknown) => [String(error)]
-    )
+    await this.reclaimOlderThan(release?.version ?? null, null)
+  }
+
+  /** Keep the release launches resolve to and the one running chats may still use. */
+  private async reclaimOlderThan(current: string | null, previous: string | null): Promise<void> {
+    const keep = [current, previous].filter((version) => version !== null)
+    const failed = await reclaimRuntimeReleases(this.root, keep).catch((error: unknown) => [
+      String(error)
+    ])
     if (failed.length > 0) {
       console.warn(`[managed-runtime] old ${this.agent} releases not removed:`, failed)
     }

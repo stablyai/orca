@@ -202,7 +202,18 @@ export function rememberManagedClaudeRelease(folder: string | null): void {
 
 /** Orca's installed Claude on this host, used only when the user has none of their own. */
 export function managedClaudeCommand(): string | null {
-  return installedFolder ? claudeManagedExecutable(installedFolder) : null
+  if (!installedFolder) {
+    return null
+  }
+  managedUseListener?.()
+  return claudeManagedExecutable(installedFolder)
+}
+
+let managedUseListener: (() => void) | null = null
+
+/** Told each time a launch resolves to Orca's copy, so updates follow real use instead of a timer. */
+export function onManagedClaudeUse(listener: () => void): void {
+  managedUseListener = listener
 }
 
 /** Last on PATH, so `claude auth login` and CLI tabs reach Orca's copy and never shadow the user's own. */
