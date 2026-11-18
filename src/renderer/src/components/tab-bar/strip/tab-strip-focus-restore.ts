@@ -27,12 +27,13 @@ export function restoreTabStripFocus({
     return
   }
   const active = document.activeElement
+  // Focus still inside the closing menu is not a user focus change; another menu is.
+  const closingMenu = focusBefore?.closest('[data-slot="dropdown-menu-content"]')
   const focusMoved =
     active !== null &&
     active !== document.body &&
     active !== focusBefore &&
-    // A closing menu's own items are being removed; that is not a user focus change.
-    active.closest('[data-slot="dropdown-menu-content"]') === null
+    !closingMenu?.contains(active)
   if (focusMoved) {
     return
   }
