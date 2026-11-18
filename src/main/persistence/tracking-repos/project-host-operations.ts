@@ -22,6 +22,7 @@ import {
   createRepoRowExecutionHostLookup,
   type RepoRowExecutionHostLookup
 } from '../../../shared/execution-host/worktree-execution-host-resolution'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../../shared/linked-work-item-prompt-settings'
 import { normalizeProjectRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import { findProjectHostSetup } from '../../../shared/project/host-setup/project-host-setup-target'
 import { makeProjectHostSetupId } from './project-host-compatibility'
@@ -148,6 +149,17 @@ export class ProjectHostPersistenceOperations {
         project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
           updates.localWindowsRuntimePreference
         )
+      }
+    }
+    if ('linkedWorkItemPromptTemplate' in updates) {
+      const value = updates.linkedWorkItemPromptTemplate
+      if (value === undefined || value === null || typeof value === 'string') {
+        const template = normalizeLinkedWorkItemPromptTemplate(value)
+        if (template === undefined) {
+          delete project.linkedWorkItemPromptTemplate
+        } else {
+          project.linkedWorkItemPromptTemplate = template
+        }
       }
     }
     project.updatedAt = Date.now()

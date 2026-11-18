@@ -6,7 +6,10 @@ import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../..
 import { terminalSessionOptionInputs } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import { resolveStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { useAppStore } from '@/store/index'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
+import {
+  getDesktopLinkedWorkItemPromptTemplate,
+  resolveQuickCreateLinkedWorkItemPrompt
+} from '@/lib/work-items/linked-work-item-context'
 import type { ComposerModel } from '../composer-model'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
@@ -131,7 +134,12 @@ export async function prepareQuickComposerStartup(
     : undefined
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     input.agent ? input.linkedWorkItem : null,
-    input.note
+    input.note,
+    getDesktopLinkedWorkItemPromptTemplate(
+      useAppStore.getState(),
+      input.repoId,
+      input.executionHostId ?? undefined
+    )
   )
   const settings = input.settings
     ? {

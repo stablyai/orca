@@ -30,6 +30,7 @@ import '@/lib/workspace/creation/new-workspace-project-options'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
+import { getDesktopLinkedWorkItemPromptTemplate } from '@/lib/work-items/linked-work-item-context'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchFact,
@@ -79,7 +80,15 @@ export async function submitFolderWorkspaceCreate({
     lastAutoName,
     linkedWorkItem
   })
-  const launchHost = getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)
+  const launchState = useAppStore.getState()
+  const promptTemplate = linkedWorkItem
+    ? getDesktopLinkedWorkItemPromptTemplate(
+        launchState,
+        linkedWorkItem.repoId,
+        getRepoExecutionHostId(projectGroup)
+      )
+    : undefined
+  const launchHost = getFolderWorkspaceAgentLaunchFact(launchState, projectGroup)
   const launchPlatform = launchHost.kind === 'known' ? launchHost.platform : null
   // SSH folders use the plain orca relay shim; keep the Linux-only local executable rename out of remote launches.
   const launchIsRemote = Boolean(projectGroup.connectionId)
@@ -107,6 +116,7 @@ export async function submitFolderWorkspaceCreate({
           settings: effectiveSettings,
           linkedWorkItem,
           note,
+          promptTemplate,
           agentCmdOverrides,
           agentArgs,
           sessionOptions,
@@ -133,7 +143,9 @@ export async function submitFolderWorkspaceCreate({
         : null
   // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
+    quickAgent && linkedWorkItem
+      ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note, promptTemplate)
+      : null
   const launchRequest = quickAgent
     ? {
         requestId: createBrowserUuid(),
@@ -189,16 +201,14 @@ export async function submitFolderWorkspaceCreate({
     ...(setupSupported ? setupApproval : {}),
     ...(setupSupported && structuredLaunch ? { agentLaunchMode: 'structured' as const } : {}),
     ...(hostStartsTerminal
-      ? {
-          ...buildFolderWorkspaceHostStartupPayload({
-            quickAgent,
-            note,
-            launchDraftPrompt,
-            agentArgs,
-            sessionOptions,
-            launchSource
-          })
-        }
+      ? buildFolderWorkspaceHostStartupPayload({
+          quickAgent,
+          note,
+          launchDraftPrompt,
+          agentArgs,
+          sessionOptions,
+          launchSource
+        })
       : {}),
     projectGroupId: projectGroup.id,
     name: workspaceName,

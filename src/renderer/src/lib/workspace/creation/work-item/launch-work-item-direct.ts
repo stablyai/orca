@@ -4,20 +4,17 @@ import { confirmDirectWorkItemSetup, prepareDirectWorkItemSetup } from './direct
 import type { DirectWorkItemLaunchResult } from './direct-work-item-setup'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import {
-  directWorkItemFailureReporter,
-  gitLabIssueNumber,
-  resolvePrHeadErrorMessage,
-  unavailableAgentErrorMessage,
-  workspaceActivationErrorMessage
-} from '@/lib/workspace/creation/work-item/launch-work-item-direct-messages'
+import * as messages from './launch-work-item-direct-messages'
 import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
 import { buildDirectWorkItemStartupOpts } from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent'
 import {
   getDirectWorkItemIdentity,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-draft'
-import { getLaunchableWorkItemDraftContent } from '@/lib/work-items/linked-work-item-context'
+import {
+  getLaunchableWorkItemDraftContent,
+  getDesktopLinkedWorkItemPromptTemplate
+} from '@/lib/work-items/linked-work-item-context'
 import {
   directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,
@@ -39,10 +36,12 @@ export async function launchWorkItemDirect(
   const { item, repoId, openModalFallback, baseBranch } = args
   const { telemetrySource, launchSource, agentOverride } = args
   args = captureDirectWorkItemLaunchArgs(args)
-  let agentArgs = args.agentArgs
   let creationAccepted = false
   let failureAgent = agentOverride
-  const reportFailure = directWorkItemFailureReporter(args.onFailureNotified, () => failureAgent)
+  const reportFailure = messages.directWorkItemFailureReporter(
+    args.onFailureNotified,
+    () => failureAgent
+  )
   try {
     if (args.signal?.aborted) {
       return 'cancelled'
@@ -83,7 +82,7 @@ export async function launchWorkItemDirect(
         if (args.signal?.aborted) {
           return 'cancelled'
         }
-        reportFailure(resolvePrHeadErrorMessage())
+        reportFailure(messages.resolvePrHeadErrorMessage())
         openModalFallback()
         return false
       }
@@ -106,7 +105,7 @@ export async function launchWorkItemDirect(
       return 'cancelled'
     }
     if (!projectPreflight) {
-      return reportFailure(unavailableAgentErrorMessage())
+      return reportFailure(messages.unavailableAgentErrorMessage())
     }
     const projectContext = projectPreflight.context
     const { prospectiveAgent, unavailable } = await resolveDirectProspectiveAgent(
@@ -120,10 +119,15 @@ export async function launchWorkItemDirect(
     }
     failureAgent = prospectiveAgent ?? undefined
     if (unavailable) {
-      return reportFailure(unavailableAgentErrorMessage())
+      return reportFailure(messages.unavailableAgentErrorMessage())
     }
     const requestId = createNonSecureContextUuid()
-    const draftContent = await Promise.resolve(getLaunchableWorkItemDraftContent(item))
+    const draftContent = await Promise.resolve(
+      getLaunchableWorkItemDraftContent(
+        item,
+        getDesktopLinkedWorkItemPromptTemplate(store, repoId, context.executionHostId)
+      )
+    )
     if (args.signal?.aborted) {
       return 'cancelled'
     }
@@ -157,10 +161,6 @@ export async function launchWorkItemDirect(
     if (agentArgsError) {
       return reportFailure(agentArgsError)
     }
-
-    if (args.signal?.aborted) {
-      return 'cancelled'
-    }
     creationAccepted = true
     args.onCreateAccepted?.()
     const result = await store.createWorktree(
@@ -179,7 +179,7 @@ export async function launchWorkItemDirect(
       prStart?.branchNameOverride,
       undefined,
       itemType === 'mr' && itemNumber ? itemNumber : undefined,
-      gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
+      messages.gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
       undefined,
       undefined,
       undefined,
@@ -195,11 +195,10 @@ export async function launchWorkItemDirect(
       }
     )
     const worktreeId = result.worktree.id
-    const worktreePath = result.worktree.path
 
     const launchPreparation = await prepareDirectWorkItemAgentLaunch({
       worktreeId,
-      worktreePath,
+      worktreePath: result.worktree.path,
       repoId,
       agentOverride,
       agentLaunchPreferences: args.agentLaunchPreferences,
@@ -231,9 +230,9 @@ export async function launchWorkItemDirect(
         setup: result.setup,
         defaultTabs: result.defaultTabs
       })
-      return reportFailure(unavailableAgentErrorMessage())
+      return reportFailure(messages.unavailableAgentErrorMessage())
     }
-    agentArgs = launchPreparation.agentArgs
+    const agentArgs = launchPreparation.agentArgs
     const { effectiveAgent, startupPlan, draftLaunchedNatively, startupPlanFailed, plan } =
       launchPreparation
 
@@ -277,7 +276,7 @@ export async function launchWorkItemDirect(
     const activation = activationHolder.value
     if (!activation) {
       // Report a workspace disappearing between create and activation rather than silently drop its draft.
-      return reportFailure(workspaceActivationErrorMessage())
+      return reportFailure(messages.workspaceActivationErrorMessage())
     }
     store.setSidebarOpen(true)
 
@@ -289,7 +288,7 @@ export async function launchWorkItemDirect(
       // The seeded startup carries the prompt and token until the shared pane delivery owner attaches.
       return (
         routing.directWorkItemStartupAccepted(activation, startupPlan, startupPlanFailed) ||
-        reportFailure(workspaceActivationErrorMessage())
+        reportFailure(messages.workspaceActivationErrorMessage())
       )
     }
     return routing.finishDirectWorkItemPrompt({
