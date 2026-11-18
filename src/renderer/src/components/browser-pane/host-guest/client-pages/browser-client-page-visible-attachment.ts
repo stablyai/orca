@@ -2,6 +2,7 @@ import { registerWebviewDragPassthroughSurface } from '../drag/webview-drag-pass
 import { retainWebviewDragListeners } from '../webview-registry'
 import { registerBrowserClientPagePositionSync } from '../viewport/browser-client-page-position-driver'
 import { syncBrowserClientPagePaintRetention } from './browser-client-page-paint-retention'
+import { readBrowserClientPageAttachedGuestId } from './browser-client-page-retained-elements'
 import type { BrowserClientPageRendererIdentity as RendererPageIdentity } from '../../../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 
@@ -35,7 +36,7 @@ export function findBrowserClientRetainedAttachedWebview(
     if (
       page.status === 'attached' &&
       page.identity.browserPageId === browserPageId &&
-      page.webContentsId === webContentsId
+      readBrowserClientPageAttachedGuestId(page.webview) === webContentsId
     ) {
       return page.webview
     }

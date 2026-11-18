@@ -29,6 +29,14 @@ export type BrowserAgentCursorEvent = {
   awaitsArrival: boolean
 }
 
+/** Main asks the renderer to keep the user's focus while it presses into the guest it drives. */
+export type BrowserAgentInputFocusGuardEvent = {
+  browserPageId: string
+  guestWebContentsId: number
+  token: string
+  active: boolean
+}
+
 /** An agent set the page's viewport; the pane sizes its page box to it, as a preset does. */
 export type BrowserAgentViewportEvent = {
   browserPageId: string

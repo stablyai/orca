@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain, type WebContents } from 'electron'
+import type { BrowserAgentInputFocusGuardEvent } from '../../../../shared/browser/automation/browser-agent-activity-contract'
 import { BrowserError } from '../../browser-error'
 
 // Guest presses take Chromium focus; only the hosting pane can restore it (#20595).
@@ -46,6 +47,12 @@ export async function guardPaneFocusForAgentInput(
   guestWebContentsId: number
 ): Promise<() => void> {
   const token = randomUUID()
+  const message = (active: boolean): BrowserAgentInputFocusGuardEvent => ({
+    browserPageId,
+    guestWebContentsId,
+    token,
+    active
+  })
   const startedAt = performance.now()
   const answer = await new Promise<'ready' | 'unavailable' | 'composing'>((resolve) => {
     const finish = (outcome: 'ready' | 'unavailable' | 'composing'): void => {
@@ -66,12 +73,7 @@ export async function guardPaneFocusForAgentInput(
     }
     const timer = setTimeout(() => finish('unavailable'), PANE_READY_TIMEOUT_MS)
     ipcMain.on(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL, onReady)
-    renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, {
-      browserPageId,
-      guestWebContentsId,
-      token,
-      active: true
-    })
+    renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, message(true))
   })
   let released = false
   const release = (): void => {
@@ -80,12 +82,7 @@ export async function guardPaneFocusForAgentInput(
     }
     released = true
     if (!renderer.isDestroyed()) {
-      renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, {
-        browserPageId,
-        guestWebContentsId,
-        token,
-        active: false
-      })
+      renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, message(false))
     }
   }
   if (answer !== 'ready') {
