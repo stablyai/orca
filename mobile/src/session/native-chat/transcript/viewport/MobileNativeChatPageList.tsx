@@ -410,7 +410,7 @@ export function MobileNativeChatPageList({
             })}
           </div>
         )}
-        {held ? held.footer : liveFooter}
+        {footer}
       </MobileNativeChatGrowthHoldContext.Provider>
     </MobileNativeChatPageScroll>
   )
