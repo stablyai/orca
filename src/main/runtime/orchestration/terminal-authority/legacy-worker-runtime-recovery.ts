@@ -69,7 +69,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
           ? {
               cutByLastRun,
               open: (sessionId) => host.revealSession(sessionId).catch(() => null),
-              status: (sessionId) => host.readFreshStatusSummary(sessionId),
+              lastOutput: (sessionId) => host.readStatusSummary(sessionId)?.lastAssistantMessage,
               cutOf: (sessionId) => host.restartResume.cutOf(sessionId)
             }
           : null

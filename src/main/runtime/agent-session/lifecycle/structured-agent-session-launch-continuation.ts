@@ -20,7 +20,8 @@ export type StructuredAgentSessionLaunchContinuation = {
   continued: ReadonlySet<string>
   /** The automatic action's answer, as `restartContinue` gives a client; absent when none ran. */
   answer?: RestartContinuationAnswer
-  /** Chats the run that just ended cut: a crash this start adopted, or an offer it recorded. */
+  /** Chats the run that just ended cut and nothing carried on: its offer (or failure) is still there.
+   *  A continued chat, or one whose agent started on its own, has none. */
   cutByLastRun: ReadonlySet<string>
 }
 
@@ -59,12 +60,12 @@ export async function continueStructuredAgentSessionsAtLaunch(
       ...(await deps.restartResume.list()),
       ...(await deps.restartResume.listFailures())
     ]
-    return new Set([
-      ...cuts.map((cut) => cut.sessionId),
-      ...offers.flatMap((offer) =>
-        since !== undefined && offer.recordedAt >= since ? [offer.sessionId] : []
+    // A crash offer is recorded by this start, so it is always newer than the run it read.
+    return new Set(
+      offers.flatMap((offer) =>
+        since === undefined || offer.recordedAt < since ? [] : [offer.sessionId]
       )
-    ])
+    )
   }
   try {
     if (!deps.resumeWorkOnRestart()) {

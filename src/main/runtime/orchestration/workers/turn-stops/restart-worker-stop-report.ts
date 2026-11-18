@@ -2,7 +2,6 @@
 // not continue, raised no live edge. One pass at startup reports each through the same turn-stop
 // report: a terminal as its live stop, a chat as the restart left it. Other chats are not opened.
 
-import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type {
   StructuredAgentSessionRestartCut,
@@ -21,10 +20,8 @@ export type RestartWorkerStopReportDeps = {
     /** Only these chats were cut by the run that just ended; no other worker chat is opened. */
     cutByLastRun: ReadonlySet<string>
     open: (sessionId: string) => Promise<unknown>
-    /** Read from the journal, not the status the last run saved. */
-    status: (
-      sessionId: string
-    ) => Promise<Pick<AgentSessionStatusSummary, 'status' | 'lastAssistantMessage'> | undefined>
+    /** What the worker last said, for the report. */
+    lastOutput: (sessionId: string) => string | undefined
     cutOf: StructuredAgentSessionRestartResume['cutOf']
   } | null
 }
@@ -50,16 +47,14 @@ async function reportCutChat(
   sessionId: string
 ): Promise<void> {
   await chats.open(sessionId)
-  const status = await chats.status(sessionId)
-  // Working again (continued, or busy): its own next stop reports it.
-  const cut = status?.status === 'working' ? null : await chats.cutOf(sessionId)
+  const cut = await chats.cutOf(sessionId)
   const worker = cut
     ? chatWorkerDispatches(sessionId, deps.db).find((entry) => entry.dispatch.id === dispatchId)
     : undefined
   if (!cut || !worker) {
     return
   }
-  const lastOutput = status?.lastAssistantMessage
+  const lastOutput = chats.lastOutput(sessionId)
   reportWorkerTurnStop(
     deps.db,
     { kind: 'local', dispatch: worker.dispatch },

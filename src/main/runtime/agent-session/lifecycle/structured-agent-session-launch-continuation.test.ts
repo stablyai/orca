@@ -75,9 +75,7 @@ describe('continuing interrupted chats at launch', () => {
     const { result, restartResume, calls } = launch(true)
     const settled = await result
     expect(settled.continued).toEqual(new Set(['continued']))
-    expect(settled.cutByLastRun).toEqual(
-      new Set(['chat-crashed', 'chat-crashed-earlier', 'chat-quit'])
-    )
+    expect(settled.cutByLastRun).toEqual(new Set(['chat-quit']))
     expect(restartResume.adoptCrashCuts).toHaveBeenCalledWith(
       [
         { sessionId: 'chat-crashed', crashedRuntime: 'runtime-crashed' },

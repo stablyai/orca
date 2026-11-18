@@ -97,7 +97,6 @@ describe('worker stops across a restart', () => {
 
   const chatPass = (
     ctx: ReturnType<typeof setup>,
-    status: 'idle' | 'working',
     cut: Awaited<ReturnType<StructuredAgentSessionRestartResume['cutOf']>>,
     open: () => Promise<unknown> = async () => undefined,
     cutByLastRun: ReadonlySet<string> = new Set([CHAT_SESSION])
@@ -109,7 +108,7 @@ describe('worker stops across a restart', () => {
       chats: {
         cutByLastRun,
         open,
-        status: async () => ({ status, lastAssistantMessage: 'Running the migration.' }),
+        lastOutput: () => 'Running the migration.',
         cutOf: async () => cut
       }
     })
@@ -117,24 +116,23 @@ describe('worker stops across a restart', () => {
   it('opens no chat worker the run that just ended did not cut, even one an older run cut', async () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
     const open = vi.fn(async () => undefined)
-    await chatPass(ctx, 'idle', { cause: 'quit', turnId: 'turn-0' }, open, new Set())
+    await chatPass(ctx, { cause: 'quit', turnId: 'turn-0' }, open, new Set())
     expect(open).not.toHaveBeenCalled()
     expect(ctx.mail()).toEqual([])
   })
 
-  it('reports each cut of a chat worker once, never one continued or not cut', async () => {
+  it('reports each cut of a chat worker once, never one not cut', async () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    await chatPass(ctx, 'working', { cause: 'crash', turnId: 'turn-1' })
-    await chatPass(ctx, 'idle', null)
+    await chatPass(ctx, null)
     expect(ctx.mail()).toEqual([])
-    await chatPass(ctx, 'idle', { cause: 'crash', turnId: 'turn-1' })
-    await chatPass(ctx, 'idle', { cause: 'crash', turnId: 'turn-1' })
+    await chatPass(ctx, { cause: 'crash', turnId: 'turn-1' })
+    await chatPass(ctx, { cause: 'crash', turnId: 'turn-1' })
     const reports = ctx.mail()
     expect(reports.map((report) => report.subject)).toEqual(['Worker exited without reporting'])
     expect(reports[0]?.body).toContain('Orca crashed during its turn')
     expect(reports[0]?.body).toContain('A message restarts it')
     // Mail continued it, and a later crash cut its next turn.
-    await chatPass(ctx, 'idle', { cause: 'crash', turnId: 'turn-2' })
+    await chatPass(ctx, { cause: 'crash', turnId: 'turn-2' })
     expect(ctx.mail()).toHaveLength(2)
   })
 
@@ -145,7 +143,7 @@ describe('worker stops across a restart', () => {
       waitingOnPerson: true
     } as const
     const fresh = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    await chatPass(fresh, 'idle', asking)
+    await chatPass(fresh, asking)
     expect(fresh.mail().map((report) => report.subject)).toEqual(['Worker is waiting on a prompt'])
 
     const reported = setup(formatOrcaSessionAddress(CHAT_SESSION))
@@ -157,8 +155,8 @@ describe('worker stops across a restart', () => {
       { from: worker!.from, stopKey: 'prompt:ask-1', reason: 'needs-input', lastOutput: undefined },
       reported.reportDeps
     )
-    await chatPass(reported, 'idle', asking)
-    await chatPass(reported, 'idle', asking)
+    await chatPass(reported, asking)
+    await chatPass(reported, asking)
     expect(reported.mail().map((report) => report.subject)).toEqual([
       'Worker is waiting on a prompt',
       'Worker is waiting on a prompt'
@@ -170,7 +168,7 @@ describe('worker stops across a restart', () => {
     ctx.db.getWorkerDispatch = () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass reads only the state.
       ({ state: 'starting' }) as ReturnType<typeof ctx.db.getWorkerDispatch>
-    await chatPass(ctx, 'idle', { cause: 'crash', turnId: 'turn-1' })
+    await chatPass(ctx, { cause: 'crash', turnId: 'turn-1' })
     expect(ctx.mail()).toEqual([])
   })
 })
