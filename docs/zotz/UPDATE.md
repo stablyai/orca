@@ -13,17 +13,27 @@ Zotz se actualiza **desde sus propios releases** (`HugoRodriguezDEV/zotz`), nunc
 
 Para apagarlo: Ajustes → Acerca de → "Buscar y descargar versiones nuevas de Zotz". Se aplica al reiniciar. Para launches automatizados que nunca deben tocar GitHub existe `ZOTZ_DISABLE_UPDATER=1`.
 
-| Plataforma     | Qué pasa                                                                                      |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| Windows        | Descarga e instala (sin firma funciona; SmartScreen solo pregunta en instalaciones manuales). |
-| Linux AppImage | Descarga e instala.                                                                           |
-| Linux deb      | Avisa; se instala con el gestor de paquetes.                                                  |
-| macOS          | Avisa con enlace al `.dmg`. Sin firma de Apple no puede instalarse sola.                      |
+| Plataforma     | Qué pasa                                                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Windows        | Descarga e instala (sin firma funciona; SmartScreen solo pregunta en instalaciones manuales).                              |
+| Linux AppImage | Descarga e instala.                                                                                                        |
+| Linux deb      | Avisa; se instala con el gestor de paquetes.                                                                               |
+| macOS          | Descarga e instala si el Zotz instalado está firmado con el certificado de Zotz; si es ad-hoc, avisa con enlace al `.dmg`. |
 
 Lo de Orca que sigue apagado:
 
 - Las novedades y campañas de `orca.dev` (política de red `orca-whats-new`).
 - Los canales RC, hourly, daily y adhoc: el selector oculto de canales ya no existe.
+
+## Firma de macOS (una vez)
+
+Zotz firma sus builds de macOS con un certificado propio y gratuito (`Zotz Release Signing`). Apple no lo conoce, así que la primera instalación sigue pidiendo `xattr -dr com.apple.quarantine /Applications/Zotz.app`. Pero la identidad es la misma en todos los releases, y por eso los updates se instalan solos.
+
+1. En tu Mac: `bash config/scripts/release/zotz-create-mac-signing-cert.sh`. Crea `~/zotz-mac-signing/` y no sube nada.
+2. Guarda el `.p12` y `password.txt` en tu gestor de contraseñas.
+3. Sube los dos secrets con los comandos que imprime el script (`ZOTZ_MAC_CERT_P12` y `ZOTZ_MAC_CERT_PASSWORD`) y borra la carpeta.
+
+Sin esos secrets, CI publica el build de macOS con firma ad-hoc (avisa en el run) y esas instalaciones solo se actualizan a mano. El primer build firmado se instala a mano una vez; desde ahí se actualiza solo.
 
 ## La primera vez (una sola instalación manual)
 

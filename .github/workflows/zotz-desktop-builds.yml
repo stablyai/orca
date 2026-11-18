@@ -76,8 +76,10 @@ jobs:
     timeout-minutes: 90
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
-      # No Apple Developer certificate: the app is ad-hoc signed and Gatekeeper asks once.
+      # No Apple Developer certificate: macOS signs with the Zotz self-signed one (CSC_NAME, set below)
+      # so Squirrel.Mac accepts updates; Gatekeeper still asks once.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      ZOTZ_MAC_SIGNING_NAME: Zotz Release Signing
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -143,6 +145,25 @@ jobs:
       - name: Build app
         run: pnpm build:release
 
+      # Without the secret the build stays ad-hoc signed: installs from it can only update by hand.
+      - name: Import the Zotz macOS signing certificate
+        id: mac-signing
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          ZOTZ_MAC_CERT_P12: ${{ secrets.ZOTZ_MAC_CERT_P12 }}
+          ZOTZ_MAC_CERT_PASSWORD: ${{ secrets.ZOTZ_MAC_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$ZOTZ_MAC_CERT_P12" ]]; then
+            echo "::warning::ZOTZ_MAC_CERT_P12 is not set; the macOS build is ad-hoc signed and cannot self-update."
+            exit 0
+          fi
+          bash config/scripts/release/zotz-import-mac-signing-cert.sh
+          # Same-repo PRs get secrets; electron-builder skips signing on PRs unless told otherwise.
+          { echo "CSC_NAME=$ZOTZ_MAC_SIGNING_NAME"; echo "CSC_FOR_PULL_REQUEST=true"; } >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
       - name: Package
         shell: bash
         env:
@@ -152,6 +173,19 @@ jobs:
           set -euo pipefail
           node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
           pnpm exec electron-builder --config config/electron-builder.config.cjs ${{ matrix.builder-args }} --publish never
+
+      # Installed nodes only accept an update carrying this same identity.
+      - name: Check the macOS signature
+        if: steps.mac-signing.outputs.signed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          codesign --verify --deep --strict "${{ matrix.app-dir }}"
+          codesign -dvv "${{ matrix.app-dir }}" 2>&1 | grep -qx "Authority=$ZOTZ_MAC_SIGNING_NAME" || {
+            codesign -dvv "${{ matrix.app-dir }}" >&2
+            echo "::error::Zotz.app is not signed by $ZOTZ_MAC_SIGNING_NAME."
+            exit 1
+          }
 
       - name: Smoke the packaged CLI
         run: node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs --app-dir=${{ matrix.app-dir }}
