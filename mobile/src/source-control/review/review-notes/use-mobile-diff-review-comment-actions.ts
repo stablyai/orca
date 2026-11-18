@@ -87,12 +87,7 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       reviewState: MobileDiffReviewState
     ) => {
       if (!client || connState !== 'connected') {
-        throw new Error(
-          translate(
-            'session.useDiffReviewCommentActions.waitingForDesktop',
-            'Waiting for desktop...'
-          )
-        )
+        throw new Error(translate('common.waitingForHost', 'Waiting for host…'))
       }
       const response = await sessionWorktreeNotesWrite.request(client, {
         worktree: `id:${worktreeId}`,

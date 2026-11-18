@@ -152,8 +152,8 @@ function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'setti
       <ActivityIndicator size="small" color={colors.textMuted} />
       <Text style={styles.filterModalSubtitle}>
         {stale
-          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the desktop')
-          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the desktop')}
+          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the host')
+          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the host')}
       </Text>
     </View>
   )

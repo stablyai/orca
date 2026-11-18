@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { onBrowserGuestPaintRetentionChange } from '../../browser-pane/host-guest/retention/browser-guest-paint-retention'
+import { onBrowserGuestPaintRetentionChange } from '../../browser-pane/host-guest/retention/browser-page-paint-retention-terms'
 import { browserPageVetoesGuestEviction } from '../../browser-pane/host-guest/retention/browser-guest-eviction-veto'
 import { installBrowserPageDownloadActivityTracking } from '../../browser-pane/navigate/browser-page-download-activity'
 import {
