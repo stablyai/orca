@@ -221,10 +221,20 @@ async function dismissOverlays(page) {
           getComputedStyle(element).position === 'fixed' && element.getClientRects().length > 0
       )
     )
-    if (!blocked && !notice) {
+    // The setup-script tip floats over the bottom of the workspace list; its own Dismiss closes it for the repo.
+    const tipClosed = await page.evaluate(() => {
+      const layer = document.querySelector('[data-setup-script-prompt-layer]')
+      const dismiss =
+        layer?.querySelector('button[aria-label^="Dismiss"]') ?? layer?.querySelector('button')
+      dismiss?.click()
+      return Boolean(dismiss)
+    })
+    if (!blocked && !notice && !tipClosed) {
       return
     }
-    await page.keyboard.press('Escape')
+    if (blocked || notice) {
+      await page.keyboard.press('Escape')
+    }
     await sleep(200)
   }
 }
