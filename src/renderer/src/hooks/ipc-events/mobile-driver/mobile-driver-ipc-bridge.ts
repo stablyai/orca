@@ -1,7 +1,7 @@
 import {
   hydrateBrowserDrivers,
   setDriverForBrowserPage
-} from '@/runtime/browser/ownership/browser-mobile-driver-state'
+} from '@/runtime/browser/ownership/browser-mobile-driver-store'
 import { registerBrowserRemoteViewerIpcBridge } from '../browser/browser-remote-viewer-ipc-bridge'
 import {
   applyClientHostedBrowserRows,
