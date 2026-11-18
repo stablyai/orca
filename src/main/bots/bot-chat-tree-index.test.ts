@@ -215,15 +215,12 @@ describe('BotChatTreeIndex', () => {
     r.expectSameAsFullBuild()
   })
 
-  it('tells no bot of a commit its chats do not show, such as a lease renewal', async () => {
+  it('publishes no notice for a lease renewal or commits outside bot homes', async () => {
     const r = await rig()
     await r.renew('chat-bot-a-2')
-    expect(r.notices).toEqual([])
+    expect(r.notices.splice(0)).toEqual([])
     r.expectSameAsFullBuild()
-  })
 
-  it('tells no bot of a chat outside every bot home', async () => {
-    const r = await rig()
     await r.put('chat-elsewhere', 'workspace-elsewhere', 'Renamed')
     await r.put('chat-new-elsewhere-1', 'workspace-elsewhere', 'New')
     expect(r.notices).toEqual([])

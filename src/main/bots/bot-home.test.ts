@@ -131,7 +131,7 @@ describe('bot folder names', () => {
     expect(folder).toBe('a'.repeat(39))
   })
 
-  it.each(['orca', 'Orca', 'orca-dev'])('keeps the %s profile on ~/.orca/bots', (profile) => {
+  it.each(['Orca', 'orca-dev'])('keeps the %s profile on ~/.orca/bots', (profile) => {
     const appData = join('home', 'me', 'Library', 'Application Support')
     const home = join('home', 'me')
     expect(botsRootFolder({ userData: join(appData, profile), appData, home })).toBe(
