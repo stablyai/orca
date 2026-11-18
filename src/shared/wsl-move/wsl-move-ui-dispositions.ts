@@ -120,6 +120,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'showAgentModels',
   'agentActivityDisplayMode',
   'workspaceStatuses',
+  'workspaceLabels',
   'workspaceBoardOpacity',
   'workspaceBoardColumnWidth',
   'syncTaskStatusFromWorkspaceBoard',

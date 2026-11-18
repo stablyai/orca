@@ -100,6 +100,9 @@ export function normalizeFolderWorkspaces(
       ...(typeof raw.workspaceStatus === 'string' && raw.workspaceStatus.trim().length > 0
         ? { workspaceStatus: raw.workspaceStatus }
         : {}),
+      ...(Array.isArray(raw.labelIds)
+        ? { labelIds: raw.labelIds.filter((id): id is string => typeof id === 'string') }
+        : {}),
       ...(isTuiAgent(raw.createdWithAgent) ? { createdWithAgent: raw.createdWithAgent } : {}),
       ...(raw.pendingFirstAgentMessageRename === true
         ? { pendingFirstAgentMessageRename: true }

@@ -1,6 +1,7 @@
 import { ProjectGroupNameDialog } from '../../worktree-list/rows/ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from '../parenting/WorktreeParentPickerPopover'
 import { useTranslate } from '@/i18n/use-translate'
+import { NewWorkspaceLabelDialog } from '../../workspace-labels/NewWorkspaceLabelDialog'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 
 export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextMenuModel }) {
@@ -27,6 +28,13 @@ export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextM
         onOpenChange={model.handleCreateGroupDialogOpenChange}
         onSubmit={model.handleSubmitNewProjectGroup}
       />
+      {model.newLabelDialogOpen ? (
+        <NewWorkspaceLabelDialog
+          existing={model.workspaceLabels}
+          onOpenChange={model.handleNewLabelDialogOpenChange}
+          onSubmit={model.handleSubmitNewWorkspaceLabel}
+        />
+      ) : null}
       {model.parentPicker ? (
         <WorktreeParentPickerPopover
           open={model.parentPickerOpen}

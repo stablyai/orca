@@ -139,6 +139,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     pendingFirstAgentMessageRename: folderWorkspace.pendingFirstAgentMessageRename,
     firstAgentMessageRenameError: folderWorkspace.firstAgentMessageRenameError,
     workspaceStatus: folderWorkspace.workspaceStatus,
+    ...(folderWorkspace.labelIds !== undefined ? { labelIds: folderWorkspace.labelIds } : {}),
     diffComments: folderWorkspace.diffComments,
     path: folderWorkspace.folderPath,
     head: '',

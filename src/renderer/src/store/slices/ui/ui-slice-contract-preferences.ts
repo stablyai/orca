@@ -19,6 +19,7 @@ import type {
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
+import type { WorkspaceLabel } from '../../../../../shared/workspace/labels/workspace-labels'
 import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
 import type { CustomPet } from '../../../../../shared/pets/pet-types'
 import type { ReleaseChannel } from '../../../../../shared/updater/release-channel'
@@ -108,6 +109,9 @@ export type UISlicePreferences = {
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
+  workspaceLabels: WorkspaceLabel[]
+  /** Returns null when the name is empty, too long or already used. */
+  addWorkspaceLabel: (name: string, color: string) => WorkspaceLabel | null
   /** Each paired runtime host's own columns, keyed by environment id; never persisted locally. */
   hostWorkspaceStatuses: Readonly<Record<string, readonly WorkspaceStatusDefinition[]>>
   fetchHostWorkspaceStatuses: (environmentId: string) => Promise<void>

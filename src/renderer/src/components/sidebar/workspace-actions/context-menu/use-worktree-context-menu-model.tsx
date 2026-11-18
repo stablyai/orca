@@ -36,6 +36,7 @@ import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-m
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
 import { useTranslate } from '@/i18n/use-translate'
+import { useWorktreeLabelMenu } from '../../workspace-labels/use-worktree-label-menu'
 
 export type WorktreeContextMenuProps = {
   worktree: Worktree
@@ -184,6 +185,7 @@ export function useWorktreeContextMenuModel({
     () => getSharedWorkspaceStatus(activeContextWorktrees, statusesForWorktree),
     [activeContextWorktrees, statusesForWorktree]
   )
+  const labelMenu = useWorktreeLabelMenu({ activeContextWorktrees, menuOpen, updateWorktreeMeta })
   const batchDeleteWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) => {
@@ -337,6 +339,7 @@ export function useWorktreeContextMenuModel({
 
   return {
     ...commands,
+    ...labelMenu,
     showsUnread,
     activeContextWorktrees,
     batchDeleteWorktrees,

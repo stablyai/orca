@@ -27,6 +27,7 @@ import {
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceStatuses
 } from '../../../../../shared/workspace/status/workspace-statuses'
+import { normalizeWorkspaceLabels } from '../../../../../shared/workspace/labels/workspace-labels'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pets/pet-types'
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/editor/markdown/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/source-control/diff/combined-diff-file-tree-width'
@@ -188,6 +189,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           showAgentModels: ui.showAgentModels !== false,
           agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
           workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
+          workspaceLabels: normalizeWorkspaceLabels(ui.workspaceLabels),
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
           workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
           syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,

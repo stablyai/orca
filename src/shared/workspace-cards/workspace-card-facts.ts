@@ -47,6 +47,8 @@ export type WorkspaceCardFacts = {
     hasRenameError: boolean
     removalError: string | null
     comment: string
+    /** Ids from the desktop's label list; the Labels element skips unknown ones. */
+    labelIds: readonly string[]
   }
   repo: { id: string; name: string; ssh: boolean } | null
   host: {

@@ -163,6 +163,7 @@ export type Worktree = {
   /** Path-derived worktree ids this worktree had before folder renames. */
   priorWorktreeIds?: string[]
   workspaceStatus?: WorkspaceStatus
+  labelIds?: string[]
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance

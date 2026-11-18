@@ -11,7 +11,8 @@ import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared
 import {
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
-  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_LABELS_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
@@ -119,6 +120,13 @@ async function persistWorktreeMetaUntracked(
         'auto.store.slices.worktrees.metadata.worktree.meta.persist.877e3638d8',
         'Update the remote runtime to change this workspace’s linked issue'
       )
+    )
+  }
+  if (target.kind === 'environment' && 'labelIds' in updates) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_LABELS_RUNTIME_CAPABILITY,
+      translate('workspaceLabels.updateRemoteRuntime', 'Update the remote runtime to use labels')
     )
   }
   // task-source-context.v1 is a sound proxy for the Linear keys: #5322 added them

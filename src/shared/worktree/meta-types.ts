@@ -101,6 +101,8 @@ export type WorktreeMeta = {
   orcaCreationWorkspaceLayout?: OrcaWorkspaceLayout
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
+  /** Ids from the desktop's workspace label list; unknown ids are kept and not rendered. */
+  labelIds?: string[]
   diffComments?: DiffComment[]
   /** Prior path-derived IDs let session GC/hydration retain sessions across folder renames. Removed with the worktree. */
   priorWorktreeIds?: string[]
