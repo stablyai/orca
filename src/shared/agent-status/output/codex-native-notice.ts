@@ -45,8 +45,9 @@ export class CodexNoticeTracker {
   private pending = false
   private observingAt = 0
   private tailAt = 0
-  /** When the pending notice's text began arriving; a deferred confirmation keeps that time. */
+  /** When the notice counts as seen: its confirmation, or its first piece when an untrusted screen held it. */
   pendingAt = 0
+  private heldUntrusted = false
   private synchronized = false
   private scanner = this.createScanner()
 
@@ -97,6 +98,7 @@ export class CodexNoticeTracker {
     if (message.startsWith(this.message)) {
       this.pending = true
       this.pendingAt = startedAt
+      this.heldUntrusted = false
       this.tail = ''
     } else {
       this.tail = this.message.startsWith(message) ? candidate : ''
@@ -127,8 +129,14 @@ export class CodexNoticeTracker {
   ): boolean {
     this.observingAt = at
     this.scanner.observe(data)
+    if (this.pending && !screenTrusted) {
+      this.heldUntrusted = true
+    }
     if (!this.pending || !screenTrusted || (readSynchronized?.() ?? this.synchronized)) {
       return false
+    }
+    if (!this.heldUntrusted) {
+      this.pendingAt = at
     }
     this.pending = false
     this.tail = ''

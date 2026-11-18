@@ -36,4 +36,16 @@ describe('Codex capacity candidate bounds', () => {
     expect(tracker.observe('', readScreen, () => false, 9)).toBe(true)
     expect(tracker.pendingAt).toBe(3)
   })
+
+  it('dates a notice held only by synchronized output from its confirmation', () => {
+    const tracker = createCodexCapacityNoticeTracker()
+    const readScreen = () => [`■ ${CODEX_CAPACITY_MESSAGE}`, '›']
+    let synchronized = true
+    expect(tracker.observe(`■ ${CODEX_CAPACITY_MESSAGE}`, readScreen, () => synchronized, 3)).toBe(
+      false
+    )
+    synchronized = false
+    expect(tracker.observe('', readScreen, () => synchronized, 7)).toBe(true)
+    expect(tracker.pendingAt).toBe(7)
+  })
 })

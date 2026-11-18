@@ -135,7 +135,7 @@ export function observeCodexCapacityTerminalStatus(
     return null
   }
   // Same-tick ordering is ambiguous; queued output must yield to a newer hook turn.
-  // The notice's own arrival, not its confirmation: a deferred confirmation must not date it later.
+  // A notice an untrusted screen held dates from its arrival, not its later confirmation.
   if (previous?.turnStartedAt !== undefined && previous.turnStartedAt >= tracker.pendingAt) {
     return null
   }
