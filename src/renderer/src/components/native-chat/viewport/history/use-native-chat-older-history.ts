@@ -6,10 +6,8 @@ import type { NativeChatSessionTransport } from '../../session/terminal/read/nat
 import type { useNativeChatTranscriptLifecycle } from '../../session/terminal/read/use-native-chat-transcript-lifecycle'
 import {
   hasMoreNativeChatHistory,
-  isNativeChatPageBefore,
   NATIVE_CHAT_PAGE,
   nativeChatHistoryCursor,
-  nativeChatHistoryRowCap,
   nativeChatLiveTailJoinsBase,
   nextNativeChatLimit,
   type NativeChatOlderPageResult
@@ -97,11 +95,11 @@ export function useNativeChatOlderHistory({
       latestTransport.current === transport &&
       transcriptEpochRef.current === requestEpoch
 
-    // Grows the whole window from EOF; repairs live-tail gaps and serves hosts without row cursors.
-    const reread = (continueByCursor: boolean): Promise<NativeChatOlderPageResult> =>
+    // Grows the whole window from EOF; repairs live-tail gaps and serves routes without row cursors.
+    const reread = (): Promise<NativeChatOlderPageResult> =>
       transport
         .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined, USER_PAGING)
-        .then((result): Promise<NativeChatOlderPageResult> | NativeChatOlderPageResult => {
+        .then((result): NativeChatOlderPageResult => {
           if (!isCurrent()) {
             return 'superseded'
           }
@@ -113,42 +111,24 @@ export function useNativeChatOlderHistory({
           heldRef.current = { phase: 'ready', messages: result.messages }
           setRead(heldRef.current)
           transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
-          const grew = result.messages.length > loadedCount
-          const more = result.hasMore ?? hasMoreNativeChatHistory(result.messages.length, nextLimit)
-          // A host-capped window cannot grow; only a cursor page can reach older rows.
-          const next = !grew && more && continueByCursor ? pageCursor(result.messages) : undefined
-          if (next !== undefined) {
-            return readPageBefore(next)
-          }
-          setHasMore(grew && more)
-          return grew ? 'applied' : 'exhausted'
+          const more = hasMoreNativeChatHistory(result.messages.length, nextLimit)
+          setHasMore(more)
+          return result.messages.length > loadedCount ? 'applied' : more ? 'unchanged' : 'exhausted'
         })
 
-    const rowCap = nativeChatHistoryRowCap(agent, transport.historyRowCap)
     // Reads one page strictly before the oldest held row, so cost stays flat with depth.
-    const readPageBefore = (before: number): Promise<NativeChatOlderPageResult> => {
-      const room =
-        rowCap - (heldRef.current.phase === 'ready' ? heldRef.current.messages.length : 0)
-      if (room <= 0) {
-        setHasMore(false)
-        return Promise.resolve('exhausted')
-      }
-      const pageLimit = Math.min(NATIVE_CHAT_PAGE, room)
-      return transport
-        .readSession(agent, sessionId, pageLimit, transcriptPath ?? undefined, {
+    const readPageBefore = (before: number): Promise<NativeChatOlderPageResult> =>
+      transport
+        .readSession(agent, sessionId, NATIVE_CHAT_PAGE, transcriptPath ?? undefined, {
           ...USER_PAGING,
           beforeOffset: before
         })
-        .then((result): Promise<NativeChatOlderPageResult> | NativeChatOlderPageResult => {
+        .then((result): NativeChatOlderPageResult => {
           if (!isCurrent()) {
             return 'superseded'
           }
           if (!result || 'error' in result) {
             return 'failed'
-          }
-          const page = result.messages
-          if (!isNativeChatPageBefore(agent, page, before)) {
-            return reread(false)
           }
           const held = heldRef.current
           if (
@@ -157,31 +137,25 @@ export function useNativeChatOlderHistory({
           ) {
             return 'superseded'
           }
+          const page = result.messages
           // Keep every source row; the assembler resolves shared ids exactly as a full reread would.
           // A rewrite racing this page is corrected by the replacement frame that follows it.
           heldRef.current = { phase: 'ready', messages: [...page, ...held.messages] }
           setRead(heldRef.current)
-          limitRef.current = Math.max(
-            limitRef.current,
-            nextLimit,
-            held.messages.length + page.length
-          )
-          const more =
-            (result.hasMore ?? page.length >= pageLimit) &&
-            held.messages.length + page.length < rowCap
+          limitRef.current = Math.max(limitRef.current, held.messages.length + page.length)
+          const more = result.hasMore ?? page.length >= NATIVE_CHAT_PAGE
           setHasMore(more)
           return page.length > 0 ? 'applied' : more ? 'unchanged' : 'exhausted'
         })
-    }
 
-    const pageCursor = (base: readonly NativeChatMessage[]): number | undefined =>
-      nativeChatLiveTailJoinsBase(agent, base, liveTailRef.current.list)
-        ? nativeChatHistoryCursor(agent, base[0])
+    const cursor =
+      transport.pagesByCursor &&
+      nativeChatLiveTailJoinsBase(agent, read.messages, liveTailRef.current.list)
+        ? nativeChatHistoryCursor(agent, read.messages[0])
         : undefined
-    const cursor = pageCursor(read.messages)
 
     setLoadingEarlier(true)
-    const promise = (cursor === undefined ? reread(true) : readPageBefore(cursor))
+    const promise = (cursor === undefined ? reread() : readPageBefore(cursor))
       // Keep loaded history when pagination rejects.
       .catch((): NativeChatOlderPageResult => 'failed')
       .finally(() => {

@@ -13,12 +13,11 @@ import {
   runtimeNativeChatReadError
 } from './native-chat-runtime-contract'
 import { translate } from '@/i18n/i18n'
-import { MOBILE_NATIVE_CHAT_MAX_WINDOW } from '../../../../../../../shared/rpc-contract/native-chat/native-chat-params'
 
 /** Match local IPC so session consumers can read local or runtime-owned transcripts. */
 export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'> & {
-  /** Deepest history this route has always paged to; runtime reads stop at its per-read window. */
-  historyRowCap?: number
+  /** Older pages read by row cursor; other routes keep the full reread and its existing depth limits. */
+  pagesByCursor?: true
 }
 
 function runtimeTooOldMessage(): string {
@@ -48,30 +47,21 @@ const localNativeChatTransport: NativeChatSessionTransport = {
   subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
 }
 
-// The web client's IPC is its paired runtime's RPC, so it keeps that route's paging depth.
-const webNativeChatTransport: NativeChatSessionTransport = {
+const desktopNativeChatTransport: NativeChatSessionTransport = {
   ...localNativeChatTransport,
-  historyRowCap: MOBILE_NATIVE_CHAT_MAX_WINDOW
+  pagesByCursor: true
 }
 
 function createRuntimeNativeChatTransport(environmentId: string): NativeChatSessionTransport {
   const target: RuntimeClientTarget = { kind: 'environment', environmentId }
 
   return {
-    historyRowCap: MOBILE_NATIVE_CHAT_MAX_WINDOW,
-    readSession: async (agent, sessionId, limit, transcriptPath, options) => {
+    readSession: async (agent, sessionId, limit, transcriptPath) => {
       try {
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          {
-            agent,
-            sessionId,
-            limit,
-            transcriptPath,
-            beforeOffset: options?.beforeOffset,
-            capabilities: { transcriptSourceOrder: 1 }
-          },
+          { agent, sessionId, limit, transcriptPath, capabilities: { transcriptSourceOrder: 1 } },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -263,11 +253,9 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
 export function getNativeChatSessionTransport(
   runtimeEnvironmentId: string | null
 ): NativeChatSessionTransport {
-  if (isWebClientLocation()) {
-    return webNativeChatTransport
-  }
-  if (runtimeEnvironmentId) {
+  if (runtimeEnvironmentId && !isWebClientLocation()) {
     return createRuntimeNativeChatTransport(runtimeEnvironmentId)
   }
-  return localNativeChatTransport
+  // The web client's IPC is its paired runtime's RPC, which keeps that route's reread depth.
+  return isWebClientLocation() ? localNativeChatTransport : desktopNativeChatTransport
 }

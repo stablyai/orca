@@ -50,16 +50,9 @@ export function parseRuntimeNativeChatReadSessionResult(
   const record = value as Record<string, unknown>
   if (Array.isArray(record.messages)) {
     const lifecycle = parseRuntimeNativeChatTurnLifecycle(record.lifecycle)
-    const beforeOffset = record.beforeOffset
     return {
       messages: record.messages as NativeChatAppendedMessages,
-      ...(lifecycle ? { lifecycle } : {}),
-      ...(typeof record.hasMore === 'boolean' ? { hasMore: record.hasMore } : {}),
-      ...(typeof beforeOffset === 'number' &&
-      Number.isSafeInteger(beforeOffset) &&
-      beforeOffset >= 0
-        ? { beforeOffset }
-        : {})
+      ...(lifecycle ? { lifecycle } : {})
     }
   }
   if (typeof record.error === 'string') {
