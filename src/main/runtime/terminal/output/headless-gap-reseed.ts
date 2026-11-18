@@ -3,6 +3,7 @@ import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
+const GAP_RESEED_WARN_AFTER_ATTEMPTS = 5
 // Past the daemon client's own request timeout, so every capture settles before its slot frees.
 const GAP_RESEED_CAPTURE_TIMEOUT_MS = 35_000
 // Why: a storm gaps every hidden PTY at once; the daemon serializing them is the one already behind.
@@ -52,11 +53,12 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     lastCaptureAt: number | undefined
   ): void {
     const state = this.replaceHeadlessTerminalForProviderSeed(ptyId)
-    state.gapReseed = { frontier }
+    state.gapReseed = { frontier, queuedChars: 0, queryCarry: '' }
     state.gapReseedLastCaptureAt = lastCaptureAt
     // Why: the hidden renderer missed the dropped bytes too, so it must not seed this model; readers treat the screen as restoring.
     this.headlessHydrationState.set(ptyId, 'pending')
     let seeded = false
+    let seededScreen = ''
     state.writeChain = state.writeChain
       .then(async () => {
         const wait = (state.gapReseedLastCaptureAt ?? 0) + GAP_RESEED_MIN_INTERVAL_MS - Date.now()
@@ -91,6 +93,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
             (await this.seedHeadlessFromProviderSnapshot(ptyId, state, snapshot)) &&
             // A gap during an asynchronous seed write leaves the frame behind again.
             snapshot.seq >= (state.gapReseed?.frontier ?? frontier)
+          seededScreen = snapshot.data
         } finally {
           this.releaseGapCaptureSlot()
         }
@@ -103,8 +106,14 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
           return
         }
         if (seeded) {
-          this.finishGapReseed(ptyId, state)
+          this.finishGapReseed(ptyId, state, seededScreen)
           return
+        }
+        if (attempt === GAP_RESEED_WARN_AFTER_ATTEMPTS) {
+          console.warn('[terminal] dropped-output recovery still waiting for a current snapshot', {
+            ptyIdSuffix: ptyId.slice(-10),
+            attempts: attempt + 1
+          })
         }
         // Stay restoring; back off so a slow daemon or a sustained storm cannot loop captures.
         const backoff =
@@ -122,11 +131,13 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       })
   }
 
-  private finishGapReseed(ptyId: string, state: RuntimeHeadlessTerminal): void {
+  private finishGapReseed(ptyId: string, state: RuntimeHeadlessTerminal, screen: string): void {
     state.gapReseed = undefined
     state.historyFromProvider = true
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
+    // Dialogs and notices painted while recovering were never observed; the seeded screen shows them now.
+    this.observeHeadlessChunk(ptyId, state, screen, Date.now())
   }
 
   private async acquireGapCaptureSlot(): Promise<void> {

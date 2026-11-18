@@ -18,7 +18,13 @@ import {
   normalizeTerminalTitle
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
-import { answerSeedCoveredQueries, splitAtProviderSeed } from './provider-seed-covered-bytes'
+import {
+  admitWhileRecovering,
+  answerQueriesAfterRecovery,
+  answerSeedCoveredQueries,
+  releaseRecoveryQueue,
+  splitAtProviderSeed
+} from './provider-seed-covered-bytes'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
@@ -225,7 +231,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
   }
 
   /** Per-chunk screen observers; covered chunks run them too, since the seed painted their screen. */
-  private observeHeadlessChunk(
+  protected observeHeadlessChunk(
     ptyId: string,
     state: RuntimeHeadlessTerminal,
     chunk: string,
@@ -277,7 +283,13 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
   ): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const outputObservedAt = Date.now()
+    const admitted = admitWhileRecovering(state, chunkData, outputSequence)
+    if (admitted.queriesOnly) {
+      answerQueriesAfterRecovery(state, admitted.data, forwardQueryReplies)
+      return
+    }
     const completion = state.writeChain.then(async () => {
+      releaseRecoveryQueue(admitted.recovery, chunkData.length)
       const {
         covered,
         uncovered: data,

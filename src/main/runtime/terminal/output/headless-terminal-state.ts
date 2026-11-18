@@ -285,7 +285,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     }
     // Queue clears after earlier output so it cannot repopulate cleared mobile scrollback.
     state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
-    await state.writeChain
+    // A recovering model's chain waits on a capture; the user's clear must not.
+    await (state.gapReseed ? undefined : state.writeChain)
   }
 
   // Public: Reset Terminal must ground this model too; park/reveal and mobile restore from it.
@@ -308,6 +309,6 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       }
     })
     state.writeChain = completion.catch(() => {})
-    await completion
+    await (state.gapReseed ? undefined : completion)
   }
 }

@@ -61,6 +61,10 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.readHeadlessVisibleTerminalState(ptyId)
     }
+    // A screen recovering from dropped output is unknown, never an empty frame.
+    if (this.headlessTerminals.get(ptyId)?.gapReseed) {
+      return null
+    }
 
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const outputSequence = this.getPtyOutputSequence(ptyId)

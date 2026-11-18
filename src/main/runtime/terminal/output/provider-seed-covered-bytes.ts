@@ -47,3 +47,58 @@ export async function answerSeedCoveredQueries(
     await state.emulator.write(queries, { forwardQueryReplies: true })
   }
 }
+
+// Bounds what a recovering model holds while its capture waits; past it, bytes count as dropped output.
+const GAP_RECOVERY_QUEUE_CAP_CHARS = 256 * 1024
+
+export function releaseRecoveryQueue(
+  recovery: RuntimeHeadlessTerminal['gapReseed'],
+  chars: number
+): void {
+  if (recovery) {
+    recovery.queuedChars -= chars
+  }
+}
+
+/** While a model recovers, admit a live chunk whole, or past the cap only its queries, raising the frontier past the rest. */
+export function admitWhileRecovering(
+  state: RuntimeHeadlessTerminal,
+  data: string,
+  outputSequence: number
+): { data: string; queriesOnly: boolean; recovery: RuntimeHeadlessTerminal['gapReseed'] } {
+  const recovery = state.gapReseed
+  if (!recovery) {
+    return { data, queriesOnly: false, recovery }
+  }
+  if (recovery.queuedChars + data.length <= GAP_RECOVERY_QUEUE_CAP_CHARS) {
+    recovery.queuedChars += data.length
+    return { data, queriesOnly: false, recovery }
+  }
+  recovery.frontier = Math.max(recovery.frontier, outputSequence)
+  const extracted = extractHiddenStartupRendererQueryData(data, recovery.queryCarry)
+  recovery.queryCarry = extracted.pending
+  return {
+    data: extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData,
+    queriesOnly: true,
+    recovery
+  }
+}
+
+/** Overflowed bytes during recovery are dropped, but the program still waits on their queries. */
+export function answerQueriesAfterRecovery(
+  state: RuntimeHeadlessTerminal,
+  queries: string,
+  forwardQueryReplies: boolean
+): void {
+  if (!queries || !forwardQueryReplies) {
+    return
+  }
+  state.writeChain = state.writeChain
+    .then(async () => {
+      // Why drop, not retry: injecting mid-escape corrupts live parsing.
+      if (state.emulator.partialEscapeTailAnsi === '') {
+        await state.emulator.write(queries, { forwardQueryReplies: true })
+      }
+    })
+    .catch(() => {})
+}

@@ -36,8 +36,8 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     }
     const headless = this.headlessTerminals.get(ptyId)
     if (headless?.gapReseed) {
-      // Only the provider saw the dropped output; the hidden renderer missed it too.
-      return this.serializeProviderTerminalBuffer(ptyId, opts)
+      // The provider already declined above, and the hidden renderer missed the dropped output.
+      return null
     }
     if (headless?.historyFromProvider && (opts.scrollbackRows ?? 0) > 0) {
       // A model reseeded screen-only after dropped output lacks the history the provider kept.
@@ -75,10 +75,14 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return null
     }
-    // Pre-attach bytes are only a suffix; older providers can fall back to the renderer.
+    const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
+    // Pre-attach bytes are only a suffix; older providers can fall back to the renderer, but after
+    // dropped output the hidden renderer missed the same bytes.
     return (
-      (await this.serializeProviderTerminalBuffer(ptyId, opts)) ??
-      (await this.serializeRendererTerminalBuffer(ptyId, opts))
+      providerSnapshot ??
+      (this.headlessTerminals.get(ptyId)?.gapReseed
+        ? null
+        : await this.serializeRendererTerminalBuffer(ptyId, opts))
     )
   }
 
