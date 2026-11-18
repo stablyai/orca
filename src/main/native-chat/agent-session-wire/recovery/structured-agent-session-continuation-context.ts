@@ -106,6 +106,7 @@ export function continuationContextReader(
         throw new ContinuedPayloadSuperseded()
       }
       return continuedFileText(path, trimEnd, async () => {
+        // A failed removal leaves the file to the export's cleanup, then to a later sweep.
         await rm(path, { force: true })
         spills.delete(path)
         activeSpills.delete(path)
@@ -129,12 +130,14 @@ export function continuationContextReader(
       }
       throw error
     } finally {
-      await Promise.all(
-        [...spills].map(async (spilled) => {
-          await rm(spilled, { force: true })
+      try {
+        await Promise.all([...spills].map((spilled) => rm(spilled, { force: true })))
+      } finally {
+        // Released either way, so a file whose removal failed can be swept once stale.
+        for (const spilled of spills) {
           activeSpills.delete(spilled)
-        })
-      )
+        }
+      }
     }
     return {
       status: 'current',
