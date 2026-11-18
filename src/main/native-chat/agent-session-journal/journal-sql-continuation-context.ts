@@ -34,7 +34,7 @@ const EXPORT_PAYLOAD = `CASE WHEN octet_length(payload_json)<=${CONTINUED_ROW_BY
       THEN json_set(p,'$.body.${field}.head',
         CAST(substr(CAST(${field} AS BLOB),1,${EXCERPT_BYTES}) AS TEXT)||char(10)||'…'||char(10)||
           CAST(substr(CAST(${field} AS BLOB),-${EXCERPT_BYTES}) AS TEXT),
-        '$.body.${field}.continued',json('true'))`
+        '$.body.${field}.continued',octet_length(${field}))`
     )
     .join(' ')} ELSE p END
     FROM (SELECT payload_json AS p,
@@ -59,11 +59,40 @@ export function journalDomainContextHead(
   }
 }
 
-/** An explicit export: query chunks are bounded, the answer is the whole effective context. */
-export function readJournalDomainContinuationContext(
+/** Where the next export page starts: items in visible order, then the chat's sends. */
+export type JournalContinuationFrom = { part: 'items' | 'sends'; after: SqliteBindings }
+
+export type JournalContinuationPage = JournalContinuationContext & {
+  next: JournalContinuationFrom | null
+}
+
+export type JournalContinuationRead =
+  | { kind: 'continuation-context'; from?: JournalContinuationFrom }
+  | { kind: 'continuation-chunk'; read: JournalContinuationChunkRead }
+
+export type JournalContinuationReadResult =
+  | { kind: 'continuation-context'; page: JournalContinuationPage }
+  | { kind: 'continuation-chunk'; bytes: Uint8Array | null }
+
+export function readJournalDomainContinuation(
   db: Database.Database,
-  target: { sessionId: string; epoch: string }
-): JournalContinuationContext {
+  target: { sessionId: string; epoch: string },
+  operation: JournalContinuationRead
+): JournalContinuationReadResult {
+  return operation.kind === 'continuation-context'
+    ? {
+        kind: 'continuation-context',
+        page: readJournalDomainContinuationPage(db, target, operation.from)
+      }
+    : readJournalDomainContinuationChunk(db, target, operation.read)
+}
+
+/** One bounded page of an explicit export; the caller joins pages that share a cursor. */
+export function readJournalDomainContinuationPage(
+  db: Database.Database,
+  target: { sessionId: string; epoch: string },
+  from: JournalContinuationFrom = { part: 'items', after: [] }
+): JournalContinuationPage {
   const prefix = [target.sessionId, target.epoch] as const
   const cursor = journalDomainContextHead(db, target)
   const clear = Number(
@@ -72,55 +101,62 @@ export function readJournalDomainContinuationContext(
       WHERE session_id=? AND epoch=? AND hidden=0 AND context_clear=1`)
       .get(...prefix)?.sequence ?? 0
   )
-  const items: AgentJournalRenderItem[] = []
   const continued: JournalContinuedPayload[] = []
-  let afterItem: SqliteBindings = []
-  do {
+  const page = { cursor, items: [], submissions: [], continued, next: null }
+  const { after } = from
+  if (from.part === 'items') {
     const rows = db
       .prepare(`SELECT ${EXPORT_PAYLOAD} AS payload_json, output_blob, sequence, sequence_index, ordinal
       FROM journal_items INDEXED BY journal_items_visible_position
       WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>?
-        ${afterItem.length ? 'AND (sequence, sequence_index, ordinal)>(?, ?, ?)' : ''}
+        ${after.length ? 'AND (sequence, sequence_index, ordinal)>(?, ?, ?)' : ''}
       ORDER BY sequence, sequence_index, ordinal LIMIT ?`)
-      .all(...prefix, clear, ...afterItem, PAGE)
+      .all(...prefix, clear, ...after, PAGE)
+    const items: AgentJournalRenderItem[] = []
     for (const row of rows) {
       const item = readJournalStoredRow(db, prefix, row)
-      const field = takeContinuedField(item)
-      if (field) {
-        continued.push({ index: items.length, itemId: item.itemId, revision: item.revision, field })
+      const taken = takeContinuedField(item)
+      if (taken) {
+        continued.push({
+          index: items.length,
+          itemId: item.itemId,
+          revision: item.revision,
+          ...taken
+        })
       }
       items.push(item)
     }
-    afterItem = nextPage(rows, ['sequence', 'sequence_index', 'ordinal'])
-  } while (afterItem.length)
+    const next = nextPage(rows, ['sequence', 'sequence_index', 'ordinal'])
+    return { ...page, items, next: { part: next.length ? 'items' : 'sends', after: next } }
+  }
   // Unaccepted sends belong only to an uncleared context, matching the saved-prompt policy.
-  const submissions: AgentJournalSubmission[] = []
-  let afterSend: SqliteBindings = []
-  do {
-    const rows = db
-      .prepare(`SELECT payload_json, submitted_at, ordinal, message_id
-      FROM journal_submission_attempts INDEXED BY journal_submission_order
-      WHERE session_id=? AND epoch=? AND current=1
-        ${clear > 0 ? 'AND accepted_sequence>?' : ''}
-        ${afterSend.length ? 'AND (submitted_at, ordinal, message_id)>(?, ?, ?)' : ''}
-      ORDER BY submitted_at, ordinal, message_id LIMIT ?`)
-      .all(...prefix, ...(clear > 0 ? [clear] : []), ...afterSend, PAGE)
-    for (const row of rows) {
-      submissions.push(JSON.parse(String(row.payload_json)))
-    }
-    afterSend = nextPage(rows, ['submitted_at', 'ordinal', 'message_id'])
-  } while (afterSend.length)
-  return { cursor, items, submissions, continued }
+  const rows = db
+    .prepare(`SELECT payload_json, submitted_at, ordinal, message_id
+    FROM journal_submission_attempts INDEXED BY journal_submission_order
+    WHERE session_id=? AND epoch=? AND current=1
+      ${clear > 0 ? 'AND accepted_sequence>?' : ''}
+      ${after.length ? 'AND (submitted_at, ordinal, message_id)>(?, ?, ?)' : ''}
+    ORDER BY submitted_at, ordinal, message_id LIMIT ?`)
+    .all(...prefix, ...(clear > 0 ? [clear] : []), ...after, PAGE)
+  const next = nextPage(rows, ['submitted_at', 'ordinal', 'message_id'])
+  return {
+    ...page,
+    submissions: rows.map((row) => JSON.parse(String(row.payload_json))),
+    next: next.length ? { part: 'sends', after: next } : null
+  }
 }
 
-function takeContinuedField(item: AgentJournalRenderItem): JournalContinuedPayload['field'] | null {
+function takeContinuedField(
+  item: AgentJournalRenderItem
+): Pick<JournalContinuedPayload, 'field' | 'bytes'> | null {
   const { body } = item
   const payload = body.kind === 'tool-call' ? body.output : body.kind === 'diff' ? body.patch : null
   if (!payload || !('continued' in payload)) {
     return null
   }
+  const bytes = Number(payload.continued)
   delete payload.continued
-  return body.kind === 'diff' ? 'patch' : 'output'
+  return { field: body.kind === 'diff' ? 'patch' : 'output', bytes }
 }
 
 /** Stored UTF-8 bytes of a continued text from `offset` (1-based); null once it is gone or revised. */
@@ -153,4 +189,41 @@ export function readJournalDomainContinuationChunk(
 function nextPage(rows: readonly SqliteRow[], columns: readonly string[]): SqliteBindings {
   const last = rows.at(-1)
   return last && rows.length === PAGE ? columns.map((column) => last[column]) : []
+}
+
+const CONTINUATION_ATTEMPTS = 3
+
+/**
+ * Joins export pages read at one cursor; a chat that moves between pages restarts the export,
+ * and one that keeps moving is joined as read, under its first page's cursor.
+ */
+export async function joinContinuationPages(
+  readPage: (from: JournalContinuationFrom | undefined) => Promise<JournalContinuationPage>
+): Promise<JournalContinuationContext> {
+  for (let attempt = 1; ; attempt++) {
+    const items: AgentJournalRenderItem[] = []
+    const submissions: AgentJournalSubmission[] = []
+    const continued: JournalContinuedPayload[] = []
+    let page = await readPage(undefined)
+    const { cursor } = page
+    let moved = false
+    for (;;) {
+      continued.push(
+        ...page.continued.map((part) => ({ ...part, index: part.index + items.length }))
+      )
+      items.push(...page.items)
+      submissions.push(...page.submissions)
+      if (!page.next) {
+        break
+      }
+      page = await readPage(page.next)
+      moved ||= page.cursor.epoch !== cursor.epoch || page.cursor.sequence !== cursor.sequence
+      if (moved && attempt < CONTINUATION_ATTEMPTS) {
+        break
+      }
+    }
+    if (!moved || attempt >= CONTINUATION_ATTEMPTS) {
+      return { cursor, items, submissions, continued }
+    }
+  }
 }

@@ -50,3 +50,16 @@ it('streams the whole stored text in place of its excerpt, as the plain transcri
   expect(Buffer.from(parts.join(''), 'utf8')).toEqual(Buffer.from(plain.join('\n\n'), 'utf8'))
   expect(markers.excerpts(marked)[0].blocks.at(-1)).toMatchObject({ output: 'run … done' })
 })
+
+it('trims a blank whole text into the line before it, as the plain transcript does', async () => {
+  const markers = new ContinuedTranscriptMarkers()
+  const marked = projectSavedChatContextItems([markers.mark(tool(' \n'), 0)])
+  const parts: string[] = []
+  for await (const part of markers.transcript(marked.map(formatWorkerTranscriptMessage), () =>
+    decodeStoredText(chunks(Buffer.from(' \n'.repeat(40_000))))
+  )) {
+    parts.push(part)
+  }
+  const plain = projectSavedChatContextItems([tool(' \n'.repeat(40_000))])
+  expect(parts.join('')).toBe(plain.map(formatWorkerTranscriptMessage).join('\n\n'))
+})

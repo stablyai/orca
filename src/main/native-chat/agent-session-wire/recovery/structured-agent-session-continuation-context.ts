@@ -99,18 +99,15 @@ export function continuationContextReader(
 
 class ContinuedPayloadSuperseded extends Error {}
 
-/** One chunk at a time; a revised or removed item supersedes the whole snapshot. */
+/** One chunk at a time up to the recorded length; a revised or removed item supersedes the snapshot. */
 async function* storedChunks(
   reads: Pick<AgentSessionJournalReads, 'continuationChunk'>,
-  { itemId, revision, field }: JournalContinuedPayload
+  { itemId, revision, field, bytes: length }: JournalContinuedPayload
 ): AsyncGenerator<Uint8Array> {
-  for (let offset = 1; ; offset += JOURNAL_CONTINUED_CHUNK_BYTES) {
+  for (let offset = 1; offset <= length; offset += JOURNAL_CONTINUED_CHUNK_BYTES) {
     const bytes = await reads.continuationChunk({ itemId, revision, field, offset })
-    if (bytes === null) {
+    if (!bytes?.length) {
       throw new ContinuedPayloadSuperseded()
-    }
-    if (bytes.length === 0) {
-      return
     }
     yield bytes
   }

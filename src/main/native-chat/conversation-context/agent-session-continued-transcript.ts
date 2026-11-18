@@ -58,25 +58,50 @@ export class ContinuedTranscriptMarkers {
       }
       let end = 0
       for (const match of message.matchAll(this.pattern)) {
-        yield message.slice(end, match.index)
+        const before = message.slice(end, match.index)
         end = match.index + match[0].length
         const text = whole(Number(match[1]))
-        yield* end === message.length ? withoutTrailingWhitespace(text) : text
+        if (end === message.length) {
+          // Trims into the text before it, as the formatter's trimEnd does for a blank output.
+          yield* withoutTrailingWhitespace(prepend(before, text))
+        } else {
+          yield before
+          yield* text
+        }
       }
       yield message.slice(end)
     }
   }
 }
 
+async function* prepend(first: string, rest: AsyncIterable<string>): AsyncGenerator<string> {
+  yield first
+  yield* rest
+}
+
+// Past this, a whitespace run is written as is: main holds one chunk, not the run.
+const HELD_WHITESPACE_CHARS = 1024 * 1024
+
 async function* withoutTrailingWhitespace(text: AsyncIterable<string>): AsyncGenerator<string> {
-  let pending = ''
+  let held: string[] = []
+  let heldChars = 0
   for await (const chunk of text) {
-    const joined = pending + chunk
-    const kept = joined.trimEnd()
+    const kept = chunk.trimEnd()
     if (kept) {
-      yield kept
+      yield held.join('') + kept
+      held = []
+      heldChars = 0
     }
-    pending = joined.slice(kept.length)
+    const tail = chunk.slice(kept.length)
+    if (tail) {
+      held.push(tail)
+      heldChars += tail.length
+    }
+    if (heldChars > HELD_WHITESPACE_CHARS) {
+      yield held.join('')
+      held = []
+      heldChars = 0
+    }
   }
 }
 

@@ -51,6 +51,8 @@ export type JournalContinuedPayload = {
   itemId: string
   revision: number
   field: JournalContinuedField
+  /** Stored UTF-8 length of the whole text. */
+  bytes: number
 }
 
 export type JournalContinuedField = 'output' | 'patch'
@@ -62,7 +64,7 @@ export type JournalContinuationContext = {
   continued: readonly JournalContinuedPayload[]
 }
 
-export type JournalContinuationChunkRead = Omit<JournalContinuedPayload, 'index'> & {
+export type JournalContinuationChunkRead = Omit<JournalContinuedPayload, 'index' | 'bytes'> & {
   /** 1-based byte offset into the stored UTF-8 text. */
   offset: number
 }

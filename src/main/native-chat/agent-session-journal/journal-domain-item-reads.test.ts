@@ -9,7 +9,10 @@ import type {
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { readJournalDomainItems, type JournalDomainItemRead } from './journal-sql-item-reads'
-import { JOURNAL_CONTINUED_CHUNK_BYTES } from './journal-sql-continuation-context'
+import {
+  JOURNAL_CONTINUED_CHUNK_BYTES,
+  joinContinuationPages
+} from './journal-sql-continuation-context'
 
 import { runJournalTransaction } from './database/journal-database'
 import {
@@ -248,7 +251,7 @@ it('selects producer identities and the roster from scalars, skipping hidden row
   expect(snapshot.subagents).toEqual(['agent-a'])
 })
 
-it('exports visible rows and sends after the newest clear across bounded query pages', () => {
+it('exports visible rows and sends after the newest clear across bounded query pages', async () => {
   const { seed, send, read } = chat()
   const submission = (
     id: string,
@@ -276,7 +279,9 @@ it('exports visible rows and sends after the newest clear across bounded query p
   seed(row('orca:rejected', 401, user('rejected')), { hidden: true })
   send(submission('rejected', 4, 401), 4)
 
-  const context = read({ kind: 'continuation-context' }).context
+  const context = await joinContinuationPages(
+    async (from) => read({ kind: 'continuation-context', from }).page
+  )
   expect(context.cursor).toEqual({ epoch: 'epoch', sequence: 900 })
   expect(context.items.map((item) => item.itemId)).toEqual([...tail, 'orca:after'])
   expect(context.submissions.map((entry) => entry.clientMessageId)).toEqual(['after', 'rejected'])
@@ -296,8 +301,10 @@ it('exports a large tool output as an excerpt plus byte chunks that rejoin it ex
     })
   )
 
-  const context = read({ kind: 'continuation-context' }).context
-  expect(context.continued).toEqual([{ index: 0, itemId: 'tool', revision: 1, field: 'output' }])
+  const { page: context } = read({ kind: 'continuation-context' })
+  expect(context.continued).toEqual([
+    { index: 0, itemId: 'tool', revision: 1, field: 'output', bytes: 34_100_020 }
+  ])
   const excerpt = (context.items[0].body as { output: { head: string } }).output.head
   expect(excerpt.startsWith('start 😀é-abc')).toBe(true)
   expect(excerpt.endsWith('after NUL end')).toBe(true)
