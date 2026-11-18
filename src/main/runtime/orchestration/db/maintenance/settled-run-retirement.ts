@@ -139,95 +139,86 @@ export function* retireSettledRun(
   }
   watchRetiringRun(orchestrationDb, runId)
   try {
-    return yield* retireWatchedRun(orchestrationDb, runId, liveness)
+    const parties = new Set(partyKeys(db.prepare(RUN_PARTIES_EXCEPT_SENDER_PANES).all(runId)))
+    for (let after = 0; ;) {
+      yield
+      const page = db.prepare(SENDER_PANE_PAGE).all(runId, after, SENDER_PANES_PER_STEP)
+      for (const row of page) {
+        if (row.coordinator && row.sender_pane_key !== null) {
+          parties.add(`pane:${String(row.sender_pane_key)}`)
+        }
+      }
+      if (page.length < SENDER_PANES_PER_STEP) {
+        break
+      }
+      after = Number(page.at(-1)!.sequence)
+    }
+    const checkedParties = [...parties]
+    const anyPartyLive = (): boolean =>
+      checkedParties.some((party) => isLiveRunParty(party, liveness))
+    // A handle's liveness reads the database; a pane's is a lookup, and a re-minted terminal keeps its
+    // pane. A reader that started mid-way, such as a pane-less wait, is found among the few waiting.
+    const panes = checkedParties.filter((party) => party.startsWith('pane:'))
+    const anyPartySeenLive = (): boolean =>
+      panes.some((party) => isLiveRunParty(party, liveness)) ||
+      [...liveness.waitedMailboxes()].some((handle) => parties.has(`handle:${handle}`))
+    if (anyPartyLive()) {
+      return false
+    }
+    for (let next = 0; next < RUN_CHILD_PAGES.length;) {
+      yield
+      const from = next
+      const step = runLifecycleWriteTransaction(db, 'orchestration_run_retention', () => {
+        if (anyPartySeenLive() || isRetiringRunWritten(orchestrationDb)) {
+          return undefined
+        }
+        const watermark = readRemovedWorkWatermark(db)
+        // Tables with nothing left cost one indexed lookup, so a step moves on until one deletes.
+        let index = from
+        for (; index < RUN_CHILD_PAGES.length; index++) {
+          const page = RUN_CHILD_PAGES[index]!
+          const deleted = db.prepare(page.sql).run(runId, page.rows).changes
+          if (deleted > 0) {
+            index = deleted < page.rows ? index + 1 : index
+            break
+          }
+        }
+        // A deleted row whose Run is gone, such as a remote attachment, leaves a record nothing reads.
+        forgetUnownedRemovedWork(orchestrationDb, watermark)
+        forgetRetiringRunWrites(orchestrationDb)
+        return { next: index }
+      })
+      if (!step) {
+        return false
+      }
+      orchestrationDb.hasAnyDispatchContextsCache = undefined
+      next = step.next
+    }
+    yield
+    const deleted = runLifecycleWriteTransaction(db, 'orchestration_run_retention', () => {
+      // Liveness was read before the lock; a party added since keeps the Run.
+      if (
+        anyPartyLive() ||
+        isRetiringRunWritten(orchestrationDb) ||
+        !isRetiredRun(db, runId) ||
+        runParties(orchestrationDb, runId).some((party) => !parties.has(party))
+      ) {
+        return false
+      }
+      const watermark = readRemovedWorkWatermark(db)
+      for (const statement of RUN_DELETES) {
+        db.prepare(statement).run(runId)
+      }
+      forgetUnownedRemovedWork(orchestrationDb, watermark)
+      return true
+    })
+    if (deleted) {
+      orchestrationDb.hasAnyDispatchContextsCache = undefined
+    }
+    return deleted
   } finally {
     unwatchRetiringRun(orchestrationDb)
   }
-}
-
-function* retireWatchedRun(
-  orchestrationDb: OrchestrationDb,
-  runId: string,
-  liveness: RunPartyLiveness
-): Generator<void, boolean> {
-  const { db } = orchestrationDb
-  const parties = new Set(partyKeys(db.prepare(RUN_PARTIES_EXCEPT_SENDER_PANES).all(runId)))
-  for (let after = 0; ;) {
-    yield
-    const page = db.prepare(SENDER_PANE_PAGE).all(runId, after, SENDER_PANES_PER_STEP)
-    for (const row of page) {
-      if (row.coordinator && row.sender_pane_key !== null) {
-        parties.add(`pane:${String(row.sender_pane_key)}`)
-      }
-    }
-    if (page.length < SENDER_PANES_PER_STEP) {
-      break
-    }
-    after = Number(page.at(-1)!.sequence)
-  }
-  const checkedParties = [...parties]
-  const anyPartyLive = (): boolean =>
-    checkedParties.some((party) => isLiveRunParty(party, liveness))
-  // A handle's liveness reads the database; a pane's is a lookup, and a re-minted terminal keeps its
-  // pane. A reader that started mid-way, such as a pane-less wait, is found among the few waiting.
-  const panes = checkedParties.filter((party) => party.startsWith('pane:'))
-  const anyPartySeenLive = (): boolean =>
-    panes.some((party) => isLiveRunParty(party, liveness)) ||
-    [...liveness.waitedMailboxes()].some((handle) => parties.has(`handle:${handle}`))
-  if (anyPartyLive()) {
-    return false
-  }
-  for (let next = 0; next < RUN_CHILD_PAGES.length;) {
-    yield
-    const from = next
-    const step = runLifecycleWriteTransaction(db, 'orchestration_run_retention', () => {
-      if (anyPartySeenLive() || isRetiringRunWritten(orchestrationDb)) {
-        return undefined
-      }
-      const watermark = readRemovedWorkWatermark(db)
-      // Tables with nothing left cost one indexed lookup, so a step moves on until one deletes.
-      let index = from
-      for (; index < RUN_CHILD_PAGES.length; index++) {
-        const page = RUN_CHILD_PAGES[index]!
-        const deleted = db.prepare(page.sql).run(runId, page.rows).changes
-        if (deleted > 0) {
-          index = deleted < page.rows ? index + 1 : index
-          break
-        }
-      }
-      // A deleted row whose Run is gone, such as a remote attachment, leaves a record nothing reads.
-      forgetUnownedRemovedWork(orchestrationDb, watermark)
-      forgetRetiringRunWrites(orchestrationDb)
-      return { next: index }
-    })
-    if (!step) {
-      return false
-    }
-    orchestrationDb.hasAnyDispatchContextsCache = undefined
-    next = step.next
-  }
-  yield
-  const deleted = runLifecycleWriteTransaction(db, 'orchestration_run_retention', () => {
-    // Liveness was read before the lock; a party added since keeps the Run.
-    if (
-      anyPartyLive() ||
-      isRetiringRunWritten(orchestrationDb) ||
-      !isRetiredRun(db, runId) ||
-      runParties(orchestrationDb, runId).some((party) => !parties.has(party))
-    ) {
-      return false
-    }
-    const watermark = readRemovedWorkWatermark(db)
-    for (const statement of RUN_DELETES) {
-      db.prepare(statement).run(runId)
-    }
-    forgetUnownedRemovedWork(orchestrationDb, watermark)
-    return true
-  })
-  if (deleted) {
-    orchestrationDb.hasAnyDispatchContextsCache = undefined
-  }
-  return deleted
 }
 
 /** Deletes one settled Run in a single call; maintenance steps `retireSettledRun` instead. */
