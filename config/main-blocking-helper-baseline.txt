@@ -1450,6 +1450,8 @@
 4 src/main/text-generation/models/commit-message-model-discovery.ts
 1 src/main/text-generation/policies/source-control-read-only-policy.ts
 1 src/main/text-generation/requests/jira-issue-summary-requests.ts
+1 src/main/traex/traex-app-server-connection.ts # One-shot managed CLI startup; shared ENOENT checks preserve executable/cwd diagnostics.
+1 src/main/traex/traex-launch-resolution.ts # One command resolution per CLI launch, including the shared WSL drive-path lookup.
 1 src/main/tray/system-tray.ts
 2 src/main/updater/lifecycle/main-window-updater.ts
 1 src/main/updater/lifecycle/updater-check-state.ts
