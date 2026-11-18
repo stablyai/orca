@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { readLastAssistantFromTranscriptAsync } from '../../../shared/agent-hook-listener/transcript-reader'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
@@ -6,8 +7,8 @@ import { ASSISTANT_MESSAGE_RETRY_ATTEMPTS, ASSISTANT_MESSAGE_RETRY_MS } from './
 import { AgentHookServerStatusRetries } from './server-status-retries'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 
-/** The identity of one Stop's pending reply read. */
-type StopReplyClaim = { readonly paneKey: string }
+/** The identity of one Stop's pending reply read, and the transcript size its last scan saw. */
+type StopReplyClaim = { readonly paneKey: string; scannedSize?: number }
 
 /** A Stop that came without its reply gets it from the transcript, read off the event loop. */
 export abstract class AgentHookServerStopTranscriptReply extends AgentHookServerStatusRetries {
@@ -99,53 +100,63 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
         ? row
         : undefined
     }
-    void readLastAssistantFromTranscriptAsync(transcriptPath, () => current() !== undefined).then(
-      (text) => {
-        const row = current()
-        if (!row || (!text && attempt >= ASSISTANT_MESSAGE_RETRY_ATTEMPTS)) {
-          if (this.stopReplyClaims.get(original.paneKey) === claim) {
-            this.stopReplyClaims.delete(original.paneKey)
-          }
-          return
+    const scan = async (): Promise<string | undefined> => {
+      const size = await stat(transcriptPath).then(
+        (stats) => stats.size,
+        () => undefined
+      )
+      // A retry on a transcript that hasn't grown would only repeat the last scan.
+      if (size !== undefined && size === claim.scannedSize) {
+        return undefined
+      }
+      claim.scannedSize = size
+      return readLastAssistantFromTranscriptAsync(transcriptPath, () => current() !== undefined)
+    }
+    void scan().then((text) => {
+      const row = current()
+      if (!row || (!text && attempt >= ASSISTANT_MESSAGE_RETRY_ATTEMPTS)) {
+        if (this.stopReplyClaims.get(original.paneKey) === claim) {
+          this.stopReplyClaims.delete(original.paneKey)
         }
-        if (!text) {
-          // Stop can precede the transcript flush.
-          super.clearAssistantMessageRetry(original.paneKey)
-          const timer = setTimeout(() => {
-            this.assistantMessageRetryTimers.delete(original.paneKey)
-            this.readStopTextFromTranscript(original, transcriptPath, claim, attempt + 1)
-          }, ASSISTANT_MESSAGE_RETRY_MS)
-          timer.unref?.()
-          this.assistantMessageRetryTimers.set(original.paneKey, timer)
-          return
-        }
-        this.stopReplyClaims.delete(original.paneKey)
-        const payload = normalizeAgentStatusPayload({
-          ...row.payload,
-          lastAssistantMessage: text,
+        return
+      }
+      if (!text) {
+        // Stop can precede the transcript flush.
+        super.clearAssistantMessageRetry(original.paneKey)
+        const timer = setTimeout(() => {
+          this.assistantMessageRetryTimers.delete(original.paneKey)
+          this.readStopTextFromTranscript(original, transcriptPath, claim, attempt + 1)
+        }, ASSISTANT_MESSAGE_RETRY_MS)
+        timer.unref?.()
+        this.assistantMessageRetryTimers.set(original.paneKey, timer)
+        return
+      }
+      this.stopReplyClaims.delete(original.paneKey)
+      const payload = normalizeAgentStatusPayload({
+        ...row.payload,
+        lastAssistantMessage: text,
+        lastAssistantMessageIsToolOutput: undefined
+      })
+      if (!payload) {
+        return
+      }
+      const tool = this.state.lastToolByPaneKey.get(original.paneKey)
+      if (tool) {
+        // Later rebuilds of this turn's row read the snapshot, not the row.
+        this.state.lastToolByPaneKey.set(original.paneKey, {
+          ...tool,
+          lastAssistantMessage: payload.lastAssistantMessage,
           lastAssistantMessageIsToolOutput: undefined
         })
-        if (!payload) {
-          return
-        }
-        const tool = this.state.lastToolByPaneKey.get(original.paneKey)
-        if (tool) {
-          // Later rebuilds of this turn's row read the snapshot, not the row.
-          this.state.lastToolByPaneKey.set(original.paneKey, {
-            ...tool,
-            lastAssistantMessage: payload.lastAssistantMessage,
-            lastAssistantMessageIsToolOutput: undefined
-          })
-        }
-        this.applyRestatedStatus({
-          ...row,
-          payload,
-          // The whole reply answers the lead's turn; the row keeps only its capped preview.
-          replyCandidate: text,
-          hookEventName: undefined,
-          hasExplicitPrompt: undefined
-        })
       }
-    )
+      this.applyRestatedStatus({
+        ...row,
+        payload,
+        // The whole reply answers the lead's turn; the row keeps only its capped preview.
+        replyCandidate: text,
+        hookEventName: undefined,
+        hasExplicitPrompt: undefined
+      })
+    })
   }
 }
