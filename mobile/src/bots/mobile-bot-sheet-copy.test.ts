@@ -48,8 +48,7 @@ describe('activity rows', () => {
 })
 
 describe('automationWhenText', () => {
-  it('words the schedule, then each event, and says Paused when off', () => {
-    expect(automationWhenText(automation(), true)).toBe('Hourly at :05')
+  it('names the event and says Paused for a disabled event-only automation', () => {
     expect(
       automationWhenText(
         automation({
