@@ -46,6 +46,7 @@ import {
   type NativeChatSideChatForkPoint
 } from '../../messages/actions/native-chat-side-chat-fork-point'
 import { markNativeChatResponseActionsHang } from './native-chat-response-actions-hang'
+import { nativeChatQuietCardAnswerRows } from './native-chat-quiet-card-answer-rows'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot = NativeChatMessageSlot | NativeChatSubagentHeadSlot
@@ -166,6 +167,7 @@ export function buildNativeChatTranscript(
   })
   const bars = nativeChatTurnBarRows(messages, turnKeys)
   const automationTurns = nativeChatAutomationTurnKeys(messages, turnKeys)
+  const quietCardAnswerRows = nativeChatQuietCardAnswerRows(input, messages, settledTurnKeys)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
   turnKeys.forEach((turnKey, index) => {
@@ -192,6 +194,9 @@ export function buildNativeChatTranscript(
     }
   }
   for (const [index, message] of messages.entries()) {
+    if (quietCardAnswerRows.has(index)) {
+      continue
+    }
     pushHeadsBefore(message)
     const turnKey = turnKeys[index]
     const receipt = receipts.get(message.id)

@@ -165,11 +165,13 @@
       "invalidUrl": "請輸入有效的網址。"
     },
     "paneView": {
-      "dialogTitle": "瀏覽器對話方塊",
       "forward": "前進",
       "keyboardPlaceholder": "在網頁上輸入…",
       "reload": "重新載入",
-      "sendText": "傳送文字至瀏覽器"
+      "sendText": "傳送文字至瀏覽器",
+      "dialogTitleWithOrigin": "{{origin}} 顯示",
+      "dialogTitleNoOrigin": "此網頁顯示",
+      "dialogAnswer": "回答"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 點擊修飾鍵"
@@ -182,6 +184,9 @@
     "viewModeSwitch": {
       "mobileView": "顯示行動版網站",
       "webView": "顯示桌面版網站"
+    },
+    "loadFailure": {
+      "retry": "重試"
     }
   },
   "chat": {

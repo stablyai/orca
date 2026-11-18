@@ -10,8 +10,9 @@ import { GOOGLE_SERVICE_CHOICES } from '../google/google-scopes'
 const Text = (max: number) => z.string().trim().min(1).max(max)
 const Values = z.array(Text(320)).min(1).max(20)
 
-/** A bot names its run by the chat it runs from; the owner names the bot. */
+/** A bot names its run by its token and the chat it runs from; the owner names the bot. */
 const Who = {
+  botToken: Text(200).optional(),
   callerSessionId: Text(200).optional(),
   botId: Text(200).optional()
 }

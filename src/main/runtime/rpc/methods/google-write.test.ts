@@ -19,6 +19,9 @@ vi.mock('../../../google/google-gmail-write', () => ({
   sendGmailDraft: async () => ({}),
   modifyGmail: async () => ({})
 }))
+vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
+  botToolRelay: { botOf: (token: string) => /^token-(b\d)$/.exec(token)?.[1] ?? null }
+}))
 vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
     bots.list().find((bot) => `chat-${bot.id}` === sessionId) ?? null
@@ -68,14 +71,26 @@ describe('Google writes over RPC', () => {
     const on = makeTestBot({ id: 'b2', name: 'Ivy', google: true })
     const rpc = dispatcher([off, on])
     const refused = await rpc.dispatch(
-      draft({ callerSessionId: 'chat-b1', to: ['sam@x.com'], subject: 'Hi', body: 'Hello' })
+      draft({
+        botToken: 'token-b1',
+        callerSessionId: 'chat-b1',
+        to: ['sam@x.com'],
+        subject: 'Hi',
+        body: 'Hello'
+      })
     )
     expect(JSON.stringify(refused)).toContain('Google is off for Scout')
     expect(drafted).toHaveLength(0)
 
     await expect(
       rpc.dispatch(
-        draft({ callerSessionId: 'chat-b2', to: ['sam@x.com'], subject: 'Hi', body: 'Hello' })
+        draft({
+          botToken: 'token-b2',
+          callerSessionId: 'chat-b2',
+          to: ['sam@x.com'],
+          subject: 'Hi',
+          body: 'Hello'
+        })
       )
     ).resolves.toMatchObject({ ok: true })
     await expect(

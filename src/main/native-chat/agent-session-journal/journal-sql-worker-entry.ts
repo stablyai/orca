@@ -20,6 +20,7 @@ import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
+import { tryFoldJournalTextTails } from './journal-text-tail'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 
 installWorkerSendLedger('orca-journal-sql-writer')
@@ -200,6 +201,9 @@ async function drain(): Promise<void> {
   }
   if (close) {
     try {
+      if (!readOnly && db) {
+        tryFoldJournalTextTails(db)
+      }
       await (checkpointClosing ?? checkpoint?.close())
       db?.close()
       db = undefined

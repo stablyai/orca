@@ -169,11 +169,13 @@
       "invalidUrl": "Introduce una URL válida."
     },
     "paneView": {
-      "dialogTitle": "Diálogo del navegador",
       "forward": "Adelante",
       "keyboardPlaceholder": "Escribe en la página…",
       "reload": "Recargar",
-      "sendText": "Enviar texto al navegador"
+      "sendText": "Enviar texto al navegador",
+      "dialogTitleWithOrigin": "{{origin}} dice",
+      "dialogTitleNoOrigin": "Esta página dice",
+      "dialogAnswer": "Respuesta"
     },
     "pointerModifiers": {
       "clickModifier": "Modificador {{key}} para clics"
@@ -186,6 +188,9 @@
     "viewModeSwitch": {
       "mobileView": "Mostrar vista móvil del sitio web",
       "webView": "Mostrar vista de escritorio del sitio web"
+    },
+    "loadFailure": {
+      "retry": "Reintentar"
     }
   },
   "chat": {

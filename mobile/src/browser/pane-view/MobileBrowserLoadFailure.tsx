@@ -1,16 +1,27 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { BrowserLoadError } from '../../../../src/shared/browser/workspaces/browser-workspace-types'
 import {
   describeBrowserLoadFailure,
   formatBrowserLoadFailureText,
   isBrowserNetworkLoadFailure
 } from '../../../../src/shared/browser/navigation/browser-load-failure'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
 
 /** The desktop failure page's words over the streamed frame, which shows only a blank page. */
-export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoadError }) {
+export function MobileBrowserLoadFailure({
+  loadError,
+  retryDisabled,
+  onRetry
+}: {
+  loadError: BrowserLoadError
+  retryDisabled: boolean
+  onRetry: () => void
+}) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   if (!isBrowserNetworkLoadFailure(loadError)) {
     return null
@@ -19,11 +30,32 @@ export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoad
   const failure = describeBrowserLoadFailure(loadError, null)
   const text = formatBrowserLoadFailureText(loadError, failure)
   return (
-    <View pointerEvents="none" style={styles.page}>
-      <View style={styles.column}>
+    <View pointerEvents="box-none" style={styles.page}>
+      <View pointerEvents="box-none" style={styles.column}>
         <Text style={styles.title}>{text.title}</Text>
         {text.description ? <Text style={styles.description}>{text.description}</Text> : null}
         {failure.errorName ? <Text style={styles.code}>{failure.errorName}</Text> : null}
+        <Pressable
+          accessibilityRole="button"
+          disabled={retryDisabled}
+          style={({ pressed }) => [
+            mobileBrowserPaneStyles.dialogButton,
+            mobileBrowserPaneStyles.dialogButtonPrimary,
+            styles.retry,
+            pressed && mobileBrowserPaneStyles.dialogButtonPressed,
+            retryDisabled && mobileBrowserPaneStyles.dialogButtonDisabled
+          ]}
+          onPress={onRetry}
+        >
+          <Text
+            style={[
+              mobileBrowserPaneStyles.dialogButtonText,
+              mobileBrowserPaneStyles.dialogButtonPrimaryText
+            ]}
+          >
+            {t('browser.loadFailure.retry', 'Retry')}
+          </Text>
+        </Pressable>
       </View>
     </View>
   )
@@ -57,5 +89,9 @@ const styles = themedStyleSheet(() => ({
     fontFamily: typography.monoFamily,
     fontSize: typography.metaSize,
     marginTop: spacing.xs
+  },
+  retry: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.md
   }
 }))

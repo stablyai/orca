@@ -104,6 +104,12 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     lineHeight: 20,
     marginTop: spacing.sm
   },
+  dialogInput: {
+    height: 36,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    fontSize: TEXT_INPUT_FONT_SIZE
+  },
   dialogButtonDisabled: {
     opacity: 0.5
   },

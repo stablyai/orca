@@ -165,11 +165,13 @@
       "invalidUrl": "유효한 URL을 입력하세요."
     },
     "paneView": {
-      "dialogTitle": "브라우저 대화상자",
       "forward": "앞으로",
       "keyboardPlaceholder": "페이지에 입력…",
       "reload": "새로고침",
-      "sendText": "브라우저로 텍스트 전송"
+      "sendText": "브라우저로 텍스트 전송",
+      "dialogTitleWithOrigin": "{{origin}} 내용:",
+      "dialogTitleNoOrigin": "이 페이지 내용:",
+      "dialogAnswer": "답변"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 클릭 보조 키"
@@ -182,6 +184,9 @@
     "viewModeSwitch": {
       "mobileView": "웹사이트를 모바일 화면으로 보기",
       "webView": "웹사이트를 데스크톱 화면으로 보기"
+    },
+    "loadFailure": {
+      "retry": "다시 시도"
     }
   },
   "chat": {

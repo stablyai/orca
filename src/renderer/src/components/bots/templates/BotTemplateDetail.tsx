@@ -1,12 +1,13 @@
 // A template's detail: what it is, what its bot posts, what it does first, and what it comes with. Its
 // header (picture, name, line, Use template…) stays pinned; the rest scrolls under it.
 import { useState } from 'react'
+import { BadgeCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BotTemplate } from '../../../../../shared/bots/bot-templates'
-import { BotTemplateComesWith } from './BotTemplateComesWith'
+import { BotTemplateComesWith, BotTemplateComesWithHeading } from './BotTemplateComesWith'
 import { BotTemplateMascot } from './BotTemplateMascot'
 import { botTemplateCategoryLabel } from './bot-template-labels'
 
@@ -41,10 +42,17 @@ export function BotTemplateDetail({
               <span className="truncate">{template.name}</span>
               {template.needsSetup ? <BotTemplateNeedsSetupBadge /> : null}
             </h2>
-            <p className="text-xs text-muted-foreground">
-              {t('bots.templates.byOrca', '{{category}} · by Orca', {
-                category: botTemplateCategoryLabel(template.category, t)
-              })}
+            <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+              <span>{botTemplateCategoryLabel(template.category, t)}</span>
+              <span className="inline-flex items-center gap-1">
+                <span aria-hidden="true">·</span>
+                {t('bots.templates.publisher', 'by Orca')}
+                <BadgeCheck
+                  className="size-3.5 shrink-0 text-callout-note"
+                  role="img"
+                  aria-label={t('bots.templates.official', 'Official Orca template')}
+                />
+              </span>
             </p>
           </div>
         </div>
@@ -82,7 +90,7 @@ export function BotTemplateDetail({
           </section>
         ) : null}
         <section>
-          <h3 className={SECTION_TITLE}>{t('bots.templates.comesWith', 'Comes with')}</h3>
+          <BotTemplateComesWithHeading />
           <BotTemplateComesWith template={template} />
         </section>
       </div>

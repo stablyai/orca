@@ -373,8 +373,21 @@ describe('bots.update from a phone', () => {
 
   it.each([
     ['add a person', { addMembers: [{ id: 'U9', name: 'Nora', source: 'slack' }] }],
+    ['replace the member list', { members: [dana] }],
+    ['change permissions', { permissionMode: 'full-access' }]
+  ])("refuses an agent's CLI that tries to %s", async (_label, updates) => {
+    const { bots, dispatcher } = phoneRuntime()
+
+    expect(
+      await dispatcher.dispatch(request('bots.update', { botId: 'bot-1', updates }), {
+        caller: LOCAL_CLI_RPC_CALLER
+      })
+    ).toMatchObject({ ok: false })
+    expect(bots.update).not.toHaveBeenCalled()
+  })
+
+  it.each([
     ['take a person off', { removeMembers: [{ id: 'U1', source: 'slack' }] }],
-    ['change permissions', { permissionMode: null }],
     ['pause it', { paused: true }],
     ['change a connector', { slack: null }]
   ])("lets an agent's CLI %s", async (_label, updates) => {
@@ -483,7 +496,7 @@ describe('bots.access.decide', () => {
     info.mockRestore()
   })
 
-  it("lets an agent's CLI answer an access request", async () => {
+  it("refuses an agent's CLI that answers an access request", async () => {
     const { cloud, decisions } = fakeAccessCloud([makeAccessRequest()])
     const bot = makeTestBot({ slack: { appId: 'A1', teamId: 'T1' } })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads only runtime.bots, the connector cloud and the runtime id, which the stub provides.
@@ -501,8 +514,8 @@ describe('bots.access.decide', () => {
         request('bots.access.decide', { requestId: 'req-1', decision: 'declined' }),
         { caller: LOCAL_CLI_RPC_CALLER }
       )
-    ).toMatchObject({ ok: true, result: { ok: true } })
-    expect(decisions).toHaveLength(1)
+    ).toMatchObject({ ok: false })
+    expect(decisions).toHaveLength(0)
   })
 
   it("refreshes the host's store once after deciding, and lists from it without the cloud", async () => {
@@ -524,7 +537,8 @@ describe('bots.access.decide', () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
 
     await dispatcher.dispatch(
-      request('bots.access.decide', { requestId: 'req-1', decision: 'declined' })
+      request('bots.access.decide', { requestId: 'req-1', decision: 'declined' }),
+      { caller: DESKTOP_RPC_CALLER }
     )
     const decisionCalls = call.mock.calls.length
     expect(await dispatcher.dispatch(request('bots.access.list', null))).toMatchObject({
