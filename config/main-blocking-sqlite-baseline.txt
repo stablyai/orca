@@ -48,6 +48,7 @@
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 32 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
 18 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
+5 src/main/native-chat/agent-session-journal/database/journal-retire-pending.ts
 12 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 18 src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts
 14 src/main/native-chat/agent-session-journal/journal-domain-command-turn.ts
@@ -116,7 +117,7 @@
 10 src/main/native-chat/agent-session-journal/journal-sql-claude-identities.ts
 2 src/main/native-chat/agent-session-journal/journal-sql-command-dispatch.ts
 8 src/main/native-chat/agent-session-journal/journal-sql-continuation-context.ts
-21 src/main/native-chat/agent-session-journal/journal-sql-database-read.ts
+19 src/main/native-chat/agent-session-journal/journal-sql-database-read.ts
 2 src/main/native-chat/agent-session-journal/journal-sql-edit-lease-command.ts
 12 src/main/native-chat/agent-session-journal/journal-sql-event-tail.ts
 4 src/main/native-chat/agent-session-journal/journal-sql-history-items.ts
