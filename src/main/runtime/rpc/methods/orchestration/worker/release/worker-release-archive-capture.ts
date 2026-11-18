@@ -9,6 +9,7 @@ import type { WorkerTerminalResourceRow } from '../../../../../orchestration/ter
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 import { archiveSummary } from './worker-terminal-resource-presentation'
+import { settleDispatchNativeUsageIntervalAtRelease } from '../../../../../orchestration/workers/transcripts/dispatch-native-usage-capture'
 import { captureWorkerResumeSession } from '../follow-up/worker-resume-session-capture'
 
 /** Record where release output lives; unverifiable structured sessions finish release_unknown instead of retrying forever as requested. A fresh request may retry. */
@@ -21,6 +22,7 @@ export function captureWorkerReleaseArchive(
 ): { captured: WorkerOutputArchiveCapture } | { receipt: WorkerReleaseReceipt } {
   const { db, resource, dispatchId, ...capture } = args
   captureWorkerResumeSession(capture.runtime, db, resource, capture.attachedAtMs)
+  settleNativeUsageBestEffort(capture, db, dispatchId)
   try {
     return { captured: captureWorkerOutputReference(capture) }
   } catch (error) {
@@ -46,4 +48,23 @@ function isUnverifiableSessionRefusal(error: unknown): error is OrchestrationErr
     error instanceof OrchestrationError &&
     (error.code === CODES.notLive || error.code === CODES.hostBoundary)
   )
+}
+
+function settleNativeUsageBestEffort(
+  capture: Parameters<typeof captureWorkerOutputReference>[0],
+  db: OrchestrationDb,
+  dispatchId: string
+): void {
+  // Usage evidence must never block release; an unsettled interval stays unavailable.
+  try {
+    settleDispatchNativeUsageIntervalAtRelease(
+      capture.runtime,
+      db,
+      dispatchId,
+      capture.terminalHandle,
+      capture.attachedAtMs
+    )
+  } catch (error) {
+    console.warn('[orchestration] native usage interval was not settled', dispatchId, error)
+  }
 }

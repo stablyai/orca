@@ -16,6 +16,19 @@ export type WorkerProjection = {
   autoReleaseAt?: string
 }
 
+export type NativeUsageInterval =
+  | {
+      status: 'closed'
+      basis: 'fresh_session_exclusive_interval'
+      transcriptPath: string
+      file: { dev: number; ino: number; birthtimeMs: number }
+      startOffset: 0
+      endOffset: number
+      sha256: string
+      closedAt: number
+    }
+  | { status: 'unavailable'; reason: string }
+
 /** Session observation only; it does not establish ownership of usage. */
 export type NativeUsageIdentity =
   | {
@@ -29,6 +42,8 @@ export type NativeUsageIdentity =
       observedAt: number
       profile: { status: 'unavailable'; reason: 'profile_not_verified' }
       usageAttribution: { status: 'unavailable'; reason: 'segment_ownership_unproven' }
+      /** Exact byte range [startOffset, endOffset) of the fresh session's transcript owned by this dispatch. */
+      usageInterval?: NativeUsageInterval
     }
   | { status: 'unavailable'; reason: 'session_not_reported' | 'session_changed_or_shared' }
 

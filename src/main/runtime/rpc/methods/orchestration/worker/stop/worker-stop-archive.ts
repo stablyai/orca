@@ -6,6 +6,7 @@ import {
 import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
 import { orchestrationTimestampToMs } from '../output/worker-output'
+import { settleDispatchNativeUsageIntervalAtRelease } from '../../../../../orchestration/workers/transcripts/dispatch-native-usage-capture'
 import { captureWorkerResumeSession } from '../follow-up/worker-resume-session-capture'
 
 /** Record where a worker's output lives before stop closes its terminal; release would otherwise find nothing to point at. */
@@ -23,6 +24,13 @@ export function archiveWorkerOutputBeforeStop(args: {
     const attachedAtMs = orchestrationTimestampToMs(args.attachedAt)
     if (resource) {
       captureWorkerResumeSession(args.runtime, db, resource, attachedAtMs)
+      settleDispatchNativeUsageIntervalAtRelease(
+        args.runtime,
+        db,
+        dispatchId,
+        args.terminalHandle,
+        attachedAtMs
+      )
     }
     if (
       !resource ||

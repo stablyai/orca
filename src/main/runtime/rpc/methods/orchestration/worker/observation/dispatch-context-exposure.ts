@@ -84,11 +84,80 @@ export function exposeNativeUsageIdentity(dispatch: DispatchContextRow) {
         launchTokenHash: value.launchTokenHash,
         observedAt: value.observedAt,
         profile: { status: 'unavailable', reason: 'profile_not_verified' },
-        usageAttribution: { status: 'unavailable', reason: 'segment_ownership_unproven' }
+        usageAttribution: { status: 'unavailable', reason: 'segment_ownership_unproven' },
+        usageInterval: exposeUsageInterval('interval' in value ? value.interval : undefined)
       }
     }
   } catch {
     // Malformed evidence is unavailable, never a reason for worker-show to fail.
   }
   return unavailable
+}
+
+const INTERVAL_REASONS: Record<string, true> = {
+  start_boundary_missing: true,
+  host_not_local: true,
+  agent_unsupported: true,
+  transcript_unreadable: true,
+  transcript_replaced: true,
+  transcript_too_large: true,
+  not_fresh_session: true,
+  session_changed: true,
+  session_shared: true
+}
+
+/** An interval is exclusive only once Orca itself closed it; open or malformed ones are unavailable. */
+function exposeUsageInterval(raw: unknown) {
+  const pending = { status: 'unavailable', reason: 'interval_not_settled' } as const
+  if (raw === undefined) {
+    return { status: 'unavailable', reason: 'start_boundary_missing' } as const
+  }
+  if (!raw || typeof raw !== 'object' || !('status' in raw)) {
+    return pending
+  }
+  if (raw.status === 'unavailable' && 'reason' in raw) {
+    const reason = String(raw.reason)
+    return INTERVAL_REASONS[reason]
+      ? { status: 'unavailable' as const, reason }
+      : { status: 'unavailable' as const, reason: 'start_boundary_missing' }
+  }
+  if (
+    raw.status === 'closed' &&
+    'transcriptPath' in raw &&
+    typeof raw.transcriptPath === 'string' &&
+    'file' in raw &&
+    raw.file &&
+    typeof raw.file === 'object' &&
+    'dev' in raw.file &&
+    typeof raw.file.dev === 'number' &&
+    'ino' in raw.file &&
+    typeof raw.file.ino === 'number' &&
+    'birthtimeMs' in raw.file &&
+    typeof raw.file.birthtimeMs === 'number' &&
+    'startOffset' in raw &&
+    raw.startOffset === 0 &&
+    'endOffset' in raw &&
+    typeof raw.endOffset === 'number' &&
+    Number.isInteger(raw.endOffset) &&
+    'sha256' in raw &&
+    typeof raw.sha256 === 'string' &&
+    'closedAt' in raw &&
+    typeof raw.closedAt === 'number'
+  ) {
+    return {
+      status: 'closed' as const,
+      basis: 'fresh_session_exclusive_interval' as const,
+      transcriptPath: raw.transcriptPath,
+      file: {
+        dev: raw.file.dev,
+        ino: raw.file.ino,
+        birthtimeMs: raw.file.birthtimeMs
+      },
+      startOffset: 0 as const,
+      endOffset: raw.endOffset,
+      sha256: raw.sha256,
+      closedAt: raw.closedAt
+    }
+  }
+  return pending
 }
