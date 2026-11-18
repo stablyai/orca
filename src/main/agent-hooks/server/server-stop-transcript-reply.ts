@@ -17,6 +17,15 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     this.stopReplyClaims.delete(paneKey)
   }
 
+  /** Server stop or status hooks off: every pending reply retry and read ends. */
+  protected clearAllAssistantMessageRetries(): void {
+    for (const timer of this.assistantMessageRetryTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.assistantMessageRetryTimers.clear()
+    this.stopReplyClaims.clear()
+  }
+
   /** Applies a live hook, then follows up on the reply text it did not carry. */
   protected applyLocalHookAndReply(
     source: AgentHookSource,
