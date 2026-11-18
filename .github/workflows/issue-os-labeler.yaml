@@ -83,13 +83,11 @@ jobs:
 
             const isBlank = (line) => /^[ \t]*$/.test(line);
             const isHeading = (line) => /^###(?:[ \t]|$)/.test(line);
-            // GitHub renders a skipped optional dropdown as "None" and a skipped input as "_No response_".
-            const isUnselected = (value) =>
-              value === "" || value === "_no response_" || value === "none";
+            const isUnselected = (value) => value === "" || value === "_no response_";
             // A recognized form with an unknown choice is left alone, but visibly, so form changes get noticed.
             const rejectChoice = (heading, value) => {
               core.warning(
-                `"${heading}" has unrecognized value "${value}". Labels left untouched; update this workflow if the form changed.`,
+                `"${heading}" has unrecognized value "${value}". No further label changes from this pass; update this workflow if the form changed.`,
               );
               return null;
             };
@@ -201,8 +199,9 @@ jobs:
               }
 
               // Validated only; the remote host never contributes a label.
+              // GitHub renders this skipped optional dropdown as "None"; required fields keep rejecting it.
               const remoteOs = fields.get("Remote host operating system") ?? "";
-              if (!isUnselected(remoteOs) && !REMOTE_OS_VALUES.has(remoteOs)) {
+              if (!isUnselected(remoteOs) && remoteOs !== "none" && !REMOTE_OS_VALUES.has(remoteOs)) {
                 return rejectChoice("Remote host operating system", remoteOs);
               }
               return desired;
