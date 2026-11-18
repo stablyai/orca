@@ -1,9 +1,10 @@
+import { unrefTimer } from '../../shared/timers/unref-timer'
 import type { WorkerRequestTransport, WorkerThreadFactory } from './worker-thread-transport'
 
 /** Clients own request state and must fail queued calls when spawning fails. */
 export class LazyWorkerThreadHost<TResponse> {
   private worker: WorkerRequestTransport | null = null
-  private idleTimer: NodeJS.Timeout | null = null
+  private idleTimer: ReturnType<typeof setTimeout> | null = null
   private cleanupListeners: (() => void) | null = null
   private reportedUnavailable = false
   private lastSpawnFailure: unknown
@@ -129,14 +130,15 @@ export class LazyWorkerThreadHost<TResponse> {
     if (!this.worker) {
       return
     }
-    this.idleTimer = setTimeout(() => {
+    const timer = setTimeout(() => {
       this.idleTimer = null
       // Recheck idle state so requests arriving during the delay survive.
       if (this.options.isIdle()) {
         this.destroy()
       }
     }, this.options.idleTeardownMs)
-    this.idleTimer.unref?.()
+    unrefTimer(timer)
+    this.idleTimer = timer
   }
 
   clearIdleTimer(): void {
