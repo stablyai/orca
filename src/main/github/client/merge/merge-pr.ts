@@ -57,11 +57,7 @@ export async function mergePR(
       )
       return { ok: false, error: STACK_METADATA_UNAVAILABLE_ERROR }
     }
-    if (
-      expectedHeadSha &&
-      restData.headRefOid &&
-      restData.headRefOid.toLowerCase() !== expectedHeadSha.toLowerCase()
-    ) {
+    if (expectedHeadSha && restData.headRefOid && restData.headRefOid !== expectedHeadSha) {
       return { ok: false, error: PR_HEAD_MOVED_MERGE_ERROR }
     }
     if (restData.stack) {

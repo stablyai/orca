@@ -202,10 +202,10 @@ export function useMobileTasksGithubReplyMergeActions<
                     prRepo: requireGitHubTaskTarget(item.source).repository,
                     method,
                     expectedHeadSha:
-                      detailPayload?.provider === 'github' &&
+                      (detailPayload?.provider === 'github' &&
                       detailPayload.targetKey === githubTaskKey(item.source)
                         ? detailPayload.headSha
-                        : undefined
+                        : undefined) ?? item.source.headSha
                   },
                   { timeoutMs: 60_000 }
                 )

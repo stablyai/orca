@@ -24,7 +24,7 @@ export const MergePr = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional(),
   expectedHeadSha: z
     .string()
-    .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i, 'Invalid expected head SHA')
+    .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, 'Invalid expected head SHA')
     .nullable()
     .optional()
 })

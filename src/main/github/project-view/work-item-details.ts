@@ -31,6 +31,7 @@ type RawWorkItemContent = {
   bodyHTML?: unknown
   headRefName?: string
   baseRefName?: string
+  headRefOid?: string
   author?: { login?: string } | null
   labels?: { nodes?: RawLabel[] }
   assignees?: { nodes?: RawUser[] }
@@ -114,7 +115,8 @@ const ISSUE_FRAGMENT = `issue(number:$num) {
 }`
 
 const PULL_REQUEST_FRAGMENT = `pullRequest(number:$num) {
-  id number title url state isDraft updatedAt headRefName baseRefName body bodyHTML author { login }
+  id number title url state isDraft updatedAt headRefName baseRefName headRefOid body bodyHTML
+  author { login }
   labels(first:50) { nodes { name } }
   assignees(first:50) { nodes { login } }
   participants(first:50) { nodes { login name avatarUrl } }
@@ -191,6 +193,7 @@ function mapWorkItemDetails(
     bodyImageUrls: githubBodyImageUrls(raw.body, raw.bodyHTML),
     comments,
     participants,
-    assignees
+    assignees,
+    ...(args.type === 'pr' && typeof raw.headRefOid === 'string' ? { headSha: raw.headRefOid } : {})
   }
 }
