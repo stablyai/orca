@@ -87,6 +87,7 @@ export function mountedSpawnSession(
   incarnationId?: string
 ) {
   const noop = () => {}
+  const waitTeardowns: (() => void)[] = []
   const session = {
     deps: {
       tabId: 'tab',
@@ -103,7 +104,7 @@ export function mountedSpawnSession(
     get activePanePtyBinding(): string | null {
       return session.transport.getPtyId()
     },
-    waitTeardowns: [] as (() => void)[],
+    waitTeardowns,
     mergeStartupEnvWithPaneIdentity: (env: Record<string, string>) => env,
     disposed: false,
     tabGeneration: 0,
