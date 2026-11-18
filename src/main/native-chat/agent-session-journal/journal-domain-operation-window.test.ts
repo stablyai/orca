@@ -278,6 +278,33 @@ it('cuts only as many of the largest rows as the window needs to fit one reply',
   expect(outputs.map((output) => output.truncated).toSorted()).toEqual([false, false, true])
 })
 
+it('carries a row whose input is large too with its output cut, when the cut row fits one reply', async () => {
+  const { f, reads } = await chat(1)
+  await f.run({
+    kind: 'item',
+    identity: identity('huge-write'),
+    options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+    body: {
+      kind: 'tool-call',
+      name: 'Write',
+      input: { content: 'i'.repeat(34 * 1024 * 1024) },
+      state: 'completed',
+      output: {
+        head: 'o'.repeat(34 * 1024 * 1024),
+        byteLength: 35_651_584,
+        digest: 'out',
+        truncated: false
+      }
+    }
+  })
+  const { snapshot } = await reads.operationWindow({ afterSequence: 0 })
+  const tool = snapshot.items.find((item) => item.body.kind === 'tool-call')
+  expect(tool?.body).toMatchObject({
+    input: { content: 'i'.repeat(34 * 1024 * 1024) },
+    output: { head: 'o'.repeat(16 * 1024), byteLength: 35_651_584, truncated: true }
+  })
+})
+
 it('drops output from a row whose input is large too, when the reader asks for no tool output', async () => {
   const { f, reads } = await chat(1)
   await f.run({
