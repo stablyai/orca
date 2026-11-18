@@ -50,6 +50,11 @@ function samePaneInputs(previous: Inputs, next: Inputs): boolean {
     a.ptyIdsByTabId === b.ptyIdsByTabId &&
     a.activityTabs === b.activityTabs &&
     a.worktreeMap === b.worktreeMap &&
+    // The worktree resolver reads these through the store, not its own identity.
+    a.worktreesByRepo === b.worktreesByRepo &&
+    a.folderWorkspaces === b.folderWorkspaces &&
+    a.floatingWorkspacePath === b.floatingWorkspacePath &&
+    a.detectedWorktreesByRepo === b.detectedWorktreesByRepo &&
     a.repoMap === b.repoMap &&
     a.repos === b.repos &&
     a.getKnownWorktreeById === b.getKnownWorktreeById &&
@@ -194,9 +199,8 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
     if (badge?.inputs === current) {
       return badge.snapshot
     }
-    const needsFull = Array.from(listeners.values()).some(Boolean)
     let allThreads = EMPTY_THREADS
-    if (needsFull || hasLiveActivity(current.storeData, Date.now())) {
+    if (hasLiveActivity(current.storeData, Date.now())) {
       const build = events(current)
       allThreads = buildAgentPaneThreads(
         {
@@ -207,8 +211,8 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
         },
         badgeThreadCache
       )
-    } else if (!needsFull) {
-      // Idle badges keep no per-pane builds alive.
+    } else if (!Array.from(listeners.values()).some(Boolean)) {
+      // Idle badges keep no per-pane builds alive unless a full reader shares them.
       eventCache.panes.clear()
       eventCache.tabs = undefined
       built = null
