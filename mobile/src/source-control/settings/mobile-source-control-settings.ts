@@ -17,7 +17,8 @@ export const DESKTOP_SOURCE_CONTROL_DEFAULTS: MobileSourceControlSettings = {
   groupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
   compareAgainstUpstream: false,
   diffShowWhitespace: false,
-  prAutoRefresh: 'default'
+  prAutoRefresh: 'default',
+  sourceControlAiEnabled: true
 }
 const DESKTOP_DEFAULTS = DESKTOP_SOURCE_CONTROL_DEFAULTS
 

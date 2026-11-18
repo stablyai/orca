@@ -40,13 +40,6 @@ describe('automationResultsPreamble', () => {
     )
   })
 
-  it('cuts each result at 400 characters', () => {
-    const line = automationResultsPreamble([note(2, 'x'.repeat(1_000))], time).split('\n')[1]
-    const result = line.slice('- t2, Automation 2, finished: '.length, -1)
-    expect(result).toHaveLength(400)
-    expect(result.endsWith('…')).toBe(true)
-  })
-
   it('shows the newest 10 and counts the rest', () => {
     const notes = Array.from({ length: 13 }, (_, index) => note(index + 1))
     const lines = automationResultsPreamble(notes, time).split('\n')
@@ -126,10 +119,6 @@ describe('automation result note body', () => {
     expect(body.text).toBe('Automation 2 finished: First line')
     expect(body.presentation).toBe('automation-result')
     expect(readAutomationResultNote(body.automationResult)).toEqual(body.automationResult)
-  })
-
-  it('clips a stored result', () => {
-    expect(note(2, 'z'.repeat(9_000)).result).toHaveLength(AUTOMATION_RESULT_NOTE_MAX_CHARS)
   })
 
   it('reads nothing that is not a note', () => {

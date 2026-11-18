@@ -309,11 +309,12 @@ export class RuntimeClientSettingsController {
 function projectSourceControlLaunchRecipes(
   settings: Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>>
 ): RuntimeClientSourceControlAi {
-  const { actions } = normalizeSourceControlAiSettings(
+  const { enabled, actions } = normalizeSourceControlAiSettings(
     settings.sourceControlAi,
     settings.commitMessageAi
   )
   return {
+    enabled,
     actions: Object.fromEntries(
       SOURCE_CONTROL_LAUNCH_ACTION_IDS.flatMap((actionId) => {
         const recipe = actions?.[actionId]
