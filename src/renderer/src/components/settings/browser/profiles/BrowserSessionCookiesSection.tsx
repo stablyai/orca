@@ -1,4 +1,4 @@
-import { useGoogleCookieClear } from '../../../use-google-cookie-clear'
+import { useGoogleCookieClear } from './use-google-cookie-clear'
 import { Plus } from 'lucide-react'
 import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { Button } from '../../../ui/button'

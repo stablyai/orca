@@ -9,7 +9,7 @@ import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-ser
 import type { UpdateCheckOptions } from '../../../../../../shared/updater/update-status-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { duplicatePairedServerNames } from '@/lib/workspace/ownership/duplicate-paired-servers'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import { Button } from '../../../ui/button'
 import { migrationPhaseLabel } from '../managed-servers/managed-server-copy'
 import type { RuntimeHostDetails } from '../catalog/runtime-environment-host-details'

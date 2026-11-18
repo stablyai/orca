@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
+import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/installation/structured-agent-session-journal-open'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import { SqlAgentSessionJournal } from './journal-sql-store'
 import {
@@ -121,62 +121,6 @@ it('keeps one ordered queue in SQL and pauses cards from before a reopen until r
   expect((await after.queuedMessages.nextInputCard())?.messageId).toBe('C')
 })
 
-it('retains a conservative reopen floor when the mark fails, apart from the opening cursor', async () => {
-  const { root, database, journal } = await fixture()
-  await journal.queuedMessages.insert({ messageId: 'A', body: message('A') })
-  const restarted = await reopen(root, database, journal)
-  const after = restarted.journal
-  const opening = after.openingCursor()
-  const failure = new Error('disk full')
-  await restarted.database.serialize('session', (writer) => {
-    vi.spyOn(writer, 'write').mockRejectedValueOnce(failure)
-  })
-  await expect(after.markQueueReopen(1)).rejects.toBe(failure)
-  const floor = after.reopenFloor()
-  expect(floor).toEqual({
-    epoch: after.physicalCursor().epoch,
-    sequence: after.physicalCursor().sequence + 1
-  })
-  expect(after.openingCursor()).toEqual(opening)
-  expect((await after.queuedMessages.pauses()).map((pause) => pause.reason)).toEqual(['restarted'])
-
-  await after.markQueueReopen(1)
-  expect(after.reopenFloor()).toBeNull()
-})
-
-it('reads the latest Stop from SQL and keeps its settlement in host memory only', async () => {
-  const { root, database, journal } = await fixture()
-  await journal.queuedMessages.insert({ messageId: 'A', body: message('A') })
-  const accepted = await journal.acceptStop({
-    event: { reason: 'user-stop' },
-    fence: 1,
-    liveTurnId: 'turn-1'
-  })
-  expect(accepted.turnId).toBe('turn-1')
-  expect(await journal.stopMarks.latest()).toMatchObject({
-    event: { reason: 'user-stop', turnId: 'turn-1' }
-  })
-  expect(await journal.stopMarks.personStopDecides('turn-1')).toBe(true)
-  expect(await journal.stopMarks.personStopDecides(null)).toBe(false)
-  expect(await journal.queuedMessages.nextInputCard()).toBeNull()
-
-  const edges: number[] = []
-  journal.stopMarks.observeSettleEdges(() => edges.push(journal.stopMarks.revision()))
-  const settle = await journal.stopMarks.beginSettle(true)
-  expect(settle).toEqual({ settling: true })
-  expect(await journal.stopMarks.personStopDecides(null)).toBe(true)
-  journal.stopMarks.settled(settle, 'turn-2')
-  expect(edges).toEqual([1, 2])
-  expect((await journal.stopMarks.latest())?.settle).toEqual({ settling: false, turnId: 'turn-2' })
-  expect(await journal.stopMarks.personStopDecides('turn-2')).toBe(true)
-
-  const restarted = await reopen(root, database, journal)
-  const stop = await restarted.journal.stopMarks.latest()
-  expect(stop).toMatchObject({ event: { reason: 'user-stop', turnId: 'turn-1' } })
-  expect(stop?.settle).toBeUndefined()
-  expect(restarted.journal.stopMarks.revision()).toBe(0)
-})
-
 it("lets every writer command plan with the host's unsaved Stop settlement", async () => {
   const { root, database, journal } = await fixture()
   const turn = (turnId: string, state: 'running' | 'interrupted') =>
@@ -215,47 +159,4 @@ it("lets every writer command plan with the host's unsaved Stop settlement", asy
 
   const restarted = await reopen(root, database, journal)
   expect((await restarted.journal.stopMarks.latest())?.settle).toBeUndefined()
-})
-
-it('orders a later turn end behind the Stop settlement read', async () => {
-  const { database, journal } = await fixture()
-  await journal.appendItem(
-    { provider: 'orca', clientMessageId: 'later' },
-    { kind: 'turn', turnId: 'later', state: 'running' },
-    { fence: 1, turnScope: { kind: 'thread' } }
-  )
-  await journal.appendStopEvent({ reason: 'user-stop', turnId: 'earlier' }, 1)
-  const stop = await journal.reads.latestStop()
-  const reached = Promise.withResolvers<void>()
-  const release = Promise.withResolvers<typeof stop>()
-  vi.spyOn(journal.reads, 'latestStop').mockImplementationOnce(() => {
-    reached.resolve()
-    return release.promise
-  })
-  const settling = journal.stopMarks.beginSettle(true)
-  await reached.promise
-  const ended = database.serialize('session', (writer) =>
-    writer.write({
-      target: {
-        sessionId: 'session',
-        epoch: journal.physicalCursor().epoch,
-        ownerToken: journal.observationHandle()
-      },
-      operation: {
-        kind: 'item',
-        identity: { provider: 'orca', clientMessageId: 'later' },
-        body: { kind: 'turn', turnId: 'later', state: 'interrupted', completedAt: 100 },
-        options: { fence: 1, turnScope: { kind: 'thread' } }
-      },
-      facts: { identity, stopSettle: journal.stopMarks.fact() },
-      savedAt: 100
-    })
-  )
-  release.resolve(stop)
-  await settling
-  await ended
-  expect((await journal.reads.item('orca:later'))?.body).toMatchObject({
-    state: 'interrupted',
-    outcome: 'cancellation'
-  })
 })

@@ -106,7 +106,7 @@ export function WorkspaceCleanupChatHistorySetting({
             <DialogDescription>
               {t(
                 'components.settings.workspaceCleanup.chatHistory.confirmDescription',
-                "Orca will delete Claude Code chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered."
+                "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered."
               )}
             </DialogDescription>
           </DialogHeader>

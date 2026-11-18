@@ -110,7 +110,7 @@ const sweep = () =>
     full: true,
     recentPerAgent: 100,
     listings: new SessionSearchDirectoryListings(),
-    overdue: () => true
+    readDeadline: () => () => true
   })
 function matches() {
   return index.db

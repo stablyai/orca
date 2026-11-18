@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { useTranslate } from '@/i18n/use-translate'

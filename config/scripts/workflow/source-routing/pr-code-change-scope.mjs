@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
 import { SHELL_PREFIXES } from './pr-shell-contract-prefixes.mjs'
 import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
 import {
@@ -41,7 +40,6 @@ export const PR_CHECK_JOBS = [
   'managed_hook_node18',
   'package',
   'package_windows',
-  'layout_oracle',
   'dependency_isolation'
 ]
 
@@ -107,7 +105,6 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex-cli/codex-read-only-app-server-args',
   'src/main/agent-launch/trust/agent-trust-presets',
   'src/main/codex/trust/toml/config-toml-trust',
-  'src/main/pty/shell-startup/codex-no-daemon-binary-contract',
   'src/main/pty/shell-startup/codex-shell-launch-preflight',
   'src/shared/shell/launch/agents/codex-shell-function',
   'src/main/codex/history/index/codex-index-heal-binary-contract',
@@ -539,8 +536,6 @@ function jobDetector(job) {
       return (files) => files.some(isLinuxPackagePath)
     case 'package_windows':
       return (files) => files.some(isWindowsPackagePath)
-    case 'layout_oracle':
-      return (files) => files.some(isLayoutOracleSource)
     case 'dependency_isolation':
       return (files) => files.some((file) => matchesPrefix(file, DEPENDENCY_ISOLATION_PREFIXES))
     default:

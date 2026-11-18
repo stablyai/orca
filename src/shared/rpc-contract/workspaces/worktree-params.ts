@@ -202,10 +202,11 @@ export const WorktreeSet = WorktreeSelector.extend({
     })
     .nullable()
     .optional(),
-  // Older clients may send unsupported review shapes alongside unrelated metadata edits.
-  diffComments: z.array(DiffCommentSchema).optional().catch(undefined),
+  // Why strict: a dropped note list would still answer ok, so the writer would think its notes saved.
+  diffComments: z.array(DiffCommentSchema).optional(),
   // The list the writer started from; the host applies only its changes so other devices' notes survive.
-  diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined),
+  diffCommentsBase: z.array(DiffCommentSchema).optional(),
+  // Older clients may send unsupported review shapes alongside unrelated metadata edits.
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
   matchFolderWorkspaces: MatchFolderWorkspaces,

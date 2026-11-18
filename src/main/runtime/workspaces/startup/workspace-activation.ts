@@ -287,7 +287,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       wslUserAct?: true
     },
     createdWorktree?: Worktree
-  ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
+  ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null; failed?: true }> {
     return provisionWorktreeTerminals(
       this.getWorktreeTerminalProvisioningHost(createdWorktree),
       args

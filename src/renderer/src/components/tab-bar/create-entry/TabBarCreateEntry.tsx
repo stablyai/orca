@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/class-names'
-import { useRuntimeFileListForWorktree } from '../../quick-open-file-list'
+import { useRuntimeFileListForWorktree } from '../../file-actions/quick-open/quick-open-file-list'
 import { createTabEntryAllowAbsolutePathsSelector } from './tab-create-entry-local-path'
 import { getTabEntryOptions } from './tab-create-entry-classifier'
 import { isTabEntryAbsolutePathLike } from './tab-create-entry-path-validation'
@@ -49,6 +49,7 @@ export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.
 function TabBarCreateEntrySession({
   agentOptions = EMPTY_AGENT_OPTIONS,
   agentPickerEntries,
+  excludedTabId,
   groupId,
   menuOpen,
   menuOptions = EMPTY_MENU_OPTIONS,
@@ -86,6 +87,7 @@ function TabBarCreateEntrySession({
   const terminalQueryMode = rawQueryOversized || forcedSearch.forced
   const tabResults = useTabCreateEntrySearchResults({
     enabled: menuOpen && !terminalQueryMode,
+    excludedTabId,
     query,
     worktreeId,
     retainedResultId: pinnedOptionId

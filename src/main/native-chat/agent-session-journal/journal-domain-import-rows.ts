@@ -10,6 +10,7 @@ import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-do
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { recordJournalLegacyChatRevision } from './database/journal-legacy-source'
+import { hydrateJournalStoredItem, journalStoredItemRow } from './journal-stored-output-rows'
 
 export type JournalDomainImportState =
   | { state: 'converting'; epoch: null }
@@ -230,15 +231,15 @@ export function insertJournalDomainItemRows(
   const insert = db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,
         sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,original_stop_note_json,
         queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id,
-        placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')})
-        VALUES(${Array.from({ length: 18 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')}) ${replace ? `ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET ${['ordinal', 'revision', 'sequence', 'sequence_index', 'owner_fence', 'execution_owner', 'payload_json', 'hidden', 'original_stop_note_json', 'queue_command_turn', 'queue_failed_outcome', 'queue_failed_at', 'queue_failure_witnessed_through', 'queue_failure_report_turn_item_id', 'placement_json', ...JOURNAL_DOMAIN_ITEM_COLUMNS].map((column) => `${column}=excluded.${column}`).join(',')}` : 'ON CONFLICT DO NOTHING'}`)
+        placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')},output_blob)
+        VALUES(${Array.from({ length: 19 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')}) ${replace ? `ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET ${['ordinal', 'revision', 'sequence', 'sequence_index', 'owner_fence', 'execution_owner', 'payload_json', 'hidden', 'original_stop_note_json', 'queue_command_turn', 'queue_failed_outcome', 'queue_failed_at', 'queue_failure_witnessed_through', 'queue_failure_report_turn_item_id', 'placement_json', ...JOURNAL_DOMAIN_ITEM_COLUMNS].map((column) => `${column}=excluded.${column}`).join(',')},output_blob=CASE WHEN ? THEN journal_items.output_blob ELSE excluded.output_blob END` : 'ON CONFLICT DO NOTHING'}`)
   for (const {
     ordinal,
     ownerFence,
     executionOwner,
     hidden,
-    item,
-    displayed,
+    item: given,
+    displayed: shown,
     originalStopNoteJson,
     queueCommandTurn,
     queueFailedOutcome,
@@ -246,8 +247,13 @@ export function insertJournalDomainItemRows(
     queueFailureWitnessedThrough,
     queueFailureReportTurnItemId
   } of rows) {
-    const { payload, metadata, values, placement } =
-      prepared ?? prepareJournalDomainItemRow(item, displayed)
+    const item = hydrateJournalStoredItem(db, prefix, given)
+    const displayed = shown && hydrateJournalStoredItem(db, prefix, shown)
+    const encoded =
+      (item === given && displayed === shown ? prepared : undefined) ??
+      prepareJournalDomainItemRow(item, displayed)
+    const { metadata, placement } = encoded
+    const row = journalStoredItemRow(db, prefix, item, encoded.payload, encoded.values)
     const result = insert.run(
       ...prefix,
       item.itemId,
@@ -257,7 +263,7 @@ export function insertJournalDomainItemRows(
       item.sequenceIndex ?? 0,
       ownerFence,
       executionOwner,
-      payload,
+      row.payload,
       Number(hidden),
       originalStopNoteJson,
       Number(queueCommandTurn),
@@ -266,7 +272,9 @@ export function insertJournalDomainItemRows(
       queueFailureWitnessedThrough,
       queueFailureReportTurnItemId,
       placement,
-      ...values
+      ...row.values,
+      row.blob,
+      ...(replace ? [Number(row.keep)] : [])
     )
     names = metadata.namedSubagentIds
     if (writeNames && Number(result.changes) > 0) {
