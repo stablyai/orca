@@ -51,6 +51,8 @@ export type SessionOptionDescriptor = {
   disabledReason?: SessionOptionDisabledReason
   /** Active value when a saved selection intentionally waits for a later input. */
   activeValue?: string
+  /** A model row that returns to the agent's own default, apart from the listed model ids. */
+  defaultChoice?: { selected: boolean }
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }
@@ -115,8 +117,12 @@ export type NativeChatSessionOptionSettingsMutation =
       sessionId?: string
     }
   | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
+  /** New chats go back to the agent's own model; per-model values stay for a later pick. */
+  | { type: 'clear-model'; agent: AgentType }
 
 export type SessionOptionsSurface = {
+  /** Present only where the host can return the option to the agent's default. */
+  resetOption?: (id: string) => Promise<SessionOptionSetResult>
   demandModelCatalog?: () => void
   /** Live local admission for a structured action, before consuming its composer trigger. */
   admits?: (id: string, value: SessionOptionValue) => boolean

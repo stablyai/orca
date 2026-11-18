@@ -16,6 +16,9 @@ import {
 import { structuredAgentSessionShownSnapshot } from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from '../catalog/use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
+import { useStructuredAgentSessionModelDefault } from './use-structured-agent-session-model-default'
+import { AGENT_SESSION_DEFAULT_MODEL_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { useStructuredAgentSessionHostCapability } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
 import {
   flushStructuredSessionSelectionOptions,
@@ -65,6 +68,14 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   })
 
   const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
+  // Default needs a chat the host already holds; before that, a pick is held for the launch.
+  const offersDefault =
+    useStructuredAgentSessionHostCapability(
+      target,
+      AGENT_SESSION_DEFAULT_MODEL_RUNTIME_CAPABILITY
+    ) &&
+    transportEnabled &&
+    fence !== null
 
   const interactionReadyRef = useRef(acceptsPicks)
   const lockSnapshotRef = useRef(
@@ -77,7 +88,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     lockSnapshotRef.current = lockSnapshot
   })
   const renderedView = optionView(optionState, launchSeedOptions, launch?.explicitOptions)
-  const optionSnapshot = structuredAgentSessionOptionAvailability({
+  const availableSnapshot = structuredAgentSessionOptionAvailability({
     controller,
     view: renderedView,
     snapshot: lockSnapshot(structuredAgentSessionShownSnapshot(renderedView)),
@@ -85,6 +96,13 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     providerStarting,
     isCurrentContext
   })
+  const optionSnapshot = offersDefault
+    ? availableSnapshot.map((descriptor) =>
+        descriptor.id === 'model'
+          ? { ...descriptor, defaultChoice: { selected: renderedView.modelDefault === true } }
+          : descriptor
+      )
+    : availableSnapshot
   const modelOption = optionSnapshot.find((row) => row.id === 'model')
   const hostCatalog = useHostModelCatalogUpgrade({
     agent,
@@ -159,8 +177,30 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     },
     [launch?.explicitOptions, launchSeedOptions, optionStateRef, optionView, setStructuredOption]
   )
+  const resetModel = useStructuredAgentSessionModelDefault({
+    agent,
+    target,
+    mutate: args.mutate,
+    source: {
+      controller,
+      activeOptionRecordRef,
+      isCurrentContext,
+      updateOptionState,
+      rereadOptions
+    }
+  })
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
+      ...(offersDefault
+        ? {
+            resetOption: async (id: string) => {
+              if (id === 'model' && acceptsPicks) {
+                await resetModel()
+              }
+              return { snapshot: optionSnapshot }
+            }
+          }
+        : {}),
       getSnapshot: () => optionSnapshot,
       demandModelCatalog: hostCatalog.demandModelCatalog,
       admits: writer.admits,
@@ -168,7 +208,15 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [setOption, optionSnapshot, hostCatalog.demandModelCatalog, writer]
+    [
+      setOption,
+      optionSnapshot,
+      hostCatalog.demandModelCatalog,
+      writer,
+      offersDefault,
+      acceptsPicks,
+      resetModel
+    ]
   )
 
   return {

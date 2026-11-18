@@ -29,6 +29,7 @@ import { NativeChatModelCombobox } from './NativeChatModelCombobox'
 import { useNativeChatPickerFocusReturn } from '../../../composer/focus/native-chat-picker-focus-return'
 import { NativeChatSessionOptionRows } from './NativeChatSessionOptionRows'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { withPendingValue, type PendingPick } from './native-chat-session-option-pending-pick'
 
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
@@ -37,35 +38,6 @@ export type NativeChatSessionOptionPickersProps = {
   pickerRequest?: NativeChatOptionPickerRequest | null
   /** Where focus lands after a visit that changed something; see `useNativeChatPickerFocusReturn`. */
   focusComposer?: () => void
-}
-
-/** A descriptor write in flight; its value shows until it settles. */
-type PendingPick = { id: string; value?: SessionOptionValue }
-
-// Show pending picks in place while open; refusal restores the host snapshot.
-function withPendingValue(
-  descriptor: SessionOptionDescriptor,
-  pending: PendingPick | null
-): SessionOptionDescriptor {
-  if (pending?.id !== descriptor.id) {
-    return descriptor
-  }
-  const { kind } = descriptor
-  if (kind.type === 'select' && typeof pending.value === 'string') {
-    return {
-      ...descriptor,
-      valueSource: 'dispatched',
-      kind: { ...kind, currentValue: pending.value }
-    }
-  }
-  if (kind.type === 'boolean' && typeof pending.value === 'boolean') {
-    return {
-      ...descriptor,
-      valueSource: 'dispatched',
-      kind: { ...kind, currentValue: pending.value }
-    }
-  }
-  return descriptor
 }
 
 // Keep visible value text inside the accessible name for voice control (WCAG 2.5.3).
@@ -155,6 +127,7 @@ function SessionOptionPopover(props: {
   request: NativeChatOptionPickerRequest | null
   onSet: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
   onAction: (descriptor: SessionOptionDescriptor) => void
+  onReset?: (descriptor: SessionOptionDescriptor) => void
   focusComposer?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -186,11 +159,19 @@ function SessionOptionPopover(props: {
   }, [open, demandModelCatalog])
   const focusReturn = useNativeChatPickerFocusReturn(props.focusComposer)
   const modelTitle = t('components.native-chat.composer.model', 'Model')
-  const modelLabel = nativeChatModelPillLabel(model, say)
+  const defaultSelected = model.defaultChoice?.selected === true
+  // Default names the model it resolved to once the host does; until then it names itself.
+  const resolved = model.valueSource !== 'unknown' && model.valueSource !== 'default'
+  const modelLabel =
+    defaultSelected && !resolved
+      ? t('components.native-chat.composer.defaultModel', 'Default')
+      : nativeChatModelPillLabel(model, say)
   const effort = options.find((option) => option.id === 'effort')
   const effortChoice =
     effort && effort.valueSource !== 'unknown' ? selectedNativeChatChoice(effort) : null
-  const knownModel = model.valueSource !== 'unknown' && selectedNativeChatChoice(model)
+  const knownModel =
+    (defaultSelected && !resolved) ||
+    (model.valueSource !== 'unknown' && selectedNativeChatChoice(model))
   const tooltipLabel = knownModel
     ? effortChoice
       ? t('components.native-chat.composer.modelAndEffortValue', '{{model}} · {{effort}}', {
@@ -219,11 +200,18 @@ function SessionOptionPopover(props: {
       setOpen(false)
     }
     if (
+      descriptor.defaultChoice?.selected ||
       descriptor.valueSource === 'unknown' ||
       descriptor.valueSource === 'default' ||
       descriptor.kind.currentValue !== value
     ) {
       props.onSet(descriptor, value)
+    }
+  }
+  const reset = (descriptor: SessionOptionDescriptor): void => {
+    if (!pendingIds.has(descriptor.id)) {
+      focusReturn.notePick()
+      props.onReset?.(descriptor)
     }
   }
   const act = (descriptor: SessionOptionDescriptor): void => {
@@ -308,6 +296,15 @@ function SessionOptionPopover(props: {
             readOnlyReason={modelReason}
             busy={pendingIds.has(model.id)}
             onSelect={(value) => set(model, value)}
+            defaultChoice={
+              model.defaultChoice && props.onReset
+                ? {
+                    selected: defaultSelected,
+                    modelLabel: defaultSelected && resolved ? modelLabel : undefined,
+                    onSelect: () => reset(model)
+                  }
+                : undefined
+            }
           />
         ) : (
           <NativeChatSessionOptionWriteGroup
@@ -357,6 +354,7 @@ function NativeChatSessionOptionPickersInner({
     return null
   }
   const model = withPendingValue(reportedModel, pending.get(reportedModel.id) ?? null)
+  const resetOption = surface.resetOption
   const options = sortNativeChatSessionOptions(snapshot)
     .filter((descriptor) => descriptor.id !== 'interactionMode')
     .map((descriptor) => withPendingValue(descriptor, pending.get(descriptor.id) ?? null))
@@ -393,6 +391,13 @@ function NativeChatSessionOptionPickersInner({
           runSessionOptionSurfaceCall({ id: descriptor.id }, markPending(descriptor.id), () =>
             surface.invokeAction(descriptor.id)
           )
+        }
+        onReset={
+          resetOption &&
+          ((descriptor) =>
+            runSessionOptionSurfaceCall({ id: descriptor.id }, markPending(descriptor.id), () =>
+              resetOption(descriptor.id)
+            ))
         }
         focusComposer={focusComposer}
       />

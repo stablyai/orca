@@ -114,8 +114,11 @@ function modelOptionView(
   seed: Readonly<Record<string, string>> | undefined,
   held: Readonly<Record<string, string>>
 ): StructuredAgentSessionOptionState {
+  // A chat on the agent's default no longer launches with the seed's model.
   const unconfirmedSeed =
-    seed !== undefined && structuredAgentSessionModelId(state.record, 'own') === null
+    !state.modelDefault &&
+    seed !== undefined &&
+    structuredAgentSessionModelId(state.record, 'own') === null
   const hasHeld = Object.keys(held).length > 0
   if (!state.catalog || (!unconfirmedSeed && !hasHeld)) {
     return state

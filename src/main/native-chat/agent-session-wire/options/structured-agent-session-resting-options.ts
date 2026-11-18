@@ -13,6 +13,7 @@ import {
   structuredAgentSessionOptionModels,
   type StructuredAgentSessionRestingOptions as RestingOptions
 } from './structured-agent-session-option-models'
+import { effectiveAgentSessionOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 /** What the asking client takes: whether it reads an answer that names no model. */
 export type StructuredAgentSessionOptionsReader = { readsWithoutModel: boolean; deadline?: number }
@@ -68,7 +69,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
       legacyOptionsDisplay: true
     })
   }
-  const saved = record.options ?? {}
+  const saved = effectiveAgentSessionOptions(record) ?? {}
   // The chat's own folder decides its default, as its first frame did.
   const scoped = await readCatalog(true)
   const folderDefault =

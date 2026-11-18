@@ -272,7 +272,7 @@ export function legacyAction(
     }
     if (method === 'agentSession.setOption') {
       const { key, value } = SetOptionParams.parse(params)
-      return write(key, value)
+      return value === null ? Promise.reject(new Error('Launches never reset')) : write(key, value)
     }
     if (method === 'agentSession.history') {
       return { ok: true, page: { ...created().value.page, fence: 2 } }

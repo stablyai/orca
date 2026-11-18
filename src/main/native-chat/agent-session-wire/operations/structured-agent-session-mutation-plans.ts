@@ -268,27 +268,29 @@ export function cancelPlan(params: {
   }
 }
 
-export function setOptionPlan(params: { key: string; value: string }) {
+/** A null value is the model's return to the agent default. */
+export function setOptionPlan({ key, value }: { key: string; value: string | null }) {
   return {
     method: 'agentSession.setOption',
-    fields: { key: params.key, value: params.value },
+    fields: { key, value },
     run: async (ctx) => {
-      const options = { ...ctx.persistedOptions, [params.key]: params.value }
+      const options = { ...ctx.persistedOptions, ...(value === null ? {} : { [key]: value }) }
       await ctx.persistOptions(options)
       ctx.publish()
-      return { ok: true, value: { ...params, options } }
+      return { ok: true, value: { key, value, options } }
     },
     // Reapply unsettled picks; only a settled success can be replayed directly.
     replay: (ctx, outcome) => {
       if (outcome.status !== 'succeeded') {
         return null
       }
-      if (Object.hasOwn(outcome, 'optionResult')) {
-        return readNoChoiceOptionResult(outcome.optionResult, params)
+      if (value !== null && Object.hasOwn(outcome, 'optionResult')) {
+        return readNoChoiceOptionResult(outcome.optionResult, { key, value })
       }
       return {
-        key: params.key,
-        value: params.value,
+        key,
+        value,
+        ...(value === null ? { modelDefault: ctx.modelDefault === true } : {}),
         ...(ctx.persistedOptions ? { options: { ...ctx.persistedOptions } } : {})
       }
     }
