@@ -20,7 +20,9 @@ export type TrackedAntigravityChild = {
   hookStepIdx?: number
   settledStepAtTurnStart?: number
   lastMemberWakeMode?: string
-  model?: string
+  lastMemberModel?: string
+  hookModel?: string
+  fallbackModel?: string
   toolName?: string
   toolInput?: string
 }
@@ -28,7 +30,7 @@ export type TrackedAntigravityChild = {
 export type AntigravityPaneChildState = {
   rootConversationId?: string
   rootBrainDir?: string
-  hasSpawnedHelper?: boolean
+  awaitingInitialHelperDiscovery?: boolean
   leadState?: AgentStatusState
   leadStateStartedAt?: number
   leadModel?: string
@@ -73,6 +75,7 @@ export function recordAntigravityChildHook(
   transcriptPath: string | undefined,
   now: number
 ): void {
+  paneState.awaitingInitialHelperDiscovery = false
   const initialStart =
     paneState.children.get(childId)?.startedAt ??
     (paneState.rootBrainDir
@@ -82,9 +85,9 @@ export function recordAntigravityChildHook(
   const tracked = getOrCreateTrackedChild(paneState, childId, initialStart)
   const hookModel = normalizeAntigravityModel(readFirstString(hookPayload, ['modelName', 'model']))
   if (hookModel) {
-    tracked.model = hookModel
-  } else if (!tracked.model && transcriptPath) {
-    tracked.model = readAntigravityTranscriptModel(transcriptPath)
+    tracked.hookModel = hookModel
+  } else if (!tracked.hookModel && !tracked.fallbackModel && transcriptPath) {
+    tracked.fallbackModel = readAntigravityTranscriptModel(transcriptPath)
   }
   if (typeof hookPayload.stepIdx === 'number') {
     tracked.hookStepIdx = hookPayload.stepIdx

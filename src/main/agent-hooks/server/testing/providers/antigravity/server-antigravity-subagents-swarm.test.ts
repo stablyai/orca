@@ -73,14 +73,14 @@ it('tracks active swarm workers via hooks and 1s metadata polls while preserving
 
   const rootBrain = createBrainTranscript(brainRoot, rootId, [ROOT_ORIGIN])
   const worker1Brain = createBrainTranscript(brainRoot, w1, [CHILD_ORIGIN])
-  createBrainTranscript(brainRoot, w2, [CHILD_ORIGIN])
+  const worker2Brain = createBrainTranscript(brainRoot, w2, [CHILD_ORIGIN])
   createBrainTranscript(brainRoot, w3, [CHILD_ORIGIN])
   createBrainTranscript(brainRoot, w4, [CHILD_ORIGIN])
 
   const swarmDir = join(rootBrain.brainDir, '.system_generated', 'swarm')
   mkdirSync(swarmDir, { recursive: true })
   const membersPath = join(swarmDir, 'members.json')
-  const writeMembers = (w1Wake: string, w2Wake: string) => {
+  const writeMembers = (w1Wake: string, w2Wake: string, w1Model = 'gemini-3.1-pro-high') => {
     writeFileSync(
       membersPath,
       JSON.stringify({
@@ -102,7 +102,7 @@ it('tracks active swarm workers via hooks and 1s metadata polls while preserving
             desired_state: 'RUNNING',
             wake_mode: w1Wake,
             killed: false,
-            applied_model: 'gemini-3.1-pro-high'
+            applied_model: w1Model
           },
           billing_check: {
             conversation_id: w2,
@@ -188,11 +188,26 @@ it('tracks active swarm workers via hooks and 1s metadata polls while preserving
     state: 'working'
   })
 
-  writeMembers('working', 'mentions')
+  writeMembers('working', 'mentions', 'gemini-3-flash')
   await vi.advanceTimersByTimeAsync(1_000)
 
   const polled = server.getStatusSnapshot()[0]
   expect(polled?.subagents?.map((s) => s.description)).toEqual(['auth_audit'])
+  expect(polled?.subagents?.[0]?.model).toBe('gemini-3-flash')
+
+  // Delayed child PostToolUse after parking in 'mentions' must not resurrect the sleeping worker.
+  await agyHook(
+    {
+      conversationId: w2,
+      transcriptPath: worker2Brain.transcriptPath,
+      lastUserInput: '',
+      toolCall: { name: 'run_command', args: { CommandLine: 'pnpm test' } }
+    },
+    'PostToolUse'
+  )
+  expect(server.getStatusSnapshot()[0]?.subagents?.map((s) => s.description)).toEqual([
+    'auth_audit'
+  ])
 
   writeMembers('mentions', 'mentions')
   await agyHook(
@@ -319,4 +334,89 @@ it('tracks invoke_subagent lifecycle, child ask_question waits, and settled ALIV
   const done = server.getStatusSnapshot()[0]
   expect(done?.state).toBe('done')
   expect(done?.subagents).toBeUndefined()
+})
+
+it('preserves done lead on late background PostToolUse and settles when the last helper is killed', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
+  const brainRoot = join(dir, 'brain')
+  const rootId = '50000000-0000-4000-8000-000000000001'
+  const childId = '60000000-0000-4000-8000-000000000001'
+
+  const rootBrain = createBrainTranscript(brainRoot, rootId, [ROOT_ORIGIN])
+  createBrainTranscript(brainRoot, childId, [CHILD_ORIGIN])
+
+  const subagentsDir = join(rootBrain.brainDir, '.system_generated', 'subagents')
+  mkdirSync(subagentsDir, { recursive: true })
+  const subagentPath = join(subagentsDir, `${childId}.json`)
+  const writeSubagentState = (state: string) => {
+    writeFileSync(
+      subagentPath,
+      JSON.stringify({
+        conversationId: childId,
+        subagentDescriptor: { typeName: 'self', role: 'Background Worker' },
+        state,
+        spawnStepIndex: 2
+      })
+    )
+  }
+  writeSubagentState('SUBAGENT_STATE_ALIVE')
+
+  await agyHook(
+    {
+      conversationId: rootId,
+      transcriptPath: rootBrain.transcriptPath,
+      lastUserInput: 'Run checks and helper',
+      modelName: 'gemini-3.1-pro-high'
+    },
+    'PreInvocation'
+  )
+  await agyHook(
+    {
+      conversationId: rootId,
+      transcriptPath: rootBrain.transcriptPath,
+      stepIdx: 1,
+      toolCall: { name: 'run_command', args: { CommandLine: 'pnpm tc', IsDaemon: false } }
+    },
+    'PreToolUse'
+  )
+  await agyHook(
+    {
+      conversationId: rootId,
+      transcriptPath: rootBrain.transcriptPath,
+      stepIdx: 2,
+      toolCall: { name: 'invoke_subagent', args: { Role: 'Background Worker' } }
+    },
+    'PreToolUse'
+  )
+  await agyHook(
+    {
+      conversationId: rootId,
+      transcriptPath: rootBrain.transcriptPath,
+      fullyIdle: false
+    },
+    'Stop'
+  )
+
+  expect(server.getStatusSnapshot()[0]?.mainAgent?.state).toBe('done')
+
+  await agyHook(
+    {
+      conversationId: rootId,
+      transcriptPath: rootBrain.transcriptPath,
+      stepIdx: 1,
+      toolCall: { name: 'run_command', args: { CommandLine: 'pnpm tc', IsDaemon: false } }
+    },
+    'PostToolUse'
+  )
+
+  const afterCommandEnd = server.getStatusSnapshot()[0]
+  expect(afterCommandEnd?.state).toBe('working')
+  expect(afterCommandEnd?.mainAgent?.state).toBe('done')
+
+  writeSubagentState('SUBAGENT_STATE_KILLED')
+  await vi.advanceTimersByTimeAsync(1_000)
+
+  const afterKill = server.getStatusSnapshot()[0]
+  expect(afterKill?.state).toBe('done')
+  expect(afterKill?.subagents).toBeUndefined()
 })

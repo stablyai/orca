@@ -31,20 +31,30 @@ function resolveChildModel(
   memberModel: string | undefined,
   tail: AntigravityChildTranscriptTail | undefined
 ): string | undefined {
-  if (tracked.model) {
-    return tracked.model
+  if (memberModel !== undefined && memberModel !== tracked.lastMemberModel) {
+    tracked.lastMemberModel = memberModel
+    tracked.fallbackModel = memberModel
+    if (tracked.hookModel && tracked.hookModel !== memberModel) {
+      tracked.hookModel = undefined
+    }
   }
-  const resolved = memberModel ?? tail?.model
-  if (resolved) {
-    tracked.model = resolved
-    return resolved
+  if (tracked.hookModel) {
+    return tracked.hookModel
+  }
+  const liveMetadataModel = memberModel ?? tail?.model
+  if (liveMetadataModel) {
+    tracked.fallbackModel = liveMetadataModel
+    return liveMetadataModel
+  }
+  if (tracked.fallbackModel) {
+    return tracked.fallbackModel
   }
   if (!rootBrainDir) {
     return undefined
   }
   const tailModel = readAntigravityChildTranscriptModel(rootBrainDir, childId)
   if (tailModel) {
-    tracked.model = tailModel
+    tracked.fallbackModel = tailModel
   }
   return tailModel
 }
@@ -98,17 +108,20 @@ function reconcileSwarmMemberSnapshot(
   if (existing && previousWakeMode !== 'working' && isWorking && existing.hookState === 'done') {
     existing.hookState = 'working'
   }
-  let active = isWorking && existing?.hookState !== 'done'
-  if (!isWorking) {
-    if (previousWakeMode === 'working' && existing) {
+
+  let active = false
+  if (member.wakeMode === 'mentions') {
+    if (existing) {
       existing.hookState = undefined
       existing.toolName = undefined
       existing.toolInput = undefined
-      active = false
-    } else {
-      active = Boolean(existing && existing.hookState && existing.hookState !== 'done')
     }
+  } else if (isWorking) {
+    active = existing?.hookState !== 'done'
+  } else {
+    active = Boolean(existing && existing.hookState && existing.hookState !== 'done')
   }
+
   const rootBrainDir = paneState.rootBrainDir
   const startAt =
     existing?.startedAt ??
@@ -177,7 +190,12 @@ function reconcileDiskSubagentSnapshot(
   if (isRegularSubagentTailSettled(existing, tail)) {
     return null
   }
-  if (!existing && !tail && paneState.leadState === 'done' && !paneState.hasSpawnedHelper) {
+  if (
+    !existing &&
+    !tail &&
+    paneState.leadState === 'done' &&
+    !paneState.awaitingInitialHelperDiscovery
+  ) {
     return null
   }
   return buildActiveChildSnapshot({
@@ -246,6 +264,10 @@ export function reconcileAntigravityActiveSubagents(
     if (snap) {
       snapshots.push(snap)
     }
+  }
+
+  if (diskSubagentById.size > 0 || swarmById.size > 0 || paneState.children.size > 0) {
+    paneState.awaitingInitialHelperDiscovery = false
   }
 
   snapshots.sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id))

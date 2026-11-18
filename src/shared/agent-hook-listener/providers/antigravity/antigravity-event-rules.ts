@@ -8,15 +8,17 @@ export function isAntigravityFeedbackTool(toolName: string | undefined): boolean
   return toolName === 'ask_question' || toolName === 'ask_permission'
 }
 
+export function isAntigravityHelperSpawnTool(toolName: string | undefined): boolean {
+  return toolName === 'invoke_subagent' || toolName === 'swarm' || toolName === 'run_workflow'
+}
+
 export function isAntigravitySubagentTool(toolName: string | undefined): boolean {
   return (
-    toolName === 'invoke_subagent' ||
+    isAntigravityHelperSpawnTool(toolName) ||
     toolName === 'send_message' ||
     toolName === 'manage_subagents' ||
-    toolName === 'swarm' ||
     toolName === 'swarm_wait' ||
-    toolName === 'read_board' ||
-    toolName === 'run_workflow'
+    toolName === 'read_board'
   )
 }
 

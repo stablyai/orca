@@ -124,11 +124,16 @@ function readBoundedJsonRecord(
   cache: AntigravityBrainCache
 ): { record: Record<string, unknown>; mtimeMs: number } | undefined {
   try {
-    const { buffer, stats } = readNodeFileSyncWithinLimit(filePath, BRAIN_METADATA_MAX_BYTES, {
-      regularFileOnly: true
-    })
     const cached = cache.jsonFiles.get(filePath)
-    if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
+    const { buffer, stats, unchanged } = readNodeFileSyncWithinLimit(
+      filePath,
+      BRAIN_METADATA_MAX_BYTES,
+      {
+        regularFileOnly: true,
+        unchangedWhen: cached ? { mtimeMs: cached.mtimeMs, size: cached.size } : undefined
+      }
+    )
+    if (cached && (unchanged || (cached.mtimeMs === stats.mtimeMs && cached.size === stats.size))) {
       return cached.parsed ? { record: cached.parsed, mtimeMs: stats.mtimeMs } : undefined
     }
     const parsed = parseAgentHookJson(buffer.toString('utf8'))

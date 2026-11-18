@@ -2,6 +2,7 @@ import { closeSync, constants, fstatSync, openSync, readSync, statSync, type Sta
 import { open, stat, type FileHandle } from 'node:fs/promises'
 
 const MIN_GROWTH_BYTES = 64 * 1024
+const EMPTY_BUFFER = Buffer.alloc(0)
 
 export class NodeFileReadTooLargeError extends Error {
   constructor(
@@ -25,6 +26,7 @@ export class NodeFileNotRegularError extends Error {
 export type BoundedNodeFileRead = {
   buffer: Buffer
   stats: Stats
+  unchanged?: boolean
 }
 
 type NodeFileReadOptions = {
@@ -149,14 +151,23 @@ export async function readNodeFileHandleWithinLimit(
 export function readNodeFileSyncWithinLimit(
   filePath: string,
   maxBytes: number,
-  options: { regularFileOnly?: boolean } = {}
+  options: { regularFileOnly?: boolean; unchangedWhen?: { mtimeMs: number; size: number } } = {}
 ): BoundedNodeFileRead {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
     throw new RangeError('File read limit must be a non-negative safe integer')
   }
 
-  if (options.regularFileOnly && !statSync(filePath).isFile()) {
+  const preStats = options.regularFileOnly || options.unchangedWhen ? statSync(filePath) : undefined
+  if (options.regularFileOnly && preStats && !preStats.isFile()) {
     throw new NodeFileNotRegularError()
+  }
+  if (
+    preStats &&
+    options.unchangedWhen &&
+    preStats.mtimeMs === options.unchangedWhen.mtimeMs &&
+    preStats.size === options.unchangedWhen.size
+  ) {
+    return { buffer: EMPTY_BUFFER, stats: preStats, unchanged: true }
   }
   // Nonblocking open also fences replacement with a FIFO after the path check.
   const flags = options.regularFileOnly
