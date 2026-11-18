@@ -241,8 +241,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
+    const rowBefore = this.state.lastStatusByPaneKey.get(event.paneKey)
     const enriched = this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
-    if (enriched && normalized.stopTranscriptPath) {
+    if (enriched && enriched !== rowBefore && normalized.stopTranscriptPath) {
       this.readStopTextFromTranscript(enriched, normalized.stopTranscriptPath)
     }
     if (event.payload.state !== 'done') {

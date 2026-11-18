@@ -54,12 +54,14 @@ export function readLastTextFromTranscriptOnce(
 
 /** For event-loop callers: the same scan as readLastAssistantFromTranscriptOnce, without blocking. */
 export function readLastAssistantFromTranscriptAsync(
-  transcriptPath: string
+  transcriptPath: string,
+  keepReading?: () => boolean
 ): Promise<string | undefined> {
   return scanFileRegionsBackwardAsync(
     transcriptPath,
     { chunkBytes: TRANSCRIPT_CHUNK_BYTES, maxScanBytes: TRANSCRIPT_MAX_SCAN_BYTES },
-    (region) => findLastExtractedTranscriptLineText(region.toString('utf8'), extractAssistantTextFromLine)
+    (region) => findLastExtractedTranscriptLineText(region.toString('utf8'), extractAssistantTextFromLine),
+    keepReading
   )
 }
 

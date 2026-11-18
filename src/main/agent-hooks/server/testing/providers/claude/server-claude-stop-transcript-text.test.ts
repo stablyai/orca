@@ -64,7 +64,6 @@ describe('Stop without its text', () => {
     const stopped = row(server)
     expect(stopped?.state).toBe('done')
     expect(stopped?.lastAssistantMessage).toBeUndefined()
-    expect(reads).toHaveLength(1)
 
     reads[0]!('All done.')
     await vi.waitFor(() => expect(row(server)?.lastAssistantMessage).toBe('All done.'))

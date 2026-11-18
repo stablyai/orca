@@ -6,6 +6,7 @@ import {
   preparePendingGrokResultDiscovery
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
   normalizeAgentStatusPayload,
   pickHostTurnEnd
@@ -233,65 +234,78 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   /**
    * The Stop already applied in hook order without its text; read it off the event loop and add
-   * it to that same row. Identity, not field equality, proves the turn: a re-asked prompt makes a
-   * newer turn look identical, and any later hook replaces the row and wins.
+   * it to that Stop's row. The row's hook receipt pins the turn: any later hook, even a re-asked
+   * identical prompt, stamps a new one and wins; restatements of the same row (an identity
+   * settling) keep it.
    */
   protected readStopTextFromTranscript(
     original: EnrichedAgentHookEventPayload,
     transcriptPath: string,
     attempt = 1
   ): void {
-    if (original.payload.lastAssistantMessage && !original.payload.lastAssistantMessageIsToolOutput) {
-      return
-    }
     const token = this.token
     const generation = this.statusHookGeneration
-    const isCurrent = (): boolean =>
-      this.statusHooksEnabled &&
-      this.token === token &&
-      this.statusHookGeneration === generation &&
-      this.state.lastStatusByPaneKey.get(original.paneKey) === original
-    void readLastAssistantFromTranscriptAsync(transcriptPath).then((text) => {
-      if (!isCurrent()) {
-        return
-      }
-      if (!text) {
-        // Stop can precede the transcript flush.
-        if (attempt < ASSISTANT_MESSAGE_RETRY_ATTEMPTS) {
-          this.clearAssistantMessageRetry(original.paneKey)
-          const timer = setTimeout(() => {
-            this.assistantMessageRetryTimers.delete(original.paneKey)
-            this.readStopTextFromTranscript(original, transcriptPath, attempt + 1)
-          }, ASSISTANT_MESSAGE_RETRY_MS)
-          timer.unref?.()
-          this.assistantMessageRetryTimers.set(original.paneKey, timer)
+    const current = (): AgentHookEventPayload | undefined => {
+      const row = this.state.lastStatusByPaneKey.get(original.paneKey)
+      return this.statusHooksEnabled &&
+        this.token === token &&
+        this.statusHookGeneration === generation &&
+        row &&
+        'receivedAt' in row &&
+        row.receivedAt === original.receivedAt &&
+        'stateStartedAt' in row &&
+        row.stateStartedAt === original.stateStartedAt &&
+        row.payload.state === original.payload.state &&
+        row.payload.prompt === original.payload.prompt
+        ? row
+        : undefined
+    }
+    void readLastAssistantFromTranscriptAsync(transcriptPath, () => current() !== undefined).then(
+      (text) => {
+        const row = current()
+        if (!row) {
+          return
         }
-        return
-      }
-      const payload = normalizeAgentStatusPayload({
-        ...original.payload,
-        lastAssistantMessage: text,
-        lastAssistantMessageIsToolOutput: undefined
-      })
-      if (!payload) {
-        return
-      }
-      const tool = this.state.lastToolByPaneKey.get(original.paneKey)
-      if (tool) {
-        // Later rebuilds of this turn's row read the snapshot, not the row.
-        this.state.lastToolByPaneKey.set(original.paneKey, {
-          ...tool,
-          lastAssistantMessage: payload.lastAssistantMessage,
+        if (!text) {
+          // Stop can precede the transcript flush.
+          if (attempt < ASSISTANT_MESSAGE_RETRY_ATTEMPTS) {
+            this.clearAssistantMessageRetry(original.paneKey)
+            const timer = setTimeout(() => {
+              this.assistantMessageRetryTimers.delete(original.paneKey)
+              this.readStopTextFromTranscript(original, transcriptPath, attempt + 1)
+            }, ASSISTANT_MESSAGE_RETRY_MS)
+            timer.unref?.()
+            this.assistantMessageRetryTimers.set(original.paneKey, timer)
+          }
+          return
+        }
+        const payload = normalizeAgentStatusPayload({
+          ...row.payload,
+          lastAssistantMessage: text,
           lastAssistantMessageIsToolOutput: undefined
         })
+        if (!payload) {
+          return
+        }
+        const tool = this.state.lastToolByPaneKey.get(original.paneKey)
+        if (tool) {
+          // Later rebuilds of this turn's row read the snapshot, not the row.
+          this.state.lastToolByPaneKey.set(original.paneKey, {
+            ...tool,
+            lastAssistantMessage: payload.lastAssistantMessage,
+            lastAssistantMessageIsToolOutput: undefined
+          })
+        }
+        this.applyRestatedStatus({
+          ...row,
+          payload,
+          // The whole reply answers the lead's turn; the row keeps only its capped preview.
+          replyCandidate: text,
+          hookEventName: undefined,
+          hasExplicitPrompt: undefined
+        })
       }
-      this.applyRestatedStatus({
-        ...original,
-        payload,
-        hookEventName: undefined,
-        hasExplicitPrompt: undefined
-      })
-    })
+    )
   }
 
   protected applyAssistantMessageRetry(

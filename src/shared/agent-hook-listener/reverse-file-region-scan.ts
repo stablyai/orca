@@ -56,7 +56,9 @@ export function scanFileRegionsBackward<T>(
 export async function scanFileRegionsBackwardAsync<T>(
   filePath: string,
   limits: { chunkBytes: number; maxScanBytes: number },
-  visit: (region: Buffer, regionPosition: number) => T | undefined
+  visit: (region: Buffer, regionPosition: number) => T | undefined,
+  /** Checked before each read; a superseded scan stops instead of reading on. */
+  keepReading: () => boolean = () => true
 ): Promise<T | undefined> {
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
@@ -65,7 +67,7 @@ export async function scanFileRegionsBackwardAsync<T>(
     const carryChunks: Buffer[] = []
     let bytesRead = 0
     let scanEnd = size
-    while (scanEnd > 0 && bytesRead < limits.maxScanBytes) {
+    while (scanEnd > 0 && bytesRead < limits.maxScanBytes && keepReading()) {
       const chunkSize = Math.min(scanEnd, limits.chunkBytes, limits.maxScanBytes - bytesRead)
       const position = scanEnd - chunkSize
       const buffer = Buffer.alloc(chunkSize)

@@ -180,10 +180,12 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           }
           this.recordCurrentAuthorityObservation(event)
           toolCallOwner = event
+          const rowBefore = this.state.lastStatusByPaneKey.get(event.paneKey)
           const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
           if (enriched) {
             this.checkAgentPresenceAfterHook(event, enriched)
-            if (normalized.stopTranscriptPath) {
+            // A refused Stop leaves the row it lost to; its transcript's reply must not land there.
+            if (normalized.stopTranscriptPath && enriched !== rowBefore) {
               this.readStopTextFromTranscript(enriched, normalized.stopTranscriptPath)
             } else {
               this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
