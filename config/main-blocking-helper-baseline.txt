@@ -944,7 +944,7 @@
 2 src/main/orcad/host-runtime/orcad-speech-services.ts
 2 src/main/orcad/host-runtime/orcad-wsl-host-login-environment.ts
 1 src/main/orcad/instance-lock/orcad-data-root-privacy.ts
-6 src/main/orcad/instance-lock/orcad-instance-lock-hold.ts # journal retirement re-reads the tiny profile lock file a few times per (backed-off) attempt
+6 src/main/orcad/instance-lock/orcad-instance-lock-hold.ts # journal legacy retirement: <=2 reads of the small (64 KiB-capped) profile lock file per attempt; attempts back off 1m->1h and stop once retired or refused
 14 src/main/orcad/instance-lock/orcad-instance-lock-reclaim.ts
 1 src/main/orcad/instance-lock/orcad-instance-lock-record.ts
 20 src/main/orcad/instance-lock/orcad-instance-lock.ts

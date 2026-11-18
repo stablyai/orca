@@ -27,7 +27,7 @@
 19 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 5 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 22 src/main/native-chat/agent-session-journal/database/journal-database.ts
-15 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
+15 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts # one INSERT of the converting version during one-time profile conversion, run only on the journal SQL worker
 7 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 22 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
