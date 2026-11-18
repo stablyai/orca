@@ -1,13 +1,12 @@
 services:
   orcad:
-    image: ${ORCAD_IMAGE:-orca/orcad:local}
+    image: ${ORCAD_IMAGE:-orcad:local}
+    pull_policy: never
     build:
       context: ../../..
       dockerfile: config/docker/orcad/Dockerfile
       args:
-        ORCAD_SOURCE_COMMIT: ${ORCAD_SOURCE_COMMIT:?Run node config/docker/orcad/configure.mjs first}
-        ORCAD_SOURCE_DIRTY: ${ORCAD_SOURCE_DIRTY:-false}
-        ORCAD_SOURCE_FINGERPRINT: ${ORCAD_SOURCE_FINGERPRINT:?Run node config/docker/orcad/configure.mjs first}
+        ORCAD_SOURCE_COMMIT: ${ORCAD_SOURCE_COMMIT:?Set ORCAD_SOURCE_COMMIT to the full git rev-parse HEAD}
         CLAUDE_CODE_VERSION: ${ORCAD_CLAUDE_CODE_VERSION:-2.1.310}
         CODEX_VERSION: ${ORCAD_CODEX_VERSION:-}
         GEMINI_CLI_VERSION: ${ORCAD_GEMINI_CLI_VERSION:-}

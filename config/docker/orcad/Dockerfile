@@ -28,13 +28,13 @@ COPY native/ native/
 COPY resources/ resources/
 COPY mobile/ mobile/
 COPY config/ config/
+# The build context has no .git, so the caller supplies the revision.
 ARG ORCAD_SOURCE_COMMIT
-ARG ORCAD_SOURCE_DIRTY=false
-ARG ORCAD_SOURCE_FINGERPRINT
-RUN ORCAD_BUILT_SOURCE_FINGERPRINT="$(node config/docker/orcad/source-metadata.mjs)" \
-    && pnpm --dir mobile run postinstall && pnpm build:mobile-web \
+RUN pnpm --dir mobile run postinstall && pnpm build:mobile-web \
     && ORCAD_SOURCE_COMMIT=${ORCAD_SOURCE_COMMIT} pnpm build:orcad \
-    && ORCAD_BUILT_SOURCE_FINGERPRINT=${ORCAD_BUILT_SOURCE_FINGERPRINT} node config/docker/orcad/build-support.mjs
+    && pnpm exec esbuild config/docker/orcad/entrypoint.mjs config/docker/orcad/healthcheck.mjs \
+      config/docker/orcad/install-providers.mjs --bundle --platform=node --target=node24 \
+      --format=cjs --outdir=out/orcad-docker --out-extension:.js=.cjs --log-level=warning
 
 FROM ${NODE_IMAGE} AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -60,13 +60,8 @@ ARG GEMINI_CLI_VERSION=
 USER node
 RUN node /opt/orca/docker/install-providers.cjs
 ARG ORCAD_SOURCE_COMMIT
-ARG ORCAD_SOURCE_DIRTY=false
-ARG ORCAD_SOURCE_FINGERPRINT
-LABEL org.opencontainers.image.title="Orca Node server" \
-    org.opencontainers.image.source="https://github.com/stablyai/orca" \
-    org.opencontainers.image.revision=${ORCAD_SOURCE_COMMIT} \
-    io.orca.source.dirty=${ORCAD_SOURCE_DIRTY} \
-    io.orca.source.fingerprint=${ORCAD_SOURCE_FINGERPRINT}
+LABEL org.opencontainers.image.title="Orca Node server (local build)" \
+    org.opencontainers.image.revision=${ORCAD_SOURCE_COMMIT}
 WORKDIR /workspaces
 EXPOSE 6768
 STOPSIGNAL SIGTERM
