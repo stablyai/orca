@@ -199,7 +199,7 @@ async function settle(
   )
   const print = events.find((event) => event.kind === 'print')
   if (print) {
-    effects.blockedPrint = { origin: clip(print.origin) }
+    effects.blockedPrint = { origin: clip(redactKagiSessionToken(print.origin)) }
   }
   effects.consoleErrors = firstItems(watch.consoleErrors.map((error) => clip(error)))
   return effects

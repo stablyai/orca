@@ -52,6 +52,19 @@ function failed(detail: string) {
   )
 }
 
+it.each([
+  ['https://kagi.com/search?q=one&token=frame-secret', 'https://kagi.com/search?q=one'],
+  ['https://example.com/frame?token=ordinary', 'https://example.com/frame?token=ordinary']
+])(
+  'redacts a legacy upload frame receipt while preserving ordinary documents: %s',
+  async (frameUrl, safe) => {
+    expect(await legacyReply('browser.upload', { uploaded: 1, frameUrl })).toEqual({
+      handled: true,
+      result: { uploaded: 1, frameUrl: safe }
+    })
+  }
+)
+
 it('redacts typed legacy navigation and action receipts at the host boundary', async () => {
   const raw = 'https://kagi.com/search?q=one&token=legacy-secret'
   expect(await legacyReply('browser.reload', { url: raw, title: raw, checkedUrl: raw })).toEqual({
@@ -72,6 +85,7 @@ it('redacts typed legacy navigation and action receipts at the host boundary', a
         popups: [{ action: 'blocked', origin: raw }],
         downloads: [{ filename: 'report', origin: raw }],
         blockedPrint: { origin: raw },
+        passkeyRequest: { origin: raw },
         body: raw
       }
     })
@@ -86,8 +100,46 @@ it('redacts typed legacy navigation and action receipts at the host boundary', a
         popups: [{ action: 'blocked', origin: 'https://kagi.com/search?q=one' }],
         downloads: [{ filename: 'report', origin: 'https://kagi.com/search?q=one' }],
         blockedPrint: { origin: 'https://kagi.com/search?q=one' },
+        passkeyRequest: { origin: 'https://kagi.com/search?q=one' },
         body: raw
       }
+    }
+  })
+})
+
+it('sanitizes legacy metadata getters while leaving arbitrary page text unchanged', async () => {
+  for (const what of ['url', 'title']) {
+    expect(
+      await legacyResponse(
+        'browser.get',
+        { status: 'completed', value: 'https://kagi.com/search?token=get-secret&q=one' },
+        { what }
+      )
+    ).toEqual({
+      handled: true,
+      result: 'https://kagi.com/search?q=one'
+    })
+  }
+  expect(
+    await legacyResponse(
+      'browser.get',
+      { status: 'completed', value: { text: 'https://kagi.com/search?token=page-content' } },
+      { what: 'text' }
+    )
+  ).toEqual({
+    handled: true,
+    result: { text: 'https://kagi.com/search?token=page-content' }
+  })
+  expect(
+    await legacyReply('browser.snapshot', {
+      url: 'https://example.com/',
+      passkeyRequest: { origin: 'https://kagi.com/search?token=frame-secret&q=one' }
+    })
+  ).toEqual({
+    handled: true,
+    result: {
+      url: 'https://example.com/',
+      passkeyRequest: { origin: 'https://kagi.com/search?q=one' }
     }
   })
 })

@@ -2,6 +2,7 @@ import {
   GRAB_BUDGET,
   type BrowserPageAnnotation
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
+import { redactBrowserMetadata } from '../../../../../../shared/browser/browser-metadata-redaction'
 
 export function sanitizeBrowserPageAnnotation(
   annotation: BrowserPageAnnotation
@@ -14,6 +15,7 @@ export function sanitizeBrowserPageAnnotation(
         : annotation.comment,
     payload: {
       ...annotation.payload,
+      page: redactBrowserMetadata(annotation.payload.page),
       // Saved notes must not retain transient screenshot bytes.
       screenshot: null
     }

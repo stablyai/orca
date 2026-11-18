@@ -3,6 +3,7 @@ import {
   LINK_STATUS_POINTER_REFRESH_MS,
   type BrowserTargetUrlChangedEvent
 } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import type { ResolveRenderer } from '../browser-guest-renderer-target'
 
 export function setupGuestTargetUrlForwarding(args: {
@@ -44,7 +45,7 @@ export function setupGuestTargetUrlForwarding(args: {
     } else if (!url && targetUrl) {
       guest.off('before-mouse-event', refreshPointer)
     }
-    targetUrl = url
+    targetUrl = redactKagiSessionToken(url)
     send()
   }
 

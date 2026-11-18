@@ -13,7 +13,7 @@ export function redactBrowserHostCommandResult(
   if (result.status === 'completed') {
     const value =
       command.type === 'automation'
-        ? redactClientBrowserAutomationResult(command.method, result.value)
+        ? redactClientBrowserAutomationResult(command.method, result.value, command.params)
         : command.type === 'navigate' && typeof result.value === 'string'
           ? redactKagiSessionToken(result.value)
           : result.value
