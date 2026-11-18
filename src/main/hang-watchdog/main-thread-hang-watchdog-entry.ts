@@ -256,7 +256,7 @@ export function runWatchdog(
   })
   const checkTimer = setInterval(() => loop.tick(), config.checkIntervalMs)
   port.on('message', (message) => {
-    if (message.type === 'capture-drain-ack' && drain?.token === message.token) {
+    if (message.type === 'capture-drain-ack' && drain && drain.token === message.token) {
       const pending = drain
       drain = null
       pending.acknowledge()
