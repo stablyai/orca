@@ -48,13 +48,17 @@ import {
 import { MacServeStartupAbortError } from './serve/startup/serve-signal-exit-diagnostic'
 import { superviseServeService } from './serve/supervision/serve-supervised-service'
 import { reexecThisServeUnderInitReaper } from './serve/startup/serve-pid1-init-reaper'
-import { supervisedAppImageUpdate } from './serve/updates/serve-appimage-update'
+import {
+  resolveAppImageBuildWatch,
+  supervisedAppImageUpdate
+} from './serve/updates/serve-appimage-update'
 import { relocateThisServeSupervisor } from './serve/supervision/serve-supervisor-relocation'
 import {
   noteServeSupervisorStart,
   restartThisServeSupervisorIfReplaced
 } from './serve/updates/serve-replaced-app-restart'
 import { isSupervisedSpawnHeld } from './serve/supervision/serve-supervised-stop'
+import { appImageEphemeralRootOf } from '../../shared/desktop-distribution/appimage/appimage-ephemeral-root'
 import { openServeBundlePark } from '../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import {
   redactingSpawn,
@@ -206,13 +210,23 @@ async function serveWithSelectedRuntime(
       userDataPath,
       stripElectronRunAsNode(process.env),
       findBundledWebClientRoot(resolveAppRoot()),
-      findAppSpeechRecognizerDir(resolveAppRoot())
+      findAppSpeechRecognizerDir(resolveAppRoot()),
+      servedAppImageForBrowser(executable)
     )
   }
   if (selection.reason) {
     process.stderr.write(`[serve] using Electron serve: ${selection.reason}\n`)
   }
   return serveWithElectron(executable, args, userDataPath)
+}
+
+/** The file, not the FUSE mount: it outlives this process and keeps its path across updates. */
+function servedAppImageForBrowser(executable: string): string | undefined {
+  // Extract-and-run means no FUSE here, so the file itself could not start.
+  if (appImageEphemeralRootOf(executable)?.kind === 'extract') {
+    return undefined
+  }
+  return resolveAppImageBuildWatch(executable)?.appImagePath
 }
 
 function serveWithElectron(
