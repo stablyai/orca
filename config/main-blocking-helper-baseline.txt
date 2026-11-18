@@ -4,18 +4,15 @@
 # Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
 3 src/main/acp/conversation-copy/acp-conversation-copy.ts
-5 src/main/acp/launch/acp-launch-command.ts
+4 src/main/acp/launch/acp-launch-command.ts
 2 src/main/acp/launch/acp-private-temp.ts
 1 src/main/acp/launch/acp-structured-launch-resolution.ts
 1 src/main/acp/process/acp-agent-connection.ts
 1 src/main/acp/session/acp-structured-acquire.ts
 1 src/main/acp/text-task/acp-text-task.ts
 1 src/main/agent-hooks/first-work/first-work-generation-target.ts
-1 src/main/agent-hooks/installation/bare-shell-plugin-agent-presence.ts
 2 src/main/agent-hooks/installation/configuration/hooks-json-read.ts
 7 src/main/agent-hooks/installation/configuration/hooks-json-write.ts
-2 src/main/agent-hooks/installation/local-agent-cli-presence.ts
-1 src/main/agent-hooks/installation/managed-agent-hook-controls.ts
 1 src/main/agent-hooks/installation/scripts/managed-hook-script-refresh.ts
 6 src/main/agent-hooks/installation/scripts/managed-hook-script-write.ts
 1 src/main/agent-hooks/server/server-opencode-binder.ts
@@ -171,7 +168,7 @@
 1 src/main/claude-accounts/profiles/routing/claude-profile-installed-router.ts
 1 src/main/claude-accounts/profiles/routing/claude-profile-launch-preparation.ts
 1 src/main/claude-accounts/profiles/routing/claude-profile-routed-home.ts
-11 src/main/claude-accounts/profiles/routing/claude-profile-router.ts
+10 src/main/claude-accounts/profiles/routing/claude-profile-router.ts
 3 src/main/claude-accounts/profiles/setup/claude-profile-history.ts
 14 src/main/claude-accounts/profiles/setup/claude-profile-prompt-history.ts
 11 src/main/claude-accounts/profiles/setup/claude-profile-provisioning.ts
@@ -187,12 +184,11 @@
 1 src/main/claude-accounts/service.ts
 6 src/main/claude-accounts/sign-in/claude-account-folder.ts
 2 src/main/claude-accounts/sign-in/claude-account-registration.ts
-7 src/main/claude-accounts/sign-in/claude-command-process.ts
+6 src/main/claude-accounts/sign-in/claude-command-process.ts
 2 src/main/claude-usage/store.ts
 2 src/main/claude-usage/transcript-file-discovery.ts
 13 src/main/claude/agent-view/agent-view-install.ts
 2 src/main/claude/agent-view/agent-view-plugin.ts
-1 src/main/claude/agent-view/agent-view-service.ts
 1 src/main/claude/child-process/claude-agent-sdk-process-spawn.ts
 1 src/main/claude/claude-cli-conversations.ts
 1 src/main/claude/claude-stream-json-connection.ts
@@ -200,17 +196,16 @@
 13 src/main/claude/configuration/claude-folder-trust-file.ts
 1 src/main/claude/configuration/claude-in-chrome-default.ts
 1 src/main/claude/configuration/claude-rejected-api-key.ts
-1 src/main/claude/conversation-naming/claude-naming-invocation.ts
 15 src/main/claude/hook-service.ts
 2 src/main/claude/hooks/claude-profile-hook-target.ts
 1 src/main/claude/hooks/statusline-install.ts
 3 src/main/claude/hooks/windows-hook-files.ts
 2 src/main/claude/structured/claude-structured-session-adapter.ts
-2 src/main/claude/structured/launch/claude-structured-child-env.ts
+1 src/main/claude/structured/launch/claude-structured-child-env.ts
 1 src/main/claude/structured/launch/claude-structured-launch-home.ts
 1 src/main/claude/structured/launch/claude-structured-launch-resolution.ts
 1 src/main/claude/theme-sync/claude-code-theme-sync-schedule.ts
-10 src/main/claude/theme-sync/claude-code-theme-sync.ts
+9 src/main/claude/theme-sync/claude-code-theme-sync.ts
 2 src/main/claude/transcripts/claude-conversation-copy.ts
 4 src/main/claude/transcripts/claude-rewind-fork.ts
 2 src/main/claude/transcripts/claude-rewind-transcript.ts
@@ -238,7 +233,7 @@
 5 src/main/codex-accounts/credentials/managed-codex-auth-readiness.ts
 1 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 4 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain.ts
-10 src/main/codex-accounts/login/codex-login-session.ts
+9 src/main/codex-accounts/login/codex-login-session.ts
 3 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
 7 src/main/codex-accounts/managed-homes/codex-managed-home-lifecycle.ts
 4 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
@@ -258,7 +253,7 @@
 1 src/main/codex-accounts/runtime-home/wsl/runtime-home-service-wsl.ts
 1 src/main/codex-accounts/runtime-home/wsl/wsl-codex-auth-batch-reader.ts
 2 src/main/codex-accounts/service.ts
-10 src/main/codex-cli/command.ts
+6 src/main/codex-cli/command.ts
 1 src/main/codex-usage/codex-usage-provider.ts
 1 src/main/codex-usage/store.ts
 1 src/main/codex/app-server/codex-app-server-connection.ts
@@ -295,9 +290,9 @@
 3 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
 1 src/main/codex/history/index/codex-account-session-index-heal.ts
 1 src/main/codex/history/index/codex-session-index-heal-state.ts
-13 src/main/codex/history/index/codex-session-index-heal.ts
+12 src/main/codex/history/index/codex-session-index-heal.ts
 3 src/main/codex/history/index/codex-state-db-backfill-recovery-process.ts
-5 src/main/codex/history/index/codex-state-db-backfill-recovery.ts
+4 src/main/codex/history/index/codex-state-db-backfill-recovery.ts
 5 src/main/codex/history/index/codex-state-db.ts
 2 src/main/codex/history/journal-views/codex-cli-conversations.ts
 3 src/main/codex/history/resume/codex-ai-vault-session-resume.ts
@@ -326,7 +321,6 @@
 7 src/main/codex/hooks/reconciliation/codex-real-home-hooks-json.ts
 2 src/main/codex/structured/catalog/codex-at-rest-skills-probe.ts
 1 src/main/codex/structured/catalog/codex-model-catalog-probe.ts
-1 src/main/codex/structured/launch/codex-structured-launch-resolution.ts
 1 src/main/codex/structured/launch/codex-structured-orca-hooks-off.ts
 3 src/main/codex/structured/session-lifecycle/codex-provider-session-rename.ts
 1 src/main/codex/structured/session-lifecycle/codex-session-account-usage.ts
@@ -338,7 +332,7 @@
 3 src/main/codex/trust/grants/codex-trust-grant-host.ts
 6 src/main/codex/trust/grants/codex-trust-grant-ledger.ts
 7 src/main/codex/trust/hooks/codex-hook-approval-first-write.ts
-14 src/main/codex/trust/hooks/codex-hook-hash-lookup.ts
+11 src/main/codex/trust/hooks/codex-hook-hash-lookup.ts
 11 src/main/codex/trust/hooks/codex-hook-orca-approvals.ts
 1 src/main/codex/trust/hooks/codex-hook-system-trust.ts
 11 src/main/codex/trust/hooks/codex-hook-trust-cleanup.ts
@@ -473,7 +467,7 @@
 4 src/main/emulator/serve-sim-execution.ts
 9 src/main/emulator/serve-sim-runtime-materializer.ts
 1 src/main/emulator/simctl-simulator-devices.ts
-2 src/main/environment-doctor/environment-doctor-host.ts
+1 src/main/environment-doctor/environment-doctor-host.ts
 4 src/main/environment-providers/shell-recipe-driver.ts
 2 src/main/ephemeral-vm/failed-start-cleanup.ts
 6 src/main/ephemeral-vm/owned-runtime-cleanup.ts
@@ -616,8 +610,6 @@
 2 src/main/ipc/notifications/notifications.ts
 5 src/main/ipc/orca-uninstall.ts
 4 src/main/ipc/plugins/plugins.ts
-3 src/main/ipc/preflight/preflight-command-exec.ts
-1 src/main/ipc/preflight/preflight-local-env.ts
 1 src/main/ipc/preflight/preflight-wsl-agent-detection.ts
 1 src/main/ipc/preflight/preflight-wsl-command.ts
 5 src/main/ipc/profiles/orca-profile-org-members-handlers.ts
@@ -630,7 +622,7 @@
 3 src/main/ipc/pty/host-env/pi-agent.ts
 2 src/main/ipc/pty/host-env/spawn-host-env.ts
 1 src/main/ipc/pty/host-env/spawn-startup-target.ts
-2 src/main/ipc/pty/ipc/claude-diff-panel-notice.ts
+1 src/main/ipc/pty/ipc/claude-diff-panel-notice.ts
 2 src/main/ipc/pty/ipc/codex-shared-server.ts
 1 src/main/ipc/pty/ipc/newer-daemon-hold.ts
 2 src/main/ipc/pty/ipc/pty-management.ts
@@ -777,7 +769,7 @@
 1 src/main/muse-usage/muse-usage-provider.ts
 1 src/main/muse-usage/store.ts
 8 src/main/muse/hook-service.ts
-5 src/main/native-chat/agent-launch/structured-agent-command-resolution.ts
+2 src/main/native-chat/agent-launch/structured-agent-command-resolution.ts
 1 src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts
 1 src/main/native-chat/agent-model-catalog/agent-model-catalog-refresh.ts
 1 src/main/native-chat/agent-model-catalog/agent-model-catalog-scope.ts
@@ -875,7 +867,6 @@
 1 src/main/opencode/status-hooks/overlay-dir-gc-lifecycle.ts
 3 src/main/opencode/status-hooks/overlay-dir-gc.ts
 1 src/main/opencode/text-tasks/opencode-text-task.ts
-1 src/main/opencode/text-tasks/wsl/opencode-wsl-text-task-entry.ts
 4 src/main/opencode/text-tasks/wsl/opencode-wsl-text-task.ts
 3 src/main/opencode/transcripts/opencode-transcript-import.ts
 7 src/main/orca-profiles/catalog/other-profile-workspace-catalog.ts
@@ -1058,7 +1049,7 @@
 1 src/main/persistence/window-save-divergence.ts
 13 src/main/pi/managed-extensions/legacy-omp-overlay-migration.ts
 3 src/main/pi/managed-extensions/titlebar-extension-service.ts
-2 src/main/pi/rpc/launch/rpc-launch-resolution.ts
+1 src/main/pi/rpc/launch/rpc-launch-resolution.ts
 1 src/main/plugins/appearance/plugin-appearance-service.ts
 1 src/main/plugins/bootstrap/plugin-bundled-bootstrap.ts
 1 src/main/plugins/catalog/plugin-marketplace-installer.ts
@@ -1076,9 +1067,7 @@
 7 src/main/ports/local-workspace-platform-port-scanner.ts
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
-3 src/main/preflight/agent-command-detection.ts
-3 src/main/preflight/agent-detection.ts # glab auth env = the same cached /proc/mounts read the exec helper does by default
-1 src/main/preflight/installed-agent-detection.ts
+1 src/main/preflight/agent-detection.ts # glab auth env = the same cached /proc/mounts read the exec helper does by default
 1 src/main/project-groups/nested-repo-discovery.ts
 2 src/main/provider-process/managed-provider-process.ts
 2 src/main/provider-process/provider-executable-missing.ts
@@ -1128,7 +1117,7 @@
 1 src/main/rate-limits/providers/antigravity/antigravity-usage-fetcher.ts
 1 src/main/rate-limits/providers/claude/claude-active-usage-fetch.ts
 5 src/main/rate-limits/providers/claude/claude-oauth-credentials.ts
-9 src/main/rate-limits/providers/codex/codex-fetcher.ts
+8 src/main/rate-limits/providers/codex/codex-fetcher.ts
 4 src/main/rate-limits/providers/codex/codex-rpc-rate-limit-probe.ts
 4 src/main/rate-limits/providers/cursor/cursor-auth.ts
 1 src/main/rate-limits/providers/cursor/cursor-fetcher.ts
@@ -1153,8 +1142,7 @@
 1 src/main/ripgrep/bundled-ripgrep-text-search.ts
 1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
-2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-6 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
+5 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
 2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
@@ -1300,11 +1288,10 @@
 7 src/main/runtime/terminal/launch/claude-agent-teams-shim-env.ts
 1 src/main/runtime/terminal/launch/mobile-terminal-chat-fork.ts
 2 src/main/runtime/terminal/launch/mobile-terminal-startup.ts
-1 src/main/runtime/terminal/launch/qoder-terminal-command-resolution.ts
 1 src/main/runtime/terminal/launch/runtime-agent-terminal-startup.ts
 1 src/main/runtime/terminal/launch/terminal-create-team-allocation.ts
 1 src/main/runtime/terminal/launch/terminal-split-source-authority.ts
-7 src/main/runtime/terminal/launch/wsl-host-agent-terminal-launch.ts
+5 src/main/runtime/terminal/launch/wsl-host-agent-terminal-launch.ts
 1 src/main/runtime/terminal/launch/wsl-host-windows-drive-guard.ts
 1 src/main/runtime/terminal/output/tail/terminal-history-last-output.ts
 2 src/main/runtime/terminal/output/terminal-kitty-file-read.ts
@@ -1442,11 +1429,11 @@
 1 src/main/text-generation/agent-generation-request.ts
 1 src/main/text-generation/commit-message-text-generation.ts
 3 src/main/text-generation/execution/commit-message-agent-environment.ts
-3 src/main/text-generation/execution/source-control-agent-launch.ts
+2 src/main/text-generation/execution/source-control-agent-launch.ts
 1 src/main/text-generation/execution/source-control-local-generation.ts
 2 src/main/text-generation/execution/source-control-local-process.ts
 1 src/main/text-generation/execution/source-control-remote-generation.ts
-4 src/main/text-generation/execution/source-control-supervised-agent-spawn.ts
+2 src/main/text-generation/execution/source-control-supervised-agent-spawn.ts
 1 src/main/text-generation/failures/kimi-generation-failure.ts
 4 src/main/text-generation/failures/source-control-agent-failure.ts
 1 src/main/text-generation/models/commit-message-model-discovery-policy.ts
@@ -1538,7 +1525,7 @@
 7 src/main/wsl/filesystem/wsl-drive-unc-conversion-stores.ts
 2 src/main/wsl/filesystem/wsl-drive-unc-mounts.ts
 1 src/main/wsl/filesystem/wsl-guest-drive-path.ts
-8 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
+2 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
 4 src/main/wsl/host-lifecycle/wsl-host-connector.ts
