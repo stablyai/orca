@@ -37,7 +37,7 @@ function applyClientHostedBrowserViewportOverride(
     })
     .then(() => {
       // Main drops wheel bounds on every override, and a reapplied preset resizes nothing that would re-report them.
-      if (scroller) {
+      if (scroller?.isConnected) {
         window.api.browser.reportViewportScrollState?.({
           browserPageId,
           state: readBrowserPageViewportScrollState(scroller)
