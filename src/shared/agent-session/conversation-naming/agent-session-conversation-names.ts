@@ -125,8 +125,15 @@ export function foldAgentSessionConversationNames(
       : []
   let next: Map<string, AgentSessionConversationName> | undefined
   for (const frame of [...sessions, ...notes]) {
-    const note = readNamingNote(frame)
-    if (!note || sameNamingNote((next ?? names).get(note.sessionId), note)) {
+    const read = readNamingNote(frame)
+    if (!read) {
+      continue
+    }
+    const previous = (next ?? names).get(read.sessionId)
+    // A chat's agent never changes; an older host's note just omits it.
+    const note =
+      read.agent === undefined && previous?.agent ? { ...read, agent: previous.agent } : read
+    if (sameNamingNote(previous, note)) {
       continue
     }
     next ??= new Map(names)
