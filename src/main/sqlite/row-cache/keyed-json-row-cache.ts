@@ -27,7 +27,7 @@ export type KeyedJsonRowCacheOptions = {
   holdConnection?: boolean
   /** JSON file older builds wrote; see load(). */
   legacyPath?: string
-  walCheckpoints?: Pick<RowCacheWalCheckpoints, 'attach' | 'detach' | 'request' | 'isCheckpointing'>
+  walCheckpoints?: Pick<RowCacheWalCheckpoints, 'attach' | 'detach' | 'request' | 'assertRemovable'>
 }
 
 /**
@@ -288,10 +288,10 @@ export class KeyedJsonRowCache {
     try {
       return operation()
     } catch (error) {
-      const checkpointing = this.walCheckpoints.isCheckpointing(this.walRegistration)
-      if (classifyRowCacheFailure(error) !== 'corrupt' || checkpointing) {
+      if (classifyRowCacheFailure(error) !== 'corrupt') {
         throw error
       }
+      this.walCheckpoints.assertRemovable(this.path)
       this.closeDatabase()
       // Fail fast: a file held open elsewhere (Windows) throws, and the caller retries later.
       removeVersionedCacheDatabase(this.path, 'fail-fast')
@@ -308,6 +308,7 @@ export class KeyedJsonRowCache {
       // The caller's budget covers opening too: schema setup writes, so it can meet the lock.
       busyTimeoutMs,
       removal: 'fail-fast',
+      beforeRemove: () => this.walCheckpoints.assertRemovable(this.path),
       // Rows can hold prompts, PR titles and notification ids; keep them user-only.
       directoryMode: 0o700,
       sql: SCHEMA_SQL

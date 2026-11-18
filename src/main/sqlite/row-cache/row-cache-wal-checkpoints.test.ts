@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -62,6 +62,25 @@ describe('RowCacheWalCheckpoints', () => {
     cache.write([{ key: 'b', json: '"2"' }])
     expect(worker.posted).toHaveLength(1)
     cache.close()
+  })
+
+  it('keeps a damaged file in place until a checkpoint on it, from any instance, has finished', () => {
+    const worker = new FakeWorker()
+    const walCheckpoints = new RowCacheWalCheckpoints(() => worker)
+    const path = cachePath()
+    const first = new KeyedJsonRowCache(path, { schemaVersion: 1, walCheckpoints })
+    first.write([{ key: 'a', json: '"1"' }])
+    first.close()
+    writeFileSync(path, 'not a database')
+
+    const second = new KeyedJsonRowCache(path, { schemaVersion: 1, walCheckpoints })
+    expect(() => second.write([{ key: 'b', json: '"2"' }])).toThrow(/SQLITE_BUSY/)
+    expect(readFileSync(path, 'utf8')).toBe('not a database')
+
+    worker.emit('message', { id: worker.posted[0]!.id, ok: true })
+    second.write([{ key: 'b', json: '"2"' }])
+    expect(second.load(() => null)).toEqual({ kind: 'rows', rows: [{ key: 'b', json: '"2"' }] })
+    second.close()
   })
 
   it('folds every WAL frame of a live cache and never recreates a removed one', async () => {

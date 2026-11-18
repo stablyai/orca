@@ -19,6 +19,8 @@ export type VersionedCacheDatabaseSchema = {
   // Main-thread callers pass 'fail-fast' so a rebuild blocked by a held file throws at once
   // (callers retry later) instead of sleeping through Windows unlock retries.
   removal?: CacheDatabaseRemoval
+  // Throws when the file can't be removed yet (another thread still holds it).
+  beforeRemove?: () => void
 }
 
 export type CacheDatabaseRemoval = 'retry' | 'fail-fast'
@@ -39,6 +41,7 @@ export function openVersionedCacheDatabase(
       throw error
     }
     // One retry only: a second failure on a file we just created is not corruption.
+    schema.beforeRemove?.()
     removeVersionedCacheDatabase(path, schema.removal)
     return openExisting(path, schema)
   }
@@ -52,6 +55,7 @@ function openExisting(path: string, schema: VersionedCacheDatabaseSchema): SyncD
       // Unlink stale caches; dropping multi-GB tables can exceed scanner readiness deadlines.
       db.close()
       db = null
+      schema.beforeRemove?.()
       removeVersionedCacheDatabase(path, schema.removal)
       db = openWithPragmas(path, schema)
     }

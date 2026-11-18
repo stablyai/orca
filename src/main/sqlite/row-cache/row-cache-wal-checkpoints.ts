@@ -85,7 +85,10 @@ type Registration = { path: string; restore: () => void; failures: number }
 export class RowCacheWalCheckpoints {
   private readonly host: LazyWorkerThreadHost<CheckpointResult> | null
   private readonly registrations = new Map<number, Registration>()
-  private readonly inFlight = new Map<number, ReturnType<typeof setTimeout>>()
+  private readonly inFlight = new Map<
+    number,
+    { deadline: ReturnType<typeof setTimeout>; path: string }
+  >()
   private readonly again = new Set<number>()
   private readonly catchUpOwed = new Set<number>()
   private readonly catchUps = new Map<number, ReturnType<typeof setTimeout>>()
@@ -120,9 +123,17 @@ export class RowCacheWalCheckpoints {
     return id
   }
 
-  /** Rebuilds wait for this: a running checkpoint's closing handle can unlink a recreated file's WAL. */
-  isCheckpointing(id: number | null): boolean {
-    return id !== null && this.inFlight.has(id)
+  /**
+   * Every removal of a row-cache file calls this first: a running checkpoint's closing handle can
+   * unlink a recreated file's WAL, whichever connection or instance asked for the checkpoint.
+   * Throws a busy error, so callers retry as they do for any locked database.
+   */
+  assertRemovable(path: string): void {
+    for (const checkpoint of this.inFlight.values()) {
+      if (checkpoint.path === path) {
+        throw new Error('SQLITE_BUSY: row cache checkpoint still running')
+      }
+    }
   }
 
   /** Drops queued work; a checkpoint already running finishes on its own short-lived handle. */
@@ -159,7 +170,7 @@ export class RowCacheWalCheckpoints {
     this.host.clearIdleTimer()
     const deadline = setTimeout(() => this.fail(), RESPONSE_DEADLINE_MS)
     deadline.unref?.()
-    this.inFlight.set(id, deadline)
+    this.inFlight.set(id, { deadline, path: registration.path })
     try {
       worker.postMessage({ id, path: registration.path, force })
     } catch {
@@ -177,7 +188,7 @@ export class RowCacheWalCheckpoints {
       this.fail()
       return
     }
-    clearTimeout(this.inFlight.get(id))
+    clearTimeout(this.inFlight.get(id)?.deadline)
     this.inFlight.delete(id)
     const registration = this.registrations.get(id)
     if (registration) {
@@ -212,7 +223,7 @@ export class RowCacheWalCheckpoints {
     }
     this.failed = true
     this.host?.destroy()
-    for (const deadline of this.inFlight.values()) {
+    for (const { deadline } of this.inFlight.values()) {
       clearTimeout(deadline)
     }
     this.inFlight.clear()
