@@ -15,12 +15,30 @@ export type MobileNewBrowserProfileChoice = ReturnType<typeof useMobileNewBrowse
 
 /** The host's profiles while a sheet that names them is open, and the profile a new browser tab opens in. */
 export function useMobileNewBrowserProfile(client: RpcClient | null, sheetOpen: boolean) {
+  const t = useMobileTranslation()
   const [profileId, setProfileId] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const profiles = useMobileBrowserProfiles(client, sheetOpen || pickerOpen)
+  const labelFor = useMobileBrowserProfileLabel(profiles)
   // A profile deleted on the host since it was picked falls back to the workspace default.
   const liveProfileId = profiles.some((profile) => profile.id === profileId) ? profileId : null
-  return { profiles, profileId: liveProfileId, setProfileId, pickerOpen, setPickerOpen }
+  return {
+    profiles,
+    profileId: liveProfileId,
+    setProfileId,
+    pickerOpen,
+    setPickerOpen,
+    /** The new-tab row's value; null hides the row when there is nothing to choose. */
+    newTabLabel:
+      profiles.length < 2
+        ? null
+        : liveProfileId === null
+          ? t('session.browserProfile.workspaceDefault', 'Workspace default')
+          : labelFor(liveProfileId),
+    /** A tab's profile name; null when the host doesn't say or lists no profiles. */
+    tabLabel: (tabProfileId: string | undefined) =>
+      tabProfileId && profiles.length > 0 ? labelFor(tabProfileId) : null
+  }
 }
 
 export function useMobileBrowserProfileLabel(

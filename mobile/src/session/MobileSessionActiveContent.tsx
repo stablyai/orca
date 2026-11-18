@@ -71,7 +71,6 @@ export function MobileSessionActiveContent({
     handleTerminalInteraction,
     handleTerminalTap,
     browserScreencastSupported,
-    browserCertificateTrustSupported,
     showToast,
     nativeChatSendError,
     nativeChatOverlayInputLockReason,
@@ -234,7 +233,7 @@ export function MobileSessionActiveContent({
           worktreeId={worktreeId}
           tab={activeBrowserTab}
           screencastSupported={browserScreencastSupported}
-          certificateTrustSupported={browserCertificateTrustSupported}
+          certificateTrustSupported={controller.browserCertificateTrustSupported}
           keyboardLift={keyboardLift}
           bottomInset={controller.insets.bottom}
           onToast={showToast}
