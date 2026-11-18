@@ -8,7 +8,6 @@ import { agentDotState } from '../agent-row-display'
 import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 
-import { listedAgentVerdict } from '../../../agents/agent-list-rows'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
 const MAX_VISIBLE_AGENTS = 3
@@ -16,11 +15,12 @@ const MAX_VISIBLE_AGENTS = 3
 type Props = {
   agents: RuntimeWorktreeAgentRow[]
   expanded: boolean
+  unread: boolean
   now: number
   onToggle: () => void
 }
 
-export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props) {
+export function WorktreeAgentSummary({ agents, expanded, unread, now, onToggle }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const visibleAgents = agents.slice(0, MAX_VISIBLE_AGENTS)
@@ -35,7 +35,12 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
         pressed && styles.summaryPressed
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} ${subject}`}
+      accessibilityLabel={[
+        `${expanded ? 'Collapse' : 'Expand'} ${subject}`,
+        unread ? t('agents.list.unread', 'Unread') : null
+      ]
+        .filter(Boolean)
+        .join(', ')}
       accessibilityState={{ expanded }}
       onPress={(event) => {
         event.stopPropagation()
@@ -55,7 +60,7 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
           {hiddenCount > 0 ? <Text style={styles.hiddenCount}>+{hiddenCount}</Text> : null}
         </View>
       )}
-      {agents.some((agent) => listedAgentVerdict(agent)?.unread) ? (
+      {unread ? (
         <Bell
           size={12}
           color={colors.statusAmber}
