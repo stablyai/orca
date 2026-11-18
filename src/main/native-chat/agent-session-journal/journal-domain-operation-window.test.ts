@@ -341,3 +341,28 @@ it('refuses a window whose rows cannot be cut to fit one reply, before decoding 
     /operation window \(\d+ bytes after cutting\) exceeds 67108864 bytes/
   )
 })
+
+it('sizes small tool rows without their output when the reader asks for none', async () => {
+  const { f, reads } = await chat(1)
+  for (let index = 0; index < 1_100; index += 1) {
+    await f.run({
+      kind: 'item',
+      identity: identity(`read-${index}`),
+      options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+      body: {
+        kind: 'tool-call',
+        name: 'Read',
+        input: {},
+        state: 'completed',
+        output: {
+          head: 'r'.repeat(60 * 1024),
+          byteLength: 61_440,
+          digest: `${index}`,
+          truncated: false
+        }
+      }
+    })
+  }
+  const { snapshot } = await reads.operationWindow({ afterSequence: 0, withoutToolOutput: true })
+  expect(snapshot.items.filter((item) => item.body.kind === 'tool-call')).toHaveLength(1_100)
+})

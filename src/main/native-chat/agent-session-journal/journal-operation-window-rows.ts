@@ -28,23 +28,6 @@ export function readOperationWindowItems(
   start: number,
   anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape'>
 ): AgentJournalRenderItem[] {
-  if (scope.db.isTransaction) {
-    return readWindowItems(scope, start, anchors)
-  }
-  // Sizes and rows come from one snapshot, so a row can't grow between them.
-  scope.db.exec('BEGIN')
-  try {
-    return readWindowItems(scope, start, anchors)
-  } finally {
-    scope.db.exec('COMMIT')
-  }
-}
-
-function readWindowItems(
-  scope: JournalSqlScope,
-  start: number,
-  anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape'>
-): AgentJournalRenderItem[] {
   const projected = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
   const rows = `FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}`
@@ -72,6 +55,16 @@ function readWindowItems(
       row.bytes = Number(found?.bytes ?? row.bytes)
       row.diff = Boolean(found?.diff)
     }
+  }
+  if (total > WINDOW_BYTES && anchors.withoutToolOutput) {
+    // Small tool rows were counted whole, but come back without their output.
+    total =
+      Number(
+        scope.db
+          .prepare(`SELECT SUM(CASE WHEN octet_length(payload_json)<=${CUT_ROW_BYTES}
+          THEN octet_length(${projected}) END) AS bytes ${rows}`)
+          .get(...scope.prefix, start)?.bytes ?? 0
+      ) + large.reduce((sum, row) => sum + row.bytes, 0)
   }
   // Largest first, Diff calls last: their patch names the files they edited. Each cut is
   // counted at the size it actually comes back at, which is whole when nothing could be cut.
