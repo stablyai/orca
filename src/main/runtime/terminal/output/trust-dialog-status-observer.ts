@@ -101,7 +101,15 @@ export class TrustDialogStatusObserver {
     const resolved = () => {
       pane.resolvingAgent = false
       const current = this.deps.getEmulator(ptyId)
-      if (this.panes.get(ptyId) === pane && current && startupDialogReason(current)) {
+      if (this.panes.get(ptyId) !== pane) {
+        return
+      }
+      if (this.deps.isScreenRestoring(ptyId)) {
+        // The rebuilt screen's observe checks again.
+        pane.pendingBytes = TRUST_DIALOG_PAINT_BYTES
+        return
+      }
+      if (current && startupDialogReason(current)) {
         this.publishWaiting(ptyId, pane, this.deps.getPaneAgent(ptyId), current)
       }
     }

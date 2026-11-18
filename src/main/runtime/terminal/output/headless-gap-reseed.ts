@@ -12,7 +12,10 @@ import {
   stopGapJournal
 } from './gap-recovery-journal'
 import { resetFreebuffTerminalStatusAfterGap } from './freebuff-terminal-status'
-import { resetCodexNoticeTrackersAfterGap } from './codex-notice-terminal-status'
+import {
+  moveCodexNoticeTrackers,
+  resetCodexNoticeTrackersAfterGap
+} from './codex-notice-terminal-status'
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
@@ -67,10 +70,12 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     ptyId: string,
     retryLateSeed = true
   ): void {
-    const recovering = this.headlessTerminals.get(ptyId)?.gapReseed !== undefined
+    const previous = this.headlessTerminals.get(ptyId)
+    const recovering = previous?.gapReseed !== undefined
     super.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, retryLateSeed)
     const replacement = this.headlessTerminals.get(ptyId)
-    if (recovering && replacement) {
+    if (recovering && previous && replacement) {
+      moveCodexNoticeTrackers(previous.emulator, replacement.emulator)
       this.resetObserversAfterGap(ptyId, replacement)
       this.startGapRecovery(ptyId, replacement)
     }
@@ -159,7 +164,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     const { snapshot } = await this.awaitProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
-      { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS }
+      { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS, exactScrollback: true }
     )
     if (!snapshot) {
       return false

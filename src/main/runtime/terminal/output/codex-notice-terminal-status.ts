@@ -17,6 +17,16 @@ type CodexCapacityStatus = Pick<
   'agentType' | 'prompt' | 'model' | 'subagents' | 'mainAgent' | 'turnStartedAt'
 >
 
+/** A replaced model inherits notices whose text already arrived; screen confirmation is still owed. */
+export function moveCodexNoticeTrackers(from: HeadlessEmulator, to: HeadlessEmulator): void {
+  for (const trackers of [capacityTrackers, reconnectFailedTrackers]) {
+    const tracker = trackers.get(from)
+    if (tracker) {
+      trackers.set(to, tracker)
+    }
+  }
+}
+
 /** At a gap's place in the stream: drop partial carries, keep notices whose text fully arrived. */
 export function resetCodexNoticeTrackersAfterGap(emulator: HeadlessEmulator): void {
   capacityTrackers.get(emulator)?.resetAfterGap()

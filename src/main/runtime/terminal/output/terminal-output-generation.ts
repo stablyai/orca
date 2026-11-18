@@ -93,7 +93,9 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
   /** The hidden renderer missed any dropped output: once its PTY gaps in a generation it never stands in for the
    *  screen (null). Compare a read's token before and after its IPC, so exit, reuse and stream resets fence it too. */
   protected rendererScreenToken(ptyId: string): number | null {
-    return this.ptyGapCounts.has(ptyId) ? null : this.getPtyLifecycleGeneration(ptyId)
+    return this.ptyGapCounts.has(ptyId) || this.headlessTerminals.get(ptyId)?.gapReseed
+      ? null
+      : this.getPtyLifecycleGeneration(ptyId)
   }
 
   protected getPtyLifecycleGeneration(ptyId: string): number {
@@ -169,10 +171,10 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       // emulator state cannot remain authoritative over the replacement.
       if (replacesExistingRuntimeGeneration) {
         this.disposeHeadlessTerminal(ptyId)
+        // The replacing stream has had no gap; the generation advance already fences older reads.
+        this.ptyGapCounts.delete(ptyId)
       }
       this.providerModeTrackersByPtyId.delete(ptyId)
-      // The new stream has had no gap; the generation advance already fences older reads.
-      this.ptyGapCounts.delete(ptyId)
       this.wslDistroByPtyId.delete(ptyId)
       this.terminalCwdByPtyId.delete(ptyId)
       this.terminalFileUriHostnameByPtyId.delete(ptyId)

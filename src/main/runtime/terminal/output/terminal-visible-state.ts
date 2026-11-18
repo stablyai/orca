@@ -18,22 +18,35 @@ import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fall
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
-  protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
+  /** `isStale` is true once a renderer-sourced preview stops being trustworthy; check it right before use. */
+  protected async visibleSnapshotPreview(
+    ptyId: string,
+    preview: string
+  ): Promise<{ preview: string; isStale: () => boolean }> {
+    const fresh = { preview, isStale: () => false }
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
     const providerModeUnknown =
       this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
     if (!providerModeUnknown && !knownAlternateScreen && !this.headlessTerminals.has(ptyId)) {
-      return preview
+      return fresh
     }
     const visibleState = await this.readVisibleTerminalState(ptyId)
     if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
-      return preview
+      return fresh
     }
     let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
     if (projection.lines.length === 0) {
       projection = await this.readRendererVisibleSnapshotLines(ptyId)
     }
-    return projection.lines.length > 0 ? buildPreview(projection.lines, '') : preview
+    if (projection.lines.length === 0) {
+      return fresh
+    }
+    const { rendererToken } = projection
+    return {
+      preview: buildPreview(projection.lines, ''),
+      isStale: () =>
+        rendererToken !== undefined && this.rendererScreenToken(ptyId) !== rendererToken
+    }
   }
 
   protected async readVisibleTerminalState(
@@ -300,7 +313,10 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       if (!snapshot || snapshot.data.length === 0 || this.rendererScreenToken(ptyId) !== token) {
         return { lines: [] }
       }
-      return await this.parseVisibleSnapshot(snapshot)
+      const projection = await this.parseVisibleSnapshot(snapshot)
+      return this.rendererScreenToken(ptyId) === token
+        ? { ...projection, rendererToken: token }
+        : { lines: [] }
     } catch {
       return { lines: [] }
     }
