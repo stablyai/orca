@@ -25,6 +25,7 @@ const WORKER_TIMEOUT_MS = WALK_BUDGET_MS + 30_000
 const IDLE_TEARDOWN_MS = 30_000
 // A stopped worker stuck in a blocking call on a hung mount never exits; give up rather than wait.
 const RETIREMENT_WAIT_MS = 10_000
+const PREPARATION_WAIT_MS = 10_000
 // Each walk stats every rollout name; reopening the page within this window reuses the last one.
 const REUSE_MS = 5 * 60_000
 
@@ -56,37 +57,60 @@ function getQueue(): NonNullable<typeof queue> {
   return queue
 }
 
-// One shared, capped wait per stopping worker; once it outlasts the cap, reads fail fast until the worker exits.
-let retirementWait: Promise<boolean> | null = null
+type CappedResult<T> = { ok: true; value: T } | { ok: false }
 
-function previousWalkStopped(signal: AbortSignal): Promise<boolean> {
-  const workers = getQueue()
-  if (!workers.isRetiring) {
-    retirementWait = null
-    return Promise.resolve(true)
-  }
-  if (signal.aborted) {
-    return Promise.resolve(false)
-  }
-  retirementWait ??= withTimeoutResult(workers.retired(), RETIREMENT_WAIT_MS).then((result) => {
-    if (result.ok) {
-      retirementWait = null
+/** Callers share one run of the task; once it outlasts the cap they fail fast, attaching nothing, until it ends. */
+function sharedCappedTask<T>(capMs: number): (start: () => Promise<T>) => Promise<CappedResult<T>> {
+  let capped: Promise<CappedResult<T>> | null = null
+  return (start) => {
+    if (!capped) {
+      const running = start()
+      capped = withTimeoutResult(running, capMs)
+      const ended = (): void => {
+        capped = null
+      }
+      running.then(ended, ended)
     }
-    return result.ok
-  })
-  const abandoned = new Promise<boolean>((resolve) =>
-    signal.addEventListener('abort', () => resolve(false), { once: true })
-  )
-  return Promise.race([retirementWait, abandoned])
+    return capped
+  }
 }
+
+function untilAbandoned<T>(
+  wait: Promise<CappedResult<T>>,
+  signal: AbortSignal
+): Promise<CappedResult<T>> {
+  if (signal.aborted) {
+    return Promise.resolve({ ok: false })
+  }
+  const abandoned = new Promise<CappedResult<T>>((resolve) =>
+    signal.addEventListener('abort', () => resolve({ ok: false }), { once: true })
+  )
+  return Promise.race([wait, abandoned])
+}
+
+// Neither can be cancelled, and a hung mount can stall both; shared runs keep abandoned reads from piling up.
+const listHomeSources =
+  sharedCappedTask<Awaited<ReturnType<typeof listHostCodexRolloutHomeSources>>>(PREPARATION_WAIT_MS)
+const previousWorkerExited = sharedCappedTask<void>(RETIREMENT_WAIT_MS)
 
 async function measure(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
   signal: AbortSignal
 ): Promise<CodexHistoryDiskUsage> {
-  const { homes, accounts } = await listHostCodexRolloutHomeSources(settings)
+  const listed = await untilAbandoned(
+    listHomeSources(() => listHostCodexRolloutHomeSources(settings)),
+    signal
+  )
+  if (!listed.ok) {
+    throw new Error('Codex homes could not be listed')
+  }
+  const { homes, accounts } = listed.value
   // A walk stopped by a release or deletion ends its worker; wait for it so this one can start.
-  if (!(await previousWalkStopped(signal))) {
+  const exited = await untilAbandoned(
+    previousWorkerExited(() => getQueue().retired()),
+    signal
+  )
+  if (!exited.ok) {
     throw new Error('the previous Codex history walk has not stopped')
   }
   const response = await getQueue().dispatch(
