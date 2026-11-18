@@ -30,6 +30,7 @@ export class HostedWorker extends EventEmitter {
   terminating = false
   lastReplyType: string | null = null
   receivedBytes = 0
+  unreleasedBytes = 0
 
   constructor(
     readonly id: number,
@@ -101,12 +102,17 @@ export class HostedWorker extends EventEmitter {
       this.chunks = []
       const { seq } = event
       let acked = false
+      const size = bytes.byteLength
+      if (seq !== undefined) {
+        this.unreleasedBytes += size
+      }
       const release =
         seq === undefined
           ? undefined
           : () => {
               if (!acked) {
                 acked = true
+                this.unreleasedBytes -= size
                 this.send({ type: 'ack', seq })
               }
             }

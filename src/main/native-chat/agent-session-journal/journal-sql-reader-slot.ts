@@ -56,6 +56,11 @@ export class ReaderSlot {
     return this.admission.stats()
   }
 
+  /** Replies a hosted reader relayed that main has not released; in-process readers use credit. */
+  get unreleasedBytes(): number {
+    return this.worker.unreleasedBytes ?? 0
+  }
+
   get pendingCount(): number {
     return this.pending.size + this.conversions
   }
