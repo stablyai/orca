@@ -165,7 +165,11 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         claim.settleFailure(dispatched)
         return { ok: false, reason: 'create_failed' }
       } catch (error) {
-        claim.settleFailure(dispatched, error)
+        // Admission refusing the pane (its tab closed meanwhile) proves no spawn ran.
+        const refusedBeforeSpawn =
+          error instanceof Error &&
+          (error.message === 'tab_not_found' || error.message === 'terminal_split_source_not_found')
+        claim.settleFailure(dispatched && !refusedBeforeSpawn, error)
         throw error
       }
     } catch (error) {
