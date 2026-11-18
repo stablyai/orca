@@ -7,6 +7,7 @@ import {
 import type { AgentSubagentSnapshot } from '../../../agent-status/contracts/agent-status-subagent-snapshot'
 
 import { codexSubagentIdentityFromHead } from './codex-subagent-identity'
+import { normalizedTranscriptPath } from './codex-rollout-paths'
 import type { JsonRecord } from './codex-rollout-jsonl-format'
 import type { CodexApprovalHold } from './codex-rollout-state'
 import { usableAgentChildLabel } from '../../../agent-status/presentation/agent-child-row-name'
@@ -116,6 +117,7 @@ export function queueCodexSubagentIdentity(
   transcriptPath: string | undefined
 ): void {
   const child = roster.get(id.trim())
+  transcriptPath = normalizedTranscriptPath(transcriptPath)
   if (
     child &&
     transcriptPath &&
@@ -203,13 +205,25 @@ export function nextCodexSubagentIdentityRetry(
   return due
 }
 
-/** Restored children no live hook confirmed cannot outlive the root turn that ends without them. */
-export function retireUnobservedCodexSubagents(roster: CodexSubagentRoster): void {
+/** At the root's Stop, children whose end Orca cannot observe go: restored rows no live hook confirmed, and
+ *  children with no rollout of their own (a later hook of theirs re-adds them). */
+export function retireUnfollowableCodexSubagents(
+  roster: CodexSubagentRoster,
+  rootRolloutPath: string | undefined
+): void {
   for (const [id, child] of roster) {
-    if (!child.observed) {
+    if (!child.observed || !codexChildRolloutPath(child, rootRolloutPath)) {
       roster.delete(id)
     }
   }
+}
+
+/** A child's own rollout, never the root's (a hook naming the parent's file gives no child end). */
+export function codexChildRolloutPath(
+  child: { rolloutPath?: string },
+  rootRolloutPath: string | undefined
+): string | undefined {
+  return child.rolloutPath !== rootRolloutPath ? child.rolloutPath : undefined
 }
 
 export function seedCodexSubagentRoster(

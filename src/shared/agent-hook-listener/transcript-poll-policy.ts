@@ -4,6 +4,7 @@ import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { hasMuseSessionLog } from './providers/muse/muse-events'
 import { parseHookEnvelope } from './hook-envelope'
+import { codexChildRolloutPath } from './providers/codex/codex-subagent-roster'
 
 export function shouldPollHookTranscript(
   state: HookListenerState,
@@ -67,7 +68,9 @@ export function codexRolloutTailPath(
     return root
   }
   const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
-  const child = [...(roster?.values() ?? [])].find((tracked) => tracked.rolloutPath)?.rolloutPath
+  const child = [...(roster?.values() ?? [])]
+    .map((tracked) => codexChildRolloutPath(tracked, root))
+    .find(Boolean)
   return child ? (root ?? child) : undefined
 }
 

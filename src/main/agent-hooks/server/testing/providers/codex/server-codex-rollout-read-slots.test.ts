@@ -5,6 +5,13 @@ import { basename, join } from 'node:path'
 
 import { AgentHookServer, _internals } from '../../../agent-hook-server'
 import { buildBody } from '../../server.test-fixtures'
+import {
+  BASH,
+  childMeta,
+  event,
+  taskStarted,
+  turnContext
+} from './codex-rollout-records.test-fixtures'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { rolloutReadLimiterForTests as slots } from '../../../../../../shared/agent-hook-listener/providers/codex/codex-rollout-async-reads'
 
@@ -81,14 +88,7 @@ vi.mock(
 import type * as FsPromises from 'node:fs/promises'
 import type * as AsyncRead from '../../../../../../shared/agent-hook-listener/providers/codex/codex-rollout-async-reads'
 
-const event = (payload: Record<string, unknown>): string =>
-  `${JSON.stringify({ type: 'event_msg', payload })}\n`
-const taskStarted = (turnId: string): string => event({ type: 'task_started', turn_id: turnId })
-const userReviewer = (turnId: string): string =>
-  `${JSON.stringify({ type: 'turn_context', payload: { turn_id: turnId, approvals_reviewer: 'user' } })}\n`
-const childMeta = (id: string, agentPath: string): string =>
-  `${JSON.stringify({ type: 'session_meta', payload: { id, source: { subagent: { thread_spawn: { agent_path: agentPath } } } } })}\n`
-const BASH = { tool_name: 'Bash', tool_input: { command: 'ls' }, tool_use_id: 'call-1' }
+const userReviewer = (turnId: string): string => turnContext(turnId, 'user')
 
 let server: AgentHookServer
 let dir: string
@@ -300,6 +300,36 @@ describe('Codex rollout reads share two slots per process', () => {
     expect(slots.inFlight()).toBe(0)
     expect(slots.queued()).toBe(0)
     expect(io.closed).toBe(io.opened)
+    for (const path of hung) {
+      expect(io.openedPaths.filter((opened) => opened === path).length).toBeGreaterThan(1)
+    }
+  })
+
+  it('lets at most one timed-out read keep its I/O beyond the two slots', async () => {
+    const keys = [0, 1, 2, 3].map(pane)
+    const files = keys.map((_, index) =>
+      rollout(`hung-${index}`, taskStarted('turn-1'), userReviewer('turn-1'))
+    )
+    const slowed = new Set<string>()
+    io.openDelayMs = (filePath) => {
+      if (slowed.has(filePath)) {
+        return 0
+      }
+      slowed.add(filePath)
+      return 8_000
+    }
+    for (const [index, key] of keys.entries()) {
+      await post(key, {
+        turn_id: 'turn-1',
+        transcript_path: files[index],
+        hook_event_name: 'UserPromptSubmit'
+      })
+    }
+    await settle(20_000)
+    // Two slots plus one read past its timeout: a pool thread stays free for the rest of the process.
+    expect(io.maxReadersInFlight).toBe(3)
+    expect(io.closed).toBe(io.opened)
+    expect(slots.inFlight()).toBe(0)
   })
 
   it('reads a busy pane only once its hooks go quiet, and still catches a turn end without a hook', async () => {

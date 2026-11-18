@@ -5,73 +5,34 @@ import { join } from 'node:path'
 
 import { AgentHookServer, _internals } from '../../../agent-hook-server'
 import { buildBody, GOOD_PANE, PANE } from '../../server.test-fixtures'
-import type * as AsyncRead from '../../../../../../shared/agent-hook-listener/providers/codex/codex-rollout-async-reads'
-
-// Every async rollout read goes through this gate: it counts reads in flight per file and can
-// hold a result back after the bytes were read, which is how a slow open or a late read looks.
-const reads = vi.hoisted(() => {
-  const gated: {
-    gate?: (filePath: string) => Promise<void>
-    inFlight: Map<string, number>
-    maxInFlight: number
-    io: Set<Promise<unknown>>
-  } = { inFlight: new Map(), maxInFlight: 0, io: new Set() }
-  return gated
-})
+import {
+  BASH,
+  childMeta,
+  event,
+  ROOT_ID,
+  sessionMeta,
+  taskComplete,
+  taskStarted,
+  turnAborted,
+  turnContext
+} from './codex-rollout-records.test-fixtures'
+import {
+  holdReads,
+  reads,
+  resetRolloutReadGate,
+  settle
+} from './codex-rollout-read-gate.test-fixtures'
 
 vi.mock(
   '../../../../../../shared/agent-hook-listener/providers/codex/codex-rollout-async-reads',
-  async (importOriginal) => {
-    const actual = await importOriginal<typeof AsyncRead>()
-    const gated =
-      <A extends unknown[], R>(read: (...args: A) => Promise<R>, pathOf: (...args: A) => string) =>
-      async (...args: A): Promise<R> => {
-        const filePath = pathOf(...args)
-        const count = (reads.inFlight.get(filePath) ?? 0) + 1
-        reads.inFlight.set(filePath, count)
-        reads.maxInFlight = Math.max(reads.maxInFlight, count)
-        try {
-          const io = read(...args)
-          reads.io.add(io)
-          const result = await io.finally(() => reads.io.delete(io))
-          await reads.gate?.(filePath)
-          return result
-        } finally {
-          reads.inFlight.set(filePath, (reads.inFlight.get(filePath) ?? 1) - 1)
-        }
-      }
-    return {
-      ...actual,
-      readJsonlCursorBytes: gated(actual.readJsonlCursorBytes, (cursor) => cursor.filePath ?? ''),
-      readJsonlFirstRecordAsync: gated(actual.readJsonlFirstRecordAsync, (path) => path)
-    }
-  }
+  async (importOriginal) =>
+    (await import('./codex-rollout-read-gate.test-fixtures')).gatedRolloutReads(importOriginal)
 )
 
-const ROOT_ID = '019fa65f-0000-7000-8000-000000000001'
 const CHILD_ID = '019fa65f-0000-7000-8000-0000000000c1'
 const GRANDCHILD_ID = '019fa65f-0000-7000-8000-0000000000c2'
 const T1 = 'turn-1'
 const T2 = 'turn-2'
-
-const event = (payload: Record<string, unknown>): string =>
-  `${JSON.stringify({ type: 'event_msg', payload })}\n`
-const sessionMeta = (cliVersion: string): string =>
-  `${JSON.stringify({ type: 'session_meta', payload: { id: ROOT_ID, cli_version: cliVersion } })}\n`
-const childMeta = (id: string, agentPath: string): string =>
-  `${JSON.stringify({
-    type: 'session_meta',
-    payload: { id, source: { subagent: { thread_spawn: { agent_path: agentPath } } } }
-  })}\n`
-const turnContext = (turnId: string, reviewer: 'user' | 'auto_review'): string =>
-  `${JSON.stringify({ type: 'turn_context', payload: { turn_id: turnId, approvals_reviewer: reviewer } })}\n`
-const taskStarted = (turnId: string): string => event({ type: 'task_started', turn_id: turnId })
-const taskComplete = (turnId: string, error?: unknown): string =>
-  event({ type: 'task_complete', turn_id: turnId, error: error ?? null })
-const turnAborted = (turnId: string): string =>
-  event({ type: 'turn_aborted', turn_id: turnId, reason: 'interrupted' })
-
-const BASH = { tool_name: 'Bash', tool_input: { command: 'ls' }, tool_use_id: 'call-1' }
 
 type Row = ReturnType<AgentHookServer['getStatusSnapshot']>[number]
 
@@ -113,21 +74,6 @@ function shown(entry: Row | undefined): Record<string, unknown> {
   }
 }
 
-/** Let real file I/O finish and fake time run, so reads land and tails tick. */
-async function settle(ms = 12_000): Promise<void> {
-  const drainIo = async (): Promise<void> => {
-    while (reads.io.size > 0) {
-      await Promise.allSettled(reads.io)
-      await vi.advanceTimersByTimeAsync(0)
-    }
-  }
-  for (let elapsed = 0; elapsed < ms; elapsed += 250) {
-    await drainIo()
-    await vi.advanceTimersByTimeAsync(250)
-  }
-  await drainIo()
-}
-
 async function startServer(): Promise<void> {
   published = []
   server = new AgentHookServer()
@@ -144,9 +90,7 @@ beforeEach(async () => {
     toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
   })
   _internals.resetCachesForTests()
-  reads.gate = undefined
-  reads.inFlight.clear()
-  reads.maxInFlight = 0
+  resetRolloutReadGate()
   dir = mkdtempSync(join(tmpdir(), 'codex-rollout-reads-'))
   await startServer()
 })
@@ -345,24 +289,6 @@ describe('Codex status from hooks, with async rollout reads only for what hooks 
 })
 
 /** Hold every read after its bytes were read; `captured` resolves once the first read has them. */
-function holdReads(): { captured: Promise<void>; releaseAll: () => void } {
-  const releases: (() => void)[] = []
-  let captured: () => void = () => {}
-  const capturedPromise = new Promise<void>((resolve) => (captured = resolve))
-  reads.gate = () => {
-    captured()
-    return new Promise((resolve) => releases.push(resolve))
-  }
-  return {
-    captured: capturedPromise,
-    releaseAll: () => {
-      reads.gate = undefined
-      for (const release of releases.splice(0)) {
-        release()
-      }
-    }
-  }
-}
 
 describe('Codex children that end without a SubagentStop', () => {
   // Codex 0.169 writes a spawned child's rollout with its own header, then a fork of the parent's
@@ -458,6 +384,28 @@ describe('Codex children that end without a SubagentStop', () => {
     expect(shown(row()).subagents).toEqual([['scout', 'working']])
   })
 
+  it('keeps a child whose ended turn a later hook resumed before its rollout shows it', async () => {
+    const child = childRollout('child-turn')
+    await startChild(child)
+    const held = holdReads(child)
+    appendFileSync(child, taskComplete('child-turn'))
+    await vi.advanceTimersByTimeAsync(5_000)
+    await held.captured
+    await post({
+      transcript_path: child,
+      hook_event_name: 'PreToolUse',
+      agent_id: CHILD_ID,
+      ...BASH
+    })
+    held.releaseAll()
+    // The next read finds nothing new: Codex has not flushed the resumed turn yet.
+    await settle(1_500)
+    expect(shown(row()).subagents).toEqual([['scout', 'working']])
+    appendFileSync(child, taskStarted('child-turn-2'))
+    await settle()
+    expect(shown(row()).subagents).toEqual([['scout', 'working']])
+  })
+
   it('keeps a child whose aborted turn a follow-up replaced before any hook', async () => {
     const child = childRollout('child-turn')
     await startChild(child)
@@ -497,6 +445,15 @@ describe('Codex children that end without a SubagentStop', () => {
     await settle(30_000)
     expect(shown(row()).subagents).toHaveLength(1)
     await settle(40_000)
+    expect(shown(row()).subagents).toEqual([])
+  })
+
+  it('ends, at the root Stop, a child whose hooks name no rollout of its own', async () => {
+    const root = rollout('root', sessionMeta('0.169.0'), taskStarted(T1))
+    await post({ turn_id: T1, transcript_path: root, hook_event_name: 'UserPromptSubmit' })
+    await post({ transcript_path: root, hook_event_name: 'SubagentStart', agent_id: CHILD_ID })
+    expect(shown(row()).subagents).toHaveLength(1)
+    await post({ turn_id: T1, transcript_path: root, hook_event_name: 'Stop' })
     expect(shown(row()).subagents).toEqual([])
   })
 })
@@ -561,6 +518,31 @@ describe('Codex rollout read ordering', () => {
     held.releaseAll()
     await settle()
     expect(row()?.state).toBe('working')
+  })
+
+  it('keeps a blocking question waiting when a late read finds the earlier approval auto-reviewed', async () => {
+    const root = rollout('root', taskStarted(T1), turnContext(T1, 'auto_review'))
+    const held = holdReads()
+    await post({ turn_id: T1, transcript_path: root, hook_event_name: 'UserPromptSubmit' })
+    await post({
+      turn_id: T1,
+      transcript_path: root,
+      hook_event_name: 'PermissionRequest',
+      ...BASH
+    })
+    await vi.advanceTimersByTimeAsync(5_100)
+    expect(row()?.state).toBe('waiting')
+    await post({
+      turn_id: T1,
+      transcript_path: root,
+      hook_event_name: 'PreToolUse',
+      tool_name: 'request_user_input',
+      tool_input: { questions: [] },
+      tool_use_id: 'call-2'
+    })
+    held.releaseAll()
+    await settle()
+    expect(row()?.state).toBe('waiting')
   })
 
   it('still shows Needs you when a parallel tool hook lands before the reviewer read', async () => {

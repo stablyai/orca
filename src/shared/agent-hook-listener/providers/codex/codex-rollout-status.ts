@@ -99,7 +99,9 @@ function settleCodexApprovalHolds(state: HookListenerState, paneKey: string, now
         rollout.rootApprovalHold = undefined
       }
       const next =
-        settled.reviewer !== 'auto_review' || pendingCodexAsyncQuestion(state, paneKey)
+        settled.reviewer !== 'auto_review' ||
+        pendingCodexAsyncQuestion(state, paneKey) ||
+        rollout.rootBlockingQuestion?.epoch === rollout.epoch
           ? 'waiting'
           : 'working'
       // Ordering rule: a verdict that matches what was shown changes nothing, so a parallel

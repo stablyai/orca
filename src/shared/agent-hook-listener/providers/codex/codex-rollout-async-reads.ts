@@ -77,6 +77,9 @@ const MAX_READS_IN_FLIGHT = 2
 // Why 5 s: a scanner hold is normally well under 2 s, and the approval hold already falls back at
 // 5 s, so a read slower than that no longer changes what the row shows.
 const READ_TIMEOUT_MS = 5_000
+// A timed-out read frees its slot but its I/O still holds a pool thread; at most one such read runs
+// beyond the slots, so hung opens never take every pool thread from the rest of the process.
+const MAX_IO_IN_FLIGHT = MAX_READS_IN_FLIGHT + 1
 const SLOW_QUEUE_LOG_MS = 1_000
 
 export type RolloutReadLog = (line: string) => void
@@ -93,12 +96,17 @@ export type RolloutReadPriority = 0 | 1 | 2 | 3
 type QueuedRead = { priority: RolloutReadPriority; start: () => void }
 
 let readsInFlight = 0
+let ioInFlight = 0
 const readQueue: QueuedRead[] = []
 /** The I/O end of the latest read per file; a later read of the same file starts after it. */
 const lastReadByPath = new Map<string, Promise<void>>()
 
 function startQueuedReads(): void {
-  while (readsInFlight < MAX_READS_IN_FLIGHT && readQueue.length > 0) {
+  while (
+    readsInFlight < MAX_READS_IN_FLIGHT &&
+    ioInFlight < MAX_IO_IN_FLIGHT &&
+    readQueue.length > 0
+  ) {
     readQueue.shift()!.start()
   }
 }
@@ -117,7 +125,7 @@ function enqueueRead(entry: QueuedRead): void {
  * still-queued read up when something more urgent waits on it. Reads of one file run one after
  * another, so the queue holds at most one entry per file however often it is written. The batch is
  * rechecked when the slot comes, so work its caller abandoned while queued never touches the disk.
- * A read past READ_TIMEOUT_MS gives its slot back and resolves `timedOut`; its late result is
+ * A read past READ_TIMEOUT_MS gives its slot back (within MAX_IO_IN_FLIGHT) and resolves `timedOut`; its late result is
  * ignored, and `settled` resolves once the I/O really ends (the reader closes its handle then). The
  * next read of that file waits for that, so a hung file never stacks reads.
  */
@@ -154,6 +162,7 @@ export function scheduleRolloutRead<T>(
         return
       }
       readsInFlight += 1
+      ioInFlight += 1
       const waitedMs = Date.now() - queuedAt
       if (waitedMs > SLOW_QUEUE_LOG_MS) {
         options.log?.(`[agent-hooks] Codex rollout read waited ${waitedMs} ms for a slot: ${label}`)
@@ -176,7 +185,9 @@ export function scheduleRolloutRead<T>(
       timer.unref?.()
       const finish = (result: RolloutReadOutcome<T>): void => {
         clearTimeout(timer)
+        ioInFlight -= 1
         release()
+        startQueuedReads()
         resolveOutcome(result)
         resolveSettled()
       }
@@ -208,6 +219,7 @@ export function scheduleRolloutRead<T>(
 
 export const rolloutReadLimiterForTests = {
   inFlight: (): number => readsInFlight,
+  ioInFlight: (): number => ioInFlight,
   queued: (): number => readQueue.length,
   maxInFlight: MAX_READS_IN_FLIGHT,
   timeoutMs: READ_TIMEOUT_MS
@@ -269,7 +281,11 @@ export async function readJsonlCursorBytes(
   let handle: FileHandle | undefined
   try {
     // Why: open per read, never held, so a replaced rollout is always read at its current path.
-    handle = await open(plan.filePath, 'r')
+    // Nonblocking, and checked on the handle: the path may have been replaced since the stat.
+    handle = await open(plan.filePath, FIRST_RECORD_OPEN_FLAGS)
+    if (!(await handle.stat()).isFile()) {
+      return undefined
+    }
     const buffer = Buffer.allocUnsafe(plan.length)
     const { bytesRead } = await handle.read(buffer, 0, plan.length, plan.start)
     return { ...plan, bytes: buffer.subarray(0, bytesRead) }

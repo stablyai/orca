@@ -44,7 +44,14 @@ export type CodexApprovalHold = {
  * An abort can be a turn replaced by a follow-up (its task_started comes right after), so it
  * applies only once a read that started CODEX_CHILD_ABORT_SETTLE_MS later still shows it.
  */
-export type CodexChildEnd = { hooks: number; at: number; aborted: boolean; settled: boolean }
+/** `confirm`: the end settles only if a read CODEX_CHILD_ABORT_SETTLE_MS later still shows it. */
+export type CodexChildEnd = {
+  hooks: number
+  at: number
+  aborted: boolean
+  confirm: boolean
+  settled: boolean
+}
 
 export const CODEX_CHILD_ABORT_SETTLE_MS = 2_000
 
@@ -70,6 +77,8 @@ export type CodexRolloutState = {
    */
   childEnds: Map<string, CodexChildEnd>
   rootApprovalHold?: CodexApprovalHold & { epoch: number; model?: string }
+  /** A blocking question the root opened (request_user_input); it needs the user whatever a reviewer says. */
+  rootBlockingQuestion?: { toolKey: string; epoch: number }
   requestSeq: number
   /** When the latest root hook arrived; the tail reads the root only once hooks go quiet. */
   lastRootHookAt?: number
@@ -175,6 +184,26 @@ export function followCodexChildRollout(
   return file
 }
 
+/** A root tool hook: a PostToolUse answers the approval held for its tool and closes its blocking question. */
+export function noteCodexRootToolHook(
+  rollout: CodexRolloutState,
+  eventName: unknown,
+  hookPayload: Record<string, unknown>,
+  blocksOnUser: boolean
+): void {
+  const toolKey = codexApprovalToolKey(hookPayload)
+  if (eventName === 'PreToolUse' && blocksOnUser) {
+    rollout.rootBlockingQuestion = { toolKey, epoch: rollout.epoch }
+  } else if (eventName === 'PostToolUse') {
+    if (rollout.rootApprovalHold?.toolKey === toolKey) {
+      rollout.rootApprovalHold = undefined
+    }
+    if (rollout.rootBlockingQuestion?.toolKey === toolKey) {
+      rollout.rootBlockingQuestion = undefined
+    }
+  }
+}
+
 /** Stop following a finished child's rollout. */
 export function forgetCodexChildRollout(rollout: CodexRolloutState, childId: string): void {
   rollout.childEnds.delete(childId)
@@ -243,25 +272,29 @@ export function commitCodexRolloutRead(
   }
   file.unreadableSince = undefined
   file.reviewer = readApprovalsReviewer(records) ?? file.reviewer
-  const markEnded = (childId: string, aborted: boolean): void => {
+  const markEnded = (childId: string, aborted: boolean, fresh: boolean): void => {
     const hooks = childHooks.get(childId)
     if (hooks === undefined) {
       return
     }
     const previous = rollout.childEnds.get(childId)
     const same = previous?.hooks === hooks && previous.aborted === aborted
+    // An end re-read under a newer hook with no new end record may predate that hook's turn.
+    const confirm = same ? previous.confirm : aborted || (!fresh && previous !== undefined)
     const at = same ? previous.at : now
     rollout.childEnds.set(childId, {
       hooks,
       at,
       aborted,
-      settled: !aborted || readStartedAt - at >= CODEX_CHILD_ABORT_SETTLE_MS
+      confirm,
+      settled: !confirm || readStartedAt - at >= CODEX_CHILD_ABORT_SETTLE_MS
     })
   }
+  let childEndRead = false
   for (const recordValue of records) {
     const interrupted = readInterruptedChild(recordValue)
     if (interrupted) {
-      markEnded(interrupted, false)
+      markEnded(interrupted, false, true)
     }
     if (!file.childId) {
       continue
@@ -272,13 +305,14 @@ export function commitCodexRolloutRead(
     } else if (type === 'task_complete' || type === 'turn_complete' || type === 'turn_aborted') {
       file.childTurnOpen = false
       file.childTurnAborted = type === 'turn_aborted'
+      childEndRead = true
     }
   }
   if (file.childId && file.childTurnOpen !== undefined) {
     if (file.childTurnOpen) {
       rollout.childEnds.delete(file.childId)
     } else {
-      markEnded(file.childId, file.childTurnAborted === true)
+      markEnded(file.childId, file.childTurnAborted === true, childEndRead)
     }
   }
   if (file !== rollout.root) {

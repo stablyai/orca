@@ -19,9 +19,12 @@ import {
   type CodexRolloutReadContext
 } from './codex-rollout-file-reads'
 import {
+  codexChildRolloutPath,
   nextCodexSubagentIdentityRetry,
   takeCodexSubagentIdentityReads
 } from './codex-subagent-roster'
+
+const ABORT_READ_RECHECK_MS = 1_000
 
 export type CodexRolloutHookContext = { body: unknown; env?: string; version?: string }
 
@@ -32,6 +35,8 @@ type PaneFollow = CodexRolloutHookContext & {
   wakeAt?: number
   /** When a tail read skipped for a recent hook or write is due. */
   tailRetryAt?: number
+  /** When a due child abort last asked for its confirming read. */
+  abortReadAt?: number
   /** Last watch event per rollout file name. */
   writes?: Map<string, number>
 }
@@ -131,6 +136,7 @@ export class CodexRolloutFollower {
     this.panes.delete(paneKey)
   }
 
+  /** Observation stopped: rollouts are detached too, so reads in flight and held approvals land nowhere. */
   clearAll(): void {
     for (const pane of this.panes.values()) {
       if (pane.wake) {
@@ -138,6 +144,7 @@ export class CodexRolloutFollower {
       }
     }
     this.panes.clear()
+    this.host.state.codexRolloutByPaneKey.clear()
   }
 
   private pump(paneKey: string, tail: boolean): void {
@@ -150,9 +157,10 @@ export class CodexRolloutFollower {
     let rollout = state.codexRolloutByPaneKey.get(paneKey)
     if (tail && roster) {
       for (const [id, child] of roster) {
-        if (child.rolloutPath) {
+        const childPath = codexChildRolloutPath(child, rollout?.root?.cursor.filePath)
+        if (childPath) {
           rollout ??= getOrCreateCodexRolloutState(state, paneKey)
-          followCodexChildRollout(rollout, id, child.rolloutPath)
+          followCodexChildRollout(rollout, id, childPath)
         }
       }
     }
@@ -198,9 +206,13 @@ export class CodexRolloutFollower {
       return
     }
     const state = this.host.state
+    const abortDue = codexChildAbortDeadline(state, paneKey)
     const dues = [
       codexApprovalHoldDeadline(state, paneKey),
-      codexChildAbortDeadline(state, paneKey),
+      // A due abort waits on its read; recheck at most once a second rather than spinning until it lands.
+      abortDue === undefined
+        ? undefined
+        : Math.max(abortDue, (pane.abortReadAt ?? 0) + ABORT_READ_RECHECK_MS),
       pane.tailRetryAt,
       nextCodexSubagentIdentityRetry(state.codexSubagentRosterByPaneKey.get(paneKey))
     ].filter((due): due is number => due !== undefined)
@@ -222,6 +234,9 @@ export class CodexRolloutFollower {
         pane.wakeAt = undefined
         const now = Date.now()
         const abortDue = (codexChildAbortDeadline(this.host.state, paneKey) ?? Infinity) <= now
+        if (abortDue) {
+          pane.abortReadAt = now
+        }
         const tailDue = (pane.tailRetryAt ?? Infinity) <= now
         this.publish(paneKey)
         // A due abort settles, and a skipped tail reads, only on a fresh read of the rollouts.

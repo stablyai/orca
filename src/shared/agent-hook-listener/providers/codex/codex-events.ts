@@ -16,7 +16,7 @@ import {
   finishCodexSubagent,
   markCodexSubagentHookEvidence,
   queueCodexSubagentIdentity,
-  retireUnobservedCodexSubagents,
+  retireUnfollowableCodexSubagents,
   upsertCodexSubagent
 } from './codex-subagent-roster'
 import {
@@ -24,6 +24,7 @@ import {
   codexApprovalToolKey,
   followCodexRootRollout,
   forgetCodexChildRollout,
+  noteCodexRootToolHook,
   requestCodexRolloutReviewer
 } from './codex-rollout-state'
 import { normalizedTranscriptPath } from './codex-rollout-paths'
@@ -137,7 +138,7 @@ export function normalizeCodexSubagentLifecycleEvent(
     finishCodexSubagent(roster, agentId)
     const rollout = state.codexRolloutByPaneKey.get(paneKey)
     if (rollout) {
-      forgetCodexChildRollout(rollout, agentId)
+      forgetCodexChildRollout(rollout, agentId.trim())
     }
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
@@ -240,8 +241,11 @@ export function normalizeCodexEvent(
   }
 
   if (eventName === 'Stop') {
-    // Hook-observed children end with their own SubagentStop (some outlive the root turn); only restored rows no hook confirmed go.
-    retireUnobservedCodexSubagents(getOrCreateCodexSubagentRoster(state, paneKey))
+    // Followable children end with their own SubagentStop or rollout (some outlive the root turn).
+    retireUnfollowableCodexSubagents(
+      getOrCreateCodexSubagentRoster(state, paneKey),
+      state.codexRolloutByPaneKey.get(paneKey)?.root?.cursor.filePath
+    )
   }
   const owned = resolveCodexApprovalOwnedState(
     state,
@@ -285,12 +289,8 @@ export function normalizeCodexEvent(
   })
   if (rollout && owned.hold) {
     rollout.rootApprovalHold = { ...owned.hold, epoch: rollout.epoch, model: record.model }
-  } else if (
-    eventName === 'PostToolUse' &&
-    rollout?.rootApprovalHold?.toolKey === codexApprovalToolKey(hookPayload)
-  ) {
-    // The approved tool ran, so its approval was answered.
-    rollout.rootApprovalHold = undefined
+  } else if (rollout) {
+    noteCodexRootToolHook(rollout, eventName, hookPayload, stateName === 'waiting')
   }
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     ...resolveCodexPaneStatus(state, paneKey, record),
