@@ -24,8 +24,9 @@ import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-st
 
 export function useWorktreeCardFoundation({
   worktree,
-  repo
-}: Pick<WorktreeCardProps, 'worktree' | 'repo'>) {
+  repo,
+  compactLine = false
+}: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'compactLine'>) {
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
@@ -44,8 +45,10 @@ export function useWorktreeCardFoundation({
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
-  const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
-  const compactWorktreeCards = settings?.compactWorktreeCards === true
+  // A one-line card is always the Compact card, which only the default style has.
+  const drawsNewCards = useAppStore(selectDrawsNewWorktreeCards)
+  const newCardStyle = drawsNewCards && !compactLine
+  const compactWorktreeCards = compactLine || settings?.compactWorktreeCards === true
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),
     [cardProps, compactWorktreeCards, newCardStyle]
@@ -243,6 +246,7 @@ export function useWorktreeCardFoundation({
     isSshDisconnected,
     sshTargetRemoved,
     parsedRepoHost,
+    runtimeHostId,
     runtimeHostLabel,
     isRuntimeDisconnected,
     titleRenaming,

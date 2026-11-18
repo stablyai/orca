@@ -481,6 +481,16 @@
       "confirm": "Ajustar filtros e exibir",
       "cancel": "Manter filtros"
     },
+    "revealCurrent": {
+      "label": "Mostrar atual",
+      "noWorkspace": "Nada está aberto",
+      "fullPageView": "Esta página não tem linha na barra lateral",
+      "archived": "Espaços de trabalho arquivados não aparecem na barra lateral",
+      "botsOff": "Os bots estão desativados, então este bot não aparece",
+      "botHidden": "Este bot está pausado e oculto pelas opções de bots",
+      "renameBotPage": "A página de um bot ou grupo não é um worktree. Para renomeá-lo, use Renomear no menu da linha.",
+      "renameUnlisted": "Este espaço de trabalho não aparece na barra lateral agora, então não pode ser renomeado lá."
+    },
     "startupWorktreeRefresh": {
       "loading": "Descobrindo espaços de trabalho…"
     },
@@ -2007,6 +2017,13 @@
     "groupHooks": {
       "invalidSetup": "O arquivo está presente, mas o Orca não encontrou um script de configuração válido.",
       "supportedKeys": "Defina apenas as chaves compatíveis: `scripts` e `setup`."
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "Todas as noites após as 3h, ou assim que este computador estiver ativo",
+        "everyWeekLine": "Uma vez por semana após as 3h, ou assim que este computador estiver ativo",
+        "everyDescriptionAwake": "Se este computador estiver em repouso nesse horário, a organização roda assim que ele estiver ativo. Só depois de noites com novos chats. Cada organização usa seu plano do {{agent}}, como um chat curto."
+      }
     }
   },
   "auto": {
@@ -3105,7 +3122,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Local do projeto não definido"
+        "locationNotSet": "Local do projeto não definido",
+        "hostLocalGitProject": "Este projeto não tem um remoto Git correspondente",
+        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Atualize o servidor para ver as portas nos hosts SSH dele.",
@@ -8397,7 +8416,7 @@
           "df142657a5": "Ainda não usado",
           "olderPairingMethod": "Usa um método de pareamento antigo. Atualize o Orca no dispositivo que usa este link.",
           "b18d1764ef": "Usado por último em {{value0}}",
-          "sshAccessCaveat": "Revogar aqui não impede que alguém com acesso SSH a este computador pareie novamente. Para impedir o acesso, remova o acesso SSH dessa pessoa.",
+          "sshAccessCaveat": "Revogar um link também revoga os links criados nos terminais que ele abriu. Qualquer pessoa com um terminal neste computador, por SSH ou por um link, ainda pode parear novamente.",
           "linkName": "Link · {{value0}}",
           "activeLinks": "Links ativos",
           "noActiveLinks": "Nenhum link ativo.",
@@ -12658,7 +12677,6 @@
           "74fc00776f": "Detalhes do erro",
           "ca3b225195": "Falha na renomeação automática da branch",
           "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente.",
-          "dismissError": "Ignorar erro",
           "dismissing": "Descartando…"
         },
         "CreateProjectLocationField": {
@@ -12721,6 +12739,9 @@
           "removeDescriptionSsh": "Isso remove {{name}} apenas do Orca. Seus arquivos permanecem em {{host}} — adicione novamente esse host SSH para recuperá-lo.",
           "removeDescriptionLocal": "Isso remove {{name}} apenas do Orca. Ele ainda está no seu disco.",
           "removeDescriptionVmRecipe": "Isso remove {{name}} do Orca. A receita de VM determina se o ambiente e seus arquivos são excluídos permanentemente.",
+          "linkedWorkspaceWarning_one": "{{count}} espaço de trabalho deste projeto também será removido do Orca.",
+          "linkedWorkspaceWarning_other": "{{count}} espaços de trabalho deste projeto também serão removidos do Orca.",
+          "linkedWorkspaceWarning_many": "{{count}} espaços de trabalho deste projeto também serão removidos do Orca.",
           "openTerminalWarning_one": "{{count}} terminal aberto neste projeto será fechado.",
           "openTerminalWarning_other": "{{count}} terminais abertos neste projeto serão fechados.",
           "openTerminalWarning_many": "{{count}} terminais abertos neste projeto serão fechados."
@@ -12988,9 +13009,6 @@
           "changesLost_other": "{{count}} alterações não commitadas serão perdidas",
           "changesLost_many": "{{count}} alterações não commitadas serão perdidas",
           "uncountedChangesLost": "As alterações não commitadas serão perdidas"
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "Revelar espaço de trabalho ativo"
         },
         "WorkspaceKanbanCard": {
           "cefae8983e": "Fixado"
@@ -14247,8 +14265,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Fechar",
           "64c71cf7b9": "O Orca ainda não instalou nenhuma skill nesta máquina.",
-          "0900db719a": "— desconectado",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Este computador",
           "3677ae58e7": "Skills que o Orca instalou a partir de um link. Reinstale, volte para uma versão anterior ou remova-as.",
           "44d118a8f7": "Instaladas pelo Orca",
@@ -14379,8 +14395,6 @@
           "a4dfd33095": "Um espaço de trabalho",
           "c779621aa0": "Skills globais",
           "63cc9e31fe": "Destino",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— desconectado",
           "0785d0a503": "— atualização necessária",
           "8562dd1e6e": "Este computador",
           "b8a0b706ad": "Máquina"
@@ -20546,7 +20560,8 @@
         "chat": {
           "label": "Interface de chat",
           "description": "Os agentes respondem em um chat, com mensagens e diffs formatados.",
-          "terminalFallback": "Agentes sem suporte de chat e pastas abertas por SSH ou WSL neste computador ainda abrem em um terminal.",
+          "recommended": "Recomendado",
+          "terminalFallback": "Agentes sem suporte de chat abrem em um terminal.",
           "noneDetected": "Nenhum dos agentes detectados funciona na interface de chat."
         },
         "terminal": {
@@ -23910,6 +23925,7 @@
     }
   },
   "nativeChat": {
+    "linkedMessageMissing": "Não foi possível encontrar essa mensagem.",
     "math": {
       "scrollDisplayEquation": "Rolar equação em bloco"
     }
@@ -24777,6 +24793,50 @@
     "branchName": "Nome da branch",
     "invalidBranchName": "Este nome de branch é inválido. Escolha outro nome.",
     "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
+  },
+  "bots": {
+    "deepLink": {
+      "missing": "Essa conversa não está aberta neste computador."
+    },
+    "activity": {
+      "title": "Atividade"
+    },
+    "connectors": {
+      "tab": "Conectores"
+    },
+    "files": {
+      "tab": "Arquivos"
+    },
+    "upcoming": {
+      "tidyNightAfter": "Todas as noites após {{from}}, ou assim que este computador estiver ativo",
+      "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo",
+      "lookDueNow": "Previsto agora · {{every}}"
+    },
+    "palette": {
+      "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",
+      "description": "Buscar bots, chats, terminais, worktrees, configurações e ações",
+      "scopedPlaceholder": "Buscar bots...",
+      "scopedLabel": "Buscar bots",
+      "scopeHint": "Digite @ para mostrar só bots",
+      "chip": "Bots",
+      "chipLabel": "Bots, mostrar tudo",
+      "searchEverything": "Buscar em tudo por \"{{text}}\"",
+      "searchBotsFor": "Buscar bots por \"{{text}}\"",
+      "noMatch": "Nenhum bot corresponde a \"{{text}}\"",
+      "noBotsYet": "Ainda não há bots",
+      "filtersPaused": "Os filtros se aplicam a worktrees, não a bots",
+      "showEverything": "Mostrar tudo",
+      "footerBots": "Bots",
+      "matchesPurpose": "Corresponde ao propósito.",
+      "scopedStatus_one": "Mostrando só bots. {{count}} resultado encontrado.",
+      "scopedStatus_other": "Mostrando só bots. {{count}} resultados encontrados.",
+      "scopedStatus_many": "Mostrando só bots. {{count}} resultados encontrados.",
+      "sidebarSearchLabel": "Buscar bots, worktrees e abas do navegador",
+      "section": "Bots"
+    },
+    "templates": {
+      "browse": "Ver modelos"
+    }
   },
   "speechModelUpdate": {
     "update": "Atualizar",

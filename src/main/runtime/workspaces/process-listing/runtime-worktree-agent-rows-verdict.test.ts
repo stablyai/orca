@@ -119,7 +119,8 @@ function ingest(summary: AgentSessionStatusSummary, children: AgentChildWorkEvid
       connectedPtyEvidence: {
         tabIds: new Set(),
         paneKeys: new Set(),
-        ptyIdByTerminalHandle: new Map()
+        ptyIdByTerminalHandle: new Map(),
+        terminalHandleByPaneKey: new Map()
       },
       hookSnapshots
     }),

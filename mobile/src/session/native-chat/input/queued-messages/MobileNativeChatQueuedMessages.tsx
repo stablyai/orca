@@ -272,7 +272,7 @@ export function MobileNativeChatQueuedMessages({
   }
   const menuEditable =
     menuCard !== undefined &&
-    !menuCard.command &&
+    !menuCard.notEditable &&
     onEdit !== undefined &&
     editor === undefined &&
     !busyIds.has(menuCard.messageId)

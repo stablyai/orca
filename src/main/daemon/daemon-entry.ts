@@ -1,4 +1,5 @@
 import '../memory/host-malloc-tunables-claim'
+import '../ipc/pty/host-env/inherited-orca-identity-claim'
 import { parseArgs } from './launch/daemon-command-arguments'
 import { readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './server/daemon-main'

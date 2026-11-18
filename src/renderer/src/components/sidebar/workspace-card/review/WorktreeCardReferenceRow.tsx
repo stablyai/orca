@@ -6,6 +6,7 @@ import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { FilePathCursorTooltip } from '@/components/file-actions/file-path-cursor-tooltip'
+import { HoverScrollText } from '@/components/hover-scroll-text'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
@@ -50,17 +51,6 @@ function StateGlyph({
       </TooltipContent>
     </Tooltip>
   )
-}
-
-function measureTitleOverflow(element: HTMLElement): void {
-  const text = element.firstElementChild
-  if (!(text instanceof HTMLElement)) {
-    return
-  }
-  const overflow = Math.max(0, text.scrollWidth - element.clientWidth)
-  element.dataset.overflow = String(overflow > 0)
-  element.style.setProperty('--reference-title-offset', `${-overflow}px`)
-  element.style.setProperty('--reference-title-duration', `${Math.max(1.5, overflow / 35)}s`)
 }
 
 export function WorktreeCardReferenceRow({
@@ -126,9 +116,7 @@ export function WorktreeCardReferenceRow({
               href={url}
               target="_blank"
               rel="noreferrer"
-              className="workspace-reference-title block w-full rounded-sm text-xs font-medium leading-snug underline decoration-muted-foreground/50 underline-offset-2 outline-none hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              onPointerEnter={(event) => measureTitleOverflow(event.currentTarget)}
-              onFocus={(event) => measureTitleOverflow(event.currentTarget)}
+              className="block w-full rounded-sm text-xs font-medium leading-snug underline decoration-muted-foreground/50 underline-offset-2 outline-none hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={t('workspace.links.openItem', 'Open {{label}}', {
                 label
               })}
@@ -139,15 +127,13 @@ export function WorktreeCardReferenceRow({
               onAuxClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
             >
-              <span>{title}</span>
+              <HoverScrollText>{title}</HoverScrollText>
             </a>
           </FilePathCursorTooltip>
         ) : (
           <button
             type="button"
-            className="workspace-reference-title block w-full rounded-sm text-left text-xs font-medium leading-snug outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-            onPointerEnter={(event) => measureTitleOverflow(event.currentTarget)}
-            onFocus={(event) => measureTitleOverflow(event.currentTarget)}
+            className="block w-full rounded-sm text-left text-xs font-medium leading-snug outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
             disabled={!onManage}
             aria-label={t('workspace.links.openItem', 'Open {{label}}', {
               label
@@ -155,7 +141,7 @@ export function WorktreeCardReferenceRow({
             onClick={onManage}
             onKeyDown={(event) => event.stopPropagation()}
           >
-            <span>{title}</span>
+            <HoverScrollText>{title}</HoverScrollText>
           </button>
         )}
         <div

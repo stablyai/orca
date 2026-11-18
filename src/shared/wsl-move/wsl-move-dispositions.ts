@@ -99,6 +99,14 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   automationRuns: moveDisposition(19, {
     note: "An in-flight run in scope blocks the move. The desktop's history stays as written, beside its automation."
   }),
+  bots: notApplicableDisposition(
+    62,
+    "A bot's hidden project group is never offered for a move; the bot stays with its host."
+  ),
+  botsPermissionDefaultMigrated: notApplicableDisposition(
+    62,
+    'A one-time migration marker for bots.'
+  ),
   orcadMigrationImportReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationEvictedReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationStagedCatalogs: notApplicableDisposition(68, 'Mover-owned.'),

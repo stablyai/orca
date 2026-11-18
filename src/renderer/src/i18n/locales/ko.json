@@ -555,6 +555,13 @@
     "groupHooks": {
       "invalidSetup": "파일은 있지만 Orca가 유효한 설정 스크립트를 찾을 수 없습니다.",
       "supportedKeys": "지원되는 키만 정의하세요: `scripts` 및 `setup`."
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "매일 밤 오전 3시 이후, 또는 이 컴퓨터가 깨어난 후",
+        "everyWeekLine": "일주일에 한 번 오전 3시 이후, 또는 이 컴퓨터가 깨어난 후",
+        "everyDescriptionAwake": "그 시간에 이 컴퓨터가 잠자기 상태이면 깨어난 후 실행됩니다. 새 채팅이 있었던 밤 이후에만 실행됩니다. 정리할 때마다 짧은 채팅처럼 {{agent}} 요금제를 사용합니다."
+      }
     }
   },
   "menu": {
@@ -1488,6 +1495,10 @@
         "mergeRequest": "MR",
         "linkedIssue": "연결된 이슈",
         "listeningPort": "수신 대기 포트"
+      },
+      "projectHostSetupOptions": {
+        "hostLocalGitProject": "이 프로젝트에 일치하는 Git 원격이 없습니다",
+        "hostLocalFolderProject": "폴더 프로젝트는 다른 호스트에 연결할 수 없습니다"
       }
     },
     "hooks": {
@@ -5023,8 +5034,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "닫기",
           "64c71cf7b9": "Orca가 아직 이 컴퓨터에 스킬을 설치하지 않았습니다.",
-          "0900db719a": "— 연결이 끊어졌습니다",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "이 컴퓨터",
           "3677ae58e7": "Orca가 링크에서 설치한 스킬입니다. 다시 설치하거나, 이전 버전으로 되돌리거나, 제거할 수 있습니다.",
           "44d118a8f7": "Orca에서 설치함",
@@ -5058,8 +5067,6 @@
           "a4dfd33095": "하나의 워크스페이스",
           "c779621aa0": "글로벌 스킬",
           "63cc9e31fe": "목적지",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— 연결이 끊어졌습니다",
           "0785d0a503": "— 업데이트 필요",
           "8562dd1e6e": "이 컴퓨터",
           "b8a0b706ad": "기계"
@@ -5543,10 +5550,8 @@
           "removeDescriptionSsh": "이 작업은 {{name}}을(를) Orca에서 제거만 합니다. 파일은 {{host}}에 그대로 남아 있으며, 해당 SSH 호스트를 다시 추가하면 복구할 수 있습니다.",
           "removeDescriptionLocal": "이 작업은 {{name}}을(를) Orca에서 제거만 합니다. 파일은 디스크에 그대로 남아 있습니다.",
           "removeDescriptionVmRecipe": "이렇게 하면 Orca에서 {{name}}이(가) 제거됩니다. 해당 VM 레시피에 따라 환경과 해당 파일이 영구적으로 삭제되는지 여부가 결정됩니다.",
+          "linkedWorkspaceWarning_other": "이 프로젝트의 워크스페이스 {{count}}개도 Orca에서 제거됩니다.",
           "openTerminalWarning_other": "이 프로젝트에서 열려 있는 터미널 {{count}}개가 닫힙니다."
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "활성 워크스페이스로 이동"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "사이드바에서 숨기기",
@@ -8077,7 +8082,7 @@
           "112f3b934f": "소스 제어 AI"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "여기서 취소해도 이 컴퓨터에 SSH로 접근할 수 있는 사람은 다시 페어링할 수 있습니다. 차단하려면 해당 SSH 접근 권한을 제거하세요.",
+          "sshAccessCaveat": "링크를 취소하면 그 링크가 연 터미널에서 만든 링크도 취소됩니다. SSH나 링크를 통해 이 컴퓨터의 터미널을 쓸 수 있는 사람은 여전히 다시 페어링할 수 있습니다.",
           "6f6d5188ed": "{{value0}} 취소",
           "434e4a6af6": "현재 링크",
           "df142657a5": "아직 사용되지 않음",
@@ -20711,6 +20716,16 @@
       "confirm": "필터 조정 및 공개",
       "cancel": "필터 유지"
     },
+    "revealCurrent": {
+      "label": "현재 항목 표시",
+      "noWorkspace": "열려 있는 항목이 없습니다",
+      "fullPageView": "이 페이지는 사이드바에 행이 없습니다",
+      "archived": "보관된 워크스페이스는 사이드바에 표시되지 않습니다",
+      "botsOff": "봇이 꺼져 있어 이 봇은 표시되지 않습니다",
+      "botHidden": "이 봇은 일시 중지되어 봇 옵션에 의해 숨겨져 있습니다",
+      "renameBotPage": "봇이나 그룹의 페이지는 워크트리가 아닙니다. 이름을 바꾸려면 해당 행 메뉴의 이름 바꾸기를 사용하세요.",
+      "renameUnlisted": "이 워크스페이스는 지금 사이드바에 표시되지 않아 그곳에서 이름을 바꿀 수 없습니다."
+    },
     "wslMoved": {
       "movedToHost": "{{distro}} 호스트로 이동됨",
       "sectionTitle": "WSL 호스트로 이동됨 ({{count}})",
@@ -22662,6 +22677,7 @@
     }
   },
   "nativeChat": {
+    "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다.",
     "math": {
       "scrollDisplayEquation": "수식 블록 스크롤"
     }
@@ -23518,6 +23534,48 @@
     "branchName": "브랜치 이름",
     "invalidBranchName": "이 브랜치 이름은 유효하지 않습니다. 다른 이름을 선택하세요.",
     "createBranchFailed": "Orca가 브랜치를 만들지 못했습니다. 터미널에서 이 저장소를 확인한 후 다시 시도하세요."
+  },
+  "bots": {
+    "deepLink": {
+      "missing": "이 대화는 이 컴퓨터에서 열려 있지 않습니다."
+    },
+    "activity": {
+      "title": "활동"
+    },
+    "connectors": {
+      "tab": "커넥터"
+    },
+    "files": {
+      "tab": "파일"
+    },
+    "upcoming": {
+      "tidyNightAfter": "매일 밤 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후",
+      "tidyWeekAfter": "일주일에 한 번 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후",
+      "lookDueNow": "지금 실행 예정 · {{every}}"
+    },
+    "palette": {
+      "placeholder": "봇, 채팅, 터미널, 워크스페이스, 작업, 설정 및 동작 검색...",
+      "description": "봇, 채팅, 터미널, 워크스페이스, 작업, 설정 및 동작 검색",
+      "scopedPlaceholder": "봇 검색...",
+      "scopedLabel": "봇 검색",
+      "scopeHint": "@를 입력하면 봇만 표시됩니다",
+      "chip": "봇",
+      "chipLabel": "봇, 모두 표시",
+      "searchEverything": "전체에서 \"{{text}}\" 검색",
+      "searchBotsFor": "\"{{text}}\"(으)로 봇 검색",
+      "noMatch": "\"{{text}}\"와(과) 일치하는 봇이 없습니다",
+      "noBotsYet": "아직 봇이 없습니다",
+      "filtersPaused": "필터는 봇이 아닌 워크스페이스에 적용됩니다",
+      "showEverything": "모두 표시",
+      "footerBots": "봇",
+      "matchesPurpose": "목적과 일치합니다.",
+      "scopedStatus_other": "봇만 표시 중. 결과 {{count}}개를 찾았습니다.",
+      "sidebarSearchLabel": "봇, 워크스페이스 및 브라우저 탭 검색",
+      "section": "봇"
+    },
+    "templates": {
+      "browse": "템플릿 둘러보기"
+    }
   },
   "speechModelUpdate": {
     "update": "업데이트",

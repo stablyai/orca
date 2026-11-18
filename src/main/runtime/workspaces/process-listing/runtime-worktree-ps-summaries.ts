@@ -2,10 +2,9 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/fee
 import type { Worktree } from '../../../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-statuses'
 import {
-  folderWorkspaceKey,
-  worktreeWorkspaceKey
-} from '../../../../shared/workspace/identity/workspace-scope'
-import { folderLineageEdgeOf } from '../../../../shared/worktree/lineage/folder-lineage-parents'
+  folderLineageEdgeOf,
+  pickFolderLineageRecord
+} from '../../../../shared/worktree/lineage/folder-lineage-parents'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
@@ -14,6 +13,15 @@ import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/feed-fact
 import { withOwnerRepos } from '../../../../shared/sidebar-list/feed-facts/workspace-rows'
 import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import type { WorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
+import { resolveWorkspaceLineageParents } from '../../../../shared/worktree/lineage/workspace-lineage-graph'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { workspaceKeyOfRow } from '../../../../shared/worktree/lineage/lineage-row-identity'
+import { nearestBotHome } from '../../../../shared/bots/bot-workspace-owner'
 import { runtimeVisibleFolderWorkspaces } from '../catalog/runtime-visible-catalog'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -28,6 +36,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
   worktreeId?: string
 }): Map<string, RuntimeWorktreePsSummary> {
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
+  const botOf = botOwnerLookup(args.store, args.resolvedWorktrees)
   const metaByHost = new Map<ExecutionHostId, Record<string, WorktreeMeta>>()
   // A same-id twin on another host has its own metadata; an unhosted row keeps the id-keyed read.
   const readMeta = (worktree: ResolvedWorktree): WorktreeMeta | undefined => {
@@ -96,6 +105,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       isMainWorktree: worktree.isMainWorktree,
       hasHostSidebarActivity: false,
       ...getWorkspaceRowKindFacts(worktree, repo),
+      ...botOf(worktreeWorkspaceKey(worktree.id), worktree),
       ...(worktree.removalError ? { removalError: worktree.removalError } : {}),
       ...(worktree.removing ? { removing: true } : {}),
       ...(worktree.removalRecorded ? { removalRecorded: true } : {}),
@@ -172,6 +182,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       isMainWorktree: worktree.isMainWorktree,
       hasHostSidebarActivity: false,
       ...getWorkspaceRowKindFacts(worktree, undefined),
+      ...botOf(folderWorkspaceKey(folderWorkspace.id), worktree),
       ...(worktree.instanceId !== undefined ? { worktreeInstanceId: worktree.instanceId } : {}),
       parentWorktreeId: null,
       childWorktreeIds: [],
@@ -203,6 +214,34 @@ export function buildRuntimeWorktreePsSummaries(args: {
     })
   }
   return summaries
+}
+
+/** The bot a workspace is under: the nearest bot home among the folders the sidebar's own parent
+ * rules nest it beneath, however it got there. */
+function botOwnerLookup(store: RuntimeStore | null, worktrees: readonly Worktree[]) {
+  const lineage = store?.getAllWorkspaceLineage?.() ?? {}
+  const botByHome = new Map(
+    (store?.getBots?.() ?? []).map((bot) => [folderWorkspaceKey(bot.folderWorkspaceId), bot.name])
+  )
+  const rows = new Map(
+    [...worktrees, ...(store?.getFolderWorkspaces?.() ?? []).map(folderWorkspaceToWorktree)].map(
+      (row) => [getWorktreeHostIdentity(row), row]
+    )
+  )
+  const parentOf = resolveWorkspaceLineageParents({}, rows, undefined, (row) =>
+    pickFolderLineageRecord(lineage[workspaceKeyOfRow(row)], row)
+  )
+  const isHome = (row: Worktree) => botByHome.has(workspaceKeyOfRow(row))
+  const parent = (row: Worktree) => parentOf.get(getWorktreeHostIdentity(row))
+  return (key: WorkspaceKey, worktree: Worktree): { bot?: string; botHome?: true } => {
+    const home = botByHome.get(key)
+    if (home) {
+      return { bot: home, botHome: true }
+    }
+    const homeRow = nearestBotHome(worktree, parent, isHome)
+    const bot = homeRow ? botByHome.get(workspaceKeyOfRow(homeRow)) : undefined
+    return bot ? { bot } : {}
+  }
 }
 
 function setPsSummary(
