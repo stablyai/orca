@@ -1034,6 +1034,8 @@
     "browser.loadFailure.retry",
     "browser.loadFailure.routeDownDescription",
     "browser.loadFailure.routeDownTitle",
+    "browser.loadFailure.siteListBlockedDescription",
+    "browser.loadFailure.siteListBlockedTitle",
     "browser.loadFailure.sshRoutedHint",
     "browser.loadFailure.timeoutTitle",
     "browser.loadFailure.waiting",

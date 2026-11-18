@@ -9,6 +9,7 @@ import {
   BrowserManagerGuestPopupPolicy,
   isLocalFileLinkFromLocalPage
 } from '../popups/browser-manager-guest-popup-policy'
+import { SITE_LIST_BLOCKED_ERROR_NAME } from '../../../../../shared/browser/navigation/browser-load-failure'
 import { allowPageUnload } from '../../navigation/browser-guest-unload-policy'
 import { initiatingFrameUrl } from '../../prompts/browser-external-app-launch'
 import { isSameExtensionNavigation } from '../../../../../shared/browser/extensions/browser-extension-url'
@@ -230,10 +231,15 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     guest.on('did-fail-load', didFailLoadHandler)
     // Why emit: an extension-blocked guest main frame commits no error page, so Electron reports
     // nothing; every did-fail-load reader (this policy, the pane, webNavigation) needs the failure.
-    const stopWatchingBlockedMainFrames = watchDecisionBlockedMainFrames(guest.id, (url) => {
-      const { processId, routingId } = guest.mainFrame
-      guest.emit('did-fail-load', {}, -20, 'ERR_BLOCKED_BY_CLIENT', url, true, processId, routingId)
-    })
+    const stopWatchingBlockedMainFrames = watchDecisionBlockedMainFrames(
+      guest.id,
+      (url, reason) => {
+        const { processId, routingId } = guest.mainFrame
+        const errorName =
+          reason === 'site-list' ? SITE_LIST_BLOCKED_ERROR_NAME : 'ERR_BLOCKED_BY_CLIENT'
+        guest.emit('did-fail-load', {}, -20, errorName, url, true, processId, routingId)
+      }
+    )
     guest.on('will-prevent-unload', allowPageUnload)
     const handleDestroyed = (): void => {
       const browserTabId = this.tabIdByWebContentsId.get(guest.id)

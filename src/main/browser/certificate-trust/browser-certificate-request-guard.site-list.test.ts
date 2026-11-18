@@ -45,7 +45,7 @@ describe('browser profile site list in the request guard', () => {
     expect(send('https://a.cdn.example.com/x.js')).toEqual({})
     expect(send('https://tracker.test/pixel')).toEqual({ cancel: true })
     expect(send('https://blocked.test/', 'mainFrame')).toEqual({ cancel: true })
-    expect(onBlocked).toHaveBeenCalledWith('https://blocked.test/')
+    expect(onBlocked).toHaveBeenCalledWith('https://blocked.test/', 'site-list')
 
     setBrowserProfileSiteList('profile-a', [])
     expect(send('https://tracker.test/pixel')).toEqual({})

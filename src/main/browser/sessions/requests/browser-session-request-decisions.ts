@@ -44,7 +44,12 @@ function warn(event: string, error: unknown): void {
   console.warn(`[browser] request decision for ${event} failed:`, error)
 }
 
-const blockedMainFrameWatchers = new Map<number, (url: string) => void>()
+export type BrowserMainFrameBlockReason = 'extension' | 'site-list'
+
+const blockedMainFrameWatchers = new Map<
+  number,
+  (url: string, reason: BrowserMainFrameBlockReason) => void
+>()
 
 /**
  * Calls `onBlocked` when the decider (an extension) cancels this webContents' main-frame load.
@@ -52,7 +57,7 @@ const blockedMainFrameWatchers = new Map<number, (url: string) => void>()
  */
 export function watchDecisionBlockedMainFrames(
   webContentsId: number,
-  onBlocked: (url: string) => void
+  onBlocked: (url: string, reason: BrowserMainFrameBlockReason) => void
 ): () => void {
   blockedMainFrameWatchers.set(webContentsId, onBlocked)
   return () => {
@@ -64,14 +69,15 @@ export function watchDecisionBlockedMainFrames(
 
 function noteBlockedMainFrame(
   details: Electron.OnBeforeRequestListenerDetails,
-  response: Electron.CallbackResponse
+  response: Electron.CallbackResponse,
+  reason: BrowserMainFrameBlockReason
 ): void {
   if (
     response.cancel &&
     details.resourceType === 'mainFrame' &&
     details.webContentsId !== undefined
   ) {
-    blockedMainFrameWatchers.get(details.webContentsId)?.(details.url)
+    blockedMainFrameWatchers.get(details.webContentsId)?.(details.url, reason)
   }
 }
 
@@ -81,12 +87,15 @@ export function answerBrowserSessionBeforeRequest(
   details: Electron.OnBeforeRequestListenerDetails,
   callback: (response: Electron.CallbackResponse) => void
 ): void {
-  const answer = (response: Electron.CallbackResponse): void => {
-    noteBlockedMainFrame(details, response)
+  const answer = (
+    response: Electron.CallbackResponse,
+    reason: BrowserMainFrameBlockReason = 'extension'
+  ): void => {
+    noteBlockedMainFrame(details, response, reason)
     callback(response)
   }
   if (isBrowserSessionRequestOutsideSiteList(session, details.url)) {
-    answer({ cancel: true })
+    answer({ cancel: true }, 'site-list')
     return
   }
   let decision: ReturnType<BrowserSessionRequestDecider['beforeRequest']> = null
