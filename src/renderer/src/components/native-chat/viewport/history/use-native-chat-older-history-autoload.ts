@@ -40,6 +40,14 @@ export function useNativeChatOlderHistoryAutoload({
   // A swapped transcript must not inherit another history’s failure.
   const [failedHistoryKey, setFailedHistoryKey] = useState<string | null>(null)
   const [readFailedHistoryKey, setReadFailedHistoryKey] = useState<string | null>(null)
+  // Any page load (a retry, a history jump) starts fresh; only its own failure brings the error back.
+  const [wasLoading, setWasLoading] = useState(loadingEarlier)
+  if (loadingEarlier !== wasLoading) {
+    setWasLoading(loadingEarlier)
+    if (loadingEarlier) {
+      setReadFailedHistoryKey(null)
+    }
+  }
 
   const canObserve = typeof IntersectionObserver !== 'undefined'
   const isAutoLoadEnabled = autoLoad && canObserve && failedHistoryKey !== historyKey
@@ -51,7 +59,9 @@ export function useNativeChatOlderHistoryAutoload({
       if (result === 'failed' || result === 'unchanged') {
         setFailedHistoryKey(historyKey)
       }
-      setReadFailedHistoryKey(result === 'failed' ? historyKey : null)
+      if (result === 'failed') {
+        setReadFailedHistoryKey(historyKey)
+      }
     })
   }
   // Lane callbacks change identity with their state; the observer must not.
