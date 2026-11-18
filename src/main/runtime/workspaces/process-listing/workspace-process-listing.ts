@@ -47,8 +47,7 @@ import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
-import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { structuredAgentSettingGates } from '../../agent-session/launch/structured-agent-setting-gates'
 import { claudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
@@ -266,15 +265,14 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       claimKeyId: this.agentSessionClaimSigner.keyId,
       logger,
       ...catalogDeps,
+      ...this.botStructuredSessionHostDeps(() => this.requireStore()),
       claudeCliFlags: claudeCliFlagSupport,
       usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
       idleSweep: { idleMs: () => nativeChatIdleStopMs(this.requireStore().getSettings()) },
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },
-      resolveAgentFullAccess: (agent) =>
-        isTuiAgent(agent) &&
-        preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),
+      ...structuredAgentSettingGates(() => this.requireStore().getSettings()),
       launchAccountHome: (record, purpose) =>
         this.resolveStructuredAgentLaunchAccountHome(record, purpose),
       prepareLaunchAccountHome: (record, launchDirectory) =>
@@ -301,12 +299,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         readNotificationSettings: () => this.requireStore().getSettings().notifications,
         readWorkspaceLabels: (scope) =>
           readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
-        isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
+        ...this.botAttentionDeliveryDeps(),
         // The same contexts the session's chat row carries.
         readOrchestration: (paneKey) => this.agentOrchestrationProjection.getForPaneKey(paneKey),
         dispatch: (event) => this.mobileNotifications.dispatch(event),
-        reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
-        now: () => Date.now()
+        reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state)
       }),
       createTurnAttention: () =>
         chatWorkerTurnStopReporter({
@@ -316,7 +313,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
-    })
+    }).then(() => this.backfillBotBackgroundChats())
     // Starts watches not yet running once the host has served: a failed first start or a teardown retries here.
     this.startPullRequestWatches()
   }

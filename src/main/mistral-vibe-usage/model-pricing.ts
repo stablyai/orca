@@ -1,7 +1,7 @@
 import {
-  record,
-  type JsonRecord
-} from '../../shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor'
+  type JsonRecord,
+  record
+} from '../../shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-format'
 import { extractString } from '../../shared/text/trimmed-string'
 import { parse as parseToml } from 'smol-toml'
 

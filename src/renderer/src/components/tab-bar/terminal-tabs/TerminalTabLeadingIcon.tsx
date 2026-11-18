@@ -1,4 +1,4 @@
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/class-names'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
@@ -20,6 +20,8 @@ type TerminalTabLeadingIconProps = {
   isActive: boolean
   /** Program-reported 0–100 for the tab's live work; fills the state ring. */
   progress?: number
+  /** Shown in place of the agent's icon: a bot's tabs show the bot's picture. */
+  identity?: React.ReactNode
 }
 
 type TerminalTabAgentIdentityIconProps = {
@@ -50,9 +52,17 @@ export function TerminalTabLeadingIcon({
   shell,
   showUnreadActivity,
   isActive,
-  progress
+  progress,
+  identity
 }: TerminalTabLeadingIconProps): React.JSX.Element {
   const t = useTranslate()
+  const identityIcon = identity ? (
+    <span className={cn('inline-flex', !isActive && 'opacity-70')} aria-hidden>
+      {identity}
+    </span>
+  ) : agent ? (
+    <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} />
+  ) : null
   if (showUnreadActivity) {
     return (
       <span
@@ -64,7 +74,7 @@ export function TerminalTabLeadingIcon({
         className="mr-1 inline-flex shrink-0 items-center gap-1"
       >
         <FilledBellIcon className="size-3 text-amber-500 drop-shadow-sm" />
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
+        {identityIcon}
       </span>
     )
   }
@@ -81,9 +91,13 @@ export function TerminalTabLeadingIcon({
         {/* Why: the state glyph is self-describing and the tab title already has a tooltip; hover here stays quiet. */}
         <AgentStateDot state={dotState} size="md" title={null} progress={progress} />
         {/* Keep agent identity beside activity so parallel tabs remain distinguishable. */}
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
+        {identityIcon}
       </span>
     )
+  }
+
+  if (identity) {
+    return <span className="mr-1 inline-flex shrink-0">{identityIcon}</span>
   }
 
   if (agent) {

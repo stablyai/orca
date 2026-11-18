@@ -27,6 +27,8 @@ export function getOrcaUninstallStepStates(
       return plan.hookScripts ? [plan.hookScripts.state] : []
     case 'ssh-hosts':
       return plan.hosts.map((entry) => entry.state)
+    case 'terminal-daemon':
+      return plan.terminalDaemon ? [plan.terminalDaemon.state] : []
   }
 }
 
@@ -106,6 +108,11 @@ export function mergeOrcaUninstallStepResult(
       return { ...previous, hookScripts: mergeSimple(previous.hookScripts, next.hookScripts) }
     case 'ssh-hosts':
       return { ...previous, hosts: mergeById(previous.hosts, next.hosts, hostId, only) }
+    case 'terminal-daemon':
+      return {
+        ...previous,
+        terminalDaemon: mergeSimple(previous.terminalDaemon, next.terminalDaemon)
+      }
   }
 }
 
@@ -132,6 +139,8 @@ export function markOrcaUninstallStepFailed(
       return { ...plan, hookScripts: plan.hookScripts && fail(plan.hookScripts) }
     case 'ssh-hosts':
       return { ...plan, hosts: failListed(plan.hosts, hostId) }
+    case 'terminal-daemon':
+      return { ...plan, terminalDaemon: plan.terminalDaemon && fail(plan.terminalDaemon) }
   }
 }
 

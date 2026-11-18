@@ -36,7 +36,8 @@ export function getMobileTerminalActionSheetActions<
   const sessionTab = args.tabs.find((tab) => tab.terminal === target.handle)
   return [
     ...getMobileNativeChatToggleActions({
-      tab: sessionTab ?? null,
+      terminalHandle: target.handle,
+      tabs: args.tabs,
       isTabChatView: args.isTabChatView,
       nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable,
       onClose: args.onDismiss,

@@ -6,6 +6,7 @@ import { Command as CommandPrimitive } from 'cmdk'
 import { SearchIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
+import { usePortalContainer } from './portal-container-context'
 import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
@@ -15,7 +16,8 @@ import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/text-input/ime/ime-text-field'
 import { DialogOverlay } from '@/components/ui/dialog'
 
-const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded-md', {
+// Why outline-none: a list without a search field takes focus itself; its highlighted row shows focus.
+const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded-md outline-none', {
   variants: {
     surface: {
       default: 'bg-popover text-popover-foreground',
@@ -97,7 +99,7 @@ function CommandDialog({
 
   return (
     <DialogPrimitive.Root {...props}>
-      <DialogPrimitive.Portal>
+      <DialogPrimitive.Portal container={usePortalContainer() ?? undefined}>
         <DialogOverlay className={overlayClassName} />
         <OverlayFocusScope value={scope}>
           <DialogPrimitive.Content
@@ -151,38 +153,74 @@ const commandInputVariants = cva('flex items-center bg-muted/30 px-3 py-1', {
   defaultVariants: { variant: 'default' }
 })
 
+function withoutTrailingEllipsis(value: string | undefined): string | undefined {
+  return value
+    ?.trim()
+    .replace(/(?:\.{3}|…)$/, '')
+    .trimEnd()
+}
+
 function CommandInput({
   className,
   variant,
   wrapperClassName,
   iconClassName,
+  leading,
   trailing,
+  truncatePlaceholder = false,
   ref,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input> &
   VariantProps<typeof commandInputVariants> & {
     wrapperClassName?: string
     iconClassName?: string
+    /** Rendered between the search icon and the field (e.g. a scope chip). */
+    leading?: React.ReactNode
     /** Rendered after the field, inside the input frame (e.g. a filter control). */
     trailing?: React.ReactNode
+    /** Ellipsize a controlled input's placeholder, including while focused. */
+    truncatePlaceholder?: boolean
   }) {
   const imeProps = useImeTextFieldProps<HTMLInputElement>(props)
+  const placeholderHint = truncatePlaceholder ? props.placeholder : props['aria-placeholder']
+  const repeatsName =
+    withoutTrailingEllipsis(placeholderHint) === withoutTrailingEllipsis(props['aria-label'])
+  const input = (
+    <CommandPrimitive.Input
+      ref={ref}
+      data-slot="command-input"
+      className={cn(
+        'flex h-10 w-full rounded-md bg-transparent py-3 text-sm text-ellipsis outline-none placeholder:text-muted-foreground placeholder:text-ellipsis disabled:cursor-not-allowed disabled:opacity-50',
+        className
+      )}
+      {...props}
+      {...imeProps}
+      placeholder={truncatePlaceholder ? undefined : props.placeholder}
+      aria-placeholder={repeatsName ? undefined : placeholderHint}
+    />
+  )
   return (
     <div
       className={cn(commandInputVariants({ variant }), wrapperClassName)}
       data-cmdk-input-wrapper=""
     >
       <SearchIcon className={cn('mr-2 h-4 w-4 shrink-0 opacity-50', iconClassName)} />
-      <CommandPrimitive.Input
-        ref={ref}
-        data-slot="command-input"
-        className={cn(
-          'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
-          className
-        )}
-        {...props}
-        {...imeProps}
-      />
+      {leading}
+      {truncatePlaceholder ? (
+        <div className="relative flex min-w-0 flex-1">
+          {input}
+          {props.value === '' ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 flex items-center"
+            >
+              <span className="truncate text-sm text-muted-foreground">{props.placeholder}</span>
+            </span>
+          ) : null}
+        </div>
+      ) : (
+        input
+      )}
       {trailing}
     </div>
   )

@@ -10,10 +10,7 @@ import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-
 import { getShellLaunchConfig } from '../../../providers/local-pty/local-pty-shell-ready'
 import { selectShellStartupFeatures } from '../../../pty/shell-startup/shell-startup-features'
 import { hasZsh, ZSH_PATH } from '../../../pty/shell-startup/zsh-startup-hook-pty-harness'
-import {
-  createTranscriptPane,
-  TRANSCRIPT_PANE_PTY_ID
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 import { normalizeTerminalChunk } from '../output/terminal-ansi-normalization'
 import { hasTerminalAgentPainted, TerminalCommandPaint } from '../input/terminal-command-paint'
 

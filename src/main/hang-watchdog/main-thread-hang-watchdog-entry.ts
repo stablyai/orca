@@ -13,6 +13,8 @@ import {
 } from './hang-observations'
 import { captureHangSnapshot } from './hang-snapshot'
 import { createWatchdogHangCapture } from './watchdog-hang-capture'
+import { MAX_HANG_WORKER_SENDS, type HangWorkerSend } from './hang-observation-schema'
+import { readWorkerSendLedger } from '../worker-threads/worker-send-ledger'
 import type {
   HangWatchdogWorkerData,
   MainToHangWatchdogWorkerMessage
@@ -22,6 +24,23 @@ type HangWatchdogPort = {
   on: (event: 'message', listener: (message: MainToHangWatchdogWorkerMessage) => void) => unknown
   close: () => void
   postMessage?: (message: { type: 'capture-drain'; token: string }) => void
+}
+
+/** Latest sends first: the message a stuck main thread is receiving was posted most recently. */
+function recentWorkerSends(now: number): HangWorkerSend[] {
+  return readWorkerSendLedger()
+    .filter((slot) => slot.sends > 0)
+    .sort((a, b) => b.lastAt - a.lastAt)
+    .slice(0, MAX_HANG_WORKER_SENDS)
+    .map((slot) => ({
+      role: slot.role,
+      kind: slot.lastKind,
+      items: slot.lastItems,
+      bytes: slot.lastBytes,
+      depth: slot.lastDepth,
+      agoMs: Math.max(0, now - slot.lastAt),
+      heapUsedMB: slot.heapUsedMB
+    }))
 }
 
 export function runWatchdog(
@@ -153,7 +172,8 @@ export function runWatchdog(
       machine: null,
       completedSpans: null,
       powerEvents,
-      initialSleepAssociated
+      initialSleepAssociated,
+      ...(kind === 'heartbeat-stall' ? { workerSends: recentWorkerSends(now) } : {})
     }
     observations = retainHangObservation(observations, record)
     if (kind === 'heartbeat-stall') {

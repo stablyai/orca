@@ -1,4 +1,7 @@
 import { createUsageProviderSlice } from './usage-provider-slice'
+import { usageApiForHost } from './usage-host'
+import { createUsagePatch } from './usage-provider-slice-state'
+import type { AppState } from '../../types'
 import type {
   ClaudeUsageTypes,
   CodexUsageTypes,
@@ -24,7 +27,7 @@ export const createClaudeUsageSlice = createUsageProviderSlice<
   name: 'Claude',
   initialScope: 'orca',
   initialRange: '30d',
-  getApi: () => window.api.claudeUsage,
+  getApi: (host) => usageApiForHost(host, 'claudeUsage'),
   hasCachedData: (state) => state.hasAnyClaudeData
 })
 
@@ -33,7 +36,7 @@ export const createCodexUsageSlice = createUsageProviderSlice<'codex', 'Codex', 
   name: 'Codex',
   initialScope: 'orca',
   initialRange: '30d',
-  getApi: () => window.api.codexUsage,
+  getApi: (host) => usageApiForHost(host, 'codexUsage'),
   hasCachedData: (state) => state.hasAnyCodexData
 })
 
@@ -46,7 +49,7 @@ export const createOpenCodeUsageSlice = createUsageProviderSlice<
   name: 'OpenCode',
   initialScope: 'orca',
   initialRange: '30d',
-  getApi: () => window.api.openCodeUsage,
+  getApi: (host) => usageApiForHost(host, 'openCodeUsage'),
   hasCachedData: (state) => state.hasAnyOpenCodeData
 })
 
@@ -55,7 +58,7 @@ export const createMuseUsageSlice = createUsageProviderSlice<'muse', 'Muse', Mus
   name: 'Muse',
   initialScope: 'orca',
   initialRange: '30d',
-  getApi: () => window.api.museUsage,
+  getApi: (host) => usageApiForHost(host, 'museUsage'),
   hasCachedData: (state) => state.hasAnyMuseData
 })
 
@@ -68,6 +71,24 @@ export const createMistralVibeUsageSlice = createUsageProviderSlice<
   name: 'MistralVibe',
   initialScope: 'orca',
   initialRange: '30d',
-  getApi: () => window.api.mistralVibeUsage,
+  getApi: (host) => usageApiForHost(host, 'mistralVibeUsage'),
   hasCachedData: (state) => state.hasAnyMistralVibeData
 })
+
+/** A host switch clears every provider's numbers, keeping the chosen scope and range. */
+export function clearUsageProviderData(): Partial<AppState> {
+  return Object.assign(
+    {},
+    ...(['claude', 'codex', 'openCode', 'muse', 'mistralVibe'] as const).map((prefix) =>
+      createUsagePatch(prefix, {
+        failure: null,
+        scanState: null,
+        summary: null,
+        daily: [],
+        modelBreakdown: [],
+        projectBreakdown: [],
+        recentSessions: []
+      })
+    )
+  )
+}

@@ -1,7 +1,7 @@
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { parseWorktreeId } from '../../worktree-logic'
-import { mergeWorktree } from '../../worktree-metadata-merge'
+import { parseWorktreeId } from '../paths/worktree-logic'
+import { mergeWorktree } from '../metadata/worktree-metadata-merge'
 import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId

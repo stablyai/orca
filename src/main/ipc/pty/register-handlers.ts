@@ -1,4 +1,4 @@
-import { createLocalPtyStartupPromises } from './local-startup-promises'
+import { createLocalPtyStartupPromises } from './provider/local-startup-promises'
 
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'

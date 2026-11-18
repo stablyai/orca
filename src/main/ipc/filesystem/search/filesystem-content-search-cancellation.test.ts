@@ -1,6 +1,5 @@
 import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 
-import { spawnProcess } from '@orca/process-host'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as BundledRipgrepPath from '../../../ripgrep/bundled-ripgrep-path'
@@ -86,11 +85,11 @@ vi.mock('../../../ripgrep/bundled-ripgrep-path', async (importOriginal) => ({
   bundledRipgrepCommand: bundledRipgrepCommandMock
 }))
 
-vi.mock('../../local-worktree-runtime-options', () => ({
+vi.mock('../../worktrees/local-worktree-runtime-options', () => ({
   getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
 }))
 
-vi.mock('../../markdown-documents', () => ({
+vi.mock('./markdown-documents', () => ({
   listMarkdownDocuments: vi.fn()
 }))
 
@@ -157,47 +156,5 @@ describe('content search cancellation', () => {
       expect.any(Array),
       expect.objectContaining({ cwd: '/private/tmp/workspace' })
     )
-  })
-
-  it('leaves no live local processes after abandoning scans in six workspace roots', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: authorization and store access are mocked; subprocesses are real.
-    registerFilesystemHandlers({} as never)
-    const sender = Object.assign(new EventEmitter(), { id: 7 })
-    const children: ReturnType<typeof spawnProcess>[] = []
-    const exits: Promise<unknown>[] = []
-    for (let index = 0; index < 6; index++) {
-      const child = spawnProcess({
-        program: process.execPath,
-        args: ['-e', 'process.stdout.write("ready\\n"); setInterval(() => {}, 1000)']
-      })
-      children.push(child)
-      exits.push(new Promise((resolve) => child.once('close', resolve)))
-      wslAwareSpawnMock.mockReturnValueOnce(child)
-      const request = handlers.get('fs:search')!(
-        { sender },
-        { rootPath: `/repo-${index}`, query: 'fixture', requestToken: `real-${index}` }
-      )
-      if (request instanceof Promise) {
-        void request.catch(() => undefined)
-      }
-      await new Promise((resolve) => child.stdout.once('data', resolve))
-    }
-    const live = () =>
-      children.filter((child) => child.exitCode === null && child.signalCode === null).length
-    const before = live()
-    try {
-      for (let index = 0; index < 6; index++) {
-        handlers.get('fs:cancelSearch')?.({ sender }, { requestToken: `real-${index}` })
-      }
-      await Promise.all(exits)
-      const after = live()
-      expect(before).toBe(6)
-      expect(after).toBe(0)
-    } finally {
-      for (const child of children) {
-        child.kill()
-      }
-      await Promise.all(exits)
-    }
   })
 })

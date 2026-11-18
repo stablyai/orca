@@ -117,7 +117,7 @@ export function FloatingTerminalIconContextMenu({
             <RotateCcw className="size-3.5" />
             {t(
               'auto.components.floating.terminal.FloatingTerminalIconContextMenu.a2fbd81c1b',
-              'Reset Floating Workspace Position and Size'
+              'Reset position/size'
             )}
           </DropdownMenuItem>
           <DropdownMenuSeparator />

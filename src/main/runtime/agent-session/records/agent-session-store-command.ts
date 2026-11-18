@@ -34,12 +34,17 @@ import {
   type AgentSessionFailedAcquisitionSettlement
 } from '../ownership/agent-session-acquisition-failure-settlement'
 import {
+  backfillAgentSessionBackground,
   initializeAgentSessionTabs,
   effectiveAgentSessionTabs,
   setAgentSessionTabVisibility,
   showAgentSessionTabs
 } from './agent-session-tab-table'
 import { commitAgentSessionFounding } from './agent-session-founding-admission'
+import {
+  forgetIdleAgentSessionRecord,
+  type AgentSessionIdleForget
+} from './agent-session-record-forget'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 
 export type AgentSessionStoreCommand =
@@ -60,12 +65,17 @@ export type AgentSessionStoreCommand =
   | { kind: 'tabs-show'; sessionIds: readonly string[]; legacyTabIds: readonly string[] }
   | {
       kind: 'tab-visibility'
+      writerFence?: Int32Array
       sessionId: string
       visible: boolean
       tabId?: string
       legacyTabIds: readonly string[]
+      /** Hide the tab but keep the chat open. */
+      background?: true
     }
+  | { kind: 'tabs-background-backfill'; sessionIds: readonly string[] }
   | { kind: 'permission-backfill'; fullAccess: ReadonlyMap<string, boolean> }
+  | ({ kind: 'forget-idle'; legacyTabIds: readonly string[] } & AgentSessionIdleForget)
 
 export type AgentSessionStoreCommandResult<C extends AgentSessionStoreCommand> = C extends {
   kind: 'reserve' | 'found'
@@ -87,7 +97,11 @@ export type AgentSessionStoreCommandResult<C extends AgentSessionStoreCommand> =
                 ? AgentSessionOperationClaim
                 : C extends { kind: 'tab-visibility' }
                   ? string | null
-                  : void
+                  : C extends { kind: 'tabs-background-backfill' }
+                    ? string[]
+                    : C extends { kind: 'forget-idle' }
+                      ? boolean
+                      : void
 
 export function agentSessionStoreCommandSelection(command: AgentSessionStoreCommand): {
   recordIds: string[]
@@ -146,8 +160,12 @@ export function agentSessionStoreCommandSelection(command: AgentSessionStoreComm
       }
     case 'tab-visibility':
       return { recordIds: [command.sessionId], legacyRecordIds: command.legacyTabIds, tabs: true }
+    case 'tabs-background-backfill':
+      return { recordIds: [...command.sessionIds], tabs: true }
     case 'permission-backfill':
       return { recordIds: [], missingPermission: true }
+    case 'forget-idle':
+      return { recordIds: [command.sessionId], legacyRecordIds: command.legacyTabIds, tabs: true }
   }
 }
 
@@ -208,10 +226,15 @@ export function applyAgentSessionStoreCommand(
         command.sessionId,
         command.visible,
         command.tabId,
-        command.legacyTabIds
+        command.legacyTabIds,
+        command.background === true
       )
       return command.visible ? (state.sessionTabs?.tabIdFor(command.sessionId) ?? null) : retired
     }
+    case 'tabs-background-backfill':
+      return backfillAgentSessionBackground(state, command.sessionIds)
+    case 'forget-idle':
+      return forgetIdleAgentSessionRecord(state, command, command.legacyTabIds)
     case 'permission-backfill':
       for (const [id, record] of state.records) {
         if (record.permissionMode !== undefined) {
