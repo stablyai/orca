@@ -9,13 +9,19 @@ import {
  *  per function, so a fresh closure would build a fresh index on every call. */
 export type AgentSessionConversationKeys = (view: AgentSessionConversationView) => readonly string[]
 
-/** One index per key function: built on first use, kept by committed writes, and rebuilt after a
- *  write that changes which rows are unreadable (listing order moves then). */
+type CommittedRecords = {
+  upsert: readonly (readonly [string, string])[]
+  remove: readonly string[]
+}
+
+/** One index per key function, sharing one listing order: built on first use, kept by committed
+ *  writes, and rebuilt after a write that changes which rows are unreadable (order moves then). */
 export class AgentSessionConversationKeyIndexes {
   private readonly indexes = new Map<
     AgentSessionConversationKeys,
     AgentSessionConversationKeyIndex
   >()
+  private order: AgentSessionListingOrder | null = null
 
   get(
     state: AgentSessionStoreState,
@@ -23,7 +29,8 @@ export class AgentSessionConversationKeyIndexes {
   ): AgentSessionConversationKeyIndex {
     let index = this.indexes.get(keys)
     if (!index) {
-      index = new AgentSessionConversationKeyIndex(state, keys)
+      this.order ??= new AgentSessionListingOrder(state)
+      index = new AgentSessionConversationKeyIndex(state, keys, this.order)
       this.indexes.set(keys, index)
     }
     return index
@@ -31,14 +38,54 @@ export class AgentSessionConversationKeyIndexes {
 
   applyCommitted(
     state: AgentSessionStoreState,
-    records: { upsert: readonly (readonly [string, string])[]; remove: readonly string[] },
+    records: CommittedRecords,
     unreadableChanged: boolean
   ): void {
     if (unreadableChanged) {
       this.indexes.clear()
+      this.order = null
       return
     }
+    this.order?.applyCommitted(state, records)
     this.indexes.forEach((index) => index.applyCommitted(state, records))
+  }
+}
+
+/** Each chat's place in listing order (readable records, then unreadable ones), mirrored from the
+ *  store's maps so a shared key picks among its chats alone, as a full scan would. */
+class AgentSessionListingOrder {
+  private readonly readable = new Map<string, number>()
+  private readonly unreadable = new Map<string, number>()
+  private nextReadable = 0
+
+  constructor(state: AgentSessionStoreState) {
+    for (const sessionId of state.records.keys()) {
+      this.readable.set(sessionId, this.nextReadable++)
+    }
+    for (const sessionId of state.unreadableRecords.keys()) {
+      this.unreadable.set(sessionId, this.unreadable.size)
+    }
+  }
+
+  applyCommitted(draft: AgentSessionStoreState, records: CommittedRecords): void {
+    // SQL acknowledgements append new records and retain existing records' listing order.
+    for (const [sessionId] of records.upsert) {
+      if (!this.readable.has(sessionId) && draft.records.has(sessionId)) {
+        this.readable.set(sessionId, this.nextReadable++)
+      }
+    }
+    for (const sessionId of records.remove) {
+      this.readable.delete(sessionId)
+    }
+  }
+
+  precedes(a: string, b: string): boolean {
+    const readableA = this.readable.get(a)
+    const readableB = this.readable.get(b)
+    if (readableA !== undefined || readableB !== undefined) {
+      return readableB === undefined || (readableA !== undefined && readableA < readableB)
+    }
+    return (this.unreadable.get(a) ?? Infinity) < (this.unreadable.get(b) ?? Infinity)
   }
 }
 
@@ -48,42 +95,19 @@ export class AgentSessionConversationKeyIndexes {
 export class AgentSessionConversationKeyIndex {
   private readonly sessionsByKey = new Map<string, Set<string>>()
   private readonly keysBySession = new Map<string, readonly string[]>()
-  /** Each chat's place in listing order (readable records, then unreadable ones), mirrored from
-   *  the store's maps so a shared key picks among its chats alone, as a full scan would. */
-  private readonly readableOrder = new Map<string, number>()
-  private readonly unreadableOrder = new Map<string, number>()
-  private nextReadable = 0
 
   constructor(
     state: AgentSessionStoreState,
-    private readonly keysOf: AgentSessionConversationKeys
+    private readonly keysOf: AgentSessionConversationKeys,
+    private readonly order: AgentSessionListingOrder
   ) {
-    for (const sessionId of state.records.keys()) {
-      this.readableOrder.set(sessionId, this.nextReadable++)
-    }
-    for (const sessionId of state.unreadableRecords.keys()) {
-      this.unreadableOrder.set(sessionId, this.unreadableOrder.size)
-    }
     for (const view of listAgentSessionConversations(state)) {
       this.add(view)
     }
   }
 
-  /** Follows one committed transaction: only the written records' places and keys move. */
-  applyCommitted(
-    draft: AgentSessionStoreState,
-    records: { upsert: readonly (readonly [string, string])[]; remove: readonly string[] }
-  ): void {
-    // SQL acknowledgements append new records and retain existing records' listing order.
-    const appended = records.upsert.map(([id]) => id).filter((id) => !this.readableOrder.has(id))
-    for (const sessionId of appended) {
-      if (draft.records.has(sessionId)) {
-        this.readableOrder.set(sessionId, this.nextReadable++)
-      }
-    }
-    for (const sessionId of records.remove) {
-      this.readableOrder.delete(sessionId)
-    }
+  /** Follows one committed transaction: only the written records' keys move. */
+  applyCommitted(draft: AgentSessionStoreState, records: CommittedRecords): void {
     for (const sessionId of [...records.upsert.map(([id]) => id), ...records.remove]) {
       this.remove(sessionId)
       const view = getAgentSessionConversation(draft, sessionId)
@@ -96,7 +120,7 @@ export class AgentSessionConversationKeyIndex {
   /** The chats answering to `key`, in listing order. */
   sessionIds(key: string): string[] {
     return [...(this.sessionsByKey.get(key) ?? [])].sort((a, b) =>
-      this.precedes(a, b) ? -1 : this.precedes(b, a) ? 1 : 0
+      this.order.precedes(a, b) ? -1 : this.order.precedes(b, a) ? 1 : 0
     )
   }
 
@@ -104,20 +128,11 @@ export class AgentSessionConversationKeyIndex {
   first(key: string): string | null {
     let first: string | null = null
     for (const sessionId of this.sessionsByKey.get(key) ?? []) {
-      if (first === null || this.precedes(sessionId, first)) {
+      if (first === null || this.order.precedes(sessionId, first)) {
         first = sessionId
       }
     }
     return first
-  }
-
-  private precedes(a: string, b: string): boolean {
-    const readableA = this.readableOrder.get(a)
-    const readableB = this.readableOrder.get(b)
-    if (readableA !== undefined || readableB !== undefined) {
-      return readableB === undefined || (readableA !== undefined && readableA < readableB)
-    }
-    return (this.unreadableOrder.get(a) ?? Infinity) < (this.unreadableOrder.get(b) ?? Infinity)
   }
 
   private add(view: AgentSessionConversationView): void {
