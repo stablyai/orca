@@ -2,13 +2,21 @@ import type { MarkdownTokenizer } from '@tiptap/core'
 import { OrderedList, ORDERED_LIST_MARKER_PATTERN } from '@tiptap/extension-list'
 
 const orderedListStart = new RegExp(`^\\s*(?:${ORDERED_LIST_MARKER_PATTERN})[.)]\\s`)
-// Same as the base tokenizer's item pattern, which it does not export.
+// Same as the base tokenizer's item and paragraph-interrupter patterns, which it does not export.
 const orderedListItem = new RegExp(`^(\\s*)(${ORDERED_LIST_MARKER_PATTERN})([.)])\\s+(.*)$`)
+const paragraphInterrupters = [
+  /^#{1,6}(?:\s|$)/,
+  /^[-+*]\s+/,
+  /^(?:```|~~~)/,
+  /^\$\$/,
+  /^(?:(?:-[ \t]*){3,}|(?:_[ \t]*){3,}|(?:\*[ \t]*){3,})$/
+]
 
 const baseTokenizer = OrderedList.config.markdownTokenizer as MarkdownTokenizer
 
 /** The base tokenizer splits all remaining source into lines for every list, which is quadratic in
- *  large files. It always stops at an unindented, non-item line after a blank line, so cut there. */
+ *  large files. It always stops at an unindented, non-item line that follows a blank line or
+ *  interrupts a paragraph, so cut there. */
 function boundOrderedListSource(src: string): string {
   let lineStart = src.indexOf('\n') + 1
   let previousBlank = false
@@ -16,7 +24,12 @@ function boundOrderedListSource(src: string): string {
     const lineEnd = src.indexOf('\n', lineStart)
     const line = src.slice(lineStart, lineEnd === -1 ? undefined : lineEnd)
     const blank = line.trim() === ''
-    if (previousBlank && !blank && !/^\s/.test(line) && !orderedListItem.test(line)) {
+    if (
+      !blank &&
+      !/^\s/.test(line) &&
+      !orderedListItem.test(line) &&
+      (previousBlank || paragraphInterrupters.some((pattern) => pattern.test(line)))
+    ) {
       // Exclude the newline too: a trailing empty line would join the list's raw source.
       return src.slice(0, lineStart - 1)
     }
