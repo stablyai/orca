@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { admitTranscriptPath } from '../native-chat/transcript-discovery/transcript-path-admission'
-import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../filesystem/local-file-io/filesystem-path-containment'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome

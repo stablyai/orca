@@ -1,6 +1,7 @@
 import {
   generationArgumentText,
   generationOptionTokens,
+  insertAdditionalAgentArgs,
   type GenerationArgument
 } from './generation-argument'
 import {
@@ -35,7 +36,7 @@ import {
   mergeOpenCodeGenerationArgs
 } from '../../../text-generation/launch/opencode-generation-command'
 import { buildAntigravityGenerationInput } from '../../../text-generation/output/antigravity-generation-stream'
-import { DEVIN_TEXT_TASK_CONFIG, DEVIN_TEXT_TASK_CONFIG_ARG } from './devin-text-task-config'
+import { devinTextTaskFiles } from './devin-text-task-config'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
@@ -82,39 +83,6 @@ const ANTIGRAVITY_FORMAT_OPTIONS = [
   '--output-format',
   '-output-format'
 ]
-
-function insertAdditionalAgentArgs(args: {
-  baseArgs: GenerationArgument[]
-  agentArgs: GenerationArgument[]
-  promptDelivery: 'argv' | 'stdin' | 'file'
-  prompt?: GenerationArgument
-  /** Built-in argv, whose `--` before the prompt ends options; a custom `--` may pass args through a wrapper. */
-  builtIn?: boolean
-}): GenerationArgument[] {
-  if (!args.agentArgs.length) {
-    return args.baseArgs
-  }
-  const promptPlaceholderIndex = args.baseArgs.lastIndexOf('{prompt}')
-  if (promptPlaceholderIndex !== -1) {
-    const merged = [...args.baseArgs]
-    merged.splice(promptPlaceholderIndex, 0, ...args.agentArgs)
-    return merged
-  }
-  if (
-    args.promptDelivery === 'argv' &&
-    args.prompt !== undefined &&
-    generationArgumentText(args.prompt).length > 0 &&
-    args.baseArgs.at(-1) === args.prompt
-  ) {
-    const insertAt = args.builtIn && args.baseArgs.at(-2) === '--' ? -2 : -1
-    return [
-      ...args.baseArgs.slice(0, insertAt),
-      ...args.agentArgs,
-      ...args.baseArgs.slice(insertAt)
-    ]
-  }
-  return [...args.baseArgs, ...args.agentArgs]
-}
 
 export function planCommitMessageGeneration(
   input: CommitMessagePlanInput,
@@ -245,10 +213,7 @@ export function planCommitMessageGeneration(
     input.agentId === 'kimi'
       ? findRecipeOption(generationArgs, ['--output-format'], KIMI_VALUE_OPTIONS)
       : null
-  // A recipe --config replaces the generated placeholder through the singleton group; then no
-  // policy file is attached and the user's own config governs the run.
-  const devinConfigIndex =
-    input.agentId === 'devin' ? generationArgs.indexOf(DEVIN_TEXT_TASK_CONFIG_ARG) : -1
+  const devinTaskFiles = devinTextTaskFiles(input.agentId, generationArgs)
   const directOpenCode = isDirectOpenCodeGenerationCommand(
     command.binary,
     merged.prefixArgs.map(generationArgumentText)
@@ -285,17 +250,7 @@ export function planCommitMessageGeneration(
             }
           }
         : {}),
-      ...(devinConfigIndex === -1
-        ? {}
-        : {
-            taskFiles: [
-              {
-                name: 'devin-text-task-config.json',
-                content: DEVIN_TEXT_TASK_CONFIG,
-                argIndex: devinConfigIndex
-              }
-            ]
-          }),
+      ...(devinTaskFiles ? { taskFiles: devinTaskFiles } : {}),
       label: spec.label,
       ...(input.agentId === 'codex'
         ? {
