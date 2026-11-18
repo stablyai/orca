@@ -92,6 +92,7 @@ export function NewWorkspaceSetupScriptField({
           <ListRow
             key="waitForSetup"
             title={waitLabel}
+            wrapTitle
             disabled={!setupRuns}
             accessory={
               <MobileSwitch
