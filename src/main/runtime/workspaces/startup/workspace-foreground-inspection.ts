@@ -38,13 +38,14 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
    *  for the process now running. */
   protected async confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean> {
     // Why first: a host that can't find an agent in front (Windows, WSL) can never confirm one.
-    if (!this.launchedAgentHostProvesAgent(ptyId)) {
+    const host = this.launchedAgentHost(ptyId)
+    if (host.windows) {
       return false
     }
     const pty = this.ptysById.get(ptyId)
     const outputClockAt = this.readOutputClockAt(ptyId)
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const foreground = await readExactAgentForeground(this, this.ptyController, ptyId, agent)
+    const foreground = await readExactAgentForeground(this, this.ptyController, host, ptyId, agent)
     if (
       foreground !== 'agent' ||
       !pty ||

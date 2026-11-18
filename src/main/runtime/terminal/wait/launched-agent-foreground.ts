@@ -195,13 +195,20 @@ export async function readExactAgentForeground(
   runtime: {
     readLaunchedAgentForeground(ptyId: string, agent: TuiAgent): Promise<LaunchedAgentForeground>
   },
-  controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
+  controller:
+    | Pick<RuntimePtyController, 'confirmForegroundProcess' | 'supportsForegroundObservation'>
+    | null
+    | undefined,
+  host: { remote: boolean },
   ptyId: string,
   agent: TuiAgent
 ): Promise<LaunchedAgentForeground> {
-  const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
-  if (foreground !== 'agent') {
-    return foreground
+  // Why the name alone on an old local owner: its group read fetches the owner's whole inventory per pane.
+  if (host.remote || controller?.supportsForegroundObservation?.(ptyId)) {
+    const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
+    if (foreground !== 'agent') {
+      return foreground
+    }
   }
   const name = (await controller?.confirmForegroundProcess?.(ptyId)) ?? null
   return recognizeAgentProcess(name)?.agent === agent ? 'agent' : 'unknown'
