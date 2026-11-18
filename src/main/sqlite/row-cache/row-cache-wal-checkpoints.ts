@@ -91,6 +91,8 @@ export class RowCacheWalCheckpoints {
     { deadline: ReturnType<typeof setTimeout>; path: string }
   >()
   private readonly again = new Set<number>()
+  // One checkpoint is posted at a time, so a hung one never strands requests the worker never began.
+  private readonly waiting = new Map<number, boolean>()
   // Checkpoints a failed worker may still be finishing; removal waits for that worker's exit.
   private retiringPaths: { path: string }[] = []
   // Files whose checkpoints kept failing stay on SQLite's own checkpointing, across reopens.
@@ -153,6 +155,7 @@ export class RowCacheWalCheckpoints {
     }
     this.registrations.delete(id)
     this.again.delete(id)
+    this.waiting.delete(id)
     this.catchUpOwed.delete(id)
     this.cancelCatchUp(id)
   }
@@ -170,6 +173,10 @@ export class RowCacheWalCheckpoints {
     }
     if (this.inFlight.has(id)) {
       this.again.add(id)
+      return
+    }
+    if (this.inFlight.size > 0) {
+      this.waiting.set(id, force || (this.waiting.get(id) ?? false))
       return
     }
     const worker = this.host.ensure()
@@ -213,7 +220,9 @@ export class RowCacheWalCheckpoints {
         this.detach(id)
         registration.restore()
       } else if (this.again.delete(id)) {
-        this.request(id)
+        // Behind connections already waiting, so one busy cache can't starve the others.
+        this.cancelCatchUp(id)
+        this.waiting.set(id, this.waiting.get(id) ?? false)
       } else if (this.catchUpOwed.has(id)) {
         const timer = setTimeout(() => {
           this.catchUps.delete(id)
@@ -222,6 +231,11 @@ export class RowCacheWalCheckpoints {
         timer.unref?.()
         this.catchUps.set(id, timer)
       }
+    }
+    const next = this.waiting.entries().next()
+    if (!next.done) {
+      this.waiting.delete(next.value[0])
+      this.send(next.value[0], next.value[1])
     }
     if (this.inFlight.size === 0) {
       this.host?.scheduleIdleTeardown()
@@ -235,6 +249,8 @@ export class RowCacheWalCheckpoints {
     this.failed = true
     const worker = exited ? null : (this.host?.current ?? null)
     this.host?.destroy()
+    // A late startup error from the stripped worker must not surface as an uncaught exception.
+    worker?.on('error', () => {})
     if (worker && this.inFlight.size > 0) {
       // Terminating doesn't stop a native checkpoint mid-call; its file stays unremovable until exit.
       const retiring = [...this.inFlight.values()].map(({ path }) => ({ path }))
@@ -248,6 +264,7 @@ export class RowCacheWalCheckpoints {
     }
     this.inFlight.clear()
     this.again.clear()
+    this.waiting.clear()
     this.catchUpOwed.clear()
     for (const timer of this.catchUps.values()) {
       clearTimeout(timer)

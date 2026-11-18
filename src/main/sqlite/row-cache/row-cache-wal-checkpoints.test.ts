@@ -132,6 +132,30 @@ describe('RowCacheWalCheckpoints', () => {
     later.close()
   })
 
+  it('fences only the file a failed worker was checkpointing, not ones still waiting', () => {
+    const worker = new FakeWorker()
+    const walCheckpoints = new RowCacheWalCheckpoints(() => worker)
+    const busyPath = cachePath()
+    const waitingPath = cachePath()
+    const busy = new KeyedJsonRowCache(busyPath, { schemaVersion: 1, walCheckpoints })
+    const waiting = new KeyedJsonRowCache(waitingPath, { schemaVersion: 1, walCheckpoints })
+    busy.write([{ key: 'a', json: '"1"' }])
+    waiting.write([{ key: 'a', json: '"1"' }])
+    expect(worker.posted.map(({ path }) => path)).toEqual([busyPath])
+    busy.close()
+    waiting.close()
+    worker.emit('error', new Error('worker crashed'))
+    writeFileSync(busyPath, 'not a database')
+    writeFileSync(waitingPath, 'not a database')
+
+    const rebuilt = new KeyedJsonRowCache(waitingPath, { schemaVersion: 1, walCheckpoints })
+    rebuilt.write([{ key: 'b', json: '"2"' }])
+    const fenced = new KeyedJsonRowCache(busyPath, { schemaVersion: 1, walCheckpoints })
+    expect(() => fenced.write([{ key: 'b', json: '"2"' }])).toThrow(/SQLITE_BUSY/)
+    rebuilt.close()
+    fenced.close()
+  })
+
   it('folds every WAL frame of a live cache and never recreates a removed one', async () => {
     const path = cachePath()
     const db = new SyncDatabase(path)
