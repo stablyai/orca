@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contrastRatio, hexToRgb } from '../../../../../shared/color/rgba-contrast'
+import { contrastRatio, hexToRgb, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
 import { derivePluginMonacoTheme } from './plugin-monaco-theme'
 
 const TOKENS: Record<string, string> = {
@@ -13,6 +13,13 @@ const TOKENS: Record<string, string> = {
   '--callout-note': '#0969da',
   '--popover': '#ffffff',
   '--border': '#dddddd'
+}
+
+const WHITE: Rgba = [255, 255, 255, 1]
+
+function rgba(value: string): Rgba {
+  const [r, g, b] = hexToRgb(value)
+  return [r, g, b, value.length === 9 ? Number.parseInt(value.slice(7, 9), 16) / 255 : 1]
 }
 
 function theme(tokens: Record<string, string> = TOKENS) {
@@ -32,10 +39,19 @@ describe('derivePluginMonacoTheme selection colors', () => {
     expect(selection[0]).toBeGreaterThan(selection[1])
     expect(selection[1]).toBe(selection[2])
 
-    const background = hexToRgb('#ffffff')
-    const active = hexToRgb(colors['editor.findMatchBackground']!)
-    const inactive = hexToRgb(colors['editor.findMatchHighlightBackground']!)
-    expect(contrastRatio(active, background)).toBeGreaterThan(contrastRatio(inactive, background))
+    const active = rgba(colors['editor.findMatchBackground']!)
+    const inactive = rgba(colors['editor.findMatchHighlightBackground']!)
+    expect(active[3]).toBeGreaterThan(inactive[3])
+    expect(contrastRatio(over(active, WHITE), WHITE)).toBeGreaterThan(
+      contrastRatio(over(inactive, WHITE), WHITE)
+    )
+  })
+
+  it('keeps built-in syntax text readable on the selection surface', () => {
+    const colors = theme({ ...TOKENS, '--text-link': '#000000' })!.data.colors!
+    const selection = over(rgba(colors['editor.selectionBackground']!), WHITE)
+
+    expect(contrastRatio(hexToRgb('#008000'), selection)).toBeGreaterThanOrEqual(3)
   })
 
   it('falls back to the ring when the accent cannot read as a surface', () => {

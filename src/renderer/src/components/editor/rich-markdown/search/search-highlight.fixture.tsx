@@ -1,14 +1,11 @@
 import { defineFixture } from '@/component-fixtures/component-fixture'
 
-const useRedAccent = (): void => {
-  document.documentElement.style.setProperty('--text-link', '#cc1111')
-}
+const ACCENT: React.CSSProperties & { '--text-link': string } = { '--text-link': '#cc1111' }
 
 export const searchMatches = defineFixture({
   width: 420,
-  setup: useRedAccent,
   render: () => (
-    <div className="rich-markdown-editor-layout p-4 text-sm text-foreground">
+    <div className="rich-markdown-editor-layout p-4 text-sm text-foreground" style={ACCENT}>
       <p>
         Search results: <span className="rich-markdown-search-match">inactive match</span> and{' '}
         <span className="rich-markdown-search-match" data-active="true">
@@ -22,9 +19,8 @@ export const searchMatches = defineFixture({
 
 export const selectedText = defineFixture({
   width: 420,
-  setup: useRedAccent,
   render: () => (
-    <div className="rich-markdown-editor-layout p-4 text-sm text-foreground">
+    <div className="rich-markdown-editor-layout p-4 text-sm text-foreground" style={ACCENT}>
       <p data-select>Select this sentence to see the theme accent.</p>
     </div>
   ),
