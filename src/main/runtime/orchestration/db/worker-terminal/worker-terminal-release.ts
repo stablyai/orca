@@ -213,7 +213,7 @@ export function releaseDeadWorkerTerminalInTransaction(
       params.resourceId,
       params.processIncarnation
     )
-  return database.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
+  return database.getWorkerTerminalResource(params.resourceId) ?? resource
 }
 
 export type WorkerTerminalReleaseMethods = {
