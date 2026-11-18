@@ -78,7 +78,7 @@ export function failedPrecheckResult(
 }
 
 export function killLocalPrecheckProcessTree(
-  child: ChildProcess
+  child: Pick<ChildProcess, 'pid' | 'kill' | 'exitCode' | 'signalCode'>
 ): ReturnType<typeof setTimeout> | null {
   const pid = child.pid
   if (!pid) {
@@ -87,7 +87,10 @@ export function killLocalPrecheckProcessTree(
   }
 
   if (process.platform === 'win32') {
+    // Windows may reuse an exited root's pid while inherited pipes still delay close.
     if (
+      (child.exitCode ?? null) !== null ||
+      (child.signalCode ?? null) !== null ||
       !admitSelfInitiatedTreeKill({
         pid,
         site: 'automation-precheck-timeout',

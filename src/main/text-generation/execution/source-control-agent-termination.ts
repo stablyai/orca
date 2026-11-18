@@ -18,7 +18,12 @@ export async function killSourceControlAgentProcess(
   if (!pid) {
     return
   }
-  if (process.platform === 'win32') {
+  // Windows may reuse an exited root's pid while inherited pipes still delay close.
+  if (
+    process.platform === 'win32' &&
+    (child.exitCode ?? null) === null &&
+    (child.signalCode ?? null) === null
+  ) {
     // Tree-walk refusal must not release the home lock having killed nothing; root handle kill cannot hit a recycled PID.
     await terminateWindowsProcessTree(pid, { site: SOURCE_CONTROL_KILL_SITE })
   }

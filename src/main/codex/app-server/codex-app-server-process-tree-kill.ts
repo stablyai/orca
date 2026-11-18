@@ -15,11 +15,15 @@ export const spawnCodexAppServerProcess: CodexAppServerSpawn = (program, args, o
   spawnProcess({ program, args, ...options } as ProcessSpec)
 
 export function killCodexAppServerProcessTree(
-  child: Pick<ChildProcess, 'pid' | 'kill'>,
+  child: Pick<ChildProcess, 'pid' | 'kill' | 'exitCode' | 'signalCode'>,
   options: { platform?: NodeJS.Platform; spawnImpl?: CodexAppServerSpawn } = {}
 ): void {
   const platform = options.platform ?? process.platform
   const spawnImpl = options.spawnImpl ?? spawnCodexAppServerProcess
+  // An exited root's pid can name another process (on Windows while pipes still delay close).
+  if ((child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null) {
+    return
+  }
   if (platform === 'win32' && child.pid) {
     if (
       !admitProcessTreeKill({
