@@ -1,6 +1,8 @@
 // The one test for "this tab is the bot's Home": placement, locks, pin rules and the banner all ask it.
 import type { Bot } from '../bot-types'
 import type { Tab } from '../workspace-layout/tab-groups/tab-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host/execution-host'
+import { folderWorkspaceKey } from '../workspace/identity/workspace-scope'
 
 type ChatTab = Pick<Tab, 'contentType' | 'entityId'>
 
@@ -14,7 +16,19 @@ export function isBotHomeTab(tab: ChatTab, bot: Pick<Bot, 'chatSessionId'> | nul
   )
 }
 
-/** Every other chat on a bot's page is one of its side chats; only Home may sit pinned at the left. */
-export function isBotSideChatTab(tab: ChatTab, bot: Pick<Bot, 'chatSessionId'> | null): boolean {
-  return bot !== null && tab.contentType === 'agent-session' && !isBotHomeTab(tab, bot)
+type HostedBotHome = Pick<Bot, 'chatSessionId' | 'folderWorkspaceId'> & { hostId: ExecutionHostId }
+type HostedChatTab = ChatTab & Pick<Tab, 'worktreeId' | 'executionHostId'>
+
+/** The dedicated home workspace and owning host identify its chats, never their names or order. */
+export function isLocalBotChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
+  return (
+    bot?.hostId === LOCAL_EXECUTION_HOST_ID &&
+    tab.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+    tab.worktreeId === folderWorkspaceKey(bot.folderWorkspaceId) &&
+    tab.contentType === 'agent-session'
+  )
+}
+
+export function isBotSideChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
+  return bot?.chatSessionId != null && isLocalBotChatTab(tab, bot) && !isBotHomeTab(tab, bot)
 }

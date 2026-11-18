@@ -15,7 +15,7 @@
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  max-width: calc(100% - 7rem);
+  max-width: calc(100% - 10rem);
   padding: 3px 10px 3px 3px;
   border: 1px solid var(--notice-border);
   border-radius: 9999px;
@@ -63,17 +63,13 @@
   }
 }
 
-/* A narrow pane keeps only the avatar, so the pane's own buttons always fit. */
+/* Match the existing narrow-pane breakpoint without taking space from the pane actions. */
 .pane-title-bar:has(> [data-bot-home-banner]) {
   container-type: inline-size;
 }
 
 @container (max-width: 260px) {
   [data-bot-home-banner] {
-    padding-right: 3px;
-    gap: 0;
-  }
-  [data-bot-home-banner-name] {
     display: none;
   }
 }
