@@ -291,8 +291,10 @@ export class ReaderSlot {
       return
     }
     if (!oldest) {
-      this.running = undefined
-      recordJournalReaderRequest(this.record, null)
+      if (this.running) {
+        this.running = undefined
+        recordJournalReaderRequest(this.record, null)
+      }
       return
     }
     const [id, { operation, chat }] = oldest
