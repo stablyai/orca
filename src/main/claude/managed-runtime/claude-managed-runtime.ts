@@ -45,14 +45,20 @@ export function claudeManagedPlatform(
   return platform === 'linux' ? `linux-${arch}${musl ? '-musl' : ''}` : null
 }
 
+let muslHost: boolean | undefined
+
+// Building a process report is slow and synchronous, and the libc can't change while running.
 function isMuslHost(): boolean {
   if (process.platform !== 'linux') {
     return false
   }
-  // glibc builds report their runtime glibc version; musl builds have none.
-  const report: unknown = process.report?.getReport()
-  const header = report && typeof report === 'object' && 'header' in report ? report.header : null
-  return !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
+  if (muslHost === undefined) {
+    // glibc builds report their runtime glibc version; musl builds have none.
+    const report: unknown = process.report?.getReport()
+    const header = report && typeof report === 'object' && 'header' in report ? report.header : null
+    muslHost = !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
+  }
+  return muslHost
 }
 
 const channelSettingsSchema = z.object({
@@ -202,7 +208,18 @@ export function rememberManagedClaudeRelease(folder: string | null): void {
 
 /** Orca's installed Claude on this host, used only when the user has none of their own. */
 export function managedClaudeCommand(): string | null {
-  return installedFolder ? claudeManagedExecutable(installedFolder) : null
+  if (!installedFolder) {
+    return null
+  }
+  managedUseListener?.()
+  return claudeManagedExecutable(installedFolder)
+}
+
+let managedUseListener: (() => void) | null = null
+
+/** Told each time a launch resolves to Orca's copy, so updates follow real use instead of a timer. */
+export function onManagedClaudeUse(listener: () => void): void {
+  managedUseListener = listener
 }
 
 /** Last on PATH, so `claude auth login` and CLI tabs reach Orca's copy and never shadow the user's own. */
@@ -211,10 +228,11 @@ export function appendManagedClaudeDirToChildPath(
   platform: NodeJS.Platform = process.platform
 ): void {
   delete env.ORCA_MANAGED_AGENT_PATH
-  const command = managedClaudeCommand()
-  if (!command) {
+  // Opening a terminal isn't use of Claude, so this doesn't trigger an update check.
+  if (!installedFolder) {
     return
   }
+  const command = claudeManagedExecutable(installedFolder)
   const key = resolvePathEnvKey(env, platform)
   const separator = platform === 'win32' ? ';' : delimiter
   const entries = readInheritedPath(env, platform).split(separator).filter(Boolean)

@@ -5,7 +5,8 @@ export function nativeChatNoticeCopy(t: Translate) {
     compaction: t('chat.notice.compaction', 'Context compacted'),
     contextCleared: t('chat.notice.contextCleared', 'Context cleared'),
     forkedFrom: t('chat.notice.forkedFrom', 'Forked from'),
-    plan: t('chat.notice.plan', 'Plan')
+    plan: t('chat.notice.plan', 'Plan'),
+    botCreated: t('chat.notice.botCreated', 'Bot created')
   }
 }
 

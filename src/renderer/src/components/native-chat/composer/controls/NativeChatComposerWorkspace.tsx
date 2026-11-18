@@ -14,6 +14,7 @@ import {
   type NativeChatComposerWorkspaceTarget
 } from './native-chat-composer-workspace'
 import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker'
+import { NativeChatSlackMirrorItem } from '../../slack-mirror/NativeChatSlackMirrorItem'
 
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
 const FOOTER_TEXT =
@@ -168,6 +169,7 @@ export function NativeChatComposerWorkspace({
           </TooltipContent>
         </Tooltip>
       )}
+      <NativeChatSlackMirrorItem />
       {identity && (
         <div className="flex min-w-[min(100%,calc(var(--spacing)*18))] flex-1 items-center">
           {identity.kind === 'branch' &&

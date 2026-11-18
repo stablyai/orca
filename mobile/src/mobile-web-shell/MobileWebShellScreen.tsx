@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Linking, View } from 'react-native'
+import { Alert, Linking, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { OrcaMobileWebShellView } from '../../modules/orca-mobile-web-shell/src/index'
@@ -7,7 +7,9 @@ import { parseMobileWebShellLoadState } from '../../modules/orca-mobile-web-shel
 import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileUiLocale } from '../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
+import { botLinkUpdateNeededLine } from '../bots/bot-link-copy'
+import { reportPageRouteRefusal } from './routing/page-route-refusal'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
 import type { BridgeClearableRouteParam } from './bridge/page-lifecycle/bridge-route-update'
@@ -77,6 +79,8 @@ export type MobileWebShellScreenProps = {
   // Where the page has navigated inside its own document; without it the location is only held for a fold.
   onPageLocation?: (href: string) => void
   runtime?: MobileWebShellRuntime
+  // A native line above the page for what the page itself may be too old to say.
+  notice?: string
 }
 
 // Key the native view by session id so reducer-requested remounts rebuild the WebView and reinstall every fence; the view has no independent reload.
@@ -87,9 +91,11 @@ export function MobileWebShellScreen({
   onRouteParamClear,
   onPageLocation,
   onOverlayLoad,
-  runtime
+  runtime,
+  notice
 }: MobileWebShellScreenProps) {
   const colorScheme = useMobileColorScheme()
+  const t = useMobileTranslation()
   const uiLocale = useMobileUiLocale()
   const insets = useSafeAreaInsets()
   const overlay = onOverlayLoad !== undefined
@@ -129,8 +135,14 @@ export function MobileWebShellScreen({
   useReportedHostAreaServing(ownsHostArea && state.kind !== 'checking')
   // Key dismissal by session id so a new generation’s refusal still appears.
   const [noticeDismissedFor, setNoticeDismissedFor] = useState<string | null>(null)
+  const banner =
+    updateNotice !== null
+      ? { message: updateNoticeMessage(updateNotice), tone: 'failure' as const }
+      : notice
+        ? { message: notice, tone: 'notice' as const }
+        : null
   const noticeShown =
-    updateNotice !== null && state.kind === 'ready' && noticeDismissedFor !== state.sessionId
+    banner !== null && state.kind === 'ready' && noticeDismissedFor !== state.sessionId
   // Edge-to-edge disables adjustResize and zeroes WebView IME insets, so visualViewport never shrinks; publish native keyboard height to the page.
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
   const pageFold = usePageFoldDivision()
@@ -276,10 +288,20 @@ export function MobileWebShellScreen({
     },
     onTerminalKeyRailClaim: keyRail.reportClaim,
     onRouteParamClear: openTarget.onRouteParamClear,
-    // Route refusal builds no tree; use document-load-failed for bounded recovery, then a terminal failure. The host logs the specific issue.
     onRouteRefused: (issue) => {
       console.warn('[web-shell] refused to open this screen', issue)
-      reportShellFailure('document-load-failed')
+      reportPageRouteRefusal(issue, {
+        route: pageRoute,
+        clear: openTarget.onRouteParamClear,
+        updateNeeded: () =>
+          Alert.alert(
+            t('bots.link.openFailed', 'Couldn’t open this link'),
+            botLinkUpdateNeededLine(t, [
+              snapshot?.host.name ?? t('bots.link.computer', 'your computer')
+            ])
+          ),
+        documentFailed: () => reportShellFailure('document-load-failed')
+      })
     },
     onNavigate: openPageRoute,
     serveNativeVerb,
@@ -359,11 +381,11 @@ export function MobileWebShellScreen({
       ]}
       testID="mobile-web-shell-ready"
     >
-      {/* Keep update-failure notice above the working fallback page so dismissal leaves its document intact. */}
-      {updateNotice !== null && noticeShown && (
+      {/* Keep the notice above the working page so dismissal leaves its document intact. */}
+      {banner !== null && noticeShown && (
         <HostRouteNoticeBanner
-          message={updateNoticeMessage(updateNotice)}
-          tone="failure"
+          message={banner.message}
+          tone={banner.tone}
           onDismiss={() => setNoticeDismissedFor(state.sessionId)}
         />
       )}

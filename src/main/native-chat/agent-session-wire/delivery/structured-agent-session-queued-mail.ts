@@ -16,3 +16,21 @@ export function queuedMessageOwed(
   const decide = deps.queuedAgentMessageOwed
   return from && orchestrationMailNotice(from) && decide ? () => decide(sessionId, from) : undefined
 }
+
+/** Admits a card for handover and returns its owed check. Stale mail skips the admission guard, so
+ *  the handoff withdraws it instead of the guard holding it as a failed send. */
+export function admitQueuedMessage(
+  deps: Pick<
+    StructuredAgentSessionHostDeps,
+    'queuedAgentMessageOwed' | 'assertQueuedMessageAllowed'
+  >,
+  sessionId: string,
+  messageId: string,
+  body: AgentJournalMessageItem
+): (() => QueuedMessageOwed) | undefined {
+  const owed = queuedMessageOwed(deps, sessionId, body)
+  if (!owed || owed() !== 'stale') {
+    deps.assertQueuedMessageAllowed?.(sessionId, messageId)
+  }
+  return owed
+}

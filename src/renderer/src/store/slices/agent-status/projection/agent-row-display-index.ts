@@ -2,7 +2,7 @@ import type { AgentGroupSummary, AgentChildren, Group, Placement } from './agent
 import { EMPTY_KEYS, EMPTY_CHILDREN, sameKeys, sameChildren } from './agent-row-display-model'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { buildAgentRowLineageTree } from '@/components/dashboard/rows/agent-row-lineage-model'
-import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
+import { agentRowDisplayDotState } from '../../../../../../shared/agent-row-dot-state'
 import { SUMMARY_STATE_ORDER } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
 import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { KeyedDeadlines } from '../../../../../../shared/collections/keyed-deadlines'

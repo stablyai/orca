@@ -1,5 +1,7 @@
 import { JournalForkStages } from './journal-fork-stages'
 import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
+import { JOURNAL_ENDED_TURN_COUNTS_SCHEMA } from './database/journal-ended-turn-counts'
+import { runJournalTransaction } from './database/journal-database'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -18,6 +20,7 @@ import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
+import { tryFoldJournalTextTails } from './journal-text-tail'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 
 installWorkerSendLedger('orca-journal-sql-writer')
@@ -55,6 +58,7 @@ async function open(): Promise<void> {
     readOnly = opened.readOnly
     if (!readOnly) {
       db.exec(JOURNAL_ASYNC_QUESTION_INDEXES)
+      runJournalTransaction(db, (writer) => writer.exec(JOURNAL_ENDED_TURN_COUNTS_SCHEMA))
     }
     forks = new JournalForkStages(db, stateDirectory)
     commands = new JournalSqlCommand(db, stateDirectory, forks)
@@ -197,6 +201,9 @@ async function drain(): Promise<void> {
   }
   if (close) {
     try {
+      if (!readOnly && db) {
+        tryFoldJournalTextTails(db)
+      }
       await (checkpointClosing ?? checkpoint?.close())
       db?.close()
       db = undefined
