@@ -1,4 +1,6 @@
 import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
+import { provideHostUsageAnalytics } from '../usage/host-usage-analytics'
+import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-service-contract'
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
@@ -202,7 +204,10 @@ export function initializeMainProcessObservers(): void {
     join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')
   )
   state.usageWorktreeHistory = usageWorktrees
-  state.backend = new BackendSupervisor(usageWorktrees)
+  const backend = new BackendSupervisor(usageWorktrees)
+  state.backend = backend
+  // Paired clients get a renderer's usage privileges, never the automation-only methods.
+  provideHostUsageAnalytics((call) => backend.callControl(BACKEND_PUBLIC_USAGE_METHOD, call))
   state.claudeUsage = state.backend.automationClient('claudeUsage')
   state.codexUsage = state.backend.automationClient('codexUsage')
 }
