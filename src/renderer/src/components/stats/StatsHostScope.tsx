@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useState } from 'react'
 import { useAppStore } from '../../store'
 import { useTranslate } from '@/i18n/use-translate'
 import { usageHostKey } from '../../store/slices/usage/usage-host'
-import { runtimeEnvironmentCapabilityProof } from '../../runtime/rpc/compatibility/runtime-capability-proof'
+import { runtimeEnvironmentSupportsCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
 import { USAGE_ANALYTICS_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
@@ -43,8 +43,8 @@ function useHostUsageSupport(target: RuntimeClientTarget): boolean | null {
         setAnswer({ environmentId, supported })
       }
     }
-    runtimeEnvironmentCapabilityProof(environmentId, USAGE_ANALYTICS_RUNTIME_CAPABILITY)
-      .then((proof) => settle(proof.supported))
+    runtimeEnvironmentSupportsCapability(environmentId, USAGE_ANALYTICS_RUNTIME_CAPABILITY)
+      .then(settle)
       // An unreachable host is not an old one; the usage reads report that failure themselves.
       .catch(() => settle(true))
     return () => {

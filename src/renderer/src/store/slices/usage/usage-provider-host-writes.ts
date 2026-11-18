@@ -2,39 +2,38 @@ import type { AppState } from '../../types'
 import type { UsageData } from './usage-provider-slice-contract'
 import type { UsageSnapshot, UsageProviderTypes, UsageFailure } from './usage-provider-types'
 import { mergeUsageFailure, readUsageData, createUsagePatch } from './usage-provider-slice-state'
-import { usageHostKey } from './usage-host'
 
-/** Every write names the host it came from, so one host's answer never lands in another's view. */
+/** Every write names the Stats host view it came from, so one host's answer never lands in another's. */
 export function createUsageProviderHostWrites<
   T extends UsageProviderTypes<string, string, UsageSnapshot>
 >(prefix: string, set: (patch: Partial<AppState>) => void, get: () => AppState) {
-  const shownHost = (): string => usageHostKey(get().statsHost)
+  const shownView = (): number => get().statsHostEpoch
   const read = (): UsageData<T> => readUsageData<T>(get(), prefix)
-  const update = (host: string, patch: Partial<UsageData<T>>): void => {
-    if (host === shownHost()) {
+  const update = (view: number, patch: Partial<UsageData<T>>): void => {
+    if (view === shownView()) {
       set(createUsagePatch(prefix, patch))
     }
   }
-  const updateFailure = (host: string, patch: Partial<UsageFailure>): void => {
+  const updateFailure = (view: number, patch: Partial<UsageFailure>): void => {
     const previous = read().failure
     const failure = mergeUsageFailure(previous, patch)
     if (failure !== previous) {
-      update(host, { failure })
+      update(view, { failure })
     }
   }
-  const setScanning = (host: string, isScanning: boolean): void => {
+  const setScanning = (view: number, isScanning: boolean): void => {
     const state = read().scanState
     // Starting needs tracking on; stopping needs a running scan.
     if (state && (isScanning ? state.enabled : state.isScanning)) {
-      update(host, { scanState: { ...state, isScanning } })
+      update(view, { scanState: { ...state, isScanning } })
     }
   }
   return {
-    shownHost,
+    shownView,
     read,
     update,
     updateFailure,
-    stopLoading: (host: string) => setScanning(host, false),
-    markLoading: (host: string) => setScanning(host, true)
+    stopLoading: (view: number) => setScanning(view, false),
+    markLoading: (view: number) => setScanning(view, true)
   }
 }
