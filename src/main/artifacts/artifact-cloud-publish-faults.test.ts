@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 vi.mock('../../shared/secure-storage/secure-file-async-write', async (importOriginal) => {
   const actual = await importOriginal<typeof AsyncWrite>()
   return {
+    ...actual,
     writeSecureFileAsync: async (
       ...[path, contents, options = {}]: Parameters<typeof actual.writeSecureFileAsync>
     ) => {
@@ -60,6 +61,7 @@ import { saveOrcaCloudSession } from '../orca-profiles/cloud-session/profile-clo
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 
 const apiUrl = 'http://localhost:3000'
+const now = Date.UTC(2026, 7, 7, 12)
 const cloud: OrcaProfileCloudSummary = {
   cloudProfileId: 'cloud-a',
   userId: 'user-a',
@@ -99,11 +101,14 @@ async function intentFiles(): Promise<string[]> {
 async function sharedSources(): Promise<string[]> {
   const text = await readFile(profileFile('artifact-shares.json'), 'utf8').catch(() => '{}')
   const file: unknown = JSON.parse(text)
-  const shares: unknown = file && typeof file === 'object' ? Reflect.get(file, 'shares') : undefined
+  const shares: unknown =
+    file && typeof file === 'object' && 'shares' in file ? file.shares : undefined
   return shares && typeof shares === 'object' ? Object.keys(shares).sort() : []
 }
 
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(now)
   vi.stubEnv('ORCA_CLOUD_API_URL', apiUrl)
   vi.stubEnv('ORCA_CLOUD_CLIENT_ID', 'orca-test')
   vi.stubEnv('ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION', '1')
@@ -113,8 +118,8 @@ beforeEach(async () => {
   saveOrcaCloudSession(profileId, userDataPath, {
     accessToken: 'access-a',
     refreshToken: 'refresh-a',
-    expiresAt: Date.now() + 60 * 60 * 1000,
-    capabilities: { flags: {}, refreshedAt: Date.now() }
+    expiresAt: now + 60 * 60 * 1000,
+    capabilities: { flags: {}, refreshedAt: now }
   })
   account = { userDataPath, profileId }
   server = new FakeArtifactServer()
@@ -122,6 +127,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   faults.beforeStage = faults.beforePublish = faults.beforeRemove = undefined
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
@@ -267,7 +273,7 @@ class FakeArtifactServer {
         renderedContentType: 'text/html',
         createdAt: '2026-08-07T12:00:00.000Z',
         updatedAt: '2026-08-07T12:00:00.000Z',
-        expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+        expiresAt: '2026-09-07T00:00:00.000Z',
         byteSize: 12,
         deletedAt: null
       },

@@ -22,12 +22,11 @@ function parsedRecordFile(value: unknown): ParsedArtifactShareRecordFile {
   if (!value || typeof value !== 'object') {
     return {}
   }
-  const field = (key: string): unknown => Reflect.get(value, key)
   return {
-    version: field('version'),
-    lifecycleGeneration: field('lifecycleGeneration'),
-    lifecycleNonce: field('lifecycleNonce'),
-    shares: field('shares')
+    version: 'version' in value ? value.version : undefined,
+    lifecycleGeneration: 'lifecycleGeneration' in value ? value.lifecycleGeneration : undefined,
+    lifecycleNonce: 'lifecycleNonce' in value ? value.lifecycleNonce : undefined,
+    shares: 'shares' in value ? value.shares : undefined
   }
 }
 

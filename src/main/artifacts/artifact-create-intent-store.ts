@@ -9,10 +9,8 @@ import {
   artifactContentByteLength,
   artifactWriteRequestByteLength
 } from '../../shared/artifacts/artifacts'
-import {
-  bestEffortFsyncDirectory,
-  bestEffortFsyncDirectorySync
-} from '../../shared/secure-storage/secure-file'
+import { bestEffortFsyncDirectorySync } from '../../shared/secure-storage/secure-file'
+import { bestEffortFsyncDirectory } from '../../shared/secure-storage/secure-file-async-write'
 import {
   serializeArtifactFileChange,
   writeArtifactFileWhileCurrent

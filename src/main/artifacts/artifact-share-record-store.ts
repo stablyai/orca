@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
@@ -33,15 +33,13 @@ function readRecords(
   preserveExpired?: PreserveExpired,
   pruneExpired = true
 ): ArtifactShareRecordFile {
-  const path = recordPath(profileId, userDataPath)
-  if (!existsSync(path)) {
-    return parseArtifactShareRecordFile(undefined, preserveExpired, pruneExpired)
-  }
-  let text: string
+  let text: string | undefined
   try {
-    text = readFileSync(path, 'utf8')
+    text = readFileSync(recordPath(profileId, userDataPath), 'utf8')
   } catch (error) {
-    throw new Error('Artifact share records could not be read safely.', { cause: error })
+    if (errnoCodeOrUnknown(error) !== 'ENOENT') {
+      throw new Error('Artifact share records could not be read safely.', { cause: error })
+    }
   }
   return parseArtifactShareRecordFile(text, preserveExpired, pruneExpired)
 }
@@ -133,16 +131,7 @@ function changeRecords(
     const records = await readRecordsAsync(profileId, userDataPath, options.preserveExpired)
     if (change(records) || artifactSharesPrunedOnRead.has(records)) {
       const contents = JSON.stringify(records, null, 2)
-      await writeArtifactFileWhileCurrent(
-        path,
-        contents,
-        options.durable,
-        assertCurrent,
-        false,
-        () =>
-          // Our own write keeps the lifecycle, so the next account check need not re-read the index.
-          rememberLifecycle(path, `${records.lifecycleGeneration}:${records.lifecycleNonce}`)
-      )
+      await writeArtifactFileWhileCurrent(path, contents, options.durable, assertCurrent, false)
     }
   })
 }
@@ -236,23 +225,15 @@ const lifecycleByPath = new Map<string, { stamp: string; lifecycle: string }>()
 
 /** Every write replaces the file (new inode), so its stat stamp names one lifecycle: account checks
  *  read the whole index only when the file changed. */
-function lifecycleStamp(path: string): string {
-  try {
-    const stat = statSync(path, { bigint: true })
-    return `${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`
-  } catch {
-    // A missing or unreadable file goes through the full read, which reports it as before.
-    return 'missing'
-  }
-}
-
-function rememberLifecycle(path: string, lifecycle: string): void {
-  lifecycleByPath.set(path, { stamp: lifecycleStamp(path), lifecycle })
-}
-
 export function captureArtifactShareLifecycle(profileId: string, userDataPath: string): string {
   const path = recordPath(profileId, userDataPath)
-  const stamp = lifecycleStamp(path)
+  let stamp = 'missing'
+  try {
+    const stat = statSync(path, { bigint: true })
+    stamp = `${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`
+  } catch {
+    // A missing or unreadable file goes through the full read, which reports it as before.
+  }
   const cached = lifecycleByPath.get(path)
   if (cached?.stamp === stamp) {
     return cached.lifecycle
