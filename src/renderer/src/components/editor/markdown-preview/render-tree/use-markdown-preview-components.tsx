@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import type { Components } from 'react-markdown'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
+import D2Block from '../../diagrams/D2Block'
 import MermaidBlock from '../../diagrams/MermaidBlock'
 import { useMermaidDiagramExpand } from '../../diagrams/use-mermaid-diagram-expand'
 import {
@@ -36,6 +37,10 @@ function hasMermaidCodeClass(value: unknown): boolean {
   return typeof value === 'string' && /language-mermaid/.test(value)
 }
 
+function hasD2CodeClass(value: unknown): boolean {
+  return typeof value === 'string' && /language-d2\b/.test(value)
+}
+
 function annotatedHeading(
   Heading: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
 ): NonNullable<Components['h1']> {
@@ -56,17 +61,19 @@ function annotatedHeading(
 const annotatedBlockComponents = {
   pre: function MarkdownPreviewPre({ node, children, ...props }) {
     const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
-    const isMermaid = node?.children.some(
+    const isDiagram = node?.children.some(
       (child) =>
         child.type === 'element' &&
         child.tagName === 'code' &&
         Array.isArray(child.properties.className) &&
-        child.properties.className.some(hasMermaidCodeClass)
+        child.properties.className.some(
+          (value) => hasMermaidCodeClass(value) || hasD2CodeClass(value)
+        )
     )
     return wrapAnnotatedBlock(
       'pre',
       node,
-      <CodeBlockCopyButton {...props} wrapInPre={!isMermaid}>
+      <CodeBlockCopyButton {...props} wrapInPre={!isDiagram}>
         {children}
       </CodeBlockCopyButton>
     )
@@ -320,6 +327,9 @@ export function useMarkdownPreviewComponents({
               onExpand={expandMermaidDiagram}
             />
           )
+        }
+        if (hasD2CodeClass(className)) {
+          return <D2Block content={String(children).trimEnd()} isDark={isDark} />
         }
         return (
           <code className={className} {...props}>

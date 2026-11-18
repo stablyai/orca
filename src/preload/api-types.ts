@@ -28,7 +28,7 @@ import type { DashboardApi, TerminalPreviewApi } from './api/window-ui/dashboard
 import type { DocPreviewApi } from './api/document-preview/doc-preview-api'
 import type { EmulatorApi } from './api/emulator/emulator-api'
 import type { EphemeralVmApi } from './api/cloud-workspaces/ephemeral-vm-api'
-import type { ExportApi, FilesystemApi } from './api/filesystem/filesystem-api'
+import type { D2Api, ExportApi, FilesystemApi } from './api/filesystem/filesystem-api'
 import type { GitInspectionApi } from './api/source-control/git-inspection-api'
 import type { GitOperationApi } from './api/source-control/git-operation-api'
 import type { GithubAccountApi } from './api/github/github-account-api'
@@ -109,6 +109,7 @@ export type PreloadApi = {
   feedback: FeedbackApi
   crashReports: CrashReportsApi
   export: ExportApi
+  d2: D2Api
   gh: Merged<GithubPullRequestApi & GithubWorkItemApi & GithubAccountApi>
   hostedReview: HostedReviewApi
   gl: GitLabApi
