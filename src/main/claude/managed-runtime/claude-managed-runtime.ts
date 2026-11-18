@@ -45,14 +45,20 @@ export function claudeManagedPlatform(
   return platform === 'linux' ? `linux-${arch}${musl ? '-musl' : ''}` : null
 }
 
+let muslHost: boolean | undefined
+
+// Building a process report is slow and synchronous, and the libc can't change while running.
 function isMuslHost(): boolean {
   if (process.platform !== 'linux') {
     return false
   }
-  // glibc builds report their runtime glibc version; musl builds have none.
-  const report: unknown = process.report?.getReport()
-  const header = report && typeof report === 'object' && 'header' in report ? report.header : null
-  return !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
+  if (muslHost === undefined) {
+    // glibc builds report their runtime glibc version; musl builds have none.
+    const report: unknown = process.report?.getReport()
+    const header = report && typeof report === 'object' && 'header' in report ? report.header : null
+    muslHost = !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
+  }
+  return muslHost
 }
 
 const channelSettingsSchema = z.object({
@@ -222,10 +228,11 @@ export function appendManagedClaudeDirToChildPath(
   platform: NodeJS.Platform = process.platform
 ): void {
   delete env.ORCA_MANAGED_AGENT_PATH
-  const command = managedClaudeCommand()
-  if (!command) {
+  // Opening a terminal isn't use of Claude, so this doesn't trigger an update check.
+  if (!installedFolder) {
     return
   }
+  const command = claudeManagedExecutable(installedFolder)
   const key = resolvePathEnvKey(env, platform)
   const separator = platform === 'win32' ? ';' : delimiter
   const entries = readInheritedPath(env, platform).split(separator).filter(Boolean)

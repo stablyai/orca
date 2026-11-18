@@ -17,6 +17,7 @@ import {
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
 
 const DEADLINE_MS = 45 * 60_000
+const AUTO_UPDATE_RETRY_MS = 60 * 60_000
 
 export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
@@ -46,6 +47,8 @@ export class ManagedRuntimeInstallation {
   private running: Run | null = null
   private mutation: Promise<void>
   private facts: { phase: string; read: Promise<InstalledFacts> } | null = null
+  /** One attempt per release per hour, so a failing update isn't redownloaded on every use. */
+  private lastAutoUpdate: { version: string; at: number } | null = null
 
   constructor(
     private readonly agent: string,
@@ -115,9 +118,18 @@ export class ManagedRuntimeInstallation {
       state.source === 'managed' &&
       state.installedVersion !== null &&
       state.available &&
+      state.version !== null &&
       !state.installedCurrent &&
       !this.running
     ) {
+      const { lastAutoUpdate } = this
+      if (
+        lastAutoUpdate?.version === state.version &&
+        Date.now() - lastAutoUpdate.at < AUTO_UPDATE_RETRY_MS
+      ) {
+        return
+      }
+      this.lastAutoUpdate = { version: state.version, at: Date.now() }
       this.install()
     }
   }
