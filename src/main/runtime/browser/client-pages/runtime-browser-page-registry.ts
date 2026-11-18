@@ -180,11 +180,11 @@ export class RuntimeBrowserPageRegistry {
     }
   }
 
-  private select(page: RuntimeBrowserClientPage): RuntimeBrowserClientPage {
+  private select(page: RuntimeBrowserClientPage, takesGlobal = true): RuntimeBrowserClientPage {
     this.deactivateWorkspace(page.workspaceId)
     const next = freezePage({ ...page, active: true, placement: page.placement })
     this.pages.set(page.browserPageId, next)
-    this.globalActivePageId = page.browserPageId
+    this.globalActivePageId = takesGlobal ? page.browserPageId : this.globalActivePageId
     return next
   }
 
@@ -192,9 +192,7 @@ export class RuntimeBrowserPageRegistry {
     const routed = [...this.pages.values()].find(
       (page) => page.workspaceId === workspaceId && page.active
     )
-    return personPickWaits(routed?.browserPageId ?? null, pickedPageId, (id) =>
-      this.agentUse.isUsing(id)
-    )
+    return personPickWaits(routed?.browserPageId ?? null, pickedPageId, this.agentUse.isUsing)
   }
 
   private applyHeldPersonPicks(workspaceId?: string): void {
@@ -205,8 +203,10 @@ export class RuntimeBrowserPageRegistry {
       ) {
         this.heldPersonPicks.delete(heldWorkspaceId)
         const page = this.pages.get(browserPageId)
+        const global = this.globalActivePageId ? this.pages.get(this.globalActivePageId) : undefined
         if (page) {
-          this.select(page)
+          // A late pick never overrides a newer selection in another workspace.
+          this.select(page, global === undefined || global.workspaceId === heldWorkspaceId)
         }
       }
     }
@@ -282,6 +282,8 @@ export class RuntimeBrowserPageRegistry {
   yieldSelection(workspaceId: string | undefined): void {
     this.deactivateGlobal()
     if (workspaceId !== undefined) {
+      // A newer pick than the held one, by the agent or the person.
+      this.heldPersonPicks.delete(workspaceId)
       this.deactivateWorkspace(workspaceId)
     }
   }

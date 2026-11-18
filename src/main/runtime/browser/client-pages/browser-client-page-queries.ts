@@ -165,6 +165,6 @@ export async function yieldClientPageSelection(
   }
   pages.deactivateGlobal()
   for (const workspaceId of new Set(pages.listPages().map((page) => page.workspaceId))) {
-    pages.deactivateWorkspace(workspaceId)
+    pages.yieldSelection(workspaceId)
   }
 }

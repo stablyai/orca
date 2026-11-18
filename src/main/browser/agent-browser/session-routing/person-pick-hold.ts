@@ -39,7 +39,7 @@ export class AgentPageUse {
     }
   }
 
-  isUsing(browserPageId: string): boolean {
+  readonly isUsing = (browserPageId: string): boolean => {
     const use = this.pages.get(browserPageId)
     return (
       use !== undefined &&
