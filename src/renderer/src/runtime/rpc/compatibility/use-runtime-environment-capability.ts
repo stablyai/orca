@@ -8,9 +8,17 @@ export function useRuntimeEnvironmentCapability(
   environmentId: string | null | undefined,
   capability: RuntimeCapability
 ): boolean {
+  return useRuntimeEnvironmentCapabilityAnswer(environmentId, capability) === true
+}
+
+/** The runtime's own answer: null until it answers, when it can't be asked, and after a reconnect until it answers again. */
+export function useRuntimeEnvironmentCapabilityAnswer(
+  environmentId: string | null | undefined,
+  capability: RuntimeCapability
+): boolean | null {
   const [contactGeneration, setContactGeneration] = useState(0)
   const key = environmentId ? `${environmentId}\n${capability}\n${contactGeneration}` : null
-  const [answer, setAnswer] = useState<{ key: string; supported: boolean } | null>(null)
+  const [answer, setAnswer] = useState<{ key: string; supported: boolean | null } | null>(null)
   useEffect(() => {
     if (!environmentId) {
       return
@@ -32,12 +40,12 @@ export function useRuntimeEnvironmentCapability(
       })
       .catch(() => {
         if (!cancelled) {
-          setAnswer({ key, supported: false })
+          setAnswer({ key, supported: null })
         }
       })
     return () => {
       cancelled = true
     }
   }, [environmentId, capability, key])
-  return answer?.key === key && answer.supported
+  return answer?.key === key ? answer.supported : null
 }

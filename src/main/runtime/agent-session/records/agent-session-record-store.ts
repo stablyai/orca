@@ -45,6 +45,7 @@ import {
   getAgentSessionConversation,
   selectWritableAgentSessionRecord,
   listAgentSessionConversations,
+  listAgentSessionWorkspaceSessions,
   requireWritableAgentSessionRecord,
   heldAgentSessionIds,
   type AgentSessionStoreState
@@ -53,12 +54,14 @@ import { AgentSessionRecordTabs } from './agent-session-tab-table'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'
+import type { JournalFirstSubmittedPrompt } from '../../../native-chat/agent-session-journal/journal-domain-first-submitted-prompt'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import type {
   AgentSessionUserNameWrite,
   CompareAndSetConversationName
 } from './agent-session-record-conversation-name'
+import { JournalSqlConnectorReplies } from '../../../native-chat/agent-session-journal/connector-replies/journal-sql-connector-replies'
 
 /** Single-writer records/operation ledger in the host chat-journal database. */
 
@@ -78,6 +81,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     this.founding = createAgentSessionFoundingStore(transactions)
     this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
   }
+
+  /** Open chats with no tab (see `isSessionInBackground`): bot and worker chats. */
+  listBackgroundSessionIds = (): string[] =>
+    this.transactions.state.sessionTabs
+      ?.backgroundSessionIds()
+      .filter(this.isSessionInBackground) ?? []
 
   /** Structural readability does not depend on which agents this host can launch.
    *  `records` must come from this database's own load. */
@@ -116,6 +125,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
     readAgentSessionWorkspaceAttention(this.journalDatabase, this.listConversations(), location)
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
+  connectorReplies = () => new JournalSqlConnectorReplies(this.journalDatabase)
   /** Sessions a committed /clear continued into this one, derived from every held conversation
    *  (unreadable leases still count) and rebuilt only when lineage changes. */
   listClearedFrom = (sessionId: string): string[] => {
@@ -156,10 +166,29 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   /** Includes unreadable rows; workspace cleanup can delete the last chat. */
   holdsRecords = (): boolean => this.state.records.size > 0 || this.state.unreadableRecords.size > 0
 
+  /** One reader-pool point read: the earliest user message submitted at/after `sinceMs`. */
+  async firstSubmittedUserPrompt(
+    sessionId: string,
+    sinceMs: number
+  ): Promise<JournalFirstSubmittedPrompt> {
+    const result = await this.journalDatabase.readers.point({
+      sessionId,
+      operation: { kind: 'first-submitted-prompt', sinceMs }
+    })
+    if (result.kind !== 'first-submitted-prompt') {
+      throw new Error(`journal reader answered ${result.kind} for first-submitted-prompt`)
+    }
+    return result.first
+  }
+
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
     const scope = agentSessionScopeKey(location)
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
   }
+
+  /** Readable chats of exactly this workspace, and whether one this build cannot validate is also there. */
+  listWorkspaceSessions = (location: AgentSessionExecutionLocation) =>
+    listAgentSessionWorkspaceSessions(this.state, location)
 
   updateRecord = <C extends AgentSessionRecordCommand>(
     sessionId: string,

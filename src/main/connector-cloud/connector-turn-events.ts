@@ -3,19 +3,39 @@ import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import {
-  cloudConversation,
   CONNECTOR_CLIENT_LIMITS,
+  CONNECTOR_AUDIENCE_EVENTS_VERSION,
+  CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE,
+  CONNECTOR_REPLIES_OUTBOX_FEATURE,
+  CONNECTOR_TURN_ORIGINS,
   ConnectorConversation,
+  ConnectorFailure,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
+import { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import { writeSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import type {
   ConversationEvent,
   ConversationSnapshot
 } from '../external-conversations/external-conversation-events'
 import { isMissingFileError } from '../runtime/rpc/server/pairing/device-registry-corruption'
+import { SIGNED_OUT } from './connector-cloud-request'
 import { ConnectorOutbox, type ConnectorOutboxHead, type ConnectorStamp } from './connector-outbox'
-import { connectorSnapshot, jsonBytes, unsupported } from './connector-snapshot'
+import { connectorSnapshot, jsonBytes } from './connector-snapshot'
+import {
+  ConnectorSnapshotTrace,
+  type ConnectorSnapshotExpectation
+} from './connector-snapshot-trace'
+import { ConnectorPromptPublications } from './connector-prompt-publications'
+import { toConnectorEvent } from './connector-event-wire'
+import type { ConnectorCallObserver } from './connector-transport'
+import {
+  ConnectorReplyOutbox,
+  isReplyEvent,
+  type ConnectorReplyClient,
+  type ConnectorReplyJournal,
+  type ConnectorReplyRoute
+} from './connector-reply-outbox'
 
 const TURN_OUTBOX_FILE = 'connector-turn-outbox.json'
 const MAX_TURN_ENDS = 200
@@ -37,28 +57,36 @@ const StoredOutbox = z.object({
       turnId: z.number(),
       at: z.number(),
       stopReason: z.string().min(1).nullable(),
-      lastAssistantMessage: z.string().optional()
+      lastAssistantMessage: z.string().optional(),
+      origin: z.enum(CONNECTOR_TURN_ORIGINS).optional(),
+      failure: ConnectorFailure.optional().catch(undefined),
+      links: z.array(ConnectorWorkLink).optional().catch(undefined),
+      mirror: z.literal(true).optional().catch(undefined),
+      stateOnly: z.literal(true).optional().catch(undefined)
     })
   )
 })
 
-const isTurnEnded = (event: ConnectorEvent): event is TurnEnded => event.kind === 'turn-ended'
-const isLive = (event: ConnectorEvent): boolean =>
-  event.kind !== 'turn-ended' && event.kind !== 'snapshot'
-
-/** Cut on a character boundary so the cloud's byte limit always holds. */
-function capUtf8(text: string, maxBytes: number): string {
-  const bytes = Buffer.from(text)
-  if (bytes.byteLength <= maxBytes) {
-    return text
-  }
-  let end = maxBytes
-  // Step back over continuation bytes (10xxxxxx) to the start of the cut character.
-  while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) {
-    end--
-  }
-  return bytes.subarray(0, end).toString('utf8')
+/** The reply outbox's journal, the kill switch's /replies post, and a cold start's wake. */
+export type ConnectorTurnEventsReplies = Pick<ConnectorReplyClient, 'post' | 'hostName'> & {
+  journal: () => ConnectorReplyJournal | null
+  /** Whether anything is owed changed, e.g. a cold start's filled rows. */
+  onOwed: () => void
 }
+
+const NO_REPLIES: ConnectorTurnEventsReplies = {
+  journal: () => null,
+  onOwed: () => {},
+  post: async () => SIGNED_OUT,
+  hostName: () => ''
+}
+
+const isTurnEnded = (event: ConnectorEvent): event is TurnEnded => event.kind === 'turn-ended'
+// Reply events are the journal's rows in transit: never trimmed, never stored here.
+const isLive = (event: ConnectorEvent): boolean =>
+  event.kind !== 'turn-ended' && event.kind !== 'snapshot' && event.kind !== 'reply'
+
+export { capUtf8 } from './connector-snapshot'
 
 /** As many leading events as fit in one request, and at least one. */
 function eventsHeadSize(events: readonly ConnectorEvent[]): number {
@@ -70,49 +98,6 @@ function eventsHeadSize(events: readonly ConnectorEvent[]): number {
     }
   }
   return events.length
-}
-
-/** Within the per-event cap. */
-function promptEvent(event: Extract<ConnectorEvent, { kind: 'prompt' }>): ConnectorEvent {
-  return jsonBytes(event) <= CONNECTOR_CLIENT_LIMITS.maxEventBytes
-    ? event
-    : { ...event, prompt: unsupported(event.prompt) }
-}
-
-export function toConnectorEvent(event: ConversationEvent): ConnectorEvent | null {
-  const conversation = cloudConversation(event.conversation)
-  if (!conversation) {
-    return null
-  }
-  const { paneKey } = event
-  switch (event.kind) {
-    case 'linked':
-      return { kind: 'linked', conversation, paneKey, agent: event.agent }
-    case 'prompt':
-      return promptEvent({ kind: 'prompt', conversation, paneKey, prompt: event.prompt })
-    case 'turn-started':
-      return { kind: 'turn-started', conversation, paneKey, at: event.at }
-    case 'turn-ended':
-      // Without its start the cloud cannot place the turn; the next snapshot marks it unverifiable.
-      return event.turnId === null
-        ? null
-        : {
-            kind: 'turn-ended',
-            conversation,
-            paneKey,
-            turnId: event.turnId,
-            at: event.at,
-            stopReason: event.stopReason,
-            ...(event.lastAssistantMessage
-              ? {
-                  lastAssistantMessage: capUtf8(
-                    event.lastAssistantMessage,
-                    CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes
-                  )
-                }
-              : {})
-          }
-  }
 }
 
 /**
@@ -139,14 +124,30 @@ export class ConnectorTurnEvents {
   private readonly outbox: ConnectorOutbox<ConnectorEvent>
   private readonly filePath: string
   // Something owed was dropped to stay within the caps; only a fresh snapshot restates it.
+  private readonly publications = new ConnectorPromptPublications()
   private dropped = false
   private warnedTrimmed = false
+  // From the current hello's answer; empty before one.
+  private cloudFeatures: ReadonlySet<string> = new Set()
+  private readonly requestVersions = new Map<number, 1 | 2>()
+  private readonly replies: ConnectorReplyOutbox
+  // Flushes the running client's events; null while none runs.
+  private replyFlush: (() => void) | null = null
+  // Whether the current hello's answer listed replies.outbox; undefined before one.
+  private repliesOutbox: boolean | undefined
 
   constructor(
     userDataPath: string,
-    readonly account: string
+    readonly account: string,
+    private readonly trace = new ConnectorSnapshotTrace(),
+    private readonly replyDeps: ConnectorTurnEventsReplies = NO_REPLIES
   ) {
     this.filePath = join(userDataPath, TURN_OUTBOX_FILE)
+    this.replies = new ConnectorReplyOutbox(account, replyDeps.journal, {
+      owed: replyDeps.onOwed,
+      wake: () => void this.drainReplies(),
+      route: () => this.replyRoute()
+    })
     this.outbox = new ConnectorOutbox<ConnectorEvent>({
       headSize: eventsHeadSize,
       initial: this.readStored(),
@@ -155,8 +156,131 @@ export class ConnectorTurnEvents {
         this.dropped ||= kept.length < events.length
         return kept
       },
-      onChange: (events) => this.store(events)
+      onChange: (events) => this.store(events),
+      onStamped: (batch, stamp) => this.trace.stamped(batch, stamp),
+      onAccepted: (batch, stamp) => {
+        this.trace.accepted(batch, stamp)
+        void this.replies.accepted(batch)
+      },
+      onSplit: (batch) => this.trace.split(batch),
+      onDropped: (item, stamp) => {
+        this.trace.dropped(item, stamp)
+        // Its row stays unsent until the cloud takes it: a later drain hands it over again.
+        this.replies.forget([item])
+        this.replies.retryLater()
+      }
     })
+  }
+
+  /** Why the next watch's snapshot is taken, said just before that watch. */
+  expectSnapshot(expectation: ConnectorSnapshotExpectation): void {
+    this.trace.expect(expectation)
+  }
+
+  /** Watches an events request carrying a snapshot, for its trace; undefined for any other. */
+  requestsFor(batch: readonly ConnectorEvent[]): ConnectorCallObserver | undefined {
+    const trace = this.trace.requestsFor(batch)
+    const publications = this.publications.requestsFor(batch)
+    if (!trace && !publications) {
+      return undefined
+    }
+    return {
+      callStarted: () => trace?.callStarted(),
+      callSettled: () => trace?.callSettled(),
+      requestStarted: (renewal) => {
+        trace?.requestStarted(renewal)
+        publications?.started()
+      },
+      requestSettled: (status) => {
+        publications?.settled(status)
+        trace?.requestSettled(status)
+      },
+      noRequest: (reason) => trace?.noRequest(reason)
+    }
+  }
+
+  /** Set before the hello's watch starts, so its events match what that cloud reads. */
+  useCloudFeatures(features: ReadonlySet<string>, helloRev?: number): void {
+    this.cloudFeatures = features
+    // Under a hello without it (the kill switch), this hello's snapshot lets replies in transit go,
+    // and they drain through /replies instead.
+    this.repliesOutbox = features.has(CONNECTOR_REPLIES_OUTBOX_FEATURE)
+    if (helloRev !== undefined && !this.requestVersions.has(helloRev)) {
+      this.requestVersions.set(
+        helloRev,
+        features.has(CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE)
+          ? CONNECTOR_AUDIENCE_EVENTS_VERSION
+          : 1
+      )
+      if (this.requestVersions.size > 2) {
+        const oldest = this.requestVersions.keys().next().value
+        if (oldest !== undefined) {
+          this.requestVersions.delete(oldest)
+        }
+      }
+    }
+  }
+
+  /** A hello's stamped version never downgrades a retained audience batch. */
+  requestVersion(helloRev: number): 1 | 2 {
+    return this.requestVersions.get(helloRev) ?? CONNECTOR_AUDIENCE_EVENTS_VERSION
+  }
+
+  resetLive(): void {
+    this.restart([], this.carried)
+    this.dropped = true
+  }
+
+  /** Events not yet accepted by the cloud, and filled replies not yet handed to it. */
+  get owed(): number {
+    return this.outbox.size + this.replies.owed
+  }
+
+  /** The running client's flush, or null once it stops. */
+  useReplyFlush(flush: (() => void) | null): void {
+    this.replyFlush = flush
+  }
+
+  /** The account whose outbox admits deliveries under the current hello; null for the legacy way. */
+  replyAccount(): string | null {
+    return this.repliesOutbox ? this.account : null
+  }
+
+  /** Sends the journal's filled, unsent replies the way the current hello takes them. */
+  drainReplies(): Promise<void> {
+    return this.replies.drain()
+  }
+
+  private replyRoute(): ConnectorReplyRoute {
+    const flush = this.replyFlush
+    const { post, hostName } = this.replyDeps
+    return {
+      client: flush && {
+        post,
+        hostName,
+        push: (events) => {
+          this.outbox.push(...events)
+          flush()
+        }
+      },
+      outbox: this.repliesOutbox
+    }
+  }
+
+  // Across a new hello: turn ends, and replies while the cloud still takes them.
+  private readonly carried = (event: ConnectorEvent): boolean =>
+    isTurnEnded(event) || (isReplyEvent(event) && this.repliesOutbox === true)
+
+  private restart(first: ConnectorEvent[], keep: (event: ConnectorEvent) => boolean): void {
+    let released: ConnectorEvent[] = []
+    this.outbox.restart(first, (event) => {
+      const kept = keep(event)
+      if (!kept) {
+        released = [...released, event]
+      }
+      return kept
+    })
+    this.replies.forget(released)
   }
 
   /** True until the next snapshot once the caps dropped an event. */
@@ -170,17 +294,20 @@ export class ConnectorTurnEvents {
    */
   observe(event: ConversationSnapshot | ConversationEvent): void {
     if (event.kind === 'snapshot') {
-      const { snapshot, trimmed } = connectorSnapshot(event, Date.now())
-      if (trimmed && !this.warnedTrimmed) {
+      const built = connectorSnapshot(event, Date.now(), this.cloudFeatures)
+      if (built.trimmed && !this.warnedTrimmed) {
         this.warnedTrimmed = true
         console.warn('[connector] a snapshot left out some active conversations to fit its caps')
       }
       this.dropped = false
-      this.outbox.restart([snapshot], isTurnEnded)
+      this.publications.bind(event, built.snapshot)
+      this.trace.built(event, built)
+      this.restart([built.snapshot], this.carried)
       return
     }
-    const wire = toConnectorEvent(event)
+    const wire = toConnectorEvent(event, this.cloudFeatures)
     if (wire) {
+      this.publications.bind(event, wire)
       this.outbox.push(wire)
     }
   }
@@ -199,7 +326,9 @@ export class ConnectorTurnEvents {
 
   /** Drops everything, file included: no other account can report these turns. */
   clear(): void {
+    this.replies.retire()
     this.outbox.restart([], () => false)
+    this.trace.flush()
   }
 
   /** The same, before any owner exists in this process. */

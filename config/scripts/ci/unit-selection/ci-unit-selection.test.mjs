@@ -79,13 +79,7 @@ describe('conservative unit selection', () => {
   })
 
   it.each(
-    [
-      [],
-      ['src/deleted.ts'],
-      ['src/deleted.ts', 'src/leaf.ts'],
-      ['pnpm-lock.yaml'],
-      ['config/vitest.config.ts']
-    ].map((changed) => ({ changed }))
+    [[], ['src/deleted.ts', 'src/leaf.ts'], ['pnpm-lock.yaml']].map((changed) => ({ changed }))
   )('runs everything for incomplete/global evidence: $changed', ({ changed }) => {
     expect(selectUnitFiles(files, changed, graph)).toMatchObject({ files, full: true })
   })

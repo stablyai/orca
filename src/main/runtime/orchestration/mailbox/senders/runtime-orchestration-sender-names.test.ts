@@ -72,7 +72,10 @@ function names() {
     getPtyAgents: () => pty,
     getTerminalPaneKey: (handle) => `tab_${handle}:leaf`,
     getWorkspaceSession: (worktreeId) => (worktreeId === WORKTREE ? session : undefined),
-    getGeneratedTitlesEnabled: () => generatedTitles,
+    getStore: () => ({
+      getSettings: () => ({ tabAutoGenerateTitle: generatedTitles, botsEnabled: true }),
+      getBots: () => []
+    }),
     getAgentStatusSnapshotForPane: (paneKey) => hookRows.filter((row) => row.paneKey === paneKey),
     getTrackedTitle: () => trackedTitle
   })

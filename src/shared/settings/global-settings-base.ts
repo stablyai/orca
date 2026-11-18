@@ -8,7 +8,6 @@ import type { BrowserLinkOpeningSettings } from '../browser/navigation/browser-l
 import type { BrowserPasswordsGlobalSettings } from '../browser/passwords/browser-passwords-types'
 import type { BrowserMemorySaverGlobalSettings } from '../browser/guest-lifecycle/browser-memory-saver'
 import type { ClaudeAccountSwitchSettings } from '../agent-accounts/claude/claude-account-switch-settings'
-import type { ExternalConversationSettings } from '../connectors/external-conversation-settings'
 import type { NativeChatGlobalSettings } from '../native-chat/settings/native-chat-appearance-settings'
 import type { NativeChatIdleStopSettings } from '../native-chat/settings/native-chat-idle-stop'
 import type { EditorTypographySettings } from '../editor/appearance/editor-typography-settings-types'
@@ -20,6 +19,7 @@ import type { TerminalScrollSettings } from '../terminal/appearance/terminal-scr
 import type { WorktreeDeletionPreferences } from '../worktree/removal/worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from '../agent-launch/permissions/tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from '../terminal-themes/terminal-color-overrides'
+import type { BotsGlobalSettings } from '../bots-global-settings'
 import type { WindowMaterialSettings } from '../app-lifecycle/windows/window-material'
 import type { EditorSaveSettings } from '../editor/saving/editor-save-settings'
 import type { NestedWorkerDepthSettings } from '../orchestration/workers/nested-worker-depth'
@@ -43,7 +43,6 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   WorktreeCardDisplaySettings &
   ClaudeAccountSwitchSettings &
   AgentPermissionGlobalSettings &
-  ExternalConversationSettings &
   BrowserLinkOpeningSettings &
   WorkerRoleSettings &
   BrowserExtensionGlobalSettings &
@@ -56,6 +55,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
   EditorSaveSettings &
+  BotsGlobalSettings &
   BrowserPasswordsGlobalSettings &
   BrowserMemorySaverGlobalSettings &
   NestedWorkerDepthSettings &

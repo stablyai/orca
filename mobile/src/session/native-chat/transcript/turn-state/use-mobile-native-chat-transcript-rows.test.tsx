@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { Harness, Result, userMessage } from './use-mobile-native-chat-turn-disclosure.test-fixture'
+import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
 
 function toolRow(id: string): NativeChatMessage {
   return {
@@ -156,4 +157,42 @@ describe('how the structured lane draws its rows, as desktop does', () => {
       ).toEqual(retained ? [{ type: 'image-ref' as const, path: '/tmp/p.png' }] : [])
     }
   )
+
+  it('keeps item notes touching across a turn that changed no files, and apart under a diff', () => {
+    const note = (id: string): NativeChatMessage => ({
+      id,
+      role: 'system',
+      blocks: [],
+      timestamp: null,
+      source: 'transcript',
+      botItemNote: {
+        noteId: id,
+        by: 'bot',
+        entries: [{ uid: id, number: 1, title: id, status: 'planned', event: 'made' }]
+      }
+    })
+    const rows = [note('a'), note('b')]
+    let joins: ReadonlyMap<number, string> = new Map()
+    function Rows({ turnDiffs }: { turnDiffs: ReadonlyMap<string, unknown> }) {
+      joins = useMobileNativeChatTranscriptRows({
+        enabled: true,
+        rows,
+        turnKeys: ['t1', 't2'],
+        receipts: null,
+        completedByTurn: {},
+        expandedTurnKeys: new Set(),
+        liveReasoningId: undefined,
+        turnDiffs
+      }).itemNoteJoins
+      return null
+    }
+    // The turn-diff map has an entry for every turn's last row, undefined when nothing changed.
+    act(() => {
+      renderer = create(createElement(Rows, { turnDiffs: new Map([['a', undefined]]) }))
+    })
+    expect(Object.fromEntries(joins)).toEqual({ 0: 'below', 1: 'above' })
+
+    act(() => renderer!.update(createElement(Rows, { turnDiffs: new Map([['a', { files: [] }]]) })))
+    expect(joins.size).toBe(0)
+  })
 })

@@ -69,6 +69,7 @@ function boxAttrs(
       props.keep === true && 'shrink-0',
       props.push === true && 'ml-auto',
       props.inset === 'end' && 'pr-1.5',
+      props.inset === 'start' && 'pl-1',
       props.inset === 'hair' && 'pr-px',
       pick(OVERFLOW, props.overflow),
       props.hoverGroup === true && 'group/worktree-card'
