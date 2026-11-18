@@ -9,7 +9,6 @@ import type { JournalRewindTarget } from './journal-domain-rewind-target'
 import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
 import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-read'
 import type { AgentSessionJournalReads } from './journal-reads'
-import { joinContinuationPages } from './journal-sql-continuation-context'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { BotMemorySources } from '../../../shared/bots/bot-memory-source'
@@ -207,10 +206,7 @@ export function journalSqlReads(
     namedTurn: async (turnId) => (await read({ kind: 'named-turn', turnId })).turn,
     messageOptions: async (clientMessageId) =>
       (await read({ kind: 'message-options', clientMessageId })).options,
-    continuationContext: () =>
-      joinContinuationPages(
-        async (from) => (await read({ kind: 'continuation-context', from })).page
-      ),
+    continuationContext: async () => (await read({ kind: 'continuation-context' })).context,
     continuationChunk: async (chunk) =>
       (await read({ kind: 'continuation-chunk', read: chunk })).bytes,
     latestPrompt: async () => (await read({ kind: 'latest-prompt' })).prompt,

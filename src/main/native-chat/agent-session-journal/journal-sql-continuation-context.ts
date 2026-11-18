@@ -60,18 +60,18 @@ export function journalDomainContextHead(
 }
 
 /** Where the next export page starts: items in visible order, then the chat's sends. */
-export type JournalContinuationFrom = { part: 'items' | 'sends'; after: SqliteBindings }
+type JournalContinuationFrom = { part: 'items' | 'sends'; after: SqliteBindings }
 
-export type JournalContinuationPage = JournalContinuationContext & {
+type JournalContinuationPage = JournalContinuationContext & {
   next: JournalContinuationFrom | null
 }
 
 export type JournalContinuationRead =
-  | { kind: 'continuation-context'; from?: JournalContinuationFrom }
+  | { kind: 'continuation-context' }
   | { kind: 'continuation-chunk'; read: JournalContinuationChunkRead }
 
 export type JournalContinuationReadResult =
-  | { kind: 'continuation-context'; page: JournalContinuationPage }
+  | { kind: 'continuation-context'; context: JournalContinuationContext }
   | { kind: 'continuation-chunk'; bytes: Uint8Array | null }
 
 export function readJournalDomainContinuation(
@@ -80,15 +80,39 @@ export function readJournalDomainContinuation(
   operation: JournalContinuationRead
 ): JournalContinuationReadResult {
   return operation.kind === 'continuation-context'
-    ? {
-        kind: 'continuation-context',
-        page: readJournalDomainContinuationPage(db, target, operation.from)
-      }
+    ? { kind: 'continuation-context', context: readJournalDomainContinuationContext(db, target) }
     : readJournalDomainContinuationChunk(db, target, operation.read)
 }
 
-/** One bounded page of an explicit export; the caller joins pages that share a cursor. */
-export function readJournalDomainContinuationPage(
+/**
+ * An explicit export, one reader snapshot answered in one reply, so the reply limit bounds the
+ * whole context; a large tool output or patch counts only as its excerpt.
+ */
+function readJournalDomainContinuationContext(
+  db: Database.Database,
+  target: { sessionId: string; epoch: string }
+): JournalContinuationContext {
+  const context = {
+    items: [] as AgentJournalRenderItem[],
+    submissions: [] as AgentJournalSubmission[],
+    continued: [] as JournalContinuedPayload[]
+  }
+  let page = readJournalDomainContinuationPage(db, target)
+  for (;;) {
+    for (const part of page.continued) {
+      context.continued.push({ ...part, index: part.index + context.items.length })
+    }
+    context.items.push(...page.items)
+    context.submissions.push(...page.submissions)
+    if (!page.next) {
+      return { cursor: page.cursor, ...context }
+    }
+    page = readJournalDomainContinuationPage(db, target, page.next)
+  }
+}
+
+/** One query page of an export, in visible order and then the chat's sends. */
+function readJournalDomainContinuationPage(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
   from: JournalContinuationFrom = { part: 'items', after: [] }
@@ -189,41 +213,4 @@ export function readJournalDomainContinuationChunk(
 function nextPage(rows: readonly SqliteRow[], columns: readonly string[]): SqliteBindings {
   const last = rows.at(-1)
   return last && rows.length === PAGE ? columns.map((column) => last[column]) : []
-}
-
-const CONTINUATION_ATTEMPTS = 3
-
-/**
- * Joins export pages read at one cursor; a chat that moves between pages restarts the export,
- * and one that keeps moving is joined as read, under its first page's cursor.
- */
-export async function joinContinuationPages(
-  readPage: (from: JournalContinuationFrom | undefined) => Promise<JournalContinuationPage>
-): Promise<JournalContinuationContext> {
-  for (let attempt = 1; ; attempt++) {
-    const items: AgentJournalRenderItem[] = []
-    const submissions: AgentJournalSubmission[] = []
-    const continued: JournalContinuedPayload[] = []
-    let page = await readPage(undefined)
-    const { cursor } = page
-    let moved = false
-    for (;;) {
-      continued.push(
-        ...page.continued.map((part) => ({ ...part, index: part.index + items.length }))
-      )
-      items.push(...page.items)
-      submissions.push(...page.submissions)
-      if (!page.next) {
-        break
-      }
-      page = await readPage(page.next)
-      moved ||= page.cursor.epoch !== cursor.epoch || page.cursor.sequence !== cursor.sequence
-      if (moved && attempt < CONTINUATION_ATTEMPTS) {
-        break
-      }
-    }
-    if (!moved || attempt >= CONTINUATION_ATTEMPTS) {
-      return { cursor, items, submissions, continued }
-    }
-  }
 }
