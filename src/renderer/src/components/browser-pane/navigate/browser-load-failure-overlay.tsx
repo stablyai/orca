@@ -11,7 +11,7 @@ import type {
   BrowserCertificateProceedResult,
   BrowserLoadError
 } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import { normalizeCertificateError } from '../../../../../shared/browser/certificate-trust/browser-certificate-errors'
+import { matchBrowserCertificateFailure } from '../../../../../shared/browser/certificate-trust/browser-certificate-failure-match'
 import {
   describeBrowserLoadFailure,
   type BrowserLoadFailureRoute
@@ -50,39 +50,6 @@ type CertificateProceedAttempt = {
   state: 'submitting' | 'failed'
   showConnecting: boolean
   reason?: BrowserCertificateProceedFailureReason | 'request-failed'
-}
-
-function getMatchingCertificateFailure(args: {
-  loadError: BrowserLoadError
-  certificateFailure?: BrowserCertificateFailure | null
-  expectedBrowserPageId?: string | null
-  canProceed: boolean
-}): BrowserCertificateFailure | null {
-  const { loadError, certificateFailure, expectedBrowserPageId, canProceed } = args
-  const errorMatchesChallenge = Boolean(
-    certificateFailure &&
-    (loadError.code === -1 ||
-      (loadError.code === certificateFailure.errorCode &&
-        normalizeCertificateError(certificateFailure.error) ===
-          normalizeCertificateError(loadError.description)))
-  )
-  if (
-    !canProceed ||
-    !certificateFailure?.canProceed ||
-    !expectedBrowserPageId ||
-    certificateFailure.browserPageId !== expectedBrowserPageId ||
-    certificateFailure.errorCode !== -202 ||
-    !errorMatchesChallenge
-  ) {
-    return null
-  }
-  try {
-    return new URL(loadError.validatedUrl).origin === certificateFailure.origin
-      ? certificateFailure
-      : null
-  } catch {
-    return null
-  }
 }
 
 function formatCertificateProceedFailure(
@@ -132,7 +99,7 @@ export function BrowserLoadFailureOverlay({
     timer: ReturnType<typeof setTimeout>
   } | null>(null)
   const [proceedAttempt, setProceedAttempt] = useState<CertificateProceedAttempt | null>(null)
-  const matchingCertificateFailure = getMatchingCertificateFailure({
+  const matchingCertificateFailure = matchBrowserCertificateFailure({
     loadError,
     certificateFailure,
     expectedBrowserPageId,

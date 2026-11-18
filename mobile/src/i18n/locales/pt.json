@@ -208,7 +208,18 @@
       "timedOut": "A transmissão do navegador expirou."
     },
     "loadFailure": {
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "connectionNotSecure": "A conexão não é segura",
+      "certificateNameMismatch": "O certificado não corresponde a {{value0}}.",
+      "certificateDateInvalid": "O certificado de {{value0}} não é válido na data e hora atuais.",
+      "certificateAuthorityInvalid": "O Orca não confia na autoridade que emitiu o certificado de {{value0}}.",
+      "certificateVerificationFailed": "O Orca não conseguiu verificar o certificado de {{value0}}.",
+      "proceedUnsafe": "Continuar Assim Mesmo (Inseguro)",
+      "connecting": "Conectando…",
+      "certificateChallengeExpired": "Esta aprovação de certificado expirou. Tente novamente a página para solicitar uma nova.",
+      "certificateChallengeChanged": "A solicitação de certificado foi alterada. Tente novamente a página e revise o novo aviso.",
+      "certificateProceedFailed": "O Orca não conseguiu aprovar esta solicitação de certificado. Tente novamente a página.",
+      "certificateChallengeUnavailable": "Esta solicitação de certificado não está mais disponível. Tente novamente a página para solicitar uma nova."
     }
   },
   "chat": {
@@ -3268,6 +3279,9 @@
     },
     "usePrTextAction": {
       "updateFailed": "Falha ao atualizar o pull request."
+    },
+    "browserProfile": {
+      "default": "Padrão"
     }
   },
   "settings": {

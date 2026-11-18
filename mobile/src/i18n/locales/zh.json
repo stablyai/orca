@@ -204,7 +204,18 @@
       "webView": "显示电脑版网站"
     },
     "loadFailure": {
-      "retry": "重试"
+      "retry": "重试",
+      "connectionNotSecure": "连接不安全",
+      "certificateNameMismatch": "证书与 {{value0}} 不匹配",
+      "certificateDateInvalid": "{{value0}} 的证书在当前日期和时间无效",
+      "certificateAuthorityInvalid": "Orca 不信任签发 {{value0}} 证书的机构",
+      "certificateVerificationFailed": "Orca 无法验证 {{value0}} 的证书",
+      "proceedUnsafe": "仍然继续(不安全)",
+      "connecting": "正在连接…",
+      "certificateChallengeExpired": "此证书审批已过期，请重试该页面以请求新的审批",
+      "certificateChallengeChanged": "证书请求已更改，请重试该页面并查看新的警告",
+      "certificateProceedFailed": "Orca 无法批准此证书请求，请重试该页面后再试，",
+      "certificateChallengeUnavailable": "此证书请求已不可用，请重试该页面以重新请求"
     }
   },
   "chat": {
@@ -3326,6 +3337,10 @@
       "next": "下一个标签页",
       "previous": "上一个标签页",
       "hint": "显示所有标签页"
+    },
+    "browserProfile": {
+      "title": "配置文件",
+      "default": "默认"
     }
   },
   "settings": {

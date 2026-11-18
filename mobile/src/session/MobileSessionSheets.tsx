@@ -21,6 +21,11 @@ import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
 import { MobileSessionBotSheet } from './MobileSessionBotSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
+import {
+  MobileBrowserProfilePicker,
+  useMobileBrowserProfileLabel,
+  useMobileNewBrowserProfile
+} from './tabs/MobileBrowserProfilePicker'
 import { MobileSessionTextSizeSheet } from './MobileSessionTextSizeSheet'
 import { useMobileWindowsShellChoices } from '../terminal/session/creation/mobile-windows-shell-choices'
 import { useRouteCapability } from '../worktree/execution-hosts/use-workspace-client'
@@ -113,6 +118,11 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     sheetOpen: showCreateTabDrawer,
     worktreeId
   })
+  const browserProfile = useMobileNewBrowserProfile(
+    client,
+    showCreateTabDrawer || browserActionTarget != null
+  )
+  const browserProfileLabel = useMobileBrowserProfileLabel(browserProfile.profiles)
   return (
     <>
       <MobileSessionBotSheet controller={controller} />
@@ -146,6 +156,14 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         // (browser.tabCreate, files.createFile); the floating sentinel is
         // terminal-only over RPC, so those options hide there.
         canCreateBrowser={!isFloatingWorkspaceRoute}
+        browserProfileLabel={
+          browserProfile.profiles.length > 1
+            ? browserProfile.profileId === null
+              ? t('session.browserProfile.workspaceDefault', 'Workspace default')
+              : browserProfileLabel(browserProfile.profileId)
+            : null
+        }
+        onChooseBrowserProfile={() => browserProfile.setPickerOpen(true)}
         canCreateMarkdownNote={!isFloatingWorkspaceRoute && onPairedHost}
         onClose={() => setShowCreateTabDrawer(false)}
         onCreateAgent={(agent, nativeChatDefault) =>
@@ -281,7 +299,17 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onClose={() => setBrowserActionTarget(null)}
         onNavigate={handleBrowserNavigationCommand}
         onCloseTab={handleCloseSessionTab}
+        profileLabel={
+          browserActionTarget?.browserProfileId && browserProfile.profiles.length > 0
+            ? browserProfileLabel(browserActionTarget.browserProfileId)
+            : null
+        }
         bulkCloseActions={bulkCloseActions}
+      />
+      <MobileBrowserProfilePicker
+        choice={browserProfile}
+        // Back to the new-tab sheet, where the chosen profile now shows.
+        onAfterClose={() => setShowCreateTabDrawer(true)}
       />
       <MobileAgentSessionTabActionSheet
         controller={controller}
@@ -351,7 +379,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         // The session page reports 'web', where RN Web maps 'url' to the URL keyboard.
         keyboardType={Platform.OS === 'android' ? 'default' : 'url'}
         onSubmit={(value) => {
-          void handleCreateBrowser(value).then((created) => {
+          void handleCreateBrowser(value, browserProfile.profileId ?? undefined).then((created) => {
             if (created) {
               setShowCreateBrowserModal(false)
             }

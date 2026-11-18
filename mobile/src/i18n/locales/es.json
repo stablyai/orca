@@ -191,7 +191,18 @@
       "webView": "Mostrar vista de escritorio del sitio web"
     },
     "loadFailure": {
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "connectionNotSecure": "La conexión no es segura",
+      "certificateNameMismatch": "El certificado no coincide con {{value0}}.",
+      "certificateDateInvalid": "El certificado de {{value0}} no es válido en la fecha y hora actuales.",
+      "certificateAuthorityInvalid": "Orca no confía en la autoridad que emitió el certificado de {{value0}}.",
+      "certificateVerificationFailed": "Orca no pudo verificar el certificado de {{value0}}.",
+      "proceedUnsafe": "Continuar (no seguro)",
+      "connecting": "Conectando…",
+      "certificateChallengeExpired": "Esta aprobación de certificado caducó. Vuelve a intentarlo con la página para solicitar una nueva.",
+      "certificateChallengeChanged": "La solicitud de certificado cambió. Vuelve a intentarlo con la página y revisa la nueva advertencia.",
+      "certificateProceedFailed": "Orca no pudo aprobar esta solicitud de certificado. Vuelve a intentarlo con la página e inténtalo de nuevo.",
+      "certificateChallengeUnavailable": "Esta solicitud de certificado ya no está disponible. Vuelve a intentarlo con la página para solicitar una nueva."
     }
   },
   "chat": {
@@ -2863,6 +2874,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "No se pudo encontrar ese mensaje."
+    },
+    "browserProfile": {
+      "default": "Predeterminado"
     }
   },
   "settings": {
