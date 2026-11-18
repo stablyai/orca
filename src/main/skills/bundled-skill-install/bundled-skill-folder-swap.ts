@@ -9,6 +9,8 @@ import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 
 export type BundledSkillFile = { path: string; text: string }
 
+const SKILL_FILE = 'SKILL.md'
+
 /** Thrown when a path no longer holds what the plan observed; nothing was moved. */
 export class BundledSkillChangedError extends Error {
   constructor(path: string) {
@@ -62,7 +64,7 @@ export function bundledSkillBackupPath(homeDirectory: string, name: string): str
   return join(homeDirectory, '.agents', '.orca-skill-backups', `${name}-${utc}-${randomUUID()}`)
 }
 
-/** The installer's only delete: it refuses anything but its own stage and old siblings. */
+/** The installer's only delete: it refuses anything but its own stage and old siblings, including SKILL.md's stage. */
 export async function removeBundledSkillSibling(
   filesystem: BundledSkillFilesystem,
   path: string
@@ -112,30 +114,28 @@ export async function putBundledSkillFolder(
   }
 }
 
-/** POSIX cannot replace a nonempty directory atomically; an interrupted two-rename update leaves .orca-old for the next plan to restore. Return old copy for rechecking. */
-export async function swapBundledSkillFolder(
+/** Hidden, not a .md, and filtered by classification, so agents and plans ignore an interrupted update's stage. */
+export function isBundledSkillFileStage(entryName: string): boolean {
+  return bundledSkillSiblingKind(SKILL_FILE, entryName) === 'stage'
+}
+
+/** Replaces only SKILL.md, by an atomic rename within the folder; every other entry is the user's and stays untouched. */
+export async function updateBundledSkillFile(
   filesystem: BundledSkillFilesystem,
-  target: string,
-  files: readonly BundledSkillFile[],
+  folder: string,
+  text: string,
   verify: () => Promise<boolean>
-): Promise<string> {
-  const staged = await stage(filesystem, target, files)
-  const old = siblingPath(target, BUNDLED_SKILL_OLD_MARKER)
+): Promise<void> {
+  const target = join(folder, SKILL_FILE)
+  const staged = siblingPath(target, BUNDLED_SKILL_STAGE_MARKER)
   try {
-    await requireUnchanged(verify, target)
-    await filesystem.rename(target, old)
-  } catch (error) {
-    await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
-    throw error
-  }
-  try {
+    await filesystem.writeFile(staged, text)
+    await requireUnchanged(verify, folder)
     await filesystem.rename(staged, target)
   } catch (error) {
-    await filesystem.rename(old, target).catch(() => undefined)
     await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
     throw error
   }
-  return old
 }
 
 /** Back up the foreign object itself before replacement; never put user content in disposable .orca-old siblings. */

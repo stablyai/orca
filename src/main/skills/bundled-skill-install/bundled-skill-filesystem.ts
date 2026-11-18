@@ -41,6 +41,8 @@ export type BundledSkillFilesystem = {
   canWrite(directory: string): Promise<boolean>
   /** Creates `path` (and missing parents) holding exactly `files`; dirs 0755, files 0644. */
   writeFolder(path: string, files: readonly { path: string; text: string }[]): Promise<void>
+  /** Creates a new file (never overwrites), mode 0644. */
+  writeFile(path: string, text: string): Promise<void>
   /** Creates a private backup directory (0700 on POSIX), tightening existing permissions. */
   ensureDirectory(path: string): Promise<void>
   rename(source: string, target: string): Promise<void>
@@ -137,6 +139,7 @@ export const nativeBundledSkillFilesystem: BundledSkillFilesystem = {
       await writeFile(join(path, file.path), file.text, { mode: 0o644, flag: 'wx' })
     }
   },
+  writeFile: (path, text) => writeFile(path, text, { mode: 0o644, flag: 'wx' }),
   ensureDirectory: async (path) => {
     await mkdir(path, { recursive: true, mode: 0o700 })
     if (process.platform !== 'win32') {

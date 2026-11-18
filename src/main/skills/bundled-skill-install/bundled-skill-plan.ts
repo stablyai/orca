@@ -125,7 +125,8 @@ async function planTarget(
     context.source,
     context.digest,
     root,
-    folderClass === 'absent'
+    folderClass === 'absent',
+    folderClass === 'current' || folderClass === 'released' ? path : undefined
   )
   const base = { path, role: root.role, agents: root.agents, observed }
   const leave = (reason: NonNullable<BundledSkillOp['reason']>, replaceable: boolean) =>
@@ -157,7 +158,8 @@ async function planTarget(
       case 'current':
         return { ...base, kind: 'keep', cleanup }
       case 'released':
-        return files('update')
+        // The update writes inside the folder, not beside it.
+        return (await filesystem.canWrite(realPath)) ? files('update') : leave('unwritable', false)
       case 'absent':
         if (!shared) {
           return files('write')

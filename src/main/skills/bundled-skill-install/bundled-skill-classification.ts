@@ -4,12 +4,16 @@ import type { BundledSkillObserved } from '../../../shared/skills/bundled/bundle
 import { isOsMetadataSkillEntryName } from '../package-archive/skill-package-identity'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { bundledSkillTreeSignature } from './bundled-skill-tree-signature'
+import { isBundledSkillFileStage } from './bundled-skill-folder-swap'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 
 export type BundledSkillFolderClass = 'absent' | 'current' | 'released' | 'edited' | 'other'
 
 export type ClassifiedBundledSkillPath = {
+  /** Decided by SKILL.md alone: other entries (e.g. Codex's agents/openai.yaml) are the user's and survive an update. */
   folderClass: BundledSkillFolderClass
+  /** Whether the whole folder is Orca's to delete or retire: current/released only when SKILL.md is its only entry. */
+  wholeFolderClass: BundledSkillFolderClass
   observed: BundledSkillObserved
 }
 
@@ -68,36 +72,39 @@ export async function classifyBundledSkillPath(
 ): Promise<ClassifiedBundledSkillPath> {
   const stat = await filesystem.stat(path)
   if (!stat) {
-    return { folderClass: 'other', observed: { kind: 'unreadable' } }
+    return classified('other', { kind: 'unreadable' })
   }
   if (stat.kind === 'missing') {
-    return { folderClass: 'absent', observed: { kind: 'absent' } }
+    return classified('absent', { kind: 'absent' })
   }
   if (stat.kind === 'symlink') {
     const target = await filesystem.readLink(path)
-    return {
-      folderClass: 'other',
-      observed: target === null ? { kind: 'unreadable' } : { kind: 'link', target }
-    }
+    return classified('other', target === null ? { kind: 'unreadable' } : { kind: 'link', target })
   }
   if (stat.kind !== 'directory') {
-    return {
-      folderClass: 'other',
-      observed: await observeTree(
+    return classified(
+      'other',
+      await observeTree(
         filesystem,
         path,
         { kind: 'file', mtimeMs: stat.mtimeMs },
         includeTreeDigest
       )
-    }
+    )
   }
   const listing = await filesystem.listEntries(path)
   if (!listing) {
-    return { folderClass: 'other', observed: { kind: 'unreadable' } }
+    return classified('other', { kind: 'unreadable' })
   }
-  // Only a plain file is OS-authored; a folder or link wearing the name is content.
+  // Only a plain file is OS-authored or Orca's own update stage; a folder or link wearing the name is content.
   const entries = listing
-    .filter((entry) => !(entry.kind === 'file' && isOsMetadataSkillEntryName(entry.name)))
+    .filter(
+      (entry) =>
+        !(
+          entry.kind === 'file' &&
+          (isOsMetadataSkillEntryName(entry.name) || isBundledSkillFileStage(entry.name))
+        )
+    )
     .map((entry) => `${entry.name}:${entry.kind}`)
     .sort()
   const bytes = entries.includes(`${SKILL_FILE}:file`)
@@ -105,19 +112,31 @@ export async function classifyBundledSkillPath(
     : null
   const skillDigest = bytes ? bundledSkillTextDigest(bytes) : null
   const observed: BundledSkillObserved = { kind: 'folder', entries, skillDigest }
-  if (entries.length === 1 && skillDigest !== null) {
-    if (skillDigest === currentDigest) {
-      return { folderClass: 'current', observed }
-    }
-    if (source.releasedDigests.includes(skillDigest)) {
-      return { folderClass: 'released', observed }
-    }
+  const fileClass =
+    skillDigest === null
+      ? null
+      : skillDigest === currentDigest
+        ? 'current'
+        : source.releasedDigests.includes(skillDigest)
+          ? 'released'
+          : null
+  if (fileClass && entries.length === 1) {
+    return classified(fileClass, observed)
   }
+  const unshipped =
+    bytes && [source.name, ...(source.aliases ?? [])].includes(frontmatterName(bytes) ?? '')
+      ? 'edited'
+      : 'other'
   return {
-    folderClass:
-      bytes && [source.name, ...(source.aliases ?? [])].includes(frontmatterName(bytes) ?? '')
-        ? 'edited'
-        : 'other',
+    folderClass: fileClass ?? unshipped,
+    wholeFolderClass: unshipped,
     observed: await observeTree(filesystem, path, observed, includeTreeDigest)
   }
+}
+
+function classified(
+  folderClass: BundledSkillFolderClass,
+  observed: BundledSkillObserved
+): ClassifiedBundledSkillPath {
+  return { folderClass, wholeFolderClass: folderClass, observed }
 }

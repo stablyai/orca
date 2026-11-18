@@ -24,7 +24,7 @@ import {
   removeBundledSkillSibling,
   replaceBundledSkillPath,
   retireBundledSkillPlacement,
-  swapBundledSkillFolder
+  updateBundledSkillFile
 } from './bundled-skill-folder-swap'
 import { findBundledSkillSource } from './bundled-skill-source-selection'
 import { withBundledSkillTargetLocks } from './bundled-skill-target-locks'
@@ -74,36 +74,6 @@ async function settleCleanup(run: SkillRun, cleanup: BundledSkillCleanup) {
     : backUpBundledSkillPath(run.input.filesystem, cleanup.path, backupFor(run)))
 }
 
-/** The moved-aside copy held edits that could not be backed up; they stay at `path`. */
-class BundledSkillStrandedError extends Error {
-  constructor(
-    readonly path: string,
-    readonly code: string
-  ) {
-    super(`bundled-skill-stranded: ${path}`)
-  }
-}
-
-/** Preserve bytes from a writer that raced the lock by re-hashing the moved-aside copy. */
-async function settleOldCopy(run: SkillRun, old: string) {
-  try {
-    const { folderClass } = await classifyBundledSkillPath(
-      run.input.filesystem,
-      old,
-      run.source,
-      run.entry.digest
-    )
-    if (folderClass === 'current' || folderClass === 'released') {
-      // A released leftover is the next plan's delete cleanup if this fails.
-      await removeBundledSkillSibling(run.input.filesystem, old).catch(() => undefined)
-      return undefined
-    }
-    return await backUpBundledSkillPath(run.input.filesystem, old, backupFor(run))
-  } catch (error) {
-    throw new BundledSkillStrandedError(old, filesystemErrorCode(error))
-  }
-}
-
 function requireLinkTarget(op: BundledSkillOp): string {
   if (!op.linkTarget) {
     throw new Error('bundled-skill-link-without-target')
@@ -135,11 +105,9 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
       await requireUnchanged(run, op.path, op.observed)
       await filesystem.createLink(requireLinkTarget(op), op.path)
       return undefined
-    case 'update': {
-      const old = await swapBundledSkillFolder(filesystem, op.path, files, verify)
-      // The new copy is in; unpreservable edits in the old copy surface as a stranded failure.
-      return settleOldCopy(run, old)
-    }
+    case 'update':
+      await updateBundledSkillFile(filesystem, op.path, run.source.text, verify)
+      return undefined
     case 'replace': {
       const backupPath = backupFor(run)
       await replaceBundledSkillPath(
@@ -200,25 +168,16 @@ async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
               ...(backupPath ? { backupPath } : {})
             }),
             (error: unknown): BundledSkillOpOutcome =>
-              error instanceof BundledSkillStrandedError
-                ? {
+              error instanceof BundledSkillChangedError
+                ? { path: op.path, kind: op.kind, status: 'changed' as const }
+                : {
                     path: op.path,
                     kind: op.kind,
-                    status: 'failed',
-                    error: error.code,
-                    strandedPath: error.path
+                    status: 'failed' as const,
+                    error: filesystemErrorCode(error)
                   }
-                : error instanceof BundledSkillChangedError
-                  ? { path: op.path, kind: op.kind, status: 'changed' as const }
-                  : {
-                      path: op.path,
-                      kind: op.kind,
-                      status: 'failed' as const,
-                      error: filesystemErrorCode(error)
-                    }
           )
-    // A stranded old copy still means the new copy is in place for dependent links.
-    statuses.set(op.path, outcome.strandedPath ? 'done' : outcome.status)
+    statuses.set(op.path, outcome.status)
     ops.push(outcome)
   }
   if (

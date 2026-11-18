@@ -42,7 +42,7 @@ export async function withoutBundledSkillCompatibilityCopies<T extends Discovere
         source,
         bundledSkillTextDigest(Buffer.from(source.text))
       )
-      if (classified.folderClass === 'released' || classified.folderClass === 'current') {
+      if (classified.wholeFolderClass === 'released' || classified.wholeFolderClass === 'current') {
         continue
       }
     }

@@ -43,7 +43,7 @@ export async function recordBundledSkillDigestWritten(
     .catch(() => undefined)
 }
 
-/** An unknown single-file copy whose bytes some Orca build on this host wrote: not a user edit. */
+/** An unknown SKILL.md whose bytes some Orca build on this host wrote: not a user edit. */
 export async function isOtherBuildCopy(
   filesystem: BundledSkillFilesystem,
   destination: { homeDirectory: string },
@@ -52,7 +52,6 @@ export async function isOtherBuildCopy(
 ): Promise<boolean> {
   return (
     observed.kind === 'folder' &&
-    observed.entries.length === 1 &&
     observed.skillDigest !== null &&
     (await wasBundledSkillDigestWritten(
       filesystem,
