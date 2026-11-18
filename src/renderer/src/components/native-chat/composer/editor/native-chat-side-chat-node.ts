@@ -111,6 +111,8 @@ export function withSideChatPillsAsText(node: JSONContent): JSONContent {
 /** `token` is the typed `/btw ` or `/side `, its space included, so the draft text never changes. */
 export const NativeChatSideChat = Node.create<{ placeholder: () => string }, SideChatStorage>({
   name: SIDE_CHAT_NODE,
+  // Ahead of NativeChatPromptPillKeys (1000), whose Backspace would delete this pill whole.
+  priority: 1001,
   group: 'inline',
   inline: true,
   atom: true,
