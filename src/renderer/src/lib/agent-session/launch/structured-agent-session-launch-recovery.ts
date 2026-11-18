@@ -6,7 +6,7 @@ import {
   StructuredAgentSessionCreateUnknownOutcomeError
 } from './structured-agent-session-launch-errors'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
-import { readStructuredSessionTabInventory } from '@/runtime/native-chat/tab-inventory/structured-session-tab-inventory'
+import { readStructuredSessionWorktreeTabs } from '@/runtime/native-chat/tab-inventory/structured-session-tab-inventory'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session/agent-session-wire'
@@ -45,15 +45,19 @@ function throwIfLaunchCancelled(state: StructuredLaunchRecoveryState): void {
 }
 
 async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Promise<void> {
-  const snapshots = await readStructuredSessionTabInventory(state.intent.target)
-  throwIfLaunchCancelled(state)
-  const published = snapshots.some(
-    (snapshot) =>
-      snapshot.worktree === state.intent.worktreeId &&
-      snapshot.tabs.some(
-        (tab) => tab.type === 'agent-session' && tab.sessionId === state.intent.sessionId
-      )
+  state.intent.awaiting = 'the chat list'
+  // Only this chat's worktree is read: a recovery must not scale with every other worktree.
+  const snapshot = await readStructuredSessionWorktreeTabs(
+    state.intent.target,
+    state.intent.worktreeId,
+    state.intent.params.worktree
   )
+  throwIfLaunchCancelled(state)
+  const published =
+    snapshot?.worktree === state.intent.worktreeId &&
+    snapshot.tabs.some(
+      (tab) => tab.type === 'agent-session' && tab.sessionId === state.intent.sessionId
+    )
   if (!published) {
     throw new Error('structured session tab publication unavailable')
   }
@@ -63,6 +67,7 @@ export async function recoverPublishedSessionReceipt(
   state: StructuredLaunchRecoveryState
 ): Promise<StructuredAgentLaunchReceipt> {
   await verifyPublishedSession(state)
+  state.intent.awaiting = 'agentSession.history'
   const history = await callStructuredAgentSession<AgentSessionHistoryResult>(
     state.intent.target,
     'agentSession.history',

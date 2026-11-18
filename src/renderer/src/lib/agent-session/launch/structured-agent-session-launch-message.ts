@@ -1,5 +1,5 @@
-// A message sent to a chat whose start failed: it restarts the chat and goes as the restart's first
-// message, holding the chat's one send slot from now until the chat exists, as a launch prompt does.
+// A message sent to a chat whose start failed or never answered: it restarts the chat and goes as the
+// restart's first message, holding the chat's one send slot from now until the chat exists, as a launch prompt does.
 
 import {
   addStructuredLaunchCaller,
@@ -9,14 +9,17 @@ import { stageStructuredLaunchPrompt } from './structured-agent-session-staged-p
 
 import { getStructuredAgentSessionLaunchLifecycle } from './structured-agent-session-launch-registry'
 import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-state-store'
-import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
+import {
+  retryStructuredAgentSessionLaunch,
+  structuredAgentSessionStartAwaitsRestart
+} from './structured-agent-session-launch'
 
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { trackStructuredLaunchPromptOutcome } from './structured-agent-session-launch-prompt-outcome'
 import { structuredAgentSessionLaunchHasRetainedInput } from './structured-agent-session-launch-input'
 import { structuredAgentSessionSendOut } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 
-/** Null when the chat's start has not failed, or its restart could not begin. */
+/** Null when the chat's start has not failed or gone unanswered, or its restart could not begin. */
 export function relaunchFailedStructuredAgentSessionWithMessage(
   worktreeId: string,
   sessionId: string,
@@ -24,7 +27,7 @@ export function relaunchFailedStructuredAgentSessionWithMessage(
   options: { callerKeepsText?: true } = {}
 ): Promise<StructuredPromptDeliveryResult> | null {
   if (
-    getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId) !== 'failed' ||
+    !structuredAgentSessionStartAwaitsRestart(worktreeId, sessionId) ||
     !retryStructuredAgentSessionLaunch(worktreeId, sessionId)
   ) {
     return null

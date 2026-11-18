@@ -2,6 +2,7 @@ import { restorePersistedStructuredLaunchState } from '@/lib/agent-session/launc
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { getStructuredAgentSessionLaunchSelection } from '../../../lib/agent-session/launch/structured-agent-session-launch-options'
 import {
+  useStructuredAgentSessionLaunchErrorText,
   useStructuredAgentSessionLaunchFailure,
   useStructuredAgentSessionLaunchLifecycle
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -106,6 +107,7 @@ export function useNativeChatProvisionalLaunch(
     }
   }, [worktreeId, sessionId, retainedInput])
   const failure = useStructuredAgentSessionLaunchFailure(worktreeId ?? '', sessionId)
+  const errorText = useStructuredAgentSessionLaunchErrorText(worktreeId ?? '', sessionId)
   const launch = useLaunchView(sessionId, worktreeId, lifecycle !== null && !retainedInput)
   const retry = useCallback(() => {
     if (worktreeId) {
@@ -119,22 +121,32 @@ export function useNativeChatProvisionalLaunch(
       requiresSession: boolean,
       send: () => boolean | 'queued'
     ): boolean | 'queued' => {
+      if (!worktreeId) {
+        return starting ? false : send()
+      }
+      // A start that never answered is retired: the message restarts it, as Retry would.
+      if (lifecycle === 'failed' || (lifecycle === 'visibility-unknown' && starting)) {
+        if (requiresSession || !text.trim()) {
+          relaunchFailedStructuredAgentSessionForMessage(worktreeId, sessionId)
+          return false
+        }
+        const relaunched = relaunchFailedStructuredAgentSessionWithMessage(
+          worktreeId,
+          sessionId,
+          text
+        )
+        if (relaunched || !starting) {
+          return relaunched !== null
+        }
+      }
       if (starting) {
         // Attachments and skills are prepared against the live chat, so only plain text waits for it.
         return (
           !requiresSession &&
-          !!worktreeId &&
           sendMessageToStartingStructuredAgentSession(worktreeId, sessionId, text) !== null
         )
       }
-      if (lifecycle !== 'failed' || !worktreeId) {
-        return send()
-      }
-      if (!requiresSession && text.trim()) {
-        return relaunchFailedStructuredAgentSessionWithMessage(worktreeId, sessionId, text) !== null
-      }
-      relaunchFailedStructuredAgentSessionForMessage(worktreeId, sessionId)
-      return false
+      return send()
     },
     [lifecycle, sessionId, starting, worktreeId]
   )
@@ -142,6 +154,7 @@ export function useNativeChatProvisionalLaunch(
     lifecycle,
     launch,
     failure,
+    errorText,
     retry,
     starting,
     sendThroughLaunch,

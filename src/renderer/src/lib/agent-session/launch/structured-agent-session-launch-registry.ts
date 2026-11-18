@@ -105,6 +105,32 @@ export function getStructuredAgentSessionLaunchFailure(
     : null
 }
 
+/** The failed or unconfirmed start's own error text when it carried no host refusal. */
+export function getStructuredAgentSessionLaunchErrorText(
+  worktreeId: string,
+  sessionId: string
+): string | null {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  if (!state || state.intent.worktreeId !== worktreeId || state.failure) {
+    return null
+  }
+  const lifecycle = launchStateLifecycle(state)
+  return lifecycle === 'failed' || lifecycle === 'visibility-unknown'
+    ? (state.errorText ?? null)
+    : null
+}
+
+export function useStructuredAgentSessionLaunchErrorText(
+  worktreeId: string,
+  sessionId: string
+): string | null {
+  return useSyncExternalStore(
+    subscribeStructuredAgentLaunchStatus,
+    () => getStructuredAgentSessionLaunchErrorText(worktreeId, sessionId),
+    () => null
+  )
+}
+
 export function useStructuredAgentSessionLaunchFailure(
   worktreeId: string,
   sessionId: string

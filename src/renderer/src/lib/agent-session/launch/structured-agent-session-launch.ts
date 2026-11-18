@@ -61,6 +61,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
 import { adoptPairedHostSeed } from './structured-agent-session-launch-host-seed'
+import { structuredAgentSessionLaunchHasRetainedInput } from './structured-agent-session-launch-input'
 
 type StructuredLaunchStateResult = {
   state: StructuredLaunchState
@@ -78,11 +79,9 @@ export type StructuredAgentLaunchResult = {
   releaseCallerAfterUnknownOutcome: () => boolean
 }
 
-function resetStructuredLaunchCallers(
-  state: StructuredLaunchState,
-  retainedOpening: boolean
-): void {
-  const requestId = retainedOpening ? state.callers.attempt.requestId : undefined
+function resetStructuredLaunchCallers(state: StructuredLaunchState, keepsRequest: boolean): void {
+  // An unconfirmed chat stays its action's, so a later re-delivery still joins it.
+  const requestId = keepsRequest ? state.callers.attempt.requestId : undefined
   state.callers = createStructuredLaunchCallerGroup({ kind: 'retry', requestId })
   state.callers.onSettled = () => maybeCleanupLaunchState(state)
 }
@@ -99,8 +98,9 @@ function restartStructuredLaunchState(
     state.intent = retryStructuredAgentSessionLaunchIntent(state.intent, retainedOpening, fresh)
     state.intent.surfaceAddress = surfaceAddress
   }
-  resetStructuredLaunchCallers(state, retainedOpening)
+  resetStructuredLaunchCallers(state, wasVisibilityUnknown)
   delete state.failure
+  delete state.errorText
   delete state.operationEnded
   state.callers.outcome = 'pending'
   // A new create seeds from the settings of now (a paired server's arrive with its probe); picks
@@ -236,6 +236,10 @@ function structuredAgentLaunchState(
   setStructuredLaunchState(state)
   notifyStructuredLaunchListeners(state.intent.sessionId)
   trackLaunchSettlement(state, state.promise)
+  // A first start that never answers must not hold every later send; a source gate may wait longer.
+  const first = state.promise
+  const arm = (): void => trackStructuredLaunchConfirmationDeadline(state, first)
+  void Promise.resolve(options.createAfter).then(arm, arm)
   return { state, caller, joined: false }
 }
 
@@ -294,12 +298,25 @@ export function retryStructuredAgentSessionLaunch(
   return true
 }
 
+/** A start that failed, or never answered and holds no opening message: a new message restarts it. */
+export function structuredAgentSessionStartAwaitsRestart(
+  worktreeId: string,
+  sessionId: string
+): boolean {
+  const lifecycle = getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId)
+  return (
+    lifecycle === 'failed' ||
+    (lifecycle === 'visibility-unknown' &&
+      !structuredAgentSessionLaunchHasRetainedInput(worktreeId, sessionId))
+  )
+}
+
 /** Share failed-unpublished chat relaunch between its composer and external message callers. */
 export function relaunchFailedStructuredAgentSessionForMessage(
   worktreeId: string,
   sessionId: string
 ): void {
-  if (getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId) === 'failed') {
+  if (structuredAgentSessionStartAwaitsRestart(worktreeId, sessionId)) {
     retryStructuredAgentSessionLaunch(worktreeId, sessionId)
   }
 }

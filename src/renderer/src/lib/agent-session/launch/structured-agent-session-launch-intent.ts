@@ -38,6 +38,8 @@ export type StructuredAgentSessionLaunchIntent = {
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
   sendSelectionSupport?: boolean
+  /** The start step now waiting on an answer, named when the start's deadline passes. */
+  awaiting?: string
   /** Client-only admission requirement; reacquired from the child after reload. */
   forkRequiresInheritedOriginal?: boolean
   sendSkillsSupport?: boolean

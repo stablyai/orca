@@ -43,19 +43,23 @@ export async function sendMessageToAgent(args: {
   }
   const lifecycle = getStructuredAgentSessionLaunchLifecycle(worktreeId, target.sessionId)
   // A chat still starting takes no send yet: the notes wait, as its composer would.
-  if (
-    lifecycle === 'pending' ||
-    (lifecycle === 'visibility-unknown' &&
-      !structuredAgentSessionLaunchHasRetainedInput(worktreeId, target.sessionId))
-  ) {
+  if (lifecycle === 'pending') {
     return { status: 'not-ready', code: 'session-send-refused' }
   }
+  // A failed or unanswered start is restarted with the notes as its first message.
   const relaunched = relaunchFailedStructuredAgentSessionWithMessage(
     worktreeId,
     target.sessionId,
     prompt,
     { callerKeepsText: true }
   )
+  if (
+    !relaunched &&
+    lifecycle === 'visibility-unknown' &&
+    !structuredAgentSessionLaunchHasRetainedInput(worktreeId, target.sessionId)
+  ) {
+    return { status: 'not-ready', code: 'session-send-refused' }
+  }
   if (relaunched) {
     const result = await relaunched
     return result.delivered

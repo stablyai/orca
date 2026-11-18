@@ -8,6 +8,7 @@ import type { StructuredAgentLaunchReceipt } from './structured-agent-session-la
 import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
 import {
   notifyStructuredLaunchListeners,
+  publishStructuredLaunchChange,
   type StructuredLaunchState
 } from './structured-agent-session-launch-state-store'
 
@@ -42,26 +43,33 @@ export function trackStructuredLaunchPromptOutcome(
   })
 }
 
-/** Confirmation checks share the opening message deadline after its send slot has settled. */
+/** Confirmation checks share the opening message deadline after its send slot has settled; every
+ *  create path is bounded, since one that never answers would otherwise hold the chat starting. */
 export function trackStructuredLaunchConfirmationDeadline(
   state: StructuredLaunchState,
   promise: Promise<StructuredAgentLaunchReceipt>
 ): void {
-  if (state.intent.createMessageSupport === false) {
-    return
-  }
   const deadline = setTimeout(() => {
-    if (
-      state.promise !== promise ||
-      state.cancelled ||
-      state.callers.outcome !== 'pending' ||
-      state.intent.createMessageSupport === false
-    ) {
+    if (state.promise !== promise || state.cancelled) {
       return
+    }
+    // Named whichever deadline passed first: the start itself still has not answered.
+    const awaiting = state.intent.awaiting ?? 'the host'
+    state.errorText = `No answer within ${STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS / 1000} s from ${awaiting}.`
+    console.warn('[structured-agent-launch] start did not answer', { awaiting })
+    if (state.callers.outcome !== 'pending') {
+      publishStructuredLaunchChange(state.intent.sessionId)
+      return
+    }
+    // Settled as an unconfirmed opening message would be, whichever deadline passes first.
+    if (state.intent.params.firstMessage) {
+      state.operationEnded = true
+      settleStructuredLaunchCreateOptions(state, { kind: 'unknown' })
     }
     state.visibilityUnknown = true
     state.callers.outcome = 'unknown'
-    notifyStructuredLaunchListeners(state.intent.sessionId)
+    // Not saved: a reload already reads a saved pending start as unconfirmed, so this adds no write.
+    publishStructuredLaunchChange(state.intent.sessionId)
   }, STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS)
   const clear = (): void => clearTimeout(deadline)
   void promise.then(clear, clear)
