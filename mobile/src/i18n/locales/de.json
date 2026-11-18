@@ -2788,8 +2788,8 @@
       "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
     },
     "currentSideChat": {
-      "open": "New side chat",
-      "readOnly": "New side chat · Read-only",
+      "open": "Neuer Nebenchat",
+      "readOnly": "Neuer schreibgeschützter Nebenchat",
       "mark": "btw"
     }
   },

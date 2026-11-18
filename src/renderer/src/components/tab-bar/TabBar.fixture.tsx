@@ -352,12 +352,12 @@ export const sideChatPane = defineFixture({
   width: 480,
   store: { unifiedTabsByWorktree: { [WORKSPACE_ID]: sidePaneTabs } },
   setup: () => {
-    const subscribe = window.api.runtime.subscribe.bind(window.api.runtime)
+    const subscribe = window.api.runtime.subscribe
     window.api.runtime.subscribe = async (request, onResponse) => {
       if (request.method !== 'agentSession.subscribeStatus') {
-        return subscribe(request, onResponse)
+        return subscribe.call(window.api.runtime, request, onResponse)
       }
-      setTimeout(() =>
+      const delivery = setTimeout(() => {
         onResponse({
           id: 'side-pane-fixture',
           ok: true,
@@ -376,8 +376,11 @@ export const sideChatPane = defineFixture({
             }))
           }
         })
-      )
-      return { unsubscribe: noop, sendBinary: noop }
+      })
+      return { unsubscribe: () => clearTimeout(delivery), sendBinary: noop }
+    }
+    return () => {
+      window.api.runtime.subscribe = subscribe
     }
   },
   render: () => (

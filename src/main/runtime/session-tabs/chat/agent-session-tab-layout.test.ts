@@ -116,7 +116,7 @@ describe('a windowless host’s chat tab saves', () => {
         sessionId: 'child',
         agent: 'codex',
         tabId: 'structured-agent-session-child',
-        placement: { afterTabId: 'structured-agent-session-source' }
+        placement: { afterTabId: 'structured-agent-session-source', index: 0 }
       }
     }
 

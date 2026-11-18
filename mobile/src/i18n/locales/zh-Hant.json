@@ -2784,8 +2784,8 @@
       "linkedMessageMissing": "找不到該訊息。"
     },
     "currentSideChat": {
-      "open": "New side chat",
-      "readOnly": "New side chat · Read-only",
+      "open": "新增側聊",
+      "readOnly": "新增唯讀側聊",
       "mark": "btw"
     }
   },

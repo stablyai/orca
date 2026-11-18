@@ -2788,8 +2788,8 @@
       "linkedMessageMissing": "Bu mesaj bulunamadı."
     },
     "currentSideChat": {
-      "open": "New side chat",
-      "readOnly": "New side chat · Read-only",
+      "open": "Yeni yan sohbet",
+      "readOnly": "Yeni salt okunur yan sohbet",
       "mark": "btw"
     }
   },

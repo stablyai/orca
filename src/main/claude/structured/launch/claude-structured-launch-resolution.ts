@@ -6,14 +6,12 @@ import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/age
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type {
-  Options as ClaudeAgentSdkOptions,
-  PermissionMode
-} from '@anthropic-ai/claude-agent-sdk'
-import type {
-  AgentChatPermissionChoice,
-  AgentChatPermissionMode
-} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
+import {
+  claudeStructuredPermissionOptions,
+  type ClaudePermissionOptions
+} from './claude-structured-permission-options'
+export { claudeStructuredPermissionOptions } from './claude-structured-permission-options'
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
@@ -46,7 +44,6 @@ import {
 } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
-type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'>
 
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
@@ -77,26 +74,6 @@ export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   settingSources: [...CLAUDE_DEFAULT_SETTING_SOURCES],
   supportedDialogKinds: [],
   extraArgs: { 'replay-user-messages': null }
-}
-
-const CLAUDE_PERMISSION_MODES = {
-  // Override settings defaultMode so the chat runs with its selected permission mode.
-  ask: 'default',
-  'accept-edits': 'acceptEdits',
-  auto: 'auto'
-} as const satisfies Partial<Record<AgentChatPermissionMode, PermissionMode>>
-
-/** Full access is the owned CLI flag: the SDK's typed bypass emits a flag older binaries reject. */
-export function claudeStructuredPermissionOptions(
-  mode: AgentChatPermissionChoice
-): ClaudePermissionOptions {
-  if (mode === 'own') {
-    // An omitted mode lets the CLI apply the user's settings defaultMode.
-    return {}
-  }
-  return mode === 'full-access'
-    ? { extraArgs: { 'dangerously-skip-permissions': null } }
-    : { permissionMode: CLAUDE_PERMISSION_MODES[mode === 'read-only' ? 'ask' : mode] }
 }
 
 export type ClaudeStructuredLaunch = {

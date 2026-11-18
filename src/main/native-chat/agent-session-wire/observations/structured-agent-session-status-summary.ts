@@ -138,7 +138,7 @@ export function structuredSummaryConversationNaming(
   failure: StructuredChatNamingFailure | undefined
 ): StructuredSummaryNaming {
   if (!record) {
-    return {}
+    return { sideChat: null }
   }
   const name = record.conversationName
   const provenance: StructuredSummaryNaming = {

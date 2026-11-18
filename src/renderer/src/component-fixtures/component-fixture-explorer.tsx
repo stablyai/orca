@@ -50,9 +50,12 @@ function requireRootElement(): HTMLElement {
 
 const rootElement = requireRootElement()
 let root: ReactDOM.Root | null = null
+let cleanupFixture: (() => void) | undefined
 
 function freshRoot(): ReactDOM.Root {
   root?.unmount()
+  cleanupFixture?.()
+  cleanupFixture = undefined
   root = ReactDOM.createRoot(rootElement)
   return root
 }
@@ -105,7 +108,8 @@ async function renderFixture(id: string, theme: ComponentFixtureTheme): Promise<
     if (entry.fixture.store) {
       useAppStore.setState(entry.fixture.store)
     }
-    entry.fixture.setup?.()
+    const teardown = entry.fixture.setup?.()
+    cleanupFixture = typeof teardown === 'function' ? () => teardown() : undefined
     target.render(
       <ComponentFixtureFrame fixture={entry.fixture}>
         {entry.fixture.render()}

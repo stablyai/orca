@@ -3263,8 +3263,8 @@
       "updateFailed": "Falha ao atualizar o pull request."
     },
     "currentSideChat": {
-      "open": "New side chat",
-      "readOnly": "New side chat · Read-only",
+      "open": "Novo chat paralelo",
+      "readOnly": "Novo chat paralelo somente leitura",
       "mark": "btw"
     }
   },

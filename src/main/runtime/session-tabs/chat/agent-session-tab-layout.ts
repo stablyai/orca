@@ -123,7 +123,7 @@ export function chatTabLayoutCommand(
     ...(groupId ? { groupId } : {}),
     ...(afterTabId ? { afterTabId } : {}),
     ...(split ? { split } : {}),
-    ...(index !== undefined ? { index } : {})
+    ...(index !== undefined && !afterTabId ? { index } : {})
   }
 }
 

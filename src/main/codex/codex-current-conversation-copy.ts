@@ -1,3 +1,4 @@
+import { codexMethodUnavailable } from './structured/catalog/codex-structured-applied-settings'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { join } from 'node:path'
 import type { StructuredAgentSessionConversationCopyInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-conversation-copy-input'
@@ -70,29 +71,55 @@ export async function copyCurrentCodexConversation(
           throw new Error('Codex did not confirm an independent conversation.')
         }
         try {
-          await rpc.request('thread/goal/clear', { threadId: fork.id, origin: 'user' })
-        } catch (error) {
-          if (!isCodexAppServerRequestError(error) || error.code !== -32601) {
-            throw error
+          try {
+            await rpc.request('thread/goal/clear', { threadId: fork.id, origin: 'user' })
+          } catch (error) {
+            if (
+              !codexMethodUnavailable(error, 'thread/goal/clear') &&
+              !(
+                isCodexAppServerRequestError(error) &&
+                error.method === 'thread/goal/clear' &&
+                /(?:^|: )goals feature is disabled[.!]?$/i.test(error.message)
+              )
+            ) {
+              throw error
+            }
           }
+          const filePath = await resolveSessionFilePath(
+            'codex',
+            fork.id,
+            {
+              codexSessionsDirs: [join(home, 'sessions'), join(home, 'archived_sessions')],
+              strictErrors: true
+            },
+            signal
+          )
+          if (!filePath) {
+            throw new Error('Codex could not find the copied conversation.')
+          }
+          return { sessionId: fork.id, filePath }
+        } catch (error) {
+          let archived = false
+          try {
+            await rpc.request('thread/archive', { threadId: fork.id }, { timeoutMs: 5_000 })
+            archived = true
+          } catch {
+            // Keep the confirmed id recoverable even if cleanup also loses its reply.
+          }
+          throw new AgentConversationCopyStartError(
+            `Codex created chat ${fork.id}, but could not finish opening it. ${
+              archived ? 'The copy is in archived history.' : 'Check this copy in Codex history.'
+            } ${error instanceof Error ? error.message : 'Copy preparation failed.'}`
+          )
         }
-        const filePath = await resolveSessionFilePath(
-          'codex',
-          fork.id,
-          {
-            codexSessionsDirs: [join(home, 'sessions'), join(home, 'archived_sessions')],
-            strictErrors: true
-          },
-          signal
-        )
-        if (!filePath) {
-          throw new Error('Codex could not find the copied conversation.')
-        }
-        return { sessionId: fork.id, filePath }
       }
     )
   } catch (error) {
-    const unsupported = isCodexAppServerRequestError(error) && error.code === -32601
+    if (error instanceof AgentConversationCopyStartError) {
+      throw error
+    }
+    const unsupported =
+      codexMethodUnavailable(error, 'thread/read') || codexMethodUnavailable(error, 'thread/fork')
     const unsaved =
       isCodexAppServerRequestError(error) &&
       (error.method === 'thread/read' || error.method === 'thread/fork') &&

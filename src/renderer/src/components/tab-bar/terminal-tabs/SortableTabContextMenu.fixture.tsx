@@ -80,6 +80,7 @@ export const currentSideChat = defineFixture({
       STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
     ]
     const call = window.api.runtime.call
+    const getStatus = window.api.runtime.getStatus
     window.api.runtime.getStatus = async () => ({
       runtimeId: 'fixture-runtime',
       rendererGraphEpoch: 1,
@@ -100,6 +101,11 @@ export const currentSideChat = defineFixture({
         : call(request)
     void refreshLocalRuntimeCapabilities()
     void loadHostStructuredAgents('local', capabilities, null)
+    return () => {
+      window.api.runtime.call = call
+      window.api.runtime.getStatus = getStatus
+      void refreshLocalRuntimeCapabilities()
+    }
   },
   render: () => <MenuFixture nativeChat={{ sessionId: 'source-session', agent: 'codex' }} />,
   interact: async () => {
