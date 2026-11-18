@@ -8,7 +8,9 @@ import { DEFAULT_LINK_OPEN_MODE, type MobileLinkOpenMode } from '../storage/pref
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/webview/terminal-webview-contract'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
-  getVisibleTerminalAccessoryKeys
+  getDefaultTerminalAccessoryLayout,
+  getVisibleTerminalAccessoryKeys,
+  type TerminalAccessoryLayout
 } from '../terminal/key-input/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/key-input/terminal-custom-keys'
 import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
@@ -85,6 +87,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [smartRailEnabled, setSmartRailEnabled] = useState(false)
   const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
     getDefaultTerminalAccessoryBuiltInIds
+  )
+  const [shortcutLayout, setShortcutLayout] = useState<TerminalAccessoryLayout>(
+    getDefaultTerminalAccessoryLayout
   )
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<CustomKey | null>(null)
@@ -186,6 +191,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setSmartRailEnabled,
     visibleBuiltInIds,
     setVisibleBuiltInIds,
+    shortcutLayout,
+    setShortcutLayout,
     showCustomKeyModal,
     setShowCustomKeyModal,
     deleteKeyTarget,

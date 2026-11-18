@@ -4,20 +4,26 @@ import { persistMirrored } from '../../storage/mirrored-storage-keys'
 import './terminal-accessory-keys'
 import type { TerminalAccessoryKey } from './terminal-accessory-keys'
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from './terminal-key-definitions'
+import {
+  MIN_TERMINAL_ACCESSORY_ROWS,
+  buildTerminalAccessoryPreference,
+  clampTerminalAccessoryRowCount,
+  dedupeKnownIds,
+  normalizePersistedAccessoryLayout,
+  parseTerminalAccessoryRowReorderIds,
+  type TerminalAccessoryLayout,
+  type TerminalAccessoryLayoutPreference
+} from './terminal-accessory-rows'
+
+export {
+  MAX_TERMINAL_ACCESSORY_ROWS,
+  MIN_TERMINAL_ACCESSORY_ROWS,
+  ROW_DIVIDER_ID_PREFIX,
+  type TerminalAccessoryLayout,
+  type TerminalAccessoryLayoutPreference
+} from './terminal-accessory-rows'
 
 export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-layout'
-
-export type TerminalAccessoryLayout = {
-  orderedBuiltInIds: string[]
-  visibleBuiltInIds: string[]
-  directionPadEnabled?: boolean
-  /** Agent keys at the front of the phone's key row; off unless the user turns it on. */
-  smartRail?: boolean
-}
-
-export type TerminalAccessoryLayoutPreference = TerminalAccessoryLayout & {
-  version: 2
-}
 
 function builtInIds(): string[] {
   return TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
@@ -28,7 +34,9 @@ function defaultPreference(
   directionPadAvailable = false
 ): TerminalAccessoryLayoutPreference {
   return {
-    version: 2,
+    version: 3,
+    rowCount: MIN_TERMINAL_ACCESSORY_ROWS,
+    rows: [[...ids]],
     orderedBuiltInIds: [...ids],
     visibleBuiltInIds: directionPadAvailable
       ? ids.filter((id) => !id.startsWith('arrow'))
@@ -38,154 +46,57 @@ function defaultPreference(
   }
 }
 
-function stringArray(value: unknown): string[] | null {
-  if (!Array.isArray(value)) {
-    return null
-  }
-  return value.every((item): item is string => typeof item === 'string') ? value : null
-}
-
-function dedupeKnownIds(ids: string[], builtInSet: Set<string>): string[] {
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const id of ids) {
-    if (!builtInSet.has(id) || seen.has(id)) {
-      continue
-    }
-    seen.add(id)
-    out.push(id)
-  }
-  return out
-}
-
-// Place newly added built-ins beside canonical neighbors in saved custom layouts.
-function insertMissingBuiltInIds(
-  ordered: string[],
-  currentBuiltInIds: string[]
-): { ordered: string[]; inserted: string[] } {
-  const present = new Set(ordered)
-  const out = [...ordered]
-  const inserted: string[] = []
-  for (let i = 0; i < currentBuiltInIds.length; i++) {
-    const id = currentBuiltInIds[i]!
-    if (present.has(id)) {
-      continue
-    }
-    let insertAt = 0
-    for (let j = i - 1; j >= 0; j--) {
-      const at = out.indexOf(currentBuiltInIds[j]!)
-      if (at !== -1) {
-        insertAt = at + 1
-        break
-      }
-    }
-    out.splice(insertAt, 0, id)
-    present.add(id)
-    inserted.push(id)
-  }
-  return { ordered: out, inserted }
+function stripVersion(pref: TerminalAccessoryLayoutPreference): TerminalAccessoryLayout {
+  const { version: _version, ...layout } = pref
+  return layout
 }
 
 export function getDefaultTerminalAccessoryBuiltInIds(): string[] {
   return builtInIds()
 }
 
+/** Returns the default built-in terminal accessory layout (single row). */
 export function getDefaultTerminalAccessoryLayout(
   directionPadAvailable = false
 ): TerminalAccessoryLayout {
-  const { orderedBuiltInIds, visibleBuiltInIds, directionPadEnabled, smartRail } =
-    defaultPreference(builtInIds(), directionPadAvailable)
-  return { orderedBuiltInIds, visibleBuiltInIds, directionPadEnabled, smartRail }
+  return stripVersion(defaultPreference(builtInIds(), directionPadAvailable))
 }
 
+/** Normalizes v1/v2/v3 persisted shortcut bar preferences into version 3 multi-row format. */
 export function normalizeTerminalAccessoryLayoutPreference(
   value: unknown,
   currentBuiltInIds = builtInIds(),
   directionPadAvailable = false
 ): TerminalAccessoryLayoutPreference {
-  const fallback = defaultPreference(currentBuiltInIds, directionPadAvailable)
-  if (!value || typeof value !== 'object') {
-    return fallback
-  }
-
-  const candidate = {
-    version: 'version' in value ? value.version : undefined,
-    orderedBuiltInIds: 'orderedBuiltInIds' in value ? value.orderedBuiltInIds : undefined,
-    visibleBuiltInIds: 'visibleBuiltInIds' in value ? value.visibleBuiltInIds : undefined,
-    knownBuiltInIds: 'knownBuiltInIds' in value ? value.knownBuiltInIds : undefined,
-    directionPadEnabled: 'directionPadEnabled' in value ? value.directionPadEnabled : undefined,
-    smartRail: 'smartRail' in value ? value.smartRail : undefined
-  }
-  const builtInSet = new Set(currentBuiltInIds)
-
-  if (candidate.version === 2) {
-    const orderedInput = stringArray(candidate.orderedBuiltInIds)
-    const visibleInput = stringArray(candidate.visibleBuiltInIds)
-    if (!orderedInput || !visibleInput) {
-      return fallback
-    }
-    const { ordered, inserted } = insertMissingBuiltInIds(
-      dedupeKnownIds(orderedInput, builtInSet),
-      currentBuiltInIds
-    )
-    const visibleSet = new Set(dedupeKnownIds(visibleInput, builtInSet))
-    for (const id of inserted) {
-      visibleSet.add(id)
-    }
-    return {
-      version: 2,
-      directionPadEnabled: candidate.directionPadEnabled !== false,
-      smartRail: candidate.smartRail === true,
-      orderedBuiltInIds: ordered,
-      visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
-    }
-  }
-
-  if (candidate.version === 1) {
-    const visibleInput = stringArray(candidate.visibleBuiltInIds)
-    const knownInput = stringArray(candidate.knownBuiltInIds)
-    if (!visibleInput || !knownInput) {
-      return fallback
-    }
-    const knownInputSet = new Set(knownInput.filter((id) => builtInSet.has(id)))
-    const visibleSet = new Set(dedupeKnownIds(visibleInput, builtInSet))
-    for (const id of currentBuiltInIds) {
-      if (!knownInputSet.has(id)) {
-        visibleSet.add(id)
-      }
-    }
-    // Version-one layouts had no custom order; migrate them to canonical order.
-    return {
-      version: 2,
-      directionPadEnabled: candidate.directionPadEnabled !== false,
-      smartRail: candidate.smartRail === true,
-      orderedBuiltInIds: [...currentBuiltInIds],
-      visibleBuiltInIds: currentBuiltInIds.filter((id) => visibleSet.has(id))
-    }
-  }
-
-  return fallback
+  return normalizePersistedAccessoryLayout(
+    value,
+    currentBuiltInIds,
+    defaultPreference(currentBuiltInIds, directionPadAvailable)
+  )
 }
 
+/** Converts an arbitrary layout object into a normalized version-3 preference payload. */
 export function createTerminalAccessoryLayoutPreference(
   layout: TerminalAccessoryLayout,
   currentBuiltInIds = builtInIds()
 ): TerminalAccessoryLayoutPreference {
-  const builtInSet = new Set(currentBuiltInIds)
-  const { ordered } = insertMissingBuiltInIds(
-    dedupeKnownIds(layout.orderedBuiltInIds, builtInSet),
-    currentBuiltInIds
+  const rowCount = clampTerminalAccessoryRowCount(
+    layout.rowCount ?? layout.rows?.length ?? MIN_TERMINAL_ACCESSORY_ROWS
   )
-  const visibleSet = new Set(dedupeKnownIds(layout.visibleBuiltInIds, builtInSet))
-  return {
-    version: 2,
-    directionPadEnabled: layout.directionPadEnabled !== false,
-    smartRail: layout.smartRail === true,
-    orderedBuiltInIds: ordered,
-    visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
-  }
+  const candidateRows =
+    layout.rows && layout.rows.length > 0 ? layout.rows : [layout.orderedBuiltInIds]
+  return buildTerminalAccessoryPreference(
+    candidateRows,
+    rowCount,
+    layout.visibleBuiltInIds,
+    currentBuiltInIds,
+    false,
+    layout.directionPadEnabled !== false,
+    layout.smartRail === true
+  )
 }
 
+/** Toggles visibility of a built-in shortcut key while preserving row assignments. */
 export function setTerminalAccessoryBuiltInVisible(
   layout: TerminalAccessoryLayout,
   id: string,
@@ -193,13 +104,8 @@ export function setTerminalAccessoryBuiltInVisible(
   currentBuiltInIds = builtInIds()
 ): TerminalAccessoryLayout {
   const preference = createTerminalAccessoryLayoutPreference(layout, currentBuiltInIds)
-  if (!new Set(currentBuiltInIds).has(id)) {
-    return {
-      directionPadEnabled: preference.directionPadEnabled,
-      smartRail: preference.smartRail,
-      orderedBuiltInIds: preference.orderedBuiltInIds,
-      visibleBuiltInIds: preference.visibleBuiltInIds
-    }
+  if (!currentBuiltInIds.includes(id)) {
+    return stripVersion(preference)
   }
   const visibleSet = new Set(preference.visibleBuiltInIds)
   if (visible) {
@@ -208,30 +114,86 @@ export function setTerminalAccessoryBuiltInVisible(
     visibleSet.delete(id)
   }
   return {
-    directionPadEnabled: preference.directionPadEnabled,
-    smartRail: preference.smartRail,
-    orderedBuiltInIds: preference.orderedBuiltInIds,
+    ...stripVersion(preference),
     visibleBuiltInIds: preference.orderedBuiltInIds.filter((builtInId) => visibleSet.has(builtInId))
   }
 }
 
+/** Replaces built-in ordering as a single row for callers that do not partition rows. */
 export function reorderTerminalAccessoryBuiltInIds(
   layout: TerminalAccessoryLayout,
   orderedBuiltInIds: string[],
   currentBuiltInIds = builtInIds()
 ): TerminalAccessoryLayout {
-  const preference = createTerminalAccessoryLayoutPreference(
-    { ...layout, orderedBuiltInIds },
-    currentBuiltInIds
+  return stripVersion(
+    buildTerminalAccessoryPreference(
+      [orderedBuiltInIds],
+      1,
+      layout.visibleBuiltInIds,
+      currentBuiltInIds,
+      false,
+      layout.directionPadEnabled !== false,
+      layout.smartRail === true
+    )
   )
-  return {
-    directionPadEnabled: preference.directionPadEnabled,
-    smartRail: preference.smartRail,
-    orderedBuiltInIds: preference.orderedBuiltInIds,
-    visibleBuiltInIds: preference.visibleBuiltInIds
-  }
 }
 
+/** Updates rowCount (clamped 1–4), merging trailing rows into the final row when shrinking. */
+export function setTerminalAccessoryRowCount(
+  layout: TerminalAccessoryLayout,
+  nextRowCount: number,
+  currentBuiltInIds = builtInIds()
+): TerminalAccessoryLayout {
+  const current = createTerminalAccessoryLayoutPreference(layout, currentBuiltInIds)
+  const rowCount = clampTerminalAccessoryRowCount(nextRowCount)
+  const rows = Array.from({ length: rowCount }, (_, i) =>
+    i === rowCount - 1 && rowCount < current.rowCount
+      ? current.rows.slice(i).flat()
+      : [...(current.rows[i] ?? [])]
+  )
+  return stripVersion(
+    buildTerminalAccessoryPreference(
+      rows,
+      rowCount,
+      current.visibleBuiltInIds,
+      currentBuiltInIds,
+      false,
+      current.directionPadEnabled !== false,
+      current.smartRail === true
+    )
+  )
+}
+
+/** Reorders built-in keys across row-divider markers and preserves visible selections. */
+export function reorderTerminalAccessoryBuiltInRows(
+  layout: TerminalAccessoryLayout,
+  orderedIdsWithDividers: string[],
+  currentBuiltInIds = builtInIds()
+): TerminalAccessoryLayout {
+  const current = createTerminalAccessoryLayoutPreference(layout, currentBuiltInIds)
+  const rows = parseTerminalAccessoryRowReorderIds(orderedIdsWithDividers, current.rowCount)
+  return stripVersion(
+    buildTerminalAccessoryPreference(
+      rows,
+      current.rowCount,
+      current.visibleBuiltInIds,
+      currentBuiltInIds,
+      false,
+      current.directionPadEnabled !== false,
+      current.smartRail === true
+    )
+  )
+}
+
+/** Returns partitioned built-in key IDs across the configured 1–4 rows. */
+export function getTerminalAccessoryBuiltInRows(
+  layout: TerminalAccessoryLayout,
+  currentBuiltInIds = builtInIds()
+): string[][] {
+  return createTerminalAccessoryLayoutPreference(layout, currentBuiltInIds).rows!
+}
+
+/** Maps a flat list of visible built-in IDs into key definitions. */
 export function getVisibleTerminalAccessoryKeys(
   visibleBuiltInIds: string[],
   includeDirectionKeys = false
@@ -244,6 +206,33 @@ export function getVisibleTerminalAccessoryKeys(
     const key = byId.get(id)
     return key ? [key] : []
   })
+}
+
+/** Maps each configured shortcut row to its visible built-in key definitions. */
+export function getVisibleTerminalAccessoryBuiltInRows(
+  layout: TerminalAccessoryLayout,
+  includeDirectionKeys = false,
+  currentBuiltInIds = builtInIds()
+): TerminalAccessoryKey[][] {
+  const normalized = createTerminalAccessoryLayoutPreference(layout, currentBuiltInIds)
+  const visibleSet = new Set(normalized.visibleBuiltInIds)
+  if (includeDirectionKeys) {
+    for (const id of currentBuiltInIds) {
+      if (id.startsWith('arrow')) {
+        visibleSet.add(id)
+      }
+    }
+  }
+  const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
+  return normalized.rows.map((row) =>
+    row.flatMap((id) => {
+      if (!visibleSet.has(id)) {
+        return []
+      }
+      const key = byId.get(id)
+      return key ? [key] : []
+    })
+  )
 }
 
 // Throws only when the store can't be read; a malformed value reads as the defaults.

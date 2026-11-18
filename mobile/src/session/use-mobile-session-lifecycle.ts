@@ -31,6 +31,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     customKeys,
     setCustomKeys,
     setVisibleBuiltInIds,
+    setShortcutLayout,
     setDirectionPadEnabled,
     setSmartRailEnabled,
     setHostEndpoint,
@@ -107,6 +108,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     void settleSessionPreferenceRead(loadTerminalAccessoryLayout(padAvailable)).then((layout) => {
       if (layoutReadRevisionRef.current === revision) {
         if (layout) {
+          setShortcutLayout(layout)
           setVisibleBuiltInIds(layout.visibleBuiltInIds)
           setDirectionPadEnabled(layout.directionPadEnabled !== false)
           setSmartRailEnabled(layout.smartRail === true)
