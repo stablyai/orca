@@ -8,8 +8,9 @@ let snapshot: ZotzAgentQueueSnapshot = EMPTY_ZOTZ_AGENT_QUEUE_SNAPSHOT
 const listeners = new Set<() => void>()
 let stopListening: (() => void) | null = null
 
-function publish(next: ZotzAgentQueueSnapshot): void {
-  snapshot = next
+// An older main (or remote host) omits fields added since; fill them so panes never crash on them.
+function publish(next: Partial<ZotzAgentQueueSnapshot>): void {
+  snapshot = { ...EMPTY_ZOTZ_AGENT_QUEUE_SNAPSHOT, ...next, canceled: next.canceled ?? [] }
   for (const listener of listeners) {
     listener()
   }
