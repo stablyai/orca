@@ -17,10 +17,16 @@ export const UpdatePr = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
+/** `expectedHeadSha`: the PR head the client reviewed; older hosts drop it and merge unfenced. */
 export const MergePr = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   method: z.enum(['merge', 'squash', 'rebase']).optional(),
-  prRepo: SlugRepo.nullable().optional()
+  prRepo: SlugRepo.nullable().optional(),
+  expectedHeadSha: z
+    .string()
+    .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i, 'Invalid expected head SHA')
+    .nullable()
+    .optional()
 })
 
 export const SetPrAutoMerge = RepoSelector.extend({

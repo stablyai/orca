@@ -34,6 +34,8 @@ export type PrActionsEngineConfig = {
   mutations: PrActionMutations
   prNumber: number
   headSha?: string | null
+  /** The PR's head as last read from GitHub, not the worktree's; merges are fenced to it. */
+  prHeadSha?: string | null
   prRepo?: GitHubPrRepoSlug | null
   /** Re-reads what the settled action changed. */
   refetch: (action: PrActionBusyKey) => void | Promise<void>
@@ -178,11 +180,11 @@ export class PrActionsEngine {
 
   async merge(method?: GitHubPRMergeMethod): Promise<boolean> {
     const { cfg, identity } = this
-    const { prNumber, prRepo } = cfg
+    const { prNumber, prRepo, prHeadSha: expectedHeadSha } = cfg
     this.setBusy({ kind: 'merge' })
     this.setError(null)
     try {
-      const outcome = await cfg.mutations.mergePR({ prNumber, method, prRepo })
+      const outcome = await cfg.mutations.mergePR({ prNumber, method, prRepo, expectedHeadSha })
       this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
       return outcome.ok
     } catch (err) {

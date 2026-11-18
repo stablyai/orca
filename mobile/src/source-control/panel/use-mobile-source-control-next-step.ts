@@ -88,6 +88,7 @@ export function useMobileSourceControlNextStep({
     worktreeId,
     prNumber,
     headSha,
+    prHeadSha: readyPr?.pr.headSha,
     prRepo,
     refetch: rereadAfterAction
   })
