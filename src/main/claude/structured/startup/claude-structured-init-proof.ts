@@ -1,5 +1,5 @@
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
-import { CLAUDE_DEFAULT_SETTING_SOURCES } from '../launch/claude-structured-launch-resolution'
+import { CLAUDE_DEFAULT_SETTING_SOURCES } from '../launch/claude-discovery-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudeAuthDiagnostic } from '../lifecycle/claude-structured-session-event'
 import { AgentSessionAcquisitionRefusal } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'

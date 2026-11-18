@@ -18,7 +18,7 @@ import { useAppStore } from '../../store/index'
 import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import { SidebarLayoutToggle } from '../SidebarLayoutToggle'
-import { RightSidebarToggle } from './TitlebarMainStrip'
+import { RightSidebarToggle } from './RightSidebarToggle'
 
 /** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {

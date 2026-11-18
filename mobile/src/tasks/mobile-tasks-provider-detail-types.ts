@@ -14,6 +14,7 @@ export type RepoSummary = {
   executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
   upstream?: { owner: string; repo: string; host?: string } | null
+  hiddenAt?: number
 }
 
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'

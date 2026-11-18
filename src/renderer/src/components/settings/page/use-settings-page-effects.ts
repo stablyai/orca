@@ -174,7 +174,8 @@ export function useSettingsPageEffects(
     const paneSectionId = getSettingsSectionId(
       settingsNavigationTarget.pane,
       settingsNavigationTarget.repoId,
-      repoIdToRepresentative
+      repoIdToRepresentative,
+      settingsNavigationTarget.sectionId
     )
     if (settingsNavigationTarget.intent === 'toggle' && activeSectionId === paneSectionId) {
       clearSettingsTarget()
@@ -208,7 +209,10 @@ export function useSettingsPageEffects(
     cancelSettingsListReveal()
     consumeSettingsNavigation(settingsNavigationTarget)
     pendingNavSectionRef.current = paneSectionId
-    pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    pendingScrollTargetRef.current =
+      settingsNavigationTarget.pane === 'bots'
+        ? paneSectionId
+        : (settingsNavigationTarget.sectionId ?? paneSectionId)
     setHighlightedSettingsTarget(
       settingsNavigationTarget.pane === 'developer-permissions' &&
         settingsNavigationTarget.sectionId

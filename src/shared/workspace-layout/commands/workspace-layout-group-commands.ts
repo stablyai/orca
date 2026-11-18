@@ -200,6 +200,7 @@ type NewGroupOpen = CommandOf<
   | 'openBrowserTab'
   | 'openAgentSessionTab'
   | 'openSimulatorTab'
+  | 'openRoomTab'
 >
 
 /** Open into the named group or create it beside the split target atomically. A group already held by main takes the open without splitting. */
