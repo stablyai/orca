@@ -4,7 +4,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
-import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { ProviderIcon } from './provider-usage-panel'
@@ -27,7 +27,7 @@ import {
   soonestResetLabel,
   validResetAt
 } from './usage-reset-caption'
-import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatBareUsagePercentage, formatScopedUsageTitle } from './usage-percentage-label'
 import { getUsageHealthTone } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
 
@@ -65,26 +65,6 @@ function DetailMetric({
   )
 }
 
-/** Spells out what a Fable figure limits; MCP windows are not weekly, so they get no title. */
-function scopedUsageTitle(
-  p: ProviderRateLimits,
-  section: UsageSection,
-  display: UsagePercentageDisplay,
-  t: Translate
-): string | undefined {
-  if (section.window !== p.fableWeekly) {
-    return undefined
-  }
-  return t(
-    'auto.components.status.bar.UsageRosterPanel.modelWeeklyLimit',
-    '{{model}} weekly limit: {{usage}}',
-    {
-      model: section.label,
-      usage: formatUsagePercentageLabel(section.window.usedPercent, display, t)
-    }
-  )
-}
-
 function ScopedUsageFlag({
   p,
   section,
@@ -98,7 +78,7 @@ function ScopedUsageFlag({
   return (
     <span
       data-usage-scoped-urgent
-      title={scopedUsageTitle(p, section, display, t)}
+      title={formatScopedUsageTitle(p, section, display, t)}
       className="shrink-0 text-[11px] text-muted-foreground"
     >
       {`${section.label} ${formatBareUsagePercentage(section.window.usedPercent, display, t)}`}
@@ -126,7 +106,7 @@ function RowUsageSummary({
         {only ? (
           <span
             data-usage-scoped-only
-            title={scopedUsageTitle(p, only, display, t)}
+            title={formatScopedUsageTitle(p, only, display, t)}
             className="text-right text-[12px] font-medium tabular-nums"
           >
             <span className="text-[11px] font-normal text-muted-foreground">{only.label}</span>{' '}
@@ -251,7 +231,7 @@ export function UsageRow({
                 section={section}
                 label={label}
                 display={display}
-                title={scopedUsageTitle(p, { ...section, label }, display, t)}
+                title={formatScopedUsageTitle(p, { ...section, label }, display, t)}
               />
             )
           })}

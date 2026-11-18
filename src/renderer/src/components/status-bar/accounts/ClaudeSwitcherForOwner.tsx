@@ -51,7 +51,6 @@ import { getOwnerAccountRows } from './owner-account-rows'
 
 const EMPTY_CLAUDE_ACCOUNTS = emptyClaudeAccountsState()
 
-// Retain account switch/reset drill-in even though the footer now opens UsageRosterPanel.
 export function ClaudeSwitcherForOwner({
   claude,
   iconOnly,
@@ -248,6 +247,7 @@ export function ClaudeSwitcherForOwner({
   const selectedGroup = chatAction
     ? switchGroups.find((group) => group.runtimeTarget.runtime === 'host')
     : (switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0])
+  const activeTarget = selectedGroup?.targets.find((target) => target.active)
 
   const accountControl = providerChatAccountControl(
     'claude',
@@ -376,17 +376,13 @@ export function ClaudeSwitcherForOwner({
       )}
       variant="account"
       accountStatus={
-        selectedGroup?.targets.some((target) => target.active && target.needsSignIn) ? (
+        activeTarget?.needsSignIn ? (
           <div role="status" className="font-medium">
             {t('auto.components.status.bar.StatusBar.signedOutAccounts', 'Signed out')}
           </div>
         ) : undefined
       }
-      accountLabel={
-        panelShowsActiveAccount && rosterKnown
-          ? selectedGroup?.targets.find((target) => target.active)?.label
-          : undefined
-      }
+      accountLabel={panelShowsActiveAccount && rosterKnown ? activeTarget?.label : undefined}
       topContent={
         // Why: runtime selection refreshes this desktop's own usage, so a remote owner has none here.
         chatAction || hasActiveRuntimeEnvironment || wslHostDistro !== null ? undefined : (

@@ -231,9 +231,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     // Why: the usage row clips from the end, so placeholders give way first.
     .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
 
-  // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
   const hostScope = getUsageOwnerHostScope(remoteOwner)
-  const handleManageAccounts = (): void => handleOpenProviderAccounts(null)
   const handleUsageDetails = (): void => {
     if (!hostScope) {
       return
@@ -278,7 +276,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
-    handleManageAccounts,
+    handleManageAccounts: () => handleOpenProviderAccounts(null),
     handleOpenProviderAccounts,
     handleRefresh,
     handleUsageDetails,
