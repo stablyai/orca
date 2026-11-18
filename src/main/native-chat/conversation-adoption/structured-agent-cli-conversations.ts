@@ -146,10 +146,13 @@ export function resumeInvocationFromOptions(
   args: readonly string[],
   options: { targetless: readonly string[]; markers: readonly string[] }
 ): StructuredAgentResumeInvocation | null {
-  if (args.some((token) => options.targetless.includes(token))) {
+  // Prompt text after -- may quote a resume flag; only tokens before it are options.
+  const terminator = args.indexOf('--')
+  const optionArgs = terminator === -1 ? args : args.slice(0, terminator)
+  if (optionArgs.some((token) => options.targetless.includes(token))) {
     return { target: null }
   }
-  const inline = args.find((token) =>
+  const inline = optionArgs.find((token) =>
     options.markers.some((marker) => token.startsWith(`${marker}=`))
   )
   if (inline !== undefined) {
@@ -157,8 +160,8 @@ export function resumeInvocationFromOptions(
     return { target: target.length > 0 ? target : null }
   }
   return invocationAfter(
-    args,
-    args.findIndex((token) => options.markers.includes(token))
+    optionArgs,
+    optionArgs.findIndex((token) => options.markers.includes(token))
   )
 }
 

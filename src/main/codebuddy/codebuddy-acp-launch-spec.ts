@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { GENERIC_ACP_DIALECT } from '../acp/acp-dialects/acp-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
@@ -14,7 +14,8 @@ const CODEBUDDY_SESSION_HISTORY: StructuredAgentSessionHistory = {
   parseResumeArgs: (args) =>
     resumeInvocationFromOptions(args, {
       targetless: ['-c', '--continue'],
-      markers: ['-r', '--resume', '--session-id']
+      // --session-id names a new session, not a session to resume.
+      markers: ['-r', '--resume']
     })
 }
 
@@ -29,7 +30,14 @@ export const CODEBUDDY_LAUNCH_SPEC: AcpLaunchSpec = {
   account: directoryAccountBinding('CODEBUDDY_CONFIG_DIR', (homePath) =>
     join(homePath, '.codebuddy')
   ),
-  installDirectories: () => [],
+  installDirectories: ({ env, homePath }) => {
+    if (process.platform !== 'win32') {
+      return []
+    }
+    // The Windows installer writes here; a PATH refreshed before install misses it.
+    const localAppData = env.LOCALAPPDATA ?? win32.join(homePath, 'AppData', 'Local')
+    return [win32.join(localAppData, 'codebuddy', 'bin')]
+  },
   // ACP first ships in 2.185.0; earlier releases have no --acp.
   minimumVersions: ['2.185.0'],
   // CodeBuddy lists the models a session can use, not a standalone catalog, and cannot delete

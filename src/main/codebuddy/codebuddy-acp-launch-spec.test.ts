@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { CODEBUDDY_LAUNCH_SPEC } from './codebuddy-acp-launch-spec'
 
@@ -37,5 +37,29 @@ describe('CodeBuddy ACP launch spec', () => {
     expect(
       CODEBUDDY_LAUNCH_SPEC.sessionHistory.parseResumeArgs(['codebuddy', '--continue'])
     ).toEqual({ target: null })
+  })
+
+  it('does not treat --session-id as a resume', () => {
+    expect(
+      CODEBUDDY_LAUNCH_SPEC.sessionHistory.parseResumeArgs([
+        'codebuddy',
+        '--session-id',
+        '01a1ee3f-e366-72bc-8d11-ceced281cf32'
+      ])
+    ).toBeNull()
+  })
+
+  it('finds the Windows installer directory', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect(
+        CODEBUDDY_LAUNCH_SPEC.installDirectories({
+          env: { LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local' },
+          homePath: 'C:\\Users\\me'
+        })
+      ).toEqual(['C:\\Users\\me\\AppData\\Local\\codebuddy\\bin'])
+    } finally {
+      platform.mockRestore()
+    }
   })
 })
