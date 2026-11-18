@@ -18,6 +18,7 @@ import {
 import { printResult } from '../output/command-result-output'
 import {
   assertReferenceWritesSupported,
+  getReferenceProviderHint,
   parseReferenceInputs,
   parseReferenceUrls,
   resolveReferenceInputs
@@ -95,10 +96,11 @@ async function mutateReferences(context: HandlerContext, operation: 'add' | 'rem
   const { flags, client, json } = context
   const target = workspaceTarget(context)
   const values = getRepeatedStringFlag(flags, 'url')
+  const providerHint = getReferenceProviderHint(flags)
   const input =
     operation === 'add'
-      ? await resolveReferenceInputs(context, parseReferenceInputs(values))
-      : parseReferenceUrls(values)
+      ? await resolveReferenceInputs(context, parseReferenceInputs(values, providerHint))
+      : parseReferenceUrls(values, providerHint)
   const keys = operation === 'remove' ? getRepeatedStringFlag(flags, 'key') : []
   if (input.length === 0 && keys.length === 0) {
     throw new RuntimeClientError(

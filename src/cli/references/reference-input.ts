@@ -19,10 +19,35 @@ import { getOptionalStringFlag, getRepeatedStringFlag } from '../arguments/flags
 import { resolveJiraTarget } from '../jira/jira-target'
 
 type ReferenceInput = { key: string } | { item: WorkspaceAttachment }
+type ReferenceProviderHint = 'github' | 'gitea'
 
-export function parseReferenceUrls(urls: string[]): WorkspaceAttachment[] {
+function isReferenceProviderHint(value: string): value is ReferenceProviderHint {
+  return value === 'github' || value === 'gitea'
+}
+
+/** A self-hosted `/issues/` URL cannot prove GitHub vs Gitea; this flag names the forge. */
+export function getReferenceProviderHint(
+  flags: Map<string, string | boolean>
+): ReferenceProviderHint | undefined {
+  const provider = getOptionalStringFlag(flags, 'reference-provider')
+  if (provider === undefined) {
+    return undefined
+  }
+  if (!isReferenceProviderHint(provider)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--reference-provider must be github or gitea.'
+    )
+  }
+  return provider
+}
+
+export function parseReferenceUrls(
+  urls: string[],
+  providerHint?: ReferenceProviderHint
+): WorkspaceAttachment[] {
   try {
-    const references = urls.map((url) => parseWorkspaceReferenceUrl(url))
+    const references = urls.map((url) => parseWorkspaceReferenceUrl(url, providerHint))
     return [
       ...new Map(references.map((item) => [getWorkspaceReferenceIdentity(item), item])).values()
     ]
@@ -34,11 +59,14 @@ export function parseReferenceUrls(urls: string[]): WorkspaceAttachment[] {
   }
 }
 
-export function parseReferenceInputs(values: string[]): ReferenceInput[] {
+export function parseReferenceInputs(
+  values: string[],
+  providerHint?: ReferenceProviderHint
+): ReferenceInput[] {
   return values.map((value) =>
     JIRA_ISSUE_KEY_PATTERN.test(value.trim())
       ? { key: value.trim().toUpperCase() }
-      : { item: parseReferenceUrls([value])[0] }
+      : { item: parseReferenceUrls([value], providerHint)[0] }
   )
 }
 
@@ -110,6 +138,9 @@ export function getCreateReferenceInputs(
     if (flags.has('reference-site')) {
       throw new RuntimeClientError('invalid_argument', '--reference-site requires --reference.')
     }
+    if (flags.has('reference-provider')) {
+      throw new RuntimeClientError('invalid_argument', '--reference-provider requires --reference.')
+    }
     return undefined
   }
   const legacy = ['issue', 'pr', 'linear-issue', 'gitlab-issue', 'gitlab-mr'].find((name) =>
@@ -126,5 +157,5 @@ export function getCreateReferenceInputs(
     )
   }
   getOptionalStringFlag(flags, 'reference-site')
-  return parseReferenceInputs(urls)
+  return parseReferenceInputs(urls, getReferenceProviderHint(flags))
 }
