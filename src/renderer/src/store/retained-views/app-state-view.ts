@@ -21,12 +21,9 @@ export function useAppStateValue<T>(selector: (state: RootSelectorState) => T): 
 /** useAppStateValue for a selector that reads channel fields; a retained view never changes. */
 export function useAppStateValueWithChannels<T>(selector: (state: AppState) => T): T {
   const store = useAppStateView()
+  const active = useAppStateViewActive()
   const read = useCallback(() => selector(store.getState()), [store, selector])
-  return useSyncExternalStore(
-    store === useAppStore ? useAppStore.subscribe : subscribeNothing,
-    read,
-    read
-  )
+  return useSyncExternalStore(active ? store.subscribe : subscribeNothing, read, read)
 }
 
 export function useAppStateViewActive(): boolean {

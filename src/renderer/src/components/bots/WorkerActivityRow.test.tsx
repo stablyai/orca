@@ -13,6 +13,9 @@ const { stopOrchestrationWorker } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/stop-orchestration-worker', () => ({ stopOrchestrationWorker }))
 vi.mock('@/store', () => ({ useAppStore: () => null }))
+vi.mock('@/store/channels/use-app-store-with-channels', () => ({
+  useAppStoreWithChannels: () => null
+}))
 
 afterEach(() => {
   cleanup()

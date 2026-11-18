@@ -52,7 +52,8 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('@/store', () => ({
   useAppStore: Object.assign((select: () => unknown) => select(), {
-    getState: () => ({ tabsByWorktree: mocks.tabsByWorktree })
+    getState: () => ({ tabsByWorktree: mocks.tabsByWorktree }),
+    subscribe: () => () => {}
   })
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
