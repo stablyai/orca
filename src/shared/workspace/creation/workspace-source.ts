@@ -5,6 +5,7 @@ export const WORKSPACE_SOURCE_VALUES = [
   'drag_drop',
   'onboarding',
   'terminal_context_menu',
+  'chat_fork',
   'unknown'
 ] as const
 

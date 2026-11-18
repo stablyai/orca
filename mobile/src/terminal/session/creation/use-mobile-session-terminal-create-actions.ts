@@ -159,7 +159,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         clientMutationId,
         agent,
         options,
-        ...(sourceFork ? { sourceChatFork: { sessionId: sourceFork.sessionId } } : {})
+        sourceChatFork: sourceFork
       })
       if (!isCurrent()) {
         return sourceOutcome('accepted')

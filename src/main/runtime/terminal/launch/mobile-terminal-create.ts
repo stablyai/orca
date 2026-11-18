@@ -24,7 +24,7 @@ const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 export type MobileTerminalCreateOptions = {
   terminalImageViewerSupported?: boolean
   afterTabId?: string
-  sourceChatFork?: { sessionId: string }
+  sourceChatFork?: { sessionId: string; throughEntryId?: string }
   targetGroupId?: string
   command?: string
   shellOverride?: string
@@ -98,7 +98,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
     worktreeSelector: string,
     opts: {
       afterTabId?: string
-      sourceChatFork?: { sessionId: string }
+      sourceChatFork?: { sessionId: string; throughEntryId?: string }
       targetGroupId?: string
       command?: string
       shellOverride?: string

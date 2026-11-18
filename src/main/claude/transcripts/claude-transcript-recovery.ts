@@ -8,7 +8,7 @@ export async function recoverClaudeTranscript(input: {
   yieldTurn: () => Promise<void>
 }): Promise<void> {
   input.signal.throwIfAborted()
-  const worker = spawnClaudeConversationWorker({ kind: 'recover', filePath: input.filePath })
+  const worker = await spawnClaudeConversationWorker({ kind: 'recover', filePath: input.filePath })
   let abort = () => {}
   try {
     await new Promise<void>((resolve, reject) => {
