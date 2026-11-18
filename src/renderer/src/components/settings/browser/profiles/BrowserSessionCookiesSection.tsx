@@ -57,6 +57,13 @@ export function BrowserSessionCookiesSection({
     activeProfile?.label
   )
   const selectedHost = hostOptions.find((host) => host.id === selectedHostId) ?? hostOptions[0]
+  const shownDefaultProfile: BrowserSessionProfile = defaultProfile ?? {
+    id: 'default',
+    scope: 'default',
+    partition: '',
+    label: t('auto.components.settings.BrowserPane.4399c77caa', 'Default'),
+    source: null
+  }
   return (
     <SearchableSetting
       id="browser-session-cookies"
@@ -145,15 +152,7 @@ export function BrowserSessionCookiesSection({
 
       <div className="space-y-2">
         <BrowserProfileRow
-          profile={
-            defaultProfile ?? {
-              id: 'default',
-              scope: 'default',
-              partition: '',
-              label: t('auto.components.settings.BrowserPane.4399c77caa', 'Default'),
-              source: null
-            }
-          }
+          profile={shownDefaultProfile}
           detectedBrowsers={detectedBrowsers}
           importState={importState}
           isActive={activeProfileId === 'default'}
@@ -173,10 +172,7 @@ export function BrowserSessionCookiesSection({
       </div>
       {selectedHostId === LOCAL_EXECUTION_HOST_ID ? (
         <BrowserProfileSiteList
-          profiles={[
-            { id: 'default', label: defaultProfile?.label ?? 'Default' },
-            ...nonDefaultProfiles
-          ]}
+          profiles={[shownDefaultProfile, ...nonDefaultProfiles]}
         />
       ) : null}
       <div className="flex items-center justify-between gap-3 pt-3">
