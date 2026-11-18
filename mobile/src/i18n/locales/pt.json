@@ -4403,7 +4403,6 @@
       "title": "Tarefas"
     },
     "searchControl": {
-      "jiraPlaceholder": "JQL do Jira, ex.: project = ABC AND statusCategory != Done",
       "projectPlaceholder": "Buscar na visualização do projeto…",
       "providerPlaceholder": "Buscar tarefas do {{provider}}…"
     },
@@ -4529,15 +4528,7 @@
       "confirmGitHubRebase": "Fazer rebase e mesclar PR #{{number}}?",
       "confirmGitLabMerge": "Mesclar o merge request #{{number}}?",
       "confirmGitLabSquash": "Fazer squash e mesclar o merge request #{{number}}?",
-      "confirmGitLabRebase": "Fazer rebase e mesclar o merge request #{{number}}?",
-      "merged": "Mesclado",
-      "closed": "Fechado",
-      "conflicts": "Conflitos",
-      "behind": "Desatualizado",
-      "blocked": "Bloqueado",
-      "checksPending": "Verificações pendentes",
-      "ableToMerge": "Pode ser mesclado",
-      "unknown": "Desconhecido"
+      "confirmGitLabRebase": "Fazer rebase e mesclar o merge request #{{number}}?"
     },
     "pagination": {
       "pageUnreachable": "A página {{page}} está além do que a pesquisa do GitHub pode retornar.",
@@ -4919,6 +4910,64 @@
             }
           }
         }
+      },
+      "TaskPage": {
+        "99c2755218": "JQL do Jira, ex.: project = ABC AND statusCategory != Done",
+        "jiraTextMatchesNotice": "Mostrando correspondências de texto. O Jira não conseguiu executar esta busca como JQL."
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "Cancelado"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Mergeado",
+              "4f976d3450": "Fechado",
+              "1f8eb81c0e": "Aprovação necessária",
+              "c606463dc2": "Alterações solicitadas",
+              "7e8bbe3cd7": "Conflitos",
+              "b169f943e1": "Mergear quando pronto",
+              "autoMergeOn": "Merge automático ativado",
+              "039c072f94": "Atrás",
+              "bf5e4c6c92": "Bloqueado",
+              "87fa36ac83": "Verificações falharam",
+              "4e2507176b": "Verificações pendentes",
+              "def355ff38": "Pode ser mergeado",
+              "f958920f3a": "Verificando"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Mergeado",
+                  "88d044c42f": "Fechado",
+                  "96b05e374c": "Conflitos",
+                  "5105b0e584": "Aprovação necessária",
+                  "893a999c8c": "Alterações solicitadas",
+                  "01ab632a21": "Threads não resolvidas",
+                  "bf628700f6": "As verificações precisam passar",
+                  "65c847ad1e": "Verificações pendentes",
+                  "382c70faeb": "Atrás",
+                  "195917574e": "Verificando",
+                  "4ecc0d90ee": "Bloqueado",
+                  "49ac4fec10": "Verificações falharam",
+                  "04a3015a12": "Pode ser mergeado"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "O Jira não conseguiu executar esta consulta JQL. Verifique a sintaxe e tente novamente."
       }
     }
   }
