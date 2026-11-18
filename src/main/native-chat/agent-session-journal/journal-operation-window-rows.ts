@@ -31,7 +31,7 @@ export function readOperationWindowItems(
   const projected = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
   const rows = `FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}`
-  // Plain sizes cost no parse; only a window past the budget sizes its large rows as projected.
+  // Plain sizes cost no parse; only a window past the budget sizes rows as projected.
   const sizes = scope.db
     .prepare(`SELECT item_id, octet_length(payload_json) AS bytes ${rows}`)
     .all(...scope.prefix, start)
