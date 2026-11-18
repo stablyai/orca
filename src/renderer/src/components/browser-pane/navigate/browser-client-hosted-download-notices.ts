@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type MouseEvent as ReactMouseEvent } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -14,6 +14,21 @@ import { formatByteCount } from './browser-notices'
 /** One toast per download, so progress, completion and failure replace each other in place. */
 function downloadToastId(downloadId: string): string {
   return `browser-download:${downloadId}`
+}
+
+/** The in-progress toast, with the Cancel a local page's download row offers. */
+function downloadInProgressToast(downloadId: string) {
+  return {
+    id: downloadToastId(downloadId),
+    action: {
+      label: translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel'),
+      onClick: (event: ReactMouseEvent) => {
+        // Keep the toast so the finish event replaces it with "Download canceled."
+        event.preventDefault()
+        void window.api.browser.cancelDownload({ downloadId })
+      }
+    }
+  }
 }
 
 /** Observe at app scope: downloads land remotely and outlive their panes, so missing completion would leave an unclosable loading toast. */
@@ -32,7 +47,7 @@ export function useBrowserClientHostedDownloadNotices(): void {
           translate('browser.clientHosted.download.started', 'Downloading {{filename}}…', {
             filename: event.filename
           }),
-          { id: downloadToastId(event.downloadId) }
+          downloadInProgressToast(event.downloadId)
         )
       }
     )
@@ -42,9 +57,10 @@ export function useBrowserClientHostedDownloadNotices(): void {
         if (filename === undefined) {
           return
         }
-        toast.loading(formatBrowserClientHostedDownloadProgress(event, filename), {
-          id: downloadToastId(event.downloadId)
-        })
+        toast.loading(
+          formatBrowserClientHostedDownloadProgress(event, filename),
+          downloadInProgressToast(event.downloadId)
+        )
       }
     )
     const releaseFinished = window.api.browser.onDownloadFinished(
@@ -85,7 +101,8 @@ export function emitBrowserClientHostedDownloadNotice(
   event: BrowserDownloadFinishedEvent,
   filename: string
 ): void {
-  const id = downloadToastId(event.downloadId)
+  // Sonner merges updates into the toast with this id, so drop the in-progress Cancel explicitly.
+  const options = { id: downloadToastId(event.downloadId), action: undefined }
   if (event.status === 'completed') {
     toast.success(
       event.remoteDestination
@@ -93,7 +110,7 @@ export function emitBrowserClientHostedDownloadNotice(
         : translate('browser.clientHosted.download.completed', 'Downloaded {{filename}}', {
             filename
           }),
-      { id }
+      options
     )
     return
   }
@@ -102,6 +119,6 @@ export function emitBrowserClientHostedDownloadNotice(
       (event.status === 'canceled'
         ? translate('browser.clientHosted.download.canceled', 'Download canceled.')
         : translate('browser.clientHosted.download.failed', "Couldn't finish the download.")),
-    { id }
+    options
   )
 }

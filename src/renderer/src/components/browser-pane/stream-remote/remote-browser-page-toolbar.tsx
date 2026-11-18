@@ -25,6 +25,7 @@ export function RemoteBrowserPageToolbar({
   markup,
   frameUrl,
   isActive,
+  history,
   onBack,
   onForward,
   onReload
@@ -44,6 +45,7 @@ export function RemoteBrowserPageToolbar({
   markup: MarkupModeController
   frameUrl: string | null
   isActive: boolean
+  history: { canGoBack: boolean; canGoForward: boolean }
   onBack: () => void
   onForward: () => void
   onReload: () => void
@@ -52,9 +54,8 @@ export function RemoteBrowserPageToolbar({
   return (
     <BrowserNavigationControlRow
       controls={{
-        // Hosts report no history depth; keep arrows enabled and let dead-end RPCs no-op.
-        canGoBack: true,
-        canGoForward: true,
+        canGoBack: history.canGoBack,
+        canGoForward: history.canGoForward,
         goBack: onBack,
         goForward: onForward,
         reload: onReload,

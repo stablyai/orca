@@ -39,6 +39,7 @@ export function CodexSwitcherMenu({
     activeTarget,
     activeUsage,
     canRedeemReset,
+    confirmedResetAccountId,
     handleConfirmReset,
     handleOpenChange,
     handleResetMenuSelect,
@@ -52,6 +53,7 @@ export function CodexSwitcherMenu({
     open,
     openSettingsPage,
     openSettingsTarget,
+    providerAccountHostLabel,
     reauthenticatingAccountId,
     resetConfirmOpen,
     resetCreditCount,
@@ -191,6 +193,14 @@ export function CodexSwitcherMenu({
         onSkipChange={setSkipFutureResetConfirm}
         isRedeemingReset={isRedeemingReset}
         onConfirm={handleConfirmReset}
+        {...(providerAccountHostLabel
+          ? {
+              accountLabel: selectedGroup?.targets.find(
+                (target) => target.id === confirmedResetAccountId
+              )?.label,
+              hostLabel: providerAccountHostLabel
+            }
+          : {})}
       />
       {open ? <CodexRestartStatusPrompt /> : null}
       <AccountSwitchSection

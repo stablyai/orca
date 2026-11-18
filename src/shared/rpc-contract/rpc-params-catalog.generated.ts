@@ -547,6 +547,7 @@ import {
   RepoSearchRefs,
   RepoSetBaseRef,
   RepoSetHidden,
+  RepoSparsePresetRemove,
   RepoSparsePresetSave,
   RepoUpdate
 } from './projects/repo-params'
@@ -1531,6 +1532,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.issueCommandRead': RepoIssueCommandRead,
   'repo.issueCommandWrite': RepoIssueCommandWrite,
   'repo.list': RepoList,
+  'repo.removeSparsePreset': RepoSparsePresetRemove,
   'repo.reorder': RepoReorder,
   'repo.rm': RepoSelector,
   'repo.saveSparsePreset': RepoSparsePresetSave,

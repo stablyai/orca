@@ -17,6 +17,7 @@ import type { RuntimeHostDetails } from '../catalog/runtime-environment-host-det
 import {
   formatRuntimeEndpointAddress,
   getRuntimeServerAvailableUpdateText,
+  getRuntimeServerNewerThanAppText,
   getRuntimeServerStatusIndicator,
   getRuntimeServerVersionText,
   isRemoteServerUpdateInFlight
@@ -187,9 +188,11 @@ export function RuntimeServerRow({
     (managed?.status?.availableUpdate
       ? t('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
       : null)
-  const infoParts = [sshRoute ?? address, versionText].filter((part): part is string =>
-    Boolean(part)
-  )
+  const infoParts = [
+    sshRoute ?? address,
+    versionText,
+    getRuntimeServerNewerThanAppText(remoteUpdate, t)
+  ].filter((part): part is string => Boolean(part))
 
   const meta = (
     <>
