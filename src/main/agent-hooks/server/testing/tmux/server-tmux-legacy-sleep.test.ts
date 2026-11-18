@@ -224,6 +224,9 @@ it('proves a tmux-hosted pane only from a complete process picture', async () =>
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
   runningPane(4050, CLIENT, [4070, 101, 4070, 'sleep 9999'], ...TMUX)
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(true)
+  // An unreadable job might be the pane's own agent.
+  runningPane(4050, CLIENT, [4080, 101, 4080, '(claude)', 'T'], ...TMUX)
+  await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
   // An agent whose ancestry cannot be read is not proven to live outside the pane.
   runningPane(4050, CLIENT, [4043, 4042, 4043, 'claude', 'S+', 'ttys011'])
   await expect(readPaneTmuxHost(io, agent)).resolves.toBe(false)

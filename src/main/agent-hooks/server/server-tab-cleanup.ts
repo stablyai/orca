@@ -246,6 +246,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
   ): void {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    this.lastSubmittedAtByPaneKey.delete(resolvedPaneKey)
     if (options?.forgetAgentExit) {
       this.forgetAgentExit(paneKey)
     }

@@ -13,8 +13,16 @@ export abstract class AgentHookServerStatusRowMutation extends AgentHookServerSt
   /** When the user last submitted a line in each pane; a resumed CLI's startup ends there. */
   protected readonly lastSubmittedAtByPaneKey = new Map<string, number>()
 
+  /** Kept only while a resumed row's startup window is open; pane teardown forgets it. */
   notePaneInputSubmitted(paneKey: string): void {
-    this.lastSubmittedAtByPaneKey.set(this.resolvePaneKeyAlias(paneKey), Date.now())
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
+    const row = this.state.lastStatusByPaneKey.get(resolved) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (row?.observation?.origin === 'launch') {
+      this.lastSubmittedAtByPaneKey.set(resolved, Date.now())
+    }
   }
 
   protected preserveAcceptedTurn(

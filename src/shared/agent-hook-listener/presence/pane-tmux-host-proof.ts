@@ -1,5 +1,8 @@
 import type { AgentProcessIdentity } from '../../agent-status/process/agent-process-presence'
-import type { ProcessTableRow } from '../../process-observation/tables/process-table-snapshot'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../process-observation/tables/process-table-snapshot'
 import {
   MAX_ANCESTRY_DEPTH,
   agentOf,
@@ -51,7 +54,7 @@ export async function readPaneTmuxHost(
         row.tty !== rootRow.tty ||
         clientChain.has(row.pid) ||
         row.pgid === rootRow.tpgid ||
-        agentOf(row.command) === undefined
+        (unreadableArgvName(row.command) === null && agentOf(row.command) === undefined)
     )
   }
   // Only a complete ancestry outside the pane proves it; a missing row proves nothing.
