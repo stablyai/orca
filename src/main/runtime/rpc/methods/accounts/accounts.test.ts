@@ -93,20 +93,24 @@ describe('account RPC methods', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sign-in methods call only this runtime member.
       const runtime = { runHostAccountSignIn } as unknown as OrcaRuntimeService
       const ctx = { runtime, caller: { kind: 'paired-device' as const, deviceId: 'laptop' } }
-      const start = method('accounts.hostSignInStart')
-      if (isStreamingMethod(start) || !start.params) {
-        throw new Error('accounts.hostSignInStart must be a request method with params')
+      const call = (name: string, params: unknown) => {
+        const found = method(name)
+        if (isStreamingMethod(found) || !found.params) {
+          throw new Error(`${name} must be a request method with params`)
+        }
+        return found.handler(found.params.parse(params), ctx)
       }
-      const call = (params: unknown) => start.handler(start.params!.parse(params), ctx)
 
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hostSignInStart answers with a HostAccountSignInStatus.
-      const started = (await call({
+      const started = (await call('accounts.hostSignInStart', {
         provider: 'codex',
         accountId: 'acct-1'
       })) as HostAccountSignInStatus
       expect(runHostAccountSignIn).toHaveBeenCalledWith('codex', expect.anything(), 'acct-1')
-      await expect(call({ provider: 'codex' })).rejects.toThrow('already running')
-      await method('accounts.hostSignInCancel').handler({ flowId: started.flowId }, ctx)
+      await expect(call('accounts.hostSignInStart', { provider: 'codex' })).rejects.toThrow(
+        'already running'
+      )
+      await call('accounts.hostSignInCancel', { flowId: started.flowId })
     }
   )
 })
