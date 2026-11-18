@@ -10,6 +10,7 @@ import type {
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
+import { codexSystemDefaultUsageKey } from '../../../../../shared/agent-accounts/codex/codex-system-default-usage'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -223,6 +224,42 @@ function switcherFixture(
 }
 
 export const sixAccounts = switcherFixture(BASE_ACCOUNTS)
+
+export const inactiveSystemDefault = (() => {
+  const identity = {
+    hasAuth: true,
+    authKind: 'oauth' as const,
+    email: 'system.developer.account@example.com',
+    providerAccountId: 'system-personal',
+    workspaceLabel: 'Personal (Plus)'
+  }
+  const fixture = switcherFixture(BASE_ACCOUNTS)
+  return defineFixture({
+    ...fixture,
+    setup: () => {
+      window.api.codexAccounts.list = async () => ({
+        accounts: [],
+        activeAccountId: BASE_ACCOUNTS[0].id,
+        systemDefault: identity
+      })
+    },
+    store: {
+      ...fixture.store,
+      rateLimits: createEmptyRateLimitState({
+        ...fixture.store?.rateLimits,
+        inactiveCodexAccounts: [
+          ...(fixture.store?.rateLimits?.inactiveCodexAccounts ?? []),
+          {
+            accountId: codexSystemDefaultUsageKey(identity)!,
+            rateLimits: { ...usageFor({ ...BASE_ACCOUNTS[0], weekly: 17 }), session: null },
+            updatedAt: NOW,
+            isFetching: false
+          }
+        ]
+      })
+    }
+  })
+})()
 
 export const systemDefaultOnly = switcherFixture(BASE_ACCOUNTS.slice(1, 2), false, false, true)
 

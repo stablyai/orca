@@ -276,7 +276,7 @@ export class CodexAccountService {
     return this.selection.snapshot()
   }
 
-  private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
+  resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
     return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
   }
 

@@ -281,6 +281,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
       : activeTarget?.label
 
   return {
+    accountState,
     activeTarget,
     handleConfirmReset,
     handleOpenChange,

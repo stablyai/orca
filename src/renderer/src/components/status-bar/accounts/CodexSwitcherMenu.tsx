@@ -18,6 +18,7 @@ import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
 import { AccountSwitchSection } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
+import { codexSystemDefaultUsageKey } from '../../../../../shared/agent-accounts/codex/codex-system-default-usage'
 
 export function CodexSwitcherMenu({
   codex,
@@ -59,14 +60,20 @@ export function CodexSwitcherMenu({
     skipFutureResetConfirm,
     switchGroups,
     usageAccountLabel,
-    displaysDefaultAccount
+    displaysDefaultAccount,
+    accountState
   } = useCodexSwitcherController(codex)
 
   const defaultCodex = useAppStore((s) => s.rateLimits.codex)
   const isBusy = isSwitching || reauthenticatingAccountId !== null
   const rows = (selectedGroup?.targets ?? []).map((target) => {
-    const inactiveUsage = target.id
-      ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+    const usageKey =
+      target.id ??
+      (!hasActiveRuntimeEnvironment && target.runtimeTarget.runtime === 'host'
+        ? codexSystemDefaultUsageKey(accountState.systemDefault)
+        : null)
+    const inactiveUsage = usageKey
+      ? inactiveCodexAccounts.find((a) => a.accountId === usageKey)
       : null
     // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
     const showSignInAction =
@@ -85,6 +92,7 @@ export function CodexSwitcherMenu({
     <AccountSwitchRowItem
       label={target.name}
       detail={target.detail}
+      multilineDetail={target.id === null}
       active={target.active}
       key={`${selectedGroup?.key}:${target.id ?? 'system'}`}
       onSelect={(event) => {
