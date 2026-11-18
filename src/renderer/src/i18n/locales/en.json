@@ -6860,14 +6860,31 @@
           "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
-          "dismissError": "Dismiss error",
           "dismissing": "Dismissing…",
           "aed1623b1e": "Close",
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
           "ca3b225195": "Branch auto-name failed",
-          "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message."
+          "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
+          "dismiss": "Dismiss",
+          "tryAgain": "Try again",
+          "namingBranch": "Naming branch…",
+          "errorDetailsAt": "Error details · {{time}}",
+          "reasonNothingYet": "No changes to name this branch from yet.",
+          "reasonBranchChanged": "The branch changed while Orca was naming it.",
+          "reasonProjectMoving": "A project move is in progress.",
+          "reasonHistoryUnreadable": "Orca couldn't read this workspace's history. Try again.",
+          "reasonInterrupted": "Orca couldn't finish naming the branch. Try again.",
+          "reasonBranchPushed": "The branch was pushed, so Orca kept its name.",
+          "reasonBranchRenamed": "The branch was renamed, so Orca kept its name.",
+          "reasonNameChosen": "This branch name was chosen by hand, so Orca kept it.",
+          "reasonSettingOff": "Branch auto-naming is off in Settings.",
+          "reasonNoDistinctName": "The generated name matched the current one.",
+          "reasonFirstMessageUnavailable": "Orca couldn't find this workspace's first message.",
+          "reasonAlreadyNamed": "This workspace was already renamed.",
+          "reasonUnavailable": "Orca can't name this branch anymore.",
+          "branchNameKept": "Branch name kept"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Choose parent folder...",
@@ -7030,6 +7047,8 @@
           "removeDescriptionSsh": "This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.",
           "removeDescriptionLocal": "This only removes {{name}} from Orca. It is still on your disk.",
           "removeDescriptionVmRecipe": "This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted.",
+          "linkedWorkspaceWarning_one": "{{count}} workspace in this project will also be removed from Orca.",
+          "linkedWorkspaceWarning_other": "{{count}} workspaces in this project will also be removed from Orca.",
           "openTerminalWarning_one": "{{count}} open terminal in this project will be closed.",
           "openTerminalWarning_other": "{{count}} open terminals in this project will be closed."
         },
@@ -18216,7 +18235,7 @@
             "4a9568f773": "Back",
             "4f86e2a10b": "Skip tour",
             "d974f32a83": "Dismiss tour",
-            "complete": "Done"
+            "complete": "Finish"
           },
           "ContextualTourProgressDots": {
             "dcd6e6b03e": "Step {{value0}} of {{value1}}",
@@ -20493,7 +20512,8 @@
         "chat": {
           "label": "Chat UI",
           "description": "Agents reply in a chat, with rendered messages and diffs.",
-          "terminalFallback": "Agents without chat support and folders opened through SSH or WSL on this computer still open in a terminal.",
+          "recommended": "Recommended",
+          "terminalFallback": "Agents without chat support fall back to a terminal.",
           "noneDetected": "None of your detected agents work in Chat UI."
         },
         "terminal": {
@@ -22305,6 +22325,8 @@
         "usageLimitContinueSearchLimit": "usage limit",
         "usageLimitContinueSearchReset": "reset",
         "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets",
+        "usageLimitContinueUnsupported": "Update Orca on {{host}} to change this setting there.",
+        "usageLimitContinueUpdateFailed": "Couldn't update the setting on {{host}}.",
         "idleStopTitle": "Stop idle agents after",
         "idleStopCopy": "Ends a chat's agent once the chat has been idle this long, to free memory. The chat stays, and your next message starts the agent again. Choose Never for agents that keep working in the background between turns.",
         "idleStopSearchIdle": "idle",

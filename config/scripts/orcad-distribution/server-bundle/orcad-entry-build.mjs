@@ -39,6 +39,7 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   codexHistoryDiskUsage:
     'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts',
   claudeConversationFork: 'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts',
+  usageScanWorker: 'src/main/usage/scan-worker/usage-scan-worker-entry.ts',
   sttWorker: 'src/main/speech/stt-worker.ts',
   computerSidecar: 'src/main/computer/computer-sidecar.ts'
 }

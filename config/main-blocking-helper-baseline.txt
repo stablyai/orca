@@ -21,7 +21,6 @@
 1 src/main/agent-hooks/server/server-opencode-binder.ts
 1 src/main/agent-hooks/server/server-runtime-env.ts
 1 src/main/agent-hooks/server/server-status-hook-lifecycle.ts
-1 src/main/agent-hooks/server/server-status-retries.ts
 2 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
 3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 2 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
@@ -94,7 +93,7 @@
 1 src/main/automations/launch/automation-run-setup-skip.ts
 2 src/main/automations/runtime-automation-service.ts
 5 src/main/backend/backend-entry.ts
-12 src/main/backend/core-runtime-activation.ts
+11 src/main/backend/core-runtime-activation.ts
 2 src/main/backend/core-runtime.ts
 4 src/main/bitbucket/client.ts
 5 src/main/bitbucket/credential-connection.ts
@@ -513,7 +512,7 @@
 3 src/main/git/command-runner/process-capture/exec-file-capture.ts
 1 src/main/git/command-runner/process-capture/worker-exec-file.ts
 1 src/main/git/command-runner/process-capture/wsl-process-group-termination.ts
-22 src/main/git/repositories/discovery/repo-detection.ts
+23 src/main/git/repositories/discovery/repo-detection.ts # main-checkout root lookup moved here from local-repo-registration.ts, which dropped to 1
 16 src/main/git/repositories/discovery/repo-git-marker-scan.ts
 2 src/main/git/worktrees/catalog/worktree-git-path.ts
 1 src/main/git/worktrees/catalog/wsl-worktree-git-path.ts
@@ -647,7 +646,7 @@
 1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
 2 src/main/ipc/renderer-shutdown-checkpoint.ts
 5 src/main/ipc/repos.ts
-2 src/main/ipc/repos/local-repo-registration.ts
+1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
 1 src/main/ipc/repos/nested-repo-scan-ipc.ts
 2 src/main/ipc/repos/project-host-setup-handlers.ts
@@ -1321,7 +1320,6 @@
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
-1 src/main/runtime/workspaces/process-listing/workspace-process-listing.ts
 1 src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
@@ -1405,7 +1403,7 @@
 1 src/main/startup/main-process-preflight-failure.ts
 25 src/main/startup/main-process-preflight.ts
 15 src/main/startup/main-process-ready-foundation.ts
-8 src/main/startup/main-process-ready-runtime.ts
+7 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts
@@ -1567,9 +1565,8 @@
 7 src/shared/agent-hook-listener/providers/codex/codex-events.ts
 1 src/shared/agent-hook-listener/providers/codex/codex-subagent-identity.ts
 1 src/shared/agent-hook-listener/providers/codex/codex-subagent-reviewer.ts
-3 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts
-4 src/shared/agent-hook-listener/providers/codex/codex-subagent-transcript.ts
-3 src/shared/agent-hook-listener/providers/codex/codex-transcript-poll.ts
+2 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts
+3 src/shared/agent-hook-listener/providers/codex/codex-subagent-transcript.ts
 1 src/shared/agent-hook-listener/providers/grok/grok-session-paths.ts
 1 src/shared/agent-hook-listener/providers/grok/grok-tool-fields.ts
 3 src/shared/agent-hook-listener/providers/jcode/jcode-session-files.ts

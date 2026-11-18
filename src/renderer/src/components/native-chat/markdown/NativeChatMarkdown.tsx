@@ -43,7 +43,7 @@ function useWordFadeArmed(fadeWords: boolean): boolean {
 
 type NativeChatMarkdownProps = Omit<
   ComponentProps<typeof CommentMarkdown>,
-  'fileLinkExists' | 'onLinkClick' | 'allowFileUriLinks'
+  'fileLinkExists' | 'onLinkClick' | 'allowFileUriLinks' | 'singleTildeStrikethrough'
 > & {
   /** Underline file paths in the text that exist in the chat's workspace, when the chat can open them. */
   linkifyFilePaths?: boolean
@@ -183,6 +183,7 @@ export function NativeChatMarkdown({
         renderMermaid={!streaming}
         keepMermaidSourceWhilePending
         unknownHtmlAsText
+        singleTildeStrikethrough={false}
         data-word-fade={wordFadeArmed ? '' : undefined}
         data-block-fade={wordFadeArmed && streaming ? '' : undefined}
         className={cn('native-chat-markdown', className)}

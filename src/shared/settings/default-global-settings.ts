@@ -298,7 +298,7 @@ export function buildDefaultSettings(args: {
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
     agentHibernationIdleMs: 30 * 60 * 1000,
-    experimentalNewWorktreeCardStyle: false,
+    experimentalNewWorktreeCardStyle: true,
     experimentalEphemeralVms: false,
     experimentalConnectors: false,
     experimentalWslHosts: false,

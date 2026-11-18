@@ -155,17 +155,19 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         </WorktreeContextMenu>
       )}
 
-      {typeof worktree.firstAgentMessageRenameError === 'string' &&
-        worktree.firstAgentMessageRenameError.length > 0 && (
-          <AutoRenameFailedDialog
-            open={showRenameErrorDialog}
-            onOpenChange={setShowRenameErrorDialog}
-            worktreeId={worktree.id}
-            executionHostId={worktree.hostId}
-            worktreeName={worktree.displayName}
-            error={worktree.firstAgentMessageRenameError}
-          />
-        )}
+      {/* Stays mounted while open: a final retry result clears the error but keeps its reason visible. */}
+      {(showRenameErrorDialog ||
+        (typeof worktree.firstAgentMessageRenameError === 'string' &&
+          worktree.firstAgentMessageRenameError.length > 0)) && (
+        <AutoRenameFailedDialog
+          open={showRenameErrorDialog}
+          onOpenChange={setShowRenameErrorDialog}
+          worktreeId={worktree.id}
+          executionHostId={worktree.hostId}
+          worktreeName={worktree.displayName}
+          error={worktree.firstAgentMessageRenameError ?? ''}
+        />
+      )}
     </>
   )
 }

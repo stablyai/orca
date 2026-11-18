@@ -6349,6 +6349,8 @@
           "removeDescriptionSsh": "Bu işlem yalnızca {{name}} öğesini Orca'dan kaldırır. Dosyaları {{host}} üzerinde kalır, geri almak için o SSH sunucusunu yeniden ekleyin.",
           "removeDescriptionLocal": "Bu işlem yalnızca {{name}} öğesini Orca'dan kaldırır. Hâlâ diskinizde bulunur.",
           "removeDescriptionVmRecipe": "Bu işlem {{name}} öğesini Orca'dan kaldırır. Ortamın ve dosyalarının kalıcı olarak silinip silinmeyeceğini VM tarifi belirler.",
+          "linkedWorkspaceWarning_one": "Bu projedeki {{count}} çalışma alanı da Orca'dan kaldırılacak.",
+          "linkedWorkspaceWarning_other": "Bu projedeki {{count}} çalışma alanı da Orca'dan kaldırılacak.",
           "openTerminalWarning_one": "Bu projedeki {{count}} açık terminal kapatılacak.",
           "openTerminalWarning_other": "Bu projedeki {{count}} açık terminal kapatılacak."
         },

@@ -104,6 +104,8 @@ export async function activateBackendRuntime(
     createOrcadProfileStateStartup(runtimeUserDataPath)
   )
   profileShutdown.store = profileStore
+  const { installOrcadUsageService } = await import('../orcad/host-runtime/orcad-usage-service')
+  const usageClients = installOrcadUsageService(profileStore, runtimeUserDataPath, registerCleanup)
   registerCleanup(() => worktreeRemovalLifetime.close())
   await timed('worktree-removals', () => prepareWorktreeRemovalsForStore(profileStore))
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
@@ -297,7 +299,7 @@ export async function activateBackendRuntime(
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())
   worktreeRemovalLifetime.resume(() => runtime.finishInterruptedWorktreeRemovals())
-  startOrcadSchedulers(runtime, profileStore, registerCleanup)
+  startOrcadSchedulers(runtime, profileStore, usageClients, registerCleanup)
   startOrcadDesktopPushService(runtime, rpc)
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 

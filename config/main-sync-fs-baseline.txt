@@ -3,7 +3,6 @@
 # Startup-only or one-shot uses are fine to keep; per-RPC, per-spawn, per-focus or per-poll uses are the target.
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing calls: pnpm check:main-sync-fs-ratchet --prune
-1 src/main/agent-hooks/first-work/first-work-rename-runtime.ts
 2 src/main/agent-hooks/installation/configuration/hook-config-write-path.ts
 6 src/main/agent-hooks/installation/configuration/hooks-json-write.ts
 6 src/main/agent-hooks/installation/scripts/locked-executable-rename.ts
@@ -536,7 +535,6 @@
 1 src/main/windows/windows-process-table.ts
 1 src/main/worker-thread-child-process/worker-thread-child-process.ts
 2 src/main/worker-threads/forked-child-entry-path.ts
-# Worker threads only: one append before a rare large post, so it survives the receiver aborting.
 3 src/main/worker-threads/worker-large-send-log.ts
 4 src/main/workspace-hooks/hooks.ts
 10 src/main/workspace-hooks/issue-command-file.ts
