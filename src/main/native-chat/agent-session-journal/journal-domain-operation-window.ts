@@ -8,7 +8,7 @@ import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
-import { operationWindowItem, operationWindowRowSql } from './journal-operation-window-rows'
+import { readOperationWindowItems } from './journal-operation-window-rows'
 
 /** Where a reader's interest starts; the window runs from a turn ahead of the earliest to the head. */
 export type JournalOperationWindowAnchors = {
@@ -102,16 +102,7 @@ export function readJournalDomainOperationWindow(
     }
     start = next
   }
-  const items =
-    start === null
-      ? []
-      : scope.db
-          .prepare(`SELECT ${operationWindowRowSql(anchors.withoutToolOutput)}
-          FROM journal_items INDEXED BY journal_items_visible_position
-          WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}
-          ORDER BY sequence,sequence_index,ordinal`)
-          .all(...scope.prefix, start)
-          .map((row) => operationWindowItem(scope, row))
+  const items = start === null ? [] : readOperationWindowItems(scope, start, anchors)
   const first = scope.db
     .prepare(`SELECT MIN(sequence) AS sequence FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0`)
@@ -126,8 +117,6 @@ export function readJournalDomainOperationWindow(
     complete: first === null || first === undefined || (start !== null && start <= Number(first))
   }
 }
-
-const TURN_SHAPE = `AND (kind IN ('message','turn','status') OR turn_scope_kind='unknown')`
 
 /** Every current send's selectors and where its rows sit; payloads are decoded only for those kept. */
 function sendHeads(scope: JournalSqlScope): Send[] {

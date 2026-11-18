@@ -31,7 +31,7 @@ export function boundedStoredJsonSql(
  * Built once in SQLite's native memory (the subquery keeps one copy), then measured itself, since
  * escaping makes stored and extracted sizes differ.
  */
-function shortenedJsonSql(json: string): string {
+export function shortenedJsonSql(json: string): string {
   const cut = (payload: string) => `WHEN json_type(${json},'${payload}.head')='text'
     THEN json_set(${json},'${payload}.head',
       substr(json_extract(${json},'${payload}.head'),1,${SHORTENED_HEAD_CHARS}),
