@@ -1,5 +1,6 @@
 import type { BuiltInWindowsTerminalShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../../shared/shell/launch/windows-terminal-shell'
+import { listWindowsTerminalShellChoices } from '../../../../../shared/shell/launch/windows-terminal-shell-choices'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { getProjectRuntimeShellMenuMode } from '../model/use-tab-bar-runtime-model'
@@ -30,39 +31,18 @@ export function buildWindowsShellMenuEntries(
   if (!showWindowsShellMenu || !hasShellLauncher) {
     return undefined
   }
-  const includeHostShells = projectRuntimeShellMenuMode !== 'wsl'
-  const includeWslShell = projectRuntimeShellMenuMode !== 'host'
-  const allShells: WindowsShellMenuEntry[] = []
-  if (includeHostShells) {
-    allShells.push(
-      {
-        label: t('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
-        shell: 'powershell.exe'
-      },
-      {
-        label: t('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
-        shell: 'cmd.exe'
-      }
-    )
-    if (gitBashAvailable) {
-      allShells.push({
-        label: t('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
-        shell: WINDOWS_GIT_BASH_SHELL
-      })
-    }
+  const labels: Record<BuiltInWindowsTerminalShell, string> = {
+    'powershell.exe': t('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
+    'cmd.exe': t('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
+    [WINDOWS_GIT_BASH_SHELL]: t('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
+    'wsl.exe': t('auto.components.tab.bar.TabBar.d1afac112b', 'WSL')
   }
-  if (includeWslShell && wslAvailable) {
-    allShells.push({
-      label: t('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
-      shell: 'wsl.exe'
-    })
-  }
-  if (allShells.length === 0) {
-    return undefined
-  }
-  const defaultEntry =
-    allShells.find((shell) => shell.shell === defaultWindowsShell) ?? allShells[0]
-  return [defaultEntry, ...allShells.filter((shell) => shell.shell !== defaultEntry.shell)].map(
-    (entry) => ({ label: entry.label, shell: entry.shell })
-  )
+  const shells = listWindowsTerminalShellChoices({
+    defaultWindowsShell,
+    gitBashAvailable,
+    wslAvailable,
+    includeHostShells: projectRuntimeShellMenuMode !== 'wsl',
+    includeWslShell: projectRuntimeShellMenuMode !== 'host'
+  })
+  return shells.length === 0 ? undefined : shells.map((shell) => ({ label: labels[shell], shell }))
 }

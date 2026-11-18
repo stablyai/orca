@@ -228,6 +228,7 @@ export const EXECUTION_HOST_METHODS = [
   'session.tabs.closeLifecycle',
   'session.tabs.createTerminal',
   'session.tabs.list',
+  'session.tabs.terminalShellChoices',
   'session.tabs.listAll',
   'session.tabs.move',
   'session.tabs.subscribe',
