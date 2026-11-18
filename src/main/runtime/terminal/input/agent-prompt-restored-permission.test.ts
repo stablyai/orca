@@ -59,6 +59,19 @@ async function createReattachedClaudePane(
 }> {
   let handle = ''
   const askedAt = Date.now() - 24 * 60_000
+  const rows = () => [
+    {
+      paneKey: 'restored-pane',
+      terminalHandle: handle,
+      state: 'waiting' as const,
+      prompt: 'clean up scratch audio',
+      agentType: 'claude',
+      connectionId: null,
+      receivedAt: askedAt,
+      stateStartedAt: askedAt,
+      restoredUnconfirmed: true
+    }
+  ]
   const pane = await createAgentPromptSubmissionRuntime(
     (runtime, data) => {
       // Echo the paste as Claude does, so the send outlives the frame that let it start.
@@ -67,19 +80,8 @@ async function createReattachedClaudePane(
     'claude',
     () => true,
     {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: 'restored-pane',
-          terminalHandle: handle,
-          state: 'waiting',
-          prompt: 'clean up scratch audio',
-          agentType: 'claude',
-          connectionId: null,
-          receivedAt: askedAt,
-          stateStartedAt: askedAt,
-          restoredUnconfirmed: true
-        }
-      ]
+      getAgentStatusSnapshot: rows,
+      getPublicAgentStatusSnapshotForPane: rows
     },
     controller
   )

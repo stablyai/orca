@@ -1,14 +1,13 @@
-import type { MobileQuickCommandLaunch } from '../../terminal/quick-commands'
+import type { MobileQuickCommandLaunch } from '../../terminal/quick-commands/quick-commands'
 import type { MobileSessionTab } from '../tabs/mobile-session-tabs'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
-import {
-  launchAgentInExistingWorkspace,
-  reserveMobileAgentLaunch
-} from './mobile-existing-agent-launch'
-import { agentPromptNotSentMessage } from '../../source-control/review/pr-ai-triage-launch'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
+import { launchAgentInExistingWorkspace } from './mobile-existing-agent-launch'
+import { reserveMobileAgentLaunch } from './mobile-agent-launch-reservation'
+import { randomV4Uuid } from '../../platform/random-v4-uuid'
+import { agentPromptNotSentMessage } from '../../source-control/review/agent-launch/pr-ai-triage-launch'
 import { readAgentLaunchNotice } from './agent-launch-request'
 import { translate } from '../../i18n/mobile-i18n'
 import {
@@ -52,6 +51,8 @@ export async function launchNewTabAgentThroughHost(args: {
   worktreeId: string
   agent: TuiAgent
   options: NewTabAgentLaunchOptions | undefined
+  /** Chat or CLI from the New Tab sheet; a chat that can't open here starts the CLI. */
+  nativeChatDefault?: boolean
   lock: string
   activeSessionTabId?: string | null
   pendingSelectionRef: { current: PendingSessionSelection | null }
@@ -63,7 +64,7 @@ export async function launchNewTabAgentThroughHost(args: {
 }): Promise<boolean> {
   const { options, pendingSelectionRef, showToast } = args
   const prompt = options?.agentPrompt ?? options?.initialPrompt
-  const reservation = reserveMobileAgentLaunch(args.agent)
+  const reservation = reserveMobileAgentLaunch(args.agent, args.hostCapabilities, randomV4Uuid)
   const afterTabId = args.hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
     ? hostTabIdOf(args.getSessionTabs(), args.activeSessionTabId)
     : undefined
@@ -74,6 +75,7 @@ export async function launchNewTabAgentThroughHost(args: {
     hostCapabilities: args.hostCapabilities,
     worktreeId: args.worktreeId,
     agent: args.agent,
+    nativeChatDefault: args.nativeChatDefault,
     reservation,
     ...(afterTabId ? { placement: { afterTabId } } : {}),
     ...(prompt?.trim() ? { prompt: { text: prompt, delivery: 'submit' as const } } : {}),

@@ -1,5 +1,5 @@
-import { sliceAtCodeUnitLimit } from '../../../shared/surrogate-safe-text-slice'
-import { withoutNativeChatVisualDirectiveLines } from '../../../shared/native-chat/native-chat-visual-directive'
+import { sliceAtCodeUnitLimit } from '../../../shared/text/surrogate-safe-text-slice'
+import { withoutNativeChatVisualDirectiveLines } from '../../../shared/native-chat/visuals/native-chat-visual-directive'
 
 const SESSION_TITLE_TEXT_LIMIT = 96
 const SESSION_PREVIEW_TEXT_LIMIT = 220

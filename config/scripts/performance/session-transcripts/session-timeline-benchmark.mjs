@@ -40,7 +40,7 @@ function retargetLegacyAccumulatorValueImports(source) {
       const name = (binding.propertyName ?? binding.name).text
       const owner =
         name === 'extractString'
-          ? 'src/shared/trimmed-string.ts'
+          ? 'src/shared/text/trimmed-string.ts'
           : name === 'timestampMs'
             ? 'src/main/ai-vault/parsing/session-record-time.ts'
             : null

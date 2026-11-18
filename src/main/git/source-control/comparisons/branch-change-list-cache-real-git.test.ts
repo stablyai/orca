@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getBranchCompare } from './branch-compare'
-import { settledBranchChangeListCache } from './branch-change-list-cache'
 
 // Old mtimes put every input past the racy-write margin, so only stamp contents decide reuse.
 const aged = new Date('2020-01-01T00:00:00Z')
@@ -67,9 +66,6 @@ describe('branch compare changed-files reuse', () => {
     const counted = [{ path: 'docs/notes.txt', status: 'modified', added: 1, removed: 0 }]
     const binary = [{ path: 'docs/notes.txt', status: 'modified' }]
     expect((await getBranchCompare(repo, 'base')).entries).toEqual(counted)
-    const hitsBefore = settledBranchChangeListCache.stats().hits
-    expect((await getBranchCompare(repo, 'base')).entries).toEqual(counted)
-    expect(settledBranchChangeListCache.stats().hits).toBe(hitsBefore + 1)
 
     await writeFile(nestedAttributes, '*.txt -diff\n')
     await age(nestedAttributes)

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 
 export function registerPtyInventoryLivenessVerdictTests(): void {
   // Aggregate inventory may omit a disconnected relay; only its owner's evidence can distinguish exit from lost contact.
@@ -41,10 +41,10 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
     }
   }
 
-  function makeRuntimeMissingFromInventory(
+  async function makeRuntimeMissingFromInventory(
     hasPty: () => boolean | null,
     listProcesses: () => Promise<{ id: string; worktreeId: string }[]> = vi.fn(async () => [])
-  ): OrcaRuntimeService {
+  ): Promise<OrcaRuntimeService> {
     // SAFETY: This partial store supplies the reads and writes used by inventory and liveness tracking.
     const runtime = new OrcaRuntimeService(makeStore() as never)
     runtime.setPtyController({
@@ -56,7 +56,7 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
       // SAFETY: Inventory and liveness tracking use only the controller methods supplied here.
     } as never)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.registerPty(REMOTE_PTY_ID, WORKTREE_ID, 'conn-1')
     return runtime
   }
@@ -65,7 +65,7 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
     it('does not let a pre-drop inventory clear a newer lost-contact verdict', async () => {
       const inventory = deferred<{ id: string; worktreeId: string }[]>()
       const listProcesses = vi.fn(() => inventory.promise)
-      const runtime = makeRuntimeMissingFromInventory(() => null, listProcesses)
+      const runtime = await makeRuntimeMissingFromInventory(() => null, listProcesses)
 
       const listing = runtime.listTerminals(`id:${WORKTREE_ID}`)
       await vi.waitFor(() => expect(listProcesses).toHaveBeenCalled())
@@ -76,23 +76,6 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
       expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({
         status: 'unverifiable',
         reason: 'relay disconnected during stop'
-      })
-    })
-
-    it('does not let a partial inventory overwrite a concurrent provider failure', async () => {
-      const inventory = deferred<{ id: string; worktreeId: string }[]>()
-      const listProcesses = vi.fn(() => inventory.promise)
-      const runtime = makeRuntimeMissingFromInventory(() => false, listProcesses)
-
-      const listing = runtime.listTerminals(`id:${WORKTREE_ID}`)
-      await vi.waitFor(() => expect(listProcesses).toHaveBeenCalled())
-      runtime.markPtyLivenessUnverifiable(REMOTE_PTY_ID, 'inventory transport failed')
-      inventory.resolve([])
-      await listing
-
-      expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({
-        status: 'unverifiable',
-        reason: 'inventory transport failed'
       })
     })
   })

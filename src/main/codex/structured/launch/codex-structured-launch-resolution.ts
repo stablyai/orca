@@ -1,5 +1,5 @@
-import { pathEnvRelativeTo } from '../../../../shared/node-cli-command-resolution'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { pathEnvRelativeTo } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
@@ -19,15 +19,15 @@ import {
   agentSessionAccountHomesEqual,
   requireLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { moveCodexThreadIntoAccountHome } from '../../history/resume/codex-thread-account-move'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { resolveCodexCommand } from '../../../codex-cli/command'
 import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import { codexOrcaHooksOffArgs } from './codex-structured-orca-hooks-off'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
@@ -36,9 +36,14 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import {
+  nothingExchangedOn,
+  type SavedProviderTurnReads
+} from '../../../native-chat/agent-session-journal/journal-provider-turn-saved'
 
 export type CodexStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]
+  savedSession: SavedProviderTurnReads
   /** The selected account's home, prepared for this start in `launchDirectory`; null keeps the record's. */
   prepareLaunchAccountHome?: (
     record: AgentSessionRecord,
@@ -158,6 +163,17 @@ export function codexStructuredLaunchPart(
         toHome: accountHome.path
       })
     }
+    // Codex saves a thread at its first turn; one that exchanged a turn lost its history, not nothing.
+    // Turns written since this thread's creation fence ran on it, even before Codex echoed the send.
+    const supersedeIfUnsaved =
+      resumeThreadId !== null &&
+      head?.origin === 'created' &&
+      (await nothingExchangedOn(
+        deps.savedSession,
+        record.sessionId,
+        resumeThreadId,
+        head.mintedAtFence
+      ))
     return {
       launch: {
         command,
@@ -173,8 +189,7 @@ export function codexStructuredLaunchPart(
         ],
         codexHome: accountHome.path,
         resumeThreadId,
-        // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
-        ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
+        ...(supersedeIfUnsaved ? { supersedeIfUnsaved } : {}),
         // Own settings leaves a new thread to config and a resumed thread to its saved policy.
         ...(basis.permissionMode === 'own'
           ? {}

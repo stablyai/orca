@@ -6,7 +6,7 @@ import type {
   RuntimeWorktreeRecord,
   RuntimeWorktreeSetResult,
   RuntimeWorktreeCreateResult
-} from '../../shared/runtime-worktree-contracts'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
@@ -17,7 +17,7 @@ import {
   annotateOmittedHostScope,
   type WithAnnotatedHostScope
 } from '../hosts/omitted-host-scope-selectors'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

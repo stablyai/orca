@@ -2,7 +2,7 @@ import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-c
 import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCredentialNotice'
 import { useState } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
-import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { JiraConnectDialog } from '@/components/integrations/task-trackers/jira-connect-dialog'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'

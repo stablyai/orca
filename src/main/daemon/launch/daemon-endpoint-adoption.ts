@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { DaemonClient } from '../transport/client/daemon-client'
 import type { DaemonEndpointIdentity } from '../protocol/daemon-hello-protocol'
-import type { DaemonPtyAdapter } from '../providers/adapter/daemon-pty-adapter'
 import { readDaemonProcessIncarnation } from '../endpoint/identity/daemon-ready-identity'
 import {
   type DaemonPidFile,
@@ -131,10 +130,13 @@ export function takeDaemonAdoptionLeaseRelease(
   return release
 }
 
+// Structural, so loading the endpoint error does not pull in the whole adapter graph.
+type AdoptedDaemonAdapter = { disconnectOnly(): Promise<void>; dispose(): void }
+
 export async function cleanupFailedDaemonAdoption(
   failedSpawner: DaemonSpawner,
-  current: DaemonPtyAdapter,
-  legacy: DaemonPtyAdapter[] = []
+  current: AdoptedDaemonAdapter,
+  legacy: AdoptedDaemonAdapter[] = []
 ): Promise<void> {
   const handle = failedSpawner.getHandle()
   const results = await Promise.allSettled([

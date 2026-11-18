@@ -1,11 +1,11 @@
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
-} from '../../../shared/worktree/retired-name-registry'
+} from '../../../shared/worktree/naming/retired-name-registry'
 import { getRemoteRetirementNamespaceKey } from '../../workspaces/removal/retirement/worktree-name-retirement'
 import { retirementNamespaceKeysToRead } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 
 export function extractRetiredNameRegistriesByNamespace(
   sourceState: PersistedState,

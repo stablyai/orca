@@ -4,11 +4,12 @@ import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import type {
   ComputerActionMetadata,
   ComputerActionResult,
+  ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerSnapshotResult
-} from '../../shared/computer-use-runtime-types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+} from '../../shared/computer/computer-use-runtime-types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export function formatGetAppState(result: ComputerSnapshotResult): string {
   const app = result.snapshot.app
@@ -69,7 +70,7 @@ export function prepareComputerCliJsonResult<TResult>(
       COMPUTER_SCREENSHOT_TEMP_DIR,
       response.id,
       screenshot.data,
-      screenshot.format === 'png' ? 'png' : 'img'
+      screenshot.format === 'jpeg' ? 'jpg' : screenshot.format === 'png' ? 'png' : 'img'
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the screenshot field is rewritten; every other TResult field is spread through unchanged.
     return {
@@ -103,9 +104,16 @@ export function formatListApps(result: ComputerListAppsResult): string {
   return result.apps
     .map((app) => {
       const bundle = app.bundleId ? `  ${app.bundleId}` : ''
-      return `${app.name}  pid:${app.pid}${bundle}`
+      const accessory = app.accessory ? '  (no Dock icon)' : ''
+      return `${app.name}  pid:${app.pid}${bundle}${accessory}`
     })
     .join('\n')
+}
+
+export function formatLaunchApp(result: ComputerLaunchAppResult): string {
+  const verb = result.launched ? 'Launched' : 'Already running:'
+  const place = result.delivery === 'foreground' ? 'in the foreground' : 'in the background'
+  return `${verb} ${result.app.name} pid:${result.app.pid} ${place}`
 }
 
 export function formatListWindows(result: ComputerListWindowsResult): string {
@@ -138,7 +146,6 @@ export type ComputerActionFollowUpTarget = {
   worktree?: string
   windowId?: number
   windowIndex?: number
-  restoreWindow?: boolean
 }
 
 export function formatComputerAction(
@@ -189,9 +196,6 @@ function formatComputerFollowUpCommand(
     } else if (windowIndex !== null && windowIndex !== undefined) {
       args.push('--window-index', String(windowIndex))
     }
-  }
-  if (target.restoreWindow) {
-    args.push('--restore-window')
   }
   return args.join(' ')
 }

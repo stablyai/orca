@@ -4,8 +4,8 @@
 import type { Dirent } from 'node:fs'
 import { lstat, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import type { StructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'
 import {
   isNativeChatScratchFolderName,

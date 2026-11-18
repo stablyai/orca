@@ -1,6 +1,6 @@
 import { safeStorage } from 'electron'
 import { guardedSafeStorage, safeStorageWithheldReason } from './safe-storage-availability'
-import type { SecretStore } from '../../shared/secret-store'
+import type { SecretStore } from '../../shared/secure-storage/secret-store'
 
 export class ElectronSecretStore implements SecretStore {
   isEncryptionAvailable(): boolean {

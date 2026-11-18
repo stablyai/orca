@@ -1,4 +1,5 @@
-import { extractLeadingEnvAssignments } from '../../../command-environment'
+import type { GenerationArgument } from './generation-argument'
+import { extractLeadingEnvAssignments } from '../../../shell/launch/command-environment'
 // Share prompt wording between renderer preview/tests and main generation.
 
 const COMMIT_MESSAGE_BASE_PROMPT = `You are generating a single git commit message.
@@ -228,6 +229,8 @@ export type CustomCommandPlan =
       ok: true
       binary: string
       args: string[]
+      localArgs: GenerationArgument[]
+      trailingPrompt?: GenerationArgument
       stdinPayload: string | null
       env?: Record<string, string>
     }
@@ -258,13 +261,27 @@ export function planCustomCommand(
       : token
   const usesPlaceholder = commandTokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
   if (usesPlaceholder) {
+    const localArgs: GenerationArgument[] = rest.map((token) =>
+      token.includes(CUSTOM_PROMPT_PLACEHOLDER)
+        ? { value: substitute(token), literal: true }
+        : token
+    )
     return {
       ok: true,
       binary: substitute(binary),
       args: rest.map(substitute),
+      localArgs,
+      ...(rest.at(-1) === CUSTOM_PROMPT_PLACEHOLDER ? { trailingPrompt: localArgs.at(-1) } : {}),
       stdinPayload: null,
       ...(env ? { env } : {})
     }
   }
-  return { ok: true, binary, args: rest, stdinPayload: prompt, ...(env ? { env } : {}) }
+  return {
+    ok: true,
+    binary,
+    args: rest,
+    localArgs: rest,
+    stdinPayload: prompt,
+    ...(env ? { env } : {})
+  }
 }

@@ -4,8 +4,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeHostPart,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 

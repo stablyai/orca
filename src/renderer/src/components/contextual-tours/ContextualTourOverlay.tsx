@@ -1,15 +1,15 @@
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { hasUndoneContextualTourAction } from '../../../../shared/contextual-tour-action-steps'
+import { hasUndoneContextualTourAction } from '../../../../shared/feature-education/contextual-tours/contextual-tour-action-steps'
 import { useAppStore } from '@/store/index'
 import { runActiveNativeChatSplit } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
 import {
   getContextualTour,
   type ContextualTourId,
   type ContextualTourStepAction
-} from '../../../../shared/contextual-tours'
-import type { ContextualTourOutcome } from '../../../../shared/feature-education-telemetry'
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type { ContextualTourOutcome } from '../../../../shared/feature-education/feature-education-telemetry'
 import {
   trackContextualTourOutcome,
   trackContextualTourShown
@@ -28,11 +28,12 @@ import {
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
+import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/pane-actions/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
 import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { useBrowserExtensionsBanner } from './browser-extensions-banner-look'
 import { CHROME_WEB_STORE_HOME_URL } from '../../../../shared/browser/extensions/browser-extension-webstore'
 
 export function ContextualTourOverlay(): JSX.Element | null {
@@ -75,6 +76,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
   const [renderState, setRenderState] = useState<ActiveTourRenderState | null>(null)
+  const extensionsBanner = useBrowserExtensionsBanner(activeTourId, renderState)
   const panelRef = useRef<HTMLElement | null>(null)
   const measuredTargetRef = useRef<MeasuredContextualTourTarget | null>(null)
   const markedTourIdRef = useRef<string | null>(null)
@@ -352,6 +354,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   }
 
   const handleStepAction = (action: ContextualTourStepAction): void => {
+    extensionsBanner.trackStep(action.kind)
     performContextualTourStepAction({
       action,
       activeTabId,
@@ -402,10 +405,11 @@ export function ContextualTourOverlay(): JSX.Element | null {
   return (
     <ContextualTourOverlaySurface
       activeTourId={activeTourId}
-      renderState={renderState}
+      renderState={extensionsBanner.renderState ?? renderState}
       panelRef={panelRef}
       panelHost={renderState.panelHost}
       onSkip={(id) => {
+        extensionsBanner.trackStep('close')
         emitContextualTourOutcome('skipped')
         dismissContextualTour(id)
       }}

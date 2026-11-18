@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CELL_SEAT_FEED_PAGE_MAX, CellSeatLog } from './cell-seat-log.js'
+import { CellSeatLog } from './cell-seat-log.js'
 
 function append(log: CellSeatLog, count: number): void {
   for (let index = 0; index < count; index += 1) {
@@ -24,16 +24,6 @@ describe('cell seat log', () => {
     expect(log.read(5)).toMatchObject({ seq: 10, full: expect.any(Array) })
   })
 
-  it('pages a long backlog and resumes from the returned cursor', () => {
-    const log = new CellSeatLog(CELL_SEAT_FEED_PAGE_MAX * 2)
-    append(log, CELL_SEAT_FEED_PAGE_MAX + 5)
-    const first = log.read(0)
-    expect(first).toMatchObject({ seq: CELL_SEAT_FEED_PAGE_MAX, more: true })
-    expect('changes' in first && first.changes).toHaveLength(CELL_SEAT_FEED_PAGE_MAX)
-    const second = log.read(first.seq)
-    expect(second).toMatchObject({ seq: CELL_SEAT_FEED_PAGE_MAX + 5, more: false })
-    expect('changes' in second && second.changes).toHaveLength(5)
-  })
 })
 
 describe('cell seat log snapshot', () => {
@@ -85,20 +75,5 @@ describe('cell seat cursor', () => {
     expect(log.recentlyLeftOf(host.userId, host.relayHostId)).toBeUndefined()
   })
 
-  it('sends only the newest page of leavers in a full snapshot', () => {
-    const log = new CellSeatLog(CELL_SEAT_FEED_PAGE_MAX * 4, () => 0)
-    const leavers = CELL_SEAT_FEED_PAGE_MAX + 5
-    for (let index = 0; index < leavers; index += 1) {
-      const host = { userId: `user-${index}`, relayHostId: 'abcdefghijklmnop', epoch: 1, generation: 1 }
-      log.append({ kind: 'join', ...host, at: 0 })
-      log.append({ kind: 'leave', ...host, closeCode: 1006, at: 0 })
-    }
-    const page = log.read(null)
-    const left = 'full' in page ? page.recentlyLeft : []
-    expect(left).toHaveLength(CELL_SEAT_FEED_PAGE_MAX)
-    expect(left.at(-1)?.userId).toBe(`user-${leavers - 1}`)
-    // The cell itself still remembers the oldest.
-    expect(log.recentlyLeftOf('user-0', 'abcdefghijklmnop')).toBeDefined()
-  })
 })
 

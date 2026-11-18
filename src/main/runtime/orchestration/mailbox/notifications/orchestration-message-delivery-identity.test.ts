@@ -49,13 +49,13 @@ function createDatabase(prefix: string): { db: OrchestrationDb; path: string } {
   return { db: new OrchestrationDb(path), path }
 }
 
-function createRuntime(
+async function createRuntime(
   db: OrchestrationDb,
   terminalHandle = TERMINAL_HANDLE
-): {
+): Promise<{
   runtime: OrcaRuntimeService
   write: ReturnType<typeof vi.fn>
-} {
+}> {
   const runtime = new OrcaRuntimeService(null, undefined, {
     attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
       paneKey === PANE_KEY ? { paneKey, source: 'current_hook' } : null
@@ -76,7 +76,7 @@ function createRuntime(
   })
   runtime.registerPreAllocatedHandleForPty(PTY_ID, terminalHandle)
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -170,7 +170,7 @@ describe('STA-4325 message and delivery identity', () => {
     fixture.db.close()
 
     const reopened = new OrchestrationDb(fixture.path)
-    const restarted = createRuntime(reopened, REMINTED_TERMINAL_HANDLE)
+    const restarted = await createRuntime(reopened, REMINTED_TERMINAL_HANDLE)
     await driveToLiveIdle(restarted.runtime)
     const checked = await check(restarted.runtime, { terminal: REMINTED_TERMINAL_HANDLE })
 

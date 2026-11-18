@@ -1,5 +1,5 @@
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'
-import { quotePowerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 
 const MANAGED_MARKER = '# Orca managed WSL CLI launcher'
 const BRIDGE_MANAGED_MARKER = '# Orca managed WSL CLI PowerShell bridge'

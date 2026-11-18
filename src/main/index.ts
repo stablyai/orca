@@ -38,31 +38,45 @@ import {
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/startup/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-startup/profile-state-recovery-preflight'
-import { profileStateRepairSectionApproval } from '../shared/profile-state-recovery-command'
+import { profileStateRepairSectionApproval } from '../shared/orca-profiles/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
 import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
+import { readWslInstallation } from './wsl/discovery/wsl-installation'
 import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
 import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
-import { ignoreInheritedWslHostsGateState } from '../shared/wsl-host-internal-gate'
+import { ignoreInheritedWslHostsGateState } from '../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import { registerOrcaProtocolClient } from './startup/open-routing/orca-protocol-registration'
 import { clearWindowsStdHandleInheritance } from './startup/windows-startup/windows-std-handle-inheritance'
 import { installWindowsIsolatedSpawner } from './startup/windows-startup/windows-isolated-spawner'
 import { dropE2eSpawnLogOutsideE2e } from './startup/testing/e2e-spawn-log-env'
+import type { MainWindowOpenOptions } from './window/main-window/main-window-contracts'
+import type { DesktopActivationRequest } from './startup/serve-launch/serve-desktop-activation'
+import {
+  argvRequestsBackgroundOpen,
+  BACKGROUND_OPEN_ARG
+} from '../shared/app-lifecycle/launch/background-open-argv'
+import { setBackgroundWindowOpener } from './window/activation/background-window-open'
+import { installFatalSignalListenerGuard } from './crash-reporting/fatal-signal-listener-guard'
+import { installWorkerThreadDiagnostics } from './worker-threads/worker-thread-diagnostics'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
+// A fatal OOM must crash with a report, never spin on its own trap.
+installFatalSignalListenerGuard()
+installWorkerThreadDiagnostics()
 
-function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
-  return openMainWindowController(options)
+async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
+  return await openMainWindowController(options)
 }
 
 setMainWindowOpener(openMainWindow)
+setBackgroundWindowOpener(() => requestDesktopActivation([BACKGROUND_OPEN_ARG]))
 
-function focusExistingWindow(): void {
-  focusExistingWindowAction()
+function focusExistingWindow(request: DesktopActivationRequest = {}): void {
+  focusExistingWindowAction(request)
 }
 
 const requestDesktopHandoff = createDesktopHandoff({
@@ -86,7 +100,9 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     requestDesktopHandoff()
     return
   }
-  state.desktopActivationGate?.requestActivation()
+  state.desktopActivationGate?.requestActivation({
+    background: argvRequestsBackgroundOpen(argv)
+  })
 }
 
 /** Buffer documents until listener readiness; webContents.send silently drops unhandled messages. */
@@ -141,11 +157,13 @@ if (preflightReady) {
   enableLinearRegexpFallback()
   void leaseAppImageGenerationForCurrentProcess()
   // Before any gate check: saved WSL work keeps a closed gate serving it.
-  configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
+  const wslHostsGateReady = configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
   configureRemoteRuntimeE2EEV2HostLatch(app.getPath('userData'))
   // A launch restore is passive (E9): it never boots a WSL host's distro, so drop the old wake list.
   if (process.platform === 'win32') {
     deleteLegacyWslHostWakeList(app.getPath('userData'))
+    // Sync WSL readers wait on this verdict instead of spawning wsl.exe; answer it early.
+    void readWslInstallation()
   }
   app.on('open-url', (event, url) => {
     if (!isRoutedOrcaDeepLink(url)) {
@@ -177,6 +195,7 @@ if (preflightReady) {
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
     try {
+      await wslHostsGateReady
       await initializeMainProcessReady({
         openMainWindow,
         handleMacAppActivation

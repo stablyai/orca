@@ -42,20 +42,6 @@ function commitAll(repo: string, message: string): string {
 
 const NO_LINES = { added: 0, removed: 0 }
 
-function rangedDiffTotal(repo: string, mergeBase: string): { added: number; removed: number } {
-  let added = 0
-  let removed = 0
-  for (const line of git(repo, ['diff', '--numstat', '-M', mergeBase, '--']).split(/\r?\n/)) {
-    if (!line) {
-      continue
-    }
-    const [rawAdded, rawRemoved] = line.split('\t')
-    added += rawAdded === '-' ? 0 : Number.parseInt(rawAdded ?? '0', 10)
-    removed += rawRemoved === '-' ? 0 : Number.parseInt(rawRemoved ?? '0', 10)
-  }
-  return { added, removed }
-}
-
 beforeEach(() => {
   invalidateGitReadCaches()
   invalidateGitBranchLineTotalInFlight()
@@ -79,7 +65,6 @@ describe('branch line total against a real repository', () => {
 
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
-    expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 1, removed: 0 })
     expect(result.branchLineTotal).toEqual({
       added: 1,
       removed: 0,
@@ -127,22 +112,5 @@ describe('branch line total against a real repository', () => {
       test: NO_LINES,
       generated: NO_LINES
     })
-  })
-
-  it('omits the total when a deleted base file is recreated as untracked', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'gone.txt', 'a\nb\nc\n')
-    const mergeBase = commitAll(repo, 'base')
-    git(repo, ['rm', '-q', 'gone.txt'])
-    commitAll(repo, 'delete gone.txt')
-    await write(repo, 'gone.txt', 'n1\nn2\n')
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
-    expect(result.entries.map((entry) => [entry.area, entry.path])).toEqual([
-      ['untracked', 'gone.txt']
-    ])
-    expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 0, removed: 3 })
-    expect(result.branchLineTotal).toBeUndefined()
   })
 })

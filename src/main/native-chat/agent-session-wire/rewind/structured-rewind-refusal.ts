@@ -1,8 +1,6 @@
-import {
-  AGENT_SESSION_REWIND_REASONS,
-  type AgentSessionRewindParams,
-  type AgentSessionRewindReason
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindParams } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import { AGENT_SESSION_REWIND_REASONS } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-reasons'
+import type { AgentSessionRewindReason } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-reasons'
 import {
   refuse,
   type AgentSessionWireRefusal
@@ -34,17 +32,21 @@ export function rewindRefusal(reason: AgentSessionRewindReason): {
 }
 
 /** Refuse pre-/clear targets or moved epochs before starting an agent. */
-export function rewindRefusalBehindClear(
-  journal: Pick<AgentSessionJournal, 'context' | 'cursor' | 'itemsRead'> | undefined,
+export async function rewindRefusalBehindClear(
+  journal: Pick<AgentSessionJournal, 'reads'> | undefined,
   target: Pick<AgentSessionRewindParams, 'itemId' | 'expectedEpoch'>
-): ReturnType<typeof rewindRefusal> | null {
-  const floor = journal?.context.floor()
-  if (!journal || !floor) {
+): Promise<ReturnType<typeof rewindRefusal> | null> {
+  if (!journal) {
     return null
   }
-  if (journal.cursor().epoch !== target.expectedEpoch) {
+  const selected = await journal.reads.rewindTarget(target.itemId)
+  if (!selected.floor) {
+    return null
+  }
+  if (selected.cursor.epoch !== target.expectedEpoch) {
     return rewindRefusal('stale-epoch')
   }
-  const item = journal.itemsRead().items.find((entry) => entry.itemId === target.itemId)
-  return !item || item.sequence <= floor.sequence ? rewindRefusal('invalid-target') : null
+  return selected.sequence !== null && selected.sequence > selected.floor.sequence
+    ? null
+    : rewindRefusal('invalid-target')
 }

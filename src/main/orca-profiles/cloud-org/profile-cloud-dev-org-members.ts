@@ -7,7 +7,7 @@ import type {
   OrcaProfileOrgMemberMutationResult,
   OrcaProfileOrgMemberRemoveArgs,
   OrcaProfileOrgInviteRevokeArgs
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 
 // With no dev-auth server, this roster mirrors real membership states and mutation results.
 type DevOrgRoster = {

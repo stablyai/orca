@@ -6,10 +6,10 @@ import {
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../../shared/native-chat/native-chat-types'
-import type { AgentSessionTokenUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionTokenUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import { buildImageDataUri } from '../../../shared/file-preview/image-data-uri'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'
 import { timestampMs } from '../../ai-vault/parsing/session-record-time'
 import { toolResultOutput } from './transcript-record-blocks'

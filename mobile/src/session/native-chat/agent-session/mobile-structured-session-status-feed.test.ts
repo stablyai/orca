@@ -63,5 +63,3 @@ describe("the phone's status stream", () => {
     expect(read()?.hostExecutionPhase).toBeUndefined()
   })
 })
-
-// Match physical registry ordering: drop ended streams before delivering their last frame.

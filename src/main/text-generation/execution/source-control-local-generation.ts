@@ -1,5 +1,6 @@
-import { wslDistroForCommand } from '../../../shared/wsl-paths'
-import { mergeCommandEnvironment } from '../../../shared/command-environment'
+import type { GenerationArgument } from '../../../shared/source-control/ai/generation/generation-argument'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
+import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {
   resolveCodexHomeProcessLockKeyForSpawnEnv,
@@ -13,7 +14,7 @@ import {
 import { runLocalSourceControlPlan } from './source-control-local-process'
 import { prepareSourceControlReadOnlyPlan } from '../policies/source-control-read-only-policy'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
-import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
+import { textGenerationFailure } from '../../../shared/text-generation/text-generation-failure-copy'
 import type {
   InternalTextGenerationResult,
   LocalGenerationTarget,
@@ -24,7 +25,7 @@ import type {
 
 export function runLocalPlanForAgent(input: {
   agentId: string
-  plan: CommitMessagePlan
+  plan: CommitMessagePlan<GenerationArgument>
   target: LocalGenerationTarget
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
@@ -44,12 +45,13 @@ export function runLocalPlanForAgent(input: {
       wslDistro ? 'linux' : process.platform
     )
   }
-  const launch = (plan: CommitMessagePlan, timeoutMs?: number) =>
+  const launch = (plan: CommitMessagePlan<GenerationArgument>, timeoutMs?: number) =>
     runLocalSourceControlPlan({
       plan,
       cwd: input.target.cwd,
       env: wslDistro ? input.target.env : target.env,
       operation: input.operation,
+      laneId: input.target.laneId,
       wslDistro,
       spawnAgent: input.spawnAgent,
       timeoutMs
@@ -60,7 +62,7 @@ export function runLocalPlanForAgent(input: {
     const deadlineAt = Date.now() + SOURCE_CONTROL_GENERATION_TIMEOUT_MS
     const deadline = AbortSignal.timeout(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
     const signal = AbortSignal.any([canceled.signal, deadline])
-    const lane = localGenerationLaneKey(input.operation, input.target.cwd)
+    const lane = localGenerationLaneKey(input.operation, input.target.cwd, input.target.laneId)
     const failure = (): InternalTextGenerationResult =>
       canceled.signal.aborted || input.shouldExecute?.() === false
         ? { success: false, error: 'Generation canceled.', canceled: true }
@@ -76,7 +78,7 @@ export function runLocalPlanForAgent(input: {
     const cancel = () => canceled.abort()
     setLocalGenerationCancelToken(lane, cancel)
     signal.addEventListener('abort', abort, { once: true })
-    let preparation: LocalProcessExecution<CommitMessagePlan> | undefined
+    let preparation: LocalProcessExecution<CommitMessagePlan<GenerationArgument>> | undefined
     let execution: LocalProcessExecution<InternalTextGenerationResult> | undefined
     const processClosed = (async () => {
       try {
@@ -149,7 +151,7 @@ function runCodexLocalPlanUnderHomeLock(
   commandEnv?: Record<string, string>,
   awaitSettlement = false
 ): Promise<InternalTextGenerationResult> {
-  const laneKey = localGenerationLaneKey(operation, target.cwd)
+  const laneKey = localGenerationLaneKey(operation, target.cwd, target.laneId)
   let canceledWhileQueued = false
   let publishResult!: (result: InternalTextGenerationResult) => void
   let rejectResult!: (error: unknown) => void

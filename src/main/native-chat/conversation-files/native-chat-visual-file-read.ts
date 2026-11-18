@@ -7,13 +7,13 @@ import { basename, dirname, join } from 'node:path'
 import {
   NATIVE_CHAT_VISUAL_MAX_BYTES,
   isNativeChatVisualFileName
-} from '../../../shared/native-chat/native-chat-visual-directive'
+} from '../../../shared/native-chat/visuals/native-chat-visual-directive'
 import type {
   AgentSessionReadVisualResult,
   AgentSessionVisualReadError
-} from '../../../shared/rpc-contract/agent-session-visual-params'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
-import { readLocalFileBounded } from '../../ipc/filesystem/local-regular-file-read'
+} from '../../../shared/rpc-contract/structured-agent-session/agent-session-visual-params'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
+import { readLocalFileBounded } from '../../filesystem/local-file-io/local-regular-file-read'
 
 // O_NOFOLLOW prevents final-component swaps; Windows relies on lstat and post-open identity checks.
 const VISUAL_OPEN_FLAGS =

@@ -1,21 +1,20 @@
-import { copyFileSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
+import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync } from 'node:fs'
 import { copyFile, link, mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import type * as NodePty from 'node-pty'
 import { join, resolve } from 'node:path'
 import { it } from 'vitest'
-import { runProcessSync } from '@orca/process-host'
 import {
   NODE_RUNTIME_ASSETS,
   SERVER_TARGETS,
   type ServerTarget
-} from '../../../../shared/node-runtime-pin'
+} from '../../../../shared/node-runtime/node-runtime-pin'
 import {
   ORCAD_NODE_PTY_DIR,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_SERVER_TARGET_FILENAME,
   orcadNodeRuntimeRelativePath
-} from '../../../../shared/orcad-artifacts'
+} from '../../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { detectNativeHostAbi, nativeSlotName } from '../../native-runtime/native-host-abi'
 
 export function hostServerTarget(): ServerTarget {
@@ -40,21 +39,6 @@ export function locatePinnedNodeForTests(): string | null {
     candidates.find((candidate): candidate is string => !!candidate && existsSync(candidate)) ??
     null
   )
-}
-
-const crossRuntimeBunVersion = readFileSync(
-  new URL('../../../../../config/.bun-version', import.meta.url),
-  'utf8'
-).trim()
-
-export function locateBunForTests(): string | null {
-  const candidate = process.env.BUN_EXECUTABLE ?? 'bun'
-  try {
-    const result = runProcessSync({ program: candidate, args: ['--version'], timeoutMs: 10_000 })
-    return result.code === 0 && result.stdout.trim() === crossRuntimeBunVersion ? candidate : null
-  } catch {
-    return null
-  }
 }
 
 export async function writeNodeSlotFixture(

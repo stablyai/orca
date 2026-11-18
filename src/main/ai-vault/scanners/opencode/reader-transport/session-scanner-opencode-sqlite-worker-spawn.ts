@@ -7,15 +7,18 @@ import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
 import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { throwIfSignalAborted } from '../../../../../shared/abort-signal-reason'
-import { openCodeTranscriptPageLimit } from '../../../../../shared/opencode-transcript-page-limit'
+import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
+import { openCodeTranscriptPageLimit } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
-import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
+import type {
+  OpenCodeNativeChatReadRequest,
+  OpenCodeSqliteCaptureValue
+} from './session-scanner-opencode-sqlite-worker-protocol'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
-} from '../../../../../shared/opencode-sqlite-session-path'
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import {
   mapOpenCodeWslSession,
   openCodeWslClient,
@@ -41,7 +44,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-opencode-sqlite-reader' })
 }
 
 let sharedClient: OpenCodeSqliteWorkerClient | null = null
@@ -53,10 +56,10 @@ function getSharedClient(): OpenCodeSqliteWorkerClient {
   return sharedClient
 }
 
-type SqliteParseArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['parse']>[0], 'agent'>
-type SqliteCaptureArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['capture']>[0], 'agent'>
+export type SqliteParseArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['parse']>[0], 'agent'>
+export type SqliteCaptureArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['capture']>[0], 'agent'>
 
-type SqliteListArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['list']>[0], 'agent'>
+export type SqliteListArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['list']>[0], 'agent'>
 
 export const listOpenCodeSqliteSessionsViaWorker = (
   args: SqliteListArgs
@@ -94,11 +97,12 @@ export const captureZcodeSqliteSessionViaWorker = (
   args: SqliteCaptureArgs
 ): Promise<OpenCodeSqliteCaptureValue> => captureForHost({ ...args, agent: 'zcode' })
 
-async function listForHost(
+export async function listForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['list']>[0]
 ): Promise<SessionFileCandidate[]> {
   const agent = args.agent ?? 'opencode'
-  const scoped = Boolean(args.scopePaths?.length)
+  // A Hermes list is always its store's main list; a scope only adds rows to it.
+  const scoped = Boolean(args.scopePaths?.length) && agent !== 'hermes'
   const issues: AiVault.AiVaultScanIssue[] = []
   const closeSource =
     !scoped && args.dbPaths.length > 0 ? openAiVaultScanSource(args.signal, agent) : null
@@ -155,7 +159,8 @@ async function listCandidatesForHost(
       const scopePaths = args.scopePaths?.length
         ? aiVaultScopePathsForWslDistro(args.scopePaths, distro)
         : args.scopePaths
-      if (args.scopePaths?.length && scopePaths?.length === 0) {
+      // A Hermes scope adds in-scope rows to its newest ones; elsewhere it is the whole request.
+      if (args.scopePaths?.length && scopePaths?.length === 0 && args.agent !== 'hermes') {
         return []
       }
       const first = paths.values().next().value!
@@ -213,7 +218,7 @@ async function listCandidatesForHost(
   return candidates.flat().sort((a, b) => b.file.mtimeMs - a.file.mtimeMs)
 }
 
-async function parseForHost(
+export async function parseForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['parse']>[0]
 ): Promise<AiVault.AiVaultSession | null> {
   const wsl = openCodeWslPath(args.dbPath)
@@ -236,7 +241,7 @@ async function parseForHost(
   return mapOpenCodeWslSession(session, args.dbPath)
 }
 
-async function captureForHost(
+export async function captureForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['capture']>[0]
 ): Promise<OpenCodeSqliteCaptureValue> {
   const wsl = openCodeWslPath(args.dbPath)
@@ -262,6 +267,18 @@ async function captureForHost(
   }
 }
 
+/** A native chat read, on WSL through the distro's own reader. */
+export async function readNativeChatForHost(
+  request: Omit<OpenCodeNativeChatReadRequest, 'id'>,
+  signal?: AbortSignal
+) {
+  const wsl = openCodeWslPath(request.dbPath)
+  const client = wsl
+    ? await openCodeWslClient(wsl.distro, request.dbPath, signal)
+    : getSharedClient()
+  return client.readNativeChat({ ...request, dbPath: wsl?.linuxPath ?? request.dbPath }, signal)
+}
+
 export async function readOpenCodeTranscriptPageViaWorker(
   args: {
     dbPath: string
@@ -272,15 +289,8 @@ export async function readOpenCodeTranscriptPageViaWorker(
   },
   signal?: AbortSignal
 ) {
-  const wsl = openCodeWslPath(args.dbPath)
-  const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
-  const value = await client.readNativeChat(
-    {
-      ...args,
-      limit: openCodeTranscriptPageLimit(args.limit),
-      dbPath: wsl?.linuxPath ?? args.dbPath,
-      kind: 'native-page'
-    },
+  const value = await readNativeChatForHost(
+    { ...args, limit: openCodeTranscriptPageLimit(args.limit), kind: 'native-page' },
     signal
   )
   if (value !== null && !('items' in value)) {
@@ -297,12 +307,7 @@ export async function readOpenCodeTranscriptSignalViaWorker(
   },
   signal?: AbortSignal
 ) {
-  const wsl = openCodeWslPath(args.dbPath)
-  const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
-  const value = await client.readNativeChat(
-    { ...args, dbPath: wsl?.linuxPath ?? args.dbPath, kind: 'native-signal' },
-    signal
-  )
+  const value = await readNativeChatForHost({ ...args, kind: 'native-signal' }, signal)
   if (value !== null && !('messageCount' in value)) {
     throw new Error('Invalid OpenCode transcript signal')
   }

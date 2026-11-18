@@ -1,10 +1,10 @@
-import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
+import type { BrowserHistoryEntry } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-session/workspace-doc-history'
 import { startOfLocalDay } from '../../../../../shared/automations/scheduling/automation-cron-occurrence'
 import {
   listBrowserHistoryRecents,
   type BrowserAddressBarSuggestion
-} from '../assemble-chrome/browser-address-bar-suggestions'
+} from '../assemble-chrome/address-bar/browser-address-bar-suggestions'
 
 export type BrowserHistoryClearRange = 'hour' | 'today' | 'all'
 

@@ -7,7 +7,7 @@ import {
   missingWorkspaceWorker
 } from './structured-sessions/runtime-legacy-worker-recovery-test-fixture'
 
-import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 
 describe('RuntimeLegacyWorkerTerminalRecoveryController retry loop', () => {
   beforeEach(() => {

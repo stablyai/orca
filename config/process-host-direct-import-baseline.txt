@@ -1,7 +1,7 @@
 
 # Existing production source files importing child_process at runtime outside @orca/process-host.
 # Migration debt: this list may only shrink; new callers use the package public API.
-src/cli/runtime/cli-lifecycle-handlers.ts
+src/cli/runtime/commands/cli-lifecycle-handlers.ts
 src/cli/accounts/interactive-login-interruption.ts
 src/cli/runtime/launch.ts
 src/main/agent-hooks/installation/locking/managed-hook-owner-identity.ts
@@ -14,7 +14,6 @@ src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/service.ts
 src/main/computer/desktop-script/desktop-script-provider-bridge.ts
-src/main/computer/macos-permissions/macos-computer-use-permission-status.ts
 src/main/computer/macos-permissions/macos-computer-use-permissions.ts
 src/main/computer/macos-native/macos-native-provider-transport.ts
 src/main/computer/sidecar-transport/sidecar-client.ts
@@ -28,8 +27,6 @@ src/main/emulator/simctl-simulator-devices.ts
 src/main/emulator/simulator-app-visibility.ts
 src/main/external-editors/external-editor-launch.ts
 src/main/git/command-runner/process-capture/exec-file-capture.ts
-src/main/git/command-runner/git-exec-file-sync.ts
-src/main/git/command-runner/git-spawn.ts
 src/main/git/command-runner/git-stream-stdout.ts
 src/main/git/command-runner/process-capture/spawn-command-capture.ts
 src/main/git/command-runner/process-capture/spawned-command-tree-kill.ts
@@ -37,14 +34,14 @@ src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
 src/main/git/command-runner/host-routing/wsl-git-read-environment.ts
 src/main/github/execution/github-legacy-command.ts
 src/main/workspace-hooks/hooks.ts
-src/main/ipc/developer-permissions.ts
+src/main/ipc/developer-permissions/developer-permissions.ts
 src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-launch.ts
-src/main/ipc/local-network-connection-test.ts
-src/main/ipc/macos-keyboard-input-source.ts
-src/main/ipc/macos-keyboard-layout-snapshot.ts
-src/main/ipc/notification-authorization-status.ts
-src/main/ipc/preflight-command-exec.ts
-src/main/ipc/worktree-apfs-clone.ts
+src/main/ipc/developer-permissions/local-network-connection-test.ts
+src/main/ipc/keyboard/macos-keyboard-input-source.ts
+src/main/ipc/keyboard/macos-keyboard-layout-snapshot.ts
+src/main/ipc/notifications/notification-authorization-status.ts
+src/main/ipc/preflight/preflight-command-exec.ts
+src/main/ipc/worktrees/linked-paths/worktree-apfs-clone.ts
 src/main/local-builds/local-build-candidate.ts
 src/main/macos-keychain/generic-password.ts
 src/main/power/macos-system-sleep-assertion.ts
@@ -68,9 +65,9 @@ src/main/ssh/system-transport/file-transfer/system-ssh-file-transfer.ts
 src/main/startup/linux-display/ensure-virtual-display.ts
 src/main/pty/process-retirement/windows-process-tree-kill.ts
 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
-src/shared/ephemeral-vm-recipe-process.ts
-src/shared/fish-binary-requirement.ts
-src/shared/process-table-ps-capture.ts
+src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-process.ts
+src/shared/shell/testing/fish-binary-requirement.ts
+src/shared/process-observation/tables/process-table-ps-capture.ts
 src/shared/terminal/pty/native-process/pty-slave-line-discipline-echo.ts
 src/shared/terminal/pty/native-process/shell-process-readiness.ts
-src/wsl-guest/preflight-handler.ts
+src/wsl-guest/commands/preflight-handler.ts

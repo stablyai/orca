@@ -13,7 +13,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { resolveOrchestrationTerminalHandle } from '../identity/terminal-identity'
 import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'

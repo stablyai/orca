@@ -24,7 +24,7 @@ import {
 } from './linear-workspace-registry'
 import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
 import { readCredentialFileProtection } from '../../credentials/credential-file-protection'
-import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../shared/secure-storage/secret-at-rest-protection'
 
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
   ensureOrcaDir()

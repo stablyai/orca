@@ -8,7 +8,7 @@ import {
   isolatedScanRoots,
   writeAntigravityTranscript
 } from '../../scanner-fixtures/session-scanner-test-fixtures'
-import { antigravitySessionOrigin } from '../../../../shared/antigravity-session-origin'
+import { antigravitySessionOrigin } from '../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import './session-scanner-antigravity-history'
 import './session-scanner-antigravity-metadata'
 

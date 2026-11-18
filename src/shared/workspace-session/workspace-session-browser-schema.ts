@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import type { BrowserWorkspace } from '../browser-workspace-types'
+import type { BrowserWorkspace } from '../browser/workspaces/browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from './workspace-doc-history'
 import { isDocPreviewUrl } from '../document-preview/doc-preview-scheme'
-import { salvagingArray } from '../zod-salvage'
+import { salvagingArray } from '../validation/zod-salvage'
 import { browserPageAnnotationSchema } from '../browser/annotations/browser-page-annotation-schema'
 
 const browserLoadErrorSchema = z.object({

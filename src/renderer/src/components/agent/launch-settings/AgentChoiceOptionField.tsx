@@ -6,15 +6,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 export function SourceControlActionOptionField({
   label,
   hint,
+  controlId,
   children
 }: {
   label: ReactNode
   hint?: ReactNode
+  controlId?: string
   children: ReactNode
 }): React.JSX.Element {
   return (
     <div className="min-h-[56.5px] min-w-0 flex-1 basis-48 space-y-2">
-      <Label variant="settings">{label}</Label>
+      <Label variant="settings" htmlFor={controlId}>
+        {label}
+      </Label>
       {children}
       {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
     </div>

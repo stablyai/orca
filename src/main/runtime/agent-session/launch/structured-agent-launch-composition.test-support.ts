@@ -124,12 +124,14 @@ function withTestSpawnToken<L>(
 
 /** Unsealed unless a token is passed: the env an agent part produced, before the seal. */
 export function createCodexStructuredLaunchResolver(
-  deps: LaunchTestSources & CodexStructuredLaunchPartDeps
+  deps: LaunchTestSources &
+    Omit<CodexStructuredLaunchPartDeps, 'savedSession'> &
+    Partial<Pick<CodexStructuredLaunchPartDeps, 'savedSession'>>
 ) {
   return withTestSpawnToken(
     CODEX_STRUCTURED_AGENT,
     launchSources(deps),
-    codexStructuredLaunchPart(deps),
+    codexStructuredLaunchPart({ savedSession: { hasProviderTurn: async () => false }, ...deps }),
     null
   )
 }
