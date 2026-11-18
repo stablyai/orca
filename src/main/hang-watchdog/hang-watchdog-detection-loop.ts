@@ -30,6 +30,8 @@ export function createHangWatchdogDetectionLoop(
   let lastHeartbeatAt = config.now()
   let lastTickAt = config.now()
   let detected: 'stall' | 'hang' | null = null
+  // A heartbeat received while the tick was overdue came after the wake; the overdue tick keeps it.
+  let wokeHeartbeat = false
   return {
     recordHeartbeat: () => {
       const now = config.now()
@@ -46,7 +48,9 @@ export function createHangWatchdogDetectionLoop(
       } else if (detected) {
         detected = null
         config.onHangResolved(silentMs)
-      } else if (stallMs !== null && silentMs > stallMs && now - lastTickAt <= sleepGapMs) {
+      } else if (now - lastTickAt > sleepGapMs) {
+        wokeHeartbeat = true
+      } else if (stallMs !== null && silentMs > stallMs) {
         // A tick-gap reset already moved lastHeartbeatAt past any sleep, so this silence was main's.
         config.onStallMissed?.(silentMs, lastHeartbeatAt)
       }
@@ -66,10 +70,10 @@ export function createHangWatchdogDetectionLoop(
           detected = null
           config.onStallEndedBySleep?.()
         }
-        // A heartbeat that already arrived after the wake marks main's own start; keep it.
-        if (!detected && lastHeartbeatAt <= now - tickGap) {
+        if (!detected && !wokeHeartbeat) {
           lastHeartbeatAt = now
         }
+        wokeHeartbeat = false
         return
       }
       if (detected === 'hang') {

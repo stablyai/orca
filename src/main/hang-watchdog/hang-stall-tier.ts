@@ -1,4 +1,5 @@
 import {
+  hangObservationUnresponsiveMs,
   isHangTierObservation,
   type HangObservation,
   type HangPowerReceipt
@@ -20,6 +21,19 @@ export type ObserveOptions = {
 /** Past the hang timeout an episode is a hang however it was observed; the loop's `>` can let one recover as a stall. */
 export function tierForSilence(unresponsiveMs: number, timeoutMs: number): 'stall' | 'hang' {
   return unresponsiveMs > timeoutMs ? 'hang' : 'stall'
+}
+
+/** Tier from the duration that will be reported, so the two agree; a 'stall' never demotes an escalated hang. */
+export function recoveredTier(
+  stall: HangObservation | undefined,
+  resolution: HangObservation['resolution'],
+  unresponsiveMs: number,
+  timeoutMs: number
+): 'stall' | 'hang' {
+  return tierForSilence(
+    stall ? hangObservationUnresponsiveMs({ ...stall, resolution }) : unresponsiveMs,
+    timeoutMs
+  )
 }
 
 /** escalatedAt keeps the loop-measured silence even when the stall's detectedAt was stamped late. */

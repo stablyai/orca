@@ -201,16 +201,13 @@ export function asHangObservations(value: unknown): HangObservationCollection | 
   }
 }
 function priority(record: HangObservation): number {
-  if (record.kind === 'heartbeat-stall') {
-    return isHangTierObservation(record) ? 4 : 2
-  }
-  return record.initialSleepAssociated ? 1 : 3
+  const gap = record.initialSleepAssociated ? 1 : 3
+  return record.kind === 'heartbeat-stall' ? (isHangTierObservation(record) ? 4 : 2) : gap
 }
 export function retainHangObservation(
   collection: HangObservationCollection,
   record: HangObservation,
-  // Only the running watchdog's live capture reserves a row; a startup replay must not evict pending hangs.
-  options: { reserve?: boolean } = {}
+  options: { reserve?: boolean } = {} // only a live capture reserves a row; replay must not evict hangs
 ): HangObservationCollection {
   record = admitHangObservation(record)
   const existing = collection.observations.findIndex((item) => item.id === record.id)
@@ -283,11 +280,12 @@ export function retainHangObservation(
 }
 export function mergeHangObservations(
   first: HangObservationCollection,
-  second: HangObservationCollection
+  second: HangObservationCollection,
+  liveId?: string | null
 ): HangObservationCollection {
   let result = { ...first, omitted: Math.min(2_147_483_647, first.omitted + second.omitted) }
   for (const record of second.observations) {
-    result = retainHangObservation(result, record)
+    result = retainHangObservation(result, record, { reserve: record.id === liveId })
   }
   return result
 }

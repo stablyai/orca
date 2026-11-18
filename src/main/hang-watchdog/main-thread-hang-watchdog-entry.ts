@@ -19,6 +19,7 @@ import {
   escalationCaptureParts,
   escalationFields,
   JS_ONLY,
+  recoveredTier,
   stallRecoveredMessage,
   suspendedSince,
   tierForSilence,
@@ -67,7 +68,8 @@ export function runWatchdog(
         }
         observations = mergeHangObservations(
           asHangObservations(existing) ?? emptyHangObservations(),
-          observations
+          observations,
+          activeStallId
         )
         existingUnavailable = false
       }
@@ -216,9 +218,9 @@ export function runWatchdog(
       const id = activeStallId
       activeStallId = null
       captures.recover(id)
-      // A 'stall' here never demotes: merging keeps an escalated hang.
-      const tier = tierForSilence(unresponsiveMs, config.timeoutMs)
-      update(id, { selfRecovered: true, resolution: captureHangSnapshot(), tier })
+      const resolution = captureHangSnapshot()
+      const tier = recoveredTier(find(id), resolution, unresponsiveMs, config.timeoutMs)
+      update(id, { selfRecovered: true, resolution, tier })
       openReceiptWindow(id)
       reportRecovered(id, unresponsiveMs, endedAt)
     },
