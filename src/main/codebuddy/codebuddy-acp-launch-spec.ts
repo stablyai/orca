@@ -36,7 +36,9 @@ export const CODEBUDDY_LAUNCH_SPEC: AcpLaunchSpec = {
     }
     // The Windows installer writes here; a PATH refreshed before install misses it.
     // An empty LOCALAPPDATA is not a directory; only a nonempty override wins.
-    const localAppData = env.LOCALAPPDATA || win32.join(homePath, 'AppData', 'Local')
+    // The shared resolver prefers HOME, so use USERPROFILE for the Windows profile.
+    const windowsHome = env.USERPROFILE || homePath
+    const localAppData = env.LOCALAPPDATA || win32.join(windowsHome, 'AppData', 'Local')
     return [win32.join(localAppData, 'codebuddy', 'bin')]
   },
   // ACP first ships in 2.185.0; earlier releases have no --acp.

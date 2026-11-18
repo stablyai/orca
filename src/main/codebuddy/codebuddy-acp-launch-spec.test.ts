@@ -63,12 +63,26 @@ describe('CodeBuddy ACP launch spec', () => {
     }
   })
 
-  it('falls back to the home profile when LOCALAPPDATA is empty', () => {
+  it('falls back to USERPROFILE when LOCALAPPDATA is empty', () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {
       expect(
         CODEBUDDY_LAUNCH_SPEC.installDirectories({
-          env: { LOCALAPPDATA: '' },
+          env: { LOCALAPPDATA: '', USERPROFILE: 'D:\\Users\\me' },
+          homePath: 'C:\\Users\\me'
+        })
+      ).toEqual(['D:\\Users\\me\\AppData\\Local\\codebuddy\\bin'])
+    } finally {
+      platform.mockRestore()
+    }
+  })
+
+  it('falls back to homePath when both Windows variables are absent', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect(
+        CODEBUDDY_LAUNCH_SPEC.installDirectories({
+          env: {},
           homePath: 'C:\\Users\\me'
         })
       ).toEqual(['C:\\Users\\me\\AppData\\Local\\codebuddy\\bin'])
