@@ -154,7 +154,7 @@ function PanZoomImageCanvas({
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const imageSrc = src && src !== failedSrc ? src : null
   const content = size ?? (loaded && loaded.src === imageSrc ? loaded.size : null)
-  const panZoom = usePanZoomViewport({ content })
+  const panZoom = usePanZoomViewport({ content, dragToPan: true })
   useViewerZoomCommands(panZoom, 'popup')
 
   return (
