@@ -31,6 +31,10 @@ export function NewFileDialog(): JSX.Element | null {
 
   useEffect(() => {
     const unsubscribe = subscribeNewFileRequests((nextRequest) => {
+      if (creatingRef.current) {
+        nextRequest.resolve(null)
+        return
+      }
       activeRequestRef.current?.resolve(null)
       activeRequestRef.current = nextRequest
       creatingRef.current = false
