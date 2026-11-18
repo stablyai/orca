@@ -72,7 +72,7 @@ function SaveIndicator({ status }: { status: 'idle' | 'saving' | 'saved' }) {
     >
       <span
         ref={observeVisibleAnimation}
-        className={`size-1.5 rounded-full ${isSaving ? 'visible-animate-pulse bg-amber-500' : 'bg-emerald-500'}`}
+        className={`size-1.5 rounded-full ${isSaving ? 'visible-animate-pulse bg-status-warning' : 'bg-status-success'}`}
       />
       {isSaving
         ? t('auto.components.settings.RepositoryHooksSection.81057d5f71', 'Saving...')

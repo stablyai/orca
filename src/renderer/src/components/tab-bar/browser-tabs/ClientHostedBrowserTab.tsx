@@ -68,7 +68,7 @@ export default function ClientHostedBrowserTab({
           {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
           <PageIcon
             ref={observeVisibleAnimation}
-            className={`mr-1 size-3 shrink-0 ${loading ? 'motion-safe:visible-animate-spin' : ''} ${row.hostAbsent ? 'text-muted-foreground' : 'text-blue-500'}`}
+            className={`mr-1 size-3 shrink-0 ${loading ? 'motion-safe:visible-animate-spin' : ''} ${row.hostAbsent ? 'text-muted-foreground' : 'text-callout-note'}`}
             aria-hidden
           />
           <span

@@ -1,4 +1,3 @@
-import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -12,7 +11,10 @@ import type { CheckDetailsLoadState } from '@/components/github/github-checks-ta
 import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { CheckDetailsPanel } from './details'
 import { useTranslate } from '@/i18n/use-translate'
-import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import {
+  observeOffscreenAnimation,
+  observeVisibleAnimation
+} from '@/lib/window-activity/offscreen-animation-pause'
 
 export function CheckRow({
   check,

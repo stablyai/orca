@@ -126,7 +126,7 @@ function TerminalEntryView(props: { entry: TerminalEntry }): JSX.Element {
       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
         <span
           ref={observeVisibleAnimation}
-          className="size-1.5 visible-animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400"
+          className="size-1.5 visible-animate-pulse rounded-full bg-status-success"
         />
         {t('auto.components.feature.wall.BrowserAnimatedVisual.0ce7c24b4d', 'Working…')}
       </span>

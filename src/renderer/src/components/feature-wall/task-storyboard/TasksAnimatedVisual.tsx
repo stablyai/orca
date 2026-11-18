@@ -281,7 +281,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
           {workspaceCreating ? (
             <span
               ref={observeVisibleAnimation}
-              className="inline-block size-[9px] visible-animate-spin rounded-full border-[1.5px] border-yellow-500 border-t-transparent"
+              className="inline-block size-[9px] visible-animate-spin rounded-full border-[1.5px] border-status-warning border-t-transparent"
             />
           ) : (
             <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
