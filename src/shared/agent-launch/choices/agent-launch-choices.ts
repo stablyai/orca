@@ -32,6 +32,7 @@ export type AgentChoiceCliForm =
       /** Values outside the choice's grammar stay literal arguments instead of becoming choices. */
       recognizes?: (value: string) => boolean
     }
+  | { kind: 'flag'; names: readonly string[]; lift: 'bare' | 'never' }
   | { kind: 'config'; names: readonly string[]; key: string; lift: 'codex-bare-string' | 'never' }
   | { kind: 'settings'; names: readonly string[]; key: string; lift: 'merged-json' }
   | { kind: 'recipe'; words: readonly string[]; value: AgentPermissionChoice }
@@ -82,6 +83,8 @@ export function normalizeAgentModelOptionChoices(
 export const AGENT_LAUNCH_CHOICE_KEYS: ReadonlySet<string> = new Set([
   'model',
   'effort',
+  'remoteAgent',
+  'remoteControl',
   'permissionMode'
 ])
 

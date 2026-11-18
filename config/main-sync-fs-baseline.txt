@@ -25,7 +25,6 @@
 1 src/main/antigravity/antigravity-host-acp.ts
 1 src/main/antigravity/native-account-launch.ts
 5 src/main/antigravity/native-account-store.ts
-2 src/main/antigravity/native-credential-backend.ts
 7 src/main/antigravity/native-file-credentials.ts
 12 src/main/artifacts/artifact-create-intent-store.ts
 2 src/main/artifacts/artifact-share-record-store.ts

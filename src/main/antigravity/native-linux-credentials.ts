@@ -13,18 +13,29 @@ const DEFAULT_COLLECTION = '/org/freedesktop/secrets/aliases/default'
 // secret-tool silently truncates stdin secrets at 8 KiB.
 const MAX_SECRET_BYTES = 8191
 
+const HEADLESS_DBUS_ERROR =
+  /ServiceUnknown|NameHasNoOwner|UnknownObject|NoSuchObject|Cannot autolaunch D-Bus|dbus-launch|Connection refused|No such file or directory|Failed to connect to socket|The connection is closed/i
+
+class LinuxKeyringLockedError extends Error {}
+
 function requireLinux(): void {
   if (process.platform !== 'linux') {
     throw new Error('The Antigravity Linux keyring is unavailable on this host.')
   }
 }
 
-async function run(program: 'gdbus' | 'secret-tool', args: string[], input?: string) {
+async function run(
+  program: 'gdbus' | 'secret-tool',
+  args: string[],
+  input?: string,
+  env?: NodeJS.ProcessEnv
+) {
   try {
     return await runProcess({
       program,
       args,
       input,
+      ...(env !== undefined ? { env } : {}),
       timeoutMs: 10_000,
       maxOutputBytes: 64 * 1024
     })
@@ -41,39 +52,50 @@ async function run(program: 'gdbus' | 'secret-tool', args: string[], input?: str
   }
 }
 
-async function getSecretServiceProperty(objectPath: string, iface: string, property: string) {
-  const result = await run('gdbus', [
-    'call',
-    '--session',
-    '--timeout',
-    '5',
-    '--dest',
-    'org.freedesktop.secrets',
-    '--object-path',
-    objectPath,
-    '--method',
-    'org.freedesktop.DBus.Properties.Get',
-    iface,
-    property
-  ])
+async function getSecretServiceProperty(
+  objectPath: string,
+  iface: string,
+  property: string,
+  env?: NodeJS.ProcessEnv
+) {
+  const result = await run(
+    'gdbus',
+    [
+      'call',
+      '--session',
+      '--timeout',
+      '5',
+      '--dest',
+      'org.freedesktop.secrets',
+      '--object-path',
+      objectPath,
+      '--method',
+      'org.freedesktop.DBus.Properties.Get',
+      iface,
+      property
+    ],
+    undefined,
+    env
+  )
   if (result.timedOut || result.signal || result.outputTruncated) {
     throw new Error('The Antigravity Linux keyring did not respond.')
   }
   if (result.code === 0) {
     return { value: result.stdout }
   }
-  if (/ServiceUnknown|NameHasNoOwner|UnknownObject|NoSuchObject/.test(result.stderr)) {
+  if (HEADLESS_DBUS_ERROR.test(result.stderr)) {
     return null
   }
   throw new Error('The Antigravity Linux keyring could not be accessed.')
 }
 
 /** Mirrors go-keyring's GetLoginCollection; null means agy falls back to its credential file. */
-async function resolveAgyCollection(): Promise<string | null> {
+async function resolveAgyCollection(env?: NodeJS.ProcessEnv): Promise<string | null> {
   const collections = await getSecretServiceProperty(
     '/org/freedesktop/secrets',
     'org.freedesktop.Secret.Service',
-    'Collections'
+    'Collections',
+    env
   )
   if (!collections) {
     return null
@@ -81,12 +103,17 @@ async function resolveAgyCollection(): Promise<string | null> {
   const path = collections.value.includes(`'${LOGIN_COLLECTION}'`)
     ? LOGIN_COLLECTION
     : DEFAULT_COLLECTION
-  const locked = await getSecretServiceProperty(path, 'org.freedesktop.Secret.Collection', 'Locked')
+  const locked = await getSecretServiceProperty(
+    path,
+    'org.freedesktop.Secret.Collection',
+    'Locked',
+    env
+  )
   if (!locked) {
     return null
   }
   if (locked.value.includes('<true>')) {
-    throw new Error(
+    throw new LinuxKeyringLockedError(
       'Your Linux keyring is locked, so Orca cannot read or switch the Antigravity account. Unlock the keyring (for example in Passwords and Keys) and try again.'
     )
   }
@@ -94,6 +121,20 @@ async function resolveAgyCollection(): Promise<string | null> {
     throw new Error('The Antigravity Linux keyring could not be accessed.')
   }
   return path
+}
+
+export async function hasAntigravityLinuxSecretService(env?: NodeJS.ProcessEnv): Promise<boolean> {
+  if (process.platform !== 'linux') {
+    return false
+  }
+  try {
+    return (await resolveAgyCollection(env)) !== null
+  } catch (error) {
+    if (error instanceof LinuxKeyringLockedError) {
+      return true
+    }
+    throw error
+  }
 }
 
 async function lookup(): Promise<AntigravityNativeCredential | null> {

@@ -3,7 +3,6 @@ import {
   removeAgentArgOption
 } from '../../agent-session/options/launch/agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
-import { PI_THINKING_LEVELS } from '../../agent-session/options/reconciliation/structured-agent-session-effective-effort'
 import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 import {
   quoteStartupArg,
@@ -12,71 +11,30 @@ import {
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from '../catalog/tui-agent-display-names'
+import {
+  EXTRA_AGENT_ARG_OPTIONS,
+  EXTRA_AGENT_ARGS_FAILURE_COPY,
+  getExtraAgentArgsPlaceholder,
+  supportsExtraAgentArgs,
+  type ExtraAgentArgKind,
+  type ExtraAgentArgOption,
+  type ExtraAgentArgsFailure,
+  type ExtraAgentArgsFailureCode
+} from './automation-extra-agent-arg-catalog'
+
+export {
+  EXTRA_AGENT_ARGS_FAILURE_COPY,
+  getExtraAgentArgsPlaceholder,
+  supportsExtraAgentArgs,
+  type ExtraAgentArgsFailure,
+  type ExtraAgentArgsFailureCode
+}
 
 export const EXTRA_AGENT_ARGS_MAX_BYTES = 4096
 export const EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED =
   'Update Orca on this host to use extra arguments.'
 export const EXTRA_AGENT_ARGS_REQUIRE_FRESH_SESSION =
   'Extra arguments require a fresh session for every run.'
-
-type ExtraAgentArgKind = 'model' | 'effort' | 'repeatable'
-
-type ExtraAgentArgOption = {
-  kind: ExtraAgentArgKind
-  aliases: readonly string[]
-  /** Accepts only values with this prefix, e.g. Codex's `-c model_reasoning_effort=`. */
-  valuePrefix?: string
-  /** Accepts only these values. */
-  values?: readonly string[]
-  /** The CLI reads only `--flag value`, so `--flag=value` is split. */
-  separateValue?: true
-}
-
-const MODEL_OPTION = { kind: 'model', aliases: ['--model'] } as const
-const MODEL_OR_M_OPTION = { kind: 'model', aliases: ['-m', '--model'] } as const
-
-// Allowlist paired-client extras so they cannot alter permissions or Orca-owned prompt/resume/cwd/print/config/MCP flags.
-const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOption[]>> = {
-  antigravity: [MODEL_OPTION, { kind: 'effort', aliases: ['--effort'] }],
-  claude: [
-    MODEL_OPTION,
-    { kind: 'effort', aliases: ['--effort'] },
-    { kind: 'repeatable', aliases: ['--add-dir'] }
-  ],
-  codex: [
-    MODEL_OR_M_OPTION,
-    { kind: 'effort', aliases: ['-c', '--config'], valuePrefix: 'model_reasoning_effort=' }
-  ],
-  codebuddy: [MODEL_OPTION, { kind: 'effort', aliases: ['--effort'] }],
-  // Cursor composes effort into the model id, so only the model is a flag.
-  cursor: [MODEL_OR_M_OPTION],
-  grok: [MODEL_OR_M_OPTION, { kind: 'effort', aliases: ['--effort', '--reasoning-effort'] }],
-  omp: [MODEL_OPTION],
-  pi: [
-    { ...MODEL_OPTION, separateValue: true },
-    { kind: 'effort', aliases: ['--thinking'], values: PI_THINKING_LEVELS, separateValue: true }
-  ]
-}
-
-export function supportsExtraAgentArgs(agent: TuiAgent): boolean {
-  return EXTRA_AGENT_ARG_OPTIONS[agent] !== undefined
-}
-
-export function getExtraAgentArgsPlaceholder(agent: TuiAgent): string {
-  return (EXTRA_AGENT_ARG_OPTIONS[agent] ?? [])
-    .map((option) => {
-      const value =
-        option.kind === 'model'
-          ? agent === 'claude'
-            ? 'opus'
-            : 'model-id'
-          : option.kind === 'effort'
-            ? 'high'
-            : 'docs'
-      return `${option.aliases[0]} ${option.valuePrefix ?? ''}${value}`
-    })
-    .join(' ')
-}
 
 // C0, DEL, C1, and the Unicode line/paragraph separators.
 function hasControlCharacter(value: string): boolean {
@@ -87,34 +45,6 @@ function hasControlCharacter(value: string): boolean {
     }
   }
   return false
-}
-
-// One English table: `error` stays English for older readers; the renderer translates by code.
-export const EXTRA_AGENT_ARGS_FAILURE_COPY = {
-  unsupportedAgent: "Extra arguments aren't supported for this agent yet.",
-  tooLarge: 'Extra arguments must be 4 KB or less.',
-  controlCharacters: 'Extra arguments cannot contain control characters or line breaks.',
-  invalid: 'Extra arguments are invalid: {{detail}}',
-  shellSyntax: "{{text}} uses shell syntax that extra arguments don't allow.",
-  terminator: '"--" isn\'t allowed in extra arguments.',
-  notAnOption:
-    '"{{token}}" isn\'t an option. Extra arguments for {{agent}} accept only: {{allowed}}.',
-  optionNotAllowed:
-    '"{{option}}" isn\'t allowed in extra arguments for {{agent}}. Allowed: {{allowed}}.',
-  missingValue: '"{{option}}" needs a value.',
-  valueNotAllowed:
-    '"{{option}} {{value}}" isn\'t allowed. {{agent}} extra arguments accept only "{{option}} {{prefix}}<level>".',
-  modelRepeated: 'Extra arguments set the model more than once.',
-  effortRepeated: 'Extra arguments set the effort more than once.'
-} as const
-
-export type ExtraAgentArgsFailureCode = keyof typeof EXTRA_AGENT_ARGS_FAILURE_COPY
-
-export type ExtraAgentArgsFailure = {
-  ok: false
-  error: string
-  errorCode: ExtraAgentArgsFailureCode
-  errorParams?: Record<string, string>
 }
 
 function extraAgentArgsFailure(
@@ -144,7 +74,9 @@ function allowedOptionList(options: readonly ExtraAgentArgOption[]): string {
   return [
     ...new Set(
       options.map((option) =>
-        option.valuePrefix ? `${option.aliases[0]} ${option.valuePrefix}…` : option.aliases.at(-1)
+        option.valuePrefix
+          ? `${option.aliases[0]} ${option.valuePrefix}\u2026`
+          : option.aliases.at(-1)
       )
     )
   ].join(', ')
@@ -155,7 +87,14 @@ function matchOption(
   options: readonly ExtraAgentArgOption[]
 ): { option: ExtraAgentArgOption; value?: string; consumed: number } | null {
   for (const option of options) {
-    const occurrence = findOptionOccurrence(tokens, option.aliases, false)
+    const occurrence = findOptionOccurrence(
+      tokens,
+      option.aliases,
+      false,
+      [],
+      0,
+      option.kind === 'flag' ? false : 'required'
+    )
     if (occurrence?.index === 0) {
       return { option, value: occurrence.value, consumed: occurrence.consumed }
     }
@@ -198,6 +137,7 @@ export function parseExtraAgentArgs(args: {
   const label = TUI_AGENT_DISPLAY_NAMES[args.agent]
   const allowed = allowedOptionList(options)
   const kinds = new Set<ExtraAgentArgKind>()
+  const seenOptions = new Set<ExtraAgentArgOption>()
   const { tokens } = tokenized
   const accepted: string[] = []
   for (let index = 0; index < tokens.length; index += 1) {
@@ -217,11 +157,23 @@ export function parseExtraAgentArgs(args: {
       })
     }
     const name = optionName(token)
+    const { kind, valuePrefix, values, separateValue } = match.option
+    if (kind === 'flag') {
+      if (match.value !== undefined || token !== name) {
+        return extraAgentArgsFailure('invalid', { detail: `${name} does not take a value` })
+      }
+      if (seenOptions.has(match.option)) {
+        return extraAgentArgsFailure('invalid', { detail: `${name} can only be set once` })
+      }
+      seenOptions.add(match.option)
+      kinds.add(kind)
+      accepted.push(token)
+      continue
+    }
     const { value } = match
     if (!value) {
       return extraAgentArgsFailure('missingValue', { option: name })
     }
-    const { kind, valuePrefix, values, separateValue } = match.option
     if (values && !values.includes(value)) {
       return extraAgentArgsFailure('invalid', { detail: `${name} accepts ${values.join(', ')}` })
     }
@@ -233,9 +185,13 @@ export function parseExtraAgentArgs(args: {
         prefix: valuePrefix
       })
     }
-    if (kind !== 'repeatable' && kinds.has(kind)) {
-      return extraAgentArgsFailure(kind === 'model' ? 'modelRepeated' : 'effortRepeated')
+    if (kind !== 'repeatable' && seenOptions.has(match.option)) {
+      return extraAgentArgsFailure(
+        kind === 'model' ? 'modelRepeated' : kind === 'effort' ? 'effortRepeated' : 'invalid',
+        kind === 'value' ? { detail: `${name} can only be set once` } : undefined
+      )
     }
+    seenOptions.add(match.option)
     kinds.add(kind)
     accepted.push(...(separateValue ? [name, value] : tokens.slice(index, index + match.consumed)))
     index += match.consumed - 1
@@ -245,16 +201,23 @@ export function parseExtraAgentArgs(args: {
 
 function removeDefaultsFor(
   agent: TuiAgent,
-  kinds: ReadonlySet<ExtraAgentArgKind>,
+  extras: Extract<ParsedExtraAgentArgs, { ok: true }>,
   tokens: readonly string[]
 ): string[] {
+  const { kinds } = extras
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   let result = [...tokens]
   if (!catalog) {
     // Without launch catalog removers, the allowlisted aliases are the overridden defaults.
     for (const option of EXTRA_AGENT_ARG_OPTIONS[agent] ?? []) {
       if (option.kind !== 'repeatable' && kinds.has(option.kind)) {
-        result = removeAgentArgOption(agent, result, option.aliases, undefined, 'required')
+        result = removeAgentArgOption(
+          agent,
+          result,
+          option.aliases,
+          undefined,
+          option.kind === 'flag' ? false : 'required'
+        )
       }
     }
     return result
@@ -268,6 +231,26 @@ function removeDefaultsFor(
       ...catalog.models.flatMap((model) => model.options)
     ].find((option) => option.id === 'effort' && option.apply.removeAgentArgs)
     result = effort?.apply.removeAgentArgs?.(result) ?? result
+  }
+  for (const option of EXTRA_AGENT_ARG_OPTIONS[agent] ?? []) {
+    if (option.kind !== 'flag' && option.kind !== 'value') {
+      continue
+    }
+    if (
+      extras.tokens.some(
+        (token) =>
+          option.aliases.includes(token) ||
+          (option.kind === 'value' && option.aliases.some((alias) => token.startsWith(`${alias}=`)))
+      )
+    ) {
+      result = removeAgentArgOption(
+        agent,
+        result,
+        option.aliases,
+        undefined,
+        option.kind === 'flag' ? false : 'required'
+      )
+    }
   }
   return result
 }
@@ -308,7 +291,7 @@ export function mergeParsedExtraAgentArgs(args: {
   if (!defaults.ok) {
     return { ok: false, error: `Default agent arguments are invalid: ${defaults.error}` }
   }
-  const kept = removeDefaultsFor(args.agent, extras.kinds, defaults.tokens)
+  const kept = removeDefaultsFor(args.agent, extras, defaults.tokens)
   const terminator = agentArgTerminatorIndex(args.agent, kept)
   const merged = [...kept.slice(0, terminator), ...extras.tokens, ...kept.slice(terminator)]
   const agentArgs = merged.map((token) => quoteStartupArg(token, args.shell)).join(' ')

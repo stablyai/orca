@@ -64,7 +64,7 @@
               "none": [
                 { "regex": "──" },
                 { "regex": "esc to cancel|for shortcuts", "ignoreCase": true },
-                { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high)$" }
+                { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high|xhigh|max)$" }
               ]
             }
           },
@@ -73,7 +73,7 @@
               "none": [
                 { "regex": "──" },
                 { "regex": "esc to cancel|for shortcuts", "ignoreCase": true },
-                { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high)$" }
+                { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high|xhigh|max)$" }
               ]
             }
           },
@@ -81,7 +81,7 @@
             "none": [
               { "regex": "──" },
               { "regex": "esc to cancel|for shortcuts", "ignoreCase": true },
-              { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high)$" }
+              { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high|xhigh|max)$" }
             ]
           }
         ]

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
+  hasAntigravityLinuxSecretService,
   readAntigravityLinuxCredential,
   writeAntigravityLinuxCredential
 } from './native-linux-credentials'
@@ -73,5 +74,67 @@ describe('Antigravity Linux keyring access', () => {
         args: expect.arrayContaining(['--collection=/org/freedesktop/secrets/aliases/default'])
       })
     )
+  })
+
+  it('treats headless D-Bus errors as unavailable Secret Service while failing closed on missing gdbus or inconclusive probes', async () => {
+    vi.mocked(runProcess).mockRejectedValueOnce(
+      Object.assign(new Error('spawn gdbus ENOENT'), { code: 'ENOENT' })
+    )
+    await expect(readAntigravityLinuxCredential()).rejects.toThrow('needs gdbus')
+
+    vi.mocked(runProcess).mockRejectedValueOnce(
+      Object.assign(new Error('spawn gdbus ENOENT'), { code: 'ENOENT' })
+    )
+    await expect(
+      hasAntigravityLinuxSecretService({ DBUS_SESSION_BUS_ADDRESS: 'unix:path=/tmp/active' })
+    ).rejects.toThrow('needs gdbus')
+
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code: null,
+      signal: 'SIGTERM',
+      stdout: '',
+      stderr: '',
+      timedOut: true
+    })
+    await expect(
+      hasAntigravityLinuxSecretService({ DBUS_SESSION_BUS_ADDRESS: 'unix:path=/tmp/active' })
+    ).rejects.toThrow('did not respond')
+
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code: 1,
+      signal: null,
+      stdout: '',
+      stderr:
+        'Error spawning command line ‘dbus-launch’: Cannot autolaunch D-Bus without X11 $DISPLAY',
+      timedOut: false
+    })
+    await expect(readAntigravityLinuxCredential()).resolves.toBeNull()
+
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code: 1,
+      signal: null,
+      stdout: '',
+      stderr: 'Could not connect: Connection refused',
+      timedOut: false
+    })
+    await expect(
+      hasAntigravityLinuxSecretService({ DBUS_SESSION_BUS_ADDRESS: 'unix:path=/tmp/missing' })
+    ).resolves.toBe(false)
+
+    vi.mocked(runProcess)
+      .mockResolvedValueOnce(collections)
+      .mockResolvedValueOnce(ok('(<true>,)\n'))
+    await expect(
+      hasAntigravityLinuxSecretService({ DBUS_SESSION_BUS_ADDRESS: 'unix:path=/tmp/active' })
+    ).resolves.toBe(true)
+
+    // Once Secret Service responds unlocked, missing secret-tool must still surface the actionable error.
+    vi.mocked(runProcess)
+      .mockResolvedValueOnce(collections)
+      .mockResolvedValueOnce(unlocked)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('spawn secret-tool ENOENT'), { code: 'ENOENT' })
+      )
+    await expect(readAntigravityLinuxCredential()).rejects.toThrow('needs secret-tool')
   })
 })

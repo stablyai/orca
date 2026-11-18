@@ -1,4 +1,5 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { access, readFile, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
 import { readPrivateWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
@@ -8,9 +9,19 @@ import type { AntigravityCredentialBackend } from './native-account-service'
 const CONFLICT =
   'The native Antigravity credential changed during selection; refresh before retrying.'
 
+function hasFileStorageEnv(env: NodeJS.ProcessEnv): boolean {
+  return ['SSH_TTY', 'SSH_CLIENT', 'SSH_CONNECTION', 'WSL_DISTRO_NAME', 'WSL_INTEROP'].some(
+    (name) => Boolean(env[name])
+  )
+}
+
+function hasExplicitSessionBusAddress(env: NodeJS.ProcessEnv): boolean {
+  return !['', 'none:', 'disabled:'].includes(env.DBUS_SESSION_BUS_ADDRESS ?? '')
+}
+
 // Mirrors agy's Linux dbus detector: no session bus address and no per-user bus socket.
 function lacksAntigravitySessionBus(env: NodeJS.ProcessEnv): boolean {
-  if (!['', 'none:', 'disabled:'].includes(env.DBUS_SESSION_BUS_ADDRESS ?? '')) {
+  if (hasExplicitSessionBusAddress(env)) {
     return false
   }
   try {
@@ -20,25 +31,55 @@ function lacksAntigravitySessionBus(env: NodeJS.ProcessEnv): boolean {
   }
 }
 
+async function lacksAntigravitySessionBusAsync(env: NodeJS.ProcessEnv): Promise<boolean> {
+  if (hasExplicitSessionBusAddress(env)) {
+    return false
+  }
+  try {
+    return !(await stat(`/run/user/${process.getuid?.()}/bus`)).isSocket()
+  } catch {
+    return true
+  }
+}
+
 export function isAntigravityFileStorageHost(env: NodeJS.ProcessEnv): boolean {
+  return hasFileStorageEnv(env) || (process.platform === 'linux' && lacksAntigravitySessionBus(env))
+}
+
+export async function isAntigravityFileStorageHostAsync(env: NodeJS.ProcessEnv): Promise<boolean> {
   return (
-    ['SSH_TTY', 'SSH_CLIENT', 'SSH_CONNECTION', 'WSL_DISTRO_NAME', 'WSL_INTEROP'].some((name) =>
-      Boolean(env[name])
-    ) ||
-    (process.platform === 'linux' && lacksAntigravitySessionBus(env))
+    hasFileStorageEnv(env) ||
+    (process.platform === 'linux' && (await lacksAntigravitySessionBusAsync(env)))
   )
 }
+
+const CONTAINER_OR_WSL_PROBES = [
+  ['/proc/1/cgroup', /docker|containerd|kubepods/],
+  ['/proc/sys/kernel/osrelease', /microsoft|wsl/i]
+] as const
 
 export function isAntigravityContainerOrWslHost(): boolean {
   if (existsSync('/.dockerenv')) {
     return true
   }
-  for (const [path, pattern] of [
-    ['/proc/1/cgroup', /docker|containerd|kubepods/],
-    ['/proc/sys/kernel/osrelease', /microsoft|wsl/i]
-  ] as const) {
+  for (const [path, pattern] of CONTAINER_OR_WSL_PROBES) {
     try {
       if (pattern.test(readFileSync(path, 'utf8'))) {
+        return true
+      }
+    } catch {}
+  }
+  return false
+}
+
+export async function isAntigravityContainerOrWslHostAsync(): Promise<boolean> {
+  try {
+    await access('/.dockerenv')
+    return true
+  } catch {}
+  for (const [path, pattern] of CONTAINER_OR_WSL_PROBES) {
+    try {
+      if (pattern.test(await readFile(path, 'utf8'))) {
         return true
       }
     } catch {}

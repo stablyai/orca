@@ -2,7 +2,10 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
-import { isAntigravityFileStorageHost } from './native-credential-backend'
+import {
+  antigravityUsesFileCredentialAuthority,
+  isAntigravityFileStorageHost
+} from './native-credential-backend'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { getAntigravityAccountService, getAntigravityAccountVaultPath } from './native-account-host'
 
@@ -41,7 +44,9 @@ export async function prepareAntigravityAccountForLaunch(args: {
   if (
     args.envToDelete?.some((key) => ['HOME', 'USERPROFILE'].includes(key)) ||
     (home && resolve(home) !== resolve(getAppEnvironment().getPath('home'))) ||
-    isAntigravityFileStorageHost(env) !== isAntigravityFileStorageHost(process.env)
+    (isAntigravityFileStorageHost(env) !== isAntigravityFileStorageHost(process.env) &&
+      (await antigravityUsesFileCredentialAuthority(env)) !==
+        (await antigravityUsesFileCredentialAuthority(process.env)))
   ) {
     throw new Error(
       'This agy launch uses a different credential authority from the selected Antigravity account.'
