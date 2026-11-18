@@ -127,11 +127,11 @@ vi.mock('../../../../src/main/linear/accounts/linear-token-store', () => ({
     detailTransport.workspaces = detailTransport.workspaces.filter((workspace) => workspace !== id)
     detailTransport.clear(id)
   },
-  loadToken: ({ workspaceId }: { workspaceId: string }) => {
+  loadCredential: (workspaceId: string) => {
     if (detailTransport.credential.message) {
       throw new Error(detailTransport.credential.message)
     }
-    return workspaceId
+    return { apiKey: workspaceId }
   },
   getWorkspaceTokenProtection: () => null
 }))

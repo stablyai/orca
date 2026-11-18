@@ -883,6 +883,13 @@
     "groupHooks": {
       "invalidSetup": "ファイルは存在しますが、Orca は有効なセットアップスクリプトを見つけられませんでした。",
       "supportedKeys": "サポートされているキーのみを定義してください: `scripts` と `setup`。"
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "毎晩午前3時以降、またはこのコンピューターのスリープ解除後",
+        "everyWeekLine": "週に1回午前3時以降、またはこのコンピューターのスリープ解除後",
+        "everyDescriptionAwake": "その時間にこのコンピューターがスリープ中なら、スリープ解除後に実行します。新しいチャットがあった夜のあとだけ実行します。整理のたびに、短いチャットと同じように {{agent}} のプランを使います。"
+      }
     }
   },
   "menu": {
@@ -6120,9 +6127,6 @@
           "linkedWorkspaceWarning_other": "このプロジェクトの {{count}} 個のワークスペースも Orca から削除されます。",
           "openTerminalWarning_other": "このプロジェクトで開いている {{count}} 個のターミナルが閉じられます。"
         },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "アクティブなワークスペースを表示する"
-        },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "サイドバーから非表示",
           "88d402b71d": "オンボーディングチェックリスト"
@@ -8750,7 +8754,7 @@
           "112f3b934f": "ソース管理 AI"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "ここで取り消しても、このコンピューターへの SSH アクセスを持つ人は再びペアリングできます。完全に遮断するには、その SSH アクセスを削除してください。",
+          "sshAccessCaveat": "リンクを取り消すと、そのリンクが開いたターミナルで作成されたリンクも取り消されます。このコンピューターでターミナルを使える人（SSH またはリンク経由）は、引き続き再ペアリングできます。",
           "6f6d5188ed": "{{value0}}を取り消す",
           "434e4a6af6": "現在のリンク",
           "df142657a5": "まだ使用されていません",
@@ -22086,6 +22090,16 @@
       "confirm": "フィルターを調整して明らかにする",
       "cancel": "フィルタを保持する"
     },
+    "revealCurrent": {
+      "label": "現在の項目を表示",
+      "noWorkspace": "何も開いていません",
+      "fullPageView": "このページにはサイドバーの行がありません",
+      "archived": "アーカイブされたワークスペースはサイドバーに表示されません",
+      "botsOff": "ボットがオフのため、このボットは表示されません",
+      "botHidden": "このボットは一時停止中で、ボットのオプションにより非表示になっています",
+      "renameBotPage": "ボットやグループのページはワークツリーではありません。名前を変更するには、その行のメニューの「名前を変更」を使ってください。",
+      "renameUnlisted": "このワークスペースは現在サイドバーに表示されていないため、そこで名前を変更できません。"
+    },
     "wslMoved": {
       "movedToHost": "{{distro}} ホストに移動済み",
       "sectionTitle": "WSL ホストに移動済み ({{count}})",
@@ -24220,6 +24234,7 @@
     }
   },
   "nativeChat": {
+    "linkedMessageMissing": "そのメッセージが見つかりませんでした。",
     "math": {
       "scrollDisplayEquation": "数式ブロックをスクロール"
     }
@@ -25127,6 +25142,48 @@
     "branchName": "ブランチ名",
     "invalidBranchName": "このブランチ名は無効です。別の名前を選んでください。",
     "createBranchFailed": "Orca はブランチを作成できませんでした。ターミナルでこのリポジトリを確認してから、もう一度お試しください。"
+  },
+  "bots": {
+    "deepLink": {
+      "missing": "その会話はこのコンピューターで開かれていません。"
+    },
+    "activity": {
+      "title": "アクティビティ"
+    },
+    "connectors": {
+      "tab": "コネクター"
+    },
+    "files": {
+      "tab": "ファイル"
+    },
+    "upcoming": {
+      "tidyNightAfter": "毎晩{{from}}以降、またはこのコンピューターのスリープ解除後",
+      "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後",
+      "lookDueNow": "今すぐ実行予定 · {{every}}"
+    },
+    "palette": {
+      "placeholder": "ボット、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",
+      "description": "ボット、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します",
+      "scopedPlaceholder": "ボットを検索…",
+      "scopedLabel": "ボットを検索",
+      "scopeHint": "@ を入力するとボットだけを表示します",
+      "chip": "ボット",
+      "chipLabel": "ボット、すべて表示に戻す",
+      "searchEverything": "「{{text}}」をすべての項目から検索",
+      "searchBotsFor": "「{{text}}」でボットを検索",
+      "noMatch": "「{{text}}」に一致するボットはありません",
+      "noBotsYet": "ボットはまだありません",
+      "filtersPaused": "フィルターはワークスペースに適用され、ボットには適用されません",
+      "showEverything": "すべて表示",
+      "footerBots": "ボット",
+      "matchesPurpose": "目的が一致しています。",
+      "scopedStatus_other": "ボットのみ表示中。{{count}} 件の結果が見つかりました。",
+      "sidebarSearchLabel": "ボット、ワークスペース、ブラウザタブを検索する",
+      "section": "ボット"
+    },
+    "templates": {
+      "browse": "テンプレートを見る"
+    }
   },
   "speechModelUpdate": {
     "update": "更新",

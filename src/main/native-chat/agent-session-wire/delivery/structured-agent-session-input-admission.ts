@@ -2,9 +2,12 @@ import type { AgentSessionDispatchOutcome } from '../providers/structured-agent-
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
+/** Why an unwritten input needs a new child: its permission mode, or tools changed since launch. */
+export type StructuredAgentSessionAcquireReason = 'permission' | 'auto' | 'tools'
+
 export type StructuredAgentSessionInputAdmission =
   | { kind: 'prepare' }
-  | { kind: 'acquire'; reason?: 'permission' | 'auto' }
+  | { kind: 'acquire'; reason?: StructuredAgentSessionAcquireReason }
   | { kind: 'sent'; response: Promise<unknown> }
 
 /** The synchronous writer runs under host ordering; its response is awaited outside it. */
@@ -28,7 +31,7 @@ export type StructuredAgentSessionAdmitHostInput = (
 export type StructuredAgentSessionContinueInput = (
   signal: AbortSignal | undefined,
   rebind: (fence: number) => Promise<void>,
-  reason?: 'permission' | 'auto'
+  reason?: StructuredAgentSessionAcquireReason
 ) => Promise<
   | { kind: 'ready'; isCurrent: () => boolean }
   | { kind: 'failed'; fence: number; outcome: AgentSessionDispatchOutcome }
@@ -38,7 +41,7 @@ export type StructuredAgentSessionContinueInput = (
 export class StructuredAgentSessionInputNotAdmitted extends Error {
   constructor(
     readonly outcome?: Extract<AgentSessionDispatchOutcome, { state: 'rejected' }>,
-    readonly reason: 'permission' | 'auto' = 'auto'
+    readonly reason: StructuredAgentSessionAcquireReason = 'auto'
   ) {
     super('input was not admitted')
   }

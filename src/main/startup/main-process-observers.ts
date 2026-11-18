@@ -1,12 +1,13 @@
 import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { provideHostUsageAnalytics } from '../usage/host-usage-analytics'
 import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-service-contract'
-import { app, powerMonitor } from 'electron'
+import { app, powerMonitor, powerSaveBlocker } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
+import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
@@ -56,6 +57,15 @@ export function initializeMainProcessObservers(): void {
   if (process.platform === 'darwin') {
     state.unsubscribeWakeSignalClock = feedWakeSignalClock()
   }
+  // Bots' Tidy-up and Look around hold off idle sleep while they run; display sleep is fine.
+  installBackgroundRunAwakeHold(() => {
+    const id = powerSaveBlocker.start('prevent-app-suspension')
+    return () => {
+      if (powerSaveBlocker.isStarted(id)) {
+        powerSaveBlocker.stop(id)
+      }
+    }
+  })
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
     listTargets: listCapableSharedControlSockets,

@@ -1131,6 +1131,9 @@
       "composer": {
         "planMode": "プラン",
         "exitPlanMode": "プランモードを終了"
+      },
+      "goal": {
+        "sentAsGoal": "ゴールとして送信されました"
       }
     }
   },
@@ -2769,6 +2772,9 @@
     "structuredOpen": {
       "worktreeDeleted": "ワークツリーは削除されました。",
       "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "そのメッセージが見つかりませんでした。"
     }
   },
   "settings": {
@@ -4421,6 +4427,23 @@
           "opencodeInvalidWorkspaceId": "ワークスペース ID の形式が無効です"
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "コンピュータをペアリング",
+      "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてください。",
+      "pairAction": "コンピュータをペアリング",
+      "openFailed": "このリンクを開けませんでした",
+      "ambiguous": "このボットは{{names}}にあります。使用するコンピュータのOrcaでチャットを開いてください。",
+      "computer": "お使いのコンピュータ",
+      "updateNeeded": "このリンクを開くには、{{names}}のOrcaを更新してください。",
+      "unreachable": "{{names}}に接続できませんでした。いずれかでOrcaが起動していることを確認し、もう一度お試しください。",
+      "missing": "ペアリング済みのコンピュータにこのボットがありません。",
+      "offline": "{{name}}はオフラインです。オンラインに戻ったらリンクを開き直してください。",
+      "chatOpenFailed": "{{name}}でこのチャットを開けませんでした。リンクをもう一度お試しください。",
+      "unreachableSingle": "{{name}}に接続できませんでした。そのコンピュータでOrcaが起動していることを確認し、もう一度お試しください。",
+      "workspaceDeleted": "このチャットのワークスペースは{{name}}で削除されました。"
     }
   }
 }

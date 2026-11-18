@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { main, PROTECTED_COPY_KEYS_PATH } from './protected-copy-keys.mjs'
+import { LOCALIZATION_SOURCE_ROOTS } from './verify-localization-catalog.mjs'
 
 let dirs = []
 afterEach(() => {
@@ -32,6 +33,12 @@ describe('protected copy check', () => {
       'src/renderer/src/i18n/locales/en.json': JSON.stringify({ trust: { allow: 'Allow' } }),
       'src/renderer/src/Dialog.tsx': `<SecuritySurface>{translate('trust.allow', 'Allow')}`,
       'src/main/ready.ts': '',
+      ...Object.fromEntries(
+        LOCALIZATION_SOURCE_ROOTS.filter((root) => path.extname(root)).map((root) => [
+          root.split(path.sep).join('/'),
+          ''
+        ])
+      ),
       'src/shared/agent-usage/status-copy/empty.ts': '',
       [PROTECTED_COPY_KEYS_PATH.split(path.sep).join('/')]: '{}'
     })

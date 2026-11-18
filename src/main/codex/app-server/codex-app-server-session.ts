@@ -3,6 +3,15 @@ import { withLostProviderOutcome } from '../../provider-process/provider-process
 import { resolveProviderChildEnv } from '../../provider-process/provider-process-launch'
 import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
+import {
+  CodexAppServerRequestError,
+  CodexAppServerUnsupportedError,
+  CodexAppServerTimeoutError
+} from './codex-app-server-request-error'
+export {
+  CodexAppServerUnsupportedError,
+  CodexAppServerTimeoutError
+} from './codex-app-server-request-error'
 import { withCliRuntimeOnPath } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   killCodexAppServerProcessTree,
@@ -26,21 +35,6 @@ export type CodexAppServerInvocation = {
   experimentalApi?: boolean
   /** Kill unsupervised plugin trees before stdin EOF; root exit leaves children behind and blocks tree killing. */
   treeKillOnFinish?: boolean
-}
-
-/** Missing app-server subcommand or RPC method; only this class marks capability caches unsupported. */
-export class CodexAppServerUnsupportedError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'CodexAppServerUnsupportedError'
-  }
-}
-
-export class CodexAppServerTimeoutError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'CodexAppServerTimeoutError'
-  }
 }
 
 export function isCodexAppServerUnsupportedError(error: unknown): boolean {
@@ -258,8 +252,12 @@ export async function runCodexAppServerSession<T>(
           `codex app-server does not support ${method}: ${response.error.message ?? 'method not found'}`
         )
       }
-      throw new Error(
-        `codex app-server ${method} failed: ${response.error.message ?? 'unknown error'}`
+      // Kept structured, so callers tell a refused request (e.g. an unknown method variant) from a failure.
+      throw new CodexAppServerRequestError(
+        method,
+        typeof response.error.code === 'number' ? response.error.code : null,
+        `codex app-server ${method} failed: ${response.error.message ?? 'unknown error'}`,
+        response.error.message
       )
     }
     return response.result
