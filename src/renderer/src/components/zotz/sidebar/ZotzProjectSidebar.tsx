@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { FolderPlus, Plus } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import { createLiveAgentWorktreeIdsSelector } from '@/lib/workspace/activity/worktree-activity-state'
+import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
+import { GitHubIcon } from '@/components/icons/GitHubIcon'
+import { activityThreadStatusId } from '@/components/activity/activity-thread-presentation'
+import { useAllAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { AddProjectMenu } from '../../sidebar/project-admission/menu/AddProjectMenu'
 import type { AddRepoDialogEntryRequest } from '../../sidebar/project-admission/dialog/add-repo-dialog-types'
@@ -17,8 +19,11 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   buildZotzFolderConversations,
   buildZotzProjectSections,
-  type ZotzConversationRow
+  summarizeZotzConversationStatus,
+  type ZotzConversationRow,
+  type ZotzConversationStatus
 } from './zotz-project-conversations'
+import { useZotzGitHubRepoIcons } from './use-zotz-github-repo-icons'
 
 function AddProjectButton(): React.JSX.Element {
   const t = useTranslate()
@@ -45,11 +50,11 @@ function AddProjectButton(): React.JSX.Element {
 function ConversationRow({
   row,
   active,
-  working
+  status
 }: {
   row: ZotzConversationRow
   active: boolean
-  working: boolean
+  status: ZotzConversationStatus | null
 }): React.JSX.Element {
   return (
     <button
@@ -64,13 +69,18 @@ function ConversationRow({
           : 'text-worktree-sidebar-foreground/80 hover:bg-worktree-sidebar-foreground/8'
       )}
     >
-      <span
-        aria-hidden
-        className={cn(
-          'mt-1.5 size-1.5 shrink-0 rounded-full',
-          working ? 'bg-agent-working' : 'bg-worktree-sidebar-foreground/25'
+      <span className="mt-1 flex size-3 shrink-0 items-center justify-center">
+        {status ? (
+          <AgentStateDot
+            state={status.state}
+            unread={status.unread}
+            size="md"
+            tooltipSide="right"
+          />
+        ) : (
+          <span aria-hidden className="size-1.5 rounded-full bg-worktree-sidebar-foreground/25" />
         )}
-      />
+      </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-medium">{row.title}</span>
         {row.branch && row.branch !== row.title ? (
@@ -94,6 +104,9 @@ function ProjectHeader({ repo }: { repo: Repo }): React.JSX.Element {
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-worktree-sidebar-foreground">
         {repo.displayName}
       </span>
+      {repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github' ? (
+        <GitHubIcon className="size-3.5 shrink-0 text-worktree-sidebar-foreground/40" />
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -122,12 +135,24 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
-  const [selectLiveAgentWorktreeIds] = useState(createLiveAgentWorktreeIdsSelector)
-  const workingIds = useAppStore((s) =>
-    selectLiveAgentWorktreeIds(s, s.tabsByWorktree, agentStatusNow)
-  )
+  const { allThreads } = useAllAgentPaneThreads()
+  const statusByWorkspace = useMemo(() => {
+    const threadsByWorkspace = new Map<string, { state: AgentDotState; unread: boolean }[]>()
+    for (const thread of allThreads) {
+      const list = threadsByWorkspace.get(thread.worktree.id) ?? []
+      list.push({ state: activityThreadStatusId(thread), unread: thread.unread })
+      threadsByWorkspace.set(thread.worktree.id, list)
+    }
+    const result = new Map<string, ZotzConversationStatus>()
+    for (const [id, threads] of threadsByWorkspace) {
+      const status = summarizeZotzConversationStatus(threads)
+      if (status) {
+        result.set(id, status)
+      }
+    }
+    return result
+  }, [allThreads])
+  useZotzGitHubRepoIcons(repos)
 
   const sections = useMemo(
     () => buildZotzProjectSections({ repos, worktreesByRepo, tabsByWorkspace: tabsByWorktree }),
@@ -160,7 +185,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
                 key={row.id}
                 row={row}
                 active={row.id === activeWorktreeId}
-                working={workingIds.has(row.id)}
+                status={statusByWorkspace.get(row.id) ?? null}
               />
             ))}
           </section>
@@ -175,7 +200,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
                 key={row.id}
                 row={row}
                 active={row.id === activeWorktreeId}
-                working={false}
+                status={statusByWorkspace.get(row.id) ?? null}
               />
             ))}
           </section>

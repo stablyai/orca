@@ -1,3 +1,4 @@
+import type { AgentDotState } from '../../AgentStateDot'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { isRepoHidden } from '../../../../../shared/hidden-projects'
 import type { Repo } from '../../../../../shared/repository/repo-types'
@@ -94,4 +95,36 @@ export function buildZotzFolderConversations(input: {
       branch: null,
       lastActivityAt: 0
     }))
+}
+
+/** Most urgent first: what needs the user, then live work, then finished. */
+const STATUS_URGENCY: readonly AgentDotState[] = [
+  'failed',
+  'blocked',
+  'permission',
+  'waiting',
+  'interrupted',
+  'unconfirmed',
+  'working',
+  'monitoring',
+  'unverifiable',
+  'done',
+  'idle'
+]
+
+export type ZotzConversationStatus = { state: AgentDotState; unread: boolean }
+
+/** One marker per conversation from all its agent threads: the most urgent state, unread if any finished unseen. */
+export function summarizeZotzConversationStatus(
+  threads: readonly { state: AgentDotState; unread: boolean }[]
+): ZotzConversationStatus | null {
+  let best: AgentDotState | null = null
+  let unread = false
+  for (const thread of threads) {
+    if (best === null || STATUS_URGENCY.indexOf(thread.state) < STATUS_URGENCY.indexOf(best)) {
+      best = thread.state
+    }
+    unread ||= thread.unread
+  }
+  return best === null ? null : { state: best, unread }
 }
