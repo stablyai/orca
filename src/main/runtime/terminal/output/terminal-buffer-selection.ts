@@ -103,7 +103,10 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     kittyKeyboardFlags?: number
   } | null> {
     // The hidden renderer missed the dropped output too, so it never stands in for a recovering screen.
-    const recovering = () => this.headlessTerminals.get(ptyId)?.gapReseed !== undefined
+    const gapsBefore = this.ptyGapCounts.get(ptyId)
+    const recovering = () =>
+      this.headlessTerminals.get(ptyId)?.gapReseed !== undefined ||
+      this.ptyGapCounts.get(ptyId) !== gapsBefore
     if (this.ptyController?.hasRendererSerializer?.(ptyId) === false || recovering()) {
       return null
     }

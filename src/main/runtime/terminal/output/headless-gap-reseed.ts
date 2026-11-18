@@ -32,9 +32,13 @@ type RebuildResult = 'rebuilt' | 'failed' | 'behind'
  *  until it is repainted from a provider snapshot plus the output journaled since that capture started. */
 export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
   private gapCapturesInFlight = 0
-  private readonly gapCaptureWaiters: { ptyId: string; grant: (granted: boolean) => void }[] = []
+  // Keyed and insertion-ordered: FIFO admission, and a retired model leaves without a scan.
+  private readonly gapCaptureWaiters = new Map<string, (granted: boolean) => void>()
+  /** Gaps per PTY, so a read that spans one can tell even after recovery finished. */
+  protected readonly ptyGapCounts = new Map<string, number>()
 
   protected reseedHeadlessTerminalAfterDataGap(ptyId: string): void {
+    this.ptyGapCounts.set(ptyId, (this.ptyGapCounts.get(ptyId) ?? 0) + 1)
     if (this.ptysById.get(ptyId)?.connected === false) {
       // An exited PTY has no screen left to restore.
       this.disposeHeadlessTerminal(ptyId)
@@ -177,6 +181,10 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (!this.isGapRecovering(ptyId, state, recovery)) {
         return 'failed'
       }
+      // An overflowed or invalidated journal cannot rebuild however long output takes to catch up.
+      if (recovery.journal === null || snapshot.seq < recovery.journalStart) {
+        return 'failed'
+      }
       const parsedTo = state.outputSequence
       const gaps = recovery.gaps
       if (parsedTo < snapshot.seq) {
@@ -233,10 +241,11 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
 
   /** A retired model's recovery leaves the capture line at once instead of holding it until a slot frees. */
   protected leaveGapCaptureLine(ptyId: string): void {
-    for (let index = this.gapCaptureWaiters.length - 1; index >= 0; index--) {
-      if (this.gapCaptureWaiters[index].ptyId === ptyId) {
-        this.gapCaptureWaiters.splice(index, 1)[0].grant(false)
-      }
+    this.ptyGapCounts.delete(ptyId)
+    const grant = this.gapCaptureWaiters.get(ptyId)
+    if (grant) {
+      this.gapCaptureWaiters.delete(ptyId)
+      grant(false)
     }
   }
 
@@ -245,13 +254,18 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       this.gapCapturesInFlight++
       return Promise.resolve(true)
     }
-    return new Promise((grant) => this.gapCaptureWaiters.push({ ptyId, grant }))
+    return new Promise((grant) => {
+      // One recovery per model: a predecessor still waiting is already retired.
+      this.gapCaptureWaiters.get(ptyId)?.(false)
+      this.gapCaptureWaiters.set(ptyId, grant)
+    })
   }
 
   private releaseGapCaptureSlot(): void {
-    const next = this.gapCaptureWaiters.shift()
-    if (next) {
-      next.grant(true)
+    const next = this.gapCaptureWaiters.entries().next()
+    if (!next.done) {
+      this.gapCaptureWaiters.delete(next.value[0])
+      next.value[1](true)
     } else {
       this.gapCapturesInFlight--
     }

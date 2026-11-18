@@ -117,6 +117,8 @@ export class FreebuffScreenStatusTracker {
     this.frameTail = ''
     this.insideFrame = false
     this.workedUnknown = true
+    // The rebuilt screen may show a state no surviving chunk asked to read.
+    this.evaluationDeferred = true
   }
 
   /** `screenTrusted: false` tracks text only; the next trusted observe, even of no data, reads the screen once. */

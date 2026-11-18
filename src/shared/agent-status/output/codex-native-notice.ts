@@ -48,20 +48,24 @@ export class CodexNoticeTracker {
   /** When the pending notice's text began arriving; a deferred confirmation keeps that time. */
   pendingAt = 0
   private synchronized = false
-  private readonly scanner = createTerminalEscapeScanner({
-    onCsi: (marker, params, final) => {
-      if (
-        marker === '?' &&
-        params.split(';').includes('2026') &&
-        (final === 'h' || final === 'l')
-      ) {
-        this.synchronized = final === 'h'
-      } else if ((final === 'H' || final === 'f') && this.tail && !this.tail.endsWith(' ')) {
-        this.tail += ' '
-      }
-    },
-    onText: (text) => this.observeText(text)
-  })
+  private scanner = this.createScanner()
+
+  private createScanner() {
+    return createTerminalEscapeScanner({
+      onCsi: (marker, params, final) => {
+        if (
+          marker === '?' &&
+          params.split(';').includes('2026') &&
+          (final === 'h' || final === 'l')
+        ) {
+          this.synchronized = final === 'h'
+        } else if ((final === 'H' || final === 'f') && this.tail && !this.tail.endsWith(' ')) {
+          this.tail += ' '
+        }
+      },
+      onText: (text) => this.observeText(text)
+    })
+  }
 
   private observeText(text: string): void {
     if (this.tail) {
@@ -109,6 +113,8 @@ export class CodexNoticeTracker {
   resetAfterGap(): void {
     this.tail = ''
     this.synchronized = false
+    // An escape string the dropped bytes would have closed must not swallow the next notice.
+    this.scanner = this.createScanner()
   }
 
   /** `screenTrusted: false` tracks text only; the pending notice is confirmed on the next trusted observe. */
