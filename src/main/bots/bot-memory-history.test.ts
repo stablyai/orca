@@ -305,6 +305,34 @@ describe("a bot's memory history", () => {
     }
   )
 
+  it('keeps an edit made right after a bot is removed, and shows nothing of it to a read after', async () => {
+    const stored = new Map<string, string>()
+    let release = (): void => {}
+    const stalled = new Promise<void>((resolve) => (release = resolve))
+    let writes = 0
+    const io = {
+      read: async (botId: string) => stored.get(botId) ?? null,
+      write: async (botId: string, text: string | null) => {
+        writes += 1
+        await stalled
+        void (text === null ? stored.delete(botId) : stored.set(botId, text))
+      },
+      bots: async () => []
+    }
+    const history = createBotMemoryHistory(io)
+    const edit = (fact: string) =>
+      history.append('bot-1', { kind: 'owner' }, botMemoryChange('', `- ${fact}\n`))
+    const first = edit('before')
+    await vi.waitFor(() => expect(writes).toBe(1))
+    const queued = [edit('queued'), history.removed('bot-1')]
+    const after = edit('after')
+    const read = history.list('bot-1')
+    release()
+    await Promise.all([first, ...queued, after])
+
+    expect((await read).map((row) => row.change.added[0]?.line)).toEqual(['- after'])
+  })
+
   it('creates MEMORY.md for a change when the file is missing', async () => {
     const { read, record, remove, rows } = bot(OLD)
     remove()

@@ -10,6 +10,7 @@ import {
   failedLooksInARow,
   LOOK_FAILURES_TO_TURN_OFF
 } from '../../../bots/bot-look-around-failures'
+import type { BotMemoryRecord } from '../../../bots/bot-memory-record'
 import { tidyUpState } from '../../../bots/bot-memory-tidy-up'
 import { runtimeTidyUpRunner } from '../../../bots/bot-memory-tidy-up-runtime'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
@@ -23,6 +24,25 @@ function botById(context: RpcContext, botId: string) {
   return bot
 }
 
+// Views polled while history is slow share one check per summary row instead of each scanning it.
+const undoneChecks = new Map<string, Promise<boolean>>()
+function undoneCheck(
+  memory: Pick<BotMemoryRecord, 'history'>,
+  botId: string,
+  rowId: string
+): Promise<boolean> {
+  const key = `${botId}\u0000${rowId}`
+  let check = undoneChecks.get(key)
+  if (!check) {
+    check = memory
+      .history(botId)
+      .then((rows) => rows.some((row) => row.by.kind === 'undo' && row.by.of === rowId))
+      .finally(() => undoneChecks.delete(key))
+    undoneChecks.set(key, check)
+  }
+  return check
+}
+
 export async function botTidyUpView(context: RpcContext, botId: string): Promise<BotTidyUpView> {
   const bot = botById(context, botId)
   const { runtime } = context
@@ -30,11 +50,7 @@ export async function botTidyUpView(context: RpcContext, botId: string): Promise
   const state = tidyUpState(runtime.lookAround.get(bot.id))
   const lastRun = state.runs.at(-1)
   const rowId = state.last?.rowId
-  const undone =
-    rowId != null &&
-    (await runtime.bots.memory.history(bot.id)).some(
-      (row) => row.by.kind === 'undo' && row.by.of === rowId
-    )
+  const undone = rowId != null && (await undoneCheck(runtime.bots.memory, bot.id, rowId))
   return {
     setting,
     last: state.last ? { ...state.last, undone } : null,

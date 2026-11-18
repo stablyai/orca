@@ -140,12 +140,13 @@ export function createBotMemoryHistory(
     })
     return run
   }
+  const kept = (row: BotMemoryHistoryRow): boolean =>
+    row.at >= now() - BOT_MEMORY_HISTORY_DAYS * DAY_MS
   /** The bot's rows still within the limit; rows past it are deleted from disk too. Run queued. */
   const read = async (botId: string): Promise<BotMemoryHistoryRow[]> => {
     const parsed = z.array(BotMemoryHistoryRowSchema).safeParse(parseJson(await io.read(botId)))
     const all = parsed.success ? parsed.data : []
-    const since = now() - BOT_MEMORY_HISTORY_DAYS * DAY_MS
-    const rows = all.filter((row) => row.at >= since)
+    const rows = all.filter(kept)
     if (rows.length < all.length) {
       await io.write(botId, rows.length > 0 ? JSON.stringify(rows) : null)
     }
@@ -211,7 +212,7 @@ export function createBotMemoryHistory(
       state.list ??= queued(botId, async () => {
         state.list = null
         const rows = await read(botId)
-        return [...state.unwritten, ...rows].slice(0, MAX_ROWS)
+        return [...state.unwritten.filter(kept), ...rows].slice(0, MAX_ROWS)
       }).finally(() => forget(botId))
       startSweep()
       return state.list
@@ -229,7 +230,12 @@ export function createBotMemoryHistory(
       return written
     },
     removed: (botId) => {
-      pendingFor(botId).unwritten = []
+      // What was queued before the removal keeps its own state; anything after starts afresh behind it.
+      const before = pending.get(botId)
+      if (before) {
+        before.unwritten = []
+        pending.delete(botId)
+      }
       const removed = queued(botId, () => io.write(botId, null)).finally(() => forget(botId))
       startSweep()
       return removed
