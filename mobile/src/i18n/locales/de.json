@@ -165,11 +165,13 @@
       "invalidUrl": "Gültige URL eingeben."
     },
     "paneView": {
-      "dialogTitle": "Browser-Dialog",
       "forward": "Vorwärts",
       "keyboardPlaceholder": "Text auf der Seite eingeben…",
       "reload": "Neu laden",
-      "sendText": "Text an den Browser senden"
+      "sendText": "Text an den Browser senden",
+      "dialogTitleWithOrigin": "{{origin}} meldet",
+      "dialogTitleNoOrigin": "Diese Seite meldet",
+      "dialogAnswer": "Antwort"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} als Klick-Modifikator"
@@ -182,6 +184,9 @@
     "viewModeSwitch": {
       "mobileView": "Mobile Ansicht der Website anzeigen",
       "webView": "Desktop-Ansicht der Website anzeigen"
+    },
+    "loadFailure": {
+      "retry": "Erneut versuchen"
     }
   },
   "chat": {
@@ -1135,6 +1140,9 @@
       "composer": {
         "planMode": "Planen",
         "exitPlanMode": "Planungsmodus verlassen"
+      },
+      "goal": {
+        "sentAsGoal": "Als Ziel gesendet"
       }
     }
   },
@@ -2643,7 +2651,7 @@
       "disconnected": "Einfügen fehlgeschlagen (Verbindung getrennt)",
       "imageTooLarge": "Bild zu groß zum Einfügen",
       "pasteFailed": "Einfügen fehlgeschlagen",
-      "pasteTooLarge": "Einzufügender Inhalt zu groß (max. 256 KiB)",
+      "pasteTooLarge": "Der einzufügende Inhalt ist zu groß.",
       "terminalChanged": "Einfügen abgebrochen (Terminal gewechselt)"
     },
     "worktreeLabel": {
@@ -2773,6 +2781,9 @@
     "structuredOpen": {
       "worktreeDeleted": "Der Worktree wurde gelöscht.",
       "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
     }
   },
   "settings": {
@@ -4341,6 +4352,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Computer koppeln",
+      "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen.",
+      "pairAction": "Computer koppeln",
+      "openFailed": "Link konnte nicht geöffnet werden",
+      "ambiguous": "Dieser Bot ist auf {{names}}. Öffne den Chat in Orca auf dem gewünschten Computer.",
+      "computer": "deinem Computer",
+      "updateNeeded": "Aktualisiere Orca auf {{names}}, um diesen Link zu öffnen.",
+      "unreachable": "{{names}} sind nicht erreichbar. Starte Orca auf einem davon und versuche es erneut.",
+      "missing": "Keiner deiner gekoppelten Computer hat diesen Bot.",
+      "offline": "{{name}} ist offline. Öffne den Link erneut, sobald der Computer wieder online ist.",
+      "chatOpenFailed": "{{name}} konnte diesen Chat nicht öffnen. Versuche es erneut.",
+      "unreachableSingle": "{{name}} ist nicht erreichbar. Starte Orca dort und versuche es erneut.",
+      "workspaceDeleted": "Der Arbeitsbereich dieses Chats wurde auf {{name}} gelöscht."
     }
   }
 }

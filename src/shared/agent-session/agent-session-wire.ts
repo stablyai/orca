@@ -32,10 +32,7 @@ import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
 import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
-export type AgentSessionTurnActivity = {
-  turnId: string
-  text: string
-}
+export type AgentSessionTurnActivity = { turnId: string; text: string }
 
 /** The agent's guess at the user's next prompt; never journaled, replaced when a turn opens. */
 export type AgentSessionPromptSuggestion = {

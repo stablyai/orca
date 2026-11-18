@@ -1,5 +1,6 @@
 // Build agent launch resolvers with production composition over test doubles so tests exercise the shared path.
 
+import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -47,7 +48,13 @@ export type LaunchTestSources = {
   resolveLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   prepareVisuals?: PrepareNativeChatVisuals
+  resolveInstructions?: StructuredAgentLaunchSources['resolveInstructions']
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
+  readOnlySession?: (sessionId: string) => ReadOnlySessionMode | null
+  resolveToolServers?: StructuredAgentLaunchSources['resolveToolServers']
+  prepareLaunch?: StructuredAgentLaunchSources['prepareLaunch']
+  resolveLinkedSkills?: StructuredAgentLaunchSources['resolveLinkedSkills']
+  reportLinkedSkills?: StructuredAgentLaunchSources['reportLinkedSkills']
 }
 
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
@@ -91,9 +98,15 @@ function launchSources(deps: LaunchTestSources): StructuredAgentLaunchSources {
     ...(deps.resolveLaunchEnv ? { resolveAgentLaunchEnv: deps.resolveLaunchEnv } : {}),
     ...(deps.resolveCommandSettings ? { resolveCommandSettings: deps.resolveCommandSettings } : {}),
     ...(deps.prepareVisuals ? { prepareVisuals: deps.prepareVisuals } : {}),
+    ...(deps.resolveInstructions ? { resolveInstructions: deps.resolveInstructions } : {}),
     ...(deps.refreshAfterMissingProgram
       ? { refreshAfterMissingProgram: deps.refreshAfterMissingProgram }
-      : {})
+      : {}),
+    ...(deps.readOnlySession ? { readOnlySession: deps.readOnlySession } : {}),
+    ...(deps.resolveToolServers ? { resolveToolServers: deps.resolveToolServers } : {}),
+    ...(deps.prepareLaunch ? { prepareLaunch: deps.prepareLaunch } : {}),
+    ...(deps.resolveLinkedSkills ? { resolveLinkedSkills: deps.resolveLinkedSkills } : {}),
+    ...(deps.reportLinkedSkills ? { reportLinkedSkills: deps.reportLinkedSkills } : {})
   }
 }
 
@@ -152,8 +165,17 @@ export function createAcpStructuredLaunchResolver(
 }
 
 /** Unsealed unless a token is passed: the env an agent part produced, before the seal. */
-export function createPiRpcLaunchResolver(deps: LaunchTestSources & PiRpcLaunchPartDeps) {
-  const resolve = withTestSpawnToken(PI_RPC_AGENT, launchSources(deps), piRpcLaunchPart(deps), null)
+export function createPiRpcLaunchResolver(
+  deps: LaunchTestSources &
+    Omit<PiRpcLaunchPartDeps, 'dataDirectory'> &
+    Partial<Pick<PiRpcLaunchPartDeps, 'dataDirectory'>>
+) {
+  const resolve = withTestSpawnToken(
+    PI_RPC_AGENT,
+    launchSources(deps),
+    piRpcLaunchPart({ dataDirectory: '/orca-data', ...deps }),
+    null
+  )
   return (identity: AgentSessionJournalIdentity, spawnToken: string | null = null) =>
     resolve({ identity, spawnToken })
 }

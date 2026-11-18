@@ -6,7 +6,7 @@ import {
   sanitizeAgentFailureDetail
 } from '../../../../shared/source-control/ai/generation/commit-message-agent-output'
 import { withMacTailscaleDnsHint } from '../../../network/macos-tailscale-dns-diagnostic'
-import { redactString } from '../../../observability/redactor'
+import { redactString } from '../../../../shared/observability/redactor'
 import { mapCodexRpcRateLimits, type RpcRateLimitsResponse } from './codex-rpc-rate-limit-mapper'
 import { classifyCodexRpcErrorFailureKind } from './codex-rpc-failure-kind'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
