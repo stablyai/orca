@@ -31,6 +31,7 @@ import {
   prepareProfileStateDomainPatches,
   type ProfileStateDomainPatch
 } from './profile-state-domain-patches'
+import { isWorkspaceSessionDomain } from '../../workspace-session-domains'
 import {
   preparePatchedProfileStateDomain,
   rememberPatchedProfileStateDomains
@@ -290,6 +291,10 @@ export function writeProfileStateDomains(
       changedDomains: updates.map(({ domain }) => domain)
     }
   })
-  rememberPatchedProfileStateDomains(db, patched)
+  // Whole session writes are cached too, so the next patch doesn't re-read what was just written.
+  rememberPatchedProfileStateDomains(db, [
+    ...prepared.filter(({ domain }) => isWorkspaceSessionDomain(domain)),
+    ...patched
+  ])
   return result
 }

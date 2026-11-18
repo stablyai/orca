@@ -60,7 +60,8 @@ export function applyPtyBinding(
   const tabs = rows?.[bindingWorktreeId]
   const tab = tabs?.find((t) => t.id === args.tabId)
   if (tab) {
-    // Replace, never edit, saved entries: incremental saves compare them by identity.
+    // Replace, never edit, saved entries: incremental saves compare entries by identity but re-read
+    // container keys, so swapping the one entry in its map is enough.
     const boundTab = {
       ...tab,
       ...(args.correctStartupCwd !== undefined ? { startupCwd: args.correctStartupCwd } : {}),
@@ -71,7 +72,7 @@ export function applyPtyBinding(
         args.ptyId
       )
     }
-    rows = { ...rows, [bindingWorktreeId]: tabs!.map((t) => (t === tab ? boundTab : t)) }
+    rows![bindingWorktreeId] = tabs!.map((t) => (t === tab ? boundTab : t))
   } else {
     terminalMembershipChanged = true
     // Persist spawn-created tabs before delayed renderer saves to keep their bindings from becoming orphans.
@@ -112,7 +113,7 @@ export function applyPtyBinding(
   const storedLayout = layoutsByTab?.[args.tabId]
   if (leafKeyed && storedLayout) {
     const layout = { ...storedLayout }
-    layoutsByTab = { ...layoutsByTab, [args.tabId]: layout }
+    layoutsByTab![args.tabId] = layout
     if (!layout.root) {
       terminalMembershipChanged = true
       layout.root = { type: 'leaf', leafId: args.leafId }

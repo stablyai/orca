@@ -54,13 +54,16 @@ export function migrateWorkspaceSessionSshTargetId(
   newTargetId: string
 ): boolean {
   let changed = false
-  const tabsByWorktree = withReplacedEntries(session.tabsByWorktree, (tabs) => {
-    const next = tabs.map((tab) => {
-      const ptyId = tab.ptyId && rewriteSshPtyId(tab.ptyId, oldTargetId, newTargetId)
-      return ptyId ? { ...tab, ptyId } : tab
-    })
-    return next.some((tab, index) => tab !== tabs[index]) ? next : tabs
-  })
+  const rewritten = (ptyId: string | null | undefined): string | null =>
+    ptyId ? rewriteSshPtyId(ptyId, oldTargetId, newTargetId) : null
+  const tabsByWorktree = withReplacedEntries(session.tabsByWorktree, (tabs) =>
+    tabs.some((tab) => rewritten(tab.ptyId))
+      ? tabs.map((tab) => {
+          const ptyId = rewritten(tab.ptyId)
+          return ptyId ? { ...tab, ptyId } : tab
+        })
+      : tabs
+  )
   if (tabsByWorktree) {
     session.tabsByWorktree = tabsByWorktree
     changed = true

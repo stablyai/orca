@@ -3,7 +3,6 @@ import type {
   ProfileStateDomainPatch,
   ProfileStateDomainPatchOperation
 } from '../../profile-state/documents/profile-state-domain-patches'
-import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 
 /** One saved value; container keys are re-read on every save, so in-place key edits show up. */
 type SavedNode = { value: unknown; keys?: string[]; children?: SavedNode[] }
@@ -12,12 +11,6 @@ export type WorkspaceSessionSaveCandidate = {
   domain: string
   epoch: number
   node: SavedNode | undefined
-}
-
-const SESSION_DOMAINS: ReadonlySet<string> = new Set(WORKSPACE_SESSION_DOMAINS)
-
-export function isWorkspaceSessionSaveDomain(domain: string): boolean {
-  return SESSION_DOMAINS.has(domain)
 }
 
 // Anything JSON.stringify would not write as a plain key list is compared and saved whole.

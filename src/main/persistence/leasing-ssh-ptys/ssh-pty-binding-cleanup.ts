@@ -82,12 +82,12 @@ export function clearSshRemotePtyBindingsForLeases(
     // Replace, never edit, saved entries: incremental saves compare them by identity.
     let rows: WorkspaceSessionState['tabsByWorktree'] | undefined
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-      const nextTabs = tabs.map((tab) =>
-        tab.ptyId && referencesBinding({ ptyId: tab.ptyId, worktreeId, targetId, tabId: tab.id })
-          ? { ...tab, ptyId: null }
-          : tab
-      )
-      if (nextTabs.some((tab, index) => tab !== tabs[index])) {
+      const bound = (tab: (typeof tabs)[number]): boolean =>
+        Boolean(
+          tab.ptyId && referencesBinding({ ptyId: tab.ptyId, worktreeId, targetId, tabId: tab.id })
+        )
+      if (tabs.some(bound)) {
+        const nextTabs = tabs.map((tab) => (bound(tab) ? { ...tab, ptyId: null } : tab))
         rows ??= { ...session.tabsByWorktree }
         rows[worktreeId] = nextTabs
         changed = true

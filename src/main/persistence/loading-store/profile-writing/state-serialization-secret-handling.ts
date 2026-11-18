@@ -25,10 +25,10 @@ import {
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { ProfileStateDomainPatch } from '../../profile-state/documents/profile-state-domain-patches'
 import {
-  isWorkspaceSessionSaveDomain,
   WorkspaceSessionSaveBaseline,
   type WorkspaceSessionSaveCandidate
 } from './workspace-session-save-baseline'
+import { isWorkspaceSessionDomain } from '../../workspace-session-domains'
 
 /** Domains whose saved form differs from state; whole saves keep this order after the durable spread. */
 const PROJECTED_SAVE_DOMAINS = [
@@ -115,7 +115,7 @@ export class StateSerializationSecretHandlingOperations {
     const sessionCandidates: WorkspaceSessionSaveCandidate[] = []
     for (const domain of saved) {
       const value = this.projectDomainToSave(domain, encrypt)
-      if (sessionSaves && isWorkspaceSessionSaveDomain(domain)) {
+      if (sessionSaves && isWorkspaceSessionDomain(domain)) {
         const { patch, candidate } = this.sessionSaveBaseline.capture(domain, value)
         sessionCandidates.push(candidate)
         if (patch && sessionSaves === 'patch') {
