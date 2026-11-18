@@ -304,3 +304,37 @@ it("never names a sender unknown here by another Run's server task its report cl
   expect(sender).toMatchObject({ name: null })
   expect(sender).not.toHaveProperty('agent')
 })
+
+it("names this Orca's own mail about a server's Dispatch by its task and agent", () => {
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Verify on Windows' })
+  db.db
+    .prepare(
+      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent)
+       VALUES ('ctx_remote', 'peerconv_1', ?, 'env_windows', ?, 'claude')`
+    )
+    .run(run.id, task.id)
+  const sender = structuredMailSource({
+    db,
+    mailboxHandle: `run:${run.id}`,
+    dispatchId: null,
+    senderSnapshot: (party, reported) => names().snapshotOf(party, reported),
+    batch: [
+      {
+        id: 'msg_lost',
+        from_handle: 'dispatch:ctx_remote',
+        run_id: run.id,
+        type: 'escalation',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: 'ctx_remote', stopReason: 'lost' }),
+        answer_sender_snapshot: null,
+        created_at: '2026-11-18 08:40:15'
+      }
+    ]
+  }).senders[0]
+  expect(sender).toMatchObject({ name: 'Verify on Windows', agent: 'claude' })
+})

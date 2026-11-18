@@ -35,12 +35,16 @@ export function importedRemoteDispatchId(
   return row?.dispatch_id
 }
 
-/** A paired server's worker, named only by a Dispatch the import recorded for this sender's own mail. */
+/** A paired server's worker, named only by a Dispatch the import recorded for this sender's own mail,
+ *  or by its own `dispatch:` address, which this Orca writes on mail it files about that Dispatch. */
 export function reportedRemoteDispatch(
   db: OrchestrationDb,
   dispatchId: string | undefined,
   senderAddress: string
 ): RemoteDispatchRow | null {
+  if (senderAddress.startsWith('dispatch:')) {
+    return getRemoteDispatch(db, senderAddress.slice('dispatch:'.length)) ?? null
+  }
   const imported =
     dispatchId !== undefined &&
     db.db
