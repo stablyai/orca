@@ -138,10 +138,12 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       return
     }
     const waiting = queued.get(request.id)
-    if (waiting && request.type === 'cancel-spawn') {
+    // Any stop of a launch that has not started withdraws it; nothing is created only to be killed.
+    if (waiting && (request.type === 'cancel-spawn' || request.type === 'kill')) {
       queued.delete(request.id)
-      port.postMessage({ type: 'exit', id: request.id, code: null, signal: 'SIGTERM' })
-      port.postMessage({ type: 'close', id: request.id, code: null, signal: 'SIGTERM' })
+      const signal = (request.type === 'kill' && request.signal) || 'SIGTERM'
+      port.postMessage({ type: 'exit', id: request.id, code: null, signal })
+      port.postMessage({ type: 'close', id: request.id, code: null, signal })
       return
     }
     if (waiting) {
