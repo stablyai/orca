@@ -9,8 +9,9 @@ description: >-
   (such as Codex from Claude) or its own Orca workspace: "Have Codex (or
   Claude) review this and report back" means an Orca worker of that agent.
   Also use when you are a dispatched worker (a prompt with Task and Dispatch
-  IDs: ask, worker_done). Searches, reads and research in your workspace stay
-  with your own subagents, even in parallel. Use `orca-cli` to hand work off
+  IDs: ask, worker_done). Unless the user asks for Orca workers or a named
+  agent, searches, reads and research in your workspace stay with your own
+  subagents, even in parallel. Use `orca-cli` to hand work off
   with nothing expected back ("hand off", "handover", "give this to another
   agent", "another worktree"), and for terminal control, shell commands,
   worktree management, and reading or waiting on terminals.
@@ -39,9 +40,9 @@ running as when the worker shares your execution host. Otherwise, such as a
 different SSH/WSL host or `--on`, ask the user. `worker-start` does not check
 that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
 
-- Start independent workers at the same time, up to about 4 at once: a
-  `worker-start` can wait until its agent is ready, so run them as separate
-  parallel tool calls, not one after another.
+- Start independent workers at the same time, up to about 4 at once, and
+  start the rest as those return: a `worker-start` can wait until its agent is
+  ready, so run them as separate parallel tool calls, not one after another.
   Then **end your turn**. "Report back" and
   "tell me when it's done" still mean end your turn; Orca wakes you and you
   report then.

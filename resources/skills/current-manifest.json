@@ -164,16 +164,16 @@
     {
       "name": "orchestration",
       "sourcePath": "skills/orchestration",
-      "packageDigest": "eb759bf76c399fdc4e59c9d7ca71ef6f053549d2678e1e30535fef967750a386",
+      "packageDigest": "8994f4e97a6544cc9d5cf7ce71f496efafb0a6a3ebe7d18c1472c4122fca4817",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3870,
+          "size": 3928,
           "executable": false,
           "classification": "text",
-          "exactSha256": "89deccfdcf758ccfee06c7aa3882788327b247d8f6732dbb88e5098d3297e6a1",
-          "textNormalizedSha256": "89deccfdcf758ccfee06c7aa3882788327b247d8f6732dbb88e5098d3297e6a1",
-          "identitySha256": "89deccfdcf758ccfee06c7aa3882788327b247d8f6732dbb88e5098d3297e6a1"
+          "exactSha256": "e3d5282234db8a2817ed7c5c660d07851ad509d9e3625d5b42a1641ca5a771e6",
+          "textNormalizedSha256": "e3d5282234db8a2817ed7c5c660d07851ad509d9e3625d5b42a1641ca5a771e6",
+          "identitySha256": "e3d5282234db8a2817ed7c5c660d07851ad509d9e3625d5b42a1641ca5a771e6"
         }
       ]
     }
