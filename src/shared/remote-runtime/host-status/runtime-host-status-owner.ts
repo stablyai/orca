@@ -163,8 +163,10 @@ export class RuntimeHostStatusOwner {
     if (transport === previous) {
       return
     }
-    // A failure seen over the old transport says nothing about the new one.
-    this.failedUntil = 0
+    // A failure seen before the transport became ready says nothing about it; other edges keep the backoff.
+    if (transport === 'ready') {
+      this.failedUntil = 0
+    }
     if (previous === 'ready') {
       this.retireRequest()
       this.clearRetry()

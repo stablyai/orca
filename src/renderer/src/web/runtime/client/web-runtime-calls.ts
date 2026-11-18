@@ -267,7 +267,7 @@ export const getWebRuntimeStatus: PreloadApi['runtimeEnvironments']['getStatus']
   force
 }) =>
   observeOnly
-    ? observeWebRuntimeStatus(selector, timeoutMs)
+    ? observeWebRuntimeStatus(selector, timeoutMs, force)
     : callEnvironmentEnvelope<RuntimeStatus>(
         selector,
         'status.get',

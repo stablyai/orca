@@ -166,8 +166,13 @@ it('answers background refreshes of a failing host from its backoff until a forc
   for (let index = 0; index < 5; index += 1) {
     expect((await owner.refresh()).ok).toBe(false)
   }
+  // A reconnect attempt that has not reached ready keeps the backoff.
+  owner.connectionChanged('connecting')
+  const afterTransport = publish.mock.calls.length
+  expect((await owner.refresh()).ok).toBe(false)
   expect(request).toHaveBeenCalledOnce()
-  expect(publish).toHaveBeenCalledTimes(publications)
+  expect(publish).toHaveBeenCalledTimes(afterTransport)
+  expect(publications).toBeLessThan(afterTransport)
   await owner.refresh({ force: true })
   expect(request).toHaveBeenCalledTimes(2)
 })
