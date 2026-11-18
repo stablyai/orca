@@ -78,7 +78,8 @@ export class DaemonPtyTargetInspection {
       const target = targetsById.get(row.id)
       return (
         target &&
-        this.exactOwner(target.id) === target.adapter &&
+        // Why the route, not exactOwner: a target that exited meanwhile throws there and would sink the rest.
+        this.routes.get(target.id) === target.adapter &&
         this.incarnationFor(target.id) === target.incarnation &&
         (!target.incarnation || row.incarnationId === target.incarnation)
       )
