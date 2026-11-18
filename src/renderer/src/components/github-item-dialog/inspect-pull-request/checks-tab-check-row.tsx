@@ -11,6 +11,7 @@ import type { PRCheckDetail } from '../../../../../shared/github/checks/check-ty
 import { getCheckDetailsKey, getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { ChecksTabCheckDetails } from './checks-tab-check-details'
 import { useTranslate } from '@/i18n/use-translate'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 
 export function renderCheckRow({
   check,
@@ -62,7 +63,7 @@ export function ChecksTabCheckRow({
   const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
   const statusLabel = getCheckStatusLabel(check, t)
   return (
-    <div className="min-w-0">
+    <div ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined} className="min-w-0">
       <button
         type="button"
         onClick={() => onToggle(check)}

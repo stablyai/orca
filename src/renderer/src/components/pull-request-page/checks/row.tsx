@@ -11,6 +11,7 @@ import type { CheckDetailsLoadState } from '@/components/github/github-checks-ta
 import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { CheckDetailsPanel } from './details'
 import { useTranslate } from '@/i18n/use-translate'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 
 export function CheckRow({
   check,
@@ -34,7 +35,11 @@ export function CheckRow({
   const statusLabel = getCheckStatusLabel(check, t)
   const key = getCheckDetailsKey(check)
   return (
-    <div key={key} className="min-w-0">
+    <div
+      ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
+      key={key}
+      className="min-w-0"
+    >
       <button
         type="button"
         onClick={() => onToggle(check)}
