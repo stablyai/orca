@@ -4,7 +4,7 @@ import type {
   NewTabAgentMenuRow,
   buildNewTabAgentMenuRows
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
-import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
+import type { UseDetectedAgentsResult } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AgentPickerDefaultSettings } from '../../../../../shared/agent-launch/picker/agent-launch-picker-defaults'

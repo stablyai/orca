@@ -1,7 +1,7 @@
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/sidebar-list/lineage/worktree-occurrence-plan'
 import type React from 'react'
 import type { AppState } from '@/store/types'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import type {
   PendingSidebarRowReveal,
   PendingSidebarWorktreeReveal

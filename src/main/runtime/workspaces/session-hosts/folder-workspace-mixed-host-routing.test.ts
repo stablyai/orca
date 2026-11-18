@@ -14,11 +14,11 @@ import {
 } from '../../../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { WorkspaceLayoutStream } from '../../terminal/surface/workspace-layout-stream'
-import '../../orca-runtime-tests/workspace-layout-stream-events.test-fixture'
+import '../../terminal/surface/workspace-layout-stream-events.test-fixture'
 import {
   partialRuntimeStore,
   storeRepo
-} from '../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-store-partial-fixture'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({

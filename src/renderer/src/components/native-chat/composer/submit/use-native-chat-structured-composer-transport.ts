@@ -20,6 +20,8 @@ import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agen
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
+import { useAppStore } from '@/store'
+import { nativeChatShowsPromptSuggestions } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
 function nativeChatSessionAttachmentNotReadyNotice(
   agent: AgentType,
@@ -136,6 +138,10 @@ export function useNativeChatStructuredComposerTransport(args: {
     sessionCommands: controller.sessionCommands
   })
   const { fork, sideChat } = forks
+  // Turned off while one shows: the read restarts without asking, and this hides what it held.
+  const showsPromptSuggestions = useAppStore((state) =>
+    nativeChatShowsPromptSuggestions(state.settings)
+  )
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
     const mcpPanel = managesMcp ? mcpTray : undefined
@@ -232,6 +238,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       commandsChecking: controller.commandsChecking,
       acceptsImages,
       contextUsage: controller.contextUsage,
+      promptSuggestion: showsPromptSuggestions ? controller.promptSuggestion : null,
       worktreeId,
       onError,
       onSubmitted,
@@ -266,6 +273,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     sendBlockedReason,
     sendThroughLaunch,
     setOptionPickerRequest,
+    showsPromptSuggestions,
     starting,
     transportEnabled
   ])

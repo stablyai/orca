@@ -1,4 +1,4 @@
-import { supersedeVirtualizedScrollAnchorRestore } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { supersedeVirtualizedScrollAnchorRestore } from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { getSidebarRowRevealAncestorKeys } from './reveal-ancestors'
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/sidebar-list/lineage/worktree-occurrence-plan'
 import type React from 'react'

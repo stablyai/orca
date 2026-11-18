@@ -1,6 +1,6 @@
 import { useCallback, useMemo, type KeyboardEventHandler, type RefObject } from 'react'
 import { useAppStore } from '@/store'
-import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { isOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { resolveStructuredSessionOrcaSessionId } from '../../../../runtime/native-chat/orchestration/structured-session-orca-session-id'

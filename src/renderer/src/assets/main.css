@@ -897,10 +897,16 @@ body[data-modal-overlay-open]
 
 /* Outline interaction cues are scoped to dialog footer actions only. #41870 applied them to
    every Button/Toggle/SelectTrigger, which read as noise on dense toolbar icon buttons.
-   Unlayered on purpose so it beats the Button's `outline-none` utility. Uses :focus (not
-   :focus-visible) so a dialog's auto-focused default action is visibly marked on open, and
-   clears the Button's focus-visible ring so the two cues don't stack. */
+   Unlayered on purpose so it beats the Button's `outline-none` utility. Uses :focus-visible so
+   a dialog's auto-focused action usually shows no ring after a pointer open (Chromium's
+   modality heuristic decides), while keyboard focus still shows one. Clears the Button's
+   focus-visible ring so the two cues don't stack; aria-disabled buttons keep that ring. */
 [data-slot='dialog-footer'] [data-slot='button']:not(:disabled, [aria-disabled='true']) {
+  /* Why: Button's transition-all otherwise animates the hover outline in from medium/currentColor, a bright 3px flash. */
+  outline-width: 1px;
+  outline-offset: 1px;
+  outline-color: var(--ring);
+
   @media (hover: hover) {
     &:hover {
       outline: 1px solid var(--ring);
@@ -908,7 +914,7 @@ body[data-modal-overlay-open]
     }
   }
 
-  &:focus {
+  &:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
     --tw-ring-shadow: 0 0 #0000;
@@ -966,6 +972,31 @@ body[data-modal-overlay-open]
 .scrollbar-sleek-parent:hover .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb:active,
 .worktree-sidebar-scrollbar:hover::-webkit-scrollbar-thumb:active {
   background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
+}
+
+/* A horizontal rail's 2px thumb in a 4px hit area, clear until hovered, so an overflowing rail reads as scrollable.
+   Why webkit-only: standard scrollbar-width/color would override the 4px size in Chromium. */
+.hover-scrollbar-x::-webkit-scrollbar {
+  height: 4px;
+}
+
+.hover-scrollbar-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hover-scrollbar-x::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+}
+
+.hover-scrollbar-x:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 28%, transparent);
+}
+
+.hover-scrollbar-x:hover::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
 }
 
 [data-slot='popover-content'] {
@@ -1946,7 +1977,9 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   top: -7px;
-  left: 0.8125rem;
+  /* Why: centred on the phone icon, measured by use-intro-arrow. */
+  inset-inline-start: calc(var(--intro-arrow-x, 1.25rem) - 7px);
+  display: var(--intro-arrow-display, block);
   border-style: solid;
   border-width: 0 7px 7px;
   /* Why: use foreground + border to create a subtle shadow that adapts to theme */
@@ -1958,7 +1991,8 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   top: -6px;
-  left: 0.8125rem;
+  inset-inline-start: calc(var(--intro-arrow-x, 1.25rem) - 6px);
+  display: var(--intro-arrow-display, block);
   border-style: solid;
   border-width: 0 6px 6px;
   border-color: transparent transparent var(--muted) transparent;
@@ -2316,13 +2350,20 @@ html.native-shell .app-layout {
 
 /* Search and deep-link target: a tint out to the enclosing card's edges that fades.
    An inset shadow carries the tint so a highlighted card keeps its own fill and corners.
-   The bleed vars are measured per target, since nested and sub-row targets sit further in. */
+   The bleed vars are measured per target, since nested and sub-row targets sit further in.
+   A row with no card around it grows a rounded halo instead, so the tint clears its text. */
 .settings-target-highlight {
   --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
   box-shadow:
     inset 0 0 0 100vmax var(--settings-target-tint),
     calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
-    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint),
+    0 0 0 var(--settings-target-halo, 0px) var(--settings-target-tint);
+}
+
+.settings-target-highlight[data-settings-target-loose] {
+  --settings-target-halo: 10px;
+  border-radius: var(--radius-md);
 }
 
 [data-settings-scroll-list] .settings-target-highlight {
@@ -2341,13 +2382,15 @@ html.native-shell .app-layout {
     box-shadow:
       inset 0 0 0 100vmax var(--settings-target-tint),
       calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
-      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint),
+      0 0 0 var(--settings-target-halo, 0px) var(--settings-target-tint);
   }
   100% {
     box-shadow:
       inset 0 0 0 100vmax transparent,
       calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 transparent,
-      var(--settings-target-bleed-right, 0px) 0 0 transparent;
+      var(--settings-target-bleed-right, 0px) 0 0 transparent,
+      0 0 0 var(--settings-target-halo, 0px) transparent;
   }
 }
 

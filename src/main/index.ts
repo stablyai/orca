@@ -59,9 +59,14 @@ import {
   BACKGROUND_OPEN_ARG
 } from '../shared/app-lifecycle/launch/background-open-argv'
 import { setBackgroundWindowOpener } from './window/activation/background-window-open'
+import { installFatalSignalListenerGuard } from './crash-reporting/fatal-signal-listener-guard'
+import { installWorkerThreadDiagnostics } from './worker-threads/worker-thread-diagnostics'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
+// A fatal OOM must crash with a report, never spin on its own trap.
+installFatalSignalListenerGuard()
+installWorkerThreadDiagnostics()
 
 async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
   return await openMainWindowController(options)

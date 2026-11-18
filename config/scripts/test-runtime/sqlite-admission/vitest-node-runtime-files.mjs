@@ -2,16 +2,16 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
-  // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
-  'tests/e2e/linear-cli-recovery.unit.test.ts',
   // Exercises a real peer reset through Node's native Socket.setTypeOfService.
   'src/main/network/best-effort-socket-type-of-service.test.ts',
+  // Relays nested worker_threads through Node's serializer, as Electron's utility process does.
+  'src/main/utility-worker-host/utility-worker-host.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
   'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
-  'tests/e2e/cursor-quota-transport.unit.test.ts',
-  'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
+  'tests/e2e/agents/settings/cursor-quota-transport.unit.test.ts',
+  'tests/e2e/desktop/electron-fixtures/electron-process-shutdown.unit.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
   'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',
@@ -24,17 +24,14 @@ const NODE_RUNTIME_INCLUDE = [
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/network/websocket/ws-inbound-message-queue.test.ts',
   'src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.test.ts',
-  'src/renderer/src/components/sidebar/HostRemoveDialog.test.tsx',
   // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
   'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
-  'src/main/agent-hooks/server/testing/providers/codex/server-codex-session-start.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
   'src/main/runtime/orchestration/mailbox/routing/orchestration-mailbox-routing.test.ts',
 
-  'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts',
   'src/main/pi/rpc/rpc-session-startup.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-clear-queued-command.test.ts',
   'src/main/acp/session/acp-structured-session-adapter.test.ts',
@@ -64,8 +61,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*memory*.test.ts',
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
-  'src/shared/text/own-retained-string.test.ts',
-  'src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
   // Worker TypeScript loads through node:module registerHooks, which Bun lacks.
@@ -118,8 +113,7 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
-  'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
-  'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
+  'tests/e2e/desktop/electron-fixtures/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts'
 ]
 
