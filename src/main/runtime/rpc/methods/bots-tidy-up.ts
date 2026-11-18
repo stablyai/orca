@@ -24,33 +24,58 @@ function botById(context: RpcContext, botId: string) {
   return bot
 }
 
-// Views polled while history is slow share one check per summary row instead of each scanning it.
-const undoneChecks = new Map<string, Promise<boolean>>()
+// Whether each bot's latest summary row was undone. A poll never waits on slow history behind a check
+// already running: it answers with the last known result while one check per bot refreshes it.
+const undoneByBot = new Map<
+  string,
+  { rowId: string; known: boolean | undefined; check: Promise<boolean> | null }
+>()
 function undoneCheck(
   memory: Pick<BotMemoryRecord, 'history'>,
   botId: string,
-  rowId: string
-): Promise<boolean> {
-  const key = `${botId}\u0000${rowId}`
-  let check = undoneChecks.get(key)
-  if (!check) {
-    check = memory
+  rowId: string,
+  fresh: boolean
+): Promise<boolean> | boolean {
+  let entry = undoneByBot.get(botId)
+  if (entry?.rowId !== rowId) {
+    entry = { rowId, known: undefined, check: null }
+    undoneByBot.set(botId, entry)
+  }
+  const current = entry
+  const check = (): Promise<boolean> =>
+    memory
       .history(botId)
       .then((rows) => rows.some((row) => row.by.kind === 'undo' && row.by.of === rowId))
-      .finally(() => undoneChecks.delete(key))
-    undoneChecks.set(key, check)
+      .then((undone) => {
+        current.known = undone
+        return undone
+      })
+  if (fresh) {
+    // Read behind the Undo's own row, so its answer can't be an earlier check's.
+    return check()
   }
-  return check
+  if (current.check) {
+    return current.known ?? false
+  }
+  current.check = check().finally(() => {
+    current.check = null
+  })
+  return current.known ?? current.check
 }
 
-export async function botTidyUpView(context: RpcContext, botId: string): Promise<BotTidyUpView> {
+export async function botTidyUpView(
+  context: RpcContext,
+  botId: string,
+  options: { fresh?: boolean } = {}
+): Promise<BotTidyUpView> {
   const bot = botById(context, botId)
   const { runtime } = context
   const setting = botTidyUp(bot)
   const state = tidyUpState(runtime.lookAround.get(bot.id))
   const lastRun = state.runs.at(-1)
   const rowId = state.last?.rowId
-  const undone = rowId != null && (await undoneCheck(runtime.bots.memory, bot.id, rowId))
+  const undone =
+    rowId != null && (await undoneCheck(runtime.bots.memory, bot.id, rowId, options.fresh === true))
   return {
     setting,
     last: state.last ? { ...state.last, undone } : null,
@@ -98,7 +123,7 @@ export const BOT_TIDY_UP_METHODS = [
         botHomeFolder(bot),
         params.rowId
       )
-      return { undone, tidyUp: await botTidyUpView(context, bot.id) }
+      return { undone, tidyUp: await botTidyUpView(context, bot.id, { fresh: true }) }
     }
   })
 ]

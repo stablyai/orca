@@ -19,7 +19,9 @@ const SUMMARY = {
   merged: 0
 }
 
-function tidyRuntime() {
+function tidyRuntime(
+  history: (botId: string) => Promise<{ by: { kind: string; of?: string } }[]> = async () => []
+) {
   const lookAround = new BotLookAroundStore({ read: () => null, write: async () => {} }, () => {})
   const undo = vi.fn(async () => true)
   const runtime = {
@@ -27,7 +29,7 @@ function tidyRuntime() {
     bots: {
       assertEnabled: () => {},
       list: () => [makeTestBot({ id: 'b1', agent: 'claude' })],
-      memory: { undo, history: async () => [] }
+      memory: { undo, history }
     },
     lookAround
   }
@@ -72,5 +74,31 @@ describe('Undo of a tidy-up', () => {
       join('/isolated', 'profile', 'bots', 'reviewer'),
       'run-B'
     )
+  })
+})
+
+describe('a polled Tidy-up view', () => {
+  it('reads slow history once, and answers later polls without waiting on it', async () => {
+    installFakeAppEnvironment({ getPath: () => join('/isolated', 'profile') })
+    initDataPath()
+    let release = (): void => {}
+    const stalled = new Promise<void>((resolve) => (release = resolve))
+    const history = vi.fn(async () => {
+      await stalled
+      return [{ by: { kind: 'undo', of: 'run-A' } }]
+    })
+    const { dispatcher, lastRun } = tidyRuntime(history)
+    lastRun('run-A')
+    const poll = () =>
+      dispatcher.dispatch({ ...request({ botId: 'b1' }), method: 'bots.tidyUp.get' })
+
+    const first = poll()
+    const later = await Promise.all(Array.from({ length: 50 }, poll))
+    expect(later.every((answer) => answer.ok)).toBe(true)
+    expect(history).toHaveBeenCalledTimes(1)
+
+    release()
+    expect(await first).toMatchObject({ ok: true, result: { tidyUp: { last: { undone: true } } } })
+    expect(await poll()).toMatchObject({ result: { tidyUp: { last: { undone: true } } } })
   })
 })
