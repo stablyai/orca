@@ -3,6 +3,8 @@ import type { ClaudeAccountSelectionChange } from '../../../shared/agent-account
 import type { PreloadApi } from '../../api-types'
 
 export const claudeAccountsApi = {
+  importHome: (args: { sourceHome: string; importHistory?: boolean }) =>
+    ipcRenderer.invoke('claudeAccounts:importHome', args),
   list: () => ipcRenderer.invoke('claudeAccounts:list'),
   add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null; copyLink?: boolean }) =>
     ipcRenderer.invoke('claudeAccounts:add', args),

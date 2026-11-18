@@ -23,7 +23,7 @@ const failedThreadIdsByHome = new Map<string, Set<string>>()
 export async function healPendingCodexAccountThreads(
   codexHomePath: string,
   pendingThreads: ReadonlyMap<string, string>,
-  options: CodexSessionIndexHealOptions = {}
+  options: CodexSessionIndexHealOptions & { retryFailed?: boolean } = {}
 ): Promise<CodexAccountSessionIndexHealSummary> {
   const summary = upToDateSummary()
   const homeKey = normalizeRuntimePathForComparison(codexHomePath)
@@ -31,7 +31,7 @@ export async function healPendingCodexAccountThreads(
   failedThreadIdsByHome.set(homeKey, failed)
   // /resume hides unindexed threads once any are indexed; prioritize recent work during long heals.
   const pending = [...pendingThreads]
-    .filter(([threadId]) => !failed.has(threadId))
+    .filter(([threadId]) => options.retryFailed || !failed.has(threadId))
     .sort(([, left], [, right]) => (left < right ? 1 : left > right ? -1 : 0))
     .map(([threadId]) => ({ threadId }))
   if (pending.length === 0) {

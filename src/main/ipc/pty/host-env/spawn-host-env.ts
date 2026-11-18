@@ -1,3 +1,6 @@
+import { getClaudeWorkspaceProfiles } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { prepareWorkspaceShellAccount } from './workspace-shell-account-preparation'
+import { historyLaunchAccount } from '../../../providers/accounts/workspace-account-session-resume'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -74,6 +77,7 @@ type PtySpawnHostEnvArgs = {
   /** The lane's spawn env before Orca's host env. */
   env: Record<string, string> | undefined
   cwd: string | undefined
+  worktreeId?: string
   shellOverride: string | undefined
   expectedWslDistro: string | null
   codexSelectionTarget: CodexAccountSelectionTarget
@@ -136,10 +140,31 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
   args.mark?.('codex_resume')
   const codexResumeHome = codexResumeLaunch.codexResumeHome
   const launchCommand = codexResumeLaunch.command
-  const baseEnv = deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch)
+  const baseEnv = { ...deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch) }
+  if (!args.launchAgent && !args.preAdopted) {
+    const claude = await prepareWorkspaceShellAccount('claude', baseEnv, true, async () =>
+      getClaudeWorkspaceProfiles()?.resolve(args.worktreeId, target, true)
+    )
+    if (claude) {
+      Object.assign(baseEnv, claude.envPatch)
+    }
+  }
   const launchesCodex = args.launchAgent === 'codex'
+  const pinnedCodex = launchesCodex
+    ? await historyLaunchAccount(baseEnv, 'codex', args.worktreeId)
+    : null
+  if (pinnedCodex) {
+    delete baseEnv.ORCA_CODEX_LAUNCH_ERROR
+  }
   const selectLaunchCodexHome = async (): Promise<string | null> =>
-    (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null
+    pinnedCodex?.home ??
+    (await prepareWorkspaceShellAccount('codex', baseEnv, !args.launchAgent, async () =>
+      deps.getSelectedCodexHomePath?.(target, baseEnv, {
+        launchesCodex,
+        workspaceId: !args.launchAgent || launchesCodex ? args.worktreeId : undefined
+      })
+    )) ??
+    null
   let selectedCodexHomePath = !args.preAdopted
     ? getCompatibleSelectedCodexHomePath(
         target,
@@ -154,17 +179,21 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
     const resolution = resolveCodexHomeAfterManagedAuthReadiness({
       selectedCodexHomePath,
       getSettings: () => deps.getSettings?.(),
-      requiredCodexHomePath: codexResumeHome?.codexHomePath,
+      requiredCodexHomePath: pinnedCodex?.home ?? codexResumeHome?.codexHomePath,
       target,
       resolveCurrent: async () =>
         getCompatibleSelectedCodexHomePath(
           target,
-          (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null
+          (await deps.getSelectedCodexHomePath?.(target, baseEnv, {
+            launchesCodex,
+            workspaceId: launchesCodex ? args.worktreeId : undefined
+          })) ?? null
         ),
       resolveAfterUnavailable: async (unavailableManagedHomePath) =>
         getCompatibleSelectedCodexHomePath(
           target,
           (await deps.getSelectedCodexHomePath?.(target, baseEnv, {
+            workspaceId: launchesCodex ? args.worktreeId : undefined,
             unavailableManagedHomePath,
             launchesCodex
           })) ?? null

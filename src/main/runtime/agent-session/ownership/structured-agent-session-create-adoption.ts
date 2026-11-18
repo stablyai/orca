@@ -1,3 +1,4 @@
+import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
 import { stat } from 'node:fs/promises'
 import {
   agentSessionRefusalError,
@@ -218,7 +219,9 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
     })
     // Title from where History found the transcript: Codex preparation may copy it to another home.
     const [prepared, conversationName] = await Promise.all([
-      input.agent === 'codex'
+      input.agent === 'codex' &&
+      (!admitted ||
+        ('path' in admitted.accountHome && admitted.accountHome.path === getSystemCodexHomePath()))
         ? prepareCodexAdoption(
             adoption,
             input.providerSessionId,

@@ -1,3 +1,11 @@
+import {
+  useHistoryAccountFilter,
+  useHistoryAccountSessions,
+  historyConversationCountLabel
+} from '../accounts/history-account-filter-options'
+import { HistoryAccountContext } from '../accounts/history-account-context'
+import { useHistoryAccountCatalogs } from '../accounts/use-history-account-catalogs'
+import { HistoryAccountFilter } from '../accounts/HistoryAccountFilter'
 import { useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -21,8 +29,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import {
   aiVaultResultCountLabel,
-  AiVaultSessionListBar,
-  aiVaultSessionCountLabel
+  AiVaultSessionListBar
 } from '../session-list/AiVaultSessionListBar'
 import { aiVaultBrowseSortMenu, aiVaultSearchSortMenu } from '../scope/ai-vault-sort-options'
 import { AiVaultShowMoreSessionsRow } from '../session-list/AiVaultShowMoreSessionsRow'
@@ -177,6 +184,9 @@ export default function AiVaultPanel({
     search,
     history
   )
+  const accountCatalogs = useHistoryAccountCatalogs(resolverSessions, scanResult?.scannedAt)
+  const [accountFilter, setAccountFilter] = useHistoryAccountFilter(accountCatalogs)
+  const accountSessions = useHistoryAccountSessions(sessions, accountCatalogs, accountFilter)
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
     scopeOnly: scope !== 'all',
@@ -223,7 +233,7 @@ export default function AiVaultPanel({
     sessionLimit
   })
 
-  const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, listMode, group, {
+  const { filteredSessions, groups } = useAiVaultPanelSessions(accountSessions, listMode, group, {
     query,
     agents,
     scope,
@@ -260,124 +270,138 @@ export default function AiVaultPanel({
   })
 
   return (
-    <div
-      className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar outline-none"
-      {...aiVaultPanelKeyboardRootProps(keyboardRows ? listKeyboardRef : undefined)}
+    <HistoryAccountContext
+      value={{ catalogs: accountCatalogs, workspaceId: effectiveActiveWorktreeId ?? undefined }}
     >
-      <AiVaultPanelHeader
-        query={query}
-        searching={searching}
-        loading={searching ? search.loading : loading}
-        hasScanResult={Boolean(scanResult)}
-        activeWorktreePath={activeWorktreePath}
-        activeProjectKey={activeProjectKey}
-        scope={scope}
-        executionHostScope={executionHostScope}
-        hostScopeOptions={hostScopeOptions}
-        agents={agents}
-        group={group}
-        hideEmptySessions={hideEmptySessions}
-        sessionLimit={sessionLimit}
-        adjustmentCount={viewAdjustmentCount}
-        searchInputRef={searchInputRef}
-        headerAction={headerAction}
-        onSearchKeyDown={
-          keyboardRows ? (event) => listKeyboardRef.current?.handleKeyDown(event) : undefined
-        }
-        onQueryChange={setQuery}
-        onScopeChange={handleScopeChange}
-        onExecutionHostScopeChange={onExecutionHostScopeChange}
-        onAgentEnabledChange={setAgentEnabled}
-        onAllAgentsEnabledChange={setAllAgentsEnabled}
-        onGroupChange={setGroup}
-        onHideEmptySessionsChange={setHideEmptySessions}
-        onSessionLimitChange={setSessionLimit}
-        onReset={resetViewOptions}
-        onRefresh={() => (searching ? search.retry() : void refresh({ force: true }))}
-      />
-
-      {stripProgress ? <AiVaultScanProgressStrip {...stripProgress} /> : null}
-
-      {!searching && error ? (
-        <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
-      ) : null}
-
-      {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
-      <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
-        {searching
-          ? filteredSessions.length > 0 && (
-              <AiVaultSessionListBar
-                label={aiVaultResultCountLabel(filteredSessions.length, t)}
-                value={searchSort}
-                menu={aiVaultSearchSortMenu(t)}
-                onChange={setSearchSort}
-              />
-            )
-          : sessions.length > 0 && (
-              <AiVaultSessionListBar
-                label={aiVaultSessionCountLabel(filteredSessions.length, sessions.length, t)}
-                value={sort}
-                menu={aiVaultBrowseSortMenu(t)}
-                onChange={setSort}
-              />
-            )}
-        {(!searching || sessions.length > 0 || search.loading) && (
-          <AiVaultSessionVirtualList
-            key={searching ? 'search' : 'history'}
-            resultsKey={searching ? search.resultsKey : undefined}
-            stale={stale}
-            searchHits={searching ? searchHits : undefined}
-            searchHitHostLabels={searchHitHostLabels}
-            groups={groups}
-            collapsedGroups={collapsedGroups}
-            loading={searching ? search.loading : loading}
-            scopePending={!searching && scopePending}
-            scanProgressShown={stripProgress !== null}
-            sessionsCount={searching ? filteredSessions.length : sessions.length}
-            filteredSessionsCount={filteredSessions.length}
-            noAgentsSelected={agents.length === 0}
-            error={error}
-            vaultScope={scope}
-            buildResumeStartup={launchActions.buildResumeStartup}
-            getSessionResumeState={getSessionResumeState}
-            getSessionResumeActions={getSessionResumeActions}
-            getOriginalPaneTarget={paneActions.getOriginalPaneTarget}
-            isStructuredSessionOpen={paneActions.isStructuredSessionOpen}
-            getSessionLiveState={paneActions.getSessionLiveState}
-            getWorktreeInfo={getSessionWorktreeInfo}
-            onToggleGroup={toggleGroup}
-            keyboardRef={keyboardRows ? listKeyboardRef : undefined}
-            query={query}
-            resumeHere={resumeHere}
-            onJumpToWorktree={paneActions.jumpToWorktree}
-            onResume={launchActions.handleResume}
-            getSessionResumeInChat={getSessionResumeInChat}
-            onContinueInNewSession={launchActions.handleContinueInNewSession}
-            onResumeInNewChat={launchActions.handleResumeInNewChat}
-            onResumeInNewCli={launchActions.handleResumeInNewCli}
-            {...rowHandlers}
-          />
-        )}
-        {!searching && (
-          <AiVaultShowMoreSessionsRow
-            loaded={sessions.length}
-            loadedSessionLimit={loadedSessionLimit}
-            loading={loading}
-            sessionLimit={sessionLimit}
-            onSessionLimitChange={setSessionLimit}
-          />
-        )}
-      </AiVaultPanelSearch>
-      {launchActions.continuationOpen && (
-        <AgentSessionContinuationDialog
-          open
-          request={launchActions.continuationRequest}
-          onOpenChange={launchActions.handleContinuationDialogOpenChange}
-          onStarted={onSessionOpened}
+      <div
+        className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar outline-none"
+        {...aiVaultPanelKeyboardRootProps(keyboardRows ? listKeyboardRef : undefined)}
+      >
+        <AiVaultPanelHeader
+          query={query}
+          searching={searching}
+          loading={searching ? search.loading : loading}
+          hasScanResult={Boolean(scanResult)}
+          activeWorktreePath={activeWorktreePath}
+          activeProjectKey={activeProjectKey}
+          scope={scope}
+          executionHostScope={executionHostScope}
+          hostScopeOptions={hostScopeOptions}
+          agents={agents}
+          group={group}
+          hideEmptySessions={hideEmptySessions}
+          sessionLimit={sessionLimit}
+          adjustmentCount={viewAdjustmentCount}
+          searchInputRef={searchInputRef}
+          headerAction={headerAction}
+          onSearchKeyDown={
+            keyboardRows ? (event) => listKeyboardRef.current?.handleKeyDown(event) : undefined
+          }
+          onQueryChange={setQuery}
+          onScopeChange={handleScopeChange}
+          onExecutionHostScopeChange={onExecutionHostScopeChange}
+          onAgentEnabledChange={setAgentEnabled}
+          onAllAgentsEnabledChange={setAllAgentsEnabled}
+          onGroupChange={setGroup}
+          onHideEmptySessionsChange={setHideEmptySessions}
+          onSessionLimitChange={setSessionLimit}
+          onReset={resetViewOptions}
+          onRefresh={() => (searching ? search.retry() : void refresh({ force: true }))}
         />
-      )}
-    </div>
+        <HistoryAccountFilter
+          value={accountFilter}
+          onChange={setAccountFilter}
+          catalogs={accountCatalogs}
+        />
+
+        {stripProgress ? <AiVaultScanProgressStrip {...stripProgress} /> : null}
+
+        {!searching && error ? (
+          <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">
+            {error}
+          </div>
+        ) : null}
+
+        {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
+        <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
+          {searching
+            ? filteredSessions.length > 0 && (
+                <AiVaultSessionListBar
+                  label={aiVaultResultCountLabel(filteredSessions.length, t)}
+                  value={searchSort}
+                  menu={aiVaultSearchSortMenu(t)}
+                  onChange={setSearchSort}
+                />
+              )
+            : sessions.length > 0 && (
+                <AiVaultSessionListBar
+                  label={historyConversationCountLabel(
+                    sessions,
+                    accountCatalogs,
+                    filteredSessions.length,
+                    t
+                  )}
+                  value={sort}
+                  menu={aiVaultBrowseSortMenu(t)}
+                  onChange={setSort}
+                />
+              )}
+          {(!searching || sessions.length > 0 || search.loading) && (
+            <AiVaultSessionVirtualList
+              key={searching ? 'search' : 'history'}
+              resultsKey={searching ? search.resultsKey : undefined}
+              stale={stale}
+              searchHits={searching ? searchHits : undefined}
+              searchHitHostLabels={searchHitHostLabels}
+              groups={groups}
+              collapsedGroups={collapsedGroups}
+              loading={searching ? search.loading : loading}
+              scopePending={!searching && scopePending}
+              scanProgressShown={stripProgress !== null}
+              sessionsCount={searching ? filteredSessions.length : sessions.length}
+              filteredSessionsCount={filteredSessions.length}
+              noAgentsSelected={agents.length === 0}
+              error={error}
+              vaultScope={scope}
+              buildResumeStartup={launchActions.buildResumeStartup}
+              getSessionResumeState={getSessionResumeState}
+              getSessionResumeActions={getSessionResumeActions}
+              getOriginalPaneTarget={paneActions.getOriginalPaneTarget}
+              isStructuredSessionOpen={paneActions.isStructuredSessionOpen}
+              getSessionLiveState={paneActions.getSessionLiveState}
+              getWorktreeInfo={getSessionWorktreeInfo}
+              onToggleGroup={toggleGroup}
+              keyboardRef={keyboardRows ? listKeyboardRef : undefined}
+              query={query}
+              resumeHere={resumeHere}
+              onJumpToWorktree={paneActions.jumpToWorktree}
+              onResume={launchActions.handleResume}
+              getSessionResumeInChat={getSessionResumeInChat}
+              onContinueInNewSession={launchActions.handleContinueInNewSession}
+              onResumeInNewChat={launchActions.handleResumeInNewChat}
+              onResumeInNewCli={launchActions.handleResumeInNewCli}
+              {...rowHandlers}
+            />
+          )}
+          {!searching && (
+            <AiVaultShowMoreSessionsRow
+              loaded={sessions.length}
+              loadedSessionLimit={loadedSessionLimit}
+              loading={loading}
+              sessionLimit={sessionLimit}
+              onSessionLimitChange={setSessionLimit}
+            />
+          )}
+        </AiVaultPanelSearch>
+        {launchActions.continuationOpen && (
+          <AgentSessionContinuationDialog
+            open
+            request={launchActions.continuationRequest}
+            onOpenChange={launchActions.handleContinuationDialogOpenChange}
+            onStarted={onSessionOpened}
+          />
+        )}
+      </div>
+    </HistoryAccountContext>
   )
 }

@@ -15,7 +15,6 @@ import type { RateLimitService } from '../rate-limits/service/rate-limit-service
 import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from '../../shared/agent-accounts/codex/codex-selection-lane'
 import { CodexAccountIdentity } from './credentials/codex-account-identity'
-import type { CodexAuthIdentity as ResolvedCodexIdentity } from './credentials/codex-auth-identity'
 import { CodexConfigMirror } from './managed-homes/codex-config-mirror'
 import { runCodexLoginSession, type CodexLoginChild } from './login/codex-login-session'
 import { CodexManagedHomePath } from './managed-homes/codex-managed-home-path'
@@ -25,6 +24,7 @@ import { CodexAccountSelection } from './account-management/codex-account-select
 import { CodexAccountRegistration } from './account-management/codex-account-registration'
 import type {
   CodexAccountAddTarget,
+  CodexAccountImportOptions,
   CodexAccountReauthenticateOptions,
   CodexAccountServiceLifecycle,
   CodexResetCreditConsumeResult
@@ -72,6 +72,7 @@ export class CodexAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private readonly renameListeners = new Set<() => void>()
   private cancelPendingCodexLogin: (() => boolean) | null = null
+  private loginRevision = 0
   private pendingLoginUrl: string | null = null
   private readonly pendingLoginUrlListeners = new Set<(url: string | null) => void>()
   private openWslLoginUrl: ((url: string) => void) | null = null
@@ -103,7 +104,7 @@ export class CodexAccountService {
       runtimeHome,
       managedHomePaths: this.managedHomePaths,
       serializeMutation: (operation) => this.serializeMutation(operation),
-      getSnapshot: () => this.getSnapshot(),
+      getSnapshot: () => this.selection.snapshot(),
       toSummary: (account) => this.toSummary(account)
     })
     this.selection = new CodexAccountSelection({
@@ -117,14 +118,14 @@ export class CodexAccountService {
         this.identity.readFromTrustedHome(
           this.managedHomePaths.assertHostOwnership(path, accountId)
         ),
-      removeManagedHome: (path, accountId) => this.safeRemoveManagedHome(path, accountId),
+      removeManagedHome: (path, accountId) => this.managedHomes.safeRemove(path, accountId),
       discardResetAttempts: (accountId) => this.resetCredits.discardForRemovedAccount(accountId)
     })
     this.registration = new CodexAccountRegistration({
       store,
       rateLimits,
       runtimeHome,
-      readIdentityFromHome: (path, accountId) => this.readIdentityFromHome(path, accountId),
+      readIdentityFromHome: (path, accountId) => this.identity.readFromHome(path, accountId),
       selection: this.selection,
       configMirror: this.configMirror,
       managedHomePaths: this.managedHomePaths,
@@ -151,8 +152,8 @@ export class CodexAccountService {
   }
 
   async addAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
-    this.supersedePendingLogin()
-    return this.serializeMutation(() => this.registration.add(target))
+    const login = this.supersedePendingLogin()
+    return this.serializeMutation(() => this.registration.add(target, login))
   }
 
   /** Adds a host account, or re-authenticates `accountId`, through a device code opened on another device. */
@@ -160,8 +161,7 @@ export class CodexAccountService {
     channel: HostAccountSignInChannel,
     accountId?: string
   ): Promise<CodexRateLimitAccountsState> {
-    this.supersedePendingLogin()
-    const login = (home: string): Promise<void> => this.runCodexLogin(home, channel)
+    const login = this.supersedePendingLogin(channel)
     return this.serializeMutation(() =>
       accountId
         ? this.registration.reauthenticate(accountId, undefined, login)
@@ -201,17 +201,27 @@ export class CodexAccountService {
 
   // Cancel before queueing: abandoned logins hold the slot needed by later user account actions.
   // Background resets share the queue without superseding logins.
-  private supersedePendingLogin(): void {
+  private supersedePendingLogin(
+    channel?: HostAccountSignInChannel
+  ): (home: string) => Promise<void> {
+    const revision = ++this.loginRevision
     if (this.cancelPendingLogin()) {
       console.info('[codex-accounts] Cancelled a pending Codex login superseded by a new request.')
+    }
+    return (home) => {
+      if (revision !== this.loginRevision) {
+        return Promise.reject(new Error(CODEX_LOGIN_CANCELLED_MESSAGE))
+      }
+      return this.runCodexLogin(home, channel)
     }
   }
 
   /** Import credentials from a terminal login on a headless host. */
   async addAccountFromHome(
     sourceHome: string,
-    target?: CodexAccountAddTarget
+    target?: CodexAccountImportOptions
   ): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
     return this.serializeMutation(() => this.registration.addFromHome(sourceHome, target))
   }
 
@@ -219,8 +229,8 @@ export class CodexAccountService {
     accountId: string,
     options?: CodexAccountReauthenticateOptions
   ): Promise<CodexRateLimitAccountsState> {
-    this.supersedePendingLogin()
-    return this.serializeMutation(() => this.registration.reauthenticate(accountId, options))
+    const login = this.supersedePendingLogin()
+    return this.serializeMutation(() => this.registration.reauthenticate(accountId, options, login))
   }
 
   async removeAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
@@ -274,19 +284,8 @@ export class CodexAccountService {
     return this.resetCredits.consumeCurrent()
   }
 
-  private getSnapshot(): CodexRateLimitAccountsState {
-    return this.selection.snapshot()
-  }
-
-  private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
+  resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
     return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
-  }
-
-  private readIdentityFromHome(
-    managedHomePath: string,
-    expectedAccountId: string
-  ): Promise<ResolvedCodexIdentity> {
-    return this.identity.readFromHome(managedHomePath, expectedAccountId)
   }
 
   private toSummary(account: CodexManagedAccount): CodexManagedAccountSummary {
@@ -294,10 +293,6 @@ export class CodexAccountService {
       account,
       this.store.getSettings().managedAccountDisplayNames
     )
-  }
-
-  private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): Promise<void> {
-    return this.managedHomes.safeRemove(candidatePath, expectedAccountId)
   }
 
   private async runCodexLogin(

@@ -61,7 +61,14 @@ const AiVaultRowResumeParams = z
     filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH),
     codexHome: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH).nullable(),
     executionHostId: z.string().optional(),
-    fork: z.boolean().optional()
+    fork: z.boolean().optional(),
+    preview: z.boolean().optional(),
+    historyCatalog: z.boolean().optional(),
+    planToken: z.string().uuid().optional(),
+    commitToken: z.string().uuid().optional(),
+    resumeAccountId: z.string().min(1).max(512).nullable().optional(),
+    exactVersion: z.boolean().optional(),
+    workspaceId: z.string().min(1).max(8192).optional()
   })
   .strict()
 

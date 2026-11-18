@@ -49,6 +49,7 @@ export type StructuredAgentAccountHomeRequest = {
    *  `identity` is a read that names the selected account before its folder exists. `catalog`
    *  is a read of the account a new chat would launch on, so its models match that chat's. */
   purpose: 'launch' | 'read' | 'identity' | 'catalog'
+  adoptingTranscript?: boolean
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
   /** The permission mode a new chat starts in, when it names one. */

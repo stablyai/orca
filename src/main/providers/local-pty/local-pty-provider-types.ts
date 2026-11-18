@@ -10,6 +10,7 @@ export type LocalPtyProviderOptions = {
       explicitEnv?: PtySpawnOptions['env']
       command?: string
       launchAgent?: PtySpawnOptions['launchAgent']
+      worktreeId?: PtySpawnOptions['worktreeId']
       codexHomePathOverride?: PtySpawnOptions['codexHomePathOverride']
       cwd?: string
       shellPath?: string

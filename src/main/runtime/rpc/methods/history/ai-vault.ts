@@ -1,3 +1,4 @@
+import { prepareWorkspaceAccountSessionResume } from '../../../../providers/accounts/workspace-account-session-resume'
 import { prepareStructuredChatCliFork } from '../../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { writeAiVaultSessionHandoffSnapshot } from '../../../../ai-vault/session-handoff-snapshot'
 import {
@@ -146,13 +147,18 @@ export const AI_VAULT_METHODS = [
         )
       }
       const args: AiVaultPrepareSessionResumeArgs = {
+        ...params,
         agent: params.agent,
         ...(params.sessionId ? { sessionId: params.sessionId } : {}),
         ...(params.fork ? { fork: true } : {}),
+        ...(params.workspaceId ? { workspaceId: params.workspaceId } : {}),
         filePath: params.filePath,
         codexHome: params.codexHome,
         // This host owns the transcripts; never echo a client-supplied runtime/SSH owner stamp.
         executionHostId: LOCAL_EXECUTION_HOST_ID
+      }
+      if (args.historyCatalog || args.commitToken) {
+        return (await prepareWorkspaceAccountSessionResume(args)) ?? { useRealCodexHome: false }
       }
       if (!isWslUncPath(args.filePath)) {
         const ensureHost = () => runtime.ensureStructuredAgentSessionHost()
@@ -162,7 +168,9 @@ export const AI_VAULT_METHODS = [
         assertLegacyAiVaultResumeAllowed(args)
       }
       return (
-        (await copyStructuredChatConversation(args)) ?? runtime.prepareAiVaultSessionResume(args)
+        (await copyStructuredChatConversation(args)) ??
+        (await prepareWorkspaceAccountSessionResume(args)) ??
+        runtime.prepareAiVaultSessionResume(args)
       )
     }
   }),

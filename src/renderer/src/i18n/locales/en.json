@@ -16108,10 +16108,6 @@
             "monthsAgo": "{{value0}}mo ago",
             "yearsAgo": "{{value0}}y ago",
             "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session",
             "worktree": "Worktree",
             "prompt": "Prompt",
             "firstPrompt": "First prompt",
@@ -24535,6 +24531,11 @@
       "scannerBusy": "Too many session scans in flight. Wait a moment, then refresh.",
       "scannerMissing": "The session scanner is missing from this Orca install. Reinstalling Orca restores it.",
       "scannerStopped": "The session scanner stopped unexpectedly. Refresh to try again."
+    },
+    "accounts": {
+      "all": "All accounts",
+      "savedIn": "Saved in {{account}}",
+      "unknown": "Unidentified account"
     }
   },
   "common": {
@@ -24914,6 +24915,25 @@
       "cancel": "Cancel",
       "save": "Save",
       "unsupportedHost": "Update Orca on {{host}} to change this setting there."
+    },
+    "codex": {
+      "import": {
+        "searchKeywords": "import home folder directory auth.json"
+      }
+    },
+    "homeImport": {
+      "absolutePath": "Enter a full directory path.",
+      "title": "Import {{provider}} account",
+      "description": "Copy a login into a new Orca account home and activate it for {{host}}. The source sign-in is preserved.",
+      "home": "{{provider}} home directory",
+      "browse": "Browse…",
+      "hint": "Choose the account home folder, not an individual file.",
+      "wslHint": "For WSL, choose its home folder through the Windows file picker.",
+      "history": "Import session history",
+      "historyWsl": "History import is available for host accounts only.",
+      "historyHint": "Copy conversations into this account and keep its history separate. The source stays unchanged.",
+      "submit": "Import account",
+      "trigger": "Import from home…"
     }
   },
   "fileSearch": {
@@ -25226,7 +25246,23 @@
         "provisionFailed": "The VM was not created, or creation was interrupted. Open Settings to destroy or remove it."
       },
       "suspendFailed": "Failed to suspend VM workspace"
-    }
+    },
+    "codexAccount": {
+      "loading": "Loading accounts…",
+      "inherit": "Use host default",
+      "missing": "Assigned account unavailable",
+      "unsupported": "Update this host to choose an account per workspace.",
+      "scope": "For new sessions in this workspace",
+      "wslHost": "This WSL host uses the desktop account selection."
+    },
+    "account": {
+      "empty": "Add {{provider}} accounts in Settings > AI Provider Accounts.",
+      "failed": "Could not save the workspace {{provider}} account.",
+      "title": "{{provider}} account",
+      "agents": "Agent accounts",
+      "savedForNewSessions": "New sessions will use {{account}}. Running sessions keep their account."
+    },
+    "continuation": {}
   },
   "tabHoverCard": {
     "browser": "Browser",
@@ -29191,6 +29227,10 @@
       "refresh": "The previous Refresh could not be completed. Try Refresh again.",
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
+    },
+    "codex": {
+      "hostDefaultAccount": "Host default account",
+      "workspaceAccount": "Workspace account"
     }
   },
   "crashReport": {
@@ -29295,5 +29335,30 @@
     "suggestionUse": "Use",
     "browseOnline": "Browse",
     "browseOnlineLabel": "Browse community translations on orca.dev (opens in your browser)"
+  },
+  "historyResume": {
+    "storageFilter": "Stored in account",
+    "chooseTitle": "Which account should continue this conversation?",
+    "unknownLast": "Orca has not recorded the account last used for this session. Choose an account for this continuation.",
+    "differentWorkspace": "The workspace account differs from the account last used. This choice applies only to this continuation.",
+    "unavailable": "Unavailable on this host or needs sign-in",
+    "lastUsed": "Last used for this session",
+    "workspaceAccount": "Workspace account",
+    "copyHint": "Using another account creates an independent continuation. The original conversation is preserved.",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "versions": "Continuations ({{count}})",
+    "lastUnknown": "Last used account not recorded",
+    "notOpened": "Not opened in Orca",
+    "original": "Original conversation",
+    "resumeWith": "Resume with {{account}}",
+    "chooseAccount": "Choose account to resume",
+    "lastUsedAccount": "Last used: {{account}}",
+    "choiceHint": "If the workspace uses another account, Orca will ask before continuing.",
+    "preparing": "Preparing continuation...",
+    "opening": "Opening session...",
+    "lastUnavailable": "The account last used is unavailable. Choose another account or sign in again in Settings.",
+    "recordFailed": "The terminal opened, but History could not record its account. Retry saving History.",
+    "retry": "Retry"
   }
 }

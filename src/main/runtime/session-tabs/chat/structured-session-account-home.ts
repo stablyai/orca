@@ -1,3 +1,4 @@
+import type { StructuredAgentAccountHomeRequest } from '../../agent-session/installation/structured-agent-runtime-registration-types'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { structuredAgentRuntimeMetadata } from '../../agent-session/installation/structured-agent-runtime-metadata'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
@@ -20,12 +21,20 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     if (!registration) {
       return null
     }
-    return async ({ launchEnv, location }, permissionMode?: string) =>
+    return async (
+      {
+        launchEnv,
+        location,
+        adoptingTranscript
+      }: Pick<StructuredAgentAccountHomeRequest, 'launchEnv' | 'location' | 'adoptingTranscript'>,
+      permissionMode?: string
+    ) =>
       registration.resolveAccountHome(
         {
           launchEnv,
           location: location ?? null,
           purpose,
+          adoptingTranscript,
           ...(permissionMode ? { permissionMode } : {}),
           ...(botOfHomeWorkspace(this.requireStore().getBots?.() ?? [], location?.workspaceId)
             ? { bot: true as const }

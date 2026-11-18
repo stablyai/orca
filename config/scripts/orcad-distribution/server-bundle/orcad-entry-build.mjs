@@ -35,6 +35,7 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   sessionScanner: 'src/main/ai-vault/scan-service/session-scanner-service-entry.ts',
   workerThreadChildProcess:
     'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts',
+  accountHomePreparation: 'src/main/providers/accounts/account-home-preparation-worker-entry.ts',
   claudeProfileSetup:
     'src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts',
   codexHistoryDiskUsage:

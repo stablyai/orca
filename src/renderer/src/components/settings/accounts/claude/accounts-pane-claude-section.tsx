@@ -1,3 +1,5 @@
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { ClaudeHomeImport } from './ClaudeHomeImport'
 import { Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -99,7 +101,7 @@ export function renderClaudeAccountsSection(
           keywords={['claude', 'account', 'rate limit', 'status bar', 'quota']}
           className="space-y-3 py-3"
         >
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-0.5">
               <Label>{t('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}</Label>
               <p className="text-xs text-muted-foreground">
@@ -116,7 +118,16 @@ export function renderClaudeAccountsSection(
                     )}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+              {!isRemoteAccountScope &&
+                !isWebClientLocation() &&
+                accountRuntime.runtime === 'host' && (
+                  <ClaudeHomeImport
+                    runtime={accountRuntime}
+                    disabled={addDisabled}
+                    runAction={runClaudeAccountAction}
+                  />
+                )}
               <ButtonGroup>
                 <Button
                   variant="outline"

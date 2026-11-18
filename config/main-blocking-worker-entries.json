@@ -1,4 +1,5 @@
 {
+  "src/main/providers/accounts/account-home-preparation-worker-entry.ts": "Account imports and Codex configuration preparation run off Electron main.",
   "src/main/plugins/panels/plugin-source-transpile-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
   "src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
   "src/main/speech/stt-worker.ts": "Dedicated utility/forked-process entry; speech work stays off Electron main.",

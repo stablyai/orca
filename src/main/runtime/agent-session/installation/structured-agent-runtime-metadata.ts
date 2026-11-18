@@ -134,6 +134,7 @@ async function resolveCodexAccountHomePath(
   const { launchEnv, purpose, workspacePath, location } = request
   const codexHome = await resolveStructuredCodexAccountHomePath({
     launchEnv,
+    workspaceId: request.adoptingTranscript ? undefined : location?.workspaceId,
     resolveLaunchHome:
       purpose === 'launch' ? services.prepareCodexLaunchHome : services.readCodexLaunchHome
   })
@@ -178,11 +179,13 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       supportsLocation: supportsClaudeStructuredLocation,
       // Without a router a launch keeps the record's home (resolveClaudeStructuredLaunchHome).
       launchFollowsSelection: () => getClaudeProfileRouter() !== undefined,
-      resolveAccountHome: async ({ launchEnv, location, purpose }, services) =>
+      resolveAccountHome: async ({ launchEnv, location, purpose, adoptingTranscript }, services) =>
         agentSessionAccountHome(
           CLAUDE_STRUCTURED_AGENT,
           await resolveStructuredClaudeAccountHomePath({
             launchEnv,
+            workspaceId: adoptingTranscript ? undefined : location?.workspaceId,
+            prepare: purpose === 'launch',
             wslDistro: location?.wslDistro ?? null,
             ...(purpose === 'launch' || purpose === 'identity' ? { purpose: 'identity' } : {}),
             getClaudeConfigDirectory: services.getClaudeConfigDirectory

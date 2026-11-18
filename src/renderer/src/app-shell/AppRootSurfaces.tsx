@@ -19,6 +19,7 @@ import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackD
 import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
 import { TelemetryFirstLaunchSurface } from '../components/onboarding/telemetry/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './chrome/ZoomOverlay'
+import { HistoryResumeAccountDialogHost } from '../components/right-sidebar/ai-vault/accounts/HistoryResumeAccountDialog'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
 import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
@@ -309,7 +310,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         onboardingVisible={onboardingGate.shouldRender}
       />
       <PluginInstallTrustDialogHost />
-      {/* Mount once per session; the internal gate selects pre-telemetry users (telemetry-plan.md §First-launch experience). */}
+      <HistoryResumeAccountDialogHost />
       <OverlayBoundary boundaryId="overlay.telemetry-first-launch" resetKey={telemetryOptedIn}>
         <TelemetryFirstLaunchSurface />
       </OverlayBoundary>

@@ -84,7 +84,7 @@ export type AiVaultAgentSource = {
   mergeRootDiscoveries?: boolean
 }
 
-type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent, AiVaultAgentSource> &
+type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent | 'codex', AiVaultAgentSource> &
   Partial<Record<AiVaultAgent, AiVaultAgentSource>>
 
 // OpenCode and Antigravity use dedicated discovery for their storage layouts.

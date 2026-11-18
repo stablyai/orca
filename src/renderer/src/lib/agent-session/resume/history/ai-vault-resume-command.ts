@@ -41,7 +41,45 @@ export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWork
 export function buildAiVaultResumeStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup {
-  return buildAiVaultResumeForWorktree(args, false)
+  let startup = {
+    ...buildAiVaultResumeForWorktree(args, false),
+    ...(args.session.resumeReceipt
+      ? {
+          historyResume: {
+            agent: args.session.agent,
+            sessionId: args.session.sessionId,
+            filePath: args.session.filePath ?? '',
+            codexHome: args.session.codexHome,
+            executionHostId: args.session.executionHostId ?? ('local' as const),
+            resumeReceipt: args.session.resumeReceipt
+          }
+        }
+      : {})
+  }
+  if (args.session.resumeReceipt) {
+    startup = {
+      ...startup,
+      env: { ...startup.env, ORCA_HISTORY_RESUME_RECEIPT: args.session.resumeReceipt }
+    }
+  }
+  const home = args.session.accountHome
+  if (
+    args.session.agent === 'claude' &&
+    home &&
+    'variable' in home &&
+    home.variable === 'CLAUDE_CONFIG_DIR'
+  ) {
+    return {
+      ...startup,
+      env: {
+        ...startup.env,
+        CLAUDE_CONFIG_DIR: home.path,
+        ORCA_CLAUDE_PROFILE_POINTER: '',
+        ORCA_CLAUDE_INJECTED_CONFIG_DIR: home.path
+      }
+    }
+  }
+  return startup
 }
 
 /** Rebuild with the substituted account home; the prebuilt command pins the wrong account. null cwd means no cd; absent cwd is an older payload whose original directory cannot be recovered. */
@@ -49,9 +87,17 @@ export function buildAiVaultDropRepinStartup(args: {
   state: AiVaultResumeWorktreeArgs['state']
   payload: Pick<
     AiVaultSessionDragPayload,
-    'agent' | 'sessionId' | 'sessionCwd' | 'sessionExecutionHostId' | 'sessionFilePath'
+    | 'agent'
+    | 'sessionId'
+    | 'sessionCwd'
+    | 'sessionExecutionHostId'
+    | 'sessionFilePath'
+    | 'codexHome'
   >
-  substituteCodexHome: string
+  substituteCodexHome?: string
+  substituteClaudeConfigDir?: string
+  substituteTranscriptPath?: string
+  resumeReceipt?: string
   worktreeId: string
 }): AiVaultResumeStartup | null {
   if (args.payload.sessionCwd === undefined || !args.payload.sessionFilePath) {
@@ -62,11 +108,15 @@ export function buildAiVaultDropRepinStartup(args: {
     worktreeId: args.worktreeId,
     session: {
       agent: args.payload.agent,
+      resumeReceipt: args.resumeReceipt,
       sessionId: args.payload.sessionId,
       cwd: args.payload.sessionCwd,
-      codexHome: args.substituteCodexHome,
+      codexHome: args.substituteCodexHome ?? args.payload.codexHome ?? null,
+      ...(args.substituteClaudeConfigDir
+        ? { accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: args.substituteClaudeConfigDir } }
+        : {}),
       executionHostId: args.payload.sessionExecutionHostId,
-      filePath: args.payload.sessionFilePath
+      filePath: args.substituteTranscriptPath ?? args.payload.sessionFilePath
     },
     commandOverride: args.state.settings?.agentCmdOverrides?.[args.payload.agent]
   })

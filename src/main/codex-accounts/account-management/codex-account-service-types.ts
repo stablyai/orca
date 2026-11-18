@@ -18,6 +18,8 @@ export type CodexAccountAddTarget = {
   wslDistro?: string | null
 }
 
+export type CodexAccountImportOptions = CodexAccountAddTarget & { importHistory?: boolean }
+
 export type CodexAccountReauthenticateOptions = {
   /** Local-only: activate after sign-in if this runtime had no selection before login. */
   activateIfSelectionWasEmpty?: boolean

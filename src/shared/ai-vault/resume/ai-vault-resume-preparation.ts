@@ -1,5 +1,6 @@
 import type { AiVaultAgent, AiVaultSession } from '../contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
+import type { HistoryResumePlan, HistoryContinuation } from './history-resume-accounts'
 
 export type AiVaultConversationCopy = {
   sessionId: string
@@ -14,6 +15,13 @@ export type AiVaultPrepareSessionResumeArgs = Pick<
     /** A fork only reads the conversation, so a native chat that owns it does not refuse it.
      *  Older hosts drop the field and refuse as for a resume. */
     fork?: boolean
+    workspaceId?: string
+    preview?: boolean
+    historyCatalog?: boolean
+    planToken?: string
+    resumeAccountId?: string | null
+    commitToken?: string
+    exactVersion?: boolean
   }
 
 export const AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY = 'ai-vault.chat-fork-source.v1' as const
@@ -35,8 +43,15 @@ export type AiVaultPrepareSessionResumeRequest =
 
 export type AiVaultPrepareSessionResumeResult = {
   useRealCodexHome: boolean
+  resumePlan?: HistoryResumePlan
+  continuationCatalog?: HistoryContinuation[]
+  resumeReceipt?: string
+  substituteSessionId?: string
+  workspaceAccountPrepared?: boolean
+  substituteClaudeConfigDir?: string
+  substituteTranscriptPath?: string
   cliForkSource?: AiVaultChatForkSource
-  // Cross-account hardlinks share rollouts: the host repins to the selected home. Absent/older-host replies retain the session's home.
+  // Older hosts omit this and retain the recorded home.
   substituteCodexHome?: string
   /** Chat-made fork identity and actual launch agent (opencode2 chats run opencode); older hosts omit it and make no copy. */
   forkedSession?: AiVaultConversationCopy & { agent: AiVaultAgent }
@@ -97,7 +112,9 @@ export function aiVaultSessionNeedsResumePreparation(
 export function aiVaultTerminalResumeRequest(
   args: AiVaultPrepareSessionResumeArgs
 ): AiVaultPrepareSessionResumeArgs {
-  return aiVaultSessionNeedsResumePreparation(args) ? args : { ...args, codexHome: null }
+  return aiVaultSessionNeedsResumePreparation(args) || args.workspaceId
+    ? args
+    : { ...args, codexHome: null }
 }
 
 /** The host's answer as a terminal resume applies it; a malformed one refuses the resume. */
@@ -107,12 +124,27 @@ export function aiVaultTerminalResumeResult(
 ): AiVaultPrepareSessionResumeResult {
   if (
     typeof result?.useRealCodexHome !== 'boolean' ||
-    (result.substituteCodexHome !== undefined && typeof result.substituteCodexHome !== 'string')
+    (result.workspaceAccountPrepared === true &&
+      [
+        result.substituteSessionId,
+        result.substituteTranscriptPath,
+        result.resumeReceipt,
+        args.agent === 'codex' ? result.substituteCodexHome : result.substituteClaudeConfigDir
+      ].some((value) => typeof value !== 'string' || !value.trim())) ||
+    (result.workspaceAccountPrepared !== undefined &&
+      typeof result.workspaceAccountPrepared !== 'boolean') ||
+    [
+      result.substituteCodexHome,
+      result.substituteClaudeConfigDir,
+      result.substituteTranscriptPath
+    ].some((value) => value !== undefined && (typeof value !== 'string' || !value.trim()))
   ) {
     throw new Error('Invalid aiVault.prepareSessionResume response')
   }
   // Why: old desktop resumes kept the recorded home for sessions that need no readying.
-  return aiVaultSessionNeedsResumePreparation(args) ? result : { useRealCodexHome: false }
+  return aiVaultSessionNeedsResumePreparation(args) || result.workspaceAccountPrepared
+    ? result
+    : { useRealCodexHome: false }
 }
 
 /** The Codex home a prepared session resumes in: null for the system home (`useRealCodexHome`),
@@ -121,11 +153,33 @@ export function aiVaultSessionAfterResumePreparation<S extends Pick<AiVaultSessi
   session: S,
   result: AiVaultPrepareSessionResumeResult
 ): S {
+  if (result.workspaceAccountPrepared) {
+    session = { ...session, resumeCommand: '' }
+  }
+  if (result.substituteSessionId) {
+    session = { ...session, sessionId: result.substituteSessionId }
+  }
+  if (result.resumeReceipt) {
+    session = { ...session, resumeReceipt: result.resumeReceipt }
+  }
+  if (result.substituteTranscriptPath) {
+    session = { ...session, filePath: result.substituteTranscriptPath }
+  }
+  if (result.substituteClaudeConfigDir) {
+    return {
+      ...session,
+      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: result.substituteClaudeConfigDir }
+    }
+  }
   if (result.useRealCodexHome) {
-    return { ...session, codexHome: null }
+    return { ...session, codexHome: null, accountHome: null }
   }
   if (result.substituteCodexHome) {
-    return { ...session, codexHome: result.substituteCodexHome }
+    return {
+      ...session,
+      codexHome: result.substituteCodexHome,
+      accountHome: { variable: 'CODEX_HOME', path: result.substituteCodexHome }
+    }
   }
   return session
 }

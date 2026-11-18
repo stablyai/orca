@@ -1,4 +1,10 @@
 import { toast } from 'sonner'
+import { commitHistorySessionResume } from '@/lib/agent-session/resume/history/history-resume-receipts'
+import {
+  historyResumeActivityKey,
+  setHistoryResumeActivity,
+  useHistoryResumeActivity
+} from '../accounts/history-resume-activity'
 import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
@@ -53,6 +59,13 @@ export async function resumeAiVaultSessionInNewChat(
   requestId: string,
   replacing?: AiVaultChatReplacement
 ): Promise<void> {
+  const activityKey = historyResumeActivityKey(session)
+  const activity = useHistoryResumeActivity.getState().entries[activityKey]
+  if (activity && activity.phase !== 'error') {
+    replacing?.onSettled(null)
+    return
+  }
+  setHistoryResumeActivity(activityKey, { phase: 'preparing' })
   try {
     const recordingHost = parseRoutableExecutionHostId(session.executionHostId)
     const workspaceOwner = structuredLaunchOwner({ route: 'structured-native-chat' }, worktreeId)
@@ -66,7 +79,7 @@ export async function resumeAiVaultSessionInNewChat(
     const executionHostId = recordingHost.id
     // Reuse terminal preparation to repin Codex rows from legacy shared homes before host lookup.
     const [preparedSession, agent] = await Promise.all([
-      prepareAiVaultSessionForResume(session),
+      prepareAiVaultSessionForResume(session, worktreeId),
       adoptingAgentOnHost(rowAgent, worktreeId, executionHostId)
     ])
     const plan = adoptAgentSessionLaunchVerdict({
@@ -77,6 +90,7 @@ export async function resumeAiVaultSessionInNewChat(
       executionHostId,
       resumeFrom: { providerSessionId: preparedSession.sessionId }
     })
+    setHistoryResumeActivity(activityKey, { phase: 'opening' })
     const selection = useAppStore.getState()
     const waitForCreate = workspaceHasSleepingAgentSessions(selection, worktreeId)
     const launch = beginStructuredAgentSessionProvisionalLaunch({
@@ -99,10 +113,22 @@ export async function resumeAiVaultSessionInNewChat(
           }
     })
     if (!launch) {
+      setHistoryResumeActivity(activityKey)
       replacing?.onSettled(null)
       return
     }
     void launch.settlement.then((settlement) => {
+      setHistoryResumeActivity(
+        activityKey,
+        settlement.kind === 'failed'
+          ? { phase: 'error', message: String(settlement.error) }
+          : undefined
+      )
+      if (settlement.kind === 'structured') {
+        void commitHistorySessionResume(preparedSession).catch((error: unknown) =>
+          notifyAiVaultSessionResumeInChatFailure(error, rowAgent)
+        )
+      }
       const state = useAppStore.getState()
       if (
         waitForCreate &&
@@ -124,6 +150,12 @@ export async function resumeAiVaultSessionInNewChat(
       }
     })
   } catch (error) {
+    setHistoryResumeActivity(
+      activityKey,
+      error instanceof Error && error.name === 'AbortError'
+        ? undefined
+        : { phase: 'error', message: error instanceof Error ? error.message : String(error) }
+    )
     notifyAiVaultSessionResumeInChatFailure(error, rowAgent)
     replacing?.onSettled(null)
   }
@@ -159,6 +191,9 @@ function notifyAiVaultSessionResumeInChatFailure(
   error: unknown,
   rowAgent: CliConversationRowAgent
 ): void {
+  if (error instanceof Error && error.name === 'AbortError') {
+    return
+  }
   const failure = structuredLaunchFailure(error)
   if (
     hasRuntimeRpcErrorCode(error, 'agent_session_conflict') ||

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { prepareAccountHomeInWorker } from '../../providers/accounts/account-home-preparation-worker'
 import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
@@ -38,6 +39,33 @@ export class ClaudeAccountRegistration {
   async begin(request: ClaudeSignInRequest): Promise<ClaudeAccountSignIn> {
     const { accountId, target, folder } = await this.prepare(request)
     return { accountId, configDir: folder.configDir, ...target }
+  }
+
+  async importHome(
+    sourceHome: string,
+    importHistory: boolean
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const accountId = randomUUID()
+    const folder = await this.deps.runtimeAuth.prepareAccountFolder(
+      accountId,
+      { runtime: 'host' },
+      true
+    )
+    const signIn = { accountId, configDir: folder.configDir, runtime: 'host' as const }
+    try {
+      await prepareAccountHomeInWorker({
+        kind: 'claude-import',
+        sourceHome,
+        destination: signIn.configDir,
+        defaultHome: this.deps.runtimeAuth.router.systemDefaultHome(),
+        importHistory
+      })
+      await this.finish(signIn, undefined, true)
+      return await this.deps.selection.select(signIn.accountId, { runtime: 'host' })
+    } catch (error) {
+      await this.cancel(signIn).catch(() => {})
+      throw error
+    }
   }
 
   async signIn(
@@ -81,7 +109,8 @@ export class ClaudeAccountRegistration {
 
   async finish(
     signIn: Omit<ClaudeAccountSignIn, 'configDir'>,
-    notSignedInMessage = CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE
+    notSignedInMessage = CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE,
+    privateHistory?: boolean
   ): Promise<ClaudeRateLimitAccountsState> {
     const { store, rateLimits, runtimeAuth, selection } = this.deps
     const saved = selection.findAccount(signIn.accountId)
@@ -121,6 +150,7 @@ export class ClaudeAccountRegistration {
         ...accounts.filter((entry) => entry.id !== signIn.accountId),
         {
           id: signIn.accountId,
+          privateHistory: privateHistory ?? saved?.privateHistory,
           email: login.email,
           organizationUuid: login.organizationUuid,
           organizationName: login.organizationName,

@@ -13,7 +13,7 @@ import type { SessionOptionValue } from '../../../../../shared/native-chat/input
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 
 export type WebRuntimeTerminalCreateOutcome =
-  | { status: 'created' }
+  | { status: 'created'; tabId?: string }
   | { status: 'failed'; message: string }
 
 export type CreateWebRuntimeSessionTerminalArgs = {

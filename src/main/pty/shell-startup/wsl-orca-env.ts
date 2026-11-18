@@ -90,6 +90,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_WSL_CLI_DIR/p',
     'ORCA_CODEX_LAUNCH_PREFLIGHT/p',
     'ORCA_CODEX_ISOLATE/u',
+    'ORCA_CODEX_LAUNCH_ERROR/u',
+    'ORCA_CLAUDE_LAUNCH_ERROR/u',
     'ORCA_PANE_KEY/u',
     `${ORCA_SCRUB_SAFE_PANE_ENV}/u`,
     'ORCA_TAB_ID/u',

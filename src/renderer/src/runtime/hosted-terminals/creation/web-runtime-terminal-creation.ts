@@ -1,3 +1,5 @@
+import { webTerminalPlacementParentTabId } from '../placement/web-session-terminal-placement'
+import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
 import { resolveWebRuntimeSessionEnvironmentId } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-routing'
 import { useAppStore } from '../../../store/index'
@@ -64,5 +66,10 @@ async function createWebRuntimeTerminal(
       worktreeId: args.worktreeId
     })
   }
-  return created.outcome
+  return created.outcome.status === 'created' && created.hostTabId
+    ? {
+        ...created.outcome,
+        tabId: toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(created.hostTabId))
+      }
+    : created.outcome
 }

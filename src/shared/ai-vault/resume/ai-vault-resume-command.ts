@@ -25,6 +25,7 @@ export function buildAiVaultResumeCommand(args: {
   platform: NodeJS.Platform
   commandOverride?: string | null
   codexHome?: string | null
+  accountHome?: { variable: 'CLAUDE_CONFIG_DIR'; path: string }
   resumeFilePath?: string | null
   shell?: AgentStartupShell
   clearEnvNames?: readonly string[]
@@ -61,6 +62,7 @@ export function buildAiVaultResumeCommand(args: {
     cwd,
     platform,
     codexHome,
+    accountHome: args.accountHome,
     shell,
     clearEnvNames: args.clearEnvNames
   })
@@ -71,12 +73,15 @@ export function buildAiVaultResumeShellCommand(args: {
   cwd: string | null
   platform: NodeJS.Platform
   codexHome?: string | null
+  accountHome?: { variable: 'CLAUDE_CONFIG_DIR'; path: string }
   /** Remove env on the agent itself: env cannot run builtin cd and a child cd would not move the agent. */
   clearEnvNames?: readonly string[]
   // Queued lines run in the live shell; persisted shell-less commands retain the self-contained cmd /d /s /c wrapper.
   shell?: AgentStartupShell
 }): string {
-  const { cwd, platform, codexHome, shell, clearEnvNames } = args
+  const { cwd, platform, shell, clearEnvNames } = args
+  const codexHome = args.accountHome?.path ?? args.codexHome
+  const homeVariable = args.accountHome?.variable ?? 'CODEX_HOME'
 
   // Choose grammar by live shell, including PowerShell on POSIX; shell-less persisted lines retain the legacy cmd wrapper.
   if (shell === 'powershell' || (platform === 'win32' && shell && shell !== 'cmd')) {
@@ -85,28 +90,29 @@ export function buildAiVaultResumeShellCommand(args: {
       cwd,
       codexHome: codexHome?.trim() || null,
       shell,
-      clearEnvNames
+      clearEnvNames,
+      homeVariable
     })
   }
 
   const resolvedCodexHome = codexHome?.trim() || null
   // Filter assignments from env -u so the explicitly pinned home stays authoritative, matching legacy clear-then-assign ordering.
   const clearNames = resolvedCodexHome
-    ? clearEnvNames?.filter((name) => name !== 'CODEX_HOME')
+    ? clearEnvNames?.filter((name) => name !== homeVariable)
     : clearEnvNames
   // POSIX set -u rejects the clear statement's unbound fish_pid: remove env on the agent. cmd can clear before cd, preserving cd-failure short-circuiting. Choose by shell, not host.
   const dialect = shell ?? (platform === 'win32' ? 'cmd' : 'posix')
   const clearsOnAgent = clearNames?.length && isPosixStartupShell(dialect)
-  const resumeCommand = `${codexHomeEnvPrefix(resolvedCodexHome, platform, shell)}${
+  const resumeCommand = `${codexHomeEnvPrefix(resolvedCodexHome, platform, shell, homeVariable)}${
     clearsOnAgent ? withoutEnvCommand(clearNames, args.resumeCommand, dialect) : args.resumeCommand
   }`
   const clearPrefix =
     clearNames?.length && !clearsOnAgent
       ? `${clearEnvCommand(clearNames, dialect)}${commandSeparator(dialect)}`
       : ''
-  if (platform === 'win32' && shell === 'cmd') {
-    // Interactive cmd splits nested-wrapper doubled quotes; queued lines need direct cmd syntax.
-    return `${clearPrefix}${cwd ? `cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}` : resumeCommand}`
+  if (platform === 'win32' && (!shell || shell === 'cmd')) {
+    const inner = `${clearPrefix}${cwd ? `cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}` : resumeCommand}`
+    return `cmd /d /s /c "${inner}"`
   }
   if (!cwd) {
     return `${clearPrefix}${resumeCommand}`
@@ -114,7 +120,7 @@ export function buildAiVaultResumeShellCommand(args: {
 
   if (platform === 'win32') {
     const inner = `${clearPrefix}cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}`
-    return `cmd /d /s /c ${quoteCmdDoubleQuoted(inner)}`
+    return `cmd /d /s /c "${inner}"`
   }
 
   return `cd ${quoteResumeArg(cwd, platform, shell)} && ${resumeCommand}`
@@ -126,14 +132,15 @@ function buildResumeShellCommandForShell(args: {
   codexHome: string | null
   shell: Exclude<AgentStartupShell, 'cmd'>
   clearEnvNames?: readonly string[]
+  homeVariable: 'CODEX_HOME' | 'CLAUDE_CONFIG_DIR'
 }): string {
-  const { cwd, codexHome, shell, clearEnvNames } = args
+  const { cwd, codexHome, shell, clearEnvNames, homeVariable } = args
   if (isPosixStartupShell(shell)) {
     // Windows Git Bash needs POSIX inline env and cd quoting.
-    const envPrefix = codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''
+    const envPrefix = codexHome ? `${homeVariable}=${quoteStartupArg(codexHome, shell)} ` : ''
     // Do not let env -u remove the explicitly assigned home.
     const clearNames = codexHome
-      ? clearEnvNames?.filter((name) => name !== 'CODEX_HOME')
+      ? clearEnvNames?.filter((name) => name !== homeVariable)
       : clearEnvNames
     const command = `${envPrefix}${
       clearNames?.length
@@ -150,13 +157,29 @@ function buildResumeShellCommandForShell(args: {
     segments.push(clearEnvCommand(clearEnvNames, shell))
   }
   if (cwd) {
-    segments.push(`Set-Location -LiteralPath ${quoteStartupArg(cwd, shell)}`)
+    segments.push(`Set-Location -LiteralPath ${quoteStartupArg(cwd, shell)} -ErrorAction Stop`)
   }
   if (codexHome) {
-    segments.push(`$env:CODEX_HOME=${quoteStartupArg(codexHome, shell)}`)
+    segments.push(`$env:${homeVariable}=${quoteStartupArg(codexHome, shell)}`)
   }
   segments.push(args.resumeCommand)
-  return segments.join(separator)
+  const variables = [...new Set([...(clearEnvNames ?? []), ...(codexHome ? [homeVariable] : [])])]
+  if (!variables.length) {
+    return segments.join(separator)
+  }
+  const save = variables
+    .map(
+      (name) =>
+        `$orcaResumePreviousEnv[${quoteStartupArg(name, shell)}]=[Environment]::GetEnvironmentVariable(${quoteStartupArg(name, shell)}, 'Process')`
+    )
+    .join(separator)
+  const restore = variables
+    .map(
+      (name) =>
+        `if ($null -eq $orcaResumePreviousEnv[${quoteStartupArg(name, shell)}]) { Remove-Item -LiteralPath 'Env:${name}' -ErrorAction SilentlyContinue } else { [Environment]::SetEnvironmentVariable(${quoteStartupArg(name, shell)}, $orcaResumePreviousEnv[${quoteStartupArg(name, shell)}], 'Process') }`
+    )
+    .join(separator)
+  return `& { $orcaResumePreviousEnv=@{}; ${save}; try { ${segments.join(separator)} } finally { ${restore} } }`
 }
 
 // Real-home resumes have no CODEX_HOME prefix: every spawning surface must delete inherited account/daemon homes instead of overlaying sparse env.
@@ -235,16 +258,17 @@ function buildAgentResumeInvocation(
 function codexHomeEnvPrefix(
   codexHome: string | null,
   platform: NodeJS.Platform,
-  shell?: AgentStartupShell
+  shell?: AgentStartupShell,
+  variable: 'CODEX_HOME' | 'CLAUDE_CONFIG_DIR' = 'CODEX_HOME'
 ): string {
   if (!codexHome) {
     return ''
   }
   if (platform === 'win32') {
-    return `set ${quoteCmdDoubleQuoted(`CODEX_HOME=${codexHome}`)} && `
+    return `set ${quoteCmdDoubleQuoted(`${variable}=${codexHome}`)} && `
   }
   // fish accepts the `NAME=value cmd` prefix (3.1+), but not sh's quoting.
-  return `CODEX_HOME=${quoteResumeArg(codexHome, platform, shell)} `
+  return `${variable}=${quoteResumeArg(codexHome, platform, shell)} `
 }
 
 /** Quotes for the live shell when one is known, else for the platform's default. */

@@ -4,6 +4,11 @@ import {
   resolveAiVaultSessionLaunchTargetOrNotify
 } from './ai-vault-session-launch-feedback'
 import { useCallback, useRef, useState } from 'react'
+import {
+  historyResumeActivityKey,
+  setHistoryResumeActivity,
+  useHistoryResumeActivity
+} from '../accounts/history-resume-activity'
 import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
@@ -95,7 +100,10 @@ export function useAiVaultSessionLaunchActions({
         return
       }
       try {
-        const preparedSession = await prepareAiVaultSessionForResume(session)
+        const preparedSession = await prepareAiVaultSessionForResume(
+          session,
+          worktreeId ?? activeWorktreeId ?? undefined
+        )
         await window.api.ui.writeClipboardText(buildResumeCommand(preparedSession, worktreeId))
         toast.success(
           translate(
@@ -107,7 +115,7 @@ export function useAiVaultSessionLaunchActions({
         notifyAiVaultSessionPreparationFailure(error, session.agent)
       }
     },
-    [buildResumeCommand]
+    [buildResumeCommand, activeWorktreeId]
   )
 
   const launchInTerminal = useCallback(
@@ -127,16 +135,30 @@ export function useAiVaultSessionLaunchActions({
       if (!targetId) {
         return
       }
+      const activityKey = historyResumeActivityKey(session)
+      const current = useHistoryResumeActivity.getState().entries[activityKey]
+      if (current && current.phase !== 'error') {
+        return
+      }
+      setHistoryResumeActivity(activityKey, { phase: 'preparing' })
       void prepareStartup(targetId.worktreeId)
-        .then((startup) =>
-          launchAiVaultSessionAndReveal(
+        .then(async (startup) => {
+          setHistoryResumeActivity(activityKey, { phase: 'opening' })
+          await launchAiVaultSessionAndReveal(
             { agent: session.agent, worktreeId: targetId.worktreeId, ...startup },
             describeFailure
           )
-        )
-        .catch((error: unknown) =>
+          setHistoryResumeActivity(activityKey)
+        })
+        .catch((error: unknown) => {
+          setHistoryResumeActivity(
+            activityKey,
+            error instanceof Error && error.name === 'AbortError'
+              ? undefined
+              : { phase: 'error', message: error instanceof Error ? error.message : String(error) }
+          )
           notifyAiVaultSessionPreparationFailure(error, session.agent, describeFailure)
-        )
+        })
     },
     [activeWorktree?.id, activeWorktreeId, targetState]
   )
@@ -151,7 +173,7 @@ export function useAiVaultSessionLaunchActions({
         session,
         targetWorktreeId,
         (worktreeId) =>
-          prepareAiVaultSessionForTerminalResume(session)
+          prepareAiVaultSessionForTerminalResume(session, worktreeId)
             .then(dropDeletedRemoteResumeCwd)
             .then((preparedSession) => buildResumeStartup(preparedSession, worktreeId)),
         (message) => describeAiVaultResumeFailure(new Error(message), session.agent)
