@@ -3,8 +3,9 @@ import type { PreloadApi } from '../../../../preload/api-types'
 
 type UsageProviderKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage' | 'museUsage'
 
-// A refresh waits for the host to read every transcript; a first scan outlasts the default timeout.
-const USAGE_REFRESH_TIMEOUT_MS = 10 * 60_000
+// Other reads wait for the host to rescan its transcripts; a first scan outlasts the default timeout.
+const USAGE_SCAN_TIMEOUT_MS = 10 * 60_000
+const IMMEDIATE_USAGE_ACTIONS = new Set(['getScanState', 'getSnapshot', 'setEnabled'])
 
 export type RuntimeUsageCaller = (
   method: string,
@@ -23,7 +24,9 @@ export function createRuntimeUsageProviderApi<Key extends UsageProviderKey>(
         call(
           'usage.call',
           { method, params },
-          method.endsWith(':refresh') ? USAGE_REFRESH_TIMEOUT_MS : undefined
+          IMMEDIATE_USAGE_ACTIONS.has(method.slice(method.indexOf(':') + 1))
+            ? undefined
+            : USAGE_SCAN_TIMEOUT_MS
         )
     },
     prefix

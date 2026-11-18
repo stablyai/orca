@@ -1,11 +1,14 @@
 import { join } from 'node:path'
-import { existsSync, lstatSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { realpath, readdir, stat } from 'node:fs/promises'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
 } from '../codex/configuration/homes/codex-home-paths'
-import { getCodexAccountHomeSessionDirectories } from '../codex/history/rollouts/codex-account-home-discovery'
+import {
+  codexHomeSessionsDirectory,
+  getCodexAccountHomeSessionDirectories
+} from '../codex/history/rollouts/codex-account-home-discovery'
 import { listGuestCodexAccountHomes } from '../codex-accounts/managed-homes/guest-codex-account-homes'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/history/bridges/codex-session-bridge'
 import { normalizeFsPath } from '../usage/worktree-attribution/usage-path-comparison'
@@ -68,16 +71,6 @@ export function getCodexSessionsDirectory(): string {
   return join(getOrcaManagedCodexHomePath(), 'sessions')
 }
 
-function ownedSessionsDirectory(home: string): string[] {
-  const sessionsPath = join(home, 'sessions')
-  try {
-    // Why: a redirected sessions root could make usage scan unrelated, unbounded trees.
-    return lstatSync(sessionsPath).isDirectory() ? [sessionsPath] : []
-  } catch {
-    return []
-  }
-}
-
 export function getCodexSessionDirectories(): string[] {
   // Include runtime, system and account homes to avoid undercounting multi-account usage.
   return [
@@ -85,7 +78,7 @@ export function getCodexSessionDirectories(): string[] {
     join(getSystemCodexHomePath(), 'sessions'),
     ...getCodexAccountHomeSessionDirectories(),
     // Homes a paired desktop's chosen Codex accounts run in on this host.
-    ...listGuestCodexAccountHomes().flatMap(ownedSessionsDirectory)
+    ...listGuestCodexAccountHomes().flatMap(codexHomeSessionsDirectory)
   ].filter((dirPath, index, allDirPaths) => allDirPaths.indexOf(dirPath) === index)
 }
 

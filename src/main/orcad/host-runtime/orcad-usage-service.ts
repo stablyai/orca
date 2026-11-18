@@ -33,7 +33,10 @@ export function installOrcadUsageService(
         new Error('Usage service is stopping. Try again after Orca reconnects.')
       )
     }
-    service ??= import('../../backend/usage-service').then(({ createUsageService }) =>
+    if (service) {
+      return service
+    }
+    const starting = import('../../backend/usage-service').then(({ createUsageService }) =>
       createUsageService({
         signal: abort.signal,
         userDataPath,
@@ -43,7 +46,14 @@ export function installOrcadUsageService(
         telemetry: { isEnabled: async () => false, capture: async () => false }
       })
     )
-    return service
+    service = starting
+    // A failed start must not stick; the next call tries again, as the desktop backend does.
+    starting.catch(() => {
+      if (service === starting) {
+        service = null
+      }
+    })
+    return starting
   }
   // Registered before RPC and automations start, so it stops after both (cleanups run in reverse).
   registerCleanup(async () => {
