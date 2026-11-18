@@ -1,3 +1,5 @@
+import { BotTidyUpLine } from '@/components/bots/BotTidyUpLine'
+import { nativeChatBotCard } from '../../native-chat-bot-cards'
 import {
   CLAUDE_MODEL_FALLBACK_COPY,
   claudeModelFallbackLabels
@@ -30,6 +32,12 @@ import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
+import { openBotSettings } from '@/components/bots/bot-settings-open'
+import {
+  BOT_CONTEXT_NOTE_COPY,
+  type BotContextChange
+} from '../../../../../../shared/bots/bot-context-note'
+import { NativeChatDividerRow } from '../../NativeChatDividerRow'
 import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import {
   NativeChatDetailsDisclosure,
@@ -65,6 +73,11 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
     )
 }
 
+const BOT_CONTEXT_WORDS: Record<BotContextChange, () => string> = {
+  soul: () => translate('components.native-chat.botContext.soul', BOT_CONTEXT_NOTE_COPY.soul),
+  memory: () => translate('components.native-chat.botContext.memory', BOT_CONTEXT_NOTE_COPY.memory)
+}
+
 function toneClass(tone: NativeChatNoticeTone): string {
   return tone === 'warning'
     ? 'text-chat-warning'
@@ -76,11 +89,13 @@ function toneClass(tone: NativeChatNoticeTone): string {
 export function NativeChatNoticeRow({
   block,
   messageId,
+  timestamp = null,
   agentName
 }: {
   block: NativeChatTextBlock
   /** The transcript row's message, so a plan's code blocks keep their wrap past the row's mount. */
   messageId?: string
+  timestamp?: number | null
   agentName?: string
 }): React.JSX.Element {
   const t = useTranslate()
@@ -99,17 +114,7 @@ export function NativeChatNoticeRow({
       look.label === 'contextCleared'
         ? t('components.native-chat.notices.contextCleared', NATIVE_CHAT_NOTICE_COPY.contextCleared)
         : t('components.native-chat.notices.compaction', NATIVE_CHAT_NOTICE_COPY.compaction)
-    return (
-      <div
-        role="separator"
-        aria-label={label}
-        className="flex items-center gap-3 py-2 text-xs text-chat-foreground-faint"
-      >
-        <span className="h-px flex-1 bg-border" />
-        <span>{label}</span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
-    )
+    return <NativeChatDividerRow label={label} />
   }
   if (look.kind === 'command-output') {
     // Why: command output is laid out in columns; proportional type breaks its grid.
@@ -117,6 +122,25 @@ export function NativeChatNoticeRow({
       <pre className="whitespace-pre-wrap break-words font-mono text-xs text-chat-foreground">
         {block.text}
       </pre>
+    )
+  }
+  const botCard = nativeChatBotCard(block, messageId ?? '', timestamp)
+  if (botCard) {
+    return botCard
+  }
+  if (block.tidyUp) {
+    return <BotTidyUpLine note={block.tidyUp} />
+  }
+  if (block.botContext) {
+    const { botId, changed } = block.botContext
+    return (
+      <button
+        type="button"
+        onClick={() => openBotSettings(botId, changed.length === 1 ? changed[0] : undefined)}
+        className="min-w-0 max-w-full rounded-md text-left text-sm text-chat-foreground-faint hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {changed.map((change) => BOT_CONTEXT_WORDS[change]()).join(' · ')}
+      </button>
     )
   }
   if (look.kind === 'host-status') {

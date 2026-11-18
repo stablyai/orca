@@ -10,7 +10,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { RpcIncompatibleReplyError } from '../../transport/rpc/rpc-incompatible-reply-error'
-import { startHostWorktreeRefresh } from '../../worktree/execution-hosts/host-worktree-refresh'
+import {
+  startHostWorktreeRefresh,
+  type BotsChangeScope
+} from '../../worktree/execution-hosts/host-worktree-refresh'
 import type { HostSidebarFeedTriggers } from '../sidebar-feed/host-sidebar-feed-connection'
 import { areWorktreeListsEqual } from '../../worktree/catalog/worktree-list-snapshot'
 import {
@@ -62,6 +65,7 @@ export function useHostWorktreeCatalog(args: {
   sidebarFeed: HostSidebarFeedTriggers | null
   state: HostScreenState
   syncViewSettingsFromDesktop: (options?: { resend?: boolean }) => Promise<void>
+  onBotsChanged?: (scope: BotsChangeScope) => void
 }) {
   const {
     client,
@@ -72,7 +76,8 @@ export function useHostWorktreeCatalog(args: {
     hostId,
     sidebarFeed,
     state,
-    syncViewSettingsFromDesktop
+    syncViewSettingsFromDesktop,
+    onBotsChanged
   } = args
   const {
     catalogError,
@@ -257,9 +262,10 @@ export function useHostWorktreeCatalog(args: {
       refreshWorktrees: () => void fetchWorktrees(),
       syncViewSettings: syncViewSettingsFromDesktop,
       sidebarFeed,
-      appState: AppState
+      appState: AppState,
+      onBotsChanged
     })
-  }, [client, connState, fetchWorktrees, syncViewSettingsFromDesktop, sidebarFeed])
+  }, [client, connState, fetchWorktrees, syncViewSettingsFromDesktop, sidebarFeed, onBotsChanged])
 
   useFocusEffect(
     useCallback(() => {

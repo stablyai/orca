@@ -18,6 +18,10 @@
       "title": "帳戶",
       "useReset": "使用重設額度",
       "weeklyWindow": "7 天"
+    },
+    "claude": {
+      "usageSignInLabel": "重新登入",
+      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。"
     }
   },
   "agentHistory": {
@@ -1127,6 +1131,9 @@
       "composer": {
         "planMode": "計畫",
         "exitPlanMode": "結束計畫模式"
+      },
+      "goal": {
+        "sentAsGoal": "作為目標傳送"
       }
     }
   },
@@ -2635,7 +2642,7 @@
       "disconnected": "貼上失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法貼上",
       "pasteFailed": "貼上失敗",
-      "pasteTooLarge": "貼上內容太大（上限為 256 KiB）",
+      "pasteTooLarge": "貼上內容過大。",
       "terminalChanged": "已取消貼上（終端機已變更）"
     },
     "worktreeLabel": {
@@ -2765,6 +2772,9 @@
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "找不到該訊息。"
     }
   },
   "settings": {
@@ -4280,7 +4290,76 @@
       },
       "taskPageJiraLoadState": {
         "jqlFailed": "Jira 無法執行此 JQL 查詢。請檢查語法後再試一次。"
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "沒有來自 {{server}} 的用量資料",
+            "remoteOwnerNotConfigured": "{{server}} 上尚未設定",
+            "claudeUnknownOnHost": "無法從 {{server}} 取得 Claude 用量。可能尚未在該主機登入，或使用 API 金鑰計費。",
+            "remoteOwnerSignInSavedHere": "登入資訊僅儲存在這台電腦上。",
+            "f8b8dbed85": "用量不可用",
+            "e2c6a4f917": "執行 Grok 以重新整理",
+            "f90b3d7a16": "執行 Kimi 以重新整理",
+            "0d8d7cfe15": "等待 Claude 工作階段",
+            "claude": {
+              "waiting": {
+                "label": "執行 Claude 時更新",
+                "message": "Claude 用量將在下次執行 Claude 時更新。"
+              }
+            },
+            "1804cd8c3f": "正在重新整理登入",
+            "bf2e739f18": "登入不可用",
+            "f8f0f9d8cc": "網路問題",
+            "minimax": {
+              "expired": {
+                "label": "登入已過期",
+                "apiKey": "MiniMax API 金鑰已過期。在設定中替換它。",
+                "cookie": "MiniMax 工作階段 cookie 已過期。在設定中替換它。"
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "登入已過期",
+                "message": "請在執行 Orca 的電腦上的終端機中執行 cursor-agent login，然後重新整理用量。"
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "無訂閱"
+              }
+            },
+            "7ad719c4bf": "受限",
+            "e740f92596": "重新整理失敗",
+            "2c35eca8d4": "無法取得用量",
+            "d1b7f509ac": "在執行 Orca 的電腦上的終端機中執行 grok，並等待其啟動。如有提示，請完成登入，然後重試用量檢查。您無需傳送聊天訊息。",
+            "a37e8c15d4": "在執行 Orca 的電腦上的終端機中執行 kimi，等待其啟動，然後重試用量檢查。",
+            "3d3c9c0c1f": "正在執行的 Claude 終端機輪替憑證後，Claude 用量會重新整理。",
+            "42fdd4da1d": "正在重新整理 Claude 登入。代理程式工作階段可能仍處於登入狀態。",
+            "c06c1d215d": "由於網路請求失敗，無法重新整理 Claude 用量。",
+            "cabdc2a9e0": "無法讀取 Claude 登入憑證。",
+            "a7517cccb6": "Claude 用量目前不可用。",
+            "8418ec448d": "{{value0}} 用量無法重新整理。代理程式工作階段可能仍處於登入狀態。"
+          }
+        }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "配對電腦",
+      "pairRequired": "若要開啟此連結，請將這部手機與電腦配對。",
+      "pairAction": "配對電腦",
+      "openFailed": "無法開啟此連結",
+      "ambiguous": "此機器人位於 {{names}}。請在你想用的電腦上透過 Orca 開啟聊天。",
+      "computer": "你的電腦",
+      "updateNeeded": "請更新 {{names}} 上的 Orca 以開啟此連結。",
+      "unreachable": "無法連線至 {{names}}。請確認其中一台電腦正在執行 Orca，然後重試。",
+      "missing": "你配對的電腦上都沒有此機器人。",
+      "offline": "{{name}} 已離線。請在它重新上線後再次開啟連結。",
+      "chatOpenFailed": "{{name}} 無法開啟此聊天。請重試此連結。",
+      "unreachableSingle": "無法連線至 {{name}}。請確認該電腦正在執行 Orca，然後重試。",
+      "workspaceDeleted": "此聊天的工作區已在 {{name}} 上被刪除。"
     }
   }
 }
