@@ -90,6 +90,12 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
+  /** The hidden renderer missed any dropped output: once its PTY gaps in a generation it never stands in for the
+   *  screen (null). Compare a read's token before and after its IPC, so exit, reuse and stream resets fence it too. */
+  protected rendererScreenToken(ptyId: string): number | null {
+    return this.ptyGapCounts.has(ptyId) ? null : this.getPtyLifecycleGeneration(ptyId)
+  }
+
   protected getPtyLifecycleGeneration(ptyId: string): number {
     const existing = this.ptyLifecycleGenerationById.get(ptyId)
     if (existing !== undefined) {

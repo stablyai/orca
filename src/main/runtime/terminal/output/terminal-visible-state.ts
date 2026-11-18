@@ -283,8 +283,8 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     ptyId: string
   ): Promise<RuntimeTerminalProjection> {
     const controller = this.ptyController
-    // The hidden renderer missed the dropped output too.
-    if (!controller?.serializeBuffer || this.headlessTerminals.get(ptyId)?.gapReseed) {
+    const token = this.rendererScreenToken(ptyId)
+    if (!controller?.serializeBuffer || token === null) {
       return { lines: [] }
     }
     if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
@@ -297,7 +297,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
         VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
         null
       )
-      if (!snapshot || snapshot.data.length === 0) {
+      if (!snapshot || snapshot.data.length === 0 || this.rendererScreenToken(ptyId) !== token) {
         return { lines: [] }
       }
       return await this.parseVisibleSnapshot(snapshot)

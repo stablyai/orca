@@ -1,4 +1,4 @@
-import { assert, expect, it, vi } from 'vitest'
+import { assert, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -108,8 +108,12 @@ it('rebuilds the screen from a provider snapshot plus the output after it, cutti
     assert(capture.land)
     expect(await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')).toBeNull()
     capture.land({ data: '\x1b[H\x1b[2Jfresh\r\nta', ...grid, seq: 18, source: 'headless' })
+    // Main's own model, not a provider read that could share the landed capture.
+    const headless = runtime as unknown as {
+      serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
+    }
     const snapshot = await vi.waitFor(async () => {
-      const rebuilt = await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')
+      const rebuilt = await headless.serializeHeadlessTerminalBuffer('pty-gap')
       assert(rebuilt)
       return rebuilt
     })
@@ -149,4 +153,61 @@ it('recaptures instead of seeding a snapshot taken before the dropped span', asy
     vi.useRealTimers()
     await runtime.onPtyExit('pty-stale', 0)
   }
+})
+
+describe('the hidden renderer after dropped output', () => {
+  function createRendererRuntime() {
+    const pending: ((value: { data: string; cols: number; rows: number }) => void)[] = []
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => grid,
+      hasRendererSerializer: () => true,
+      serializeBuffer: () => new Promise((resolve) => pending.push(resolve)),
+      serializeProviderBuffer: async () => ({
+        data: '\x1b[H\x1b[2JNEW',
+        ...grid,
+        seq: runtime.getPtyOutputSequence('pty-r'),
+        source: 'headless' as const
+      })
+    })
+    const replyOld = () => pending.shift()?.({ data: 'OLD', ...grid })
+    return { runtime, replyOld }
+  }
+
+  it.each(['gap', 'recovered', 'exit'] as const)(
+    'drops a renderer read that spans a gap (%s)',
+    async (after) => {
+      const { runtime, replyOld } = createRendererRuntime()
+      const read = runtime.serializeRendererTerminalBuffer('pty-r')
+      runtime.notePtyDataGap('pty-r', 5)
+      if (after === 'recovered') {
+        await vi.waitFor(async () => {
+          expect(await runtime.serializeHiddenOutputRecoveryBuffer('pty-r')).not.toBeNull()
+        })
+      } else if (after === 'exit') {
+        await runtime.onPtyExit('pty-r', 0)
+      }
+      replyOld()
+      expect(await read).toBeNull()
+      await runtime.onPtyExit('pty-r', 0)
+    }
+  )
+
+  it('never reads the renderer again once its PTY has gapped, but does without a gap', async () => {
+    const { runtime, replyOld } = createRendererRuntime()
+    const control = runtime.serializeRendererTerminalBuffer('pty-r')
+    replyOld()
+    expect((await control)?.data).toBe('OLD')
+    runtime.notePtyDataGap('pty-r', 5)
+    await vi.waitFor(async () => {
+      expect(await runtime.serializeHiddenOutputRecoveryBuffer('pty-r')).not.toBeNull()
+    })
+    const after = runtime.serializeRendererTerminalBuffer('pty-r')
+    replyOld()
+    expect(await after).toBeNull()
+    await runtime.onPtyExit('pty-r', 0)
+  })
 })

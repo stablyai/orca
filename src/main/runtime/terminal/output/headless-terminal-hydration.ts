@@ -77,8 +77,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     if (!controller?.serializeBuffer || !controller.hasRendererSerializer) {
       return null
     }
-    if (!controller.hasRendererSerializer(ptyId)) {
-      // Renderer hasn't registered yet (or never will). Live writes lazy-
+    const rendererToken = this.rendererScreenToken(ptyId)
+    if (!controller.hasRendererSerializer(ptyId) || rendererToken === null) {
+      // Renderer hasn't registered yet (or never will), or it missed dropped output. Live writes lazy-
       // create the state via trackHeadlessTerminalData on this same tick.
       return null
     }
@@ -112,7 +113,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         // A gap while serializing: the renderer missed the dropped output too.
         if (
           this.headlessTerminals.get(ptyId) !== state ||
-          state.gapReseed ||
+          this.rendererScreenToken(ptyId) !== rendererToken ||
           !rendered ||
           rendered.data.length === 0
         ) {

@@ -102,14 +102,8 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     pendingEscapeTailAnsi?: string
     kittyKeyboardFlags?: number
   } | null> {
-    // The hidden renderer missed the dropped output too, so it never stands in for a recovering screen.
-    const gapsBefore = this.ptyGapCounts.get(ptyId)
-    // Exit and stream resets clear the count, so they fence by generation.
-    const generation = this.getPtyLifecycleGeneration(ptyId)
-    const recovering = () =>
-      this.headlessTerminals.get(ptyId)?.gapReseed !== undefined ||
-      this.ptyGapCounts.get(ptyId) !== gapsBefore ||
-      this.getPtyLifecycleGeneration(ptyId) !== generation
+    const token = this.rendererScreenToken(ptyId)
+    const recovering = () => token === null || this.rendererScreenToken(ptyId) !== token
     if (this.ptyController?.hasRendererSerializer?.(ptyId) === false || recovering()) {
       return null
     }
