@@ -7,7 +7,8 @@ import { getTightestUsageSection, usedSections } from '../usage/usage-headline-s
 import { getUsageRosterRowState } from '../usage/usage-roster-row-state'
 import { isClaudeUsageWaitingForClaude } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { formatUsagePercentageLabel } from '../usage/usage-percentage-label'
-import { formatLocalizedResetDuration } from '../usage/usage-reset-caption'
+import { formatLocalizedResetDuration, formatResetsInCaption } from '../usage/usage-reset-caption'
+import { useResetCountdownClock } from '../usage/useResetCountdownClock'
 import { UsageBar, UsageValue } from '../usage/usage-meter'
 
 export function useNotCheckedDescription(): string {
@@ -108,21 +109,28 @@ export function AccountUsageWindowsGauge({
     useAppStore((state) => state.usagePercentageDisplay)
   )
   const sections = usedSections(limits, t)
+  // Why: one boundary-scheduled clock re-renders this gauge the moment a reset label goes stale,
+  // instead of leaving an expired countdown on screen until an unrelated update (#43673 review).
+  // Called before the early return so hook order stays stable.
+  const now = useResetCountdownClock(sections.map((section) => section.window.resetsAt))
   if (sections.length === 0) {
     return <AccountUsageGauge limits={limits} isFetching={isFetching} />
   }
-  const now = Date.now()
   return (
     <div
       className={`flex flex-col items-end gap-0.5 ${isFetching ? 'animate-pulse motion-reduce:animate-none' : ''}`}
     >
       {sections.map((section) => {
         const resetLabel = formatLocalizedResetDuration(section.window.resetsAt, now, intlLocale)
+        // Why: role="img" makes descendants presentational, so the countdown must live in the
+        // label itself or screen readers never announce it (#43673 review).
+        const resetCaption = formatResetsInCaption(section.window.resetsAt, now, intlLocale, t)
+        const usageLabel = `${section.label} ${formatUsagePercentageLabel(section.window.usedPercent, display, t)}`
         return (
           <div
             key={section.label}
             role="img"
-            aria-label={`${section.label} ${formatUsagePercentageLabel(section.window.usedPercent, display, t)}`}
+            aria-label={resetCaption ? `${usageLabel}, ${resetCaption}` : usageLabel}
             className="flex items-center justify-end gap-1.5"
           >
             <span className="text-3xs text-muted-foreground">{section.label}</span>
@@ -137,12 +145,11 @@ export function AccountUsageWindowsGauge({
               display={display}
               className="w-9 text-right text-xs font-medium"
             />
-            {/* A window without a reset time keeps its row; the countdown slot stays empty. */}
-            {resetLabel ? (
-              <span className="w-[46px] text-right text-3xs text-muted-foreground">
-                {resetLabel}
-              </span>
-            ) : null}
+            {/* Why: the fixed-width slot always renders, so a window without a reset time
+                keeps its bar and percentage aligned with windows that have countdowns. */}
+            <span className="w-[46px] text-right text-3xs text-muted-foreground">
+              {resetLabel ?? ''}
+            </span>
           </div>
         )
       })}
