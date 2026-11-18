@@ -368,7 +368,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.hasMore).toBe(false)
   })
 
-  it('repairs a live-tail gap with a full reread, then resumes cursor paging', async () => {
+  it('repairs a live-tail gap through a capped reread, then continues by cursor', async () => {
     const transport = getMockTransport('env-1')
     const at = (id: string, offset: number) => ({
       ...assistant(id, 't'),
@@ -381,29 +381,29 @@ describe('useNativeChatLiveSession — transport routing', () => {
     const live = Array.from({ length: 301 }, (_unused, n) => at(`live-${n}`, 5000 + n))
     await act(async () => transport.emit({ type: 'appended', messages: live }))
     expect(latest?.messages.map((m) => m.id)).not.toContain('live-0')
-    transport.readSession.mockResolvedValueOnce({
-      messages: [at('bridge-0', 4900), ...live],
-      hasMore: true
-    })
+    // The host caps the reread below the held count, starting after the live tail's first row.
+    transport.readSession
+      .mockResolvedValueOnce({ messages: live.slice(50), hasMore: true })
+      .mockResolvedValueOnce({
+        messages: [at('bridge-0', 4900), ...live.slice(0, 50)],
+        hasMore: false
+      })
 
+    let result: unknown
     await act(async () => {
-      await latest?.loadEarlier()
+      result = await latest?.loadEarlier()
     })
 
-    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 500, undefined, {
+    expect(transport.readSession).toHaveBeenNthCalledWith(2, AGENT, SESSION, 500, undefined, {
       wakeWslDistro: true
     })
-    expect(latest?.messages.slice(0, 2).map((m) => m.id)).toEqual(['bridge-0', 'live-0'])
-
-    transport.readSession.mockResolvedValueOnce({ messages: [], hasMore: false })
-    await act(async () => {
-      await latest?.loadEarlier()
-    })
-
-    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 200, undefined, {
+    expect(transport.readSession).toHaveBeenNthCalledWith(3, AGENT, SESSION, 200, undefined, {
       wakeWslDistro: true,
-      beforeOffset: 4900
+      beforeOffset: 5050
     })
+    expect(result).toBe('applied')
+    expect(latest?.messages.slice(0, 2).map((m) => m.id)).toEqual(['bridge-0', 'live-0'])
+    expect(latest?.hasMore).toBe(false)
   })
 })
 
