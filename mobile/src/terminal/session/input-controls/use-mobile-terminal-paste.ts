@@ -78,18 +78,18 @@ export function useMobileTerminalPaste({
 }: UseMobileTerminalPasteOptions): () => Promise<void> {
   // Read images through native media handles: inline clipboard base64 can exceed the bridge reply cap.
   const clipboard = useClipboardReader()
-  // A paste spanning several sends owns the terminal's input until it ends, so another paste cannot land inside it.
-  const multiSendPasteRef = useRef(false)
+  // One paste at a time owns the terminal's input, so another paste or its held-text flush cannot land inside it.
+  const pasteRunningRef = useRef(false)
   return useCallback(async () => {
     if (!client || !activeHandle || !canSend) {
       return
     }
-    // Refuse before flushing held IME text, which would land inside the running paste.
-    if (multiSendPasteRef.current) {
+    if (pasteRunningRef.current) {
       onError()
       showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
       return
     }
+    pasteRunningRef.current = true
     const targetHandle = activeHandle
     try {
       const text = await clipboard.readText()
@@ -173,34 +173,24 @@ export function useMobileTerminalPaste({
           (response) => terminalInputSend.interpret(response) === true,
           () => false
         )
-      const chunks = splitTerminalInputChunks(payload, PASTE_SEND_CHUNK_BYTES)
-      if (multiSendPasteRef.current) {
-        onError()
-        showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
-        return
-      }
-      multiSendPasteRef.current = chunks.length > 1
       let delivered = true
-      try {
-        // Send in order and stop at the first refusal or reconnect, as desktop's remote paste does.
-        const pasteEpoch = epoch(currentClient)
-        for (const [index, chunk] of chunks.entries()) {
-          if (epoch(currentClient) !== pasteEpoch) {
-            delivered = false
-            break
-          }
-          if (!(await sendChunk(chunk))) {
-            // Close a bracketed paste whose start landed so the program leaves paste mode.
-            if (index > 0 && bracketed) {
-              await sendChunk(BRACKETED_PASTE_END)
-            }
-            delivered = false
-            break
-          }
+      // Send in order and stop at the first refusal or reconnect, as desktop's remote paste does.
+      const pasteEpoch = epoch(currentClient)
+      for (const [index, chunk] of splitTerminalInputChunks(
+        payload,
+        PASTE_SEND_CHUNK_BYTES
+      ).entries()) {
+        if (epoch(currentClient) !== pasteEpoch) {
+          delivered = false
+          break
         }
-      } finally {
-        if (chunks.length > 1) {
-          multiSendPasteRef.current = false
+        if (!(await sendChunk(chunk))) {
+          // Close a bracketed paste whose start landed so the program leaves paste mode.
+          if (index > 0 && bracketed) {
+            await sendChunk(BRACKETED_PASTE_END)
+          }
+          delivered = false
+          break
         }
       }
       if (!delivered) {
@@ -229,6 +219,8 @@ export function useMobileTerminalPaste({
       } else {
         showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
       }
+    } finally {
+      pasteRunningRef.current = false
     }
   }, [
     sendTerminalUserInput,
