@@ -24,5 +24,8 @@ describe('orca speech openai-key set', () => {
   it('refuses empty and oversized input', async () => {
     await expect(readOpenAiKeyFromStdin(piped('  \n'))).rejects.toThrow('No key on stdin')
     await expect(readOpenAiKeyFromStdin(piped('x'.repeat(1025)))).rejects.toThrow('too long')
+    await expect(readOpenAiKeyFromStdin(piped('sk-a\nsk-b\n'))).rejects.toThrow(
+      'line breaks inside'
+    )
   })
 })

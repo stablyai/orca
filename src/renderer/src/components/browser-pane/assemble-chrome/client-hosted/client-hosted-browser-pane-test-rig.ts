@@ -58,6 +58,9 @@ export function installClientHostedPaneApi(overrides?: {
         onTargetUrlChanged: inert,
         openDevTools: vi.fn(async () => true),
         onDevToolsDockChanged: inert,
+        getPageSiteDisplay: vi.fn(async () => null),
+        setViewportOverride: vi.fn(async () => true),
+        reportViewportScrollState: vi.fn(),
         proceedCertificate: vi.fn(async () => ({ ok: true })),
         publishClientPageMetadata: vi.fn(async () => ({ status: 'published', accepted: true })),
         ...overrides?.browser
@@ -70,6 +73,7 @@ export function installClientHostedPaneApi(overrides?: {
         onReloadBrowserPage: inert,
         onHardReloadBrowserPage: inert,
         onZoomBrowserPage: inert,
+        onScrollBrowserPage: inert,
         getZoomLevel: () => 0,
         writeClipboardText: vi.fn(async () => {}),
         recordFeatureInteraction: vi.fn(async () => ({

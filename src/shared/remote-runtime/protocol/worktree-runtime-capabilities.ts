@@ -25,6 +25,9 @@ export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
 // Legacy clients cannot safely derive a branch name from a qualified ref selector.
 export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
   'repo.search-qualified-refs.v1' as const
+// Clients that label full refs/heads|remotes selectors; older qualified-ref clients display refName raw.
+export const REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY =
+  'repo.search-canonical-refs.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
 // Hosts whose folderWorkspace.update/delete honor `requireUniqueId`; older hosts edit the first twin and delete every row with the id.

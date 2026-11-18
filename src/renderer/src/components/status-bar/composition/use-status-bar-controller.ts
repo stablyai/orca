@@ -26,7 +26,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const localRateLimits = useAppStore((s) => s.rateLimits)
   // Why: with a remote account owner the agents run there, so its usage is the one to show.
-  const { rateLimits, remoteOwner, refreshRemote } = useOwnerUsageRateLimits(localRateLimits)
+  const ownerUsage = useOwnerUsageRateLimits(localRateLimits)
+  const { rateLimits, remoteOwner, refreshRemote } = ownerUsage
   const remoteOwned = remoteOwner !== null
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
@@ -201,10 +202,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMuse
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode, muse },
-    usageSettings
-  )
+  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
@@ -303,6 +301,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     menuOpen,
     menuPoint,
     overflowing,
+    ownerUsage,
     petEnabled,
     recordFeatureInteraction,
     remoteOwner,
