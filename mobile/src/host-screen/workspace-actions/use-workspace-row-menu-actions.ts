@@ -29,7 +29,7 @@ export function useWorkspaceRowMenuActions(args: {
   const { controller, row, server, onRename, onMoveToStatus } = args
   const { actions, client, connState, hostCapabilities, hostId, state } = controller
   const t = useMobileTranslation()
-  const { mutes, toggleMuted } = useWorkspaceNotificationMutes({
+  const { mutes, setMuted } = useWorkspaceNotificationMutes({
     client,
     connState,
     menuOpen: row !== null
@@ -92,7 +92,7 @@ export function useWorkspaceRowMenuActions(args: {
               : t('hostScreen.hostScreenOverlays.muteNotifications', 'Mute Notifications'),
             icon: muted ? BellRing : BellMinus,
             onPress: () => {
-              toggleMuted(row.worktreeId)
+              setMuted(row.worktreeId, !muted)
               close()
             }
           }

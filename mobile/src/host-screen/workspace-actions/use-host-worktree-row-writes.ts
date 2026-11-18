@@ -1,6 +1,9 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { isSameWorktreeRow } from '../../worktree/row-presentation/worktree-host-row-identity'
+import {
+  getWorktreeRowIdentity,
+  isSameWorktreeRow
+} from '../../worktree/row-presentation/worktree-host-row-identity'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import type { HostScreenState } from '../use-host-screen-state'
 import { worktreeReadStateWrite, worktreeStatusWrite } from './workspace-row-menu-operations'
@@ -14,6 +17,8 @@ export function useHostWorktreeRowWrites(args: {
 }) {
   const { clientForRow, state } = args
   const { setServerWorkspaces, setWorktrees, setLastKnownWorktrees } = state
+  // The latest write per row and field: an older write's refusal must not undo a newer one.
+  const latestWriteRef = useRef(new Map<string, number>())
 
   const patchRow = useCallback(
     (item: Worktree, patch: RowPatch) => {
@@ -40,11 +45,14 @@ export function useHostWorktreeRowWrites(args: {
       if (!rowClient) {
         return
       }
+      const key = `${getWorktreeRowIdentity(item)}:${Object.keys(patch).join()}`
+      const writeId = (latestWriteRef.current.get(key) ?? 0) + 1
+      latestWriteRef.current.set(key, writeId)
       patchRow(item, patch)
       void send(rowClient)
         .catch(() => false)
         .then((accepted) => {
-          if (!accepted) {
+          if (!accepted && latestWriteRef.current.get(key) === writeId) {
             patchRow(item, previous)
           }
         })
