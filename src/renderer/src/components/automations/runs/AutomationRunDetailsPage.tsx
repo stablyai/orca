@@ -353,6 +353,7 @@ export function AutomationRunDetailsPage({
               <CommentMarkdown
                 variant="document"
                 content={content}
+                singleTildeStrikethrough={false}
                 className="text-sm leading-relaxed text-foreground"
               />
             </RunSection>
