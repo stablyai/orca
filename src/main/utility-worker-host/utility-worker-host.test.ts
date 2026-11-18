@@ -3,12 +3,29 @@ import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { MessageChannel, type MessagePort, Worker } from 'node:worker_threads'
+import { type MessagePort, Worker } from 'node:worker_threads'
 import { build } from 'esbuild'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fork = vi.hoisted(() => vi.fn())
-/** Electron's MessagePortMain shape over a node port: listeners get `{ data }`. */
+vi.mock('electron', async () => {
+  const { MessageChannel } = await import('node:worker_threads')
+  return {
+    app: { once: vi.fn() },
+    utilityProcess: { fork },
+    MessageChannelMain: class {
+      port1: unknown
+      port2: unknown
+      constructor() {
+        const { port1, port2 } = new MessageChannel()
+        this.port1 = portMain(port1)
+        this.port2 = portMain(port2)
+      }
+    }
+  }
+})
+
+/** Electron's MessagePortMain over a node port: listeners get `{ data }`. Inlined in the host shim. */
 const portMainSource = `(port) => ({
   raw: port,
   postMessage: (message) => port.postMessage(message),
@@ -17,23 +34,23 @@ const portMainSource = `(port) => ({
   start: () => port.start(),
   close: () => port.close()
 })`
-const channel = vi.hoisted(() => ({ create: (): unknown => undefined }))
-vi.mock('electron', () => ({
-  app: { once: vi.fn() },
-  utilityProcess: { fork },
-  MessageChannelMain: vi.fn(() => channel.create())
-}))
+function portMain(port: MessagePort) {
+  return {
+    raw: port,
+    postMessage: (message: unknown) => port.postMessage(message),
+    on: (event: string, listener: (...args: unknown[]) => void) =>
+      event === 'message'
+        ? port.on('message', (data) => listener({ data }))
+        : port.on(event, listener),
+    start: () => port.start(),
+    close: () => port.close()
+  }
+}
 vi.mock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: vi.fn()
 }))
 
 const { UtilityWorkerHost } = await import('./utility-worker-host')
-// eslint-disable-next-line no-eval -- the same adapter runs on the main side and inside the host thread.
-const portMain = (0, eval)(portMainSource) as (port: MessagePort) => { raw: MessagePort }
-channel.create = () => {
-  const { port1, port2 } = new MessageChannel()
-  return { port1: portMain(port1), port2: portMain(port2) }
-}
 
 let root = ''
 let hostEntry = ''

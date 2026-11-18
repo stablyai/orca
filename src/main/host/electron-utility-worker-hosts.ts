@@ -47,7 +47,7 @@ export function installElectronHeavyWorkerHost(): void {
     {
       crashes: 3,
       windowMs: CRASH_WINDOW_MS,
-      message: 'Orca paused this after its background worker crashed 3 times. Try again to restart it.'
+      message: 'Orca stopped this after its background worker crashed 3 times in 5 minutes. Try again, or restart Orca if it keeps happening.'
     }
   )
   setHeavyWorkerSpawner(

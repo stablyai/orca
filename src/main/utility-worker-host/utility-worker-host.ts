@@ -1,5 +1,11 @@
 import type { Worker } from 'node:worker_threads'
-import { app, MessageChannelMain, utilityProcess, type UtilityProcess } from 'electron'
+import {
+  app,
+  MessageChannelMain,
+  utilityProcess,
+  type MessagePortMain,
+  type UtilityProcess
+} from 'electron'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
@@ -8,7 +14,6 @@ import type {
   HostedWorkerThread,
   UtilityWorkerHostEvent,
   UtilityWorkerHostRequest,
-  UtilityWorkerPort,
   UtilityWorkerSpawn
 } from './utility-worker-host-protocol'
 
@@ -32,7 +37,7 @@ export class UtilityWorkerHostPausedError extends Error {
 type Host = {
   child: UtilityProcess
   ready: boolean
-  queued: { request: UtilityWorkerHostRequest; port: UtilityWorkerPort }[]
+  queued: { request: UtilityWorkerHostRequest; port: MessagePortMain }[]
   workers: Map<number, HostedWorker>
   readyTimer: ReturnType<typeof setTimeout>
   idleTimer?: ReturnType<typeof setTimeout>
@@ -164,7 +169,7 @@ export class UtilityWorkerHost {
     host.ready = true
     this.retryMs = 0
     for (const { request, port } of host.queued.splice(0)) {
-      host.child.postMessage(request, [port as Electron.MessagePortMain])
+      host.child.postMessage(request, [port])
     }
   }
 
