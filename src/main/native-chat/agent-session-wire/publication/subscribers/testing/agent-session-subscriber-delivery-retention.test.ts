@@ -26,7 +26,10 @@ async function collect(): Promise<void> {
   }
 }
 
-async function blockedSubscriber(sessionId = SESSION) {
+async function blockedSubscriber(
+  sessionId = SESSION,
+  readLiveText?: () => readonly AgentJournalRenderItem[]
+) {
   const journal = await journals.open({
     identity: {
       sessionId,
@@ -37,7 +40,7 @@ async function blockedSubscriber(sessionId = SESSION) {
     },
     stateDirectory: join(fixture.root, sessionId)
   })
-  const subscribers = new AgentSessionSubscribers()
+  const subscribers = new AgentSessionSubscribers(readLiveText ? { readLiveText } : {})
   const ends: unknown[] = []
   const transport = Promise.withResolvers<void>()
   let blocked = false
@@ -157,6 +160,27 @@ it('ends a stream whose one live text alone outgrows its share', async () => {
     // 5M characters at two bytes each, with nothing else in flight.
     pane.publish(0, 5_000_000)
     expect(pane.ends).toHaveLength(1)
+  } finally {
+    pane.release()
+  }
+})
+
+it('ends a stream whose opening would send live text past its share', async () => {
+  const text: AgentJournalRenderItem = {
+    itemId: 'orca:text',
+    revision: 1,
+    sequence: 0,
+    observedAt: 0,
+    turnScope: { kind: 'thread' },
+    body: {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'x'.repeat(5_000_000) }]
+    }
+  }
+  const pane = await blockedSubscriber('opening-session', () => [text])
+  try {
+    await vi.waitFor(() => expect(pane.ends).toHaveLength(1))
   } finally {
     pane.release()
   }

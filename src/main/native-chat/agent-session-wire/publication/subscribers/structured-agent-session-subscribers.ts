@@ -250,8 +250,7 @@ export class AgentSessionSubscribers {
   /** Live text an opening or snapshot sends itself counts against its subscriber's share. */
   private sentLiveText(subscriber: Subscriber, sessionId: string) {
     const items = this.hooks.readLiveText?.(sessionId) ?? []
-    this.lanes.of(subscriber).sendsLiveText(items)
-    return items
+    return this.lanes.of(subscriber).sendsLiveText(items) ? items : []
   }
 
   private subscribers = (sessionId: string): Subscriber[] => [

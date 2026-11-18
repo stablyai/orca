@@ -136,11 +136,18 @@ export class SubscriberDeliveryLane {
     this.add({ kind: 'live-text', since, liveText, release })
   }
 
-  /** Ordered work (an opening or snapshot) that sends live text itself says what it holds. */
-  sendsLiveText(items: object): void {
+  /** Ordered work (an opening or snapshot) sending live text itself; false past the stream's share. */
+  sendsLiveText(items: object): boolean {
+    const waiting = this.pending.find((entry) => entry.kind === 'live-text')
+    const queued = waiting?.kind === 'live-text' ? heldBytesOf(waiting.liveText.items) : 0
+    if (heldBytesOf(items) + queued > CHAT_LIVE_TEXT_SUBSCRIBER_BYTES) {
+      this.refuse()
+      return false
+    }
     if (this.active?.kind === 'ordered') {
       this.delivering = items
     }
+    return true
   }
 
   private refuse(): void {
