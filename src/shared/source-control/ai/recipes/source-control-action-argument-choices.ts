@@ -103,12 +103,20 @@ export function reconcileActionArgumentDocumentTransaction<T extends SourceContr
           : ['permissionMode'])
       ])
     })
-  if (!result.selected.length) {
+  const authoredEffort =
+    mode === 'arguments-edit' &&
+    selection?.options?.effort?.agentId === agent &&
+    selection.options.effort.value === null &&
+    result.analysis.occurrences.some((entry) => entry.key === 'effort')
+  if (!result.selected.length && !authoredEffort) {
     return { recipe, result }
   }
   const ranges = [...result.selected].sort((a, b) => a.start - b.start)
   const map = actionCutOffset(recipe.agentArgs, result)
   const touched = new Set(result.selected.map((entry) => entry.key))
+  if (authoredEffort) {
+    touched.add('effort')
+  }
   const document = recipe.argumentChoices
   const foreign = document !== undefined && document.syntaxAgent !== agent
   const retained = (document?.nodes ?? [])

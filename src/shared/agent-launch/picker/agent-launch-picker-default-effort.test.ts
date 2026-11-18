@@ -6,6 +6,11 @@ import {
 } from './agent-launch-picker'
 import { applyAgentPickerEdit } from './agent-launch-picker-edits'
 import { TEXT_ACTION_DEFAULT_MODEL } from './agent-launch-picker-text-action'
+import {
+  canonicalSourceControlActionSelection,
+  selectSourceControlActionRecipe
+} from '../../source-control/ai/recipes/source-control-action-selection'
+import { sourceControlActionLaunchOptions } from '../../source-control/ai/recipes/source-control-action-launch-preferences'
 
 const entry: AgentPickerEntry = {
   agent: 'claude',
@@ -65,3 +70,30 @@ it.each(['--effort high', '--effort high --effort low'])(
     expect(accepted.acceptedEdits?.choices.options?.effort).toBeUndefined()
   }
 )
+
+it('keeps newly authored duplicate effort after saving and reloading an action', () => {
+  const selected = {
+    ...agentPickerDraft(entry),
+    recipeEdits: {
+      selection: canonicalSourceControlActionSelection({
+        agentId: 'claude',
+        agentArgs: '--add-dir docs'
+      }),
+      changed: false,
+      argumentsAuthored: false
+    }
+  }
+  const cleared = applyAgentPickerEdit(entry, selected, {
+    kind: 'choice',
+    patch: { options: { effort: TEXT_ACTION_DEFAULT_MODEL } }
+  })
+  const typing = applyAgentPickerEdit(entry, cleared, {
+    kind: 'arguments',
+    text: '--effort high --effort low --add-dir docs'
+  })
+  const accepted = applyAgentPickerEdit(entry, typing, { kind: 'accept-arguments' })
+  const saved = JSON.parse(JSON.stringify(accepted.recipeEdits!.selection))
+  const recipe = selectSourceControlActionRecipe(saved)
+  expect(sourceControlActionLaunchOptions(recipe, 'claude').omitEffort).toBeUndefined()
+  expect(recipe.agentArgs).toBe('--effort high --effort low --add-dir docs')
+})
