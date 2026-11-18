@@ -86,9 +86,7 @@ export async function sendPeerMail(args: {
   }
   const caller = peerMailLocalCaller({ ...args, from: params.from })
   const toBot =
-    parseBotAddress(to) !== null ||
-    params.chat !== undefined ||
-    params.item !== undefined
+    parseBotAddress(to) !== null || params.chat !== undefined || params.item !== undefined
   const server = await requirePeerMailServer(runtime, params.on, toBot, type)
   const conversation = runtime.getOrchestrationDb().openHomePeerMailConversation({
     environmentId: server.environmentId,
