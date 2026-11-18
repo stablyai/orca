@@ -109,8 +109,10 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         const rendered = await controller.serializeBuffer!(ptyId, {
           scrollbackRows: this.headlessTerminalScrollbackRows
         })
+        // A gap while serializing: the renderer missed the dropped output too.
         if (
           this.headlessTerminals.get(ptyId) !== state ||
+          state.gapReseed ||
           !rendered ||
           rendered.data.length === 0
         ) {
@@ -151,7 +153,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         // Hydration is best-effort. Live writes continue via the same
         // writeChain that this catch-arm leaves intact.
       } finally {
-        if (this.headlessTerminals.get(ptyId) === state) {
+        if (this.headlessTerminals.get(ptyId) === state && !state.gapReseed) {
           this.headlessHydrationState.set(ptyId, 'done')
         }
       }

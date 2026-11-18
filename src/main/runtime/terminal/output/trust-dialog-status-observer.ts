@@ -123,6 +123,14 @@ export class TrustDialogStatusObserver {
     return true
   }
 
+  /** The screen is trusted again: read a parked card once. */
+  resume(ptyId: string): void {
+    const pane = this.panes.get(ptyId)
+    if (pane?.owned) {
+      this.scheduleRead(ptyId, pane)
+    }
+  }
+
   forget(ptyId: string): void {
     clearTimeout(this.panes.get(ptyId)?.readTimer)
     this.panes.delete(ptyId)
@@ -199,9 +207,9 @@ export class TrustDialogStatusObserver {
     if (emulator.isSynchronizedOutput) {
       return true
     }
-    // Keep the card and read again: a screen being rebuilt is no evidence it closed.
+    // Park, keeping the card: a screen being rebuilt is no evidence it closed; `resume` reads it once rebuilt.
     if (this.deps.isScreenRestoring(ptyId)) {
-      return true
+      return false
     }
     const card = startupDialogPrompt(emulator, owned.agent)
     if (!card) {

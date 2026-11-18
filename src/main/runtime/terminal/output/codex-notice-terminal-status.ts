@@ -17,6 +17,12 @@ type CodexCapacityStatus = Pick<
   'agentType' | 'prompt' | 'model' | 'subagents' | 'mainAgent' | 'turnStartedAt'
 >
 
+/** Dropped output breaks the trackers' cross-chunk carries; restart them like a fresh model would. */
+export function forgetCodexNoticeTrackers(emulator: HeadlessEmulator): void {
+  capacityTrackers.delete(emulator)
+  reconnectFailedTrackers.delete(emulator)
+}
+
 /** A pane earns a tracker once it is known to run Codex; other agents never scan for its notices. */
 function codexNoticeTracker(
   trackers: WeakMap<HeadlessEmulator, CodexNoticeTracker>,

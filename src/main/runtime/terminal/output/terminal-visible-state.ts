@@ -249,6 +249,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     const state = this.headlessTerminals.get(ptyId)
     if (
       !state ||
+      state.gapReseed ||
       this.providerSnapshotPreferredPtys.has(ptyId) ||
       this.headlessHydrationState.get(ptyId) === 'pending'
     ) {
@@ -282,7 +283,8 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     ptyId: string
   ): Promise<RuntimeTerminalProjection> {
     const controller = this.ptyController
-    if (!controller?.serializeBuffer) {
+    // The hidden renderer missed the dropped output too.
+    if (!controller?.serializeBuffer || this.headlessTerminals.get(ptyId)?.gapReseed) {
       return { lines: [] }
     }
     if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {

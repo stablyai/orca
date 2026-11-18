@@ -58,7 +58,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
         (this.ptysById.get(ptyId)?.connected === true
           ? undefined
           : this.headlessExitHolds.get(ptyId)?.exited)
-      if (current !== state) {
+      if (current !== state || state.gapReseed) {
         return null
       }
       // Why: normal history is separated from an active alternate frame, so the

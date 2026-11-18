@@ -4,6 +4,11 @@ import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulat
 
 const trackers = new WeakMap<HeadlessEmulator, FreebuffScreenStatusTracker>()
 
+/** Dropped output can end inside a frame whose end marker never arrives; restart from the next screen. */
+export function forgetFreebuffTerminalStatus(emulator: HeadlessEmulator): void {
+  trackers.delete(emulator)
+}
+
 export function observeFreebuffTerminalStatus(
   emulator: HeadlessEmulator,
   data: string,

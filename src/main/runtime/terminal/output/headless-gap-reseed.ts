@@ -11,6 +11,8 @@ import {
   startGapJournal,
   stopGapJournal
 } from './gap-recovery-journal'
+import { forgetFreebuffTerminalStatus } from './freebuff-terminal-status'
+import { forgetCodexNoticeTrackers } from './codex-notice-terminal-status'
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
@@ -40,6 +42,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     }
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const gapEnd = this.getPtyOutputSequence(ptyId)
+    forgetFreebuffTerminalStatus(state.emulator)
+    forgetCodexNoticeTrackers(state.emulator)
     state.writeChain = state.writeChain
       .then(async () => {
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
@@ -171,6 +175,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         return 'failed'
       }
       const parsedTo = state.outputSequence
+      const gaps = recovery.gaps
       if (parsedTo < snapshot.seq) {
         return 'behind'
       }
@@ -186,6 +191,10 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (!(await this.writeProviderSnapshotScreen(ptyId, state, snapshot))) {
         return 'failed'
       }
+      // The reset cleared them; the replayed output can change them again.
+      if (typeof snapshot.kittyKeyboardFlags === 'number') {
+        await state.emulator.applyKittyKeyboardFlags(snapshot.kittyKeyboardFlags)
+      }
       await state.emulator.write(`${snapshot.pendingEscapeTailAnsi ?? ''}${after}`)
       if (after === '') {
         // Live ownership saw every byte after the snapshot; with none, the provider's view is current.
@@ -193,7 +202,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
           alternateScreen: state.emulator.isAlternateScreen
         })
       }
-      if (!this.isGapRecovering(ptyId, state, recovery)) {
+      // A gap during the repaint dropped bytes it never saw.
+      if (!this.isGapRecovering(ptyId, state, recovery) || recovery.gaps !== gaps) {
         return 'failed'
       }
       this.finishGapRecovery(ptyId, state, recovery)
@@ -216,9 +226,10 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
     // Only output that arrived while untrusted, at its arrival time: what the snapshot painted earlier is not news.
-    if (recovery.unobservedTail) {
-      this.observeHeadlessChunk(ptyId, state, recovery.unobservedTail, recovery.unobservedAt)
+    for (const { chunk, at } of recovery.unobserved) {
+      this.observeHeadlessChunk(ptyId, state, chunk, at)
     }
+    this.trustDialogStatus.resume(ptyId)
   }
 
   private async acquireGapCaptureSlot(): Promise<void> {
