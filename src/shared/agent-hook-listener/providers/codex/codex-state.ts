@@ -12,6 +12,7 @@ import {
   codexRosterChildWorkLiveness,
   codexRosterToSnapshots,
   finishCodexSubagent,
+  hasPendingCodexSubagentIdentity,
   seedCodexSubagentRoster,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
@@ -54,12 +55,16 @@ export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: s
 
 /**
  * Whether a replayed hook left rollout work only the transcript poll can do: a child whose path is
- * unresolved, or a parent read the replay scope gave up on. A stale root-only row would otherwise
- * poll a dead rollout forever.
+ * unresolved, a child name whose header read was deferred, or a parent read the replay scope gave
+ * up on. A stale root-only row would otherwise poll a dead rollout forever.
  */
 export function codexReplayLeftTranscriptWork(state: HookListenerState, paneKey: string): boolean {
   const subagents = state.codexSubagentTranscriptByPaneKey.get(paneKey)?.subagents.values()
-  return parentReadDeferred() || [...(subagents ?? [])].some((child) => !child.filePath)
+  return (
+    parentReadDeferred() ||
+    hasPendingCodexSubagentIdentity(state.codexSubagentRosterByPaneKey.get(paneKey)) ||
+    [...(subagents ?? [])].some((child) => !child.filePath)
+  )
 }
 
 /** The only writer of the root record; the root's clock keeps continuity across same-state writes. */
