@@ -82,6 +82,8 @@ export class DnrSessionRuntime {
   /** Chrome holds requests until rulesets load; at startup that includes extensions still loading. */
   holdForStartup(startupLoad: () => Promise<void>): void {
     this.startupLoad = startupLoad
+    // Why: a hold built before a reattach waits on the old loads, so later requests get a new one.
+    this.loadHold = null
   }
 
   addExtension(extension: Electron.Extension): Promise<void> {

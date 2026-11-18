@@ -196,9 +196,10 @@ export async function detachBrowserExtensionsFromProfileSession(
 /** The extensions setting turned off: every profile drops its extensions until it turns on. */
 export async function detachBrowserExtensionsFromAllProfileSessions(): Promise<void> {
   const states = [...stateByProfileId.values()]
+  const idleUnloads = [...unloadingByProfileId.values()]
   stateByProfileId.clear()
   profileIdByPartition.clear()
-  await Promise.all(states.map(unloadProfileSession))
+  await Promise.all([...states.map(unloadProfileSession), ...idleUnloads])
 }
 
 /**
