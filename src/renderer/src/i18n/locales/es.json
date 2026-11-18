@@ -24335,7 +24335,10 @@
     },
     "composer": {
       "worktreeLabel": "Worktree",
-      "worktreeOff": "La conversación se abre en la carpeta del proyecto, en la rama que tiene ahora."
+      "worktreeOff": "La conversación trabaja en esta rama dentro de la carpeta del proyecto. Zotz cambia la carpeta a esa rama antes de empezar.",
+      "branchLabel": "Rama",
+      "worktreeOn": "Se crea un worktree nuevo a partir de esta rama; la carpeta del proyecto no cambia.",
+      "switchFailed": "No se pudo cambiar la carpeta del proyecto a esa rama"
     }
   }
 }

@@ -49,9 +49,6 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'startFromResetHint'
 > & {
   onNamePlainEnter: () => void
-  /** Zotz: the worktree switch beside the branch picker; off hides the name field. */
-  zotzWorktreeSwitch?: React.ReactNode
-  zotzWorkInProjectFolder?: boolean
 }
 
 export function NewWorkspaceComposerNameSection({
@@ -92,9 +89,7 @@ export function NewWorkspaceComposerNameSection({
   onOpenSelectedBranchWorkspace,
   baseBranch,
   onBaseBranchChange,
-  startFromResetHint,
-  zotzWorktreeSwitch,
-  zotzWorkInProjectFolder = false
+  startFromResetHint
 }: NewWorkspaceComposerNameSectionProps): React.JSX.Element {
   const t = useTranslate()
   const showBaseRefPicker =
@@ -108,7 +103,7 @@ export function NewWorkspaceComposerNameSection({
   return (
     <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-name">
       <div className="flex items-center justify-between gap-2">
-        <label className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
+        <label className="min-w-0 truncate text-xs font-medium text-muted-foreground">
           {selectedRepoIsGit
             ? t('auto.components.NewWorkspaceComposerCard.ac3748dcda', 'Create From')
             : t('auto.components.NewWorkspaceComposerCard.0ee17638fe', 'Workspace name')}{' '}
@@ -122,45 +117,42 @@ export function NewWorkspaceComposerNameSection({
             baseBranch={baseBranch}
             onBaseBranchChange={onBaseBranchChange}
             resetHint={startFromResetHint}
-            readOnly={selectedRepoRequiresConnection || zotzWorkInProjectFolder}
+            readOnly={selectedRepoRequiresConnection}
           />
         ) : null}
-        {zotzWorktreeSwitch}
       </div>
-      {zotzWorkInProjectFolder ? null : (
-        <SmartWorkspaceNameField
-          inputRef={nameInputRef}
-          repos={eligibleRepos}
-          selectedRepo={selectedRepo}
-          repoId={repoId}
-          onRepoChange={onRepoChange}
-          value={name}
-          onValueChange={onNameValueChange}
-          onGitHubItemSelect={onSmartGitHubItemSelect}
-          onGitLabItemSelect={onSmartGitLabItemSelect}
-          onBranchSelect={onSmartBranchSelect}
-          onLinearIssueSelect={onSmartLinearIssueSelect}
-          onJiraIssueSelect={onSmartJiraIssueSelect}
-          onOpenJiraSettings={onOpenJiraSettings}
-          selectedSource={smartNameSelection}
-          onClearSelectedSource={onClearSmartNameSelection}
-          githubSourceContext={smartNameGitHubSourceContext}
-          jiraSourceContext={smartNameJiraSourceContext}
-          disabled={selectedRepoRequiresConnection}
-          disabledPlaceholder={t(
-            'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
-            'Connect this project first'
-          )}
-          textOnly={!selectedRepoIsGit}
-          branchesEnabled={branchesEnabled}
-          repoBackedSourcesDisabled={repoBackedSourcesDisabled}
-          repoBackedSearchRepos={repoBackedSearchRepos}
-          allowCrossRepoProjectAdd={allowSmartNameAddProject}
-          crossRepoSwitchTarget={smartNameRepoSwitchTarget}
-          onActiveSourceModeChange={onSmartNameModeChange}
-          onPlainEnter={onNamePlainEnter}
-        />
-      )}
+      <SmartWorkspaceNameField
+        inputRef={nameInputRef}
+        repos={eligibleRepos}
+        selectedRepo={selectedRepo}
+        repoId={repoId}
+        onRepoChange={onRepoChange}
+        value={name}
+        onValueChange={onNameValueChange}
+        onGitHubItemSelect={onSmartGitHubItemSelect}
+        onGitLabItemSelect={onSmartGitLabItemSelect}
+        onBranchSelect={onSmartBranchSelect}
+        onLinearIssueSelect={onSmartLinearIssueSelect}
+        onJiraIssueSelect={onSmartJiraIssueSelect}
+        onOpenJiraSettings={onOpenJiraSettings}
+        selectedSource={smartNameSelection}
+        onClearSelectedSource={onClearSmartNameSelection}
+        githubSourceContext={smartNameGitHubSourceContext}
+        jiraSourceContext={smartNameJiraSourceContext}
+        disabled={selectedRepoRequiresConnection}
+        disabledPlaceholder={t(
+          'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
+          'Connect this project first'
+        )}
+        textOnly={!selectedRepoIsGit}
+        branchesEnabled={branchesEnabled}
+        repoBackedSourcesDisabled={repoBackedSourcesDisabled}
+        repoBackedSearchRepos={repoBackedSearchRepos}
+        allowCrossRepoProjectAdd={allowSmartNameAddProject}
+        crossRepoSwitchTarget={smartNameRepoSwitchTarget}
+        onActiveSourceModeChange={onSmartNameModeChange}
+        onPlainEnter={onNamePlainEnter}
+      />
       {forkPushWarning ? (
         <p className="flex items-start gap-1.5 text-[11px] text-yellow-600 dark:text-yellow-500">
           <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />

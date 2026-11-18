@@ -25961,7 +25961,10 @@
     },
     "composer": {
       "worktreeLabel": "Worktree",
-      "worktreeOff": "The conversation opens in the project folder, on the branch it has checked out now."
+      "worktreeOff": "The conversation works on this branch in the project folder. Zotz switches the folder to it first.",
+      "branchLabel": "Branch",
+      "worktreeOn": "A new worktree is created from this branch; your project folder stays as it is.",
+      "switchFailed": "Could not switch the project folder to that branch"
     }
   }
 }
