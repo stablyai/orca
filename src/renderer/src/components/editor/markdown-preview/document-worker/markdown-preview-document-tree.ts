@@ -97,7 +97,7 @@ function sourceBounds(node: Nodes): { sourceLine: number | null; sourceEndLine: 
   }
 }
 
-const SEMANTIC_BLOCK_ATTRIBUTES = ['src', 'href', 'alt', 'checked', 'type'] as const
+const SEMANTIC_BLOCK_ATTRIBUTES = ['src', 'href', 'alt', 'checked', 'type', 'className'] as const
 
 function serializeBlockContent(node: Nodes): string {
   if (node.type === 'text') {
@@ -111,6 +111,10 @@ function serializeBlockContent(node: Nodes): string {
     return value === undefined ? [] : [`${key}=${JSON.stringify(value)}`]
   })
   const header = attrs.length ? `${node.tagName}[${attrs.join(',')}]` : node.tagName
+  // Footnote refs render document-global counters ('1', '2') that shift when earlier footnotes are added.
+  if (node.tagName === 'a' && node.properties.dataFootnoteRef) {
+    return `<${header}>(footnote-ref)`
+  }
   return `<${header}>(${node.children.map((child) => serializeBlockContent(child)).join(',')})`
 }
 

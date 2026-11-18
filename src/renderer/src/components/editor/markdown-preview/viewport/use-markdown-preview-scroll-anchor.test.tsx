@@ -129,6 +129,20 @@ describe('markdown preview scroll anchor', () => {
       '![](inserted.png)\n\n![](kept.png)\n',
       4,
       104
+    ],
+    [
+      'an inline math paragraph is inserted above an identically texted inline code paragraph',
+      'A.\n\n`x`\n\nT.\n',
+      'A.\n\n$x$\n\n`x`\n\nT.\n',
+      112,
+      212
+    ],
+    [
+      'an earlier footnote shifts footnote numbering above the anchored paragraph',
+      'A.\n\nRead[^b].\n\n[^a]: first\n[^b]: second\n',
+      'A.\n\nNew[^a].\n\nRead[^b].\n\n[^a]: first\n[^b]: second\n',
+      112,
+      212
     ]
   ])(
     'keeps scrollTop anchored on the reading block when %s',
