@@ -57,6 +57,8 @@ export type JournalSqlStorePrepare = (
 ) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
 
 /** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
+type JournalHistoryAsk = Omit<JournalDomainHistoryRequest, 'sessionId'>
+
 export class SqlAgentSessionJournal extends SqlJournalAppends {
   private readonly goalAttachments: JournalGoalAttachmentInverse
   readonly reads: JournalSqlReads
@@ -287,11 +289,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   }
 
   /** One reader snapshot answers the page and, when asked, current work beside it. */
-  history(
-    request: Omit<JournalDomainHistoryRequest, 'sessionId'>,
-    work?: JournalDomainHistoryWork,
-    signal?: AbortSignal
-  ) {
+  history(request: JournalHistoryAsk, work?: JournalDomainHistoryWork, signal?: AbortSignal) {
     const sessionId = this.identity.sessionId
     return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work, signal)
   }

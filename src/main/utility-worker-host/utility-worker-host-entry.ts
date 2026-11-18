@@ -154,7 +154,10 @@ function host(
   })
   // The consumer is gone (main retired it or itself died); nothing can read this worker's replies.
   port.on('close', () => {
-    budget.release(id)
+    // After its exit the port is already gone; releasing then would mark a finished worker forever.
+    if (ports.delete(id)) {
+      budget.release(id)
+    }
     void worker.terminate()
   })
   port.start()
