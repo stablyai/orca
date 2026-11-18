@@ -20,7 +20,6 @@ export type FleetView = {
   summary: FleetBucketCounts & { agents: number; teams: number }
   teams: FleetTeam[]
   solo: DashboardCard[]
-  window: { from: number; to: number }
 }
 
 type FleetLineageRow = {
@@ -72,7 +71,7 @@ function buildTeam(root: FleetNode): FleetTeam {
   return { root, size: members.length, counts, startedAt, endedAt }
 }
 
-export function buildFleetView(cards: readonly DashboardCard[], now: number): FleetView {
+export function buildFleetView(cards: readonly DashboardCard[]): FleetView {
   const rows: FleetLineageRow[] = cards.map((card) => ({
     paneKey: card.paneKey,
     card,
@@ -104,13 +103,9 @@ export function buildFleetView(cards: readonly DashboardCard[], now: number): Fl
   solo.sort((a, b) => lastActivity(b) - lastActivity(a))
 
   const summary = { ...emptyCounts(), agents: cards.length, teams: teams.length }
-  let from = now
   for (const card of cards) {
     summary[card.bucket] += 1
-    if (card.startedAt > 0) {
-      from = Math.min(from, card.startedAt)
-    }
   }
 
-  return { summary, teams, solo, window: { from, to: now } }
+  return { summary, teams, solo }
 }

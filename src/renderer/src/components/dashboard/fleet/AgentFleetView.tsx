@@ -5,19 +5,14 @@ import {
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { FleetNetworkView } from './FleetNetworkView'
 import { FleetSummaryBand } from './FleetSummaryBand'
-import { FleetTimelineView } from './FleetTimelineView'
 import { buildFleetView } from './fleet-view-model'
-
-export type AgentFleetLayout = 'network' | 'timeline'
 
 export function AgentFleetView({
   snapshot,
-  now,
-  layout
+  now
 }: {
   snapshot: DashboardSnapshot
   now: number
-  layout: AgentFleetLayout
 }): React.JSX.Element {
   const buckets = useMemo(
     () =>
@@ -25,17 +20,13 @@ export function AgentFleetView({
     [snapshot.showIdle]
   )
   const view = useMemo(
-    () =>
-      buildFleetView(
-        snapshot.cards.filter((card) => buckets.includes(card.bucket)),
-        now
-      ),
-    [snapshot.cards, buckets, now]
+    () => buildFleetView(snapshot.cards.filter((card) => buckets.includes(card.bucket))),
+    [snapshot.cards, buckets]
   )
   return (
     <div className="@container flex flex-col gap-3 bg-background text-foreground">
       <FleetSummaryBand summary={view.summary} buckets={buckets} />
-      {layout === 'network' ? <FleetNetworkView view={view} /> : <FleetTimelineView view={view} />}
+      <FleetNetworkView view={view} now={now} />
     </div>
   )
 }

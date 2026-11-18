@@ -7,8 +7,13 @@ import type { FleetView } from './fleet-view-model'
 
 const SECTION_CLASS = 'min-w-0 rounded-xl border border-border/60 bg-muted/30'
 
-export function FleetNetworkView({ view }: { view: FleetView }): React.JSX.Element {
-  const now = view.window.to
+export function FleetNetworkView({
+  view,
+  now
+}: {
+  view: FleetView
+  now: number
+}): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       {view.teams.map((team) => (

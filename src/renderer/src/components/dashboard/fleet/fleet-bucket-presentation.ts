@@ -12,13 +12,6 @@ export const FLEET_BUCKET_DOT_STATE: Record<DashboardBucket, DashboardCardBaseDi
   idle: 'idle'
 }
 
-export const FLEET_BUCKET_BAR_CLASS: Record<DashboardBucket, string> = {
-  attention: 'bg-agent-question',
-  working: 'bg-agent-working',
-  done: 'bg-emerald-500',
-  idle: 'bg-neutral-500/40'
-}
-
 export function fleetCardSurfaceClass(card: DashboardCard): string {
   if (card.bucket === 'attention') {
     return 'border-agent-question/40 bg-agent-question/[0.06]'
