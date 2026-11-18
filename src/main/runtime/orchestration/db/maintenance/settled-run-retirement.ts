@@ -4,6 +4,7 @@ import { readRemovedWorkWatermark } from '../reset/removed-orchestration-work-re
 import { forgetUnownedRemovedWork, RETENTION_AGE, RETIRED_RUN_SQL } from './settled-run-retention'
 import {
   forgetRetiringRunWrites,
+  isRetiringRunMailbox,
   isRetiringRunWritten,
   unwatchRetiringRun,
   watchRetiringRun
@@ -157,11 +158,14 @@ export function* retireSettledRun(
     const anyPartyLive = (): boolean =>
       checkedParties.some((party) => isLiveRunParty(party, liveness))
     // A handle's liveness reads the database; a pane's is a lookup, and a re-minted terminal keeps its
-    // pane. A reader that started mid-way, such as a pane-less wait, is found among the few waiting.
+    // pane. A reader that started mid-way on the Run's or a Dispatch's mailbox, such as a pane-less
+    // wait, is found among the few waiting.
     const panes = checkedParties.filter((party) => party.startsWith('pane:'))
     const anyPartySeenLive = (): boolean =>
       panes.some((party) => isLiveRunParty(party, liveness)) ||
-      [...liveness.waitedMailboxes()].some((handle) => parties.has(`handle:${handle}`))
+      [...liveness.waitedMailboxes()].some(
+        (handle) => parties.has(`handle:${handle}`) || isRetiringRunMailbox(orchestrationDb, handle)
+      )
     if (anyPartyLive()) {
       return false
     }
@@ -199,6 +203,7 @@ export function* retireSettledRun(
       // Liveness was read before the lock; a party added since keeps the Run.
       if (
         anyPartyLive() ||
+        anyPartySeenLive() ||
         isRetiringRunWritten(orchestrationDb) ||
         !isRetiredRun(db, runId) ||
         runParties(orchestrationDb, runId).some((party) => !parties.has(party))

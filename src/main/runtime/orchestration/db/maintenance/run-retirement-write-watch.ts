@@ -101,6 +101,11 @@ export function watchRetiringRun(db: OrchestrationDb, runId: string): void {
     .run(runId)
 }
 
+/** Whether a mailbox is the retiring Run's own or one of its Dispatches'. */
+export function isRetiringRunMailbox(db: OrchestrationDb, mailbox: string): boolean {
+  return Boolean(db.db.prepare(`SELECT 1 FROM temp.${table}_tracked WHERE key = ?`).get(mailbox))
+}
+
 /** Whether anything wrote to the Run since the last `forgetRetiringRunWrites`. */
 export function isRetiringRunWritten(db: OrchestrationDb): boolean {
   return Boolean(db.db.prepare(`SELECT 1 FROM temp.${table}_dirty LIMIT 1`).get())

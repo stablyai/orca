@@ -275,30 +275,35 @@ describe('settled Run retention', () => {
     expect(count("tasks WHERE id = ? AND status = 'ready'", task.id)).toBe(1)
   })
 
-  it('keeps a Run whose mailbox gets a reader between pages', () => {
-    const { run } = createRunWithWorker('waited')
-    for (let n = 0; n < 200; n++) {
-      db!.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: `m${n}` })
-    }
-    settle(run.id)
-    ageEveryTimestamp()
-    let waiting = false
-    const steps = retireSettledRun(db!, run.id, {
-      ...nobodyIsLive,
-      waitedMailboxes: () => (waiting ? [`run:${run.id}`] : [])
-    })
-    let step = steps.next()
-    while (!step.done && count('messages WHERE run_id = ?', run.id) === 201) {
-      step = steps.next()
-    }
-    waiting = true
-    while (!step.done) {
-      step = steps.next()
-    }
+  it.each(['run', 'dispatch'] as const)(
+    'keeps a Run whose %s mailbox gets a reader between pages',
+    (mailbox) => {
+      const { run, dispatchId } = createRunWithWorker(`waited_${mailbox}`)
+      for (let n = 0; n < 200; n++) {
+        db!.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: `m${n}` })
+      }
+      settle(run.id)
+      ageEveryTimestamp()
+      const handle = mailbox === 'run' ? `run:${run.id}` : `dispatch:${dispatchId}`
+      let waiting = false
+      const steps = retireSettledRun(db!, run.id, {
+        ...nobodyIsLive,
+        waitedMailboxes: () => (waiting ? [handle] : [])
+      })
+      let step = steps.next()
+      // The worker's report, its question and the 200 above.
+      while (!step.done && count('messages WHERE run_id = ?', run.id) === 202) {
+        step = steps.next()
+      }
+      waiting = true
+      while (!step.done) {
+        step = steps.next()
+      }
 
-    expect(step.value).toBe(false)
-    expect(count('messages WHERE run_id = ?', run.id)).toBeGreaterThan(0)
-  })
+      expect(step.value).toBe(false)
+      expect(count('messages WHERE run_id = ?', run.id)).toBeGreaterThan(0)
+    }
+  )
 
   it('keeps a Run whose settled Task result is corrected between pages', () => {
     const { run, task } = createRunWithWorker('corrected')
