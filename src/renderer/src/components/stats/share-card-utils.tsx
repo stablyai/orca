@@ -11,6 +11,8 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { ZOTZ_RELEASE_REPO } from '../../../../shared/zotz/zotz-app-identity'
 
+const ZOTZ_REPO_LABEL = `github.com/${ZOTZ_RELEASE_REPO}`
+
 export type ClaudeShareData = {
   provider: 'claude'
   summary: ClaudeUsageSummary
@@ -147,7 +149,7 @@ export function OrcaLogo(): React.JSX.Element {
       style={{ opacity: 0.9, verticalAlign: 'middle' }}
     >
       <path
-        fill="#ffffff"
+        style={{ fill: '#ffffff' }}
         d="M32 24L35 22L37 15L39.5 24C46 22 55 18 62 20C59 26 58 31 58 37Q53 31 48 36Q43 32 39 40Q35 40 32 47Q29 40 25 40Q21 32 16 36Q11 31 6 37C6 31 5 26 2 20C9 18 18 22 24.5 24L27 15L29 22Z"
       />
     </svg>
@@ -232,7 +234,7 @@ export function CardFooter(props: {
             marginLeft: 5
           }}
         >
-          {`github.com/${ZOTZ_RELEASE_REPO}`}
+          {ZOTZ_REPO_LABEL}
         </span>
       </div>
     </div>
