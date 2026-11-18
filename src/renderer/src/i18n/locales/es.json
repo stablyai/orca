@@ -24315,7 +24315,10 @@
         "tooltip": "Cola de agentes y memoria"
       },
       "settingLabel": "Cola de agentes por memoria",
-      "settingDescription": "Los agentes arrancan solo cuando caben en memoria; los demás esperan su turno. Al apagarla arranca todo lo que esperaba."
+      "settingDescription": "Los agentes arrancan solo cuando caben en memoria; los demás esperan su turno. Al apagarla arranca todo lo que esperaba.",
+      "canceledNotice": "{{agent}} cancelado en la cola: no se inició.",
+      "dismissCanceled": "Quitar aviso",
+      "canceledMark": "Cancelado"
     },
     "sidebar": {
       "home": "Inicio",

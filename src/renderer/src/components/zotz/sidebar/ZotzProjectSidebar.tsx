@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import { FolderPlus, Plus } from 'lucide-react'
+import { Ban, FolderPlus, Plus } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -25,6 +25,7 @@ import {
 } from './zotz-project-conversations'
 import { useZotzGitHubRepoIcons } from './use-zotz-github-repo-icons'
 import { ZotzWorkingRipple } from './ZotzWorkingRipple'
+import { useZotzAgentQueue } from '../agent-queue/zotz-agent-queue-store'
 import { ZotzConversationMenu } from './ZotzConversationMenu'
 import { ZotzProjectMenu } from './ZotzProjectMenu'
 import HiddenProjectsSection from '../../sidebar/hidden-projects/HiddenProjectsSection'
@@ -54,12 +55,16 @@ function AddProjectButton(): React.JSX.Element {
 function ConversationRow({
   row,
   active,
-  status
+  status,
+  canceled
 }: {
   row: ZotzConversationRow
   active: boolean
   status: ZotzConversationStatus | null
+  /** Its only agent was canceled in the memory queue and never started. */
+  canceled: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       type="button"
@@ -82,6 +87,12 @@ function ConversationRow({
             unread={status.unread}
             size="md"
             tooltipSide="right"
+          />
+        ) : canceled ? (
+          <Ban
+            role="img"
+            aria-label={t('zotz.agentQueue.canceledMark', 'Canceled')}
+            className="size-3 text-muted-foreground"
           />
         ) : (
           <span aria-hidden className="size-1.5 rounded-full bg-worktree-sidebar-foreground/25" />
@@ -160,15 +171,20 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
     return result
   }, [allThreads])
   useZotzGitHubRepoIcons(repos)
+  const queueSnapshot = useZotzAgentQueue()
+  const canceledWorkspaces = useMemo(
+    () => new Set(queueSnapshot.canceled.map((launch) => launch.label)),
+    [queueSnapshot.canceled]
+  )
 
   const sections = useMemo(
     () =>
       buildZotzProjectSections({
         repos,
         worktreesByRepo,
-        workspacesWithAgents: new Set(statusByWorkspace.keys())
+        workspacesWithAgents: new Set([...statusByWorkspace.keys(), ...canceledWorkspaces])
       }),
-    [repos, worktreesByRepo, statusByWorkspace]
+    [repos, worktreesByRepo, statusByWorkspace, canceledWorkspaces]
   )
   const folders = useMemo(
     () => buildZotzFolderConversations({ folderWorkspaces, tabsByWorkspace: tabsByWorktree }),
@@ -198,6 +214,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
                   row={row}
                   active={row.id === activeWorktreeId}
                   status={statusByWorkspace.get(row.id) ?? null}
+                  canceled={canceledWorkspaces.has(row.id)}
                 />
               </ZotzConversationMenu>
             ))}
@@ -214,6 +231,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
                 row={row}
                 active={row.id === activeWorktreeId}
                 status={statusByWorkspace.get(row.id) ?? null}
+                canceled={canceledWorkspaces.has(row.id)}
               />
             ))}
           </section>

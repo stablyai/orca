@@ -25941,7 +25941,10 @@
         "tooltip": "Agent queue and memory"
       },
       "settingLabel": "Agent queue by memory",
-      "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting."
+      "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting.",
+      "canceledNotice": "{{agent}} canceled in the queue: it did not start.",
+      "dismissCanceled": "Dismiss",
+      "canceledMark": "Canceled"
     },
     "sidebar": {
       "home": "Home",

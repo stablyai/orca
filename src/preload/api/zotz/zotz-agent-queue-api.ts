@@ -6,4 +6,6 @@ export type ZotzAgentQueueApi = {
   /** "Launch anyway": starts a queued agent whatever the memory says. */
   forceStart: (id: string) => Promise<void>
   cancel: (id: string) => Promise<void>
+  /** Clears a canceled pane's mark. */
+  dismissCanceled: (id: string) => Promise<void>
 }

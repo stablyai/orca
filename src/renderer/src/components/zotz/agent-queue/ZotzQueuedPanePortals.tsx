@@ -1,4 +1,4 @@
-import { Hourglass, Play, X } from 'lucide-react'
+import { Ban, Hourglass, Play, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -132,6 +132,60 @@ function QueuedPanePortal({
   )
 }
 
+type CanceledLaunch = ZotzAgentQueueSnapshot['canceled'][number]
+
+/** The strip a canceled pane keeps: it stays a plain shell, so the strip must not cover it. */
+export function ZotzCanceledPaneNotice({
+  launch,
+  onDismiss
+}: {
+  launch: CanceledLaunch
+  onDismiss: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm text-card-foreground shadow-xs"
+    >
+      <Ban className="size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        {t('zotz.agentQueue.canceledNotice', '{{agent}} canceled in the queue: it did not start.', {
+          agent: launch.agent
+        })}
+      </span>
+      <Button
+        type="button"
+        size="icon-xs"
+        variant="ghost"
+        aria-label={t('zotz.agentQueue.dismissCanceled', 'Dismiss')}
+        onClick={onDismiss}
+      >
+        <X className="size-3.5" />
+      </Button>
+    </div>
+  )
+}
+
+function CanceledPanePortal({
+  pane,
+  launch
+}: {
+  pane: ManagedPane
+  launch: CanceledLaunch
+}): React.JSX.Element {
+  return createPortal(
+    <div className="absolute inset-x-2 top-2 z-40" data-zotz-canceled-pane="">
+      <ZotzCanceledPaneNotice
+        launch={launch}
+        onDismiss={() => void window.api.zotzAgentQueue.dismissCanceled(launch.id)}
+      />
+    </div>,
+    pane.container,
+    `zotz-canceled-pane-${pane.id}`
+  )
+}
+
 /** "Queued" over a pane whose agent waits for memory (docs/zotz/PLAN.md §8g). */
 export function ZotzQueuedPanePortals({
   controller
@@ -139,15 +193,22 @@ export function ZotzQueuedPanePortals({
   controller: TerminalPaneController
 }): React.JSX.Element | null {
   const snapshot = useZotzAgentQueue()
-  if (snapshot.queued.length === 0) {
+  if (snapshot.queued.length === 0 && snapshot.canceled.length === 0) {
     return null
   }
   const { managedPanes, tabId } = controller
   return (
     <>
-      {managedPanes.map((pane) => (
-        <QueuedPanePortal key={pane.id} pane={pane} tabId={tabId} snapshot={snapshot} />
-      ))}
+      {managedPanes.map((pane) => {
+        const canceled = snapshot.canceled.find(
+          (entry) => entry.id === makePaneKey(tabId, pane.leafId)
+        )
+        return canceled ? (
+          <CanceledPanePortal key={pane.id} pane={pane} launch={canceled} />
+        ) : (
+          <QueuedPanePortal key={pane.id} pane={pane} tabId={tabId} snapshot={snapshot} />
+        )
+      })}
     </>
   )
 }

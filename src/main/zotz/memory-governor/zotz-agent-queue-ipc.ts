@@ -6,7 +6,7 @@ import type { ZotzMemoryGovernorService } from './zotz-memory-governor-service'
 
 export function buildZotzAgentQueueSnapshot(
   governor: Pick<ZotzMemoryGovernorService, 'getState'>,
-  queue: Pick<ZotzAgentLaunchQueue, 'list'>
+  queue: Pick<ZotzAgentLaunchQueue, 'list' | 'listCanceled'>
 ): ZotzAgentQueueSnapshot {
   const state = governor.getState()
   return {
@@ -42,6 +42,12 @@ export function buildZotzAgentQueueSnapshot(
       enqueuedAt: task.enqueuedAt,
       position: task.position,
       waitReason: task.waitReason
+    })),
+    canceled: queue.listCanceled().map(({ id, agent, label, canceledAt }) => ({
+      id,
+      agent,
+      label,
+      canceledAt
     }))
   }
 }
@@ -78,6 +84,12 @@ export function registerZotzAgentQueueHandlers(
       queue.cancel(valid)
     }
   })
+  ipcMain.handle('zotzAgentQueue:dismissCanceled', (event, id: unknown) => {
+    const valid = taskId(id)
+    if (isWindowRenderer(event) && valid) {
+      queue.dismissCanceled(valid)
+    }
+  })
   const unsubscribeQueue = queue.subscribe(publish)
   const unsubscribeGovernor = governor.subscribe(publish)
   return () => {
@@ -86,5 +98,6 @@ export function registerZotzAgentQueueHandlers(
     ipcMain.removeHandler('zotzAgentQueue:snapshot')
     ipcMain.removeHandler('zotzAgentQueue:forceStart')
     ipcMain.removeHandler('zotzAgentQueue:cancel')
+    ipcMain.removeHandler('zotzAgentQueue:dismissCanceled')
   }
 }

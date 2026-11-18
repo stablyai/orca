@@ -65,6 +65,7 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
       endedAt: NOW - 48 * MIN
     }
   ],
+  canceled: [],
   queued: [
     {
       id: 'q1',

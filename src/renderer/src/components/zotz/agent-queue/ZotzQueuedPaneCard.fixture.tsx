@@ -36,6 +36,7 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
     }
   ],
   done: [],
+  canceled: [],
   queued: []
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computeZotzMemoryGovernorDefaults } from '../../../shared/zotz/agent-queue/zotz-memory-governor-defaults'
 import type { ZotzMemoryGovernorState } from './zotz-memory-governor-service'
-import { ZotzAgentLaunchCanceledError, ZotzAgentLaunchQueue } from './zotz-agent-launch-queue'
+import { ZotzAgentLaunchQueue } from './zotz-agent-launch-queue'
 
 const GB = 1024 ** 3
 // Samples and the queue share this clock, so every sample counts as fresh.
@@ -93,9 +93,44 @@ describe('ZotzAgentLaunchQueue', () => {
     const forced = queue.admit({ agent: 'claude', priority: 'remote', paneKey: 'b', label: 'b' })
     queue.cancel('a')
     queue.forceStart('b')
-    await expect(canceled).rejects.toBeInstanceOf(ZotzAgentLaunchCanceledError)
-    await expect(forced).resolves.toBeUndefined()
+    await expect(canceled).resolves.toBe('canceled')
+    await expect(forced).resolves.toBe('admitted')
     expect(queue.list()).toEqual([])
+  })
+
+  it('keeps a canceled pane canceled when it respawns, until the mark is dismissed', async () => {
+    const governor = fakeGovernor()
+    const queue = new ZotzAgentLaunchQueue(governor, now)
+    governor.sample(3, 0)
+    void queue.admit({ agent: 'claude', priority: 'manual', paneKey: 'a', label: 'wt-1' })
+    queue.cancel('a')
+
+    // The pane asks again with the same key: it must not rejoin the backlog.
+    await expect(
+      queue.admit({ agent: 'claude', priority: 'manual', paneKey: 'a', label: 'wt-1' })
+    ).resolves.toBe('canceled')
+    expect(queue.list()).toEqual([])
+    expect(queue.listCanceled().map((entry) => [entry.id, entry.label])).toEqual([['a', 'wt-1']])
+
+    queue.dismissCanceled('a')
+    expect(queue.listCanceled()).toEqual([])
+  })
+
+  it('forgets a launch whose pane closed without marking it canceled', async () => {
+    const governor = fakeGovernor()
+    const queue = new ZotzAgentLaunchQueue(governor, now)
+    governor.sample(3, 0)
+    const closing = new AbortController()
+    const launch = queue.admit({
+      agent: 'claude',
+      priority: 'manual',
+      paneKey: 'a',
+      label: 'wt-1',
+      signal: closing.signal
+    })
+    closing.abort()
+    await expect(launch).resolves.toBe('canceled')
+    expect(queue.listCanceled()).toEqual([])
   })
 
   it('starts everything waiting when the queue is turned off and holds nothing new', async () => {
@@ -104,10 +139,10 @@ describe('ZotzAgentLaunchQueue', () => {
     governor.sample(3, 0)
     const waiting = queue.admit({ agent: 'codex', priority: 'manual', paneKey: 'a', label: 'a' })
     queue.setEnabled(false)
-    await expect(waiting).resolves.toBeUndefined()
+    await expect(waiting).resolves.toBe('admitted')
     await expect(
       queue.admit({ agent: 'codex', priority: 'manual', paneKey: 'b', label: 'b' })
-    ).resolves.toBeUndefined()
+    ).resolves.toBe('admitted')
     expect(queue.list()).toEqual([])
   })
 

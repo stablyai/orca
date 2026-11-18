@@ -32,10 +32,16 @@ export type ZotzQueuedLaunchView = ZotzQueuedAgentTask & {
   waitReason: ZotzAgentWaitReason | 'pressure' | null
 }
 
+/** A canceled launch still opens its pane, as a plain shell, so the pane never retries it. */
+export type ZotzAdmission = 'admitted' | 'canceled'
+
+export type ZotzCanceledLaunch = { id: string; agent: TuiAgent; label: string; canceledAt: number }
+
 type Waiter = {
-  promise: Promise<void>
-  resolve: () => void
-  reject: (error: Error) => void
+  promise: Promise<ZotzAdmission>
+  resolve: (admission: ZotzAdmission) => void
+  agent: TuiAgent
+  label: string
 }
 
 /** Holds an admitted agent's estimate until a sample measures it (by pane) or it times out. */
@@ -46,12 +52,8 @@ const RESERVATION_MS = 90_000
 // The governor stops sampling when idle; an older sample says nothing about memory now.
 const FRESH_SAMPLE_MS = 20_000
 
-export class ZotzAgentLaunchCanceledError extends Error {
-  constructor() {
-    super('The queued agent launch was canceled.')
-    this.name = 'ZotzAgentLaunchCanceledError'
-  }
-}
+// Enough to cover every pane still open; older marks belong to long-closed tabs.
+const CANCELED_KEPT = 50
 
 /**
  * Holds agent launches until memory and the concurrency limit allow them, in the order of
@@ -61,6 +63,7 @@ export class ZotzAgentLaunchQueue {
   private queue: ZotzAgentQueue = createZotzAgentQueue()
   private readonly waiters = new Map<string, Waiter>()
   private reservations: Reservation[] = []
+  private canceled: ZotzCanceledLaunch[] = []
   private readonly listeners = new Set<() => void>()
   private enabled = true
 
@@ -85,23 +88,25 @@ export class ZotzAgentLaunchQueue {
     }
   }
 
-  /** Resolves when the launch may start; rejects if it is canceled while waiting. */
-  admit(request: ZotzAgentLaunchRequest): Promise<void> {
+  /** Resolves when the launch may start, or with 'canceled' once the user canceled that pane. */
+  admit(request: ZotzAgentLaunchRequest): Promise<ZotzAdmission> {
     if (!this.enabled) {
-      return Promise.resolve()
+      return Promise.resolve('admitted')
     }
     const id = request.paneKey ?? randomUUID()
+    // The pane respawns after a cancel; it stays canceled until the user dismisses the mark.
+    if (this.canceled.some((entry) => entry.id === id)) {
+      return Promise.resolve('canceled')
+    }
     const existing = this.waiters.get(id)
     if (existing) {
       return existing.promise
     }
-    let resolve!: () => void
-    let reject!: (error: Error) => void
-    const promise = new Promise<void>((res, rej) => {
+    let resolve!: (admission: ZotzAdmission) => void
+    const promise = new Promise<ZotzAdmission>((res) => {
       resolve = res
-      reject = rej
     })
-    this.waiters.set(id, { promise, resolve, reject })
+    this.waiters.set(id, { promise, resolve, agent: request.agent, label: request.label })
     const limits = this.governor.getState()?.limits
     this.queue = enqueueZotzAgentTask(
       this.queue,
@@ -119,7 +124,8 @@ export class ZotzAgentLaunchQueue {
       },
       this.now()
     )
-    request.signal?.addEventListener('abort', () => this.cancel(id), { once: true })
+    // A closed pane is gone, not canceled: nothing to mark.
+    request.signal?.addEventListener('abort', () => this.withdraw(id, false), { once: true })
     this.schedule()
     this.governor.wake()
     return promise
@@ -130,15 +136,39 @@ export class ZotzAgentLaunchQueue {
     this.release(id)
   }
 
+  /** The user's Cancel: the pane opens as a plain shell and keeps a "canceled" mark. */
   cancel(id: string): void {
+    this.withdraw(id, true)
+  }
+
+  private withdraw(id: string, markCanceled: boolean): void {
     const waiter = this.waiters.get(id)
     if (!waiter) {
       return
     }
     this.waiters.delete(id)
     this.queue = removeZotzAgentTask(this.queue, id)
-    waiter.reject(new ZotzAgentLaunchCanceledError())
+    if (markCanceled) {
+      this.canceled = [
+        { id, agent: waiter.agent, label: waiter.label, canceledAt: this.now() },
+        ...this.canceled
+      ].slice(0, CANCELED_KEPT)
+    }
+    waiter.resolve('canceled')
     this.notify()
+  }
+
+  /** Canceled launches, newest first; their panes show the mark until it is dismissed. */
+  listCanceled(): readonly ZotzCanceledLaunch[] {
+    return this.canceled
+  }
+
+  dismissCanceled(id: string): void {
+    const before = this.canceled.length
+    this.canceled = this.canceled.filter((entry) => entry.id !== id)
+    if (this.canceled.length !== before) {
+      this.notify()
+    }
   }
 
   subscribe(listener: () => void): () => void {
@@ -172,7 +202,7 @@ export class ZotzAgentLaunchQueue {
       bytes: task.estimatedBytes,
       until: this.now() + RESERVATION_MS
     })
-    waiter.resolve()
+    waiter.resolve('admitted')
     this.notify()
   }
 
