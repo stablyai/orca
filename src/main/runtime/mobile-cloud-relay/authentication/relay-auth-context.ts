@@ -1,17 +1,24 @@
 import type { OrcaCloudAuthConfig } from '../../../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { ensureActiveOrcaProfile } from '../../../orca-profiles/profile-index-store'
 import { readFreshOrcaCloudSession } from '../../../orca-profiles/cloud-session/profile-cloud-session-refresh'
+import { relayAuthConfigAt } from '../session-lifecycle/relay-renewal-origin'
 import type { RelayAuthContext } from './relay-auth-identity'
 
 export async function readRelayAuthContext(
   authConfig: OrcaCloudAuthConfig,
-  userDataPath: string
+  userDataPath: string,
+  // A director-provided origin for the session refresh (relay token renewal); see RelayRenewalOrigin.
+  authOrigin?: string
 ): Promise<RelayAuthContext | null> {
   const active = ensureActiveOrcaProfile(userDataPath)
   if (!active.profile.cloud) {
     return null
   }
-  const session = await readFreshOrcaCloudSession(authConfig, active, userDataPath)
+  const session = await readFreshOrcaCloudSession(
+    authOrigin ? relayAuthConfigAt(authConfig, authOrigin) : authConfig,
+    active,
+    userDataPath
+  )
   if (session.status !== 'found') {
     return null
   }

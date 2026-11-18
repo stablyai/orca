@@ -1,4 +1,4 @@
-import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
+import { agentRowDisplayDotState } from '../../../../../../shared/agent-row-dot-state'
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { agentPaneConversationForEntry } from '@/store/slices/agent-status/conversation/agent-pane-conversation'

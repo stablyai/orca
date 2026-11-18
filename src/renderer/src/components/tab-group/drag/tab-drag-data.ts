@@ -10,11 +10,13 @@ export type TabDragItemData = {
   groupId: string
   unifiedTabId: string
   visibleTabId: string
-  tabType: 'terminal' | 'editor' | 'agent-session' | 'browser' | 'simulator'
+  tabType: 'terminal' | 'editor' | 'agent-session' | 'browser' | 'simulator' | 'room'
   label: string
   iconPath?: string
   color?: string | null
   agent?: TuiAgent | null
+  /** A bot's Home: first in its group, so it does not drag and nothing drops before it. */
+  fixedFirst?: true
 }
 
 export type TabPaneDropData = {

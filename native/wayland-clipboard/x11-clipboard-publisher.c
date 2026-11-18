@@ -5,7 +5,9 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 typedef void GtkClipboard;
@@ -79,7 +81,16 @@ int publish_x11_clipboard(const unsigned char *text, size_t length) {
         ssize_t count;
         do { count = read(ready[0], &ack, 1); } while (count < 0 && errno == EINTR);
         close(ready[0]);
-        return count == 1 && ack == 1 ? 0 : 71;
+        if (count == 1 && ack == 1) return 0;
+        // The owner died before acknowledging; report how, since it has no other diagnostics channel.
+        int status;
+        if (waitpid(pid, &status, 0) == pid) {
+            if (WIFEXITED(status))
+                fprintf(stderr, "X11 clipboard owner exited with status %d\n", WEXITSTATUS(status));
+            else if (WIFSIGNALED(status))
+                fprintf(stderr, "X11 clipboard owner was killed by signal %d\n", WTERMSIG(status));
+        }
+        return 71;
     }
     close(ready[0]);
     signal(SIGHUP, SIG_IGN);
@@ -88,11 +99,19 @@ int publish_x11_clipboard(const unsigned char *text, size_t length) {
     if (setsid() < 0) _exit(71);
     int devnull = open("/dev/null", O_RDWR);
     if (devnull < 0) _exit(71);
-    for (int fd = 0; fd < 3; fd++) if (dup2(devnull, fd) < 0) _exit(71);
-    if (devnull > 2) close(devnull);
-    if (chdir("/") < 0 || setenv("GDK_BACKEND", "x11", 1) < 0 || load_gtk() < 0) _exit(69);
+    // Keep stderr until the acknowledgement so a failed GTK start still reaches the caller.
+    for (int fd = 0; fd < 2; fd++) if (dup2(devnull, fd) < 0) _exit(71);
+    if (chdir("/") < 0 || setenv("GDK_BACKEND", "x11", 1) < 0) _exit(69);
+    if (load_gtk() < 0) {
+        const char *reason = dlerror();
+        fprintf(stderr, "X11 clipboard owner could not load GTK: %s\n", reason ? reason : "unknown");
+        _exit(69);
+    }
     gtk.allow_backends("x11");
-    if (!gtk.init(NULL, NULL)) _exit(69);
+    if (!gtk.init(NULL, NULL)) {
+        fprintf(stderr, "X11 clipboard owner could not open display %s\n", display);
+        _exit(69);
+    }
     GtkClipboard *clipboard = gtk.clipboard(gtk.atom("CLIPBOARD"));
     GtkTargetEntry targets[] = {
         { "text/plain;charset=utf-8", 0, 0 },
@@ -104,6 +123,8 @@ int publish_x11_clipboard(const unsigned char *text, size_t length) {
     owned = true;
     if (!clipboard || !gtk.set_data(clipboard, targets, 3, get_data, clear_data, NULL)) _exit(70);
     gtk.sync(gtk.display());
+    if (dup2(devnull, 2) < 0) _exit(71);
+    if (devnull > 2) close(devnull);
     if (write(ready[1], "\1", 1) != 1) _exit(71);
     close(ready[1]);
     alarm(0);

@@ -4,7 +4,10 @@ import type {
 } from '../../../../orchestration/db/orchestration-records'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
+import {
+  isFederatedRelaySender,
+  reconcileLifecycleMessage
+} from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 import { bindCoordinatorMutationPayload } from '../../../../orchestration/workers/reports/dispatch-message-binding'
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { parseMessageTaskId } from './message-payload'
@@ -94,7 +97,8 @@ export function sendPointToPointMessage(args: {
         paneKey: senderPaneKey,
         processIncarnation,
         taskId,
-        coordinatorMutation
+        coordinatorMutation,
+        workerReport: msg.type === 'worker_done'
       })
       if (refusal) {
         const rejection =
@@ -185,8 +189,18 @@ function lifecycleRefusal(args: {
   processIncarnation: string | undefined
   taskId: string | undefined
   coordinatorMutation: boolean
+  workerReport: boolean
 }): LifecycleRefusal | null {
-  const { db, dispatch, from, paneKey, processIncarnation, taskId, coordinatorMutation } = args
+  const {
+    db,
+    dispatch,
+    from,
+    paneKey,
+    processIncarnation,
+    taskId,
+    coordinatorMutation,
+    workerReport
+  } = args
   if (!dispatch) {
     return coordinatorMutation
       ? {
@@ -195,6 +209,12 @@ function lifecycleRefusal(args: {
             'No active Dispatch belongs to this message sender. Send --type status instead; `orca orchestration gate-create` only blocks a Task in a Run you coordinate.'
         }
       : null
+  }
+  if (workerReport && isFederatedRelaySender(db, dispatch.id, from, paneKey)) {
+    return {
+      code: 'sender_not_assignee',
+      reason: `Only the paired server's relay can report as ${from}.`
+    }
   }
   if (coordinatorMutation && taskId && taskId !== dispatch.task_id) {
     return {

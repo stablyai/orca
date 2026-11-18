@@ -55,8 +55,6 @@ export type OrcaUninstallHostEntry = {
   connected: boolean
   state: OrcaUninstallEntryState
   detail: string | null
-  /** Run on the host by hand when it can't be reached. */
-  manualCommand: string | null
 }
 
 export type OrcaUninstallSimpleEntry = {

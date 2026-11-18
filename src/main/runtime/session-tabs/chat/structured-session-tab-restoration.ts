@@ -11,6 +11,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeRepoSearchRefs } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
+import type { RepoSearchRefSelectorForm } from '../../../git/refs/resolution/legacy-ref-selectors'
 import { REPO_SEARCH_REFS_DEFAULT_LIMIT as DEFAULT_REPO_SEARCH_REFS_LIMIT } from '../../../../shared/git/refs/repo-search-limits'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
@@ -213,15 +214,17 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     repoSelector: string,
     query: string,
     limit = DEFAULT_REPO_SEARCH_REFS_LIMIT,
-    includeQualifiedRefs = true,
-    namespace?: 'remote'
+    selectorForm: RepoSearchRefSelectorForm = 'canonical',
+    namespace?: 'remote',
+    signal?: AbortSignal
   ): Promise<RuntimeRepoSearchRefs> {
     return this.repositoryRefQueries.search(
       repoSelector,
       query,
       limit,
-      includeQualifiedRefs,
-      namespace
+      selectorForm,
+      namespace,
+      signal
     )
   }
 

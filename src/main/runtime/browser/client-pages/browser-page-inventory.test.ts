@@ -96,7 +96,7 @@ function fixture(runtime = createRuntime()) {
   runtime.setAgentBrowserBridge(bridge as never)
   electronMocks.webContents.fromId.mockReturnValue({
     isDestroyed: () => false,
-    isLoading: () => false
+    isLoadingMainFrame: () => false
   })
   vi.spyOn(browserManager, 'getGuestWebContentsId').mockImplementation((id) => live.get(id) ?? null)
   const sync = (snapshots = publication(), extra: Partial<RuntimeSyncWindowGraph> = {}) =>

@@ -8,6 +8,9 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useWorkingRingRotation } from '../../components/motion/use-working-motion'
 
+/** An agent waiting on the owner, or failed. */
+export const AGENT_ATTENTION_COLOR = '#ef4444'
+
 // Per-agent state indicator, 1:1 with desktop AgentStateDot
 // (src/renderer/src/components/AgentStateDot.tsx): yellow spinner for 'working',
 // emerald for 'done', red for blocked/waiting/failed (attention), muted for a user's Stop
@@ -19,11 +22,11 @@ const dotColors = (): Record<
   string
 > => ({
   done: '#10b981',
-  blocked: '#ef4444',
-  waiting: '#ef4444',
-  permission: '#ef4444',
+  blocked: AGENT_ATTENTION_COLOR,
+  waiting: AGENT_ATTENTION_COLOR,
+  permission: AGENT_ATTENTION_COLOR,
   interrupted: colors.textMuted,
-  failed: '#ef4444',
+  failed: AGENT_ATTENTION_COLOR,
   unconfirmed: colors.statusAmber,
   idle: 'rgba(115,115,115,0.4)'
 })
@@ -39,7 +42,12 @@ export function WorkingRing({ color, style }: { color: string; style: ViewStyle 
   return (
     <Animated.View
       ref={ring.ref}
-      style={[style, { borderColor: color }, still ? { borderTopColor: color } : ring.style]}
+      // One object, sides after the shorthand: react-native-web lets a later borderColor repaint the gap.
+      style={[
+        style,
+        { borderColor: color, borderTopColor: still ? color : 'transparent' },
+        still ? undefined : ring.style
+      ]}
     />
   )
 }
@@ -118,7 +126,6 @@ const styles = themedStyleSheet(() => ({
     width: 6,
     height: 6,
     borderRadius: radii.pill,
-    borderWidth: 1.5,
-    borderTopColor: 'transparent'
+    borderWidth: 1.5
   }
 }))
