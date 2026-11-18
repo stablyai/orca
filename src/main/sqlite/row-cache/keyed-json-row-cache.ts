@@ -313,17 +313,16 @@ export class KeyedJsonRowCache {
     })
     hardenSqliteDatabaseFiles(this.path)
     this.db = db
-    const autoCheckpoint = db.pragma('wal_autocheckpoint', { simple: true })
-    const restore = (): void => {
+    const autoCheckpoint = Number(db.pragma('wal_autocheckpoint', { simple: true }))
+    this.walRegistration = this.walCheckpoints.attach(this.path, () => {
       try {
         if (this.db === db) {
-          db.pragma(`wal_autocheckpoint = ${Number(autoCheckpoint)}`)
+          db.pragma(`wal_autocheckpoint = ${autoCheckpoint}`)
         }
       } catch {
         // A failing handle is rebuilt or closed by its next operation.
       }
-    }
-    this.walRegistration = this.walCheckpoints.attach(this.path, restore)
+    })
     if (this.walRegistration !== null) {
       db.pragma('wal_autocheckpoint = 0')
     }
