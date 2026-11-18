@@ -19,7 +19,7 @@ import {
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
-import { journalGapRecoveryChunk, noteUnobservedGapChunk } from './gap-recovery-journal'
+import { journalGapRecoveryChunk } from './gap-recovery-journal'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
@@ -226,7 +226,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       .catch(() => {})
   }
 
-  /** Per-chunk screen observers, run on a screen this runtime trusts. */
+  /** Per-chunk observers: text tracking always runs; screen decisions wait while the screen is untrusted. */
   protected observeHeadlessChunk(
     ptyId: string,
     state: RuntimeHeadlessTerminal,
@@ -239,12 +239,22 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     }
     const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
     const readStatus = () => this.readPtyAgentStatusRow(ptyId, pty)
+    const screenTrusted = !state.gapReseed
     // Remote hosts report status themselves, but only this runtime can settle its own dispatches.
-    if (observeCodexReconnectFailure(state.emulator, chunk, command, pty.launchAgent, readStatus)) {
+    if (
+      observeCodexReconnectFailure(
+        state.emulator,
+        chunk,
+        command,
+        pty.launchAgent,
+        readStatus,
+        screenTrusted
+      )
+    ) {
       this.settleLostAgentSession(ptyId)
     }
     if (!pty.connectionId) {
-      this.trustDialogStatus.observe(ptyId, state.emulator, chunk)
+      this.trustDialogStatus.observe(ptyId, state.emulator, chunk, screenTrusted)
       const payload =
         observeCodexCapacityTerminalStatus(
           state.emulator,
@@ -252,8 +262,16 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
           command,
           pty.launchAgent,
           readStatus,
-          outputObservedAt
-        ) ?? observeFreebuffTerminalStatus(state.emulator, chunk, command, pty.launchAgent)
+          outputObservedAt,
+          screenTrusted
+        ) ??
+        observeFreebuffTerminalStatus(
+          state.emulator,
+          chunk,
+          command,
+          pty.launchAgent,
+          screenTrusted
+        )
       if (payload) {
         pty.lastExplicitAgentStatus = {
           state: payload.state,
@@ -303,10 +321,6 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
         // Replies stay live while the screen rebuilds; only screen evidence waits for it.
         await state.emulator.write(chunk, { forwardQueryReplies })
-        if (state.gapReseed) {
-          noteUnobservedGapChunk(state.gapReseed, chunk, outputObservedAt)
-          continue
-        }
         this.observeHeadlessChunk(ptyId, state, chunk, outputObservedAt)
       }
       state.outputSequence = outputSequence

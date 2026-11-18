@@ -43,6 +43,10 @@ function reconnectFailedNoticeOnScreen(lines: readonly string[]): boolean {
 export class CodexNoticeTracker {
   private tail = ''
   private pending = false
+  private observingAt = 0
+  private tailAt = 0
+  /** When the pending notice's text began arriving; a deferred confirmation keeps that time. */
+  pendingAt = 0
   private synchronized = false
   private readonly scanner = createTerminalEscapeScanner({
     onCsi: (marker, params, final) => {
@@ -84,11 +88,15 @@ export class CodexNoticeTracker {
     }
     const candidate = text.replace(/\s+/g, ' ')
     const message = candidate.slice(1).trimStart()
+    // A candidate split across chunks dates from its first piece.
+    const startedAt = this.tail ? this.tailAt : this.observingAt
     if (message.startsWith(this.message)) {
       this.pending = true
+      this.pendingAt = startedAt
       this.tail = ''
     } else {
       this.tail = this.message.startsWith(message) ? candidate : ''
+      this.tailAt = startedAt
     }
   }
 
@@ -97,13 +105,23 @@ export class CodexNoticeTracker {
     private readonly confirm: (screen: readonly string[]) => boolean
   ) {}
 
+  /** Output was dropped before the next byte: carries describe bytes that never finished, the candidate did. */
+  resetAfterGap(): void {
+    this.tail = ''
+    this.synchronized = false
+  }
+
+  /** `screenTrusted: false` tracks text only; the pending notice is confirmed on the next trusted observe. */
   observe(
     data: string,
     readScreen: () => readonly string[],
-    readSynchronized?: () => boolean
+    readSynchronized?: () => boolean,
+    at = 0,
+    screenTrusted = true
   ): boolean {
+    this.observingAt = at
     this.scanner.observe(data)
-    if (!this.pending || (readSynchronized?.() ?? this.synchronized)) {
+    if (!this.pending || !screenTrusted || (readSynchronized?.() ?? this.synchronized)) {
       return false
     }
     this.pending = false

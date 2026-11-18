@@ -4,16 +4,17 @@ import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulat
 
 const trackers = new WeakMap<HeadlessEmulator, FreebuffScreenStatusTracker>()
 
-/** Dropped output can end inside a frame whose end marker never arrives; restart from the next screen. */
-export function forgetFreebuffTerminalStatus(emulator: HeadlessEmulator): void {
-  trackers.delete(emulator)
+/** At a gap's place in the stream: a dropped frame end must not hold the next screen. */
+export function resetFreebuffTerminalStatusAfterGap(emulator: HeadlessEmulator): void {
+  trackers.get(emulator)?.resetAfterGap()
 }
 
 export function observeFreebuffTerminalStatus(
   emulator: HeadlessEmulator,
   data: string,
   startupCommand: string | undefined,
-  launchAgent?: string | null
+  launchAgent?: string | null,
+  screenTrusted = true
 ) {
   let tracker = trackers.get(emulator)
   if (!tracker) {
@@ -23,8 +24,9 @@ export function observeFreebuffTerminalStatus(
     tracker = new FreebuffScreenStatusTracker(identified)
     trackers.set(emulator, tracker)
   }
-  return tracker.observe(data, () => ({
-    lines: emulator.getVisibleLines(),
-    alternate: emulator.isAlternateScreen
-  }))
+  return tracker.observe(
+    data,
+    () => ({ lines: emulator.getVisibleLines(), alternate: emulator.isAlternateScreen }),
+    screenTrusted
+  )
 }

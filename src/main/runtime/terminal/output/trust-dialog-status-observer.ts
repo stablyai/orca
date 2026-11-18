@@ -51,7 +51,8 @@ export class TrustDialogStatusObserver {
 
   constructor(private readonly deps: TrustDialogStatusDeps) {}
 
-  observe(ptyId: string, emulator: HeadlessEmulator, chunk: string): void {
+  /** `screenTrusted: false` keeps keyword evidence and parks reads; a later trusted observe, even of '', resumes. */
+  observe(ptyId: string, emulator: HeadlessEmulator, chunk: string, screenTrusted = true): void {
     let pane = this.panes.get(ptyId)
     if (!pane) {
       pane = { carry: '', pendingBytes: 0, misses: 0 }
@@ -64,7 +65,9 @@ export class TrustDialogStatusObserver {
         return
       }
       pane.outputSinceRead = true
-      this.scheduleRead(ptyId, pane)
+      if (screenTrusted) {
+        this.scheduleRead(ptyId, pane)
+      }
       return
     }
     // The carry catches the keyword split across PTY reads without copying the chunk.
@@ -75,7 +78,12 @@ export class TrustDialogStatusObserver {
     pane.carry = (pane.carry + chunk.slice(-TRUST_KEYWORD_CARRY_CHARS)).slice(
       -TRUST_KEYWORD_CARRY_CHARS
     )
-    if (pane.pendingBytes <= 0 || pane.resolvingAgent || emulator.isSynchronizedOutput) {
+    if (
+      pane.pendingBytes <= 0 ||
+      !screenTrusted ||
+      pane.resolvingAgent ||
+      emulator.isSynchronizedOutput
+    ) {
       return
     }
     if (!startupDialogReason(emulator)) {
@@ -121,14 +129,6 @@ export class TrustDialogStatusObserver {
     }
     this.choiceAt.set(ptyId, outputSequence)
     return true
-  }
-
-  /** The screen is trusted again: read a parked card once. */
-  resume(ptyId: string): void {
-    const pane = this.panes.get(ptyId)
-    if (pane?.owned) {
-      this.scheduleRead(ptyId, pane)
-    }
   }
 
   forget(ptyId: string): void {
@@ -204,12 +204,12 @@ export class TrustDialogStatusObserver {
       return false
     }
     pane.outputSinceRead = false
-    if (emulator.isSynchronizedOutput) {
-      return true
-    }
-    // Park, keeping the card: a screen being rebuilt is no evidence it closed; `resume` reads it once rebuilt.
+    // Park, keeping the card: a screen being rebuilt is no evidence it closed; the rebuilt screen's observe resumes it.
     if (this.deps.isScreenRestoring(ptyId)) {
       return false
+    }
+    if (emulator.isSynchronizedOutput) {
+      return true
     }
     const card = startupDialogPrompt(emulator, owned.agent)
     if (!card) {

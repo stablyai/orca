@@ -102,7 +102,9 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     pendingEscapeTailAnsi?: string
     kittyKeyboardFlags?: number
   } | null> {
-    if (this.ptyController?.hasRendererSerializer?.(ptyId) === false) {
+    // The hidden renderer missed the dropped output too, so it never stands in for a recovering screen.
+    const recovering = () => this.headlessTerminals.get(ptyId)?.gapReseed !== undefined
+    if (this.ptyController?.hasRendererSerializer?.(ptyId) === false || recovering()) {
       return null
     }
     let rendererSnapshot: {
@@ -125,7 +127,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       // If renderer serialization races reload/unmount, callers can still use
       // their existing null fallback paths.
     }
-    return rendererSnapshot
+    return rendererSnapshot && !recovering()
       ? this.preferTrackedLastTitle(ptyId, {
           ...rendererSnapshot,
           cwd: rendererSnapshot.cwd ?? this.terminalCwdByPtyId.get(ptyId),

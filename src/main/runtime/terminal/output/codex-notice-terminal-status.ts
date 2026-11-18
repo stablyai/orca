@@ -17,10 +17,10 @@ type CodexCapacityStatus = Pick<
   'agentType' | 'prompt' | 'model' | 'subagents' | 'mainAgent' | 'turnStartedAt'
 >
 
-/** Dropped output breaks the trackers' cross-chunk carries; restart them like a fresh model would. */
-export function forgetCodexNoticeTrackers(emulator: HeadlessEmulator): void {
-  capacityTrackers.delete(emulator)
-  reconnectFailedTrackers.delete(emulator)
+/** At a gap's place in the stream: drop partial carries, keep notices whose text fully arrived. */
+export function resetCodexNoticeTrackersAfterGap(emulator: HeadlessEmulator): void {
+  capacityTrackers.get(emulator)?.resetAfterGap()
+  reconnectFailedTrackers.get(emulator)?.resetAfterGap()
 }
 
 /** A pane earns a tracker once it is known to run Codex; other agents never scan for its notices. */
@@ -64,7 +64,8 @@ export function observeCodexReconnectFailure(
   data: string,
   startupCommand: string | undefined,
   launchAgent: string | null | undefined,
-  readStatus: () => Pick<AgentStatusIpcPayload, 'agentType'> | undefined
+  readStatus: () => Pick<AgentStatusIpcPayload, 'agentType'> | undefined,
+  screenTrusted = true
 ): boolean {
   const tracker = codexNoticeTracker(
     reconnectFailedTrackers,
@@ -79,7 +80,9 @@ export function observeCodexReconnectFailure(
     tracker?.observe(
       data,
       () => emulator.getVisibleLines(),
-      () => emulator.isSynchronizedOutput
+      () => emulator.isSynchronizedOutput,
+      0,
+      screenTrusted
     ) === true
   )
 }
@@ -90,7 +93,8 @@ export function observeCodexCapacityTerminalStatus(
   startupCommand: string | undefined,
   launchAgent: string | null | undefined,
   readStatus: () => CodexCapacityStatus | undefined,
-  outputObservedAt = Date.now()
+  outputObservedAt = Date.now(),
+  screenTrusted = true
 ): ParsedAgentStatusPayload | null {
   const tracker = codexNoticeTracker(
     capacityTrackers,
@@ -108,7 +112,9 @@ export function observeCodexCapacityTerminalStatus(
     !tracker.observe(
       data,
       () => emulator.getVisibleLines(),
-      () => emulator.isSynchronizedOutput
+      () => emulator.isSynchronizedOutput,
+      outputObservedAt,
+      screenTrusted
     )
   ) {
     return null
@@ -118,7 +124,8 @@ export function observeCodexCapacityTerminalStatus(
     return null
   }
   // Same-tick ordering is ambiguous; queued output must yield to a newer hook turn.
-  if (previous?.turnStartedAt !== undefined && previous.turnStartedAt >= outputObservedAt) {
+  // The notice's own arrival, not its confirmation: a deferred confirmation must not date it later.
+  if (previous?.turnStartedAt !== undefined && previous.turnStartedAt >= tracker.pendingAt) {
     return null
   }
   if (previous?.mainAgent?.outcome === 'failure') {

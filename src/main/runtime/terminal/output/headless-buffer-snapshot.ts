@@ -152,6 +152,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
 
   private detachHeadlessTerminal(ptyId: string, state: RuntimeHeadlessTerminal): void {
     this.headlessTerminals.delete(ptyId)
+    this.leaveGapCaptureLine(ptyId)
     // Sever reply forwarding before queued writes finish so reused PTY ids cannot receive stale replies.
     state.emulator.disableQueryReplyForwarding()
     state.ownership.dispose()

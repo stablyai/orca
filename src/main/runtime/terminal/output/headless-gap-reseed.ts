@@ -11,8 +11,8 @@ import {
   startGapJournal,
   stopGapJournal
 } from './gap-recovery-journal'
-import { forgetFreebuffTerminalStatus } from './freebuff-terminal-status'
-import { forgetCodexNoticeTrackers } from './codex-notice-terminal-status'
+import { resetFreebuffTerminalStatusAfterGap } from './freebuff-terminal-status'
+import { resetCodexNoticeTrackersAfterGap } from './codex-notice-terminal-status'
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
@@ -32,7 +32,7 @@ type RebuildResult = 'rebuilt' | 'failed' | 'behind'
  *  until it is repainted from a provider snapshot plus the output journaled since that capture started. */
 export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
   private gapCapturesInFlight = 0
-  private readonly gapCaptureWaiters: (() => void)[] = []
+  private readonly gapCaptureWaiters: { ptyId: string; grant: (granted: boolean) => void }[] = []
 
   protected reseedHeadlessTerminalAfterDataGap(ptyId: string): void {
     if (this.ptysById.get(ptyId)?.connected === false) {
@@ -42,12 +42,13 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     }
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const gapEnd = this.getPtyOutputSequence(ptyId)
-    forgetFreebuffTerminalStatus(state.emulator)
-    forgetCodexNoticeTrackers(state.emulator)
     state.writeChain = state.writeChain
       .then(async () => {
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
         await state.emulator.write('\x18')
+        // Here, in stream order: chunks queued before the gap finished their carries already.
+        resetFreebuffTerminalStatusAfterGap(state.emulator)
+        resetCodexNoticeTrackersAfterGap(state.emulator)
         // The dropped bytes are behind this model now; a snapshot at the gap end needs nothing newer.
         state.outputSequence = Math.max(state.outputSequence, gapEnd)
       })
@@ -115,7 +116,9 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (!this.isGapRecovering(ptyId, state, recovery)) {
         return
       }
-      await this.acquireGapCaptureSlot()
+      if (!(await this.acquireGapCaptureSlot(ptyId))) {
+        return
+      }
       try {
         if (
           this.isGapRecovering(ptyId, state, recovery) &&
@@ -188,6 +191,9 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       // CAN, then RIS: an open escape cannot swallow the reset.
       await state.emulator.write('\x18\x1bc')
       state.emulator.setRestoredOscLinks(undefined)
+      // A renderer seed the gap overtook is no longer what this screen continues from.
+      state.rendererSeedSeq = undefined
+      state.rendererSeedEscapeTail = undefined
       if (!(await this.writeProviderSnapshotScreen(ptyId, state, snapshot))) {
         return 'failed'
       }
@@ -206,7 +212,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (!this.isGapRecovering(ptyId, state, recovery) || recovery.gaps !== gaps) {
         return 'failed'
       }
-      this.finishGapRecovery(ptyId, state, recovery)
+      this.finishGapRecovery(ptyId, state)
       return 'rebuilt'
     })
     state.writeChain = step.then(
@@ -216,34 +222,36 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     return step
   }
 
-  private finishGapRecovery(
-    ptyId: string,
-    state: RuntimeHeadlessTerminal,
-    recovery: GapRecovery
-  ): void {
+  private finishGapRecovery(ptyId: string, state: RuntimeHeadlessTerminal): void {
     state.gapReseed = undefined
     state.historyFromProvider = true
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
-    // Only output that arrived while untrusted, at its arrival time: what the snapshot painted earlier is not news.
-    for (const { chunk, at } of recovery.unobserved) {
-      this.observeHeadlessChunk(ptyId, state, chunk, at)
-    }
-    this.trustDialogStatus.resume(ptyId)
+    // No new text: observers confirm candidates that arrived while untrusted, with their own arrival times.
+    this.observeHeadlessChunk(ptyId, state, '', Date.now())
   }
 
-  private async acquireGapCaptureSlot(): Promise<void> {
+  /** A retired model's recovery leaves the capture line at once instead of holding it until a slot frees. */
+  protected leaveGapCaptureLine(ptyId: string): void {
+    for (let index = this.gapCaptureWaiters.length - 1; index >= 0; index--) {
+      if (this.gapCaptureWaiters[index].ptyId === ptyId) {
+        this.gapCaptureWaiters.splice(index, 1)[0].grant(false)
+      }
+    }
+  }
+
+  private acquireGapCaptureSlot(ptyId: string): Promise<boolean> {
     if (this.gapCapturesInFlight < GAP_RESEED_MAX_CONCURRENT_CAPTURES) {
       this.gapCapturesInFlight++
-      return
+      return Promise.resolve(true)
     }
-    await new Promise<void>((resolve) => this.gapCaptureWaiters.push(resolve))
+    return new Promise((grant) => this.gapCaptureWaiters.push({ ptyId, grant }))
   }
 
   private releaseGapCaptureSlot(): void {
     const next = this.gapCaptureWaiters.shift()
     if (next) {
-      next()
+      next.grant(true)
     } else {
       this.gapCapturesInFlight--
     }

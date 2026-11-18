@@ -242,7 +242,4 @@ export type GapRecovery = {
   journalChars: number
   /** Gaps seen so far; a repaint that a gap overtook cannot be trusted. */
   gaps: number
-  /** Output the observers skipped on the untrusted screen, with arrival times, newest last. */
-  unobserved: { chunk: string; at: number }[]
-  unobservedChars: number
 }
