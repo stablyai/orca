@@ -15,7 +15,7 @@ import type {
   NativeChatDiffTarget
 } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { NativeChatRewindContext } from '../actions/native-chat-rewind-context'
-import { nativeChatRowOffersRewind } from '../../../../../../shared/native-chat/native-chat-rewind-eligibility'
+import { nativeChatRowOffersRewind } from '../../../../../../shared/native-chat/transcript/turns/native-chat-rewind-eligibility'
 import { NativeChatForkContext } from '../actions/native-chat-fork-context'
 import { nativeChatSlotOffersFork } from '../actions/native-chat-side-chat-fork-point'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'

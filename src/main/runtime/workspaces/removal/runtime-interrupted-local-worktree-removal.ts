@@ -15,7 +15,7 @@ import {
 } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
 import { listWorktreesSharedStrict as listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import {
   authorizeWindowsCheckout,
   usesNativeWindowsRemoval
@@ -41,7 +41,6 @@ import {
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import {
   getLocalWorktreePathAccess,
-  toLocalWorktreeRuntimePath,
   type LocalWorktreeFilesystemOptions
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
@@ -279,8 +278,7 @@ async function isCheckoutMissingGitLink(
   checkoutPath: string,
   options: LocalWorktreeFilesystemOptions
 ): Promise<boolean> {
-  const { statPath } = getLocalWorktreePathAccess(options)
-  const stat = (path: string) => statPath(toLocalWorktreeRuntimePath(path, options))
+  const { statPath: stat } = getLocalWorktreePathAccess(options)
   try {
     await stat(checkoutPath)
   } catch {

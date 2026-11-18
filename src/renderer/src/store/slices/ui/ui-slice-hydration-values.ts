@@ -142,11 +142,13 @@ export function mergeContextualTourSeenIds(
   return [...merged]
 }
 
-/** One-shot notices set when shown: only an explicit true counts as seen. */
+/** One-shot notices: only an explicit true counts as seen or dismissed. */
 export function hydrateOneShotNoticesSeen(
   ui: PersistedUIState
 ): Pick<
   UISlice,
+  | 'usageEmptyStateDismissed'
+  | 'pluginsAlphaNoticeDismissed'
   | 'codexTerminalServerIsolationNoticeSeen'
   | 'codexSharedSettingsNoticeSeen'
   | 'worktreeCardsUpdateNoticeSeen'
@@ -154,6 +156,9 @@ export function hydrateOneShotNoticesSeen(
   | 'claudeDiffPanelNoticeSeen'
 > {
   return {
+    // Default false so existing users still see the usage CTA.
+    usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+    pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
     codexTerminalServerIsolationNoticeSeen: ui.codexTerminalServerIsolationNoticeSeen === true,
     codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
     worktreeCardsUpdateNoticeSeen: ui.worktreeCardsUpdateNoticeSeen === true,

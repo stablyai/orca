@@ -2,7 +2,7 @@
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 // Failed hooks never fail the turn: those that end it stay visible below the answer, earlier ones fold as work.
 
-import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../agent-session/agent-session-compaction'
+import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../agent-session/conversation-context/agent-session-compaction'
 import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../../agent-session/journal/agent-session-hook-outcome'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../agent-session/journal/agent-session-turn-notice'
@@ -10,9 +10,9 @@ import {
   deriveNativeChatRowContent,
   nativeChatRowRendersContent
 } from '../row-content/native-chat-row-content'
-import { isStoppedBeforeStartBlock } from '../../native-chat-stopped-before-start'
-import { nativeChatRowRendersProse } from '../../native-chat-trailing-run'
-import { isGeneratedImageOperation, isImageOperation } from '../../native-chat-generated-image'
+import { isStoppedBeforeStartBlock } from '../pending-sends/native-chat-stopped-before-start'
+import { nativeChatRowRendersProse } from './native-chat-trailing-run'
+import { isGeneratedImageOperation, isImageOperation } from '../images/native-chat-generated-image'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,

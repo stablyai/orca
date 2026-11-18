@@ -114,7 +114,8 @@ export async function prepareStructuredChatCliFork(
       ...result,
       cliForkSource: {
         agent: copy.agent,
-        sourceAgent: metadata.sessionHistory.rowAgents.at(-1) ?? agent,
+        // Older clients add this agent's launch flags to the copy's; its own CLI adds none.
+        sourceAgent: copy.agent,
         sessionId: copy.sessionId,
         filePath: copy.filePath ?? '',
         codexHome: null,

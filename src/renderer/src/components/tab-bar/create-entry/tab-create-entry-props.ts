@@ -6,6 +6,7 @@ import type { TabCreateMenuOption } from '../create-menu/tab-create-menu-options
 export type TabBarCreateEntryProps = {
   agentPickerEntries?: readonly AgentPickerEntry[]
   agentOptions?: readonly TabAgentLaunchOption[]
+  excludedTabId?: string | null
   groupId: string
   menuOpen: boolean
   menuOptions?: readonly TabCreateMenuOption[]

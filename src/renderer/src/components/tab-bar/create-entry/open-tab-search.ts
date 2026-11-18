@@ -190,7 +190,6 @@ export function searchOpenTabCandidates(
   )
 
   return [
-    // Offer the active tab too so searching for the visible destination remains useful across columns.
     ...rank(
       'workspace',
       searchWorkspaceTabs([...workspaceTabs], trimmed, { context, fieldMode: 'omnibox' }),

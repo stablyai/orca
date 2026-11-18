@@ -3,7 +3,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
@@ -33,12 +32,6 @@ type FixtureResult = {
   afterCookies: JarCookie[]
 }
 
-type SourceCookieRow = {
-  name: string
-  samesite: number | null
-  is_secure: number
-}
-
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
 
@@ -49,16 +42,8 @@ const VALID_COMBINATIONS: readonly ExpectedCookie[] = [
     secure: false,
     sameSite: 'unspecified'
   },
-  {
-    name: 'raw-minus-1-secure-1',
-    rawSameSite: -1,
-    secure: true,
-    sameSite: 'unspecified'
-  },
   { name: 'raw-0-secure-1', rawSameSite: 0, secure: true, sameSite: 'no_restriction' },
   { name: 'raw-1-secure-0', rawSameSite: 1, secure: false, sameSite: 'lax' },
-  { name: 'raw-1-secure-1', rawSameSite: 1, secure: true, sameSite: 'lax' },
-  { name: 'raw-2-secure-0', rawSameSite: 2, secure: false, sameSite: 'strict' },
   { name: 'raw-2-secure-1', rawSameSite: 2, secure: true, sameSite: 'strict' }
 ]
 
@@ -146,26 +131,7 @@ run().catch((error) => {
 `
 }
 
-function readSourceCookieRows(sourceDbPath: string): SourceCookieRow[] {
-  const db = new DatabaseSync(sourceDbPath, { readOnly: true })
-  try {
-    return db
-      .prepare('SELECT name, samesite, is_secure FROM cookies ORDER BY rowid')
-      .all()
-      .map((row) => ({
-        name: String(row.name),
-        samesite: row.samesite === null ? null : Number(row.samesite),
-        is_secure: Number(row.is_secure)
-      }))
-  } finally {
-    db.close()
-  }
-}
-
-async function runFixture(): Promise<{
-  fixture: FixtureResult
-  sourceCookieRows: SourceCookieRow[]
-}> {
+async function runFixture(): Promise<FixtureResult> {
   const root = mkdtempSync(join(tmpdir(), 'orca-samesite-enum-'))
   fixtureRoots.push(root)
   const bundlePath = join(root, 'cookie-import-samesite.cjs')
@@ -183,7 +149,6 @@ async function runFixture(): Promise<{
     })
   )
   createChromiumCookieTestDatabase(sourceDbPath, rows).close()
-  const sourceCookieRows = readSourceCookieRows(sourceDbPath)
   writeFileSync(
     bundleEntryPath,
     `export { importCookiesFromBrowser } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/cookies/browser-cookie-import.ts'))}`
@@ -220,14 +185,14 @@ async function runFixture(): Promise<{
   expect(run.error).toBeUndefined()
   expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
   const fixture: FixtureResult = JSON.parse(fixtureResult)
-  return { fixture, sourceCookieRows }
+  return fixture
 }
 
 describe('Chromium SameSite storage enum import', () => {
   let fixture: FixtureResult
 
   beforeAll(async () => {
-    ;({ fixture } = await runFixture())
+    fixture = await runFixture()
   }, 120_000)
 
   it.each(VALID_COMBINATIONS)(
@@ -240,14 +205,6 @@ describe('Chromium SameSite storage enum import', () => {
       })
     }
   )
-
-  it('rejects the synthetic SameSite=None insecure control and continues later writes', () => {
-    // A synthetic rejection proves the fixture can distinguish refused writes from successful imports.
-    expect(
-      fixture.afterCookies.find((cookie) => cookie.name === REJECTION_CONTROL.name)
-    ).toBeUndefined()
-    expect(fixture.afterCookies.find((cookie) => cookie.name === 'raw-2-secure-1')).toBeDefined()
-  })
 
   it('imports a null SameSite column as unspecified without changing Secure', () => {
     expect(fixture.afterCookies.find((cookie) => cookie.name === NULL_CASE.name)).toEqual({

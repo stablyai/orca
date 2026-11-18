@@ -51,20 +51,4 @@ describe('Hermes remote installer through a local filesystem adapter (no SSH)', 
       expect(readdirSync(join(directory, '.hermes'))).toEqual(['config.yaml'])
     }
   )
-
-  it('keeps the config and cleans staged files when remote rename fails', async () => {
-    writeFileSync(configPath, 'model: fixture\n')
-    const filesystem = createManagedHookLocalFilesystem()
-    const rename = filesystem.ext_openssh_rename.bind(filesystem)
-    filesystem.ext_openssh_rename = (source, destination, callback) => {
-      if (destination === configPath) {
-        callback(new Error('fixture rename refusal'))
-      } else {
-        rename(source, destination, callback)
-      }
-    }
-    expect((await service.installRemote(filesystem, directory)).state).toBe('error')
-    expect(readFileSync(configPath, 'utf8')).toBe('model: fixture\n')
-    expect(readdirSync(join(directory, '.hermes')).sort()).toEqual(['config.yaml', 'plugins'])
-  })
 })

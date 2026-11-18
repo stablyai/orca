@@ -14,7 +14,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
-import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
+import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/transcript/turns/native-chat-terminal-turn'
 
 export type NativeChatMessageListProps = {
   ref?: Parameters<typeof useNativeChatMessageListHandle>[0]

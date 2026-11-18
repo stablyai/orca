@@ -16,7 +16,7 @@ import type {
   NativeChatSettledTurns
 } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
-import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatInputLockStatus } from './composer/field/MobileNativeChatInputLockStatus'
@@ -32,19 +32,18 @@ import {
 import { useMobileNativeChatTransientData } from './transcript/projection/use-mobile-native-chat-transient-data'
 import { useMobileNativeChatRowKeys } from './transcript/projection/mobile-native-chat-row-keys'
 import { useMobileNativeChatPinchGesture } from './transcript/viewport/mobile-native-chat-pinch-zoom'
+import { useNativeChatTextSettings } from './preferences/native-chat-text-settings'
 import { useMobileNativeChatTailFollow } from './transcript/viewport/use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './transcript/turn-state/use-mobile-native-chat-turn-disclosure'
 import { mobileNativeChatComposerPlaceholder } from './composer/field/use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './transcript/messages/MobileNativeChatLiveLine'
 import { MobileNativeChatAwaitingInputRow } from './transcript/messages/MobileNativeChatAwaitingInputRow'
-import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
+import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/transcript/turns/native-chat-terminal-turn'
 import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
 import type { PendingNativeChatImage } from './composer/attachments/mobile-native-chat-image-attachment'
 import type { MobilePastedImages } from './composer/attachments/mobile-native-chat-composer-paste'
-import {
-  MobileNativeChatDraftComposer,
-  type MobileNativeChatSendProps
-} from './composer/MobileNativeChatComposer'
+import type { MobileNativeChatSendProps } from './composer/MobileNativeChatComposer'
+import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import type { MobileNativeChatStructuredComposer } from './composer/commands/mobile-native-chat-structured-composer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
 import type { MobileNativeChatMicProps } from './composer/dictation/MobileNativeChatComposerMic'
@@ -220,7 +219,8 @@ export function MobileNativeChatView({
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
-  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture(sendSurfaceId)
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
+  const { font, lineSpacing } = useNativeChatTextSettings()
 
   const data = useMobileNativeChatTransientData(
     { folded, streaming, pending, imagePreviewsByMessageId },
@@ -314,8 +314,8 @@ export function MobileNativeChatView({
     ) : null
 
   const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
-  // Changing text scale relays out every row, so preserve the page’s reading anchor.
-  const layoutKey = `${fontScale}`
+  // Changing text size, face or spacing relays out every row, so preserve the page’s reading anchor.
+  const layoutKey = `${fontScale}:${font}:${lineSpacing}`
   const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
   const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
 

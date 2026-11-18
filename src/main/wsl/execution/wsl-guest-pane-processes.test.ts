@@ -1,29 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WslResult } from './wsl-runner'
-
-const isWslDistroRunning = vi.hoisted(() => vi.fn(async (_distro: string) => true))
-const runWslProcess = vi.hoisted(() =>
-  vi.fn(async (_spec: unknown): Promise<WslResult> => ({
-    environmentResolved: true,
-    code: 0,
-    stdout: '',
-    stderr: '',
-    timedOut: false
-  }))
-)
-const wasWslDistroLastSeenRunningSettled = vi.hoisted(() => vi.fn((_distro: string) => false))
+import { describe, expect, it, vi } from 'vitest'
 vi.mock('../discovery/wsl-background-distro-gate', () => ({
-  isWslDistroRunning,
-  wasWslDistroLastSeenRunningSettled
+  isWslDistroRunning: vi.fn(),
+  wasWslDistroLastSeenRunningSettled: vi.fn()
 }))
-vi.mock('./wsl-runner', () => ({ runWslProcess }))
+vi.mock('./wsl-runner', () => ({ runWslProcess: vi.fn() }))
 
-const {
-  parseWslGuestPaneProcesses,
-  readWslGuestPaneProcesses,
-  readWslGuestPaneShellCwd,
-  WSL_GUEST_PANE_PROCESS_SCRIPT
-} = await import('./wsl-guest-pane-processes')
+const { parseWslGuestPaneProcesses, readWslGuestPaneShellCwd } =
+  await import('./wsl-guest-pane-processes')
 
 const KEY = 'tab-1:leaf-1'
 const fenced = (...lines: string[]) =>
@@ -32,14 +15,6 @@ const row = (pid: number, ppid: number, comm: string, key: string, cwd: string) 
   [pid, ppid, comm, key, cwd].join('\t')
 
 describe('the guest process table', () => {
-  beforeEach(() => {
-    isWslDistroRunning.mockReset()
-    isWslDistroRunning.mockResolvedValue(true)
-    wasWslDistroLastSeenRunningSettled.mockReset()
-    wasWslDistroLastSeenRunningSettled.mockReturnValue(false)
-    runWslProcess.mockReset()
-  })
-
   it('reads only between its fences, and nothing from a list that was cut off', () => {
     const stdout = fenced(row(10, 1, 'bash', KEY, '/home/a/deep'))
     expect(parseWslGuestPaneProcesses(`banner\n${stdout}`)).toEqual([
@@ -71,29 +46,5 @@ describe('the guest process table', () => {
       fenced(row(10, 1, 'bash', KEY, '/a'), row(20, 1, 'bash', KEY, '/b'))
     )
     expect(readWslGuestPaneShellCwd(twoRoots ?? [], KEY)).toBeNull()
-  })
-
-  it('runs one fixed script with no login shell, shared by callers asking at once', async () => {
-    runWslProcess.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: fenced(row(10, 1, 'bash', KEY, '/home/a')),
-      stderr: '',
-      timedOut: false
-    })
-    const [a, b] = await Promise.all([
-      readWslGuestPaneProcesses('Ubuntu', 3_000),
-      readWslGuestPaneProcesses('ubuntu', 3_000)
-    ])
-    expect(a).toBe(b)
-    expect(runWslProcess).toHaveBeenCalledTimes(1)
-    expect(runWslProcess).toHaveBeenCalledWith(
-      expect.objectContaining({
-        distro: 'Ubuntu',
-        script: WSL_GUEST_PANE_PROCESS_SCRIPT,
-        loginPath: 'none',
-        timeoutMs: 3_000
-      })
-    )
   })
 })

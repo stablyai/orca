@@ -7,11 +7,8 @@ import {
   listDiscardedBrowserTabs,
   type DiscardedBrowserTab
 } from './browser-extension-discarded-tabs'
-import {
-  canExtensionSeeTabUrl,
-  getActiveBrowserTabId,
-  mainWindowTabIds
-} from './browser-extension-tab-model'
+import { getActiveBrowserTabId, mainWindowTabIds } from './browser-extension-tab-model'
+import { canExtensionSeeTabUrl } from '../permissions/browser-extension-tab-url-access'
 import { getBrowserExtensionMainWindow } from './browser-extension-window-model'
 
 /** A discarded tab sits in the main window after every loaded one. */
