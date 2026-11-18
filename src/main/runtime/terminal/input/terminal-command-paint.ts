@@ -66,8 +66,11 @@ export class TerminalCommandPaint {
   private startSeen = false
   private repaintOffered = false
   /** The last read finished a command and started the next. Its reports are stamped after this
-   *  observer runs, so none of them count; the next read's arrival starts the new command. */
+   *  observer runs, so none of them count; at the next read they are retired by identity (a
+   *  millisecond clock cannot order them) and that read's arrival starts the new command. */
   private startFollowsFinishInRead = false
+  private retiredTitleAt: number | null = null
+  private retiredStatus: object | null = null
   /** When a report restored across the reattach was admitted for the process now running. */
   private restoredReportAt: number | null = null
   private markerEndInChunk = -1
@@ -83,10 +86,12 @@ export class TerminalCommandPaint {
     }
   )
 
-  observe(data: string, normalizedText: string, at: number): void {
+  observe(data: string, normalizedText: string, at: number, reports: TerminalReportHolder): void {
     if (this.startFollowsFinishInRead) {
       this.startFollowsFinishInRead = false
       this.startedAt = at
+      this.retiredTitleAt = reports.lastOscTitleAt ?? null
+      this.retiredStatus = reports.lastExplicitAgentStatus ?? null
     }
     this.markerEndInChunk = -1
     const finishEnd = this.scanner.scan(data)
@@ -180,6 +185,8 @@ export class TerminalCommandPaint {
     this.startedAt = null
     this.startSeen = false
     this.startFollowsFinishInRead = false
+    this.retiredTitleAt = null
+    this.retiredStatus = null
     this.betweenCommands = false
     this.awaitingPaint = false
     this.composers = null
@@ -200,6 +207,14 @@ export class TerminalCommandPaint {
   isCurrentStatus(titleObservedAt: number | null | undefined): boolean {
     return this.isCurrentReport(
       Math.max(titleObservedAt ?? -Infinity, this.restoredReportAt ?? -Infinity)
+    )
+  }
+
+  /** Whether this title or status is one a finish-then-start read carried or left in place. */
+  isRetired(report: { titleAt?: number | null; status?: object | null }): boolean {
+    return (
+      (report.titleAt != null && report.titleAt === this.retiredTitleAt) ||
+      (report.status != null && report.status === this.retiredStatus)
     )
   }
 
@@ -233,7 +248,15 @@ export class TerminalCommandPaint {
   }
 }
 
-export type TerminalCommandPaintRecord = { commandPaint?: TerminalCommandPaint }
+/** The pane's latest agent reports, as its record holds them. */
+type TerminalReportHolder = {
+  lastOscTitleAt?: number | null
+  lastExplicitAgentStatus?: object | null
+}
+
+export type TerminalCommandPaintRecord = TerminalReportHolder & {
+  commandPaint?: TerminalCommandPaint
+}
 
 /** `normalizedText` is the chunk as the tail buffer received it (pending escapes resolved). */
 export function observeTerminalCommandPaint(
@@ -243,7 +266,7 @@ export function observeTerminalCommandPaint(
   at: number
 ): void {
   record.commandPaint ??= new TerminalCommandPaint()
-  record.commandPaint.observe(data, normalizedText, at)
+  record.commandPaint.observe(data, normalizedText, at, record)
 }
 
 export function awaitReattachedTerminalPaint(
@@ -272,6 +295,15 @@ export function isCurrentCommandReport(
   return record.commandPaint?.isCurrentReport(observedAt) ?? true
 }
 
+/** The agent's own first-party report, current like `isCurrentCommandReport` and not retired. */
+export function isCurrentFirstPartyReport(
+  record: TerminalCommandPaintRecord,
+  status: { updatedAt: number }
+): boolean {
+  const paint = record.commandPaint
+  return !paint || (paint.isCurrentReport(status.updatedAt) && !paint.isRetired({ status }))
+}
+
 export function admitRestoredTerminalReport(
   record: TerminalCommandPaintRecord | undefined,
   at: number
@@ -284,7 +316,11 @@ export function isCurrentCommandStatus(
   record: TerminalCommandPaintRecord,
   titleObservedAt: number | null | undefined
 ): boolean {
-  return record.commandPaint?.isCurrentStatus(titleObservedAt) ?? true
+  const paint = record.commandPaint
+  return (
+    !paint ||
+    (paint.isCurrentStatus(titleObservedAt) && !paint.isRetired({ titleAt: record.lastOscTitleAt }))
+  )
 }
 
 export function takeReattachedRepaintRequest(

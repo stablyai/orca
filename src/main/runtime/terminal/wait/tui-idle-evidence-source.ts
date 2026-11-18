@@ -16,8 +16,8 @@ import {
 import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
 import {
   hasTerminalAgentPainted,
-  isCurrentCommandReport,
-  isCurrentCommandStatus
+  isCurrentCommandStatus,
+  isCurrentFirstPartyReport
 } from '../input/terminal-command-paint'
 import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -204,7 +204,7 @@ export function ptyTuiIdleEvidence(
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,
     firstPartyStatus:
-      firstPartyStatus && isCurrentCommandReport(pty, firstPartyStatus.updatedAt)
+      firstPartyStatus && isCurrentFirstPartyReport(pty, firstPartyStatus)
         ? firstPartyStatus
         : null,
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),

@@ -4,6 +4,7 @@ import {
   hasTerminalAgentPainted,
   observeTerminalCommandPaint,
   isCurrentCommandReport,
+  isCurrentCommandStatus,
   takeReattachedRepaintRequest,
   vouchTerminalSpawn,
   type TerminalCommandPaintRecord
@@ -96,11 +97,12 @@ describe('the command an agent report speaks for', () => {
     observeTerminalCommandPaint(record, START, START, 1_000)
     const handoff = `${FINISH}~/repo % codex\r\n${START}`
     observeTerminalCommandPaint(record, handoff, handoff, 5_000)
-    // A report stamped while that read was handled may precede its finish.
     expect(isCurrentCommandReport(record, 2_000)).toBe(false)
-    expect(isCurrentCommandReport(record, 5_004)).toBe(false)
+    // The exiting agent's rest title in that read is stamped after it, in the next read's millisecond.
+    Object.assign(record, { lastOscTitleAt: 7, lastOscTitleEpochMs: 6_000 })
     observeTerminalCommandPaint(record, 'Python 3', 'Python 3', 6_000)
-    expect(isCurrentCommandReport(record, 5_004)).toBe(false)
-    expect(isCurrentCommandReport(record, 6_000)).toBe(true)
+    expect(isCurrentCommandStatus(record, 6_000)).toBe(false)
+    Object.assign(record, { lastOscTitleAt: 8 })
+    expect(isCurrentCommandStatus(record, 6_000)).toBe(true)
   })
 })
