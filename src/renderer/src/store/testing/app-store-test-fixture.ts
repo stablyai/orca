@@ -1,5 +1,5 @@
 import { withAgentStatusOwnership } from '../slices/agent-status/status-ownership/agent-status-ownership-boundary'
-import { create, type StateCreator } from 'zustand'
+import { create, type StoreApi, type StateCreator } from 'zustand'
 import type { AppState } from '../types'
 
 import { createRepoSlice } from '../repos/create-repo-slice'
@@ -136,7 +136,7 @@ export function createTestStore(
 }
 
 export function seedStore(
-  store: ReturnType<typeof createTestStore>,
+  store: Pick<StoreApi<AppState>, 'getState' | 'setState'>,
   state: Partial<AppState>
 ): void {
   // Centralize fixture to keep cascade suites within max-lines limits without suppressing growth checks.

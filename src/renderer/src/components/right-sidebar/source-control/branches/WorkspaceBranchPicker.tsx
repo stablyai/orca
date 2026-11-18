@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { AppState } from '@/store/types'
 import { worktreeGitCopyHostId } from '@/lib/workspace/ownership/worktree-git-copy'
@@ -18,6 +17,8 @@ import { selectWorktreeAgentActivitySummary } from '@/components/sidebar/workspa
 import type { BranchWorkspace } from './branch-picker-rows'
 import { BranchPicker } from './BranchPicker'
 import { useWorkspaceCopyStatus } from './use-workspace-copy-status'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type WorkspaceBranchPickerProps = {
   worktreeId: string
@@ -88,10 +89,10 @@ export function WorkspaceBranchPicker({
     () => createEnvironmentNameSelector(environmentId),
     [environmentId]
   )
-  const environmentName = useAppStore(selectEnvironmentName)
+  const environmentName = useAppStoreWithChannels(selectEnvironmentName)
   // Workspace rows need every worktree, not a folder section's owner-only map.
   const worktreeMap = useAppStore((state) => getIndexedWorktreeMap(selectWorktreesByRepo(state)))
-  const agentWorking = useAppStore(
+  const agentWorking = useAppStoreWithChannels(
     (state) => selectWorktreeAgentActivitySummary(state, worktreeId).hasLiveWorking
   )
   const showDirtyBlocker =

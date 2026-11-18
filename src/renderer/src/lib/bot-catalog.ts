@@ -13,7 +13,6 @@ import {
 } from '../../../shared/rpc-contract/bots-params'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { activateAndRevealFolderWorkspace } from './workspace/activation/worktree-activation'
 import {
@@ -58,6 +57,8 @@ import { NativeChatVisualOwnerContext } from '@/components/native-chat/media/vis
 import { isHome, type BotHomeOwner } from '../../../shared/bots/bot-homes'
 import { requestNativeChatComposerFocus } from '../components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/drafts/native-chat-draft-scope'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
 
@@ -92,7 +93,7 @@ export function useBotHomeWorkspaces(
   groups: readonly BotHomeOwner[]
 ): readonly FolderWorkspace[] {
   const selectHomes = useMemo(() => createBotHomesSelector([...bots, ...groups]), [bots, groups])
-  const homes = useAppStore(useShallow(selectHomes))
+  const homes = useAppStoreWithChannels(useShallow(selectHomes))
   // The listed hosts change when a server is first listed from its kept read.
   const hostIds = useSyncExternalStore(subscribe, readBotHostIds, readBotHostIds)
   return useMemo(() => withKeptBotHomes(homes, hostIds), [homes, hostIds])

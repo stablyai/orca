@@ -1,6 +1,5 @@
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import React from 'react'
-import { useAppStore } from '@/store/index'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import {
@@ -41,6 +40,7 @@ import { getAutomationPromptEditorRoot } from './AutomationEditorPromptEditor'
 import { AutomationEditorPromptSection } from './AutomationEditorPromptSection'
 import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export const AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS =
   'border-input bg-input/30 shadow-xs hover:bg-accent/60 dark:bg-input/30 dark:hover:bg-input/50'
@@ -186,7 +186,7 @@ export function AutomationEditorDialog({
   }
   const launchWorkspace = automationLaunchWorkspace(draft, destination?.resolution)
   useChatProgramFacts(launchWorkspace, open)
-  const routeState = useAppStore(selectAgentLaunchRouteView)
+  const routeState = useAppStoreWithChannels(selectAgentLaunchRouteView)
   const chatSupported = automationChatSupport(routeState, draft, launchWorkspace)
   const surface = automationDraftSurface(draft, settings, chatSupported)
   const visibleAgents = React.useMemo(() => {

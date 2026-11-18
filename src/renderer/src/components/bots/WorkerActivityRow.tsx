@@ -17,13 +17,13 @@ import {
   type SessionWorkerLook
 } from '@/lib/orchestration-session-worker-status'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
-import { useAppStore } from '@/store'
 import { formatNativeChatDuration } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import {
   sessionWorkerIsRunning,
   type OrchestrationSessionWorker
 } from '../../../../shared/orchestration-session-workers'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type WorkerActivityRowProps = {
   dispatchId: string
@@ -91,7 +91,7 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
   const t = useTranslate()
   const { worker } = props
   const { stopping, stop } = useWorkerStop(props.dispatchId, props.onStopped)
-  const workspace = useAppStore((state) =>
+  const workspace = useAppStoreWithChannels((state) =>
     props.workspaceId ? selectOrchestrationWorkerWorkspaceLabel(state, props.workspaceId) : null
   )
   const look = worker ? sessionWorkerLook(worker) : null
@@ -211,10 +211,10 @@ export function WorkerActivityDetails({
   origin?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const workspace = useAppStore((state) =>
+  const workspace = useAppStoreWithChannels((state) =>
     workspaceId ? selectOrchestrationWorkerWorkspaceLabel(state, workspaceId) : null
   )
-  const branch = useAppStore((state) =>
+  const branch = useAppStoreWithChannels((state) =>
     workspaceId ? (findWorktreeById(state, workspaceId)?.branch ?? null) : null
   )
   const agent = agentId && isTuiAgent(agentId) ? getAgentLabel(agentId) : null

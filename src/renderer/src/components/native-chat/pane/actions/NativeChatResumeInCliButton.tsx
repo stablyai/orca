@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
   selectFolderWorkspaces,
@@ -20,6 +19,8 @@ import {
   type NativeChatCliForkIdentity,
   type NativeChatTabSession
 } from '../../../tab-bar/session-actions/tab-session-history-switch'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function createExecutionHostSelector(
   tabId: string,
@@ -71,7 +72,7 @@ export function NativeChatResumeInCliButton({
     () => createExecutionHostSelector(tabId, worktreeId, sessionId, nativeAgent),
     [tabId, worktreeId, sessionId, nativeAgent]
   )
-  const executionHostScope = useAppStore(selectExecutionHost)
+  const executionHostScope = useAppStoreWithChannels(selectExecutionHost)
   const pending = useNativeChatCliForkPending(
     executionHostScope ? { executionHostScope, sessionId: nativeChat.sessionId } : null
   )

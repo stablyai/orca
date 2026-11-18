@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
@@ -33,6 +32,8 @@ import {
   subscribeSetupScriptProbeCache
 } from './setup-script-probe-cache'
 import { localPreflightContextKey } from '../../runtime/hosts/preflight/local-preflight-context-key'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS = 15_000
 
@@ -61,7 +62,7 @@ export function useSetupGuideProgress(
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
-  const expectedPreflightContextKey = useAppStore((s) =>
+  const expectedPreflightContextKey = useAppStoreWithChannels((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const setupScriptProbe = useSyncExternalStore(

@@ -1,5 +1,4 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import '@/lib/workspace/ownership/connection-context'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
@@ -15,6 +14,7 @@ import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host/
 import { getOrcadSshDeployment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /**
  * `local`: no SSH target this client dials for the worktree — a local workspace, a
@@ -163,7 +163,7 @@ export function useWorktreeHostConnection(
   worktreeId: string | null,
   browserRouteTargetId?: string | null
 ): WorktreeHostConnection {
-  return useAppStore(
+  return useAppStoreWithChannels(
     useShallow((state) =>
       browserRouteTargetId === undefined
         ? selectWorktreeHostConnectionPhase(state, worktreeId)

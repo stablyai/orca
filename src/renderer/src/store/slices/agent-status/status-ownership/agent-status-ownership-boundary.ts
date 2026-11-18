@@ -9,7 +9,7 @@ export function withAgentStatusOwnership(
   createState: StateCreator<AppState, [], []>
 ): StateCreator<AppState, [], []> {
   return (set, get, api) => {
-    const router = createAppStoreNotificationRouter(api.subscribe)
+    const router = createAppStoreNotificationRouter(api.subscribe, get)
     api.subscribe = router.subscribe
     Object.assign(api, { subscribeRootSelector: router.subscribeRootSelector })
     const wrap =

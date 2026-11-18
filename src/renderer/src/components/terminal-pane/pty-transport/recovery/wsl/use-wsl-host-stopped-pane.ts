@@ -1,10 +1,11 @@
-import { useAppStore } from '@/store/index'
 import {
   paneShowsWslHostStoppedCard,
   selectStoppedWslDistro
 } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { selectWorkspaceRuntimeEnvironmentId } from '../../../../../lib/workspace/ownership/workspace-runtime-environment'
 import { selectWslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /**
  * Whether the active pane's raw error toast gives way to the stopped distro's Start card: only
@@ -15,12 +16,12 @@ export function useWslHostStartCardReplacesPaneError(
   /** The active pane's server; null when it has none yet, undefined with no active pane. */
   activePaneEnvironmentId: string | null | undefined
 ): boolean {
-  const ownerEnvironmentId = useAppStore((state) =>
+  const ownerEnvironmentId = useAppStoreWithChannels((state) =>
     selectWorkspaceRuntimeEnvironmentId(state, worktreeId)
   )
   const stoppedWslDistro = useAppStore((state) => selectStoppedWslDistro(state, ownerEnvironmentId))
   // Why behind the stop: every surface subscribes, and most workspaces are not on a stopped host.
-  const wslHostUnavailable = useAppStore(
+  const wslHostUnavailable = useAppStoreWithChannels(
     (state) =>
       stoppedWslDistro !== null && selectWslHostUnavailableReason(state, worktreeId) !== null
   )

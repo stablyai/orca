@@ -1,8 +1,8 @@
 import { parseExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'
 import { getOrcadSshDeployment } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { workspaceOwnerHostId } from '@/lib/workspace/ownership/workspace-row-owner-host'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Expose terminal-owned SSH-managed server refusal when automatic re-pairing failed or its host now serves another server; no retry remains. */
 export function selectManagedPairingRefusedEnvironmentId(
@@ -42,9 +42,11 @@ export function selectManagedServerReplaced(
 export function useManagedPairingRefusedEnvironmentId(
   worktreeId: string | null | undefined
 ): string | null {
-  return useAppStore((state) => selectManagedPairingRefusedEnvironmentId(state, worktreeId))
+  return useAppStoreWithChannels((state) =>
+    selectManagedPairingRefusedEnvironmentId(state, worktreeId)
+  )
 }
 
 export function useManagedServerReplaced(environmentId: string | null): boolean {
-  return useAppStore((state) => selectManagedServerReplaced(state, environmentId))
+  return useAppStoreWithChannels((state) => selectManagedServerReplaced(state, environmentId))
 }

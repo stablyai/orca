@@ -1,7 +1,6 @@
 import { Copy, ExternalLink } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { LocalOnlyMenuHint } from '@/components/ui/local-only-menu-hint'
-import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { isRevealOrEditorOpenBlocked } from '@/lib/files/os-open/local-path-open-guard'
 import {
@@ -10,6 +9,7 @@ import {
   revealInFileManager
 } from '@/lib/files/os-open/reveal-in-file-manager'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function EditorFileLocationMenuItems({
   file,
@@ -19,7 +19,7 @@ export function EditorFileLocationMenuItems({
   onCopyPath: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const revealOwner = useAppStore((state) => getOpenFileRevealOwner(state, file))
+  const revealOwner = useAppStoreWithChannels((state) => getOpenFileRevealOwner(state, file))
   const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
 
   return (

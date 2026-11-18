@@ -2,8 +2,8 @@ import { selectWslHostsServing } from './use-wsl-hosts-enabled'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isWslHostRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { workspaceOwnerHostId } from '@/lib/workspace/ownership/workspace-row-owner-host'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type WslHostUnavailableReason = 'turned-off' | 'server-files-missing'
 
@@ -40,5 +40,5 @@ export function selectWslHostEnvironmentUnavailableReason(
 export function useWslHostUnavailableReason(
   worktreeId: string | null | undefined
 ): WslHostUnavailableReason | null {
-  return useAppStore((state) => selectWslHostUnavailableReason(state, worktreeId))
+  return useAppStoreWithChannels((state) => selectWslHostUnavailableReason(state, worktreeId))
 }

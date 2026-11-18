@@ -13,7 +13,7 @@ export function createBrowserLinkTestStore(): BrowserLinkTestStore {
   return store
 }
 
-export function seedBrowserLinkTestStore(store: BrowserLinkTestStore): void {
+export function seedBrowserLinkTestStore(store: Parameters<typeof seedStore>[0]): void {
   seedStore(store, {
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},

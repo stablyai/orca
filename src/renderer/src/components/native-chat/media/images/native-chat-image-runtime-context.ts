@@ -1,4 +1,3 @@
-import { useAppStore } from '@/store/index'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { resolveWorktreeOperationRouteResult } from '@/lib/workspace/ownership/worktree-operation-route'
 import type { WorktreeOperationRouteResolution } from '@/lib/workspace/ownership/worktree-operation-route'
@@ -25,6 +24,7 @@ import {
 import type { AppState } from '@/store/types'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** The transcript must not read until ownership and its path are both known. */
 export type NativeChatImageRuntimeContext = RuntimeFileOperationArgs | null
@@ -253,5 +253,5 @@ export function createNativeChatImageRuntimeContextSelector(tabId: string) {
 
 export function useNativeChatImageRuntimeContext(tabId: string): NativeChatImageRuntimeContext {
   const selectContext = useMemo(() => createNativeChatImageRuntimeContextSelector(tabId), [tabId])
-  return useAppStore(selectContext)
+  return useAppStoreWithChannels(selectContext)
 }

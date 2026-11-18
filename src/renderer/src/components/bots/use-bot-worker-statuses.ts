@@ -2,12 +2,13 @@
 import { useMemo } from 'react'
 import { useWorktreeActivityStatuses } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-statuses'
 import { isWorktreeHostDisconnected } from '@/lib/workspace/ownership/worktree-host-disconnected'
-import { useAppStore } from '@/store'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { getFolderWorkspaceChildWorktrees } from '../../../../shared/folder-workspace-child-worktrees'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** The bot home's worker workspaces, as its sidebar lists them. */
 export function useBotWorkerWorkspaces(
@@ -23,7 +24,7 @@ export function useBotWorkerWorkspaces(
 /** Each workspace's status; a line whose own server is down shows no live work, whatever its bot's server does. */
 export function useLiveWorkspaceStatuses(workspaceIds: readonly string[]): WorktreeStatus[] {
   const statusById = useWorktreeActivityStatuses(workspaceIds)
-  const downIds = useAppStore((s) =>
+  const downIds = useAppStoreWithChannels((s) =>
     workspaceIds.filter((id) => isWorktreeHostDisconnected(s, id)).join('\n')
   )
   return useMemo(() => {

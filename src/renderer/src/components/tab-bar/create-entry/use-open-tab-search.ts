@@ -1,6 +1,5 @@
 import { useDeferredValue, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import {
   buildOpenTabSearchEntries,
   selectOpenTabSearchAgentState,
@@ -16,6 +15,8 @@ import { usePaletteSearchEvaluationContext } from '@/lib/workspace/search/palett
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useWorktreeStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
@@ -46,7 +47,7 @@ export function useOpenTabSearch({
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   // Why null while disabled: a closed menu stays stable across store churn.
-  const state = useAppStore(
+  const state = useAppStoreWithChannels(
     useShallow((store) => (enabled ? selectOpenTabSearchEntryState(store, worktreeId) : null))
   )
   // Snapshot noisy agent metadata on open and tab-set changes instead of rerendering search for every status event.

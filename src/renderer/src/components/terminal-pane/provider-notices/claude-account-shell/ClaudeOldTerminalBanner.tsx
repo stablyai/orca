@@ -6,7 +6,6 @@ import {
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { paneClaudeTarget } from '../../host-state/terminal-pane-claude-target'
@@ -81,7 +80,7 @@ export function ClaudeOldTerminalBanner({
   const dismissed =
     lifetime !== undefined &&
     (dismissedLifetime === lifetime || lifetime.dismissed.has('claude-old-terminal'))
-  const selectionKey = useAppStore(selectedClaudeAccountKey)
+  const selectionKey = useAppStoreWithChannels(selectedClaudeAccountKey)
   // Why either signal: a typed claude is seen by the process read, or by its hooks.
   const claudeInPane = useAppStoreWithChannels(
     (state) =>

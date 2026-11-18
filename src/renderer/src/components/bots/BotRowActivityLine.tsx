@@ -14,7 +14,6 @@ import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { stripInlineMarkdownForToc } from '@/components/editor/markdown/navigation/markdown-table-of-contents'
 import { cn } from '@/lib/class-names'
-import { useAppStore } from '@/store'
 import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Bot } from '../../../../shared/bot-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -27,10 +26,10 @@ import { botRowLineText, botRowReplyingAt } from '../../../../shared/bots/bot-ro
 import { countLiveBotWorkspaces } from '../../../../shared/bots/bot-sidebar-workspaces'
 import { useBotWorkerWorkspaces, useLiveWorkspaceStatuses } from './use-bot-worker-statuses'
 import { useBotOwnChats } from '@/lib/bot-own-chats'
-import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 import type { NamedUsageLimitStop } from '../../../../shared/bots/bot-usage-limit-stop'
 import { useBotUsageLimitStops } from './use-bot-usage-limit-stops'
 import { usageLimitStopText } from './BotUsageLimitMark'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** A chat, worker or run stopped on its usage limit, said while nothing of the bot's works or
  *  waits on the owner; those still speak first. */
@@ -70,7 +69,7 @@ export function useBotRowLine(
     )
   )
   // The rest of its home's open sessions (runs, Look around), which count only as needing you or working.
-  const homeEntries = useAppStore((state) =>
+  const homeEntries = useAppStoreWithChannels((state) =>
     bot.paused
       ? NO_ENTRIES
       : selectLiveAgentStatusEntriesForWorktree(state, folderWorkspaceKey(home.id))

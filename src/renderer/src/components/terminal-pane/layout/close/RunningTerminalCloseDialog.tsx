@@ -1,4 +1,3 @@
-import { useAppStore } from '@/store/index'
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
@@ -7,6 +6,8 @@ import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/s
 import { revalidateTerminalCloseSleep } from '@/components/terminal/tab-lifecycle/terminal-close-sleep'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 async function sleepInstead(worktreeId: string, terminalTabId: string): Promise<void> {
   if (!(await revalidateTerminalCloseSleep(worktreeId, terminalTabId))) {
@@ -37,7 +38,7 @@ export default function RunningTerminalCloseDialog(): React.JSX.Element {
   // Process probes can overlap the synchronous pinned queue; wait instead of stacking modal focus traps.
   const pinnedRequest = useAppStore((state) => state.pinnedTabCloseConfirm)
   const worktreeId = request?.worktreeId
-  const workspaceName = useAppStore((state) => {
+  const workspaceName = useAppStoreWithChannels((state) => {
     const worktree = worktreeId ? findWorktreeById(state, worktreeId) : null
     return worktree ? resolveWorktreeDisplayName(worktree) : undefined
   })

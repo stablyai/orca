@@ -25,7 +25,6 @@ import { useBotGroups } from '@/lib/bot-group-list'
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot, useBotHomeWorkspaces, useBots } from '@/lib/bot-catalog'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
 import { cn } from '@/lib/class-names'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import {
@@ -58,6 +57,8 @@ import { BotsCollapseAllButton } from './BotsCollapseAllButton'
 import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** The sidebar's Bots section, its own top-level section above Projects: one row per bot, this computer's and each paired server's. */
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
@@ -68,7 +69,7 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
   const bots = useBots()
   const savedCollapsed = useAppStore((s) => s.collapsedGroups.has(BOTS_GROUP_KEY))
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const activeWorkspaceId = useAppStore((s) =>
+  const activeWorkspaceId = useAppStoreWithChannels((s) =>
     s.activeView === 'tasks' ||
     s.activeView === 'activity' ||
     selectActiveBotGroupRoomId(s) !== null
@@ -77,7 +78,7 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
   )
   const groups = useBotGroups()
   const folderWorkspaces = useBotHomeWorkspaces(bots, groups)
-  const activeRoomId = useAppStore(selectActiveBotGroupRoomId)
+  const activeRoomId = useAppStoreWithChannels(selectActiveBotGroupRoomId)
   const activeGroupId = activeRoomId ? findBotGroupRoom(groups, activeRoomId)?.group.id : null
   const deleteGroup = useBotGroupDelete()
   const [newBotOpen, setNewBotOpen] = useState(false)

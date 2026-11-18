@@ -1,4 +1,3 @@
-import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useMemo } from 'react'
 import type { AppState } from '@/store/types'
 import {
@@ -7,6 +6,10 @@ import {
 } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { selectWorkspaceRuntimeEnvironmentId } from '../../lib/workspace/ownership/workspace-runtime-environment'
 import { selectWslHostEnvironmentUnavailableReason } from '../../runtime/hosts/wsl/wsl-host-availability'
+import {
+  useAppStateValue,
+  useAppStateValueWithChannels
+} from '@/store/retained-views/app-state-view'
 
 export type StoppedWslHost = { environmentId: string; distro: string }
 /** A host a read surface waits on instead of showing its read error; `connecting` once Start (or a reconnect) is under way. */
@@ -36,7 +39,7 @@ export function selectStoppedWslHostEnvironmentId(
 }
 
 export function useStoppedWslHost(worktreeId: string | null | undefined): StoppedWslHost | null {
-  const environmentId = useAppStateValue((state) =>
+  const environmentId = useAppStateValueWithChannels((state) =>
     selectStoppedWslHostEnvironmentId(state, worktreeId)
   )
   const distro = useAppStateValue((state) => selectStoppedWslDistro(state, environmentId))
@@ -54,7 +57,7 @@ export function useWslHostReadOutage(
   worktreeId: string | null | undefined
 ): WslHostReadOutage | null {
   const stopped = useStoppedWslHost(worktreeId)
-  const environmentId = useAppStateValue((state) =>
+  const environmentId = useAppStateValueWithChannels((state) =>
     selectWorkspaceRuntimeEnvironmentId(state, worktreeId)
   )
   const connectingDistro = useAppStateValue((state) =>

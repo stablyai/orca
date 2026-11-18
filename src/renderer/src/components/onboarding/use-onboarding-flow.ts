@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
-import { useAppStore } from '@/store/index'
 import { selectOnboardingWorkspaceId } from './onboarding-workspace-selection'
 import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
 import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
@@ -26,6 +25,8 @@ import {
 } from './onboarding-flow-state'
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useOnboardingFlow(
   onboarding: OnboardingState,
@@ -38,7 +39,7 @@ export function useOnboardingFlow(
   const pathSource = useAppStore((s) => s.pathSource)
   const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const openModal = useAppStore((s) => s.openModal)
-  const selectedWorkspaceId = useAppStore(selectOnboardingWorkspaceId)
+  const selectedWorkspaceId = useAppStoreWithChannels(selectOnboardingWorkspaceId)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)

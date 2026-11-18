@@ -3,7 +3,6 @@ import { useShallow } from 'zustand/react/shallow'
 
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { useNow } from '@/lib/window-activity/use-now'
-import { useAppStore } from '@/store'
 import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { lineageLaneStatus } from './worktree-card-lineage-lane-status'
 import {
@@ -41,6 +40,8 @@ import {
   WorktreeCardTitlePills,
   WorktreeCardTitleTime
 } from '../slots/WorktreeCardSlot'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const NO_DESCENDANTS: readonly HostScopedWorktreeKey[] = []
 const NO_EXCEPTIONS: readonly SlotException[] = []
@@ -61,7 +62,7 @@ const TitleStatusContext = createContext<TitleStatus | null>(null)
 
 function useSlotAgentSignals(agents: DashboardAgentRow[]): SlotAgentSignals {
   // Same acknowledgement records the agent rows read, so unread means the same in both places.
-  const unread = useAppStore(useShallow((s) => selectAgentRowsUnread(s, agents)))
+  const unread = useAppStoreWithChannels(useShallow((s) => selectAgentRowsUnread(s, agents)))
   return useMemo(() => buildSlotAgentSignals(agents, unread), [agents, unread])
 }
 
@@ -82,7 +83,7 @@ export function WorktreeCardTitleStatusProvider({
   const offline = card.isRuntimeDisconnected || card.isSshDisconnected
   const identity = composeWorktreeHostIdentity(worktree.hostId ?? 'local', worktree.id)
   const markedByUser = useAppStore((s) => Boolean(s.workspacesMarkedUnreadByUser[identity]))
-  const pickingSendTarget = useAppStore(
+  const pickingSendTarget = useAppStoreWithChannels(
     (s) => selectSendTargetControlInputs(s, worktree.id).targetMode !== null
   )
   const { compactRootListExpanded } = useWorktreeAgentExpansionState(worktree.id, worktree.hostId)
@@ -106,7 +107,7 @@ export function WorktreeCardTitleStatusProvider({
     () => createWorkspaceUnreadSelector(worktree, visibleAgentTargets),
     [visibleAgentTargets, worktree]
   )
-  const workspaceUnread = useAppStore(selectWorkspaceUnread)
+  const workspaceUnread = useAppStoreWithChannels(selectWorkspaceUnread)
   const slot = titleRowSlot({
     offline,
     lines: signals.allSignals,

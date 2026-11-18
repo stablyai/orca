@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store/index'
 import { selectNativeChatForkSourceOpenable } from './native-chat-fork-source-openable'
 import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import {
@@ -13,6 +12,7 @@ import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/o
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatRewindSurface } from '@/components/native-chat/messages/actions/use-native-chat-rewind-host'
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** What the pane's transcript rows offer: rewind on prompts, fork on responses, and the chat a
  *  "Forked from" divider opens. */
@@ -31,7 +31,7 @@ export function NativeChatRowActionsProvider({
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
   const { agent, target } = pane
   // An unreachable host cannot open the source, so its divider shows plain words until it returns.
-  const sourceOpenable = useAppStore(
+  const sourceOpenable = useAppStoreWithChannels(
     (state) => worktreeId !== null && selectNativeChatForkSourceOpenable(state, worktreeId, target)
   )
   // A fork and its source share a workspace and host.

@@ -1,6 +1,5 @@
 import { useBots } from '@/lib/bot-catalog'
 import { isHome } from '../../../../shared/bots/bot-homes'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
@@ -9,6 +8,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type BotWorkerRow = Pick<Worktree, 'id' | 'hostId'>
 
@@ -17,7 +17,7 @@ const NO_FOLDERS: readonly FolderWorkspace[] = []
 /** The bot whose home this workspace sits under, while Hide bot workspaces is off and it shows in its project too. */
 export function useWorktreeBot(worktree: BotWorkerRow, botsEnabled: boolean): Bot | null {
   // One subscription per card; absent reads as on, like the persisted default.
-  const folders = useAppStore((s) =>
+  const folders = useAppStoreWithChannels((s) =>
     botsEnabled && s.hideBotCreatedWorkspaces === false
       ? selectFolderAncestors(s, worktree)
       : NO_FOLDERS

@@ -1,12 +1,15 @@
 import { captureAgentStatusView } from '@/store/slices/agent-status/status-ownership/agent-status-ownership-boundary'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { create, type StoreApi } from 'zustand'
-import { AppStateViewContext, useAppStateValue } from '@/store/retained-views/app-state-view'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { AttachedWorktreeOwner } from '../../folder-workspaces/folder-workspace-attached-worktrees'
+import { useAppStore } from '@/store'
+import {
+  AppStateViewContext,
+  useAppStateValueWithChannels
+} from '@/store/retained-views/app-state-view'
 
 export type SourceControlScope = AttachedWorktreeOwner & {
   repo: Repo
@@ -139,7 +142,7 @@ export function sourceControlConnectionId(
 
 /** Body context subscriptions stop while hidden; actions still read the live app store. */
 export function useSourceControlState<T>(selector: (state: AppState) => T): T {
-  return useAppStateValue(selector)
+  return useAppStateValueWithChannels(selector)
 }
 
 /** Pause a retained body's operation display without suspending the operation's owner. */

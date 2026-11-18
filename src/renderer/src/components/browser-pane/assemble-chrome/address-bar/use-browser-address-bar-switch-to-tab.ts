@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import {
   buildOpenTabSearchBrowserPages,
@@ -15,6 +14,8 @@ import { normalizeBrowserNavigationUrl } from '../../../../../../shared/browser/
 import { requestBrowserFocus } from '../../host-guest/input/browser-focus'
 import { toDisplayUrl } from '../../describe-page/browser-page-url-display'
 import type { BrowserAddressBarSuggestion } from './browser-address-bar-suggestions'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type SwitchableRow = Pick<BrowserAddressBarSuggestion, 'url' | 'isSearch' | 'docLocation'>
 
@@ -55,7 +56,7 @@ export function useBrowserAddressBarSwitchToTab({
     }
   }
   // Why only while open: the scan follows every page update, which a closed bar never needs.
-  const entryState = useAppStore(
+  const entryState = useAppStoreWithChannels(
     useShallow((state) => {
       if (!open) {
         return null

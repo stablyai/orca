@@ -1,13 +1,10 @@
 import { useCallback, useMemo } from 'react'
-import {
-  useAppStateValue,
-  useAppStateValueWithChannels
-} from '@/store/retained-views/app-state-view'
 import { useTranslate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'
 import { useAgentPresentation } from './useWorktreeAgentRows'
 import { createRootsUnreadSelector } from './worktree-card-agent-ack-inputs'
 import { CompactAgentSummaryButton } from './worktree-card-compact-agents'
+import { useAppStateValueWithChannels } from '@/store/retained-views/app-state-view'
 
 /** The compact pill over a card's root agents, from keyed groups unless rows must regroup. */
 export function KeyedSummary({
@@ -35,7 +32,9 @@ export function KeyedSummary({
   )
   const selectUnread = useMemo(() => createRootsUnreadSelector(worktreeId), [worktreeId])
   // Same acknowledgement records the rows read, so the pill's unread count matches theirs.
-  const unread = useAppStateValue(useCallback((s) => selectUnread(s, roots), [selectUnread, roots]))
+  const unread = useAppStateValueWithChannels(
+    useCallback((s) => selectUnread(s, roots), [selectUnread, roots])
+  )
   const unreadByPaneKey = useMemo(
     () =>
       unread.some(Boolean)

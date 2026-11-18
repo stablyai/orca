@@ -1,7 +1,6 @@
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
@@ -32,6 +31,8 @@ import {
   FOLDER_WORKTREE_CARD_CLASS,
   FolderWorktreeSectionHeader
 } from './folder-worktree-section-header'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 const EMPTY_ENTRIES: readonly unknown[] = []
 
 type SectionProps = {
@@ -93,7 +94,7 @@ const WorktreeSection = memo(
     if (bodyActive && !bodyMounted) {
       setBodyMounted(true)
     }
-    const watchRuntimeEnvironmentId = useAppStore((state) =>
+    const watchRuntimeEnvironmentId = useAppStoreWithChannels((state) =>
       sourceControlFileWatchRuntimeEnvironmentId(state, owner)
     )
     // Only local or served-runtime roots have the existing watch transport; huge repos keep their pause.

@@ -1,11 +1,11 @@
 import { selectWorkspaceRuntimeEnvironmentId } from '../../../../../lib/workspace/ownership/workspace-runtime-environment'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { toRuntimeExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'
 import { tailscaleHostOfEndpoint } from '../../../../../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RemoteRuntimeRecoveryCause } from '../../remote-runtime/recovery/remote-runtime-recovery-copy'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Read shared server reconnection once so individual panes do not announce the same outage. */
 export function selectRetryingOutageEnvironmentId(
@@ -49,5 +49,5 @@ export function selectRuntimeServerTailscaleHost(
 export function useRetryingOutageEnvironmentId(
   worktreeId: string | null | undefined
 ): string | null {
-  return useAppStore((state) => selectRetryingOutageEnvironmentId(state, worktreeId))
+  return useAppStoreWithChannels((state) => selectRetryingOutageEnvironmentId(state, worktreeId))
 }

@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { persistedUIValuesEqual } from '../../../../../../shared/collections/persisted-ui-equality'
 import { getProjectHeaderHostContexts } from '../rows/project-header-host-context'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type ContextArgs = Omit<
   Parameters<typeof getProjectHeaderHostContexts>[0],
@@ -44,5 +44,5 @@ export function useProjectHeaderHostContexts(args: ContextArgs) {
       }),
     [rows, visibleProjectRepoIdsBySection, hosts, repoMap, projectGrouping]
   )
-  return useAppStore(select)
+  return useAppStoreWithChannels(select)
 }

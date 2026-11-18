@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
-import { useAppStore } from '@/store/index'
 import { getPreflightIntegrationStatuses } from './integrations-pane-status'
 import type {
   PreflightIntegrationStatuses,
   PreflightRefreshProvider
 } from './integrations-pane-status'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type CliStatus = {
   installed?: boolean
@@ -60,7 +61,7 @@ export function usePreflightCardStatuses(
   const preflightStatusError = useAppStore((s) => s.preflightStatusError)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const expectedPreflightContextKey = useAppStore((s) =>
+  const expectedPreflightContextKey = useAppStoreWithChannels((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const mountedRef = useMountedRef()

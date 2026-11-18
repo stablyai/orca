@@ -1,7 +1,8 @@
 import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
-import { useAppStore } from '@/store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useFloatingTerminalPanelStoreState() {
   const { tabs, browserTabs, groups, unifiedTabs, floatingFiles, expandedPaneByTabId } =
@@ -27,7 +28,7 @@ export function useFloatingTerminalPanelStoreState() {
   const generatedTabTitlesEnabled = useAppStore(
     (state) => state.settings?.tabAutoGenerateTitle === true
   )
-  const managedBrowserCreationEnabled = useAppStore(
+  const managedBrowserCreationEnabled = useAppStoreWithChannels(
     (state) =>
       getClientCreationActionPolicy(state, FLOATING_TERMINAL_WORKTREE_ID)['managed-browser']
         .state === 'enabled'

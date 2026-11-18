@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { useAppStore } from '@/store/index'
 import { worktreeUsesRemoteConnection } from '@/store/terminals/tabs/creation/terminal-workspace-routing'
 import { hasRemoteRuntimePtyForTab } from './tab-agent-remote-pty-selector'
 import {
@@ -20,6 +19,8 @@ import {
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type TabHookAgents = {
   focused: TerminalAgent | null
@@ -59,12 +60,12 @@ function createTabHookAgentResolver(): (
 /** Resolve pane identity, separate from activity, without foreground probes: live focused hook → process (normalized to owner group) → reuse/hookless title → completed focused identity → sleeping session → launch → sibling fallback. Native OpenCode titles cannot displace durable ownership; local OSC 133;D suppresses exited idle identity. */
 export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
   const [resolveHookAgents] = useState(createTabHookAgentResolver)
-  const focusedHookAgent = useAppStore((s) => resolveHookAgents(s, tab.id).focused)
-  const siblingHookAgent = useAppStore((s) => resolveHookAgents(s, tab.id).sibling)
-  const focusedCompletedHookAgent = useAppStore(
+  const focusedHookAgent = useAppStoreWithChannels((s) => resolveHookAgents(s, tab.id).focused)
+  const siblingHookAgent = useAppStoreWithChannels((s) => resolveHookAgents(s, tab.id).sibling)
+  const focusedCompletedHookAgent = useAppStoreWithChannels(
     (s) => resolveHookAgents(s, tab.id).focusedCompleted
   )
-  const siblingCompletedHookAgent = useAppStore(
+  const siblingCompletedHookAgent = useAppStoreWithChannels(
     (s) => resolveHookAgents(s, tab.id).siblingCompleted
   )
   const hasCompletedHook = focusedCompletedHookAgent !== null

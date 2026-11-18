@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
@@ -18,6 +17,8 @@ import {
   getWorkspaceReferenceLookup,
   readWorkspaceReferenceDetails
 } from './workspace-reference-detail-read'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useWorkspaceReferenceDetails(
   workspace: Worktree,
@@ -43,7 +44,7 @@ export function useWorkspaceReferenceDetails(
       ),
     [requests]
   )
-  useAppStore(useShallow((state) => cacheReads.map((read) => read?.(state))))
+  useAppStoreWithChannels(useShallow((state) => cacheReads.map((read) => read?.(state))))
   useEffect(() => {
     if (!hoverOpen || hostOff) {
       return

@@ -3,7 +3,6 @@ import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hi
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
-import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import { createLiveAgentWorktreeIdsSelector } from '@/lib/workspace/activity/worktree-activity-state'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
@@ -31,6 +30,7 @@ import {
   subscribeHiddenVmCheckouts,
   withoutHiddenVmWorktrees
 } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
+import { useAppStore } from '@/store/index'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
@@ -94,7 +94,7 @@ export function useVisibleSidebarWorktrees(args: {
     () => createSidebarPairedDeviceIdsSelector(hideWorkspacesFromOtherDevices),
     [hideWorkspacesFromOtherDevices]
   )
-  const pairedDeviceIdsByEnvironment = useAppStore(selectPairedDevices)
+  const pairedDeviceIdsByEnvironment = useAppStoreWithChannels(selectPairedDevices)
   const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
 
   const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
@@ -115,7 +115,7 @@ export function useVisibleSidebarWorktrees(args: {
 
   // Recompute on epoch, not every hook ping; key on the epoch too since ticks can share a millisecond sample.
   const [selectLiveAgentWorktreeIds] = useState(createLiveAgentWorktreeIdsSelector)
-  const worktreeIdsWithLiveAgent = useAppStore((s) =>
+  const worktreeIdsWithLiveAgent = useAppStoreWithChannels((s) =>
     showSleepingWorkspaces
       ? EMPTY_WORKTREE_ID_SET
       : selectLiveAgentWorktreeIds(s, tabsByWorktree, agentStatusNow)

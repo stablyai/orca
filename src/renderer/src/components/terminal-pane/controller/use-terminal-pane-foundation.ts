@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { IDisposable } from '@xterm/xterm'
-import { useAppStore } from '../../../store/index'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -27,6 +26,8 @@ import type { PaneProcessExit } from '../process-exit/pane-process-exit'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
 import type { TerminalErrorsByPaneId } from '../errors/terminal-error-accumulation'
 import { selectTerminalPaneHostState } from '../host-state/terminal-pane-host-state'
+import { useAppStore } from '../../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useTerminalPaneFoundation(props: TerminalPaneProps) {
   const {
@@ -74,7 +75,7 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
     sshReconnectTargetId,
     sshReconnectTargetLabel,
     sshReconnectTargetRemoved
-  } = useAppStore(useShallow((store) => selectTerminalPaneHostState(store, worktreeId)))
+  } = useAppStoreWithChannels(useShallow((store) => selectTerminalPaneHostState(store, worktreeId)))
   const sshReconnectOwnsTerminalErrors = Boolean(
     sshReconnectTargetId && sshReconnectStatus && sshReconnectStatus !== 'connected'
   )

@@ -2,7 +2,6 @@ import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateA
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { selectWorkspaceRuntimeEnvironmentId } from '@/lib/workspace/ownership/workspace-runtime-environment'
-import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type { WslHostConnectionState } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
@@ -15,6 +14,10 @@ import {
   WORKTREE_OWNER_UNREACHABLE_ERROR,
   type FileContent
 } from './editor-panel-content-types'
+import {
+  useAppStateValue,
+  useAppStateValueWithChannels
+} from '@/store/retained-views/app-state-view'
 
 export const FILE_LOAD_RETRY_DELAYS_MS = [250, 1000, 2500]
 // Poll unresolved local owner state without network calls; bound the wait to two minutes, then require explicit Retry.
@@ -98,7 +101,7 @@ export function useEditorPanelFileLoadRetry({
     ? fileContents[activeFileLoadRetryId]?.loadErrorCode
     : undefined
   const hostConnection = useWorktreeHostConnection(activeFile?.worktreeId ?? null)
-  const wslEnvironmentId = useAppStateValue((state) =>
+  const wslEnvironmentId = useAppStateValueWithChannels((state) =>
     selectWorkspaceRuntimeEnvironmentId(state, activeFile?.worktreeId)
   )
   const wslHostState = useAppStateValue((state) =>

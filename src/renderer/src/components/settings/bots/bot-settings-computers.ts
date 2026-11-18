@@ -3,7 +3,6 @@
 // once, since Slack, Linear and GitHub belong to an account rather than a computer.
 import { useSyncExternalStore } from 'react'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
-import { useAppStore } from '@/store'
 import {
   readBotHostIds,
   readBotHostState,
@@ -18,6 +17,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type BotSettingsComputer = {
   hostId: ExecutionHostId
@@ -48,7 +49,7 @@ export function useBotSettingsComputers(): BotSettingsComputer[] {
   const listed = useSyncExternalStore(subscribeToBotChanges, readBotHostIds)
   const tooOld = useSyncExternalStore(subscribeToBotChanges, readUpdateNeededBotHosts)
   const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
-  const names = useAppStore((state) =>
+  const names = useAppStoreWithChannels((state) =>
     [...listed, ...tooOld]
       .map((hostId) => selectExecutionHostDisplayLabel(state, hostId))
       .join('\n')

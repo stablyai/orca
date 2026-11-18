@@ -1,5 +1,4 @@
 import { Bot, ChevronDown } from 'lucide-react'
-import { useAppStore } from '../../../store/index'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
@@ -29,6 +28,8 @@ import {
   landingQueryMatches,
   useLandingResultsChange
 } from './split-pane-landing-item'
+import { useAppStore } from '../../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** The default agent, launched exactly as the New Agent shortcut would launch it; the chevron
  *  opens the + menu's agent list for any other. */
@@ -47,7 +48,7 @@ export function LandingDefaultAgentItem({
   onPickerClosed: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const defaultAgent = useAppStore((state) => readNewAgentTabDefault(state, worktreeId))
+  const defaultAgent = useAppStoreWithChannels((state) => readNewAgentTabDefault(state, worktreeId))
   const shortcut = useOptionalShortcutLabel('tab.newAgent')
   const agentLabel = defaultAgent
     ? (getAgentCatalog().find((entry) => entry.id === defaultAgent)?.label ?? defaultAgent)

@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
   structuredAgentSessionOwnerForTab,
@@ -10,6 +9,8 @@ import type { OrchestrationSessionWorker } from '../../../shared/orchestration-s
 import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { isStructuredTab } from '../../../shared/agent-session/view/structured-agent-session-tab'
 import { useOrchestrationSessionsWorkers } from './orchestration-session-workers'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
 const NO_WORKERS: readonly OrchestrationSessionWorker[] = []
@@ -39,7 +40,9 @@ export type FocusedChatWorkers = {
 
 /** The focused chat's workers, read through the shared per-chat feed. */
 export function useFocusedChatWorkers(visible: boolean): FocusedChatWorkers {
-  const tab = useAppStore((state) => selectFocusedChatTab(state, state.activeWorktreeId))
+  const tab = useAppStoreWithChannels((state) =>
+    selectFocusedChatTab(state, state.activeWorktreeId)
+  )
   const owner = useAppStore((state) => (tab ? structuredAgentSessionOwnerForTab(state, tab) : null))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner) ?? LOCAL, [owner])
   const sessionId = tab?.entityId ?? null

@@ -5,11 +5,12 @@ import {
 } from '@/lib/workspace/ownership/resolve-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/git/git-operation-target'
 import type { AttachedWorktreeOwner } from '../../folder-workspaces/folder-workspace-attached-worktrees'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function sourceControlFileWatchRuntimeEnvironmentId(
   state: AppState,
@@ -53,7 +54,7 @@ export function useWorktreeGitOwnerTarget(
   hostId?: ExecutionHostId
 ): RuntimeClientTarget | null {
   // Subscribe by primitive owner key; fresh resolver objects would rerender every write.
-  const ownerKey = useAppStore((state) => {
+  const ownerKey = useAppStoreWithChannels((state) => {
     const target = ownerTargetFor(state, worktreeId, hostId)
     return target ? (target.kind === 'environment' ? `env:${target.environmentId}` : 'local') : null
   })

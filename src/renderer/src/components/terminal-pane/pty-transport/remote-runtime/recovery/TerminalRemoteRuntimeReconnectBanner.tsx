@@ -15,7 +15,7 @@ import {
   selectRuntimeServerName,
   selectRuntimeServerTailscaleHost
 } from '../../recovery/server-outage/remote-server-outage'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type BannerProps = {
   recovery: Pick<VisiblePtyRecoveryState, 'phase' | 'cause' | 'waiting'>
@@ -173,10 +173,10 @@ export function CalmRemoteRuntimeReconnectBanner({
   heldByServer: boolean
   environmentId: string | null
 }): React.JSX.Element | null {
-  const serverName = useAppStore((state) =>
+  const serverName = useAppStoreWithChannels((state) =>
     environmentId ? selectRuntimeServerName(state, environmentId) : fallbackRemoteServerName()
   )
-  const tailscaleHost = useAppStore((state) =>
+  const tailscaleHost = useAppStoreWithChannels((state) =>
     environmentId ? selectRuntimeServerTailscaleHost(state, environmentId) : null
   )
   const [lastRecovery, setLastRecovery] = useState(recovery)

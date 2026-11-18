@@ -16,7 +16,6 @@ import {
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import { useAppStore } from '@/store/index'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import {
   useChatSettingsOwnPermissions,
@@ -46,6 +45,8 @@ import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 // Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
@@ -148,7 +149,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const bots = useBots(botsEnabled)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
-  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStoreWithChannels(
     useShallow((state) => {
       const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
       return [

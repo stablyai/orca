@@ -11,7 +11,6 @@ import {
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { cn } from '@/lib/class-names'
-import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
@@ -22,6 +21,8 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../../shared/work-items/task-providers'
 import { localPreflightContextKey } from '../../../runtime/hosts/preflight/local-preflight-context-key'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function HideTaskSidebarMenu({ onHide }: { onHide: () => void }): React.JSX.Element {
   const t = useTranslate()
@@ -70,7 +71,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const expectedPreflightContextKey = useAppStore((s) =>
+  const expectedPreflightContextKey = useAppStoreWithChannels((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const linearStatus = useAppStore((s) => s.linearStatus)

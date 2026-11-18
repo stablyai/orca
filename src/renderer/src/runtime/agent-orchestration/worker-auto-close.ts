@@ -6,7 +6,6 @@ import {
   readLocalRuntimeCapabilitiesOrUnknown
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -21,6 +20,7 @@ import {
   subscribeWorkerAutoClose,
   type WorkerAutoCloseState
 } from '../../../../shared/orchestration/workers/worker-auto-close'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** A terminal pane, or a chat named by session: its owning host resolves the pane credential. */
 export type WorkerAutoCloseSubject = { paneKey: string } | { sessionId: string }
@@ -105,7 +105,7 @@ export function useWorkerAutoClose(
     [key]
   )
   const state = useSyncExternalStore(subscribe, () => readPublishedWorkerAutoClose(key))
-  const activity = useAppStore((s) => workerActivity(s, paneKey))
+  const activity = useAppStoreWithChannels((s) => workerActivity(s, paneKey))
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   useEffect(() => {

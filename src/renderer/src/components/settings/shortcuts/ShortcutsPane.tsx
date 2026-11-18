@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '../../../store/index'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { ShortcutFilterRail } from './ShortcutFilterRail'
@@ -20,6 +19,8 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useKeybindingActionEditor } from './use-keybinding-action-editor'
 import { useShortcutRecorderFocus } from './use-shortcut-recorder-focus'
 import type { KeybindingActionId, KeybindingInput } from '../../../../../shared/keybindings/types'
+import { useAppStore } from '../../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function ShortcutsPane(): React.JSX.Element {
   const t = useTranslate()
@@ -43,7 +44,7 @@ export function ShortcutsPane(): React.JSX.Element {
     saveBindings,
     captureBinding: captureBindingAt
   } = useKeybindingActionEditor()
-  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStoreWithChannels(
     useShallow((state) => {
       const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
       return [

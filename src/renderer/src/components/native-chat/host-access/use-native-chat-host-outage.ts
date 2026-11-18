@@ -1,5 +1,4 @@
 import { useCallback, useContext, useMemo, useState, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
 import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { runtimeHostContactFromSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
@@ -13,6 +12,8 @@ import {
   nativeChatHostOutageKind,
   type NativeChatHostOutage
 } from './native-chat-host-outage-latch'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 export {
   nativeChatHostOutageKind,
   NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS
@@ -42,7 +43,7 @@ export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChat
     const wsl = environmentId === null ? undefined : s.wslHostStatuses[environmentId]
     return wsl?.state === 'distro-stopped' ? wsl.distro : null
   })
-  const hostLabel = useAppStore((s) =>
+  const hostLabel = useAppStoreWithChannels((s) =>
     environmentId === null
       ? null
       : selectExecutionHostDisplayLabel(s, toRuntimeExecutionHostId(environmentId))

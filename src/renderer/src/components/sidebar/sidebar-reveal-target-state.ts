@@ -1,6 +1,5 @@
 // "Reveal current" over the app's own state: the store, and the bot and group lists.
 import { useCallback, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
   selectFolderWorkspaces,
@@ -38,6 +37,8 @@ import {
   type SidebarWorkspaceOwner,
   type SidebarWorkspaceOwnerInputs
 } from '../../../../shared/sidebar-list/sidebar-reveal-target'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type OwnerEntry = {
   kind: 'bot' | 'group'
@@ -218,5 +219,5 @@ export function useSidebarRevealUnavailableReason(): SidebarRevealNoneReason | n
     },
     [bots, groups]
   )
-  return useAppStore(select)
+  return useAppStoreWithChannels(select)
 }

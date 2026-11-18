@@ -5,10 +5,9 @@ import type { AppState } from '../types'
 const CHANNEL_FIELDS = [
   'agentStatusByPaneKey',
   'agentStatusEpoch',
-  'agentConversationsByPaneKey',
-  // Freshness ticks bump ordering with every status refresh.
-  'sortEpoch',
-  'settledSortEpoch'
+  // Sort epochs stay root: about 25 writers across worktrees, repos and tabs bump them, and live
+  // status writes change them only on ordering transitions.
+  'agentConversationsByPaneKey'
 ] as const satisfies readonly (keyof AppState)[]
 
 export type AppStoreChannelField = (typeof CHANNEL_FIELDS)[number]

@@ -1,4 +1,3 @@
-import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import {
   getWorktreeIdsWithLiveAgent,
@@ -11,6 +10,7 @@ import {
   hasUnknownStructuredChat,
   type StructuredChatSleptAtByPaneKey
 } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type TabLike = { id: string }
 
@@ -83,7 +83,7 @@ export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: str
 }
 
 export function useIsSleepingWorktree(worktreeId: string): boolean {
-  return useAppStore((state) => selectIsSleepingWorktree(state, worktreeId))
+  return useAppStoreWithChannels((state) => selectIsSleepingWorktree(state, worktreeId))
 }
 
 export function resetWorktreeSleepStateCacheForTests(): void {

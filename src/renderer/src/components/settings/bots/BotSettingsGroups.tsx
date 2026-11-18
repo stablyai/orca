@@ -25,7 +25,6 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useHostBots } from '@/lib/bot-catalog'
 import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import { botHostTarget } from '@/lib/bot-hosts'
-import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
@@ -38,6 +37,8 @@ import {
   SettingsInsetGroup,
   SettingsInsetRow
 } from '@/components/bots/settings-view/BotSettingsRows'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** One group: an icon, its name, then what it is or why it is closed; open unless it has no body. */
 function SettingsGroup({
@@ -307,7 +308,7 @@ function ComposioKeySection({
 }): React.JSX.Element {
   const t = useTranslate()
   const holder = useComposioEventsHolder(computer.hostId)
-  const holderName = useAppStore((state) =>
+  const holderName = useAppStoreWithChannels((state) =>
     holder ? selectExecutionHostDisplayLabel(state, holder) : null
   )
   return (

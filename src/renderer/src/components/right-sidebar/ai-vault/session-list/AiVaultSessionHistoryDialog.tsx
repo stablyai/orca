@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -14,6 +13,8 @@ import {
 import AiVaultPanel from '../panel/AiVaultPanel'
 import type { AiVaultPanelHandle } from '../scope/ai-vault-panel-handle'
 import { readAgentSessionHistoryModalRequest } from '../panel/agent-session-history-modal'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function selectVisibleTabs(state: AppState, chatWorkspaceId: string | null): string {
   const focusedTab = (workspaceId: string | null): string => {
@@ -40,7 +41,7 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   )
   // Tab changes prove an action opened a destination; failed actions leave this dialog in place.
-  const visibleTabs = useAppStore((s) => selectVisibleTabs(s, chatWorkspaceId))
+  const visibleTabs = useAppStoreWithChannels((s) => selectVisibleTabs(s, chatWorkspaceId))
   const [openedOver] = useState(visibleTabs)
   const tabsChanged = visibleTabs !== openedOver
   useEffect(() => {

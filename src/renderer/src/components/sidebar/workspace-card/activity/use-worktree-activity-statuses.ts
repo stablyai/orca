@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
 import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
@@ -12,6 +11,7 @@ import {
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
 import { selectWorktreeActivityPtyIds } from './use-worktree-activity-status'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type StatusMemo = { inputs: readonly unknown[]; status: WorktreeStatus }
 
@@ -103,5 +103,5 @@ export function useWorktreeActivityStatuses(
     (state: AppState) => selectWorktreeActivityStatuses(state, worktreeIds),
     [worktreeIds]
   )
-  return useAppStore(useShallow(selectStatuses))
+  return useAppStoreWithChannels(useShallow(selectStatuses))
 }

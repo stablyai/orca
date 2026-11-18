@@ -1,6 +1,5 @@
 import { useCallback, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '../../../store'
 import {
   onQueuedRestartPaneBound,
   selectReadyAccountRestartPtyIds
@@ -8,6 +7,8 @@ import {
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 import type { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
+import { useAppStore } from '../../../store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useReadyPaneAccountRestarts({
   consumePendingPaneAccountRestart,
@@ -28,7 +29,7 @@ export function useReadyPaneAccountRestarts({
   panePtyLayoutBindings: TerminalPaneCloseController['savedLayout']['ptyIdsByLeafId']
 }) {
   // Why primitive ids: another tab's queued restart stays shallow-equal and skips this pane.
-  const queuedRestartPtyIds = useAppStore(
+  const queuedRestartPtyIds = useAppStoreWithChannels(
     useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId))
   )
   const runQueuedAccountRestarts = useCallback(() => {

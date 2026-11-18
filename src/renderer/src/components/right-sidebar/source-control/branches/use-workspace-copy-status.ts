@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
@@ -10,6 +9,8 @@ import type {
   GitStatusResult
 } from '../../../../../../shared/git/status/git-status-types'
 import { copyOwnsStatusSlot, refreshWorktreeCopyStatus } from './workspace-branch-switch-status'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const NO_ENTRIES: GitStatusEntry[] = []
 
@@ -39,7 +40,7 @@ export function useWorkspaceCopyStatus({
   open: boolean
   refreshOnOpen: boolean
 }): WorkspaceCopyStatus {
-  const owner = useAppStore((state) => copyOwnsStatusSlot(state, worktreeId, hostId))
+  const owner = useAppStoreWithChannels((state) => copyOwnsStatusSlot(state, worktreeId, hostId))
   const head = useAppStore((state) =>
     owner ? state.gitStatusHeadByWorktree?.[worktreeId] : undefined
   )

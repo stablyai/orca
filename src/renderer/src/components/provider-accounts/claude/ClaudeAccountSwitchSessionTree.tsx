@@ -16,13 +16,14 @@ import {
   resolveWorktreeDisplayName
 } from '@/lib/workspace/display/worktree-default-display-name'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { useAppStore } from '../../../store/index'
 import { ResumeTreeRow } from '../../native-chat-recovery/tree/NativeChatResumeTreeRow'
 import {
   resumeSelectionState,
   toggleResumeSelection
 } from '../../native-chat-recovery/tree/native-chat-resume-on-restart-grouping'
 import { moveInTree } from '../../native-chat-recovery/tree/native-chat-resume-tree-keys'
+import { useAppStore } from '../../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type SessionRowData = ClaudeSessionMoveCandidate & { reason?: string }
 
@@ -276,7 +277,7 @@ function SessionRow({
     return tab?.customTitle || tab?.title || ''
   })
   const lastPrompt = useAgentStatus(paneKey)?.prompt?.trim()
-  const busy = useAppStore((store) => isClaudePaneMidTurn(store, paneKey))
+  const busy = useAppStoreWithChannels((store) => isClaudePaneMidTurn(store, paneKey))
   const title =
     lastPrompt || tabTitle || t('accounts.claude.switchSessions.session', 'Claude session')
   return (

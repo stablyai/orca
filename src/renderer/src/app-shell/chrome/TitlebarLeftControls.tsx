@@ -14,17 +14,18 @@ import {
   canGoForwardWorktreeHistory
 } from '@/store/slices/ui/workspace-navigation-history'
 import { useShortcutLabel } from '../../lib/keyboard/useShortcutLabel'
-import { useAppStore } from '../../store/index'
 import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
+import { useAppStore } from '../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const t = useTranslate()
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
-  const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
+  const canGoBackWorktree = useAppStoreWithChannels(canGoBackWorktreeHistory)
+  const canGoForwardWorktree = useAppStoreWithChannels(canGoForwardWorktreeHistory)
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')

@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next'
-import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
@@ -11,6 +10,8 @@ import {
 import { useRef } from 'react'
 import { getScreenSubmitShortcutLabel } from '@/lib/keyboard/screen-submit-shortcut'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useTaskPageStoreBindings() {
   useTranslation()
@@ -65,7 +66,7 @@ export function useTaskPageStoreBindings() {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const expectedPreflightContextKey = useAppStore((s) =>
+  const expectedPreflightContextKey = useAppStoreWithChannels((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const jiraStatus = useAppStore((s) => s.jiraStatus)

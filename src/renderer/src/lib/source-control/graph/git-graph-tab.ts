@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { captureWorktreeOperationGenerationSnapshot } from '../../workspace/ownership/worktree-operation-generation'
-import { useAppStore } from '@/store/index'
 import {
   findFirstIndexedWorktree,
   findIndexedWorktreeOwnerForHost
@@ -28,6 +27,8 @@ import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type ScopeState = WorktreeOperationRouteState &
   Pick<ReturnType<typeof useAppStore.getState>, 'repos' | 'worktreesByRepo'>
@@ -50,7 +51,7 @@ export function gitGraphScopeInputs(state: ReturnType<typeof useAppStore.getStat
 }
 
 export function useGitGraphScope(worktreeId: string, executionHostId?: ExecutionHostId) {
-  const inputs = useAppStore(useShallow(gitGraphScopeInputs))
+  const inputs = useAppStoreWithChannels(useShallow(gitGraphScopeInputs))
   return useMemo(
     () => gitGraphScope(worktreeId, inputs, executionHostId),
     [worktreeId, inputs, executionHostId]

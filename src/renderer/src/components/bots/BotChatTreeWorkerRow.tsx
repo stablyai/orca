@@ -2,7 +2,6 @@
 import { CircleX } from 'lucide-react'
 import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
-import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -20,6 +19,7 @@ import { useBotHostLabel } from './use-bot-host-label'
 import { WorkerActivityRow } from './WorkerActivityRow'
 import { useBotUsageLimitStopIndex } from './use-bot-usage-limit-stops'
 import { UsageLimitStopMark, usageLimitStopMeta } from './BotUsageLimitMark'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function WorkerStateIcon({
   state
@@ -160,7 +160,7 @@ export function BotChatTreeWorkerRow({
   const parsedHost = parseExecutionHostId(worker.hostId)
   const hostId = parsedHost?.kind === 'runtime' ? parsedHost.id : undefined
   const host = useBotHostLabel(hostId ?? LOCAL_EXECUTION_HOST_ID)
-  const worktreeBranch = useAppStore((state) =>
+  const worktreeBranch = useAppStoreWithChannels((state) =>
     worker.worktreeId ? (findWorktreeById(state, worker.worktreeId)?.branch ?? null) : null
   )
   // The chat, a note or host comes first, so it survives truncation.

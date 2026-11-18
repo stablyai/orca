@@ -27,7 +27,6 @@ import { RepositorySidebarVisibilitySection } from './RepositorySidebarVisibilit
 import { RepositoryRemoveProjectSection } from './RepositoryRemoveProjectSection'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './identity/RepositoryIconPicker'
 import { getRepositoryPaneSearchMetadata } from './repository-search'
@@ -50,6 +49,8 @@ import {
   RepositoryFormatterSection,
   getRepositoryFormatterSearchEntry
 } from './RepositoryFormatterSection'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const EMPTY_WSL_DISTROS: string[] = []
 const EMPTY_REMOVAL_SETUPS: ProjectHostSetup[] = []
@@ -132,7 +133,7 @@ export function RepositoryPane({
       }
     : null
   const fetchWorktrees = useAppStore((state) => state.fetchWorktrees)
-  const runtimeSessionSummary = useAppStore(
+  const runtimeSessionSummary = useAppStoreWithChannels(
     useShallow((state) => getProjectRuntimeSessionSummary(state, repo.id))
   )
   const [copiedTemplate, setCopiedTemplate] = useState(false)

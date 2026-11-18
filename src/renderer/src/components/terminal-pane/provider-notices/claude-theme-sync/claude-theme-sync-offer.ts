@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { TRAILING_ACTIONS_CLASS_NAMES } from '@/components/ui/sonner'
 import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const OFFER_TOAST_ID = 'claude-theme-sync-offer'
 
@@ -66,7 +67,7 @@ function showClaudeThemeSyncOffer(): void {
 
 /** Offers theme sync once, when Claude Code first runs in an Orca terminal. */
 export function useClaudeThemeSyncOffer(): void {
-  const due = useAppStore(isOfferDue)
+  const due = useAppStoreWithChannels(isOfferDue)
 
   useEffect(() => {
     // Why: a paired web client's Claude runs on the host, whose settings this window does not own.

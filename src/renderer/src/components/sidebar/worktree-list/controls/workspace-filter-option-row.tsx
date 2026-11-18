@@ -7,11 +7,12 @@ import {
   Moon,
   SquareTerminal
 } from 'lucide-react'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceViewOptionKey } from '../../../../../../shared/workspace-view/workspace-view-options'
 import { FilterToggleRow } from './FilterToggleRow'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type WorkspaceFilterOptionKey = Extract<
   WorkspaceViewOptionKey,
@@ -123,7 +124,7 @@ export function WorkspaceFilterOptionRow({
   optionKey: WorkspaceFilterOptionKey
 }): React.JSX.Element {
   const row = FILTER_ROWS[optionKey]
-  const checked = useAppStore(row.checked)
+  const checked = useAppStoreWithChannels(row.checked)
   return (
     <FilterToggleRow
       icon={row.icon}

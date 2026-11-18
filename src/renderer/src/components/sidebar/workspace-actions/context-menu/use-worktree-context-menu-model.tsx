@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useContextWorkspaceStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
@@ -36,6 +35,7 @@ import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-m
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type WorktreeContextMenuProps = {
@@ -115,7 +115,7 @@ export function useWorktreeContextMenuModel({
     selectMenuScopedMap(menuOpen, s.unifiedTabsByWorktree, EMPTY_UNIFIED_TABS_BY_WORKTREE)
   )
   // The menu offers what the card shows: unread when any agent result or the flag is unread.
-  const showsUnread = useAppStore((s) =>
+  const showsUnread = useAppStoreWithChannels((s) =>
     menuOpen ? selectWorkspaceShowsUnread(s, worktree) : worktree.isUnread
   )
   const agentStatusByPaneKey = useAppStoreWithChannels((s) =>
