@@ -38,7 +38,7 @@ export function useSidebarRevealRequests(args: {
   worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
   hasFilters: boolean
-  revealWorkspaceFilters: (worktree: Worktree) => void
+  revealWorkspaceFilters: (worktree: Worktree, executionHostId?: ExecutionHostId) => void
 }): void {
   const {
     groupBy,
@@ -89,7 +89,7 @@ export function useSidebarRevealRequests(args: {
         currentSidebarExecutionHostId
       )
       if (target) {
-        revealWorkspaceFilters(target)
+        revealWorkspaceFilters(target, target.hostId ?? currentSidebarExecutionHostId ?? undefined)
       }
     }
   }, [
@@ -176,7 +176,10 @@ export function useSidebarRevealRequests(args: {
             latest.visibleFolderWorkspaces
           )
         ) {
-          revealWorkspaceFilters(activeWorktree)
+          revealWorkspaceFilters(
+            activeWorktree,
+            activeWorktree.hostId ?? currentSidebarExecutionHostId ?? undefined
+          )
         }
       }
       revealWorktreeInSidebar(currentSidebarWorktreeId, {
