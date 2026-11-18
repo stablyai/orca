@@ -20,9 +20,12 @@ function sameValue(previous: unknown, next: unknown): boolean {
  *  acknowledged goes whole; after that only the keys whose values changed travel. */
 export class AcknowledgedWorkspaceSessionEntries {
   private readonly byHost = new Map<ExecutionHostId, Map<SessionField, unknown>>()
+  // A whole-session write replaces main's copy; an acknowledgement that started before it is stale.
+  private generation = 0
 
   diff(hostId: ExecutionHostId, slice: WorkspaceSessionState): WorkspaceSessionEntriesDiff {
     const acknowledged = this.byHost.get(hostId)
+    const generation = this.generation
     const patch: WorkspaceSessionEntriesPatch = { fields: {}, entries: {} }
     const fields = Object.keys(slice) as SessionField[]
     for (const field of fields) {
@@ -54,6 +57,9 @@ export class AcknowledgedWorkspaceSessionEntries {
     return {
       patch,
       acknowledge: () => {
+        if (generation !== this.generation) {
+          return
+        }
         let host = this.byHost.get(hostId)
         if (!host) {
           host = new Map()
@@ -67,15 +73,30 @@ export class AcknowledgedWorkspaceSessionEntries {
   }
 
   /** Main's copy can't be assumed after a failed, fenced or whole-partition write: send whole fields. */
-  forget(hostId?: ExecutionHostId): void {
+  forget(hostId?: ExecutionHostId, fields?: readonly string[]): void {
     if (hostId === undefined) {
       this.byHost.clear()
+      this.generation += 1
+    } else if (fields) {
+      const host = this.byHost.get(hostId)
+      for (const field of fields) {
+        host?.delete(field as SessionField)
+      }
     } else {
       this.byHost.delete(hostId)
     }
   }
+
+  /** Drop hosts this window no longer routes to; forgetting a live one only makes its next write whole. */
+  retainHosts(hostIds: ReadonlySet<ExecutionHostId>): void {
+    for (const hostId of this.byHost.keys()) {
+      if (!hostIds.has(hostId)) {
+        this.byHost.delete(hostId)
+      }
+    }
+  }
 }
 
-export function isEmptyWorkspaceSessionEntriesPatch(patch: WorkspaceSessionEntriesPatch): boolean {
-  return Object.keys(patch.fields).length === 0 && Object.keys(patch.entries).length === 0
-}
+/** One window, one copy: the debounced writer diffs against it, and whole-session writes from this
+ *  window (set, unload staging) clear it because they replace what main holds. */
+export const windowAcknowledgedSessionEntries = new AcknowledgedWorkspaceSessionEntries()

@@ -18,6 +18,7 @@ import type {
 } from '../../shared/workspace-session/workspace-session-state-types'
 import {
   applyWorkspaceSessionEntriesPatch,
+  fieldsStoredDifferently,
   type WorkspaceSessionEntriesPatch,
   type WorkspaceSessionEntriesPatchResult
 } from '../../shared/workspace-session/workspace-session-entries-patch'
@@ -68,7 +69,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   const patchWindowSession = (
     toPatch: (stored: WorkspaceSessionState) => WorkspaceSessionPatch,
     hostId: string | null | undefined
-  ): WorkspaceSessionEntriesPatchResult => {
+  ): WorkspaceSessionEntriesPatchResult['status'] => {
     if (isFenced(hostId)) {
       return 'skipped'
     }
@@ -92,8 +93,22 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   // Changed keys only: rebuilt into whole fields from the stored partition, then saved as a patch.
   ipcMain.handle(
     'session:patch-entries',
-    (_event, args: WorkspaceSessionEntriesPatch, hostId?: string | null) =>
-      patchWindowSession((stored) => applyWorkspaceSessionEntriesPatch(stored, args), hostId)
+    (
+      _event,
+      args: WorkspaceSessionEntriesPatch,
+      hostId?: string | null
+    ): WorkspaceSessionEntriesPatchResult => {
+      const status = patchWindowSession(
+        (stored) => applyWorkspaceSessionEntriesPatch(stored, args),
+        hostId
+      )
+      if (status !== 'applied') {
+        return { status }
+      }
+      // Normalization and fences can store something else; the window must not assume its copy.
+      const normalizedFields = fieldsStoredDifferently(store.getWorkspaceSession(hostId), args)
+      return normalizedFields.length > 0 ? { status, normalizedFields } : { status }
+    }
   )
 
   // Window saves cannot shrink main-owned membership; closes must commit explicitly.

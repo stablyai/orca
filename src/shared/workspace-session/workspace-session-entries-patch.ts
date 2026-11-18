@@ -1,5 +1,6 @@
 import type { WorkspaceSessionPatch, WorkspaceSessionState } from './workspace-session-state-types'
 import { isWorkspaceSessionRecord } from './workspace-session-host-records'
+import { structuralValuesEqual } from '../collections/structural-value-equality'
 
 type SessionField = keyof WorkspaceSessionState
 
@@ -17,7 +18,12 @@ export type WorkspaceSessionEntriesPatch = {
   entries: Partial<Record<SessionField, WorkspaceSessionFieldEntryChanges>>
 }
 
-export type WorkspaceSessionEntriesPatchResult = 'applied' | 'unchanged' | 'skipped'
+export type WorkspaceSessionEntriesPatchResult = {
+  status: 'applied' | 'unchanged' | 'skipped'
+  /** Fields main stored differently from what the window sent (normalization, fences); the window
+   *  can't assume its copy for them, so it sends them whole next time. */
+  normalizedFields?: string[]
+}
 
 function isFieldEntryChanges(value: unknown): value is WorkspaceSessionFieldEntryChanges {
   return (
@@ -51,4 +57,36 @@ export function applyWorkspaceSessionEntriesPatch(
     ;(whole as Record<string, unknown>)[field] = next
   }
   return whole
+}
+
+/** The sent fields whose stored values main changed while saving. Only what the window sent is
+ *  compared (whole fields, and the keys it set or removed), never the rest of the partition. */
+export function fieldsStoredDifferently(
+  stored: WorkspaceSessionState,
+  patch: WorkspaceSessionEntriesPatch
+): string[] {
+  const differ: string[] = []
+  const fields = isWorkspaceSessionRecord(patch?.fields) ? patch.fields : {}
+  for (const [field, value] of Object.entries(fields)) {
+    if (!structuralValuesEqual(stored[field as SessionField], value)) {
+      differ.push(field)
+    }
+  }
+  const entries = isWorkspaceSessionRecord(patch?.entries) ? patch.entries : {}
+  for (const [field, changes] of Object.entries(entries)) {
+    if (!isFieldEntryChanges(changes)) {
+      continue
+    }
+    const current = stored[field as SessionField]
+    const record = isWorkspaceSessionRecord(current) ? current : {}
+    const same =
+      changes.remove.every((key) => !Object.hasOwn(record, key)) &&
+      Object.entries(changes.set).every(
+        ([key, value]) => Object.hasOwn(record, key) && structuralValuesEqual(record[key], value)
+      )
+    if (!same) {
+      differ.push(field)
+    }
+  }
+  return differ
 }
