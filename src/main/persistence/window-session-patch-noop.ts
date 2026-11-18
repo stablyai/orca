@@ -4,11 +4,7 @@ import type {
   WorkspaceSessionState
 } from '../../shared/workspace-session/workspace-session-state-types'
 
-/**
- * Windows patch every host partition each round, though usually only one host's workspaces changed.
- * A patch whose every field already equals the stored partition's would rebuild the same partition.
- * Comparing with the stored value, not a past write, also sees other writers and time-based rules.
- */
+/** Comparing with the stored partition, not a past write, also sees other writers and timed rules. */
 export function isNoopWindowSessionPatch(
   stored: WorkspaceSessionState,
   patch: WorkspaceSessionPatch
