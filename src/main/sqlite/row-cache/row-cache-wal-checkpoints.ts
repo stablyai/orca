@@ -186,7 +186,9 @@ export class RowCacheWalCheckpoints {
     }
     this.host.clearIdleTimer()
     const deadline = setTimeout(() => this.fail(), RESPONSE_DEADLINE_MS)
-    deadline.unref?.()
+    if (typeof deadline === 'object' && 'unref' in deadline) {
+      deadline.unref()
+    }
     this.inFlight.set(id, { deadline, path: registration.path })
     try {
       worker.postMessage({ id, path: registration.path, force })
@@ -228,7 +230,9 @@ export class RowCacheWalCheckpoints {
           this.catchUps.delete(id)
           this.send(id, true)
         }, CATCH_UP_IDLE_MS)
-        timer.unref?.()
+        if (typeof timer === 'object' && 'unref' in timer) {
+          timer.unref()
+        }
         this.catchUps.set(id, timer)
       }
     }
