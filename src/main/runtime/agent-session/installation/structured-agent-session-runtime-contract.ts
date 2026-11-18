@@ -75,7 +75,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   queuedAgentMessageOwed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
   resolveCodexAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   /** Launch prep's sync for a probed home; see `CodexModelCatalogProbeDeps.prepareHome`. */
-  prepareCodexCatalogProbeHome?: (homePath: string) => void
+  prepareCodexCatalogProbeHome?: (homePath: string) => void | Promise<void>
   /** See `StructuredAgentSessionHostDeps.onSessionTabHidden`. */
   onSessionTabHidden?: StructuredAgentSessionHostDeps['onSessionTabHidden']
   assertNoTerminalWriter?: StructuredAgentSessionHostDeps['assertNoTerminalWriter']

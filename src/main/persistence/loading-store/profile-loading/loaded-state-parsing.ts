@@ -279,8 +279,11 @@ export class LoadedStateParsingOperations {
       chatUiLaunchTipAudience ?? this.cohorts.captureChatUiLaunchTipAudience(undefined)
     const migrated = {
       ...this.cohorts.carryChatUiChoices(
-        this.cohorts.keepResumeOnRestartOffForExistingProfiles(
-          this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
+        this.cohorts.seedWorktreeCardStyle(
+          this.cohorts.keepResumeOnRestartOffForExistingProfiles(
+            this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
+            parsed
+          ),
           parsed
         ),
         parsed,

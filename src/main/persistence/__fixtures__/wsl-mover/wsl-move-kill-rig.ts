@@ -106,9 +106,9 @@ export function createWslMoveKillRig(): WslMoveRig {
   world.deps.quiesce = {
     sleepWorkspaces: async (ids) => (at('sleep'), quiesce.sleepWorkspaces(ids)),
     livePtyIds: quiesce.livePtyIds,
-    captureRestoreHints: async (panes, distro) => (
+    captureRestoreHints: async (panes, distro, mappedDrives) => (
       at('restore-hints'),
-      quiesce.captureRestoreHints(panes, distro)
+      quiesce.captureRestoreHints(panes, distro, mappedDrives)
     ),
     proveExited: async (scope) => (at('prove-exited'), quiesce.proveExited(scope))
   }

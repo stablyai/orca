@@ -30,6 +30,7 @@ import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launc
 import { COPILOT_LAUNCH_SPEC } from '../../copilot/copilot-acp-launch-spec'
 import { KIMI_LAUNCH_SPEC } from '../../kimi/kimi-acp-launch-spec'
 import { CURSOR_LAUNCH_SPEC } from '../../cursor/cursor-acp-launch-spec'
+import { HERMES_LAUNCH_SPEC } from '../../hermes/hermes-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 
 const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
@@ -160,7 +161,8 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   ANTIGRAVITY_LAUNCH_SPEC,
   COPILOT_LAUNCH_SPEC,
   KIMI_LAUNCH_SPEC,
-  CURSOR_LAUNCH_SPEC
+  CURSOR_LAUNCH_SPEC,
+  HERMES_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

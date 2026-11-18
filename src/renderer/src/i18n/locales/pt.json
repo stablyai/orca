@@ -3105,7 +3105,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Local do projeto não definido"
+        "locationNotSet": "Local do projeto não definido",
+        "hostLocalGitProject": "Este projeto não tem um remoto Git correspondente",
+        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Atualize o servidor para ver as portas nos hosts SSH dele.",
@@ -12658,7 +12660,6 @@
           "74fc00776f": "Detalhes do erro",
           "ca3b225195": "Falha na renomeação automática da branch",
           "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente.",
-          "dismissError": "Ignorar erro",
           "dismissing": "Descartando…"
         },
         "CreateProjectLocationField": {
@@ -12721,6 +12722,9 @@
           "removeDescriptionSsh": "Isso remove {{name}} apenas do Orca. Seus arquivos permanecem em {{host}} — adicione novamente esse host SSH para recuperá-lo.",
           "removeDescriptionLocal": "Isso remove {{name}} apenas do Orca. Ele ainda está no seu disco.",
           "removeDescriptionVmRecipe": "Isso remove {{name}} do Orca. A receita de VM determina se o ambiente e seus arquivos são excluídos permanentemente.",
+          "linkedWorkspaceWarning_one": "{{count}} espaço de trabalho deste projeto também será removido do Orca.",
+          "linkedWorkspaceWarning_other": "{{count}} espaços de trabalho deste projeto também serão removidos do Orca.",
+          "linkedWorkspaceWarning_many": "{{count}} espaços de trabalho deste projeto também serão removidos do Orca.",
           "openTerminalWarning_one": "{{count}} terminal aberto neste projeto será fechado.",
           "openTerminalWarning_other": "{{count}} terminais abertos neste projeto serão fechados.",
           "openTerminalWarning_many": "{{count}} terminais abertos neste projeto serão fechados."
@@ -14247,8 +14251,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Fechar",
           "64c71cf7b9": "O Orca ainda não instalou nenhuma skill nesta máquina.",
-          "0900db719a": "— desconectado",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Este computador",
           "3677ae58e7": "Skills que o Orca instalou a partir de um link. Reinstale, volte para uma versão anterior ou remova-as.",
           "44d118a8f7": "Instaladas pelo Orca",
@@ -14379,8 +14381,6 @@
           "a4dfd33095": "Um espaço de trabalho",
           "c779621aa0": "Skills globais",
           "63cc9e31fe": "Destino",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— desconectado",
           "0785d0a503": "— atualização necessária",
           "8562dd1e6e": "Este computador",
           "b8a0b706ad": "Máquina"
@@ -20546,7 +20546,8 @@
         "chat": {
           "label": "Interface de chat",
           "description": "Os agentes respondem em um chat, com mensagens e diffs formatados.",
-          "terminalFallback": "Agentes sem suporte de chat e pastas abertas por SSH ou WSL neste computador ainda abrem em um terminal.",
+          "recommended": "Recomendado",
+          "terminalFallback": "Agentes sem suporte de chat abrem em um terminal.",
           "noneDetected": "Nenhum dos agentes detectados funciona na interface de chat."
         },
         "terminal": {
@@ -20691,6 +20692,7 @@
         "availableAfterSessionStarts": "Disponível após a sessão começar.",
         "optionUpdateFailed": "Não foi possível atualizar a opção",
         "optionValue": {
+          "none": "Nenhum",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Baixo",

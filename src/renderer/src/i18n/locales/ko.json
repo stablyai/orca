@@ -1488,6 +1488,10 @@
         "mergeRequest": "MR",
         "linkedIssue": "연결된 이슈",
         "listeningPort": "수신 대기 포트"
+      },
+      "projectHostSetupOptions": {
+        "hostLocalGitProject": "이 프로젝트에 일치하는 Git 원격이 없습니다",
+        "hostLocalFolderProject": "폴더 프로젝트는 다른 호스트에 연결할 수 없습니다"
       }
     },
     "hooks": {
@@ -5023,8 +5027,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "닫기",
           "64c71cf7b9": "Orca가 아직 이 컴퓨터에 스킬을 설치하지 않았습니다.",
-          "0900db719a": "— 연결이 끊어졌습니다",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "이 컴퓨터",
           "3677ae58e7": "Orca가 링크에서 설치한 스킬입니다. 다시 설치하거나, 이전 버전으로 되돌리거나, 제거할 수 있습니다.",
           "44d118a8f7": "Orca에서 설치함",
@@ -5058,8 +5060,6 @@
           "a4dfd33095": "하나의 워크스페이스",
           "c779621aa0": "글로벌 스킬",
           "63cc9e31fe": "목적지",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— 연결이 끊어졌습니다",
           "0785d0a503": "— 업데이트 필요",
           "8562dd1e6e": "이 컴퓨터",
           "b8a0b706ad": "기계"
@@ -5543,6 +5543,7 @@
           "removeDescriptionSsh": "이 작업은 {{name}}을(를) Orca에서 제거만 합니다. 파일은 {{host}}에 그대로 남아 있으며, 해당 SSH 호스트를 다시 추가하면 복구할 수 있습니다.",
           "removeDescriptionLocal": "이 작업은 {{name}}을(를) Orca에서 제거만 합니다. 파일은 디스크에 그대로 남아 있습니다.",
           "removeDescriptionVmRecipe": "이렇게 하면 Orca에서 {{name}}이(가) 제거됩니다. 해당 VM 레시피에 따라 환경과 해당 파일이 영구적으로 삭제되는지 여부가 결정됩니다.",
+          "linkedWorkspaceWarning_other": "이 프로젝트의 워크스페이스 {{count}}개도 Orca에서 제거됩니다.",
           "openTerminalWarning_other": "이 프로젝트에서 열려 있는 터미널 {{count}}개가 닫힙니다."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
@@ -18736,6 +18737,7 @@
         "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
         "optionUpdateFailed": "옵션을 업데이트하지 못했습니다",
         "optionValue": {
+          "none": "없음",
           "fast": "빠름",
           "minimal": "최소",
           "low": "낮음",
