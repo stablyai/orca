@@ -126,9 +126,21 @@ describe('previous hang detection', () => {
     }
     writeHangDetectionMarker(hangDetectionMarkerPath(dir), collection)
     preservePreviousHangDetection(dir)
-    const records: { attributes: Record<string, unknown> }[] = []
+    const breadcrumbNames: unknown[] = []
     setActiveSink({
-      push: (record) => records.push(record as { attributes: Record<string, unknown> }),
+      push: (record) => {
+        const attributes =
+          typeof record === 'object' && record !== null && 'attributes' in record
+            ? record.attributes
+            : null
+        if (
+          typeof attributes === 'object' &&
+          attributes !== null &&
+          'breadcrumb.name' in attributes
+        ) {
+          breadcrumbNames.push(attributes['breadcrumb.name'])
+        }
+      },
       flush() {},
       close() {}
     })
@@ -138,7 +150,7 @@ describe('previous hang detection', () => {
       unresponsiveMs: 46_000,
       selfRecovered: true
     })
-    expect(records.map((record) => record.attributes['breadcrumb.name'])).toEqual([
+    expect(breadcrumbNames).toEqual([
       'main_thread_hang_detected',
       'main_thread_stall_detected',
       'main_thread_stall_detected',
