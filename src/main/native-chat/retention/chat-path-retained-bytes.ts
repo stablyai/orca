@@ -25,9 +25,10 @@ const VALUE_BYTES = 16
 const sizes = new WeakMap<object, number>()
 
 /**
- * What a payload holds on the heap, from above for its strings: two bytes per character, plus a
- * fixed cost per value. One visit per value and no serialization, so a growing reply costs its
- * value count, not its text length; measured once per payload however many holders share it.
+ * Estimates what a payload holds on the heap: two bytes per character plus a fixed cost per value.
+ * One visit per value and no serialization, so a growing reply costs its value count, not its
+ * length; measured once per payload however many holders share it. A string sliced from a larger
+ * one would keep more alive, but live text is parsed provider output, never such a slice.
  */
 export function heldBytesOf(payload: object): number {
   const cached = sizes.get(payload)
