@@ -68,7 +68,7 @@ function DialogWarning({ className, ...props }: React.ComponentProps<'p'>): Reac
   return (
     <p
       data-slot="dialog-warning"
-      className={cn('text-[12.5px] leading-normal text-status-warning-text', className)}
+      className={cn('text-[13px] leading-normal text-status-warning-text', className)}
       {...props}
     />
   )
@@ -96,7 +96,7 @@ function DialogDisclosure({
         aria-expanded={open}
         aria-controls={contentId}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-fit items-center gap-1 rounded-sm text-[12.5px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ChevronRight
           aria-hidden="true"

@@ -44,6 +44,9 @@ export type GitHubWorkItem = {
   checksSummary?: ProviderCheckSummary
   mergeable?: GitHubPRMergeableState
   mergeStateStatus?: string | null
+  autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
+  mergeQueueRequired?: boolean | null
 }
 
 export type GitHubAssignableUser = {
