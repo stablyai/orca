@@ -5,6 +5,7 @@ import {
 } from '../../appearance/native-chat-appearance-style'
 import { NativeChatJumpToLatest } from './NativeChatJumpToLatest'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import { resolveNativeChatAppearanceSettings } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
 const PROSE = [
   'The reconnect path retries the relay handshake before it replays buffered output, so a stalled socket shows up as a slow first frame rather than a dropped session.',
@@ -42,9 +43,7 @@ export const matchTerminal = defineFixture({
   render: () => (
     <Transcript
       settings={{
-        nativeChatAppearance: {
-          matchTerminalInterface: true
-        } as GlobalSettings['nativeChatAppearance'],
+        nativeChatAppearance: resolveNativeChatAppearanceSettings({ matchTerminalInterface: true }),
         terminalColorOverrides: { background: '#333333', foreground: '#a1a1a1' }
       }}
     />
