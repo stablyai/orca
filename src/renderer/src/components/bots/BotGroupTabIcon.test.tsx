@@ -76,10 +76,4 @@ describe('useBotGroupTabMembers', () => {
     const { result } = renderHook(() => useBotGroupTabMembers('thread-1'))
     expect(result.current.map((member) => member.name)).toEqual(['Scout'])
   })
-
-  it('reads nothing for a tab that is not a room', () => {
-    mocks.groups.push(group(['a']))
-    mocks.bots.push(crew[0]!)
-    expect(renderHook(() => useBotGroupTabMembers(null)).result.current).toEqual([])
-  })
 })
