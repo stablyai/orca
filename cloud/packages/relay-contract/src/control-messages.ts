@@ -55,6 +55,9 @@ export const RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME = 'idle-regional-rehome-
 // be a 400): the desktop accepts AssignmentResponse.alternateCellUrls. Without it the director never
 // sends the field, since shipped desktops parse the answer strictly.
 export const RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES = 'origin-alternates-v1'
+// Sent on POST /v1/assign: the desktop accepts AssignmentResponse.authOrigin and may renew its relay
+// token through that origin. Without it the director never sends the field.
+export const RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH = 'front-door-auth-v1'
 
 export function parseRelayHostCapabilities(
   header: string | string[] | undefined

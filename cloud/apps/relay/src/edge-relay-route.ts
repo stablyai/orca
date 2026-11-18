@@ -50,3 +50,14 @@ export function edgeAlternateCellUrls(
       : undefined
   return alternate === undefined || alternate === answered.cellUrl ? undefined : [alternate]
 }
+
+// AssignmentResponse.authOrigin for an answer (director/edge.json frontDoorAuth), or undefined for
+// none: the front door origin the answer routes through, which also proxies the desktop auth
+// refresh and relay-token endpoints. Only an edge answer whose cellUrl is an allowed front door
+// (ORCA_RELAY_EDGE_FRONT_DOOR_URLS) has one; a direct edge or GCE answer never does.
+export function edgeAuthOrigin(config: EdgeRelayConfig, answered: { cellId: string; cellUrl: string }): string | undefined {
+  if (answered.cellId !== EDGE_CELL_ID || config.frontDoorUrls === undefined) { return undefined }
+  const flags = config.control?.() ?? EDGE_CONTROL_DEFAULTS
+  if ((flags.frontDoorAuth ?? 'off') !== 'on') { return undefined }
+  return config.frontDoorUrls.has(answered.cellUrl) ? answered.cellUrl : undefined
+}

@@ -9,6 +9,7 @@ import {
   RELAY_ADMISSION_BUDGETS,
   RELAY_DEFAULT_REGION,
   RELAY_HOST_CAPABILITIES_HEADER,
+  RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH,
   RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES,
   RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND,
   RELAY_PROTOCOL_LIMITS,
@@ -68,7 +69,7 @@ import {
   type EdgeAssignments
 } from './edge-relay.js'
 import { EDGE_CONTROL_DEFAULTS } from './edge-relay-control.js'
-import { edgeAlternateCellUrls, edgeRoute } from './edge-relay-route.js'
+import { edgeAlternateCellUrls, edgeAuthOrigin, edgeRoute } from './edge-relay-route.js'
 import { requestCountry } from './ip-country.js'
 import {
   DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
@@ -533,13 +534,20 @@ export function createRelayApp(
     // alternateCellUrls only for a desktop that said it parses them (shipped desktops parse the
     // answer strictly) and only where director/edge.json alternates allows it: without both, every
     // answer is byte-identical to one without the feature.
-    const acceptsAlternates = parseRelayHostCapabilities(context.req.header(RELAY_HOST_CAPABILITIES_HEADER)).has(
-      RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES
-    )
-    const alternatesFor = (assignment: RelayAssignment): { alternateCellUrls?: string[] } => {
-      if (!acceptsAlternates || !edge) { return {} }
-      const alternateCellUrls = edgeAlternateCellUrls(edge.config, claims.relayHostId, cohortRegion, country, assignment)
-      return alternateCellUrls === undefined ? {} : { alternateCellUrls }
+    // authOrigin likewise: only with front-door-auth-v1 and director/edge.json frontDoorAuth on.
+    const hostCapabilities = parseRelayHostCapabilities(context.req.header(RELAY_HOST_CAPABILITIES_HEADER))
+    const acceptsAlternates = hostCapabilities.has(RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES)
+    const acceptsAuthOrigin = hostCapabilities.has(RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH)
+    const alternatesFor = (assignment: RelayAssignment): { alternateCellUrls?: string[]; authOrigin?: string } => {
+      if (!edge) { return {} }
+      const alternateCellUrls = acceptsAlternates
+        ? edgeAlternateCellUrls(edge.config, claims.relayHostId, cohortRegion, country, assignment)
+        : undefined
+      const authOrigin = acceptsAuthOrigin ? edgeAuthOrigin(edge.config, assignment) : undefined
+      return {
+        ...(alternateCellUrls === undefined ? {} : { alternateCellUrls }),
+        ...(authOrigin === undefined ? {} : { authOrigin })
+      }
     }
     const toEdge =
       edge?.ready === true &&

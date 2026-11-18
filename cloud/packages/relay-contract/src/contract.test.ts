@@ -7,6 +7,7 @@ import {
   HostHelloAckSchema,
   HostHelloSchema,
   parseRelayHostCapabilities,
+  RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH,
   RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES
 } from './control-messages.js'
 import {
@@ -388,5 +389,25 @@ describe('origin alternates capability', () => {
       )
     ).toBe(true)
     expect(RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES).toBe('origin-alternates-v1')
+  })
+})
+
+describe('front door auth capability', () => {
+  const answer = { v: 1, cellUrl: 'https://cn.relay.example.test', assignmentEpoch: 3, lease: 'signed-lease' }
+
+  it('accepts a canonical https authOrigin and no field at all', () => {
+    expect(AssignmentResponseSchema.safeParse(answer).success).toBe(true)
+    expect(AssignmentResponseSchema.safeParse({ ...answer, authOrigin: 'https://cn.relay.example.test' }).success).toBe(true)
+  })
+
+  it('rejects a non-origin authOrigin', () => {
+    for (const authOrigin of ['http://cn.relay.example.test', 'https://cn.relay.example.test/path', '', ['https://cn.relay.example.test']]) {
+      expect(AssignmentResponseSchema.safeParse({ ...answer, authOrigin }).success).toBe(false)
+    }
+  })
+
+  it('is read from the capabilities header', () => {
+    expect(parseRelayHostCapabilities(`origin-alternates-v1, ${RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH}`).has(RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH)).toBe(true)
+    expect(RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH).toBe('front-door-auth-v1')
   })
 })
