@@ -37,6 +37,8 @@ export class CodexAccountHistoryPasses {
 
   private readonly requests = new CodexHistoryPassRequests()
   private readonly settledThisRun = new Map<string, boolean>()
+  // Homes sharing can't reach (another volume, a user's own link): retried next app start.
+  private readonly privateThisRun = new Set<string>()
   private readonly busyRetries = new Map<string, ReturnType<typeof setTimeout>>()
   private activePasses = 0
   // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
@@ -65,6 +67,9 @@ export class CodexAccountHistoryPasses {
       { queue: 'host', home: key, shared, forLaunch: options.forLaunch ?? false },
       async () => {
         if (options.stillWanted && !options.stillWanted()) {
+          return
+        }
+        if (shared && this.privateThisRun.has(key)) {
           return
         }
         if (this.settledThisRun.get(key) === shared) {
@@ -110,6 +115,7 @@ export class CodexAccountHistoryPasses {
     this.cancelRetry(key)
     try {
       if (!shared) {
+        this.privateThisRun.delete(key)
         if (await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })) {
           this.settledThisRun.set(key, false)
           return 'unshared'
@@ -133,6 +139,9 @@ export class CodexAccountHistoryPasses {
       }
       if (result === 'busy') {
         this.retryWhenIdle(key, accountHome)
+      }
+      if (result === 'private') {
+        this.privateThisRun.add(key)
       }
       return result
     } catch (error) {
