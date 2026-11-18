@@ -57,9 +57,11 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
   const child = launch()
   const stdout = createOutputSink(options.maxBuffer)
   const stderr = createOutputSink(options.maxBuffer)
+  const decode = (bytes: Buffer): string | Buffer =>
+    encoding === 'buffer' ? bytes : bytes.toString(encoding)
   const read = (): { stdout: string | Buffer; stderr: string | Buffer } => ({
-    stdout: encoding === 'buffer' ? stdout.buffer() : stdout.buffer().toString(encoding),
-    stderr: encoding === 'buffer' ? stderr.buffer() : stderr.buffer().toString(encoding)
+    stdout: decode(stdout.buffer()),
+    stderr: decode(stderr.buffer())
   })
   options.onCapture?.(read)
   let completed = false
@@ -108,23 +110,32 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
     finish(error)
   })
   child.once('close', (code: number | null, signal: NodeJS.Signals | null) => {
+    if (overflowError || code === 0) {
+      finish(overflowError)
+      return
+    }
+    // Assemble stderr once; the failure message and the callback share it.
+    const stderrBytes = stderr.buffer()
+    const stderrText = stderrBytes.toString('utf8')
+    const output = {
+      stdout: decode(stdout.buffer()),
+      stderr: encoding === 'utf8' ? stderrText : decode(stderrBytes)
+    }
     finish(
-      overflowError ??
-        (code === 0
-          ? null
-          : Object.assign(
-              new Error(
-                options.errorCommand
-                  ? `Command failed: ${options.errorCommand}\n${stderr.text()}`
-                  : stderr.text().trim() || `${command} exited with ${code}`
-              ),
-              {
-                code,
-                signal,
-                killed: signal !== null,
-                ...(options.errorCommand ? { cmd: options.errorCommand } : {})
-              }
-            ))
+      Object.assign(
+        new Error(
+          options.errorCommand
+            ? `Command failed: ${options.errorCommand}\n${stderrText}`
+            : stderrText.trim() || `${command} exited with ${code}`
+        ),
+        {
+          code,
+          signal,
+          killed: signal !== null,
+          ...(options.errorCommand ? { cmd: options.errorCommand } : {})
+        }
+      ),
+      output
     )
   })
   return child
