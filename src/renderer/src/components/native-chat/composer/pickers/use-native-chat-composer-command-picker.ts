@@ -10,6 +10,7 @@ import {
   type NativeChatResumeCommand
 } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
+import { useNativeChatRecapCommand } from './use-native-chat-recap-command'
 import { useNativeChatSideChatCommand } from './use-native-chat-side-chat-command'
 
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
@@ -78,20 +79,32 @@ export function useNativeChatComposerCommandPicker(
     setNotice
   })
   const side = useNativeChatSideChatCommand({ structuredTransport, picker, editor })
-  // `/btw` and `/resume` never collide, so each draft and pick has at most one owner.
+  const recap = useNativeChatRecapCommand({ structuredTransport, picker, editor, setNotice })
+  // `/btw`, `/resume` and `/recap` never collide, so each draft and pick has at most one owner.
   const { consume: sideConsume, matchesDraft: sideMatches, interceptPick: sideIntercept } = side
   const {
     consume: resumeConsume,
     matchesDraft: resumeMatches,
     interceptPick: resumeIntercept
   } = resume
+  const { consume: recapConsume, matchesDraft: recapMatches, interceptPick: recapIntercept } = recap
   const orcaCommands = useMemo(
     (): NativeChatResumeCommand => ({
-      matchesDraft: (draft) => sideMatches(draft) || resumeMatches(draft),
-      consume: (draft) => sideConsume(draft) || resumeConsume(draft),
-      interceptPick: (pick) => sideIntercept(resumeIntercept(pick))
+      matchesDraft: (draft) => sideMatches(draft) || resumeMatches(draft) || recapMatches(draft),
+      consume: (draft) => sideConsume(draft) || resumeConsume(draft) || recapConsume(draft),
+      interceptPick: (pick) => sideIntercept(resumeIntercept(recapIntercept(pick)))
     }),
-    [resumeConsume, resumeIntercept, resumeMatches, sideConsume, sideIntercept, sideMatches]
+    [
+      recapConsume,
+      recapIntercept,
+      recapMatches,
+      resumeConsume,
+      resumeIntercept,
+      resumeMatches,
+      sideConsume,
+      sideIntercept,
+      sideMatches
+    ]
   )
   return { picker, orcaCommands }
 }

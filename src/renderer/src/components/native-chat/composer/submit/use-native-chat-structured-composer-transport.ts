@@ -1,6 +1,7 @@
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
 import { useNativeChatMcpTray } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
@@ -17,7 +18,7 @@ import type { NativeChatPaneForks } from '@/components/native-chat/messages/acti
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
-import type { Translate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useAppStore } from '@/store'
 import { nativeChatShowsPromptSuggestions } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
@@ -106,6 +107,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
 }): NativeChatStructuredComposerTransport {
+  const t = useTranslate()
   const { props, controller, forks, sendThroughLaunch, starting, worktreeId, optionPickerRequest } =
     args
   const { setOptionPickerRequest, onError } = args
@@ -160,6 +162,26 @@ export function useNativeChatStructuredComposerTransport(args: {
       fork: nativeChatForkCommand({ fork, sideChat }, controller.isWorking, props.agent),
       capturePresentation: controller.capturePresentation,
       ...(sideChat ? { sideChat } : {}),
+      // Recap rides the provider's generate endpoint, which only the opencode2 adapter line exposes.
+      ...(props.agent === 'opencode2'
+        ? {
+            recap: {
+              run: () =>
+                callStructuredAgentSession<{ text: string }>(props.target, 'agentSession.recap', {
+                  sessionId: props.sessionId
+                }).then(
+                  () => null,
+                  (error: unknown) =>
+                    error instanceof Error
+                      ? error.message
+                      : t(
+                          'components.native-chat.recap.failed',
+                          "The recap couldn't run. Try again."
+                        )
+                )
+            }
+          }
+        : {}),
       send: (text, attachments, ...request) => {
         if (sendBlockedReason !== null) {
           return false
@@ -261,6 +283,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     setOptionPickerRequest,
     showsPromptSuggestions,
     starting,
+    t,
     transportEnabled
   ])
 }

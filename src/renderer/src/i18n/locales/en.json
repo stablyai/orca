@@ -21822,6 +21822,10 @@
       "claudeSignIn": {
         "signingIn": "Signing in…"
       },
+      "recap": {
+        "description": "Recap this chat with a quick summary",
+        "failed": "The recap couldn't run. Try again."
+      },
       "resumeCommand": {
         "description": "Open Agent Session History",
         "argumentHint": "[search]",
