@@ -346,8 +346,8 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     }
   )
 
-  it.each([
-    { listed: 'only the home folder', projects: [] as string[], expected: ['gone.jsonl'] },
+  it.each<{ listed: string; projects: string[]; expected: string[] }>([
+    { listed: 'only the home folder', projects: [], expected: ['gone.jsonl'] },
     { listed: 'a project holding the workspaces', projects: ['workspaces'], expected: [] }
   ])('with $listed listed, deletes $expected', async ({ projects, expected }) => {
     root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
