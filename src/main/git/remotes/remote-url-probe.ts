@@ -23,7 +23,8 @@ const sharedRemoteUrlReads = new AsyncLocalStorage<SharedRemoteUrlReads>()
 // A confirmed missing remote stays missing until the repo's Git config changes; the TTL covers global config the signature can't see.
 const MISSING_REMOTE_TTL_MS = 5 * 60_000
 const MISSING_REMOTE_MAX_ENTRIES = 500
-type MissingRemote = { error: unknown; signature: string; expiresAt: number }
+// One miss can race a `git remote add`; a second miss under the same signature confirms it.
+type MissingRemote = { error: unknown; signature: string; expiresAt: number; confirmed: boolean }
 const missingRemotes = new Map<string, MissingRemote>()
 
 /** @internal - exposed for tests only */
@@ -91,13 +92,13 @@ async function currentMissingRemote(
     return undefined
   }
   if (
-    missing.expiresAt > Date.now() &&
-    missing.signature === (await readConfigSignature(context))
+    !missing.confirmed ||
+    missing.expiresAt <= Date.now() ||
+    missing.signature !== (await readConfigSignature(context))
   ) {
-    return missing
+    return undefined
   }
-  missingRemotes.delete(key)
-  return undefined
+  return missing
 }
 
 /** True when Git already confirmed this local remote is missing and the repo's config hasn't changed since. */
@@ -123,16 +124,20 @@ async function readUncachedRemoteUrl(
       ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
       ...(context.admissionTier ? { admissionTier: context.admissionTier } : {})
     })
+    missingRemotes.delete(missingRemoteKey(context, remoteName))
     return stdout
   } catch (error) {
     if (isStableMissingGitRemoteError(error)) {
+      const key = missingRemoteKey(context, remoteName)
       const signature = await readConfigSignature(context)
       // Without a signature (WSL, unreadable config) a later `git remote add` can't be noticed, so don't remember.
       if (signature !== undefined) {
-        rememberMissingRemote(missingRemoteKey(context, remoteName), {
+        const previous = missingRemotes.get(key)
+        rememberMissingRemote(key, {
           error,
           signature,
-          expiresAt: Date.now() + MISSING_REMOTE_TTL_MS
+          expiresAt: Date.now() + MISSING_REMOTE_TTL_MS,
+          confirmed: previous?.signature === signature && previous.expiresAt > Date.now()
         })
       }
     }
