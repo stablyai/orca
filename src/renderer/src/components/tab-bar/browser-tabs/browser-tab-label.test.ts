@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { getBrowserDisplayTitle } from '../../../../../shared/browser/browser-display-title'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { getBrowserTabLabel } from './browser-tab-label'
-import { getClientHostedBrowserRowLabel } from './client-hosted-browser-row-label'
 
 const czech = (_key: string, fallback: string): string =>
   fallback === 'New Tab' ? 'Nová karta' : fallback
@@ -40,21 +38,5 @@ describe('getBrowserTabLabel', () => {
 
   it('keeps the file name of a document preview on the blank URL', () => {
     expect(getBrowserTabLabel(tab(ORCA_BROWSER_BLANK_URL, 'README.md'), czech)).toBe('README.md')
-  })
-})
-
-describe('getClientHostedBrowserRowLabel', () => {
-  it('localizes a blank client-hosted row', () => {
-    const row: ClientHostedBrowserRow = {
-      browserPageId: 'page',
-      worktreeId: 'wt',
-      url: 'about:blank',
-      title: getBrowserDisplayTitle(null, 'about:blank'),
-      loading: false,
-      browserHostClientId: 'client',
-      hostDeviceName: null,
-      hostAbsent: false
-    }
-    expect(getClientHostedBrowserRowLabel(row, czech)).toBe('Nová karta')
   })
 })
