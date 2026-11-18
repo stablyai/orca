@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ZotzNodeSetupStep } from '../../../../shared/zotz/zotz-node-setup-contract'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { Progress } from '../ui/progress'
 import {
   zotzNodeSetupStepDetail,
@@ -26,8 +27,7 @@ function useStepElapsed(runningId: string | null): number {
     const at = Date.now()
     setStarted({ id: runningId, at })
     setNow(at)
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
+    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1000 })
   }, [runningId])
   return runningId && started?.id === runningId ? now - started.at : 0
 }
@@ -92,6 +92,16 @@ export function ZotzServerSetupProgress({
   )
 }
 
+/** Keys from the text plus its repeat count, so they stay put when old lines are trimmed. */
+function keyedLines(output: string[]): { key: string; line: string }[] {
+  const seen = new Map<string, number>()
+  return output.map((line) => {
+    const count = (seen.get(line) ?? 0) + 1
+    seen.set(line, count)
+    return { key: `${count}:${line}`, line }
+  })
+}
+
 function SetupConsole({ output }: { output: string[] }): React.JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(true)
@@ -126,9 +136,9 @@ function SetupConsole({ output }: { output: string[] }): React.JSX.Element | nul
             'font-mono text-xs leading-relaxed whitespace-pre-wrap break-words'
           )}
         >
-          {output.map((line, index) => (
+          {keyedLines(output).map(({ key, line }) => (
             <div
-              key={index}
+              key={key}
               className={cn(
                 line.startsWith('== ') && 'font-semibold',
                 / -> failed/.test(line) && 'text-destructive',

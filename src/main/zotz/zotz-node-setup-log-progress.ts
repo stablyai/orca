@@ -6,6 +6,7 @@ import type {
 const LINE_PREFIX = '[zotz] '
 const STEP_START = /^== (\w+) ==$/
 const STEP_RESULT = /^(\w+) -> (done|skipped|failed)(?:: (.*))?$/
+const SETTLED_STATUSES = ['done', 'skipped', 'failed'] as const
 
 /** Live per-step state read from the transcript zotz-node-setup.ps1 writes while it runs. */
 export function parseNodeSetupLogProgress(
@@ -30,8 +31,8 @@ export function parseNodeSetupLogProgress(
     }
     const settled = STEP_RESULT.exec(line)
     const settledId = settled ? stepIds.find((id) => id === settled[1]) : undefined
-    if (settled && settledId) {
-      const status = settled[2] as 'done' | 'skipped' | 'failed'
+    const status = settled ? SETTLED_STATUSES.find((value) => value === settled[2]) : undefined
+    if (settled && settledId && status) {
       byId.set(settledId, { id: settledId, status, ...(settled[3] ? { detail: settled[3] } : {}) })
       current = current === settledId ? null : current
       continue
