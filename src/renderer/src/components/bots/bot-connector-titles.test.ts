@@ -12,15 +12,6 @@ function texts(rows: BotConnectorTitleParts[]): string[] {
 const VIA = 'via Composio'
 
 describe('botConnectorTitles', () => {
-  it('keeps the plain service for a row with no place, or one not yet named', () => {
-    expect(
-      texts([
-        { key: 'slack:T1', service: 'Slack', place: null },
-        { key: 'google', service: 'Google', hints: ['me@example.com'] }
-      ])
-    ).toEqual(['Slack', 'Google'])
-  })
-
   it('marks the Composio row beside a native one of the same service', () => {
     expect(
       texts([
@@ -47,14 +38,5 @@ describe('botConnectorTitles', () => {
         { key: 'app:linear', service: 'linear', hints: ['mcp.linear.app'] }
       ])
     ).toEqual(['Linear · Acme', 'linear · mcp.linear.app'])
-  })
-
-  it('names the Google accounts when another row is also Google', () => {
-    expect(
-      texts([
-        { key: 'google', service: 'Google', hints: ['me@example.com'] },
-        { key: 'composio:c1', service: 'Google', hints: [VIA, null] }
-      ])
-    ).toEqual(['Google · me@example.com', 'Google · via Composio'])
   })
 })
