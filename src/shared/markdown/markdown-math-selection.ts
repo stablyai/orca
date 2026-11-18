@@ -21,24 +21,37 @@ const selectionBlockTags = new Set([
 const selectionParagraphTags = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'P'])
 
 class SelectionTextWriter {
-  value = ''
+  private readonly chunks: string[] = []
+  private pendingLines = 0
+  private trailingLines = 0
+  hasContent = false
 
   append(text: string): void {
-    this.value += text
+    if (!text) {
+      return
+    }
+    if (this.pendingLines) {
+      const separator = '\n'.repeat(this.pendingLines)
+      this.chunks.push(separator)
+      this.trailingLines += this.pendingLines
+      this.pendingLines = 0
+    }
+    this.chunks.push(text)
+    this.hasContent = true
+    let trailingLines = 0
+    for (let index = text.length - 1; index >= 0 && text[index] === '\n'; index -= 1) {
+      trailingLines += 1
+    }
+    this.trailingLines =
+      trailingLines === text.length ? this.trailingLines + trailingLines : trailingLines
   }
 
   separate(lines: number): void {
-    this.value = this.value.replace(/[\t ]+$/g, '')
-    this.separateRaw(lines)
-  }
-
-  separateRaw(lines: number): void {
-    const trailingLines = this.value.match(/\n*$/)?.[0].length ?? 0
-    this.value += '\n'.repeat(Math.max(0, lines - trailingLines))
+    this.pendingLines = Math.max(this.pendingLines, lines - this.trailingLines)
   }
 
   finish(): string {
-    return this.value.trimEnd()
+    return this.chunks.join('')
   }
 }
 
@@ -79,11 +92,11 @@ function writeSelectionNode(node: Node, writer: SelectionTextWriter, insideListI
     return
   }
   if (element.tagName === 'PRE') {
-    if (writer.value) {
+    if (writer.hasContent) {
       writer.separate(1)
     }
     writer.append(element.textContent ?? '')
-    writer.separateRaw(1)
+    writer.separate(1)
     return
   }
   if (element.tagName === 'TR') {
@@ -106,9 +119,9 @@ function writeSelectionNode(node: Node, writer: SelectionTextWriter, insideListI
     element.tagName === 'DIV' &&
     !Array.from(element.children).some((child) => selectionBlockTags.has(child.tagName))
   const paragraphLines = insideListItem ? 1 : 2
-  if (selectionParagraphTags.has(element.tagName) && writer.value) {
+  if (selectionParagraphTags.has(element.tagName) && writer.hasContent) {
     writer.separate(1)
-  } else if ((element.tagName === 'LI' || isLeafDiv) && writer.value) {
+  } else if ((element.tagName === 'LI' || isLeafDiv) && writer.hasContent) {
     writer.separate(1)
   } else if ((element.tagName === 'UL' || element.tagName === 'OL') && insideListItem) {
     writer.separate(1)
