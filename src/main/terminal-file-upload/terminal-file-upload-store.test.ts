@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TerminalFileUploadStore } from './terminal-file-upload-store'
 
@@ -158,5 +158,59 @@ describe('TerminalFileUploadStore', () => {
     await expect(store.commit({ callerKey: 'a', uploadId })).resolves.toMatchObject({
       byteLength: 2
     })
+  })
+
+  it.skipIf(process.platform === 'win32')('keeps the folder and file owner-only', async () => {
+    const { uploadId } = await store.start({ callerKey: 'a', name: 'x.bin', byteLength: 0 })
+    const committed = await store.commit({ callerKey: 'a', uploadId })
+    expect((await stat(join(committed.path, '..'))).mode & 0o777).toBe(0o700)
+    expect((await stat(committed.path)).mode & 0o777).toBe(0o600)
+  })
+
+  it('fails a commit that an abort overtook, leaving no file behind', async () => {
+    const { uploadId } = await store.start({ callerKey: 'a', name: 'x.bin', byteLength: 0 })
+    const commit = store.commit({ callerKey: 'a', uploadId })
+    await store.abort({ callerKey: 'a', uploadId })
+    await expect(commit).rejects.toThrow('Terminal file upload was aborted')
+    expect(await pasteDirs()).toEqual([])
+  })
+
+  it('fails a chunk write that an abort overtook, leaving no file behind', async () => {
+    const { uploadId } = await store.start({ callerKey: 'a', name: 'x.bin', byteLength: 2 })
+    const append = store.append({
+      callerKey: 'a',
+      uploadId,
+      offset: 0,
+      contentBase64: b64(Buffer.alloc(2))
+    })
+    await store.abort({ callerKey: 'a', uploadId })
+    await expect(append).rejects.toThrow('Terminal file upload was aborted')
+    expect(await pasteDirs()).toEqual([])
+  })
+
+  it('removes committed folders past the retention and keeps recent ones', async () => {
+    const day = 24 * 60 * 60 * 1000
+    let now = Date.UTC(2026, 0, 15)
+    const daysAgo = (days: number) => new Date(now - days * day)
+    store = new TerminalFileUploadStore(
+      () => root,
+      () => now
+    )
+    const { uploadId } = await store.start({ callerKey: 'a', name: 'x.bin', byteLength: 0 })
+    const recentDir = join((await store.commit({ callerKey: 'a', uploadId })).path, '..')
+    await utimes(recentDir, daysAgo(1), daysAgo(1))
+    const old = join(root, 'orca-paste-old')
+    await mkdir(old)
+    await utimes(old, daysAgo(8), daysAgo(8))
+    await mkdir(join(root, 'unrelated'))
+    await utimes(join(root, 'unrelated'), daysAgo(8), daysAgo(8))
+
+    await store.removeExpiredCommittedUploads()
+    expect(await pasteDirs()).toEqual([basename(recentDir)])
+    expect(await readdir(root)).toContain('unrelated')
+
+    now += 8 * day
+    await store.removeExpiredCommittedUploads()
+    expect(await pasteDirs()).toEqual([])
   })
 })
