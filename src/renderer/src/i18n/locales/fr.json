@@ -20048,9 +20048,6 @@
         "replaceDescription": "Reprendre « {{title}} » ici arrêtera ce que {{agent}} fait dans ce chat.",
         "replaceTitle": "Remplacer ce chat ?"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity n’est pas connecté. Connectez-vous dans <settings>Paramètres → Comptes → Antigravity</settings>. Puis renvoyez votre message."
-      },
       "claudeSignIn": {
         "signingIn": "Connexion…"
       },

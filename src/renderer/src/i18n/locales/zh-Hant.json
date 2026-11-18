@@ -19700,9 +19700,6 @@
         "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
         "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity 尚未登入。請前往 <settings>設定 → 帳戶 → Antigravity</settings> 登入，再重新傳送訊息。"
-      },
       "claudeSignIn": {
         "signingIn": "正在登入…"
       },

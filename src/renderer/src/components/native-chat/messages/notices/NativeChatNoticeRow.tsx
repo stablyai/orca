@@ -58,7 +58,7 @@ import {
 } from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
 import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
+import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -250,12 +250,6 @@ export function NativeChatNoticeRow({
   const continueOffered =
     orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
-  const antigravitySignInContent = nativeChatAntigravitySignInContent(
-    failure?.kind,
-    agentName,
-    failure?.account,
-    t
-  )
   // Reword only text fully described by its fact; other host text may carry command advice.
   const factSurface =
     failure &&
@@ -341,6 +335,14 @@ export function NativeChatNoticeRow({
         : tone === 'notice'
           ? Info
           : null
+  const details =
+    block.providerFrame || detail ? (
+      <ProviderFrameRow
+        block={block}
+        detail={detail}
+        summary={t('components.native-chat.notices.details', 'Details')}
+      />
+    ) : null
   const row = (resolved: boolean): React.JSX.Element => (
     <div
       className={cn(
@@ -351,23 +353,27 @@ export function NativeChatNoticeRow({
     >
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-          {(resolved ? null : antigravitySignInContent) ?? text}
-        </p>
+        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</p>
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
         ) : null}
       </div>
       <NativeChatSetupButton failureKind={block.failure?.kind} rowId={messageId} />
-      {block.providerFrame || detail ? (
-        <ProviderFrameRow
-          block={block}
-          detail={detail}
-          summary={t('components.native-chat.notices.details', 'Details')}
-        />
-      ) : null}
+      {details}
     </div>
   )
+  if (!named && failure?.kind === 'notSignedIn') {
+    // The fact names the failure, so an older host's longer sentence still reads as the short one.
+    return (
+      <NativeChatTranscriptSignInNotice
+        agentName={agentName}
+        account={failure.account}
+        rowId={messageId}
+        fallback={row}
+        details={details}
+      />
+    )
+  }
   // Only setup failures read the setup context, so other rows skip its changes.
   return isNativeChatSetupFailureKind(block.failure?.kind) ? (
     <NativeChatSetupFailureRow rowId={messageId} row={row} />

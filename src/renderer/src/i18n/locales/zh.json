@@ -20366,9 +20366,6 @@
         "replaceDescription": "在此恢复“{{title}}”将停止 {{agent}} 在此聊天中正在进行的工作",
         "replace": "替换"
       },
-      "antigravitySignIn": {
-        "sentence": "尚未登录 Antigravity，请在<settings>设置 → 账户 → Antigravity</settings>中登录，然后重新发送消息"
-      },
       "claudeSignIn": {
         "signingIn": "正在登录…"
       },

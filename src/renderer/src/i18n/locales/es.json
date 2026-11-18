@@ -19777,9 +19777,6 @@
         "replaceDescription": "Reanudar “{{title}}” aquí detendrá lo que {{agent}} está haciendo en este chat.",
         "replaceTitle": "¿Reemplazar este chat?"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity no ha iniciado sesión. Inicia sesión en <settings>Ajustes → Cuentas → Antigravity</settings>. Después, vuelve a enviar tu mensaje."
-      },
       "claudeSignIn": {
         "signingIn": "Iniciando sesión…"
       },

@@ -21467,9 +21467,6 @@
         "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída.",
         "usageLimitExplanation": "Pede ao agente para continuar de onde parou. Use-o quando o limite for redefinido."
       },
-      "antigravitySignIn": {
-        "sentence": "Você não está conectado ao Antigravity. Entre em <settings>Configurações → Contas → Antigravity</settings>. Depois envie sua mensagem novamente."
-      },
       "claudeSignIn": {
         "signingIn": "Entrando…"
       },

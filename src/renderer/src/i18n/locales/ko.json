@@ -19263,9 +19263,6 @@
         "replaceDescription": "여기서 “{{title}}”을(를) 재개하면 이 채팅에서 {{agent}}이(가) 하고 있는 작업이 중지됩니다.",
         "replaceTitle": "이 채팅을 바꿀까요?"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity에 로그인되어 있지 않습니다. <settings>설정 → 계정 → Antigravity</settings>에서 로그인한 후 메시지를 다시 보내세요."
-      },
       "claudeSignIn": {
         "signingIn": "로그인 중…"
       },

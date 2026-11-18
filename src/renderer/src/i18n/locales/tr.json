@@ -20159,9 +20159,6 @@
         "failed": "Bu sohbete devam edilemedi. Yeniden deneyin veya bir mesaj gönderin.",
         "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity'de oturum açılmamış. <settings>Ayarlar → Hesaplar → Antigravity</settings> bölümünden oturum açın. Ardından mesajınızı yeniden gönderin."
-      },
       "claudeSignIn": {
         "signingIn": "Oturum açılıyor…"
       },
