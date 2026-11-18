@@ -11,8 +11,14 @@ import {
   startGapJournal,
   stopGapJournal
 } from './gap-recovery-journal'
-import { resetFreebuffTerminalStatusAfterGap } from './freebuff-terminal-status'
-import { resetCodexNoticeTrackersAfterGap } from './codex-notice-terminal-status'
+import {
+  moveFreebuffTerminalStatus,
+  resetFreebuffTerminalStatusAfterGap
+} from './freebuff-terminal-status'
+import {
+  moveCodexNoticeTrackers,
+  resetCodexNoticeTrackersAfterGap
+} from './codex-notice-terminal-status'
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
@@ -72,12 +78,18 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     ptyId: string,
     retryLateSeed = true
   ): void {
-    const recovery = this.headlessTerminals.get(ptyId)?.gapReseed
-    if (recovery) {
-      recovery.contextChangePending = true
+    const previous = this.headlessTerminals.get(ptyId)
+    if (previous?.gapReseed) {
+      previous.gapReseed.contextChangePending = true
       return
     }
     super.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, retryLateSeed)
+    const replacement = this.headlessTerminals.get(ptyId)
+    // Same stream, new model: notices and session state observed so far still describe it.
+    if (previous && replacement) {
+      moveCodexNoticeTrackers(previous.emulator, replacement.emulator)
+      moveFreebuffTerminalStatus(previous.emulator, replacement.emulator)
+    }
   }
 
   private startGapRecovery(ptyId: string, state: RuntimeHeadlessTerminal): void {

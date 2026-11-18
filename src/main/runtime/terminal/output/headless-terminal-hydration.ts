@@ -36,7 +36,10 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     readLaunchedAgentForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
     getEmulator: (ptyId) =>
       this.ptysById.has(ptyId) ? this.headlessTerminals.get(ptyId)?.emulator : undefined,
-    isScreenRestoring: (ptyId) => this.headlessTerminals.get(ptyId)?.gapReseed !== undefined,
+    // Also while a replaced model waits for its provider seed: its blank screen is no evidence the card closed.
+    isScreenRestoring: (ptyId) =>
+      this.headlessTerminals.get(ptyId)?.gapReseed !== undefined ||
+      this.providerSnapshotPreferredPtys.has(ptyId),
     readStatus: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
       return pty ? this.readPtyAgentStatusRow(ptyId, pty) : undefined

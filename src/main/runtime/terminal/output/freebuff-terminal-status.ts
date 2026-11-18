@@ -4,6 +4,15 @@ import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulat
 
 const trackers = new WeakMap<HeadlessEmulator, FreebuffScreenStatusTracker>()
 
+/** A model replaced over the same stream keeps its session state; the old model is retired. */
+export function moveFreebuffTerminalStatus(from: HeadlessEmulator, to: HeadlessEmulator): void {
+  const tracker = trackers.get(from)
+  if (tracker) {
+    trackers.delete(from)
+    trackers.set(to, tracker)
+  }
+}
+
 function trackerFor(
   emulator: HeadlessEmulator,
   startupCommand: string | undefined,

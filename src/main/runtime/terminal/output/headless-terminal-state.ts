@@ -207,6 +207,13 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         state.outputSequence = snapshot.seq
         seeded = true
       })
+      .then(() => {
+        if (seeded && this.headlessTerminals.get(ptyId) === state) {
+          this.providerSnapshotPreferredPtys.delete(ptyId)
+          // Observers parked on the unseeded model check the seeded screen once.
+          this.observeHeadlessChunk(ptyId, state, '', Date.now())
+        }
+      })
       .catch(() => {
         // Best-effort: live bytes already chain behind this replacement state.
       })
