@@ -40,8 +40,8 @@ export class UsageLimitColdCuts {
     return this.cuts.get(id) ?? null
   }
 
-  /** One chat that can't be read (a corrupt journal) counts as having no cut, not as a failed pass. */
-  async readForSweep(id: string): Promise<HostUsageLimitCut | null> {
+  /** One chat that can't be read (a corrupt journal) is skipped this pass instead of failing it. */
+  async readForSweep(id: string): Promise<HostUsageLimitCut | null | 'unreadable'> {
     try {
       const cut = await this.read(id)
       this.sweepFailures.delete(id)
@@ -55,7 +55,7 @@ export class UsageLimitColdCuts {
           error
         })
       }
-      return null
+      return 'unreadable'
     }
   }
 
@@ -87,6 +87,12 @@ export class UsageLimitColdCuts {
         if (!shown.has(id)) {
           cache.delete(id)
         }
+      }
+    }
+    // Loaded chats are still swept while hidden; logging their failure once must survive that.
+    for (const id of this.sweepFailures) {
+      if (!shown.has(id) && !this.deps.sessions.has(id)) {
+        this.sweepFailures.delete(id)
       }
     }
   }

@@ -2,25 +2,29 @@ import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal
 import { journalSqlSourceFailure } from '../../agent-session-journal/journal-sql-failure'
 
 /**
- * A corrupt journal fails the same read the same way until a commit or reopen changes its key,
- * so a status sweep must not reread it every pass.
+ * A corrupt journal fails status reads the same way until a commit or reopen moves it, so a
+ * status sweep must not reread it every pass.
  */
 export class CorruptJournalReads {
-  private readonly failed = new WeakMap<SqlAgentSessionJournal, { key: string; error: unknown }>()
+  private readonly failed = new WeakMap<SqlAgentSessionJournal, { at: string; error: unknown }>()
 
-  throwIfKnown(journal: SqlAgentSessionJournal, key: string): void {
+  async read<T>(journal: SqlAgentSessionJournal, read: () => Promise<T>): Promise<T> {
+    const at = position(journal)
     const failed = this.failed.get(journal)
-    if (failed?.key === key) {
+    if (failed?.at === at) {
       throw failed.error
     }
-  }
-
-  remember<T>(journal: SqlAgentSessionJournal, key: string, read: Promise<T>): Promise<T> {
-    return read.catch((error: unknown) => {
+    try {
+      return await read()
+    } catch (error) {
       if (journalSqlSourceFailure(error).sourceContent === 'journalCorrupt') {
-        this.failed.set(journal, { key, error })
+        this.failed.set(journal, { at, error })
       }
       throw error
-    })
+    }
   }
+}
+
+function position(journal: SqlAgentSessionJournal): string {
+  return JSON.stringify([journal.cursor(), journal.physicalCursor()])
 }
