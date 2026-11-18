@@ -27,7 +27,11 @@ export async function compareJournalLegacyChatsWhenIdle(
         return
       }
       const result = await compareOnce(readers, compare.sessionId, stopped, report)
-      if (result && ('error' in result || result.revision === compare.revision)) {
+      // No original, stopping, or this file failing: no other chat would fare better this launch.
+      if (!result) {
+        return
+      }
+      if ('error' in result || result.revision === compare.revision) {
         await writer.maintain({ kind: 'legacy-compare-settle', ...compare, ...result })
       }
     }
