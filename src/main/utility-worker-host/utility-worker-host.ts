@@ -17,12 +17,12 @@ import {
   recordUtilityWorkerHeapPressure,
   utilityWorkerHeapData
 } from './utility-worker-heap-report'
-import {
-  type HostedWorkerThread,
-  type UtilityWorkerHeapReport,
-  type UtilityWorkerHostEvent,
-  type UtilityWorkerHostRequest,
-  type UtilityWorkerSpawn
+import type {
+  HostedWorkerThread,
+  UtilityWorkerHeapReport,
+  UtilityWorkerHostEvent,
+  UtilityWorkerHostRequest,
+  UtilityWorkerSpawn
 } from './utility-worker-host-protocol'
 
 /** A host that cannot start in time loses its workers to in-process threads. */
