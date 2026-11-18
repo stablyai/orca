@@ -176,7 +176,6 @@ export async function startAntigravityChatSignIn(
     if (ticket === local.starts) {
       const current = observed(owner)
       if (
-        attempt.previousRuntime !== undefined &&
         current?.runtimeId !== undefined &&
         current.runtimeId !== attempt.previousRuntime &&
         current.runtimeId !== _meta.runtimeId
