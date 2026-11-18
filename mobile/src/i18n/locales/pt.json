@@ -1267,6 +1267,9 @@
         "partial": "Diff parcial",
         "showMoreFiles": "Mostrar mais {{count}}",
         "changedFiles_many": "{{count}} arquivos alterados"
+      },
+      "goal": {
+        "sentAsGoal": "Enviado como objetivo"
       }
     },
     "pullDownMenu": {
@@ -3083,7 +3086,7 @@
       "disconnected": "Falha ao colar (sem conexão)",
       "imageTooLarge": "Imagem grande demais para colar",
       "pasteFailed": "Falha ao colar",
-      "pasteTooLarge": "Colagem grande demais (máx. 256 KiB)",
+      "pasteTooLarge": "A colagem é muito grande.",
       "terminalChanged": "Colagem cancelada (o terminal mudou)"
     },
     "worktreeLabel": {
@@ -3225,7 +3228,8 @@
       "paneUnavailable": "O painel do agente não está mais disponível."
     },
     "nativeChatView": {
-      "loading": "Carregando conversa…"
+      "loading": "Carregando conversa…",
+      "linkedMessageMissing": "Não foi possível encontrar essa mensagem."
     },
     "contentState": {
       "connectingTo": "Conectando-se a {{host}}…",
@@ -5024,6 +5028,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Emparelhar um computador",
+      "pairRequired": "Para abrir este link, emparelhe este telefone com um computador.",
+      "pairAction": "Emparelhar um computador",
+      "openFailed": "Não foi possível abrir este link",
+      "ambiguous": "Este bot está em {{names}}. Abra a conversa no Orca no computador que você quiser.",
+      "computer": "seu computador",
+      "updateNeeded": "Atualize o Orca em {{names}} para abrir este link.",
+      "unreachable": "Não foi possível conectar a {{names}}. Verifique se o Orca está aberto em um deles e tente novamente.",
+      "missing": "Nenhum dos seus computadores emparelhados tem este bot.",
+      "offline": "{{name}} está offline. Abra o link novamente quando ele se conectar.",
+      "chatOpenFailed": "{{name}} não conseguiu abrir esta conversa. Tente o link novamente.",
+      "unreachableSingle": "Não foi possível conectar a {{name}}. Verifique se o Orca está aberto nele e tente novamente.",
+      "workspaceDeleted": "O espaço de trabalho desta conversa foi excluído em {{name}}."
     }
   }
 }

@@ -1,4 +1,7 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -113,28 +116,30 @@ async function attach(): Promise<AgentSessionRecord | null> {
 }
 
 async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
+  return seedPrompt({
+    kind: 'approval',
+    title: 'Run the command?',
+    detail: null,
+    options: [{ id: optionId, label: 'Allow' }],
+    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+  })
+}
+
+async function seedPrompt(
+  body: Extract<AgentJournalItemBody, { kind: 'approval' | 'question' }>
+): Promise<{ itemId: string; revision: number }> {
   const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
   const events = acquire.mock.calls.at(-1)?.[0].events
   if (!events) {
-    throw new Error('seedApproval requires an acquired session')
+    throw new Error('seedPrompt requires an acquired session')
   }
-  events.appendItem(
-    identity,
-    {
-      kind: 'approval',
-      title: 'Run the command?',
-      detail: null,
-      options: [{ id: optionId, label: 'Allow' }],
-      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-    },
-    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
+  events.appendItem(identity, body, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
   await host.flushStreamedEvents(SESSION)
   const itemId = agentJournalItemKey(identity)
   const page = await host.history({ sessionId: SESSION, direction: 'tail' })
   const appended = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
   if (!appended) {
-    throw new Error('provider approval was not written to the journal')
+    throw new Error('provider prompt was not written to the journal')
   }
   return { itemId, revision: appended.revision }
 }
@@ -234,7 +239,8 @@ export {
   envelope,
   hostTestRecoveryCapsuleSettled,
   journals,
-  seedApproval
+  seedApproval,
+  seedPrompt
 }
 
 import type { AgentChildWorkEvidence } from '../../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
