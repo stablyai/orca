@@ -49,6 +49,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginCommand: ['cursor-agent', 'login'],
     installCommand: 'curl https://cursor.com/install -fsS | bash'
   },
+  // `hermes model` picks a provider and signs in to it; Hermes has no separate login.
+  {
+    agent: 'hermes',
+    loginCommand: ['hermes', 'model'],
+    installCommand: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
+  },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
   { agent: 'antigravity', loginCommand: [] }
 ] as const

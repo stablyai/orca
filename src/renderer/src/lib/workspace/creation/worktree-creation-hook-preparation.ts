@@ -4,7 +4,7 @@ import {
 } from '../../../../../shared/worktree/creation/approved-setup-hashes'
 import { useAppStore } from '@/store/index'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
-import type { SetupHooksCreateSource } from '../../../../../shared/worktree/setup-hooks-create-source'
+import { setupHooksCreateSource } from '../../../../../shared/worktree/setup-hooks-create-source'
 import {
   ensureHooksConfirmed,
   readAndConfirmRuntimeIssueCommand
@@ -95,24 +95,6 @@ export async function prepareWorktreeCreationHooks(
     phase: getInitialWorktreeCreationPhase(prepared)
   })
   return prepared
-}
-
-/**
- * Only explicit reuse checks out the named branch; every other create starts from the base. A VM
- * create picks its base after this check, so it keeps reading the project checkout.
- */
-export function setupHooksCreateSource(
-  request: Pick<
-    WorktreeCreationRequest,
-    'branchIntent' | 'branchNameOverride' | 'baseBranch' | 'ephemeralVmRecipe'
-  >
-): SetupHooksCreateSource | undefined {
-  if (request.ephemeralVmRecipe) {
-    return undefined
-  }
-  return request.branchIntent === 'open-existing-v2' && request.branchNameOverride
-    ? { kind: 'branch', ref: request.branchNameOverride, baseBranch: request.baseBranch }
-    : { kind: 'base', baseBranch: request.baseBranch }
 }
 
 /** Setup fields for the create call; the approved hash lets the host check the created branch. */

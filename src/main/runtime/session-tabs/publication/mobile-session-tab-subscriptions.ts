@@ -4,6 +4,7 @@ import type {
   MobileSessionTabSubscription
 } from '../../construction/runtime-identity-state'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeWorkspaceFileTargets } from '../../workspaces/workspace-file-session-targets'
 export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorkspaceFileTargets {
   onMobileSessionTabsChanged(
@@ -99,6 +100,14 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
   }
 
   protected hasAgentSenderListeners(): boolean {
+    // The window applying graph replies reads senders too; releasing after each reply rebuilt history cold every time.
+    if (
+      this.authoritativeWindowId !== null &&
+      this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.graphStatus !== 'unavailable'
+    ) {
+      return true
+    }
     for (const { clientKind } of this.mobileSessionTabListeners) {
       if (clientKind !== 'mobile') {
         return true

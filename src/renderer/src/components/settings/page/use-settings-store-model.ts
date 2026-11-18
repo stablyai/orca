@@ -1,4 +1,4 @@
-import { useSupportedGroupHookSettings } from '@/hooks/use-supported-group-hook-settings'
+import { useSupportedGroupHookSettings } from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
 import type { GeneralSubPage } from '../general/general-sub-pages'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
@@ -9,7 +9,7 @@ import { useProjectHostSetupProjection } from '@/store/projects/use-project-host
 import { usePluginFontFamilies } from '@/store/plugins/appearance/plugin-fonts'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   COMPUTER_USE_SKILL_NAME,
@@ -22,7 +22,7 @@ import {
   useInstalledAgentSkillNames
 } from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
-import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { useLinearProviderConnected } from '@/lib/work-items/linear/useLinearProviderConnected'
 import { useSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'
 import {
   getFallbackTerminalFonts,

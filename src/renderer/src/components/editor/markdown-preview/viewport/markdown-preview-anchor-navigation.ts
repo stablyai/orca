@@ -1,5 +1,5 @@
 import { elementScroll, type Virtualizer } from '@tanstack/react-virtual'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 
 export function getMarkdownPreviewAnchorScrollTop(
   container: Pick<HTMLElement, 'getBoundingClientRect' | 'scrollTop'>,

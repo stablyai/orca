@@ -11,7 +11,7 @@ import {
   type TranscriptPaneOptions,
   TRANSCRIPT_PANE_PTY_ID as PTY_ID,
   waitForTranscriptIdle
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+} from './agent-transcript-pane-test-harness'
 import { assertTerminalAgentSendable } from '../../rpc/terminal/terminal-agent-send-guard'
 import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 
@@ -41,8 +41,8 @@ describe('Interactive wait visibility and terminal admission', () => {
     '  2. No, exit\n'
   ].join('')
 
-  function agentStatusOsc(state: string): string {
-    return `]9999;${JSON.stringify({ state, prompt: 'ship it', agentType: 'claude' })}`
+  function agentStatusOsc(state: string, agentType = 'claude'): string {
+    return `]9999;${JSON.stringify({ state, prompt: 'ship it', agentType })}`
   }
 
   async function createPane(
@@ -108,6 +108,38 @@ describe('Interactive wait visibility and terminal admission', () => {
         )
 
         await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
+      })
+    })
+
+    describe('agents whose hooks report working through an approval menu', () => {
+      async function guard(pane: Awaited<ReturnType<typeof createPane>>): Promise<void> {
+        await assertTerminalAgentSendable({
+          runtime: pane.runtime,
+          handle: pane.handle,
+          assertWritable: () => {}
+        })
+      }
+
+      it('refuses Kiro mid-turn and sends once its own report ends the turn', async () => {
+        const pane = await createPane({
+          paneTitle: 'kiro-cli',
+          foregroundProcess: 'kiro-cli',
+          data: agentStatusOsc('working', 'kiro')
+        })
+        await expect(guard(pane)).rejects.toThrow('terminal_guard_approval_unseen')
+
+        pane.runtime.onPtyData(PTY_ID, agentStatusOsc('done', 'kiro'), Date.now())
+
+        await expect(guard(pane)).resolves.toBeUndefined()
+      })
+
+      it('refuses such an agent when only another agent has reported on its pane', async () => {
+        const pane = await createPane({
+          paneTitle: 'amp',
+          foregroundProcess: 'amp',
+          data: `${agentStatusOsc('done', 'claude')}Thinking...`
+        })
+        await expect(guard(pane)).rejects.toThrow('terminal_guard_approval_unseen')
       })
     })
 

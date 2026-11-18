@@ -14,6 +14,7 @@ import { openWorktreeCreatePathClaim } from '../../../workspaces/creation/worktr
 import { exactNameLateCollision } from '../../../workspaces/creation/worktree-create-exact-name'
 import { pendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
+import { WorktreeCreateCollisionError } from '../../../../shared/new-workspace/worktree-create-collision'
 import { WorktreeCreate } from '../../../../shared/rpc-contract/workspaces/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/workspaces/worktree-create-args'
 import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
@@ -400,5 +401,69 @@ describe('exact-name create with real Git', () => {
     })
     expect(mapped).toBe(error)
     expect(mapped).not.toMatchObject(refused)
+  })
+})
+
+describe('derived slash branches with real Git', () => {
+  it('keeps branch hierarchy, a flat checkout path and matching collision suffixes', async () => {
+    const f = await fixture('origin', { branchPrefix: 'custom', branchPrefixCustom: 'team' })
+    const request = {
+      name: 'feature/tti_fix_1440',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new' as const
+    }
+    const first = await f.create(request)
+    expect(first.worktreePath).toBe(join(f.workspaceRoot, 'feature-tti_fix_1440'))
+    expect(await git(first.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/team/feature/tti_fix_1440'
+    )
+    const second = await f.create(request)
+    expect(second.worktreePath).toBe(join(f.workspaceRoot, 'feature-tti_fix_1440-2'))
+    expect(await git(second.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/team/feature/tti_fix_1440-2'
+    )
+  })
+
+  it('normalizes reserved ref segments without changing the directory name', async () => {
+    const f = await fixture()
+    const picked = await f.create({
+      name: '/feature.lock//.中文 fix../item.lock.lock/',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new'
+    })
+    expect(picked.worktreePath).toBe(
+      join(f.workspaceRoot, 'feature.lock-.中文-fix.-item.lock.lock')
+    )
+    expect(await git(picked.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/feature-lock/中文-fix/item.lock-lock'
+    )
+  })
+})
+
+describe('derived branch namespace conflicts with real Git', () => {
+  it.each(['create-new', 'create-exact'] as const)(
+    'refuses an occupied parent without changing the requested hierarchy (%s)',
+    async (branchIntent) => {
+      const f = await fixture()
+      await git(f.repoPath, 'branch', 'feature')
+      await expect(
+        f.candidate({ name: 'feature/x', branchNameOverride: undefined, branchIntent })
+      ).rejects.toBeInstanceOf(WorktreeCreateCollisionError)
+      expect(await git(f.repoPath, 'for-each-ref', '--format=%(refname)', 'refs/heads/')).toBe(
+        'refs/heads/feature\nrefs/heads/main'
+      )
+    }
+  )
+
+  it('suffixes a name occupied by descendants while keeping the checkout flat', async () => {
+    const f = await fixture()
+    await git(f.repoPath, 'branch', 'feature/x')
+    const picked = await f.create({
+      name: 'feature',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new'
+    })
+    expect(picked.worktreePath).toBe(join(f.workspaceRoot, 'feature-2'))
+    expect(await git(picked.worktreePath, 'symbolic-ref', 'HEAD')).toBe('refs/heads/feature-2')
   })
 })

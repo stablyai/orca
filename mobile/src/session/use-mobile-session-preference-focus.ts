@@ -6,9 +6,13 @@ import {
   loadLinkOpenMode,
   loadTerminalFontStyle,
   loadTerminalTextScale,
+  saveTerminalFontStyle,
   saveTerminalTextScale
 } from '../storage/preferences'
-import { sameTerminalFontStyle } from '../terminal/preferences/terminal-font-style'
+import {
+  sameTerminalFontStyle,
+  type TerminalFontStyle
+} from '../terminal/preferences/terminal-font-style'
 import { terminalFontDefaults } from '../terminal/preferences/terminal-font-defaults'
 import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 
@@ -70,5 +74,13 @@ export function useMobileSessionPreferenceFocus(
     },
     [setTerminalTextScale, terminalTextScaleRevisionRef]
   )
-  return { terminalPreferencesReady, commitPinchedTextScale }
+  // The session's Text size sheet picks a font here, as Terminal settings does.
+  const commitTerminalFontStyle = useCallback(
+    (style: TerminalFontStyle) => {
+      setTerminalFontStyle(style)
+      void saveTerminalFontStyle(style)
+    },
+    [setTerminalFontStyle]
+  )
+  return { terminalPreferencesReady, commitPinchedTextScale, commitTerminalFontStyle }
 }

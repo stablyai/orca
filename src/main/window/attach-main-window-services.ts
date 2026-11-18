@@ -9,7 +9,7 @@ import {
 } from '../macos-permissions/macos-tcc-prompt-notice'
 import { registerRepoHandlers } from '../ipc/repos'
 import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
-import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
+import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/worktrees/listing/watched-worktree-catalog-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup/workspace-cleanup'
 import { registerPtyHandlers } from '../ipc/pty/register-handlers'
@@ -18,7 +18,7 @@ import type {
   GetSelectedCodexHomePath,
   PrepareCodexSessionResume
 } from '../ipc/pty/host-env/types'
-import { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
+import { registerDaemonManagementHandlers } from '../ipc/pty/ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import {
@@ -43,7 +43,7 @@ import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktrees/creation/worktree-base-directory-watcher'
-import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
+import { startFolderRepoGitUpgradeWatch } from '../ipc/worktrees/listing/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from '../updater/lifecycle/main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/installation/structured-agent-session-host-refusal'

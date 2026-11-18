@@ -200,10 +200,18 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const dictation = useNativeChatDictation(textareaRef, disabled)
+    // What option commands and PTY sends share to reach, and read, the agent's input line.
+    const ptyCommandTarget = {
+      agent,
+      disabled,
+      resolveTarget,
+      onSlashCommand,
+      onSubmitted,
+      readTerminalDraft: launchSeed?.readTerminalDraft
+    }
     const sessionOptions = useNativeChatComposerSessionOptions({
       ...props,
-      disabled,
-      resolveTarget
+      ...ptyCommandTarget
     })
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
 
@@ -219,12 +227,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const ptyCommandRouting = {
-      agent,
-      disabled,
+      ...ptyCommandTarget,
       ...sessionOptions.ptyCommandRouting,
-      resolveTarget,
-      onSlashCommand,
-      onSubmitted,
       answerCommandLocally,
       trackPendingSend,
       setDraft,
@@ -240,7 +244,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       imageAttachments,
       launchDraft: launchSeed?.launchDraft,
       launchDraftResolved: launchSeed?.launchDraftResolved === true,
-      readTerminalDraft: launchSeed?.readTerminalDraft,
       classifySend,
       onOptimisticSend,
       optimisticSendOutcome,

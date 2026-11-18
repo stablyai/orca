@@ -3,7 +3,7 @@ import { Undo2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { bringWslMovedProjectBack } from '@/lib/workspace/ownership/wsl-moved-project-use-here'
 import {
   movedProjectForKey,

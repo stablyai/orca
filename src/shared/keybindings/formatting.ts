@@ -17,8 +17,7 @@ import {
   isDefaultKeybinding,
   keybindingConflictGroups,
   bindingsOverlap,
-  isKeybindingInterceptedBeforeBrowserChords,
-  isKeybindingInterceptedByMainProcess
+  keybindingMainProcessConflictGroups
 } from './effective'
 import { isDoubleTapBinding } from './normalization'
 
@@ -175,18 +174,9 @@ export function findKeybindingConflictsForDefinitions(
       overrides,
       definitions
     )) {
-      const groups = new Set(keybindingConflictGroups(definition))
-      // Why: main consumes these before renderer handlers run, but a focused browser guest runs its own chords ahead of the after-browser ones.
-      if (
-        options.includeMainProcessInterception &&
-        isKeybindingInterceptedByMainProcess(definition)
-      ) {
-        for (const scope of scopes) {
-          if (scope !== 'browser' || isKeybindingInterceptedBeforeBrowserChords(definition)) {
-            groups.add(scope)
-          }
-        }
-      }
+      const groups = options.includeMainProcessInterception
+        ? keybindingMainProcessConflictGroups(definition, scopes)
+        : new Set(keybindingConflictGroups(definition))
       for (const group of groups) {
         for (const identity of keybindingConflictIdentities(definition.id, binding, platform)) {
           const conflictKey = `${group}\u0000${identity}`

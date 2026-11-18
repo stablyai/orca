@@ -1,5 +1,6 @@
 import { loadAutomationTargets, workspaceMatchesSetup } from './automation-target-inventory'
 import { describe, expect, it } from 'vitest'
+import { automationDraftPatch, newAutomationDraft } from './automation-draft'
 
 import { automationClient, automationTargets } from './automation-test-fixtures'
 
@@ -48,5 +49,28 @@ describe('mobile automation host contracts', () => {
     expect((await loadAutomationTargets(port.client)).workspaces).toEqual([])
     repos = []
     expect((await loadAutomationTargets(port.client)).workspaces).toEqual([])
+  })
+})
+
+describe('automation setup pin writes', () => {
+  const original = { ...newAutomationDraft(), name: 'Nightly', setupDecision: 'run' as const }
+
+  it('keeps the saved pin on an ordinary edit', () => {
+    expect(automationDraftPatch({ ...original, name: 'Renamed' }, original)).toEqual({
+      name: 'Renamed'
+    })
+  })
+
+  it('names the decision when setup was re-approved without a pin', () => {
+    expect(automationDraftPatch({ ...original, setupDecisionEdited: true }, original)).toEqual({
+      setupDecision: 'run'
+    })
+  })
+
+  it("re-decides setup when only the base changes, since runs use the new base's setup", () => {
+    expect(automationDraftPatch({ ...original, baseBranch: 'release' }, original)).toEqual({
+      baseBranch: 'release',
+      setupDecision: 'run'
+    })
   })
 })

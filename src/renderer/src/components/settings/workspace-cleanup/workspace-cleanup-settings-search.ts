@@ -16,20 +16,43 @@ function cleanupKeywords(): string[] {
 export const getWorkspaceCleanupSettingsSearchParts = createLocalizedCatalog(
   () =>
     ({
-      status: {
-        title: translate('components.settings.workspaceCleanup.cleanUpNow', 'Clean up now'),
+      review: {
+        title: translate('components.settings.workspaceCleanup.manual.review', 'Review workspaces'),
         description: translate(
-          'components.settings.workspaceCleanup.search.statusDescription',
-          'Run the cleanup rules now, or review workspaces yourself.'
+          'components.settings.workspaceCleanup.manual.description',
+          'See every workspace and choose which to delete.'
+        ),
+        keywords: [
+          ...cleanupKeywords(),
+          ...translateSearchKeyword('components.settings.workspaceCleanup.search.manual', 'manual')
+        ]
+      },
+      // The Automatic cleanup heading, shown whether rules are off, on or running.
+      status: {
+        title: translate(
+          'components.settings.workspaceCleanup.automatic.title',
+          'Automatic cleanup'
+        ),
+        description: translate(
+          'components.settings.workspaceCleanup.search.automaticDescription',
+          'Whether automatic cleanup is on, when it runs next, and running the rules now.'
         ),
         keywords: [
           ...translateSearchKeyword(
-            'components.settings.workspaceCleanup.search.reviewWorkspaces',
-            'review workspaces'
+            'components.settings.workspaceCleanup.search.runRulesNow',
+            'run rules now'
+          ),
+          ...translateSearchKeyword(
+            'components.settings.workspaceCleanup.search.cleanUpNow',
+            'clean up now'
           ),
           ...translateSearchKeyword(
             'components.settings.workspaceCleanup.search.automatic',
             'automatic'
+          ),
+          ...translateSearchKeyword(
+            'components.settings.workspaceCleanup.search.schedule',
+            'schedule'
           )
         ]
       },

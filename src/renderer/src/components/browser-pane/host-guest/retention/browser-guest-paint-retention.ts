@@ -1,21 +1,9 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../../store/index'
-import {
-  isBrowserPageMobileDriven,
-  onBrowserDriverChange,
-  useBrowserMobileDriverForAny
-} from '../../../../runtime/browser/ownership/browser-mobile-driver-state'
+import { useBrowserMobileDriverForAny } from '../../../../runtime/browser/ownership/browser-mobile-driver-state'
 import { useBrowserRemoteViewerForAny } from '../../../../runtime/browser/ownership/browser-remote-viewer-state'
-import {
-  isBrowserPageRemotelyViewed,
-  onBrowserRemoteViewerChange
-} from '../../../../runtime/browser/ownership/browser-remote-viewer-store'
-import {
-  isBrowserAutomationVisible,
-  onBrowserAutomationVisibilityChange,
-  useBrowserAutomationVisibilityForAny
-} from './browser-automation-visibility'
+import { useBrowserAutomationVisibilityForAny } from './browser-automation-visibility'
 
 // Every ancestor must avoid display:none for retained guests; a pane cannot override hidden parents to keep mobile/agent/paired screencasts producing frames.
 
@@ -52,29 +40,6 @@ export function useBrowserGuestPaintRetention(browserPageIds: readonly string[])
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const hasRemotelyViewedBrowser = useBrowserRemoteViewerForAny(browserPageIds)
   return hasAutomationVisibleBrowser || hasMobileDrivenBrowser || hasRemotelyViewedBrowser
-}
-
-// Centralize all paint-retention terms so new signals cannot silently miss a container gate.
-export function browserPageNeedsPaintRetention(browserPageId: string): boolean {
-  return (
-    isBrowserAutomationVisible(browserPageId) ||
-    isBrowserPageMobileDriven(browserPageId) ||
-    isBrowserPageRemotelyViewed(browserPageId)
-  )
-}
-
-/** Fires whenever any retention term flips, for callers that cache a retention decision. */
-export function onBrowserGuestPaintRetentionChange(listener: (pageId: string) => void): () => void {
-  const removeListeners = [
-    onBrowserAutomationVisibilityChange(listener),
-    onBrowserDriverChange((event) => listener(event.browserPageId)),
-    onBrowserRemoteViewerChange(listener)
-  ]
-  return () => {
-    for (const removeListener of removeListeners) {
-      removeListener()
-    }
-  }
 }
 
 // Scan only for hidden callers. Include automation bootstrap: mobile driving starts after guest registration, so driver-only gating would deadlock a cold phone screencast.

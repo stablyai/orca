@@ -18,7 +18,10 @@ import type {
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
 import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
-import { replaceRecordEntries, replaceTabBuckets } from '../../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../../record-transitions/keyed-record-transitions'
 
 export function createSetRenamingWorktreeId(
   set: WorktreeSliceSet,

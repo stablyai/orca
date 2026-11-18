@@ -72,6 +72,11 @@ export const AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY = 'agent.launch.pi-model.v
 export const AGENT_LAUNCH_PLAIN_SESSION_ID_RUNTIME_CAPABILITY =
   'agent.launch.plain-session-id.v1' as const
 
+// Host-advertised: a created workspace's receipt reports `setupTrustMismatch`, so a client that
+// pinned setup can re-ask. Older hosts skip that setup without saying so.
+export const AGENT_LAUNCH_SETUP_TRUST_MISMATCH_RUNTIME_CAPABILITY =
+  'agent.launch.setup-trust-mismatch.v1' as const
+
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
@@ -90,5 +95,6 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_PLAIN_SESSION_ID_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_PLAIN_SESSION_ID_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_SETUP_TRUST_MISMATCH_RUNTIME_CAPABILITY
 ] as const

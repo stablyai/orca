@@ -15,7 +15,6 @@ import type {
   CodexSharedRuntimeAuthProvenanceStatus,
   CodexSystemDefaultSnapshot
 } from './runtime-home-service-types'
-import type { CodexSessionBackfillDate } from '../../codex/history/backfill/codex-session-backfill-types'
 import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { LegacyWslRuntimeAuthDestination } from '../legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain'
 import type { WslCodexAuthRead } from './wsl/wsl-codex-auth-batch-reader'
@@ -52,7 +51,8 @@ export abstract class CodexRuntimeHomeState {
   ): boolean | null
   abstract isHostSystemDefaultSessionMigrationEligible(): boolean
   abstract prepareHostSystemDefaultSessionMigrationPass(
-    scanDates?: readonly CodexSessionBackfillDate[]
+    fullScanRequired?: boolean,
+    newFullScanRequest?: boolean
   ): boolean
   abstract finishHostSystemDefaultSessionMigrationPass(): void
 
