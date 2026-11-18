@@ -17,8 +17,11 @@ export function useHostWorktreeRowWrites(args: {
 }) {
   const { clientForRow, state } = args
   const { setServerWorkspaces, setWorktrees, setLastKnownWorktrees } = state
-  // Writes to one row field run in order, and only the latest one's refusal puts the row back.
-  const writesRef = useRef(new Map<string, { id: number; done: Promise<unknown> }>())
+  // Writes to one row field run in order; only the latest one's refusal puts the row back, to the
+  // value the host last took.
+  const writesRef = useRef(
+    new Map<string, { id: number; done: Promise<unknown>; committed: RowPatch }>()
+  )
 
   const patchRow = useCallback(
     (item: Worktree, patch: RowPatch) => {
@@ -53,11 +56,17 @@ export function useHostWorktreeRowWrites(args: {
         .then(() => send(rowClient))
         .catch(() => false)
         .then((accepted) => {
-          if (!accepted && writesRef.current.get(key)?.id === id) {
-            patchRow(item, previous)
+          const entry = writesRef.current.get(key)
+          if (!entry) {
+            return
+          }
+          if (accepted) {
+            entry.committed = patch
+          } else if (entry.id === id) {
+            patchRow(item, entry.committed)
           }
         })
-      writesRef.current.set(key, { id, done })
+      writesRef.current.set(key, { id, done, committed: before?.committed ?? previous })
     },
     [clientForRow, patchRow]
   )

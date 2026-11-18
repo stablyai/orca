@@ -27,10 +27,9 @@ export function WorkspaceStatusSheet({
         label: status.label,
         icon: Circle,
         checked: status.id === current,
+        // Always written: the menu's row may predate a status change made elsewhere.
         onPress: () => {
-          if (status.id !== current) {
-            onPick(row, status.id)
-          }
+          onPick(row, status.id)
           onClose()
         }
       }))}
