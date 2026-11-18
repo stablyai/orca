@@ -54,6 +54,10 @@ function tryLock(entryDir) {
       throw error
     }
     const owner = readOwner(lockDir)
+    if (owner === null && !fs.existsSync(lockDir)) {
+      // Released between our rename and this read: just try again.
+      return null
+    }
     if (owner === null || processIdentity(Number(owner.split(' ')[0])) !== owner) {
       throw new Error(
         `stale cache lock ${lockDir} (owner ${owner ?? 'unknown'} is no longer running). ` +
