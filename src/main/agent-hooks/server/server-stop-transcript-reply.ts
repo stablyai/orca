@@ -1,6 +1,10 @@
 import { stat } from 'node:fs/promises'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { readLastAssistantFromTranscriptAsync } from '../../../shared/agent-hook-listener/transcript-reader'
+import {
+  readLastAssistantFromTranscriptAsync,
+  TRANSCRIPT_CHUNK_BYTES,
+  TRANSCRIPT_MAX_SCAN_BYTES
+} from '../../../shared/agent-hook-listener/transcript-reader'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import { ASSISTANT_MESSAGE_RETRY_ATTEMPTS, ASSISTANT_MESSAGE_RETRY_MS } from './server-constants'
@@ -105,12 +109,19 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
         (stats) => stats.size,
         () => undefined
       )
-      // A retry on a transcript that hasn't grown would only repeat the last scan.
-      if (size !== undefined && size === claim.scannedSize) {
+      // A retry reads only what was appended since its last scan, and nothing if the file hasn't grown.
+      const previous = claim.scannedSize
+      if (size !== undefined && size === previous) {
         return undefined
       }
       claim.scannedSize = size
-      return readLastAssistantFromTranscriptAsync(transcriptPath, () => current() !== undefined)
+      return readLastAssistantFromTranscriptAsync(
+        transcriptPath,
+        () => current() !== undefined,
+        size !== undefined && previous !== undefined && size > previous
+          ? Math.min(TRANSCRIPT_MAX_SCAN_BYTES, size - previous + TRANSCRIPT_CHUNK_BYTES)
+          : TRANSCRIPT_MAX_SCAN_BYTES
+      )
     }
     void scan().then((text) => {
       const row = current()

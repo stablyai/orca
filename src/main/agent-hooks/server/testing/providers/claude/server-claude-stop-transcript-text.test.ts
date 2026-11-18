@@ -70,6 +70,7 @@ describe('Stop without its text', () => {
     expect(stopped?.state).toBe('done')
     expect(stopped?.lastAssistantMessage).toBeUndefined()
 
+    await vi.waitFor(() => expect(reads).toHaveLength(1))
     reads[0]!('All done.')
     await vi.waitFor(() => expect(row(server)?.lastAssistantMessage).toBe('All done.'))
     expect(row(server)?.state).toBe('done')
@@ -84,6 +85,7 @@ describe('Stop without its text', () => {
     const newer = row(server)
     expect(newer?.state).toBe('working')
 
+    await vi.waitFor(() => expect(reads).toHaveLength(1))
     reads[0]!('All done.')
     // The read settles in a microtask; one macrotask turn lets any late apply land.
     await new Promise((resolve) => setImmediate(resolve))
@@ -98,6 +100,7 @@ describe('Stop without its text', () => {
     await hook(server, { hook_event_name: 'UserPromptSubmit', prompt: 'ship it' })
     await hook(server, { hook_event_name: 'Stop' })
 
+    await vi.waitFor(() => expect(reads).toHaveLength(2))
     reads[0]!('Earlier turn.')
     await new Promise((resolve) => setImmediate(resolve))
     expect(row(server)?.lastAssistantMessage).toBeUndefined()
