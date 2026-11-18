@@ -11,6 +11,7 @@ import type {
 import { mapPRState } from '../../api/github-read-response'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
+import type { GitHubRepositoryMergeMetadata } from './../detect/repository-merge-metadata-cache'
 
 // Main-only: the full rollup stays off the renderer broadcast, beside the outcome it was read for.
 const observedRollups = new WeakMap<PRRefreshOutcome, readonly unknown[]>()
@@ -26,7 +27,7 @@ export function assemblePRRefreshFoundOutcome(args: {
   dataHeadRepo: OwnerRepo | null
   stack: GitHubPRStack | undefined
   mergeable: PRMergeableState
-  stackMergeQueueRequired: boolean | null | undefined
+  stackMergeMetadata: GitHubRepositoryMergeMetadata | undefined
   confirmedContainedHeadOid: string | null
   headDivergedFromMergedPRAtOid: string | null
   conflictSummary: PRConflictSummary | undefined
@@ -37,7 +38,7 @@ export function assemblePRRefreshFoundOutcome(args: {
     dataHeadRepo,
     stack,
     mergeable,
-    stackMergeQueueRequired,
+    stackMergeMetadata,
     confirmedContainedHeadOid,
     headDivergedFromMergedPRAtOid,
     conflictSummary
@@ -63,16 +64,17 @@ export function assemblePRRefreshFoundOutcome(args: {
       ...(data.reviewDecision !== undefined ? { reviewDecision: data.reviewDecision } : {}),
       ...(data.autoMergeEnabled !== undefined ? { autoMergeEnabled: data.autoMergeEnabled } : {}),
       ...(data.autoMergeAllowed !== undefined ? { autoMergeAllowed: data.autoMergeAllowed } : {}),
-      ...(stackMergeQueueRequired !== undefined || data.mergeQueueRequired !== undefined
+      ...(stackMergeMetadata || data.mergeQueueRequired !== undefined
         ? {
-            mergeQueueRequired:
-              stackMergeQueueRequired !== undefined
-                ? stackMergeQueueRequired
-                : data.mergeQueueRequired
+            mergeQueueRequired: stackMergeMetadata
+              ? stackMergeMetadata.mergeQueueRequired
+              : data.mergeQueueRequired
           }
         : {}),
-      ...(data.mergeMethodSettings !== undefined
-        ? { mergeMethodSettings: data.mergeMethodSettings }
+      ...((stackMergeMetadata?.mergeMethodSettings ?? data.mergeMethodSettings) !== undefined
+        ? {
+            mergeMethodSettings: stackMergeMetadata?.mergeMethodSettings ?? data.mergeMethodSettings
+          }
         : {}),
       ...(data.mergeStateStatus !== undefined ? { mergeStateStatus: data.mergeStateStatus } : {}),
       ...(stack ? { stack } : {}),
