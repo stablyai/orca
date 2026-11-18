@@ -59,6 +59,21 @@
   flex-shrink: 0;
 }
 
+.rich-markdown-word-count {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@container (max-width: 620px) {
+  .rich-markdown-word-count {
+    display: none;
+  }
+}
+
 .rich-markdown-toolbar-button:hover,
 .rich-markdown-toolbar-button.is-active {
   border-color: color-mix(in srgb, var(--border) 82%, transparent);
