@@ -106,8 +106,11 @@ export async function forgetBrowserRoutePartitionSessionCookies(partition: strin
     // One that read it already (or ran past its page's timeout) finishes before the jar is cleared,
     // and the next restore tracks the jar again even when the file could not go.
     const restore = routeRestores.get(filePath)
-    routeRestores.delete(filePath)
     await restore
+    // Only after it settles, so an overlapping retirement waits for the same restore.
+    if (routeRestores.get(filePath) === restore) {
+      routeRestores.delete(filePath)
+    }
   }
 }
 
