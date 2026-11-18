@@ -180,7 +180,8 @@ describe('the chat strip and the session list read the same host child records',
         connectedPtyEvidence: {
           tabIds: new Set(),
           paneKeys: new Set(),
-          ptyIdByTerminalHandle: new Map()
+          ptyIdByTerminalHandle: new Map(),
+          terminalHandleByPaneKey: new Map()
         }
       })
       expect([...sources.values()].flatMap((source) => rows(source.children))).toEqual(expected)
