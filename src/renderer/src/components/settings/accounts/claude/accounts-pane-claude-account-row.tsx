@@ -59,6 +59,17 @@ export function renderClaudeAccountRow(
   const plan = getObservedAccountPlan(claudeAccountPlans, account.id, accountRuntimeView)
   // A named row keeps its sign-in email visible, most of all when it needs signing in.
   const namedEmail = account.displayName ? account.email : null
+  const details = joinAccountDetails(
+    account.needsSignIn
+      ? [namedEmail, t('accounts.claude.signInRequired', 'Sign in again to use this account')]
+      : [
+          getClaudeAccountAddedAsHint(account),
+          account.organizationName,
+          plan,
+          namedEmail,
+          formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)
+        ]
+  )
   const reauthenticate = (copyLink: boolean): Promise<void> =>
     runClaudeAccountAction(
       `reauth:${account.id}`,
@@ -116,21 +127,8 @@ export function renderClaudeAccountRow(
               </Badge>
             ) : null}
           </div>
-          <span className="truncate text-[11px] text-muted-foreground">
-            {joinAccountDetails(
-              account.needsSignIn
-                ? [
-                    namedEmail,
-                    t('accounts.claude.signInRequired', 'Sign in again to use this account')
-                  ]
-                : [
-                    getClaudeAccountAddedAsHint(account),
-                    account.organizationName,
-                    plan,
-                    namedEmail,
-                    formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)
-                  ]
-            )}
+          <span className="truncate text-[11px] text-muted-foreground" title={details}>
+            {details}
           </span>
         </button>
         <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
