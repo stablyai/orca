@@ -416,6 +416,7 @@
       "otherDevice": "em outro dispositivo"
     },
     "sessionOptionCopy": {
+      "none": "Nenhum",
       "availableAfterSessionStarts": "Disponível após a sessão começar.",
       "chooseInAgentPicker": "Escolha no seletor de agente…",
       "effort": "Esforço",
@@ -763,14 +764,16 @@
     },
     "offline": {
       "waitingFor": "Esperando por {{host}}",
-      "waiting": "Aguardando o computador",
-      "message": "Verifique se o seu computador está ativado e se o Orca está em execução.",
+      "waiting": "Aguardando host",
+      "message": "Verifique se o host está ativado e se o Orca está em execução.",
       "reconnect": "Reconectar"
     },
     "noMatch": {
       "title": "Nenhuma correspondência",
       "clearSearch": "Limpar busca"
-    }
+    },
+    "waitingForHost": "Aguardando host…",
+    "connectingToHost": "Conectando ao host…"
   },
   "components": {
     "accountsSnapshot": {
@@ -780,7 +783,7 @@
       "copyFailed": "Não foi possível copiar",
       "copyPrompt": "Copiar prompt",
       "statusUnreadable": "Não foi possível ler o status deste host. Tentando novamente…",
-      "updateRequired": "Atualize o Orca no seu computador para iniciar um agente pelo celular."
+      "updateRequired": "Atualize o Orca neste host para iniciar um agente pelo celular."
     },
     "agentSpinner": {
       "monitoring": "Monitorando tarefas em segundo plano",
@@ -918,7 +921,7 @@
       "unsentNotes_many": "{{count}} notas não enviadas",
       "unsentNotes_one": "{{count}} nota não enviada",
       "unsentNotes_other": "{{count}} notas não enviadas",
-      "updateRequired": "Atualize o Orca no seu computador",
+      "updateRequired": "Atualize o Orca neste host",
       "viewedFiles_one": "{{count}} arquivo visualizado",
       "viewedFiles_other": "{{count}} arquivos visualizados",
       "notes_one": "{{count}} nota",
@@ -1011,7 +1014,7 @@
       "connectHint": "Adicione seu site do Jira no Orca para desktop em Configurações → Integrações e verifique novamente.",
       "connectOnDesktop": "Conecte o Jira no seu desktop",
       "credentialUnreadable": "Não foi possível ler as credenciais salvas do Jira: {{credentialError}}",
-      "updateDesktop": "Atualize o Orca no desktop"
+      "updateDesktop": "Atualize o Orca neste host"
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
@@ -1082,23 +1085,23 @@
     },
     "protocolBlockScreen": {
       "backToHosts": "Voltar para hosts",
-      "desktopTooOldBody": "A versão do app desktop pareado é antiga demais para a sua versão atual do Orca Mobile. Atualize o Orca no seu computador e tente se conectar a este host novamente.",
+      "desktopTooOldBody": "A versão do Orca neste host é antiga demais para a sua versão atual do Orca Mobile. Atualize o Orca nesse host e tente se conectar a ele novamente.",
       "getVersion": "Baixar o Orca {{version}}",
-      "mobileTooOldAppStore": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
-      "mobileTooOldGooglePlay": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
-      "mobileTooOldGitHubReleases": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente.",
+      "mobileTooOldAppStore": "Este host precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
+      "mobileTooOldGooglePlay": "Este host precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
+      "mobileTooOldGitHubReleases": "Este host precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente.",
       "openAppStore": "Abrir a App Store",
       "openGooglePlay": "Abrir o Google Play",
       "openGitHubReleases": "Abrir GitHub Releases",
       "refreshRecoveryNote": "Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
-      "refreshWorkspaceBody": "O espaço de trabalho em cache deste host é mais antigo do que o desktop espera. Reconecte-se a este host para baixar a versão atual.",
+      "refreshWorkspaceBody": "O espaço de trabalho em cache deste host é mais antigo do que o host espera. Reconecte-se a este host para baixar a versão atual.",
       "refreshWorkspaceTitle": "Atualizar o espaço de trabalho mobile",
-      "updateDesktopTitle": "Atualizar o Orca no seu computador",
+      "updateDesktopTitle": "Atualizar o Orca neste host",
       "updateMobileTitle": "Atualizar o Orca Mobile",
       "updateRecoveryNote": "Já atualizou? Volte para Hosts e atualize a conexão. Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
-      "workspaceNeedsUpdateAppStore": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
-      "workspaceNeedsUpdateGooglePlay": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
-      "workspaceNeedsUpdateGitHubReleases": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente."
+      "workspaceNeedsUpdateAppStore": "O espaço de trabalho mobile deste host precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
+      "workspaceNeedsUpdateGooglePlay": "O espaço de trabalho mobile deste host precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
+      "workspaceNeedsUpdateGitHubReleases": "O espaço de trabalho mobile deste host precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente."
     },
     "richMarkdownEditor": {
       "imageUrl": "URL da imagem",
@@ -1555,12 +1558,10 @@
     "fileExplorerPanel": {
       "backToSession": "Voltar à sessão",
       "closeFiles": "Fechar arquivos",
-      "connecting": "Conectando ao desktop…",
       "emptyState": "Nenhum arquivo encontrado",
       "loadFailed": "Não foi possível carregar os arquivos",
       "title": "Arquivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando os primeiros 5000",
-      "waiting": "Aguardando o desktop…",
       "filterPlaceholder": "Filtrar arquivos",
       "noMatchesHint": "Somente as pastas que você abriu serão pesquisadas.",
       "clearFilter": "Limpar filtro",
@@ -1596,8 +1597,7 @@
     "fileMediaPreview": {
       "downloading": "Baixando {{bytes}} de {{total}}",
       "loadFailed": "Não foi possível carregar a mídia",
-      "loading": "Carregando mídia…",
-      "waiting": "Aguardando o desktop…"
+      "loading": "Carregando mídia…"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Não foi possível verificar a conexão SSH. Reconecte o host e tente novamente."
@@ -1636,8 +1636,7 @@
       "saveArtifact": "Salvar artefato do terminal",
       "saveFailed": "Não foi possível salvar o arquivo",
       "stay": "Permanecer",
-      "title": "Pré-visualização",
-      "waiting": "Aguardando o desktop…"
+      "title": "Pré-visualização"
     },
     "filePreviewSourceText": {
       "previewLabel": "Pré-visualização do arquivo",
@@ -1886,13 +1885,13 @@
       "localWindows": "Windows local",
       "projectOrder": "Ordem do projeto",
       "projects": "Projetos",
-      "savingToDesktop": "Salvando no desktop",
+      "savingToDesktop": "Salvando no host",
       "show": "Mostrar",
       "showProperties": "Mostrar propriedades",
       "sortBy": "Ordenar por",
       "syncedAcrossDevices": "Sincronizadas entre seus dispositivos",
       "thisComputer": "Este computador",
-      "waitingForDesktop": "Ainda aguardando o desktop",
+      "waitingForDesktop": "Ainda aguardando o host",
       "workspaceOptions": "Opções do espaço de trabalho",
       "done": "Concluído",
       "reset": "Restaurar"
@@ -2512,7 +2511,7 @@
       "committedChangesFailed": "Falha ao carregar alterações commitadas",
       "committedChangesUnavailable": "Alterações commitadas indisponíveis",
       "committedDiffUnavailable": "Diff de alterações commitadas indisponível",
-      "desktopUpdateRequired": "Atualize o Orca no desktop para revisar alterações no celular.",
+      "desktopUpdateRequired": "Atualize o Orca neste host para revisar alterações no celular.",
       "diffLoadFailed": "Não foi possível carregar o diff",
       "reviewNotesLoadFailed": "Não foi possível carregar as notas de revisão",
       "commitLoadFailed": "Não foi possível carregar este commit",
@@ -2779,7 +2778,7 @@
       "emptyPrompt": "O prompt salvo para esta ação está vazio. Atualize as configurações de IA do Controle de Versão no seu computador.",
       "loadFailed": "Não foi possível carregar os agentes disponíveis.",
       "promptNotSent": "O agente foi iniciado, mas o prompt não foi enviado.",
-      "updateRequired": "Atualize o Orca no seu computador para iniciar um agente pelo seu celular."
+      "updateRequired": "Atualize o Orca neste host para iniciar um agente pelo celular."
     },
     "prSidebarState": {
       "loadFailed": "Não foi possível carregar o pull request"
@@ -2975,27 +2974,22 @@
       "noteAdded": "Nota adicionada",
       "notesCopied": "Notas copiadas",
       "saveNoteFailed": "Falha ao salvar a nota",
-      "saveNotesFailed": "Falha ao salvar as notas de revisão",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "saveNotesFailed": "Falha ao salvar as notas de revisão"
     },
     "useDiffReviewCommentActions": {
       "saveFailed": "Falha ao salvar a revisão",
-      "saveStateFailed": "Falha ao salvar o estado da revisão",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "saveStateFailed": "Falha ao salvar o estado da revisão"
     },
     "useDiffReviewController": {
       "loadFailed": "Não foi possível carregar a revisão",
       "missingWorktree": "Worktree ausente",
-      "waitingForDesktop": "Aguardando o desktop…",
       "commitMissing": "Atualize o aplicativo Orca para abrir arquivos de commit aqui."
     },
     "useDiffReviewDiffLoading": {
-      "loadFailed": "Não foi possível carregar o diff",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "loadFailed": "Não foi possível carregar o diff"
     },
     "useDiffReviewGitActions": {
-      "actionFailed": "Falha na ação de controle de versão",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "actionFailed": "Falha na ação de controle de versão"
     },
     "useDiffReviewInteractions": {
       "openFailed": "Não foi possível abrir na sessão"
@@ -3009,8 +3003,7 @@
       "notesSentWithWarning": "Notas de revisão enviadas. {{warning}}",
       "promptNotSent": "O agente foi iniciado, mas as notas não foram enviadas. Use Copiar Notas para colá-las.",
       "sendFailed": "Falha ao enviar as notas",
-      "startingAgent": "Iniciando um agente…",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "startingAgent": "Iniciando um agente…"
     },
     "useImageAttachment": {
       "attachFailed": "Falha ao anexar",
@@ -3049,8 +3042,7 @@
       "presetsUnavailable": "Predefinições de agentes indisponíveis"
     },
     "usePrAiTriage": {
-      "launchFailed": "Falha ao iniciar o agente",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "launchFailed": "Falha ao iniciar o agente"
     },
     "usePrCommentActions": {
       "actionFailed": "Falha ao executar a ação no comentário"
@@ -3252,9 +3244,6 @@
       "openInBrowser": "Abrir no navegador do sistema",
       "copyLink": "Copiar link"
     },
-    "useDiffReviewGitHub": {
-      "waitingForDesktop": "Aguardando o desktop…"
-    },
     "usePrTextAction": {
       "updateFailed": "Falha ao atualizar o pull request."
     }
@@ -3343,7 +3332,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Não foi possível carregar as configurações de entrega. Reabra esta tela para tentar novamente.",
       "saveFailed": "Não foi possível salvar as configurações de entrega. Tente novamente.",
-      "updateDesktopHint": "Pareie um desktop atualizado para receber notificações neste celular."
+      "updateDesktopHint": "Pareie um host atualizado para receber notificações neste celular."
     },
     "notificationDisplayTest": {
       "accepted": "O serviço de notificações push do Orca aceitou o teste. Verifique se a notificação chegou.",
@@ -3434,8 +3423,7 @@
   },
   "sourceControl": {
     "actionSheetRunners": {
-      "noBaseBranch": "Nenhuma branch base disponível para fazer rebase",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "noBaseBranch": "Nenhuma branch base disponível para fazer rebase"
     },
     "actions": {
       "checkingReviewStatus": "Verificando status da revisão.",
@@ -3616,7 +3604,6 @@
       "noCommits": "Nenhum commit.",
       "noFileChanges": "Nenhuma alteração em arquivos",
       "retryFiles": "Tentar carregar os arquivos do commit novamente",
-      "waitingForDesktop": "Aguardando o desktop…",
       "loading": "Carregando commits…"
     },
     "gitStatus": {
@@ -3685,10 +3672,8 @@
       "pullRequest": "Pull request"
     },
     "loaders": {
-      "connectingToDesktop": "Conectando ao desktop…",
       "loadFailed": "Não foi possível carregar o controle de versão",
-      "updateDesktop": "Atualize o Orca no desktop para usar o controle de versão no celular.",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "updateDesktop": "Atualize o Orca neste host para usar o controle de versão no celular."
     },
     "modals": {
       "currentBranch": "atual",
@@ -3884,8 +3869,7 @@
       "windowsBatchUnsafeArguments": "{{label}} é executado por um script em lote do Windows que não aceita o prompt de várias linhas como argumento. Em Configurações, indique o executável do agente ou use um comando personalizado sem {prompt} para que o Orca envie o prompt pelo stdin."
     },
     "useMobileCommitFailureRecovery": {
-      "launchFailed": "Falha ao iniciar o agente",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "launchFailed": "Falha ao iniciar o agente"
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Falha ao gerar a mensagem de commit"
@@ -3893,8 +3877,7 @@
     "useMobileGitRequests": {
       "actionFailed": "Falha na ação de controle de versão",
       "branchUnavailable": "Status da branch indisponível",
-      "commitFailed": "Falha no commit",
-      "waitingForDesktop": "Aguardando o desktop…"
+      "commitFailed": "Falha no commit"
     },
     "conflictActions": {
       "needsNewerHost": "Atualize o Orca no computador que executa este espaço de trabalho para resolver conflitos de mesclagem pelo celular.",
@@ -4182,8 +4165,8 @@
       "connectLinearMessage": "Veja as issues do Linear atribuídas a você e comece a trabalhar nelas diretamente em Tarefas.",
       "connectLinearTitle": "Conecte sua conta do Linear",
       "jiraStatusFailed": "Falha ao ler o status do Jira",
-      "updateDesktopMessage": "Esta visualização de Tarefas no celular requer uma versão mais recente do Orca no desktop.",
-      "updateDesktopTitle": "Atualize o Orca no desktop"
+      "updateDesktopMessage": "Esta visualização de Tarefas no celular requer uma versão mais recente do Orca neste host.",
+      "updateDesktopTitle": "Atualize o Orca neste host"
     },
     "options": {
       "all": "Todos",
@@ -4420,7 +4403,6 @@
       "title": "Tarefas"
     },
     "searchControl": {
-      "jiraPlaceholder": "JQL do Jira, ex.: project = ABC AND statusCategory != Done",
       "projectPlaceholder": "Buscar na visualização do projeto…",
       "providerPlaceholder": "Buscar tarefas do {{provider}}…"
     },
@@ -4546,15 +4528,7 @@
       "confirmGitHubRebase": "Fazer rebase e mesclar PR #{{number}}?",
       "confirmGitLabMerge": "Mesclar o merge request #{{number}}?",
       "confirmGitLabSquash": "Fazer squash e mesclar o merge request #{{number}}?",
-      "confirmGitLabRebase": "Fazer rebase e mesclar o merge request #{{number}}?",
-      "merged": "Mesclado",
-      "closed": "Fechado",
-      "conflicts": "Conflitos",
-      "behind": "Desatualizado",
-      "blocked": "Bloqueado",
-      "checksPending": "Verificações pendentes",
-      "ableToMerge": "Pode ser mesclado",
-      "unknown": "Desconhecido"
+      "confirmGitLabRebase": "Fazer rebase e mesclar o merge request #{{number}}?"
     },
     "pagination": {
       "pageUnreachable": "A página {{page}} está além do que a pesquisa do GitHub pode retornar.",
@@ -4936,6 +4910,64 @@
             }
           }
         }
+      },
+      "TaskPage": {
+        "99c2755218": "JQL do Jira, ex.: project = ABC AND statusCategory != Done",
+        "jiraTextMatchesNotice": "Mostrando correspondências de texto. O Jira não conseguiu executar esta busca como JQL."
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "Cancelado"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Mergeado",
+              "4f976d3450": "Fechado",
+              "1f8eb81c0e": "Aprovação necessária",
+              "c606463dc2": "Alterações solicitadas",
+              "7e8bbe3cd7": "Conflitos",
+              "b169f943e1": "Mergear quando pronto",
+              "autoMergeOn": "Merge automático ativado",
+              "039c072f94": "Atrás",
+              "bf5e4c6c92": "Bloqueado",
+              "87fa36ac83": "Verificações falharam",
+              "4e2507176b": "Verificações pendentes",
+              "def355ff38": "Pode ser mergeado",
+              "f958920f3a": "Verificando"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Mergeado",
+                  "88d044c42f": "Fechado",
+                  "96b05e374c": "Conflitos",
+                  "5105b0e584": "Aprovação necessária",
+                  "893a999c8c": "Alterações solicitadas",
+                  "01ab632a21": "Threads não resolvidas",
+                  "bf628700f6": "As verificações precisam passar",
+                  "65c847ad1e": "Verificações pendentes",
+                  "382c70faeb": "Atrás",
+                  "195917574e": "Verificando",
+                  "4ecc0d90ee": "Bloqueado",
+                  "49ac4fec10": "Verificações falharam",
+                  "04a3015a12": "Pode ser mergeado"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "O Jira não conseguiu executar esta consulta JQL. Verifique a sintaxe e tente novamente."
       }
     }
   }

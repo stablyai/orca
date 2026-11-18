@@ -3,9 +3,7 @@ import type {
   JournalForkPreparationResult
 } from './journal-fork-preparation'
 
-import type { Worker } from 'node:worker_threads'
-
-import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
+import { spawnJournalSqlReader, type JournalSqlReaderWorker } from './journal-sql-reader-spawn'
 
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
@@ -84,7 +82,7 @@ export class JournalSqlConversionReader {
 }
 
 export class ReaderSlot {
-  private readonly worker: Worker
+  private readonly worker: JournalSqlReaderWorker
   private nextId = 0
   private readonly pending = new Map<
     number,
@@ -118,11 +116,11 @@ export class ReaderSlot {
   ) {
     this.credit = replyCredit?.claim()
     try {
-      this.worker = spawnWorkerThread(workerPath, {
-        name: 'orca-journal-sql-reader',
-        workerData: { filename, originalFilename, replyCredit: this.credit?.grant },
-        execArgv: []
-      })
+      this.worker = spawnJournalSqlReader(
+        workerPath,
+        { filename, originalFilename },
+        this.credit && { replyCredit: this.credit.grant }
+      )
     } catch (error) {
       this.credit?.retire()
       throw error

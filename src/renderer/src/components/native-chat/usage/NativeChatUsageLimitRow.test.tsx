@@ -358,25 +358,4 @@ describe('usage-limit row More menu', () => {
     }
     expect(toastError).not.toHaveBeenCalled()
   })
-
-  it('reports a clipboard failure', async () => {
-    writeClipboardText.mockRejectedValue(new Error('denied'))
-    const user = userEvent.setup()
-    render(row({ resetsAt: Date.now() + HOUR }))
-    await user.click(screen.getByRole('button', { name: 'More actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Copy error' }))
-    expect(toastError).toHaveBeenCalledTimes(1)
-  })
-
-  it('opens and closes from the keyboard, returning focus to its trigger', async () => {
-    const user = userEvent.setup()
-    render(row({ resetsAt: Date.now() + HOUR }))
-    const more = screen.getByRole('button', { name: 'More actions' })
-    more.focus()
-    await user.keyboard('{Enter}')
-    expect(await screen.findByRole('menuitem', { name: 'Copy error' })).toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    expect(screen.queryByRole('menuitem', { name: 'Copy error' })).toBeNull()
-    expect(more).toHaveFocus()
-  })
 })

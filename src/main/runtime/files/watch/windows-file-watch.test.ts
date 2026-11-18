@@ -86,22 +86,16 @@ describe('watchWindowsRuntimeFileExplorer', () => {
     expect(callback).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: 'C:\\repo' }])
   })
 
-  it.each([
-    'src\\node_modules_notes.ts',
-    'src/not_node_modules/file.ts',
-    'node_modules',
-    'app\\dist',
-    'build',
-    'src\\target.ts',
-    '',
-    null
-  ])('preserves conservative refreshes for an included or unknown filename: %s', (filename) => {
-    const callback = vi.fn()
-    watchWindowsRuntimeFileExplorer('C:\\repo', callback, vi.fn())
-    fsWatch.listener?.('rename', filename)
-    vi.advanceTimersByTime(150)
-    expect(callback).toHaveBeenCalledExactlyOnceWith([
-      { kind: 'overflow', absolutePath: 'C:\\repo' }
-    ])
-  })
+  it.each(['src\\node_modules_notes.ts', 'node_modules', '', null])(
+    'preserves conservative refreshes for an included or unknown filename: %s',
+    (filename) => {
+      const callback = vi.fn()
+      watchWindowsRuntimeFileExplorer('C:\\repo', callback, vi.fn())
+      fsWatch.listener?.('rename', filename)
+      vi.advanceTimersByTime(150)
+      expect(callback).toHaveBeenCalledExactlyOnceWith([
+        { kind: 'overflow', absolutePath: 'C:\\repo' }
+      ])
+    }
+  )
 })

@@ -10,5 +10,19 @@ export function selectJournalAutomaticSubmission(
   now: number,
   facts: JournalSqlQueueFacts
 ) {
-  return selectJournalEligibleQueueCard(scope, selection.authority, now, facts, true)
+  const child = selection.child
+  return selectJournalEligibleQueueCard(
+    scope,
+    selection.authority,
+    now,
+    facts,
+    true,
+    undefined,
+    Boolean(
+      child?.ready &&
+      !child.closing &&
+      !child.stopping &&
+      selection.authority.child?.fence === child.fence
+    )
+  )
 }

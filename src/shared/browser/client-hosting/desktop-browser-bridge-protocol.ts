@@ -9,6 +9,8 @@ export const DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY = 'browser.desktopBrid
 /** Older desktops drop the whole attachment on a method they don't allow, so tab annotations need this. */
 export const DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY =
   'browser.desktopBridge.tab-annotations.v1'
+/** Same reason: pdf, network log, device/media/offline/geolocation emulation and page storage need this. */
+export const DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY = 'browser.desktopBridge.page-tools.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
 export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge_not_forwarded'
@@ -24,6 +26,29 @@ export const DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL =
   'Hosts browsing from this device instead'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE = `No Orca desktop is sharing its browser with this host. On your desktop, open this host's SSH settings and turn on "${DESKTOP_BROWSER_BRIDGE_SETTING_LABEL}", make sure ${DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL} is "SSH host" and this host isn't listed under "${DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL}", and keep the host connected. The desktop needs an Orca version that supports it.`
+
+const PAGE_TOOLS_METHODS = [
+  'browser.pdf',
+  'browser.network',
+  'browser.setDevice',
+  'browser.setMedia',
+  'browser.setOffline',
+  'browser.geolocation',
+  'browser.storage.local.get',
+  'browser.storage.local.set',
+  'browser.storage.local.clear',
+  'browser.storage.session.get',
+  'browser.storage.session.set',
+  'browser.storage.session.clear'
+] as const
+
+/** Methods an older desktop refuses, mapped to the capability a desktop declares when it serves them. */
+export const DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES: ReadonlyMap<string, string> = new Map([
+  ['browser.tabAnnotations', DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY],
+  ...PAGE_TOOLS_METHODS.map(
+    (method) => [method, DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY] as const
+  )
+])
 
 /** Unlike the pre-1.4.225 arbitrary CLI relay, allow browser commands only: no desktop files, clipboard, cookies/headers, raw agent-browser, profile/identity changes or certificate bypass. */
 export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
@@ -70,7 +95,8 @@ export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
   'browser.mouseWheel',
   'browser.viewport',
   'browser.dialogAccept',
-  'browser.dialogDismiss'
+  'browser.dialogDismiss',
+  ...PAGE_TOOLS_METHODS
 ])
 
 /** Main asks the renderer, which owns the workspace-to-host map, what a host may reach. */

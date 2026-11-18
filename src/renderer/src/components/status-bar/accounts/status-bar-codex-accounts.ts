@@ -8,7 +8,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getCodexAccountDisplayDetail,
   getCodexAccountDisplayLabel
-} from '@/lib/provider-accounts/codex-account-display-label'
+} from '../../../../../shared/agent-accounts/codex-account-display-label'
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,

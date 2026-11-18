@@ -5590,8 +5590,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Schließen",
           "64c71cf7b9": "Orca hat auf diesem Rechner noch keine Skills installiert.",
-          "0900db719a": "— nicht verbunden",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Dieser Computer",
           "3677ae58e7": "Skills, die Orca über einen Link installiert hat. Erneut installieren, zu einer früheren Version zurückkehren oder entfernen.",
           "44d118a8f7": "Von Orca installiert",
@@ -5625,8 +5623,6 @@
           "a4dfd33095": "Ein Arbeitsbereich",
           "c779621aa0": "Globale Skills",
           "63cc9e31fe": "Ziel",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— nicht verbunden",
           "0785d0a503": "— Aktualisierung erforderlich",
           "8562dd1e6e": "Dieser Computer",
           "b8a0b706ad": "Rechner"
@@ -19521,6 +19517,7 @@
         "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
         "optionUpdateFailed": "Option konnte nicht aktualisiert werden",
         "optionValue": {
+          "none": "Keine",
           "fast": "Schnell",
           "minimal": "Minimal",
           "low": "Niedrig",

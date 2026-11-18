@@ -5464,8 +5464,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "關閉",
           "64c71cf7b9": "Orca 尚未在這台電腦上安裝任何技能。",
-          "0900db719a": "— 已斷開連線",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "本機",
           "3677ae58e7": "Orca 透過連結安裝的技能。可重新安裝、還原至較早版本，或移除技能。",
           "44d118a8f7": "由 Orca 安裝",
@@ -5499,8 +5497,6 @@
           "a4dfd33095": "一個工作區",
           "c779621aa0": "全域技能",
           "63cc9e31fe": "目的地",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— 已斷開連線",
           "0785d0a503": "— 需要更新",
           "8562dd1e6e": "本機",
           "b8a0b706ad": "機器"
@@ -19258,6 +19254,7 @@
         "availableAfterSessionStarts": "工作階段開始後可用。",
         "optionUpdateFailed": "無法更新選項",
         "optionValue": {
+          "none": "無",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
