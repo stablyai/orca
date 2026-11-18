@@ -225,7 +225,7 @@ it("holds a Claude turn's opener, kept under its echo's alias, sent turns before
 
 it('carries a tool row too large for one reply with its output cut, keeping its size and digest', async () => {
   const { f, reads } = await chat(1)
-  const output = 'x'.repeat(33 * 1024 * 1024)
+  const output = 'x'.repeat(65 * 1024 * 1024)
   await f.run({
     kind: 'item',
     identity: identity('huge-read'),
@@ -235,7 +235,7 @@ it('carries a tool row too large for one reply with its output cut, keeping its 
       name: 'Read',
       input: {},
       state: 'completed',
-      output: { head: output, byteLength: 34_603_008, digest: 'whole', truncated: false }
+      output: { head: output, byteLength: 68_157_440, digest: 'whole', truncated: false }
     }
   })
   const { snapshot } = await reads.operationWindow({ afterSequence: 0 })
@@ -243,7 +243,7 @@ it('carries a tool row too large for one reply with its output cut, keeping its 
   expect(tool?.body).toMatchObject({
     output: {
       head: 'x'.repeat(16 * 1024),
-      byteLength: 34_603_008,
+      byteLength: 68_157_440,
       digest: 'whole',
       truncated: true
     }
@@ -320,4 +320,24 @@ it('refuses a row past a whole reply that cutting cannot shrink, before decoding
   await expect(
     reads.operationWindow({ afterSequence: 0, withoutToolOutput: true })
   ).rejects.toThrow(/exceeds 67108864 bytes/)
+})
+
+it('refuses a window whose rows cannot be cut to fit one reply, before decoding them', async () => {
+  const { f, reads } = await chat(1)
+  for (const id of ['write-a', 'write-b', 'write-c']) {
+    await f.run({
+      kind: 'item',
+      identity: identity(id),
+      options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+      body: {
+        kind: 'tool-call',
+        name: 'Write',
+        input: { content: 'w'.repeat(25 * 1024 * 1024) },
+        state: 'completed'
+      }
+    })
+  }
+  await expect(reads.operationWindow({ afterSequence: 0 })).rejects.toThrow(
+    /operation window \(\d+ bytes after cutting\) exceeds 67108864 bytes/
+  )
 })

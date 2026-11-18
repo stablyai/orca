@@ -28,6 +28,23 @@ export function readOperationWindowItems(
   start: number,
   anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape'>
 ): AgentJournalRenderItem[] {
+  if (scope.db.isTransaction) {
+    return readWindowItems(scope, start, anchors)
+  }
+  // Sizes and rows come from one snapshot, so a row can't grow between them.
+  scope.db.exec('BEGIN')
+  try {
+    return readWindowItems(scope, start, anchors)
+  } finally {
+    scope.db.exec('COMMIT')
+  }
+}
+
+function readWindowItems(
+  scope: JournalSqlScope,
+  start: number,
+  anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape'>
+): AgentJournalRenderItem[] {
   const projected = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
   const rows = `FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}`
@@ -56,41 +73,35 @@ export function readOperationWindowItems(
       row.diff = Boolean(found?.diff)
     }
   }
-  // Largest first, Diff calls last: their patch names the files they edited.
+  // Largest first, Diff calls last: their patch names the files they edited. Each cut is
+  // counted at the size it actually comes back at, which is whole when nothing could be cut.
+  const cutSize = scope.db.prepare(`SELECT octet_length(${shortenedJsonSql(projected)}) AS bytes
+    FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
   const cut: string[] = []
   for (const row of large.toSorted(
     (a, b) => Number(a.diff) - Number(b.diff) || b.bytes - a.bytes
   )) {
     if (row.bytes > WINDOW_BYTES || (total > WINDOW_BYTES && row.bytes > CUT_ROW_BYTES)) {
       cut.push(row.itemId)
-      total -= row.bytes - CUT_ROW_BYTES
+      const shortened = cutSize.get(...scope.prefix, row.itemId)?.bytes
+      if (typeof shortened === 'number') {
+        total -= row.bytes - shortened
+        row.bytes = shortened
+      }
     }
   }
-  // A cut row whose bulk is not its output or patch stays whole unless past a reply; that one
-  // comes back NULL and is refused here, before anything decodes it.
-  const sizeOf = new Map(sizes.map((row) => [row.itemId, row.bytes]))
-  const refused = cut.filter((itemId) => sizeOf.get(itemId)! > JOURNAL_READER_REPLY_BYTE_LIMIT)
+  if (total > JOURNAL_READER_REPLY_BYTE_LIMIT) {
+    throw new Error(
+      `journal operation window (${total} bytes after cutting) exceeds ${JOURNAL_READER_REPLY_BYTE_LIMIT} bytes`
+    )
+  }
+  // A cut row whose bulk is not its output or patch comes back whole, within the total above.
   const value = cut.length
-    ? `CASE WHEN item_id IN (SELECT value FROM json_each(?1))
-        THEN COALESCE(${shortenedJsonSql(projected)},
-          CASE WHEN item_id IN (SELECT value FROM json_each(?2)) THEN NULL ELSE ${projected} END)
-        ELSE ${projected} END`
+    ? `CASE WHEN item_id IN (SELECT value FROM json_each(?))
+        THEN COALESCE(${shortenedJsonSql(projected)}, ${projected}) ELSE ${projected} END`
     : projected
   return scope.db
-    .prepare(`SELECT item_id, ${value} AS payload_json ${rows}
-      ORDER BY sequence,sequence_index,ordinal`)
-    .all(
-      ...(cut.length ? [JSON.stringify(cut), JSON.stringify(refused)] : []),
-      ...scope.prefix,
-      start
-    )
-    .map((row) => {
-      const examined = scope.examined(row)
-      if (examined.payload_json === null) {
-        throw new Error(
-          `journal stored item (${sizeOf.get(String(examined.item_id))} bytes) exceeds ${JOURNAL_READER_REPLY_BYTE_LIMIT} bytes`
-        )
-      }
-      return scope.decode<AgentJournalRenderItem>(examined.payload_json)
-    })
+    .prepare(`SELECT ${value} AS payload_json ${rows} ORDER BY sequence,sequence_index,ordinal`)
+    .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, start)
+    .map((row) => scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json))
 }
