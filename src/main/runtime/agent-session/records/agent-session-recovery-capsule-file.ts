@@ -9,6 +9,7 @@ import {
   renameDurable,
   writeTempFileDurable
 } from '../../../filesystem/durable-file-write'
+import { storedAgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   normalizeState,
   parseState,
@@ -57,9 +58,22 @@ export async function publishRecoveryCapsuleState(
   const { serialized } = stringifyJsonWithinByteLimit(
     {
       version: 2,
-      entries,
+      entries: entries.map((entry) => ({
+        ...entry,
+        marker: storedAgentSessionResumeMarker(entry.marker),
+        ...(entry.replacement
+          ? { replacement: storedAgentSessionResumeMarker(entry.replacement) }
+          : {})
+      })),
       ...(dismissedAt === undefined ? {} : { dismissedAt }),
-      ...(failed.length === 0 ? {} : { failed })
+      ...(failed.length === 0
+        ? {}
+        : {
+            failed: failed.map((failure) => ({
+              ...failure,
+              marker: storedAgentSessionResumeMarker(failure.marker)
+            }))
+          })
     },
     MAX_CAPSULE_BYTES
   )

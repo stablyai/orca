@@ -98,18 +98,29 @@ describe('worker stops across a restart', () => {
   const chatPass = (
     ctx: ReturnType<typeof setup>,
     status: 'idle' | 'working',
-    cut: Awaited<ReturnType<StructuredAgentSessionRestartResume['cutOf']>>
+    cut: Awaited<ReturnType<StructuredAgentSessionRestartResume['cutOf']>>,
+    open: () => Promise<unknown> = async () => undefined,
+    cutByLastRun: ReadonlySet<string> = new Set([CHAT_SESSION])
   ) =>
     reportWorkerStopsAcrossRestart({
       db: ctx.db,
       reportDeps: ctx.reportDeps,
       reportRestingPane: async () => {},
       chats: {
-        open: async () => undefined,
+        cutByLastRun,
+        open,
         status: async () => ({ status, lastAssistantMessage: 'Running the migration.' }),
         cutOf: async () => cut
       }
     })
+
+  it('opens no chat worker the run that just ended did not cut, even one an older run cut', async () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const open = vi.fn(async () => undefined)
+    await chatPass(ctx, 'idle', { cause: 'quit', turnId: 'turn-0' }, open, new Set())
+    expect(open).not.toHaveBeenCalled()
+    expect(ctx.mail()).toEqual([])
+  })
 
   it('reports each cut of a chat worker once, never one continued or not cut', async () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))

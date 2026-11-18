@@ -88,6 +88,12 @@ describe('crash cut resume marker', () => {
     })
   })
 
+  it('marks a cut turn whose agent was not proven to have exited', () => {
+    const unproven = { ...turnItem('turn-1', 'unverifiable', 'user-1'), ...settled }
+    expect(derive([unproven])).toMatchObject({ exitUnproven: true })
+    expect(derive([interrupted(), crashCut()])).not.toHaveProperty('exitUnproven')
+  })
+
   it('marks a turn cut while it asked the person as waiting on them', () => {
     const asked = pendingApproval()
     const cancelled: AgentJournalRenderItem = {

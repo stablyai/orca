@@ -41,7 +41,7 @@ afterEach(() => {
 })
 
 const olderHost = async () => 'unsupported' as const
-const hostContinued = async () => 'settled' as const
+const hostContinued = async () => []
 
 describe('launch auto-resume', () => {
   it('leaves continuing to a host that does it, and asks the person about what it left', async () => {

@@ -47,6 +47,8 @@ export type AgentSessionResumeMarker = {
   trigger: AgentSessionResumeMarkerTrigger
   /** Compare provider identity roots: Claude close advances the leaf after teardown, so full-key checks would refuse every resume. A changed root is a fork. */
   providerHandleRoot: string
+  /** A crash cut whose agent was not proven to have exited: a person continues it, never Orca alone. */
+  exitUnproven?: true
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
   teardownId: string
   /** Offer-time journal position; later accepted messages or another epoch mean the chat moved on. Older markers omit it. */
@@ -87,6 +89,10 @@ const agentSessionResumeMarkerSchema = z.object({
   trigger: z.enum(AGENT_SESSION_RESUME_MARKER_TRIGGERS),
   providerHandleRoot: markerField,
   teardownId: markerField,
+  /** A crash offer is stored as a quit plus this, since released builds reject a capsule naming an
+   *  unknown trigger but strip unknown keys; a rollback then still reads every offer. */
+  cause: z.literal('crash').optional().catch(undefined),
+  exitUnproven: z.literal(true).optional().catch(undefined),
   contextClearOperationId: markerField.optional().catch(undefined),
   journalCursor: z
     .object({ epoch: markerField, sequence: z.number().int().nonnegative() })
@@ -101,10 +107,25 @@ export function parseAgentSessionResumeMarker(value: unknown): AgentSessionResum
   if (!parsed.success) {
     return null
   }
-  const { activity, journalCursor, ...marker } = parsed.data
+  const { activity, journalCursor, cause, exitUnproven, ...marker } = parsed.data
   return {
     ...marker,
+    ...(exitUnproven ? { exitUnproven } : {}),
+    ...(cause === 'crash' ? { trigger: 'crash' as const } : {}),
     ...(journalCursor === undefined ? {} : { journalCursor }),
     ...(activity === undefined ? {} : { activity })
   }
+}
+
+/** The marker as the capsule file stores it; see `cause`. */
+export function storedAgentSessionResumeMarker(marker: AgentSessionResumeMarker): Omit<
+  AgentSessionResumeMarker,
+  'trigger'
+> & {
+  trigger: AgentSessionResumeTrigger
+  cause?: 'crash'
+} {
+  return marker.trigger === 'crash'
+    ? { ...marker, trigger: 'quit', cause: 'crash' }
+    : { ...marker, trigger: marker.trigger }
 }

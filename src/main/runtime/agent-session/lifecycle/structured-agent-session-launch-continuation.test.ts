@@ -5,6 +5,19 @@ import {
   STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
   type StructuredAgentSessionLaunchContinuationDeps
 } from './structured-agent-session-launch-continuation'
+import type { StructuredAgentSessionResumeCandidate } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-set'
+
+const offer = (sessionId: string, recordedAt: number): StructuredAgentSessionResumeCandidate => ({
+  sessionId,
+  workspaceId: 'repo::/repo',
+  agent: 'claude',
+  work: { kind: 'turn', id: 'turn-1' },
+  trigger: 'quit',
+  recordedAt,
+  latestPrompt: '',
+  executionHostId: 'local',
+  workspaceKind: 'git-worktree'
+})
 
 const ENDS = {
   'chat-crashed': { runtime: 'runtime-crashed', end: 'crash' },
@@ -33,7 +46,10 @@ function launch(resumeWorkOnRestart: boolean) {
     passOverAutomatic: vi.fn(async () => {
       calls.push('pass over')
     }),
-    cutOf: vi.fn(async () => null)
+    cutOf: vi.fn(async () => null),
+    // The run that just ended started at 3: only what it recorded is its cut.
+    list: vi.fn(async () => [offer('chat-quit', 4), offer('chat-quit-before', 2)]),
+    listFailures: vi.fn(async () => [])
   }
   const deps: StructuredAgentSessionLaunchContinuationDeps = {
     restartResume,
@@ -48,6 +64,7 @@ function launch(resumeWorkOnRestart: boolean) {
       }
     },
     startedAt: 5,
+    previousRunStartedAt: 3,
     resumeWorkOnRestart: () => resumeWorkOnRestart
   }
   return { result: continueStructuredAgentSessionsAtLaunch(deps), restartResume, calls, deps }
@@ -56,7 +73,11 @@ function launch(resumeWorkOnRestart: boolean) {
 describe('continuing interrupted chats at launch', () => {
   it("offers what each chat's crashed run cut, continues it, then leaves what remains to a person", async () => {
     const { result, restartResume, calls } = launch(true)
-    expect((await result).continued).toEqual(new Set(['continued']))
+    const settled = await result
+    expect(settled.continued).toEqual(new Set(['continued']))
+    expect(settled.cutByLastRun).toEqual(
+      new Set(['chat-crashed', 'chat-crashed-earlier', 'chat-quit'])
+    )
     expect(restartResume.adoptCrashCuts).toHaveBeenCalledWith(
       [
         { sessionId: 'chat-crashed', crashedRuntime: 'runtime-crashed' },
@@ -68,7 +89,7 @@ describe('continuing interrupted chats at launch', () => {
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
       undefined,
-      { automatic: true }
+      { automatic: true, onReserved: expect.any(Function) }
     )
     expect(calls).toEqual(['adopt', 'continue', 'pass over'])
   })
@@ -78,6 +99,26 @@ describe('continuing interrupted chats at launch', () => {
     expect((await result).continued).toEqual(new Set())
     expect(restartResume.continueAfterRestart).not.toHaveBeenCalled()
     expect(calls).toEqual(['adopt', 'pass over'])
+  })
+
+  it('names the chats it took before their agents start, and none when the setting is off', async () => {
+    const reserved = Promise.withResolvers<void>()
+    const on = launch(true)
+    on.restartResume.continueAfterRestart.mockImplementation(async (...args: unknown[]) => {
+      const options = args[3] as { onReserved: (rows: { sessionId: string }[]) => void }
+      options.onReserved([{ sessionId: 'chat-crashed' }])
+      await reserved.promise
+      return { resumed: [], continued: [] }
+    })
+    const once = new StructuredAgentSessionLaunchContinuationOnce()
+    once.start(on.deps)
+    expect((await once.taken).map((row) => row.sessionId)).toEqual(['chat-crashed'])
+    reserved.resolve()
+    await once.done
+
+    const off = new StructuredAgentSessionLaunchContinuationOnce()
+    off.start(launch(false).deps)
+    expect(await off.taken).toEqual([])
   })
 
   it('lets waiters go on without a host, and still runs once a retried restoration has one', async () => {

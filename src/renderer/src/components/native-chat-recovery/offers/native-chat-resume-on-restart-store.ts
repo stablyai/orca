@@ -6,7 +6,7 @@ import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-d
 import { launchResumeSessionIds } from '../tree/native-chat-resume-on-restart-grouping'
 import { useEffect, useSyncExternalStore } from 'react'
 import { createNativeChatRestartStore } from './native-chat-restart-runtime-store'
-import { awaitRestartHostLaunchContinuation } from './native-chat-restart-host-offer'
+import { readRestartHostLaunchTaken } from './native-chat-restart-host-offer'
 
 export const localNativeChatRestartStore = createNativeChatRestartStore({ kind: 'local' })
 export const {
@@ -59,12 +59,24 @@ export async function loadNativeChatLaunchOffer(
     NativeChatRestartStore,
     'readNativeChatRestartOffer' | 'continueNativeChatRestartOffer' | 'target'
   >,
-  awaitHostContinuation = awaitRestartHostLaunchContinuation
+  readHostTaken = readRestartHostLaunchTaken
 ): Promise<void> {
   // The preference belongs to this launch's request; later saves cannot dispatch another.
   const autoResume = useAppStore.getState().settings?.nativeChatResumeWorkOnRestart === true
-  // A host that continues on its own has done so by now; what it left needs the person.
-  const hostContinued = (await awaitHostContinuation(store.target)) === 'settled'
+  // A host that continues on its own names what it took before any agent starts; show that as this
+  // launch's run, then offer what it left to the person.
+  const taken = await readHostTaken(store.target)
+  const hostContinues = taken !== 'unsupported'
+  if (hostContinues) {
+    markNativeChatLaunchResumeDecided()
+  }
+  if (hostContinues && taken.length > 0) {
+    await store.continueNativeChatRestartOffer(
+      taken.map((row) => row.sessionId),
+      'launch',
+      taken
+    )
+  }
   let read = await store.readNativeChatRestartOffer()
   // Host startup can race the renderer. Retry only failed reads, never a confirmed empty result,
   // so a transient startup gap does not strand a durable offer or add steady-state polling.
@@ -80,7 +92,7 @@ export async function loadNativeChatLaunchOffer(
   if (offered.length === 0) {
     return
   }
-  if (!autoResume || hostContinued) {
+  if (!autoResume || hostContinues) {
     requestNativeChatResumeOnRestartDialog()
     return
   }

@@ -56,8 +56,9 @@ export function writeAutomaticRestartLedger(
   return writeRecoveryFileDurable(ledgerPath(capsulePath), JSON.stringify(ledger))
 }
 
-/** Orca continues on its own only a cut from the run that just ended, that no person is being asked
- *  about, that it has not continued before, and while it took fewer than three in five minutes. */
+/** Orca continues on its own only a cut from the run that just ended, whose agent was proven to
+ *  have exited, that no person is being asked about, that it has not continued before, and while it
+ *  took fewer than three in five minutes. */
 export function automaticallyContinuable(
   ledger: AutomaticRestartLedger,
   marker: AgentSessionResumeMarker,
@@ -66,6 +67,7 @@ export function automaticallyContinuable(
   const taken = ledger.taken[marker.sessionId] ?? []
   return (
     !ledger.passed.includes(offerKey(marker)) &&
+    marker.exitUnproven !== true &&
     !restartActivityWaitsOnPerson(marker.activity) &&
     !taken.some((entry) => entry.work === cutOf(marker)) &&
     taken.filter((entry) => now - entry.at <= AUTOMATIC_CONTINUATION_WINDOW_MS).length <

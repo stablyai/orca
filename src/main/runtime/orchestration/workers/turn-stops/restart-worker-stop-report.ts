@@ -1,6 +1,6 @@
-// A worker whose turn ended while Orca was down, or whose chat a restart cut and Orca did not continue,
-// raised no live edge. One pass at startup reads each open Dispatch's worker once and reports it
-// through the same turn-stop report: a terminal as its live stop, a chat as the restart left it.
+// A worker whose turn ended while Orca was down, or whose chat the run that just ended cut and Orca did
+// not continue, raised no live edge. One pass at startup reports each through the same turn-stop
+// report: a terminal as its live stop, a chat as the restart left it. Other chats are not opened.
 
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -18,6 +18,8 @@ export type RestartWorkerStopReportDeps = {
   reportRestingPane: (paneKey: string) => Promise<void>
   /** Opens a chat so its status is read from its journal; null when this host runs no chats. */
   chats: {
+    /** Only these chats were cut by the run that just ended; no other worker chat is opened. */
+    cutByLastRun: ReadonlySet<string>
     open: (sessionId: string) => Promise<unknown>
     /** Read from the journal, not the status the last run saved. */
     status: (
@@ -104,7 +106,7 @@ export async function reportWorkerStopsAcrossRestart(
         }
         continue
       }
-      if (deps.chats) {
+      if (deps.chats?.cutByLastRun.has(sessionId)) {
         await reportCutChat(deps, deps.chats, dispatchId, sessionId)
       }
     } catch (error) {

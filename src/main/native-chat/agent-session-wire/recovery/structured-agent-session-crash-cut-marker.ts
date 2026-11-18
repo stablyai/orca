@@ -108,9 +108,12 @@ export function crashCutResumeMarker(input: {
   const prompts = cancelledPrompts(settled, turnItem.itemId)
   const tasks = lostTasks(settled, turnItem.itemId)
   // Only this turn's cut counts; a cut turn is itself settled, so a row outside it adds nothing.
-  const leadCut =
+  const provenCut =
     settled.some((item) => inTurn(item, turnItem.itemId) && orcaStopCauseOfRow(item) === 'crash') ||
-    (settled.includes(turnItem) && (turn.state === 'interrupted' || turn.state === 'unverifiable'))
+    (settled.includes(turnItem) && turn.state === 'interrupted')
+  // No proof its agent exited: it may still be running, so only a person may continue it.
+  const exitUnproven = !provenCut && settled.includes(turnItem) && turn.state === 'unverifiable'
+  const leadCut = provenCut || exitUnproven
   // A finished turn with nothing left running was not interrupted.
   if (!leadCut && tasks.length === 0) {
     return null
@@ -127,6 +130,7 @@ export function crashCutResumeMarker(input: {
       ? { contextClearOperationId: input.record.providerContextBoundary.operationId }
       : {}),
     providerHandleRoot: agentSessionProviderHandleRoot(head.handle),
+    ...(exitUnproven ? { exitUnproven: true as const } : {}),
     activity: {
       state: prompts.length > 0 ? 'blocked' : leadCut ? 'working' : 'done',
       prompts,

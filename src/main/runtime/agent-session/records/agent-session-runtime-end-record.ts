@@ -107,7 +107,10 @@ function readTrigger(value: unknown): AgentSessionResumeTrigger | undefined {
   return AGENT_SESSION_RESUME_TRIGGERS.find((trigger) => trigger === value)
 }
 
-function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCause | undefined {
+function readRecord(
+  path: string,
+  runtime: string
+): { startedAt: number; end: AgentSessionOrcaStopCause | undefined } | undefined {
   try {
     const parsed: unknown = JSON.parse(
       readNodeFileSyncWithinLimit(path, MAX_RUNTIME_RECORD_BYTES).buffer.toString('utf8')
@@ -123,15 +126,42 @@ function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCau
       return undefined
     }
     if (!('end' in parsed) || parsed.end === undefined) {
-      return 'crash'
+      return { startedAt: parsed.startedAt, end: 'crash' }
     }
     const end = parsed.end
-    return readTrigger(
-      typeof end === 'object' && end !== null && 'trigger' in end ? end.trigger : undefined
-    )
+    return {
+      startedAt: parsed.startedAt,
+      end: readTrigger(
+        typeof end === 'object' && end !== null && 'trigger' in end ? end.trigger : undefined
+      )
+    }
   } catch {
     return undefined
   }
+}
+
+/** When the newest other runtime started: what it recorded is what the run that just ended cut. */
+export function previousAgentSessionRuntimeStartedAt(
+  stateDirectory: string,
+  runtime: string
+): number | undefined {
+  const directory = join(stateDirectory, RUNTIMES_DIRECTORY)
+  let names: string[]
+  try {
+    names = readdirSync(directory)
+  } catch {
+    return undefined
+  }
+  let latest: number | undefined
+  for (const name of names) {
+    const other = RECORD_FILE.exec(name)?.[1]
+    const startedAt =
+      other && other !== runtime ? readRecord(join(directory, name), other)?.startedAt : undefined
+    if (startedAt !== undefined && (latest === undefined || startedAt > latest)) {
+      latest = startedAt
+    }
+  }
+  return latest
 }
 
 /** Missing/unreadable runtime records give no cause; null means the directory itself could not be listed. */
@@ -148,7 +178,7 @@ export function readAgentSessionRuntimeEnds(
   const ends = new Map<string, AgentSessionOrcaStopCause>()
   for (const name of names) {
     const runtime = RECORD_FILE.exec(name)?.[1]
-    const end = runtime ? readRecordedEnd(join(directory, name), runtime) : undefined
+    const end = runtime ? readRecord(join(directory, name), runtime)?.end : undefined
     if (runtime && end) {
       ends.set(runtime, end)
     }

@@ -61,18 +61,25 @@ export async function readRestartHostOffer(target: RuntimeClientTarget): Promise
   }
 }
 
-/** Waits for the host's own continuation at launch. `unsupported`: an older host leaves it to this client. */
-export async function awaitRestartHostLaunchContinuation(
+/** The chats the host's own launch continuation took, once it has reserved them.
+ *  `unsupported`: an older host leaves continuing to this client. */
+export async function readRestartHostLaunchTaken(
   target: RuntimeClientTarget
-): Promise<'settled' | 'unsupported'> {
+): Promise<readonly ResumeCandidate[] | 'unsupported'> {
   try {
-    await callStructuredAgentSession(target, 'agentSession.restartLaunchSettled')
-    return 'settled'
+    const answer = await callStructuredAgentSession<{ sessions?: unknown }>(
+      target,
+      'agentSession.restartLaunchSettled',
+      { until: 'taken' }
+    )
+    // SAFETY: the host is the single writer of these rows, as for restartResumable.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above.
+    return Array.isArray(answer.sessions) ? (answer.sessions as ResumeCandidate[]) : []
   } catch (error) {
     // Any other failure still comes from a host that continues on its own; continuing here too would repeat it.
     return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
       ? 'unsupported'
-      : 'settled'
+      : []
   }
 }
 

@@ -48,6 +48,14 @@ async function fileFailure(overrides: Partial<AgentSessionResumeFailureInput> = 
 }
 
 describe('durable restart offers', () => {
+  it('stores a crash offer in the shape released builds read, and reads it back as a crash', async () => {
+    await capsule.record([marker({ trigger: 'crash', teardownId: 'crash:runtime-1' })], NOW)
+
+    const stored = JSON.parse(await readFile(filePath, 'utf8'))
+    expect(stored.entries[0].marker).toMatchObject({ trigger: 'quit', cause: 'crash' })
+    expect((await capsule.list(NOW)).map((offer) => offer.trigger)).toEqual(['crash'])
+  })
+
   it('reserves only one copy of a selected session across competing owners', async () => {
     await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
     const other = new AgentSessionRecoveryCapsule(directory)

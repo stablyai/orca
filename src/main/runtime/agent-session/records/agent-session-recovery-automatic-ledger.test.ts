@@ -67,6 +67,11 @@ it('leaves a cut that was asking its person to that person', async () => {
   expect(await capsule.beginResume(undefined, 'person', NOW)).toHaveLength(1)
 })
 
+it('leaves a crash cut whose agent was not proven to have exited to the person', async () => {
+  expect(await launch('turn-1', NOW, { trigger: 'crash', exitUnproven: true })).toBe(0)
+  expect(await capsule.beginResume(undefined, 'person', NOW)).toHaveLength(1)
+})
+
 it('continues on its own only what the run that just ended cut', async () => {
   await capsule.record([marker({ teardownId: 'quit-earlier', recordedAt: NOW })], NOW)
   // A launch with the setting off passed over it.

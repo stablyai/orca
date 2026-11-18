@@ -16,6 +16,12 @@ export type StructuredAgentSessionRestartCut = {
   waitingOnPerson?: true
 }
 
+export type RestartContinuationOptions = {
+  automatic?: boolean
+  /** The chats this action reserved, before any agent starts; called once, empty when it took none. */
+  onReserved?: (rows: StructuredAgentSessionResumeCandidate[]) => void
+}
+
 export type StructuredAgentSessionRestartResume = {
   /** Snapshot before Stop, confirm proven exit, then persist confirmed offers together. */
   beginTeardown: (trigger: AgentSessionResumeTrigger) => void
@@ -43,7 +49,7 @@ export type StructuredAgentSessionRestartResume = {
     sessionIds: readonly string[] | undefined,
     owner: string,
     audience?: StructuredAgentSessionRestartAudience,
-    options?: { automatic?: boolean }
+    options?: RestartContinuationOptions
   ) => Promise<{
     resumed: StructuredAgentSessionResumeOutcome[]
     continued: StructuredAgentSessionContinuationOutcome[]

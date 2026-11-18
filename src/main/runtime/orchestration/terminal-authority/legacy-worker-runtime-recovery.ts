@@ -52,7 +52,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   reportWorkerStopsAcrossRestartOnce(): Promise<void> {
     this.restartWorkerStopReport ??= (async () => {
       // Continued chats are working again, and replayed hooks have been probed once.
-      await Promise.all([
+      const [{ cutByLastRun }] = await Promise.all([
         this.structuredAgentSessionLaunchContinuation.done,
         agentHookServer.whenRestoredOwnersChecked()
       ])
@@ -67,6 +67,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         reportRestingPane: (paneKey) => this.reportRestingPane(paneKey),
         chats: host
           ? {
+              cutByLastRun,
               open: (sessionId) => host.revealSession(sessionId).catch(() => null),
               status: (sessionId) => host.readFreshStatusSummary(sessionId),
               cutOf: (sessionId) => host.restartResume.cutOf(sessionId)

@@ -173,7 +173,8 @@ export function createStructuredAgentSessionRestartResume(
       )) ?? []
     const markersBySession = new Map(reserved.map((marker) => [marker.sessionId, marker]))
     const candidates = (await derive(reserved, 'may-be-held')).candidates
-    progress.skipExcluded(eligibleIds, candidates)
+    // Only eligible chats were reserved, so these rows are already this audience's.
+    progress.reserved(eligibleIds, candidates)
     try {
       const outcomes = await resumeStructuredAgentSessionsFromRestart(
         {
@@ -219,7 +220,7 @@ export function createStructuredAgentSessionRestartResume(
     audience,
     options
   ) => {
-    const progress = createRestartResumeProgress(sessions, surfaces.publishStatus)
+    const progress = createRestartResumeProgress(sessions, surfaces.publishStatus, options)
     try {
       const continued: StructuredAgentSessionContinuationOutcome[] = []
       const verdicts: Promise<void>[] = []

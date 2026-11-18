@@ -17,6 +17,7 @@ import { ContinueInterruptedParams } from '../../../../../../shared/rpc-contract
 import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
 import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import { structuredAgentsReadBy } from '../structured-agent-session-policy'
+import { restartRowsFor } from '../../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-set'
 
 export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
   defineMethod({
@@ -76,9 +77,34 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     name: 'agentSession.restartLaunchSettled',
     permission: 'workspace',
     params: RestartLaunchSettledParams,
-    handler: async (_params, ctx) => {
-      const { continued } = await ctx.runtime.structuredAgentSessionLaunchContinuation.done
-      return { continuedSessionIds: [...continued] }
+    handler: async (params, ctx) => {
+      const launch = ctx.runtime.structuredAgentSessionLaunchContinuation
+      if (params.until === 'taken') {
+        const taken = await launch.taken
+        if (taken.length === 0) {
+          return { sessions: [] }
+        }
+        await ensureStructuredHostInstalled(ctx)
+        const host = requireStructuredHost(ctx)
+        return {
+          sessions: restartRowsFor(taken, structuredAgentsReadBy(ctx, host.knownAgentIds()))
+        }
+      }
+      const { continued, answer } = await launch.done
+      if (!answer) {
+        return { continuedSessionIds: [...continued] }
+      }
+      // Shaped as restartContinue's answer, so a window closes its run of these chats the same way.
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredHost(ctx)
+      const audience = structuredAgentsReadBy(ctx, host.knownAgentIds())
+      return {
+        continuedSessionIds: [...continued],
+        continued: answer.continued,
+        ...(answer.skipped ? { skipped: answer.skipped } : {}),
+        sessions: await host.restartResume.list(audience),
+        failed: await host.restartResume.listFailures(audience)
+      }
     }
   }),
   defineMethod({
