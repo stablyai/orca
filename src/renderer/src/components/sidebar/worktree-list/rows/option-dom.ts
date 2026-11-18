@@ -18,6 +18,30 @@ export function getMountedWorktreeOptions(
   return result
 }
 
+export function getMountedWorktreeOptionsById(
+  worktreeIds: readonly string[],
+  root: ParentNode
+): Map<string, HTMLElement[]> {
+  const requested = new Set(worktreeIds)
+  const result = new Map<string, HTMLElement[]>()
+  if (requested.size === 0) {
+    return result
+  }
+  root.querySelectorAll<HTMLElement>('[data-worktree-id]').forEach((element) => {
+    const id = element.dataset.worktreeId
+    if (id === undefined || !requested.has(id)) {
+      return
+    }
+    const options = result.get(id)
+    if (options) {
+      options.push(element)
+    } else {
+      result.set(id, [element])
+    }
+  })
+  return result
+}
+
 export function markSidebarWorktreeActiveImmediately(
   worktreeId: string,
   primaryRowKey?: string

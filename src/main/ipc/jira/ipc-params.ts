@@ -1,5 +1,5 @@
 import type { JiraIssueUpdate, JiraSiteSelection } from '../../../shared/jira/jira-types'
-import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 export function normalizeJiraSiteId(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined

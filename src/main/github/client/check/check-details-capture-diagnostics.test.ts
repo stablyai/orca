@@ -1,4 +1,3 @@
-import '../../../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import type { ChildProcess } from 'node:child_process'
 import { getEventListeners } from 'node:events'
 import type * as ProcessHostModule from '@orca/process-host'
@@ -7,13 +6,16 @@ import {
   completeFakeSpawn,
   createFakeSpawnedChild
 } from '../../../../shared/__fixtures__/fake-spawned-child'
-import * as capture from '../../../git/command-runner/exec-file-capture'
+import * as capture from '../../../git/command-runner/process-capture/exec-file-capture'
 import { RpcDispatcher } from '../../../runtime/rpc/dispatcher'
-import { GITHUB_PULL_REQUEST_METHODS } from '../../../runtime/rpc/methods/github-pull-request-methods'
+import { GITHUB_PULL_REQUEST_METHODS } from '../../../runtime/rpc/methods/source-control/github/github-pull-request-methods'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import * as ghUtils from '../../gh-utils'
+import * as ghUtilsOwner1 from '../../execution/github-operation-slots'
+import * as ghUtilsOwner2 from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { getPRCheckDetails } from './get-pr-check-details'
 import { prCheckLogTailCache } from './check-job-log-tails'
+
+const { groupExists } = vi.hoisted(() => ({ groupExists: vi.fn(() => true) }))
 
 const { spawnMock, resolverMock, signalMock, forceMock, captureCap } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -23,8 +25,11 @@ const { spawnMock, resolverMock, signalMock, forceMock, captureCap } = vi.hoiste
   captureCap: { bytes: 4096, metadata: false }
 }))
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
-vi.mock('../../github-api-repository', () => ({ resolveGitHubRepoExecution: resolverMock }))
+vi.mock('../../repositories/github-api-repository', () => ({
+  resolveGitHubRepoExecution: resolverMock
+}))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
+  processGroupExists: groupExists,
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
@@ -89,27 +94,27 @@ function serializeDiagnostics(value: unknown): string {
   )
 }
 async function verifyAdmissionIsRestored(): Promise<void> {
-  await Promise.all(Array.from({ length: 4 }, () => ghUtils.acquire()))
+  await Promise.all(Array.from({ length: 4 }, () => ghUtilsOwner1.acquire()))
   let fifthStarted = false
-  const fifth = ghUtils.acquire().then(() => {
+  const fifth = ghUtilsOwner1.acquire().then(() => {
     fifthStarted = true
   })
   await vi.advanceTimersByTimeAsync(0)
   expect(fifthStarted).toBe(false)
-  ghUtils.release()
+  ghUtilsOwner1.release()
   await fifth
   for (let i = 0; i < 4; i++) {
-    ghUtils.release()
+    ghUtilsOwner1.release()
   }
 }
 async function verifyAdmissionIsRetained(): Promise<void> {
-  await Promise.all(Array.from({ length: 3 }, () => ghUtils.acquire()))
+  await Promise.all(Array.from({ length: 3 }, () => ghUtilsOwner1.acquire()))
   const controller = new AbortController()
   let started = false
-  const waiting = ghUtils.acquire(controller.signal).then(
+  const waiting = ghUtilsOwner1.acquire(controller.signal).then(
     () => {
       started = true
-      ghUtils.release()
+      ghUtilsOwner1.release()
     },
     () => {}
   )
@@ -118,12 +123,13 @@ async function verifyAdmissionIsRetained(): Promise<void> {
   controller.abort()
   await waiting
   for (let i = 0; i < 3; i++) {
-    ghUtils.release()
+    ghUtilsOwner1.release()
   }
 }
 
 describe('real capture and gh diagnostics through check details RPC', () => {
   beforeEach(() => {
+    groupExists.mockReturnValue(true)
     vi.useFakeTimers()
     children.length = 0
     signals.clear()
@@ -141,6 +147,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
   })
   afterEach(async () => {
     for (const child of children) {
+      groupExists.mockReturnValue(false)
       child.emit('close', 0, null)
     }
     await vi.advanceTimersByTimeAsync(15_000)
@@ -156,7 +163,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
     'keeps %s raw capture fields internal and restores actual admission',
     async (mode) => {
       const captureSpy = vi.spyOn(capture, 'execFileCaptureToTermination')
-      const ghSpy = vi.spyOn(ghUtils, 'ghExecFileAsync')
+      const ghSpy = vi.spyOn(ghUtilsOwner2, 'ghExecFileAsync')
       if (mode === 'runner-timeout') {
         resolverMock.mockResolvedValue({
           ownerRepo: { owner: 'acme', repo: 'widgets' },
@@ -214,6 +221,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
         child.emit('error', privateFailure())
         await vi.advanceTimersByTimeAsync(0)
         expect(children).toHaveLength(4)
+        groupExists.mockReturnValue(false)
         child.emit('close', 1, null)
       } else {
         // Lower only the test capture cap; the real sinks still report truncation.
@@ -231,6 +239,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
         // The physical child still holds admission after unverified grace.
         expect(getEventListeners(child, 'close')).toHaveLength(1)
         await verifyAdmissionIsRetained()
+        groupExists.mockReturnValue(false)
         child.emit('close', null, 'SIGKILL')
       }
       const response = await result

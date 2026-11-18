@@ -1,15 +1,18 @@
 import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import {
   AGENT_PROMPT_SUBMIT,
   isHeldAgentPromptDraft
-} from '../../../../shared/agent-prompt-injection'
-import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import type { AgentPromptActivity } from './agent-prompt-submission-verification'
 import {
   isAgentPromptStalledError,
   verifyAgentPromptSubmission
-} from '../../agent-prompt-submission-verification'
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+} from './agent-prompt-submission-verification'
+import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+
+/** How often a held prompt is re-read when the agent sets no blind-retry delay. */
+const HELD_PROMPT_RECHECK_MS = 1000
 
 type HeldAgentPrompt = {
   baseline: AgentPromptActivity
@@ -32,16 +35,18 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     const gated = held.heldBudgetMs > 0 && prompt !== undefined
     // Why: the draft reader knows dsh's launchpad, which its first-run guide covers once ready.
     const readsLaunchDraft = agent === 'dsh'
-    let blind = options.composerReady === true && !readsLaunchDraft
-    if (retryDelayMs === undefined || (!blind && !gated)) {
+    let blind = options.composerReady === true && !readsLaunchDraft && retryDelayMs !== undefined
+    if (!blind && !gated) {
       return 0
     }
-    const deadline = Date.now() + held.heldBudgetMs
+    const recheckMs = retryDelayMs ?? HELD_PROMPT_RECHECK_MS
+    // Why one recheck past the budget: the burst can end just before it, and a held prompt still needs Enter then.
+    const deadline = Date.now() + held.heldBudgetMs + recheckMs
     let resubmits = 0
     let gatedResubmits = 0
     try {
       do {
-        const waitMs = blind ? retryDelayMs : Math.min(retryDelayMs, deadline - Date.now())
+        const waitMs = blind ? recheckMs : Math.min(recheckMs, deadline - Date.now())
         if (await agentPromptSettledWithin(held, Math.max(0, waitMs), options.signal)) {
           return resubmits
         }

@@ -1,4 +1,4 @@
-import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from './github-links'
+import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '../github/repositories/links'
 import { parseGitLabIssueOrMRLink } from './gitlab-links'
 import { parseJiraIssueUrl } from '../jira/jira-issue-url'
 

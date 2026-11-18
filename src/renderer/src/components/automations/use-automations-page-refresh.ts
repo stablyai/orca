@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { useAppStore } from '@/store'
-import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { useAppStore } from '@/store/index'
+import { AUTOMATIONS_CHANGED_EVENT } from '@/components/automations/events/automations-changed-window-event'
 import {
   getAutomationHostTargetKey,
   getAutomationListedTargetFromHostId,
   listAutomationsForTarget
-} from './automation-host-client'
-import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
-import { useSelectedAutomationRunHistory } from './use-selected-automation-run-history'
-import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
-import type { AutomationsPageListState } from './use-automations-page-list-state'
+} from './hosts/automation-host-client'
+import { automationAuthorityCatalogKey } from './hosts/automation-host-catalog-types'
+import { useSelectedAutomationRunHistory } from './runs/use-selected-automation-run-history'
+import type { AutomationsPageDestinationState } from './authoring/use-automations-page-destination-state'
+import type { AutomationsPageListState } from './listing/use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
 
@@ -40,8 +40,7 @@ export function useAutomationsPageRefresh({
     isLoading,
     automationHostTargetKey,
     setRelativeNow,
-    runHistoryReloadToken,
-    workspaceNameCacheRef
+    runHistoryReloadToken
   } = local
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
@@ -63,7 +62,8 @@ export function useAutomationsPageRefresh({
       const managersSettled = reloadExternalManagers().catch(() => undefined)
       try {
         const nextAutomations = await listAutomationsForTarget(target)
-        setAutomations(nextAutomations)
+        // A bot's waits are listed in its sidebar, never with automations.
+        setAutomations(nextAutomations.filter((automation) => !automation.once))
         setAutomationHostTargetKey(getAutomationHostTargetKey(target))
         setFailedAuthorityKeys((current) => {
           if (!current.has(authorityKey)) {
@@ -134,20 +134,15 @@ export function useAutomationsPageRefresh({
     refresh,
     runtimeEnvironments
   ])
-  useEffect(() => {
-    for (const [workspaceId, worktree] of store.worktreeMap) {
-      const displayName = worktree.displayName.trim()
-      if (displayName) {
-        workspaceNameCacheRef.current.set(workspaceId, displayName)
-      }
-    }
-  }, [store.worktreeMap, workspaceNameCacheRef])
   useSelectedAutomationRunHistory({
     selected: selectedRow,
+    selection: { automationId: store.selectedId, rowKey: local.selectedRowKey },
+    retained: local.selectedAutomationRuns,
     context: destination.automationDispatchContext,
     legacyTarget: automationHostTargetFor,
     navigation: pendingAutomationRunNavigation,
     reloadToken: runHistoryReloadToken,
+    acquisitionToken: local.runHistoryAcquisitionToken,
     onSettled: local.setSelectedAutomationRuns
   })
   useEffect(() => {

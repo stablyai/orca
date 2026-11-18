@@ -1,19 +1,19 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '../../store'
-import { useRuntimeSessionMirrorEnvironmentKeys } from '../use-runtime-session-mirror-environment-key'
-import { sessionTabsFreshnessKey } from './tracking'
-import { clearWebSessionTabsTrackingForEnvironment } from './tracking-lifecycle'
+import { useRuntimeSessionMirrorEnvironmentKeys } from './subscriptions/use-runtime-session-mirror-environment-key'
+import { sessionTabsFreshnessKey } from './state'
+import { clearWebSessionTabsTrackingForEnvironment } from './tracking/tracking-lifecycle'
 import {
   installGlobalSessionTabsSubscriptions,
   type GlobalSubscriptionRefs
-} from './global-session-subscription'
-import { installActiveSessionTabsSubscription } from './active-session-subscription'
-import { mirroredRuntimeEnvironmentIdForWorkspace } from './mirrored-workspace-owner'
+} from './subscriptions/global-session-subscription'
+import { installActiveSessionTabsSubscription } from './subscriptions/active-session-subscription'
+import { mirroredRuntimeEnvironmentIdForWorkspace } from './workspace-selection/mirrored-workspace-owner'
 import {
   createWarmWorktreeSessionSubscriptions,
   type WarmWorktreeSessionSubscriptions
-} from './warm-worktree-subscriptions'
+} from './subscriptions/warm-worktree-subscriptions'
 
 /** Mount the paired-runtime tab mirrors and the selected-worktree stream. */
 export function useWebSessionTabsSync(): void {

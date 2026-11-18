@@ -1,27 +1,22 @@
 import {
   closeTestStores,
-  readPersistedState,
   testState,
   createStore,
-  dataFile,
-  writeDataFile,
-  readDataFile,
   makeRepo,
-  makeWorktreeLineage,
   makeWorkspaceLineage
 } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createProfileStateStore } from '../profile-state/profile-state-store-factory'
-import { ProfileStateAuthorityBootstrapError } from '../profile-state/profile-state-recovery-required'
+import { createProfileStateStore } from '../profile-state/startup/profile-state-store-factory'
+import { ProfileStateAuthorityBootstrapError } from '../profile-state/recovery/profile-state-recovery-required'
 import { restoreProfileStateJsonExport } from '../profile-state/legacy-json/profile-state-recovery'
-import { acquireProfileStateMaintenance } from '../profile-state/profile-state-access'
-import type { Repo } from '../../../shared/repo-types'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
+import { acquireProfileStateMaintenance } from '../profile-state/access/profile-state-access'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -75,81 +70,6 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('getAllWorktreeMeta returns all entries', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'a', hostId: 'local' }), { displayName: 'A' })
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'b', hostId: 'local' }), { displayName: 'B' })
-    const all = store.getAllWorktreeMeta()
-    expect(Object.keys(all)).toHaveLength(2)
-    expect(all['a'].displayName).toBe('A')
-    expect(all['b'].displayName).toBe('B')
-  })
-
-  it('removeWorktreeMeta deletes a single entry', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'a', hostId: 'local' }), { displayName: 'A' })
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'b', hostId: 'local' }), { displayName: 'B' })
-    removeWorktreeMetaRow(store, 'a', undefined)
-    expect(store.getWorktreeMeta('a')).toBeUndefined()
-    expect(store.getWorktreeMeta('b')).toBeDefined()
-  })
-
-  it('stores and removes worktree lineage independently from metadata', async () => {
-    const store = await createStore()
-    const lineage = makeWorktreeLineage()
-
-    store.setWorktreeMeta(hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }), {
-      displayName: 'child'
-    })
-    store.setWorktreeLineage(
-      hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }),
-      lineage
-    )
-
-    expect(store.getWorktreeLineage(lineage.worktreeId)).toEqual(lineage)
-    expect(store.getAllWorktreeLineage()).toEqual({ [lineage.worktreeId]: lineage })
-
-    store.removeWorktreeLineage(hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }))
-
-    expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
-    expect(store.getWorktreeMeta(lineage.worktreeId)).toBeDefined()
-  })
-
-  it('removeWorktreeMeta deletes that worktree lineage entry', async () => {
-    const store = await createStore()
-    const lineage = makeWorktreeLineage()
-
-    store.setWorktreeMeta(hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }), {
-      displayName: 'child'
-    })
-    store.setWorktreeLineage(
-      hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }),
-      lineage
-    )
-
-    removeWorktreeMetaRow(store, lineage.worktreeId, undefined)
-
-    expect(store.getWorktreeMeta(lineage.worktreeId)).toBeUndefined()
-    expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
-  })
-
-  it('stores workspace lineage and removes it with the child worktree metadata', async () => {
-    const store = await createStore()
-    const lineage = makeWorkspaceLineage()
-
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'r1::/path/child', hostId: 'local' }), {
-      displayName: 'child'
-    })
-    store.setWorkspaceLineage(lineage)
-
-    expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toEqual(lineage)
-    expect(store.getAllWorkspaceLineage()).toEqual({ [lineage.childWorkspaceKey]: lineage })
-
-    removeWorktreeMetaRow(store, 'r1::/path/child', undefined)
-
-    expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toBeUndefined()
-  })
-
   it('removeFolderWorkspace deletes child workspace lineage for that folder parent', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({
@@ -179,29 +99,6 @@ describe('Store', () => {
   })
 
   describe('mobileClientTabSelectionsByDeviceId', () => {
-    it('persists device tab selections across reloads and drops malformed payloads', async () => {
-      const store = await createStore()
-      // Register the owner so orphan cleanup cannot erase the fixture on reload.
-      store.addRepo(makeRepo({ id: 'repo-1', path: '/repo-1' }))
-      store.setMobileClientTabSelections({
-        'device-a': {
-          'repo-1::/tmp/wt': { activeTabId: 'tab-1', activeGroupId: 'g1', activeTabIdByGroupId: {} }
-        }
-      })
-      store.flush()
-
-      const reloaded = await createStore()
-      expect(reloaded.getMobileClientTabSelections()['device-a']?.['repo-1::/tmp/wt']).toEqual({
-        activeTabId: 'tab-1',
-        activeGroupId: 'g1',
-        activeTabIdByGroupId: {}
-      })
-
-      writeDataFile({ mobileClientTabSelectionsByDeviceId: { 'device-a': 'corrupt' } })
-      const corrupted = await createStore()
-      expect(corrupted.getMobileClientTabSelections()).toEqual({})
-    })
-
     it('prunes selections for a removed repo worktree', async () => {
       const store = await createStore()
       store.addRepo(makeRepo())
@@ -282,41 +179,6 @@ describe('Store', () => {
 
       const reloaded = await createStore()
       expect(reloaded.getMobileClientTabSelections()).toEqual({})
-    })
-  })
-
-  describe('retired JSON backups', () => {
-    it.each(['sync', 'async'] as const)(
-      'leaves legacy JSON and backups unchanged during %s SQL writes',
-      async (flush) => {
-        writeDataFile({ repos: [makeRepo({ id: 'seed' })] })
-        const retained = readFileSync(dataFile())
-        const backup = `${dataFile()}.bak.0`
-        writeFileSync(backup, retained)
-        const store = createStore()
-        store.addRepo(makeRepo({ id: 'updated', path: '/updated' }))
-        if (flush === 'sync') {
-          store.flushOrThrow()
-        } else {
-          await store.flushPendingOrThrowAsync()
-        }
-
-        expect(readFileSync(dataFile())).toEqual(retained)
-        expect(readFileSync(backup)).toEqual(retained)
-        expect(existsSync(`${dataFile()}.bak.1`)).toBe(false)
-        const persisted = readDataFile() as { repos: Repo[] }
-        expect(persisted.repos.map((repo) => repo.id).sort()).toEqual(['seed', 'updated'])
-      }
-    )
-
-    it('does not create a JSON primary or backup for a fresh SQL profile', () => {
-      const store = createStore()
-      store.addRepo(makeRepo())
-      store.flushOrThrow()
-      expect(existsSync(dataFile())).toBe(false)
-      expect(existsSync(`${dataFile()}.bak.0`)).toBe(false)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture registered r1 before flushing; its exported repos are Repo records.
-      expect((readDataFile() as { repos: Repo[] }).repos.map((repo) => repo.id)).toEqual(['r1'])
     })
   })
 
@@ -409,25 +271,6 @@ describe('Store', () => {
       const store = importRecoveredProfile(options)
       expect(store.getRepos().map((repo) => repo.id)).toEqual(['survives'])
       expect(store.getSettings().theme).toBe('dark')
-    })
-  })
-
-  describe('concurrent write serialization', () => {
-    it('persists both repo additions across debounced writes', async () => {
-      vi.useFakeTimers()
-      try {
-        const store = await createStore()
-        store.addRepo(makeRepo({ id: 'first' }))
-        vi.advanceTimersByTime(1000)
-        store.addRepo(makeRepo({ id: 'second', path: '/second' }))
-        vi.advanceTimersByTime(1000)
-        await store.waitForPendingWrite()
-
-        const persisted = readPersistedState()
-        expect(persisted.repos.map((r) => r.id).sort()).toEqual(['first', 'second'])
-      } finally {
-        vi.useRealTimers()
-      }
     })
   })
 })

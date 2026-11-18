@@ -1,5 +1,8 @@
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
-import type { RepoHostTarget } from '../../shared/repo-host-identity'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host/execution-host'
+import type { RepoHostTarget } from '../../shared/repository/repo-host-identity'
 
 export function repoTarget(id: string, hostId: ExecutionHostId = 'local') {
   return {

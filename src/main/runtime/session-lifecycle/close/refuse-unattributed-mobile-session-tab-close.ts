@@ -1,12 +1,14 @@
-import { OrcaRuntimeWithResumeAgentSessionInWorkspace } from '../projection/resume-agent-session-in-workspace'
-import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/runtime-types'
+import { OrcaRuntimeWithRestartAgentPaneInPlace } from '../projection/restart-agent-pane-in-place'
+import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
-export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose extends OrcaRuntimeWithResumeAgentSessionInWorkspace {
+export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose extends OrcaRuntimeWithRestartAgentPaneInPlace {
   async refuseUnattributedMobileSessionTabClose(
     worktreeSelector: string,
     tabId: string
   ): Promise<RuntimeMobileSessionTabCloseResult> {
-    const snapshot = await this.listMobileSessionTabs(worktreeSelector)
+    const snapshot = await this.listMobileSessionTabs(worktreeSelector, undefined, {
+      includeAgentSenders: false
+    })
     const tabExists = snapshot.tabs.some(
       (candidate) =>
         candidate.id === tabId ||

@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import type { GitHistoryScope } from '../../../../../../shared/git-history'
+export type GitHistoryScope = 'all' | 'current'
 
 export function GitHistoryScopeMenu({
   scope,

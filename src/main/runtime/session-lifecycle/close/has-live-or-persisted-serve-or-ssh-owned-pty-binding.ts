@@ -1,14 +1,12 @@
-import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RendererTerminalRescue } from '../../session-tabs/renderer-session-terminal-rescue'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/structured-session-tab-close'
+import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RendererTerminalRescue } from '../../session-tabs/restoration/renderer-session-terminal-rescue'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/chat/structured-session-tab-close'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as SessionGraphAuthority } from '../../session-graph/session-graph-authority'
 import type { OrcaRuntimeWithWaitForMobileTerminalSurface as MobileTerminalSurface } from '../../terminal/view/mobile-terminal-surface'
-import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab as HeadlessTerminalClose } from '../../session-tabs/headless-terminal-tab-close'
+import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab as HeadlessTerminalClose } from '../../session-tabs/terminal-retirement/headless-terminal-tab-close'
 import { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs } from '../projection/reconcile-headless-mobile-session-browser-tabs'
-import type {
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
-import { SSH_PANE_RECOVERY_GRACE_MS } from '../../orca-runtime-core'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import { SSH_PANE_RECOVERY_GRACE_MS } from '../../terminal/recovery/ssh-pane-recovery-window'
 import { terminalIsOfTab } from './closed-tab-terminal'
 
 export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding extends OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs {
@@ -27,6 +25,14 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
   protected abstract assertStableReadyGraph(
     ...args: Parameters<SessionGraphAuthority['assertStableReadyGraph']>
   ): ReturnType<SessionGraphAuthority['assertStableReadyGraph']>
+
+  protected abstract captureRendererGraphFence(
+    ...args: Parameters<SessionGraphAuthority['captureRendererGraphFence']>
+  ): ReturnType<SessionGraphAuthority['captureRendererGraphFence']>
+
+  protected abstract assertRendererGraphFence(
+    ...args: Parameters<SessionGraphAuthority['assertRendererGraphFence']>
+  ): ReturnType<SessionGraphAuthority['assertRendererGraphFence']>
 
   protected abstract resolvePtyTabCloseSurfaceAuthority(
     ...args: Parameters<MobileTerminalSurface['resolvePtyTabCloseSurfaceAuthority']>

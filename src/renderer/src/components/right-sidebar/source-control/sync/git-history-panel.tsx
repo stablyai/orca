@@ -1,16 +1,31 @@
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { GitGraphOpenButton } from './git-graph-open-button'
+import { CommitsHeaderIconButton } from './commits-header-icon-button'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import type { GitHistoryResult, GitHistoryScope } from '../../../../../../shared/git-history'
+import { cn } from '@/lib/class-names'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import type {
+  GitHistoryItem,
+  GitHistoryResult
+} from '../../../../../../shared/git/history/git-history-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import {
   buildDefaultGitHistoryColorMap,
-  buildGitHistoryViewModels
-} from '../../../../../../shared/git-history-graph'
-import { GitHistoryList, type GitHistoryListActions } from './git-history-list'
+  buildGitHistoryViewModels,
+  getGitHistoryItemLaneIndex
+} from '../../../../../../shared/git/history/git-history-graph'
+import { GitHistoryRow } from './git-history-row'
+import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './git-history-commit-files'
+import {
+  GitHistoryCommitContextMenu,
+  type GitHistoryCommitAction
+} from './git-history-commit-context-menu'
+import type { SourceControlRowOpenEvent } from '../listing/split-open'
+import { GitHistoryScopeMenu, type GitHistoryScope } from './git-history-scope-menu'
 import { translate } from '@/i18n/i18n'
-import { GitHistoryScopeMenu } from './git-history-scope-menu'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type GitHistoryPanelState = (
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
@@ -36,6 +51,7 @@ function clampGitHistoryPanelHeight(height: number): number {
 
 export function GitHistoryPanel({
   state,
+  worktreeId,
   collapsed,
   onToggle,
   onRefresh,
@@ -43,17 +59,30 @@ export function GitHistoryPanel({
   onLoadCommitFiles,
   onOpenCommitFile,
   onCommitAction,
+  onOpenGitGraph,
   onLoadMore,
   scope = 'all',
   onScopeChange
-}: GitHistoryListActions & {
+}: {
+  worktreeId?: string
   state: GitHistoryPanelState
   collapsed: boolean
   onToggle: () => void
   onRefresh: () => void
+  onOpenCommit?: (item: GitHistoryItem) => void
+  onLoadCommitFiles?: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
+  onOpenCommitFile?: (
+    item: GitHistoryItem,
+    entry: GitBranchChangeEntry,
+    event?: SourceControlRowOpenEvent
+  ) => void
+  onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
+  onOpenGitGraph?: (event: SourceControlRowOpenEvent) => void
   scope?: GitHistoryScope
   onScopeChange?: (scope: GitHistoryScope) => void
+  onLoadMore?: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const result = state.result
   const viewModels = useMemo(() => {
     if (!result) {
@@ -65,16 +94,97 @@ export function GitHistoryPanel({
       result.currentRef,
       result.remoteRef,
       result.baseRef,
-      result.scope === 'all' ? false : result.hasIncomingChanges,
-      result.scope === 'all' ? false : result.hasOutgoingChanges,
+      result.hasIncomingChanges,
+      result.hasOutgoingChanges,
       result.mergeBase
     )
   }, [result])
 
+  const graphLaneCount = useMemo(
+    () =>
+      viewModels.reduce(
+        (count, row) =>
+          Math.max(
+            count,
+            row.inputSwimlanes.length,
+            row.outputSwimlanes.length,
+            getGitHistoryItemLaneIndex(row) + 1
+          ),
+        1
+      ),
+    [viewModels]
+  )
   const loading = state.status === 'loading' || state.status === 'refreshing'
   const count = result?.items.length ?? 0
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
+  const loadedCommitsRef = useRef(new Set<string>())
+  const [previousResult, setPreviousResult] = useState(result)
+  if (result !== previousResult) {
+    setPreviousResult(result)
+    const ids = new Set(result?.items.map((item) => item.id))
+    setExpanded(new Set([...expanded].filter((id) => ids.has(id))))
+    setFilesByCommit(
+      Object.fromEntries(Object.entries(filesByCommit).filter(([id]) => ids.has(id)))
+    )
+  }
+  useEffect(() => {
+    const ids = new Set(result?.items.map((item) => item.id))
+    loadedCommitsRef.current = new Set([...loadedCommitsRef.current].filter((id) => ids.has(id)))
+  }, [result])
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({
+    count: collapsed ? 0 : viewModels.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 28,
+    overscan: 8,
+    getItemKey: (index) => `${viewModels[index]!.kind}:${viewModels[index]!.historyItem.id}`
+  })
+
+  const handleToggleExpand = useCallback(
+    (item: GitHistoryItem): void => {
+      const id = item.id
+      const willExpand = !expanded.has(id)
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        if (willExpand) {
+          next.add(id)
+        } else {
+          next.delete(id)
+        }
+        return next
+      })
+      if (!willExpand || !onLoadCommitFiles || loadedCommitsRef.current.has(id)) {
+        return
+      }
+      loadedCommitsRef.current.add(id)
+      setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'loading' } }))
+      onLoadCommitFiles(item)
+        .then((entries) => {
+          setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'ready', entries } }))
+        })
+        .catch((error: unknown) => {
+          loadedCommitsRef.current.delete(id)
+          setFilesByCommit((prev) => ({
+            ...prev,
+            [id]: {
+              status: 'error',
+              error:
+                error instanceof Error
+                  ? error.message
+                  : translate(
+                      'auto.components.right.sidebar.GitHistoryPanel.6d1e0a7c3b',
+                      'Failed to load commit files'
+                    )
+            }
+          }))
+        })
+    },
+    [expanded, onLoadCommitFiles]
+  )
 
   const stopResize = useCallback((): void => {
     const session = resizeSessionRef.current
@@ -154,7 +264,7 @@ export function GitHistoryPanel({
       {!collapsed && (
         <div
           role="separator"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.right.sidebar.GitHistoryPanel.e5e81e59a6',
             'Resize commits'
           )}
@@ -178,21 +288,16 @@ export function GitHistoryPanel({
             <ChevronDown
               className={cn('size-3 shrink-0 transition-transform', collapsed && '-rotate-90')}
             />
-            <span>
-              {translate('auto.components.right.sidebar.GitHistoryPanel.d836037d02', 'Commits')}
-            </span>
+            <span>{t('auto.components.right.sidebar.GitHistoryPanel.d836037d02', 'Commits')}</span>
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
           {onScopeChange && <GitHistoryScopeMenu scope={scope} onChange={onScopeChange} />}
+          {worktreeId && <GitGraphOpenButton worktreeId={worktreeId} onOpen={onOpenGitGraph} />}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
-                aria-label={translate(
+              <CommitsHeaderIconButton
+                aria-label={t(
                   'auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9',
                   'What are refs?'
                 )}
@@ -201,10 +306,10 @@ export function GitHistoryPanel({
                 }}
               >
                 <CircleHelp className="size-3.5" />
-              </Button>
+              </CommitsHeaderIconButton>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-              {translate(
+              {t(
                 'auto.components.right.sidebar.GitHistoryPanel.9f7535d22b',
                 'Refs are branch or tag names pointing at that exact commit. They only appear where Git has a named ref for the commit.'
               )}
@@ -212,11 +317,7 @@ export function GitHistoryPanel({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
+              <CommitsHeaderIconButton
                 onClick={(event) => {
                   event.stopPropagation()
                   if (collapsed) {
@@ -225,19 +326,16 @@ export function GitHistoryPanel({
                   }
                   onRefresh()
                 }}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2',
                   'Refresh commits'
                 )}
               >
                 <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-              </Button>
+              </CommitsHeaderIconButton>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate(
-                'auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2',
-                'Refresh commits'
-              )}
+              {t('auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2', 'Refresh commits')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -251,63 +349,108 @@ export function GitHistoryPanel({
         </div>
       )}
       {!collapsed && (state.status === 'idle' || state.status === 'loading') && !result && (
-        <div
-          className={cn(
-            expandedBodyClassName,
-            'flex items-start gap-2 px-6 py-2 text-[11px] text-muted-foreground'
-          )}
-          style={expandedBodyStyle}
-        >
-          <RefreshCw className="size-3 animate-spin" />
-          <span>
-            {translate(
-              'auto.components.right.sidebar.GitHistoryPanel.781a8bcf7b',
-              'Loading graph...'
-            )}
-          </span>
-        </div>
+        <div className={expandedBodyClassName} style={expandedBodyStyle} />
       )}
       {!collapsed && result && viewModels.length === 0 && (
         <div
           className={cn(expandedBodyClassName, 'px-6 py-2 text-[11px] text-muted-foreground')}
           style={expandedBodyStyle}
         >
-          {translate('auto.components.right.sidebar.GitHistoryPanel.cf7cad58d2', 'No commits yet')}
+          {t('auto.components.right.sidebar.GitHistoryPanel.cf7cad58d2', 'No commits yet')}
         </div>
       )}
-      {!collapsed && result && viewModels.length > 0 && (
-        <>
-          {scope === 'all' &&
-            result.scope !== 'all' &&
-            onScopeChange &&
-            state.status === 'ready' && (
-              <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
-                {translate(
-                  'source-control.history.unsupported-scope',
-                  'Restart Orca or update the execution host to display all branches.'
-                )}
-              </p>
-            )}
-          {state.status === 'error' && (
-            <p role="alert" className="px-3 py-1 text-xs text-destructive">
-              {state.error}
-            </p>
+      {!collapsed && viewModels.length > 0 && (
+        <div ref={scrollRef} className={expandedBodyClassName} style={expandedBodyStyle}>
+          <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const viewModel = viewModels[virtualRow.index]!
+              const item = viewModel.historyItem
+              const isBoundaryNode =
+                viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
+              const canExpand =
+                !isBoundaryNode && Boolean(onLoadCommitFiles) && Boolean(onOpenCommitFile)
+              const isExpanded = canExpand && expanded.has(item.id)
+              const row = (
+                <GitHistoryRow
+                  viewModel={viewModel}
+                  graphLaneCount={graphLaneCount}
+                  expanded={isExpanded}
+                  preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
+                  onOpenCommit={onOpenCommit}
+                  onToggleExpand={canExpand ? handleToggleExpand : undefined}
+                />
+              )
+              return (
+                <div
+                  key={`${viewModel.kind}:${item.id}`}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute left-0 top-0 w-full"
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  {onCommitAction && !isBoundaryNode ? (
+                    <ContextMenu>
+                      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+                      <GitHistoryCommitContextMenu item={item} onAction={onCommitAction} />
+                    </ContextMenu>
+                  ) : (
+                    row
+                  )}
+                  {isExpanded && (
+                    <GitHistoryCommitFiles
+                      state={filesByCommit[item.id] ?? { status: 'loading' }}
+                      author={item.author}
+                      timestamp={item.timestamp}
+                      onOpenFile={(entry, event) => onOpenCommitFile?.(item, entry, event)}
+                      onOpenAll={onOpenCommit ? () => onOpenCommit(item) : undefined}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      {!collapsed && scope === 'all' && result && result.refs !== 'all' && (
+        <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
+          {translate(
+            'source-control.history.unsupported-scope',
+            'Restart Orca or update the execution host to display all branches.'
           )}
-          <GitHistoryList
-            result={result}
-            viewModels={viewModels}
-            height={expandedBodyStyle.height}
-            isLoadingMore={state.isLoadingMore}
-            loadMoreError={state.loadMoreError}
-            refreshing={loading}
-            paginationPaused={state.status === 'error'}
-            onLoadMore={onLoadMore}
-            onOpenCommit={onOpenCommit}
-            onLoadCommitFiles={onLoadCommitFiles}
-            onOpenCommitFile={onOpenCommitFile}
-            onCommitAction={onCommitAction}
-          />
-        </>
+        </p>
+      )}
+      {!collapsed && result && viewModels.length > 0 && onLoadMore && (
+        <div className="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+          {state.loadMoreError ? (
+            <div className="flex items-center gap-2">
+              <span role="alert" className="text-destructive">
+                {state.loadMoreError}
+              </span>
+              <button type="button" className="underline" onClick={() => onLoadMore()}>
+                {translate('source-control.history.retry', 'Retry loading commits')}
+              </button>
+            </div>
+          ) : result.hasMore ? (
+            state.isLoadingMore ? (
+              <span role="status">
+                {translate('source-control.history.loading-more', 'Loading more commits…')}
+              </span>
+            ) : result.historyToken === undefined ? (
+              <span>
+                {translate(
+                  'source-control.history.update-host',
+                  'Restart Orca or update the execution host to load older commits.'
+                )}
+              </span>
+            ) : (
+              <button type="button" className="underline" onClick={() => onLoadMore()}>
+                {translate('source-control.history.load-more', 'Load more commits')}
+              </button>
+            )
+          ) : (
+            <span>{translate('source-control.history.all-loaded', 'All commits loaded')}</span>
+          )}
+        </div>
       )}
     </div>
   )
