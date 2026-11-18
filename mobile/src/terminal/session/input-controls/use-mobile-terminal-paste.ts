@@ -212,7 +212,7 @@ export function useMobileTerminalPaste({
           translate('session.useTerminalPaste.disconnected', 'Paste failed (disconnected)'),
           1500
         )
-      } else if ((e as { reason?: unknown }).reason === 'reply-too-large') {
+      } else if (e instanceof Error && 'reason' in e && e.reason === 'reply-too-large') {
         // The page's clipboard bridge caps one reply below desktop's paste limit.
         showToast(translate('session.useTerminalPaste.pasteTooLarge', 'Paste is too large.'), 1500)
       } else if (err.message === 'Clipboard image is too large') {

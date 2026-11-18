@@ -25,21 +25,24 @@ const BRACKETED: TerminalModes = {
   modifyOtherKeys: 0
 }
 
+type PasteOptions = Parameters<typeof useMobileTerminalPaste>[0]
+
 async function pasteInto(accept: (text: string, index: number) => boolean): Promise<string[]> {
   const sent: string[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook only hands the client to the stubbed send and reads its connection epoch.
   const client = { getLastConnectedAt: () => 1 } as unknown as RpcClient
-  const sendTerminalUserInput = vi.fn((_client: RpcClient, params: { text?: string }) => {
+  const sendTerminalUserInput: PasteOptions['sendTerminalUserInput'] = (_client, params) => {
     const index = sent.push(params.text ?? '') - 1
     return Promise.resolve({
       id: String(index),
       ok: true as const,
       result: { send: { accepted: accept(params.text ?? '', index) } }
     })
-  })
+  }
   let paste: (() => Promise<void>) | undefined
   function Probe() {
     paste = useMobileTerminalPaste({
-      sendTerminalUserInput: sendTerminalUserInput as never,
+      sendTerminalUserInput,
       activeHandle: 'terminal-1',
       activeHandleRef: { current: 'terminal-1' },
       activeSessionTabTypeRef: { current: 'terminal' },
