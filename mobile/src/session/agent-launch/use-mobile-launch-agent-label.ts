@@ -4,9 +4,11 @@ import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../
 import { useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../../navigation/route-param-reader'
 import { agentLaunchContextOf, useMobileAgentLaunchQueries } from './mobile-agent-launch-queries'
-import { resolveMobileSourceControlLaunchAgent } from '../../source-control/review/agent-launch/mobile-source-control-launch-agent'
+import {
+  hostOpensChatsWithoutCli,
+  resolveMobileSourceControlLaunchAgent
+} from '../../source-control/review/agent-launch/mobile-source-control-launch-agent'
 import { useMobileRegisteredAgents } from '../native-chat/agent-session/use-mobile-registered-agent'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 
 // The agent a Fix button would start, by the same resolution the launch uses, so it can say "Fix with Claude".
 export function useMobileLaunchAgentLabel(args: {
@@ -28,7 +30,7 @@ export function useMobileLaunchAgentLabel(args: {
   )
   const registeredAgents = useMobileRegisteredAgents(
     client,
-    enabled && hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+    enabled && hostOpensChatsWithoutCli(hostCapabilities)
   )
   if (!actionId || !context) {
     return null

@@ -13,7 +13,13 @@ import {
   filterEnabledTuiAgents,
   isTuiAgentEnabled
 } from '../../../../../src/shared/agent-launch/catalog/tui-agent-selection'
-import { resolveSourceControlActionPreferredSurface } from '../../../../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import {
+  resolveSourceControlActionPreferredSurface,
+  resolveSourceControlActionRequestedSurface
+} from '../../../../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
+import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-launch/installation/managed-runtime-install'
+import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   nativeChatPreferenceFor,
   type NativeChatDefaultSettings
@@ -29,13 +35,29 @@ import { translate } from '../../../i18n/mobile-i18n'
 import type { MobileAgentLaunchContext } from '../../../session/agent-launch/mobile-new-tab-agent-loader'
 
 export type MobileSourceControlLaunchAgent =
-  | { kind: 'agent'; agent: TuiAgent; recipe: SourceControlActionRecipe | null }
+  | {
+      kind: 'agent'
+      agent: TuiAgent
+      recipe: SourceControlActionRecipe | null
+      /** No CLI was detected, so only an explicit chat can start it. */
+      chatOnly: boolean
+    }
   | { kind: 'unavailable'; message: string }
 
 type LaunchAgentSettings = Pick<
   GlobalSettings,
   'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent' | 'disabledTuiAgents'
 > & { nativeChatDefaults?: NativeChatDefaultSettings | null }
+
+/** The host can run an agent's chat on a program it installs, and refuses an explicit chat it can't open. */
+export function hostOpensChatsWithoutCli(hostCapabilities: readonly string[]): boolean {
+  return (
+    hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) &&
+    hostCapabilities.includes(STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY) &&
+    hostCapabilities.includes(MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY) &&
+    hostCapabilities.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)
+  )
+}
 
 /** What the host says about running agents as chats; absent facts open nothing as a chat. */
 export type MobileLaunchChatHost = {
@@ -55,16 +77,18 @@ export function resolveMobileSourceControlLaunchAgent(
   // As desktop: an agent without a CLI is usable when the host opens it as a chat it installs itself.
   const opensAsChat = (agent: TuiAgent): boolean =>
     !!chatHost &&
-    chatHost.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) &&
+    hostOpensChatsWithoutCli(chatHost.hostCapabilities) &&
     // SSH workspaces run agents in terminals only.
     !context.repo?.connectionId &&
+    (recipe === null || resolveSourceControlActionRequestedSurface(recipe, agent) !== 'terminal') &&
     ((recipe !== null && resolveSourceControlActionPreferredSurface(recipe, agent) === 'chat') ||
       nativeChatPreferenceFor(settings?.nativeChatDefaults, agent)) &&
     registeredAgentChatInstallable(chatHost.registeredAgents, agent, chatHost.hostCapabilities)
+  const enabledDetected = filterEnabledTuiAgents(detectedAgents, settings?.disabledTuiAgents)
   // No pre-launch dialog can show a substitution; fail an unavailable saved agent instead of silently swapping it.
   if (
     savedAgent &&
-    !filterEnabledTuiAgents(detectedAgents, settings?.disabledTuiAgents).includes(savedAgent) &&
+    !enabledDetected.includes(savedAgent) &&
     !(isTuiAgentEnabled(savedAgent, settings?.disabledTuiAgents) && opensAsChat(savedAgent))
   ) {
     return {
@@ -83,7 +107,7 @@ export function resolveMobileSourceControlLaunchAgent(
     chosenOpensAsChat: opensAsChat
   })
   return agent
-    ? { kind: 'agent', agent, recipe }
+    ? { kind: 'agent', agent, recipe, chatOnly: !enabledDetected.includes(agent) }
     : {
         kind: 'unavailable',
         message: translate(

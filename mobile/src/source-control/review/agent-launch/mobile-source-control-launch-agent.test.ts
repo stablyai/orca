@@ -7,7 +7,12 @@ vi.mock('../../../i18n/mobile-i18n', () => ({
 
 // Claude's chat runs on a program the host installs itself; no claude CLI is on its PATH.
 const CHAT_HOST = {
-  hostCapabilities: ['agent-session.structured.v1', 'managed-runtime.install.v1'],
+  hostCapabilities: [
+    'agent-session.structured.v1',
+    'agent-session.structured.registered-agents.v1',
+    'managed-runtime.install.v1',
+    'agent.launch.surface.v1'
+  ],
   registeredAgents: [
     {
       agent: 'claude',
@@ -43,8 +48,25 @@ describe('resolveMobileSourceControlLaunchAgent', () => {
       resolveMobileSourceControlLaunchAgent(contextWith('chat'), 'fixChecks', CHAT_HOST)
     ).toMatchObject({
       kind: 'agent',
-      agent: 'claude'
+      agent: 'claude',
+      chatOnly: true
     })
+  })
+
+  it('refuses that agent when its saved Terminal surface needs the missing CLI', () => {
+    const terminalRepo = {
+      id: 'repo-1',
+      sourceControlAi: {
+        actionOverrides: { fixChecks: { agentId: 'claude', surface: 'terminal' } }
+      }
+    }
+    expect(
+      resolveMobileSourceControlLaunchAgent(
+        { ...contextWith('chat'), repo: terminalRepo },
+        'fixChecks',
+        CHAT_HOST
+      )
+    ).toMatchObject({ kind: 'unavailable' })
   })
 
   it('refuses that agent when the host would start it in a terminal', () => {
