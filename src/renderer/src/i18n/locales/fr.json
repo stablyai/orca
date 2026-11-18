@@ -20033,7 +20033,7 @@
       "rewind": {
         "unsupported": "Ce chat ne peut pas revenir à un message antérieur.",
         "historyNotPaginated": "Ce chat Codex plus ancien ne peut pas revenir à un message antérieur. Démarrez un nouveau chat pour utiliser « Revenir ici ».",
-        "busy": "Disponible une fois que l'agent est inactif et que plus rien dans ce chat n'attend votre action.",
+        "busy": "Disponible lorsque le chat est inactif",
         "staleEpoch": "La conversation a changé. Examinez les derniers messages et réessayez.",
         "invalidTarget": "La conversation ne peut pas revenir à ce message. Rien n'a été modifié.",
         "historyLimit": "Cette conversation est trop longue pour y revenir. Rien n'a été modifié.",
