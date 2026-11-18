@@ -176,11 +176,13 @@
       "invalidUrl": "请输入有效的 URL"
     },
     "paneView": {
-      "dialogTitle": "浏览器对话框",
       "forward": "前进",
       "keyboardPlaceholder": "在网页中输入…",
       "reload": "重新加载",
-      "sendText": "将文本发送到浏览器"
+      "sendText": "将文本发送到浏览器",
+      "dialogTitleWithOrigin": "{{origin}} 显示",
+      "dialogTitleNoOrigin": "此网页显示",
+      "dialogAnswer": "回答"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 点击修饰键"
@@ -199,6 +201,9 @@
     "viewModeSwitch": {
       "mobileView": "显示移动版网站",
       "webView": "显示电脑版网站"
+    },
+    "loadFailure": {
+      "retry": "重试"
     }
   },
   "chat": {
@@ -237,7 +242,8 @@
     "contextUsage": {
       "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
       "title": "上下文",
-      "estimated": "根据上一次响应的估算值。"
+      "estimated": "根据上一次响应的估算值。",
+      "deferredNote": "按需加载，不计入已用总量。"
     },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
@@ -1324,6 +1330,9 @@
       "composer": {
         "planMode": "计划",
         "exitPlanMode": "退出计划模式"
+      },
+      "goal": {
+        "sentAsGoal": "作为目标发送"
       }
     },
     "hostOfflineBanner": {
@@ -3099,7 +3108,7 @@
       "disconnected": "粘贴失败（连接已断开）",
       "imageTooLarge": "图片过大，无法粘贴",
       "pasteFailed": "粘贴失败",
-      "pasteTooLarge": "粘贴内容过大（最大 256 KiB）",
+      "pasteTooLarge": "粘贴内容过大",
       "terminalChanged": "粘贴已取消（终端已切换）"
     },
     "worktreeLabel": {
@@ -3241,6 +3250,7 @@
       "folderWorkspaceRemoved": "文件夹工作区已移除。"
     },
     "nativeChatView": {
+      "linkedMessageMissing": "找不到该消息。",
       "loading": "正在加载对话…"
     },
     "contentState": {
@@ -5162,6 +5172,23 @@
           "opencodeInvalidWorkspaceId": "工作区 ID 格式无效"
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "配对电脑",
+      "pairRequired": "要打开此链接，请将这部手机与电脑配对。",
+      "pairAction": "配对电脑",
+      "openFailed": "无法打开此链接",
+      "ambiguous": "此机器人位于 {{names}}。请在你想用的电脑上通过 Orca 打开聊天。",
+      "computer": "你的电脑",
+      "updateNeeded": "请更新 {{names}} 上的 Orca 以打开此链接。",
+      "unreachable": "无法连接到 {{names}}。请确认其中一台电脑正在运行 Orca，然后重试。",
+      "missing": "你配对的电脑上都没有此机器人。",
+      "offline": "{{name}} 已离线。请在它重新上线后再次打开链接。",
+      "chatOpenFailed": "{{name}} 无法打开此聊天。请重试此链接。",
+      "unreachableSingle": "无法连接到 {{name}}。请确认该电脑正在运行 Orca，然后重试。",
+      "workspaceDeleted": "此聊天的工作区已在 {{name}} 上被删除。"
     }
   },
   "hostMutation": {

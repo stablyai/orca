@@ -1,12 +1,12 @@
 import { resolve } from 'node:path'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { getStatus as getLinearStatus } from '../../../linear/accounts/linear-account-client'
+import { requireConnectedWorkspaces } from '../../../linear/issues/context/linear-connected-workspaces'
 import { listTeamsOrThrow as listLinearTeamsOrThrow } from '../../../linear/teams/linear-team-queries'
 import {
   LinearAgentAccessError,
   linearError
 } from '../../../linear/issues/context/linear-access-errors'
-import { linearNotConnectedError } from '../../../linear/issues/context/linear-not-connected-error'
 import {
   getLinearCurrentIssueFromWorktree,
   resolveLegacyLinearLinkWorkspace
@@ -157,8 +157,8 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
-    if (teams.length === 0 && (getLinearStatus().workspaces?.length ?? 0) === 0) {
-      throw linearNotConnectedError('issue create')
+    if (teams.length === 0) {
+      requireConnectedWorkspaces()
     }
     const matches = teams.filter(
       (team) =>

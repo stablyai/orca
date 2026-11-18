@@ -61,6 +61,9 @@ import type { WslDriveProjectApi } from './api/wsl/wsl-drive-project-bridge'
 import type { WslDriveUncConversionApi } from './api/wsl/wsl-drive-unc-conversion-bridge'
 import type { KeybindingsApi, SettingsApi } from './api/preferences/settings-api'
 import type { ShellApi } from './api/terminal/shell-api'
+import type { BotChangesApi } from './api/bot-changes-api'
+import type { GoogleSetupApi } from './api/google-setup-api'
+import type { SlackHandOffApi } from './api/slack-hand-off-api'
 import type { SpeechApi } from './api/speech/speech-api'
 import type { SshApi } from './api/ssh/ssh-api'
 import type { PlainSshTerminalApi } from './api/terminal/plain-ssh-terminal-bridge'
@@ -73,6 +76,7 @@ import type {
 } from './api/diagnostics/telemetry-api'
 import type { UiCommandEventApi } from './api/window-ui/ui-command-event-api'
 import type { UiWindowApi } from './api/window-ui/ui-window-api'
+import type { BotLinkEventApi } from './api/bot-link-event-api'
 import type { UpdaterApi } from './api/updater/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspaces/workspace-cleanup-api'
 import type {
@@ -140,6 +144,9 @@ export type PreloadApi = {
   developerPermissions: DeveloperPermissionsApi
   computerUsePermissions: ComputerUsePermissionsApi
   shell: ShellApi
+  botChanges: BotChangesApi
+  googleSetup: GoogleSetupApi
+  slackHandOff: SlackHandOffApi
   skills: SkillsApi
   pet: PetApi
   appIcon: AppIconApi
@@ -163,7 +170,7 @@ export type PreloadApi = {
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
   git: Merged<GitInspectionApi & GitOperationApi>
-  ui: Merged<UiCommandEventApi & UiWindowApi>
+  ui: Merged<UiCommandEventApi & UiWindowApi & BotLinkEventApi>
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi

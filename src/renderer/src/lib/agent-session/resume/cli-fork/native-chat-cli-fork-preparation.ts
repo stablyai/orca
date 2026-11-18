@@ -1,6 +1,7 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 
 import {
+  AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS,
   type AiVaultListResult,
   isAiVaultSessionResumableContent
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -118,7 +119,7 @@ export async function prepareNativeChatCliFork(
     )
   }
   // Old peers alone need one same-host inventory; never force a rescan or retry a modern error.
-  const listed = await observe(150_000, (signal) =>
+  const listed = await observe(AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS, (signal) =>
     callRuntimeRpc<AiVaultListResult>(
       target,
       'aiVault.listSessions',
@@ -126,7 +127,7 @@ export async function prepareNativeChatCliFork(
         ...aiVaultSessionListArgs(subject.request, { requestToken: createBrowserUuid() }),
         executionHostId: host.id
       },
-      callOptions(150_000, signal)
+      callOptions(AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS, signal)
     )
   )
   if (!options.isCurrent()) {

@@ -1,4 +1,4 @@
-// Keep actionable failures after offers are spent; retire on independent startup, successful retry or dismissal.
+// Keep actionable failures after offers are spent; retire on independent startup, a later accepted message, successful retry or dismissal.
 
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type {
@@ -70,6 +70,8 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
   capsule?: FailureCapsule
   getRecord: (sessionId: string) => AgentSessionConversationView | null
   retryable: (marker: AgentSessionResumeMarker) => boolean | Promise<boolean>
+  /** A provider-accepted message since the restart, including its own late-settled continuation, spends the failure. */
+  deliveredSince: (marker: AgentSessionResumeMarker) => Promise<boolean>
   /** Preserve newer-chat failures for compatible builds, hidden here. */
   savedByNewerOrca: (sessionId: string) => boolean
   logger: StructuredAgentSessionLogger
@@ -93,7 +95,11 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     failure: AgentSessionResumeFailureRecord
   ): Promise<StructuredAgentSessionResumeFailure[]> => {
     const record = deps.getRecord(failure.marker.sessionId)
-    if (!record || deps.savedByNewerOrca(failure.marker.sessionId)) {
+    if (
+      !record ||
+      deps.savedByNewerOrca(failure.marker.sessionId) ||
+      (await deps.deliveredSince(failure.marker))
+    ) {
       return []
     }
     const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)

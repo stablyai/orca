@@ -81,14 +81,11 @@ export function reportFollowUpAction(
   return finishedElsewhere(dispatchId)
 }
 
-/** The follow-up a current-contract completion report offers once its task finished.
- *  Pass one `lineageCache` across a batch so reports of one worker share its lineage walk. */
-export function completionReportFollowUp(
+/** The Dispatch behind a current-contract completion report; legacy mail is inspect-only. */
+export function currentCompletionReportDispatchId(
   db: OrchestrationDb,
-  message: MessageRow,
-  lineageCache?: Map<string, WorkerLineage>
-): ReportFollowUpAction | undefined {
-  // Legacy mail is inspect-only.
+  message: MessageRow
+): string | undefined {
   if (
     message.type !== 'worker_done' ||
     message.run_id === ORCHESTRATION_LEGACY_RUN_ID ||
@@ -97,6 +94,16 @@ export function completionReportFollowUp(
   ) {
     return undefined
   }
-  const dispatchId = completionReportDispatchId(db, message)
+  return completionReportDispatchId(db, message)
+}
+
+/** The follow-up a current-contract completion report offers once its task finished.
+ *  Pass one `lineageCache` across a batch so reports of one worker share its lineage walk. */
+export function completionReportFollowUp(
+  db: OrchestrationDb,
+  message: MessageRow,
+  lineageCache?: Map<string, WorkerLineage>
+): ReportFollowUpAction | undefined {
+  const dispatchId = currentCompletionReportDispatchId(db, message)
   return dispatchId ? reportFollowUpAction(db, dispatchId, lineageCache) : undefined
 }

@@ -7,19 +7,19 @@ import type { PointerEvent } from 'react'
 import {
   getProjectGroupHeaderDragBucketKey,
   measureProjectGroupHeaderDragRects,
-  type ProjectGroupHeaderDragBucketKey
+  type ProjectGroupHeaderDragBucketKey,
+  type ProjectGroupHeaderDragItem
 } from './project-group-header-drop'
 import {
   isProjectGroupHeaderActionTarget,
   isProjectGroupHeaderDragHandleTarget,
   type ProjectGroupHeaderDragSession
 } from './project-group-header-drag-contract'
-import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 
 export function createProjectGroupHeaderDragSession(args: {
   event: PointerEvent<HTMLElement>
   groupId: string
-  projectGroupById: ReadonlyMap<string, ProjectGroup>
+  projectGroupById: ReadonlyMap<string, ProjectGroupHeaderDragItem>
   sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
     ProjectGroupHeaderDragBucketKey,
     readonly string[]

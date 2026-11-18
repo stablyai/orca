@@ -24,7 +24,7 @@ export function acpLaunchPermission(
   fullAccess: boolean,
   permission: AgentChatPermissionChoice | undefined
 ) {
-  const args = (grant: boolean) => spec.args({ fullAccess: grant, pluginDir: null }).join('\0')
+  const args = (grant: boolean) => spec.args({ fullAccess: grant, pluginDirs: [] }).join('\0')
   return {
     permissionModes: acpLaunchPermissionModes(spec, fullAccess),
     permission: permission ?? 'ask',

@@ -94,6 +94,7 @@ export class RuntimeRpcState {
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
   protected mobileRelayPairingOfferInFlight: {
     generation: number
+    createdByDeviceId: string | undefined
     address: string | null
     rotate: boolean
     request: Promise<MobilePairingOffer>
