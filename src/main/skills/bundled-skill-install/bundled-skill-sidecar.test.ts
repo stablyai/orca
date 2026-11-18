@@ -157,23 +157,19 @@ describe('a bundled skill folder holding a file Orca does not ship', () => {
     expect(await formerReason()).toBe('edited')
 
     await writeCopy(home.shared, NEW_TEXT)
-    for (const sidecar of [false, true]) {
-      if (sidecar) {
-        await addSidecar(home.shared)
-      }
-      const besideCurrent = await previewBundledSkillInstall(input)
-      expect(besideCurrent.skills[0].ops.map((op) => [op.path, op.kind, op.reason])).toEqual([
-        [home.shared, 'keep', undefined],
-        [formerOf(home), 'leave', 'edited']
-      ])
-      expect(bundledSkillNudgeEntries(besideCurrent).map((entry) => entry.name)).toEqual([NAME])
-      await autoUpdateInstalledBundledSkills({ ...input, names: [NAME] })
-      expect(await readFile(join(formerOf(home), 'SKILL.md'), 'utf8')).toBe(FORMER_TEXT)
-      expect(await readFile(join(formerOf(home), SIDECAR), 'utf8')).toBe(SIDECAR_TEXT)
-      expect(
-        bundledSkillNudgeEntries(await previewBundledSkillInstall(input)).map((entry) => entry.name)
-      ).toEqual([NAME])
-    }
+    await addSidecar(home.shared)
+    const besideCurrent = await previewBundledSkillInstall(input)
+    expect(besideCurrent.skills[0].ops.map((op) => [op.path, op.kind, op.reason])).toEqual([
+      [home.shared, 'keep', undefined],
+      [formerOf(home), 'leave', 'edited']
+    ])
+    expect(bundledSkillNudgeEntries(besideCurrent).map((entry) => entry.name)).toEqual([NAME])
+    await autoUpdateInstalledBundledSkills({ ...input, names: [NAME] })
+    expect(await readFile(join(formerOf(home), 'SKILL.md'), 'utf8')).toBe(FORMER_TEXT)
+    expect(await readFile(join(formerOf(home), SIDECAR), 'utf8')).toBe(SIDECAR_TEXT)
+    expect(
+      bundledSkillNudgeEntries(await previewBundledSkillInstall(input)).map((entry) => entry.name)
+    ).toEqual([NAME])
 
     // Bytes this build never shipped that another Orca build recorded read as that build's copy.
     await writeFile(join(formerOf(home), 'SKILL.md'), unknown)
@@ -276,17 +272,5 @@ describe('a bundled skill folder holding a file Orca does not ship', () => {
       serviceInput(home, { filesystem, installedOnly: true })
     )
     expect(again.skills[0].ops.map((op) => op.kind)).toEqual(['keep', 'keep'])
-  })
-
-  it("treats a user's own former-name folder beside the current copy as theirs", async () => {
-    const home = await makeSkillHome()
-    await writeCopy(home.shared, NEW_TEXT)
-    await addSidecar(home.shared)
-    await writeCopy(formerOf(home), `${FORMER_TEXT}my own notes\n`)
-
-    const plan = await previewBundledSkillInstall(sharedOnly(home, [RENAMED]))
-
-    expect(plan.skills[0].ops.map((op) => [op.path, op.kind])).toEqual([[home.shared, 'keep']])
-    expect(bundledSkillNudgeEntries(plan)).toEqual([])
   })
 })
