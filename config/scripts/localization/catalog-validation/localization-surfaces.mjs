@@ -1,10 +1,17 @@
 import path from 'node:path'
 
+// Copy both surfaces render; each resolves it in its own catalog through an injected translator.
+const USAGE_STATUS_COPY_ROOT = path.join('src', 'shared', 'agent-usage', 'status-copy')
+
 // Desktop and mobile ship separate catalogs under one contract: same call shape, key rules and gates.
 export const LOCALIZATION_SURFACES = {
   desktop: {
     localesDir: path.join('src', 'renderer', 'src', 'i18n', 'locales'),
-    sourceRoots: [path.join('src', 'renderer', 'src'), path.join('src', 'main')],
+    sourceRoots: [
+      path.join('src', 'renderer', 'src'),
+      path.join('src', 'main'),
+      USAGE_STATUS_COPY_ROOT
+    ],
     runtimeRequiredPath: path.join('src', 'renderer', 'src', 'i18n', 'en-runtime-required.json'),
     // Desktop runtimes load built-in catalogs as-is; plural forms CLDR adds beyond `_other` are committed.
     fillsPluralForms: true,
@@ -16,7 +23,8 @@ export const LOCALIZATION_SURFACES = {
     sourceRoots: [
       path.join('mobile', 'app'),
       path.join('mobile', 'src'),
-      path.join('mobile', 'web-entry')
+      path.join('mobile', 'web-entry'),
+      USAGE_STATUS_COPY_ROOT
     ],
     runtimeRequiredPath: path.join('mobile', 'src', 'i18n', 'en-runtime-required.json'),
     syncCatalogCommand: 'pnpm run sync:mobile-localization',
