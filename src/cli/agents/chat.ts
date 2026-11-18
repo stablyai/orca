@@ -12,7 +12,6 @@ import { structuredSessionIdFromNotificationPane } from '../../shared/agent-sess
 import {
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryDirection,
   type AgentSessionHistoryResult
 } from '../../shared/agent-session/agent-session-wire'
 import type { RuntimeWorktreePsResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
@@ -96,13 +95,13 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
   'chat read': async ({ flags, client, json }) => {
     const sessionId = resolveSessionId(getPresentStringFlag(flags, 'session'), client.isRemote)
     const directionArg = getOptionalStringFlag(flags, 'direction') ?? 'tail'
-    if (!AGENT_SESSION_HISTORY_DIRECTIONS.includes(directionArg as AgentSessionHistoryDirection)) {
+    const direction = AGENT_SESSION_HISTORY_DIRECTIONS.find((d) => d === directionArg)
+    if (direction === undefined) {
       throw new RuntimeClientError(
         'invalid_argument',
         `--direction must be one of ${AGENT_SESSION_HISTORY_DIRECTIONS.join(', ')}.`
       )
     }
-    const direction = directionArg as AgentSessionHistoryDirection
     const cursorArg = getOptionalStringFlag(flags, 'cursor')
     if (direction !== 'tail' && !cursorArg) {
       throw new RuntimeClientError(

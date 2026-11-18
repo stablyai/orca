@@ -60,14 +60,14 @@ export function journalItemCliLines(item: AgentJournalRenderItem): string[] {
       const input = body.input === undefined ? '' : ` ${clip(JSON.stringify(body.input))}`
       const output = body.output && body.output.head.length > 0 ? `\n${clip(body.output.head)}` : ''
       const cut = body.output?.truncated ? ' [truncated]' : ''
-      return [`${owner}tool ${body.name} (${body.state}):${input}${output}${cut}`]
+      return [`${owner}tool ${String(body.name)} (${body.state}):${input}${output}${cut}`]
     }
     case 'diff': {
       const cut = body.patch.truncated ? ' [truncated]' : ''
       return [`${owner}diff ${body.path}${cut}`]
     }
     case 'status': {
-      const failure = 'failure' in body && body.failure ? ` ${body.failure}` : ''
+      const failure = 'failure' in body && body.failure ? ` ${String(body.failure)}` : ''
       return [`${owner}status${failure}: ${clip(body.text)}`]
     }
     case 'turn': {
