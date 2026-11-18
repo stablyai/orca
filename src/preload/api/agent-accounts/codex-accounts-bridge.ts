@@ -1,8 +1,11 @@
+import type { CodexHomeImportRequest } from './agent-account-api'
 import { ipcRenderer } from 'electron'
 import { CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL } from '../../../shared/agent-accounts/codex/codex-auth-errors'
 import type { PreloadApi } from '../../api-types'
 
 export const codexAccountsApi = {
+  importHome: (args: CodexHomeImportRequest) =>
+    ipcRenderer.invoke('codexAccounts:importHome', args),
   list: () => ipcRenderer.invoke('codexAccounts:list'),
   add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
     ipcRenderer.invoke('codexAccounts:add', args),

@@ -36,6 +36,7 @@ export type AccountsPaneProps = {
 export type ProviderAccountAction =
   | 'idle'
   | 'adding'
+  | 'importing'
   | `reauth:${string}`
   | `remove:${string}`
   | `select:${string}`
