@@ -14,6 +14,7 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
+import { isDoneWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 
 // Apply host/device scope consistently to repos, project groups and folder workspaces.
 export function useSidebarHostVisibleScope(args: {
@@ -27,8 +28,12 @@ export function useSidebarHostVisibleScope(args: {
   botListedWorktreeIdentities?: ReadonlySet<string>
 }) {
   const { filterState, defaultHostId, repos, projectGroups, folderWorkspaces } = args
-  const { visibleWorkspaceHostIds, workspaceHostScope, hideWorkspacesFromOtherDevices } =
-    filterState
+  const {
+    visibleWorkspaceHostIds,
+    workspaceHostScope,
+    hideWorkspacesFromOtherDevices,
+    hideDoneWorkspaces
+  } = filterState
   const visibleHostIdSet = useMemo(
     () => getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
     [visibleWorkspaceHostIds, workspaceHostScope]
@@ -54,18 +59,21 @@ export function useSidebarHostVisibleScope(args: {
       visibleHostIdSet,
       defaultHostId
     )
-    if (!hideWorkspacesFromOtherDevices) {
-      return hostVisibleWorkspaces
-    }
-    return filterFolderWorkspacesFromOtherDevices(
-      hostVisibleWorkspaces,
-      args.pairedDeviceIdsByEnvironment
-    )
+    const visibleWorkspaces = hideWorkspacesFromOtherDevices
+      ? filterFolderWorkspacesFromOtherDevices(
+          hostVisibleWorkspaces,
+          args.pairedDeviceIdsByEnvironment
+        )
+      : hostVisibleWorkspaces
+    return hideDoneWorkspaces
+      ? visibleWorkspaces.filter((folder) => !isDoneWorkspaceStatus(folder.workspaceStatus))
+      : visibleWorkspaces
   }, [
     args.botListedWorktreeIdentities,
     args.pairedDeviceIdsByEnvironment,
     defaultHostId,
     folderWorkspaces,
+    hideDoneWorkspaces,
     hideWorkspacesFromOtherDevices,
     projectGroups,
     visibleHostIdSet
