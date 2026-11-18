@@ -1,9 +1,9 @@
 import type Database from '../../../sqlite/sync-database'
-import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { runJournalTransaction } from './journal-database'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
+import { readAdoption, type Adoption, type Claim } from './journal-legacy-adoption'
 import { journalDatabasePath } from './journal-host-database'
 import {
   journalLegacyChatRevision,
@@ -123,20 +123,6 @@ type Pass = {
   failures: JournalLegacyFailure[]
 }
 
-type Claim = SqliteRow
-
-/** The original's tabs and claims, and this file's tabs, read once per pass. */
-type Adoption = {
-  savedTabs: Map<string, string>
-  claims: Map<string, Claim[]>
-  tabbed: Set<string>
-  takenTabs: Set<string>
-  nextPosition: number
-  tabsRecorded: boolean
-  /** Tabs this pass added, so a chat that fails can take back its own. */
-  added: [sessionId: string, tab: string][]
-}
-
 /**
  * A baseline is the original's revision when it was read. A write changes the original's identity
  * for good, so while it still matches the saved receipt, no write followed any baseline here.
@@ -201,40 +187,6 @@ function absorbChats(
     }
   }
   return true
-}
-
-/** Claims for `only` when given, so a pass over chats due a copy never replays every chat's. */
-function readAdoption(
-  source: Database.Database,
-  db: Database.Database,
-  only: readonly string[] | null
-): Adoption {
-  const claims = new Map<string, Claim[]>()
-  for (const claim of source
-    .prepare(`SELECT upload_id,session_id,claimed_at FROM agent_session_attachment_claims
-      WHERE ?1 IS NULL OR session_id IN (SELECT value FROM json_each(?1))`)
-    .all(only && JSON.stringify(only))) {
-    const id = String(claim.session_id)
-    const list = claims.get(id) ?? []
-    list.push(claim)
-    claims.set(id, list)
-  }
-  const tabs = db.prepare('SELECT tab_id,session_id FROM agent_session_tabs').all()
-  const tail = db.prepare('SELECT COALESCE(MAX(position),-1) AS tail FROM agent_session_tabs').get()
-  return {
-    savedTabs: new Map(
-      source
-        .prepare('SELECT tab_id,session_id FROM agent_session_tabs')
-        .all()
-        .map((row) => [String(row.session_id), String(row.tab_id)])
-    ),
-    claims,
-    tabbed: new Set(tabs.map((row) => String(row.session_id))),
-    takenTabs: new Set(tabs.map((row) => String(row.tab_id))),
-    nextPosition: Number(tail?.tail ?? -1) + 1,
-    tabsRecorded: readMeta(db, AGENT_SESSION_TABS_RECORDED) !== undefined,
-    added: []
-  }
 }
 
 function absorbChat(

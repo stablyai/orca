@@ -4,9 +4,9 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
 import type Database from '../../sqlite/sync-database'
+import { journalDomainDatabasePath } from './database/journal-host-database'
 import {
   initializeJournalDomainDatabase,
-  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './database/journal-domain-database'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'

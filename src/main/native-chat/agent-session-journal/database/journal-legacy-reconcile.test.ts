@@ -7,10 +7,9 @@ import type Database from '../../../sqlite/sync-database'
 import { openJournalDatabase, runJournalTransaction } from './journal-database'
 import {
   initializeJournalDomainDatabase,
-  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
 import { insertJournalRow, publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { journalSqlRetryRows } from '../journal-sql-retry-rows.test-fixture'

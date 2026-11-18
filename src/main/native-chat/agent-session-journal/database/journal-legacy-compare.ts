@@ -41,12 +41,18 @@ export function compareJournalLegacyChat(
   db: Database.Database,
   sessionId: string
 ): { revision: string; held: boolean } | { error: string } | null {
+  let source: Database.Database | undefined
+  try {
+    source = openSource()
+  } catch (error) {
+    return originalFailure(error)
+  }
+  // With no original there is nothing to compare, so this file isn't read.
+  if (!source) {
+    return null
+  }
   const held = { items: heldItems(db, sessionId), cards: heldCards(db, sessionId) }
   try {
-    const source = openSource()
-    if (!source) {
-      return null
-    }
     const imported = prepareJournalDomainImport(source, sessionId)
     if (!imported) {
       return { revision: journalLegacyChatRevision(source, sessionId) ?? 'null', held: true }
@@ -56,11 +62,15 @@ export function compareJournalLegacyChat(
       held: heldEveryItem(held, imported.pages)
     }
   } catch (error) {
-    if (isSqliteStorageFailure(error)) {
-      throw error
-    }
-    return { error: error instanceof Error ? error.message : String(error) }
+    return originalFailure(error)
   }
+}
+
+function originalFailure(error: unknown): { error: string } {
+  if (isSqliteStorageFailure(error)) {
+    throw error
+  }
+  return { error: error instanceof Error ? error.message : String(error) }
 }
 
 /** Ignored when a later open marked a newer revision; a failed compare is absorbed like a chat. */
