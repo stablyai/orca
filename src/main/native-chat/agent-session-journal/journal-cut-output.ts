@@ -80,6 +80,22 @@ export function restoreCutJournalOutput(
   return restored
 }
 
+/** `item` with the tool output or patch of `from`, under whichever field `item`'s kind holds it. */
+export function withJournalOutputOf(
+  item: AgentJournalRenderItem,
+  from: AgentJournalRenderItem
+): AgentJournalRenderItem {
+  const payload = savedPayload(from.body)
+  const { body } = item
+  return !payload
+    ? item
+    : body.kind === 'diff'
+      ? { ...item, body: { ...body, patch: payload } }
+      : body.kind === 'tool-call'
+        ? { ...item, body: { ...body, output: payload } }
+        : item
+}
+
 function savedPayload(body: AgentJournalItemBody): AgentJournalBoundedPayload | undefined {
   return body.kind === 'tool-call' ? body.output : body.kind === 'diff' ? body.patch : undefined
 }

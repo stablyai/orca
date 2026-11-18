@@ -33,7 +33,7 @@ import {
   journalStoredItemRow,
   readJournalStoredItem
 } from './journal-stored-output-rows'
-import { restoreCutJournalOutput } from './journal-cut-output'
+import { restoreCutJournalOutput, withJournalOutputOf } from './journal-cut-output'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
@@ -72,13 +72,10 @@ export function writeJournalDomainCurrentItem(
     throw new Error('journal item persistence requires its writer transaction')
   }
   // A stored form handed back is written from its text, so every derived column stays exact.
+  const restored = restoreCutJournalOutput(db, [target.sessionId, target.epoch], write.item)
   const input = {
     ...write,
-    item: hydrateJournalStoredItem(
-      db,
-      [target.sessionId, target.epoch],
-      restoreCutJournalOutput(db, [target.sessionId, target.epoch], write.item)
-    )
+    item: hydrateJournalStoredItem(db, [target.sessionId, target.epoch], restored)
   }
   const body = normalizeJournalDomainItemBody(
     db,
@@ -207,7 +204,8 @@ export function writeJournalDomainCurrentItem(
     invalidateJournalDomainQueue(db, target, sequence)
   }
   return [
-    next,
+    // A restored whole output stays in its row; the caller gets back the cut it handed in.
+    restored === write.item ? next : withJournalOutputOf(next, write.item),
     ...(readAgentJournalTurn(next.body) || readAgentJournalTurn(input.previous?.item.body)
       ? refreshJournalDomainStopNotes(
           db,
