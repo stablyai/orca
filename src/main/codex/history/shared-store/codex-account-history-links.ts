@@ -16,10 +16,9 @@ import {
 } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import {
   COORDINATION_LOCK,
-  hasThreadLockConflict,
-  hasThreadWriter,
   holdsThreadLock,
   keepsThreadLock,
+  moveIdleThreadLockFolder,
   WRITER_LOCKS
 } from './codex-thread-writer-locks'
 import { writeSharedSqliteHome } from './codex-account-sqlite-home-config'
@@ -191,9 +190,6 @@ export async function shareCodexAccountHistory(
   if (args.platform === 'win32' && !(await markHomeLinked(args.accountHome))) {
     return 'private'
   }
-  if (await hasThreadWriter(args.accountHome)) {
-    return (await isCodexAccountHistoryLinked(args.accountHome, args.storeHome)) ? 'shared' : 'busy'
-  }
   // A thread lock a merge kept apart guards that thread beside the store's own lock.
   const keptLocks = join(args.accountHome, `${WRITER_LOCKS}${MERGE_PENDING_SUFFIX}`)
   if ((await keepsThreadLock(keptLocks)) && (await holdsThreadLock(keptLocks))) {
@@ -201,14 +197,6 @@ export async function shareCodexAccountHistory(
   }
   const accountLocks = join(args.accountHome, WRITER_LOCKS)
   const storeLocks = join(args.storeHome, WRITER_LOCKS)
-  // Once linked, both names are one folder, already swept above through the account's link.
-  if (!(await isLinkedDirectory(accountLocks, storeLocks))) {
-    // Also clears the store's free locks, so a lock taken in the account from now on has no twin.
-    await hasThreadWriter(args.storeHome)
-    if (await hasThreadLockConflict(args.accountHome, args.storeHome)) {
-      return 'busy'
-    }
-  }
   await Promise.all(
     [WRITER_LOCKS, ...STORE_DIRECTORIES].map((name) =>
       mkdir(join(args.storeHome, name), { recursive: true })
@@ -248,12 +236,23 @@ export async function shareCodexAccountHistory(
         ? (path) => name !== WRITER_LOCKS || basename(path) === COORDINATION_LOCK
         : undefined
     })
-  try {
-    // A held lock file moves by hard link, so its inode keeps guarding the thread.
-    await link(WRITER_LOCKS)
-  } catch (error) {
-    onWarning(error)
-    return 'private'
+  // Once linked, both names are one folder: no twin can exist, so there is nothing to hold.
+  if (!(await isLinkedDirectory(accountLocks, storeLocks))) {
+    try {
+      // A held lock file moves by hard link, so its inode keeps guarding the thread.
+      const moved = await moveIdleThreadLockFolder(args.accountHome, args.storeHome, () =>
+        link(WRITER_LOCKS)
+      )
+      if (moved !== 'moved') {
+        return moved === 'held' &&
+          (await isCodexAccountHistoryLinked(args.accountHome, args.storeHome))
+          ? 'shared'
+          : 'busy'
+      }
+    } catch (error) {
+      onWarning(error)
+      return 'private'
+    }
   }
   // A user's own link elsewhere would split the lock namespace from the history's.
   if (!(await isLinkedDirectory(accountLocks, storeLocks))) {
