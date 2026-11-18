@@ -98,6 +98,8 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
 
   protected ptyOutputSequenceById = new Map<string, number>()
+  /** Output gaps per PTY until it exits, so a read that spans one can tell even after recovery finished. */
+  protected readonly ptyGapCounts = new Map<string, number>()
 
   protected providerSequenceInitializedPtys = new Set<string>()
 

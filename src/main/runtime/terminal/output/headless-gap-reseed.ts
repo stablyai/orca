@@ -34,8 +34,6 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   private gapCapturesInFlight = 0
   // Keyed and insertion-ordered: FIFO admission, and a retired model leaves without a scan.
   private readonly gapCaptureWaiters = new Map<string, (granted: boolean) => void>()
-  /** Gaps per PTY, so a read that spans one can tell even after recovery finished. */
-  protected readonly ptyGapCounts = new Map<string, number>()
 
   protected reseedHeadlessTerminalAfterDataGap(ptyId: string): void {
     if (this.ptysById.get(ptyId)?.connected === false) {
@@ -52,13 +50,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
         await state.emulator.write('\x18')
         // Here, in stream order: chunks queued before the gap finished their carries already.
-        const pty = this.ptysById.get(ptyId)
-        resetFreebuffTerminalStatusAfterGap(
-          state.emulator,
-          this.terminalSpawnCommandsByPtyId.get(ptyId),
-          pty?.launchAgent
-        )
-        resetCodexNoticeTrackersAfterGap(state.emulator)
+        this.resetObserversAfterGap(ptyId, state)
         // The dropped bytes are behind this model now; a snapshot at the gap end needs nothing newer.
         state.outputSequence = Math.max(state.outputSequence, gapEnd)
       })
@@ -79,8 +71,18 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     super.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, retryLateSeed)
     const replacement = this.headlessTerminals.get(ptyId)
     if (recovering && replacement) {
+      this.resetObserversAfterGap(ptyId, replacement)
       this.startGapRecovery(ptyId, replacement)
     }
+  }
+
+  private resetObserversAfterGap(ptyId: string, state: RuntimeHeadlessTerminal): void {
+    resetFreebuffTerminalStatusAfterGap(
+      state.emulator,
+      this.terminalSpawnCommandsByPtyId.get(ptyId),
+      this.ptysById.get(ptyId)?.launchAgent
+    )
+    resetCodexNoticeTrackersAfterGap(state.emulator)
   }
 
   private startGapRecovery(ptyId: string, state: RuntimeHeadlessTerminal): void {

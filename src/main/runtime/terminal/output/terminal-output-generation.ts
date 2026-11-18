@@ -165,6 +165,8 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
         this.disposeHeadlessTerminal(ptyId)
       }
       this.providerModeTrackersByPtyId.delete(ptyId)
+      // The new stream has had no gap; the generation advance already fences older reads.
+      this.ptyGapCounts.delete(ptyId)
       this.wslDistroByPtyId.delete(ptyId)
       this.terminalCwdByPtyId.delete(ptyId)
       this.terminalFileUriHostnameByPtyId.delete(ptyId)
