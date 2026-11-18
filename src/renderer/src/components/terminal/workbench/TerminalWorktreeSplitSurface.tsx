@@ -60,7 +60,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       }
       inert={!isVisible}
       aria-hidden={!isVisible}
-      data-workspace-animation-paused={!isVisible ? '' : undefined}
+      data-retained-animation-paused={!isVisible ? '' : undefined}
       data-workspace-surface-id={worktreeId}
     >
       <TabGroupSplitLayout

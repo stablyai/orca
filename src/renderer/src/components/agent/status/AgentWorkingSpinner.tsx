@@ -34,7 +34,7 @@ function handleSpinnerAnimationStart(event: React.AnimationEvent<HTMLSpanElement
   }
 }
 
-// Offscreen rings drop their animation; the restart on reveal re-anchors phase via animationstart.
+// Paused rings drop their animation; the restart on reveal re-anchors phase via animationstart.
 function observeSpinner(el: HTMLSpanElement): () => void {
   const stopOffscreen = observeOffscreenAnimation(el)
   const stopVisible = observeVisibleAnimation(el)

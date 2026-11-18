@@ -2134,11 +2134,10 @@ html.native-shell .app-layout {
 }
 
 .agent-working-spinner {
-  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
-  animation-play-state: paused;
+  animation: none;
 
   &[data-animation-running] {
-    animation-play-state: running;
+    animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
   }
 }
 
@@ -2160,10 +2159,19 @@ html.native-shell .app-layout {
   }
 }
 
-/* Retained guests still paint, but their hidden workspace needs no CSS animation frames. */
-[data-workspace-animation-paused],
-[data-workspace-animation-paused] * {
+/* Retained hidden surfaces keep guest paint but need no CSS animation frames; pseudo-elements don't inherit play state. */
+[data-retained-animation-paused],
+[data-retained-animation-paused]::before,
+[data-retained-animation-paused]::after,
+[data-retained-animation-paused] *,
+[data-retained-animation-paused] *::before,
+[data-retained-animation-paused] *::after {
   animation-play-state: paused !important;
+}
+
+/* Rings drop their animation instead of pausing so the restart re-anchors the shared phase. */
+[data-retained-animation-paused] .agent-working-spinner {
+  animation: none !important;
 }
 
 /* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
@@ -2177,7 +2185,8 @@ html.native-shell .app-layout {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-spinner {
+  .agent-working-spinner,
+  .agent-working-spinner[data-animation-running] {
     animation: none;
   }
 }
