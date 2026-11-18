@@ -7,6 +7,8 @@ import type {
 import { isChromiumCertificateErrorCode } from '../../../../src/shared/browser/certificate-trust/browser-certificate-errors'
 import {
   browserCertificateFailureReason,
+  browserCertificatePresentationLoadError,
+  browserCertificateProceedFailureKind,
   matchBrowserCertificateFailure
 } from '../../../../src/shared/browser/certificate-trust/browser-certificate-failure-match'
 import type { MobileCertificateProceedFailure } from '../certificate/mobile-browser-certificate-proceed'
@@ -52,15 +54,10 @@ export function MobileBrowserLoadFailure({
     expectedBrowserPageId: browserPageId,
     canProceed: certificateTrustSupported
   })
-  // Chromium can replace the certificate code with -1 after the host captured the exact challenge.
-  const presentationLoadError =
-    matchingCertificateFailure && loadError.code === -1
-      ? {
-          ...loadError,
-          code: matchingCertificateFailure.errorCode ?? loadError.code,
-          description: matchingCertificateFailure.error
-        }
-      : loadError
+  const presentationLoadError = browserCertificatePresentationLoadError(
+    loadError,
+    matchingCertificateFailure
+  )
   const certificateError = isChromiumCertificateErrorCode(presentationLoadError.code)
   if (!certificateError && !isBrowserNetworkLoadFailure(presentationLoadError)) {
     return null
@@ -83,13 +80,11 @@ export function MobileBrowserLoadFailure({
   const proceedCertificate = (challengeId: string) => {
     setProceed({ challengeId, state: 'submitting' })
     void onProceedCertificate(challengeId).then((reason) => {
-      // Success needs nothing here: the host reloads the page and the failure goes away.
+      // On success stay "Connecting…": the host reloads the page and this view goes away.
       setProceed((current) =>
-        current?.challengeId !== challengeId
-          ? current
-          : reason
-            ? { challengeId, state: 'failed', reason }
-            : null
+        current?.challengeId === challengeId && reason
+          ? { challengeId, state: 'failed', reason }
+          : current
       )
     })
   }
@@ -192,19 +187,20 @@ function certificateProceedFailureText(
       'Update Orca on this host to accept certificate warnings from your phone.'
     )
   }
-  if (reason === 'expired') {
+  const kind = browserCertificateProceedFailureKind(reason)
+  if (kind === 'expired') {
     return t(
       'browser.loadFailure.certificateChallengeExpired',
       'This certificate approval expired. Retry the page to request a new one.'
     )
   }
-  if (reason === 'changed' || reason === 'navigated') {
+  if (kind === 'changed') {
     return t(
       'browser.loadFailure.certificateChallengeChanged',
       'The certificate request changed. Retry the page and review the new warning.'
     )
   }
-  if (reason === 'request-failed') {
+  if (kind === 'request-failed') {
     return t(
       'browser.loadFailure.certificateProceedFailed',
       'Orca could not approve this certificate request. Retry the page and try again.'

@@ -11,7 +11,11 @@ import type {
   BrowserCertificateProceedResult,
   BrowserLoadError
 } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import { matchBrowserCertificateFailure } from '../../../../../shared/browser/certificate-trust/browser-certificate-failure-match'
+import {
+  browserCertificatePresentationLoadError,
+  browserCertificateProceedFailureKind,
+  matchBrowserCertificateFailure
+} from '../../../../../shared/browser/certificate-trust/browser-certificate-failure-match'
 import {
   describeBrowserLoadFailure,
   type BrowserLoadFailureRoute
@@ -56,19 +60,20 @@ function formatCertificateProceedFailure(
   reason: BrowserCertificateProceedFailureReason | 'request-failed',
   t: Translate = translate
 ): string {
-  if (reason === 'expired') {
+  const kind = browserCertificateProceedFailureKind(reason)
+  if (kind === 'expired') {
     return t(
       'browser.loadFailure.certificateChallengeExpired',
       'This certificate approval expired. Retry the page to request a new one.'
     )
   }
-  if (reason === 'changed' || reason === 'navigated') {
+  if (kind === 'changed') {
     return t(
       'browser.loadFailure.certificateChallengeChanged',
       'The certificate request changed. Retry the page and review the new warning.'
     )
   }
-  if (reason === 'request-failed') {
+  if (kind === 'request-failed') {
     return t(
       'browser.loadFailure.certificateProceedFailed',
       'Orca could not approve this certificate request. Retry the page and try again.'
@@ -105,15 +110,10 @@ export function BrowserLoadFailureOverlay({
     expectedBrowserPageId,
     canProceed: Boolean(onProceedCertificate)
   })
-  // Chromium can replace the diagnostic code with -1 after main captures an exact certificate challenge.
-  const presentationLoadError =
-    matchingCertificateFailure && loadError.code === -1
-      ? {
-          ...loadError,
-          code: matchingCertificateFailure.errorCode ?? loadError.code,
-          description: matchingCertificateFailure.error
-        }
-      : loadError
+  const presentationLoadError = browserCertificatePresentationLoadError(
+    loadError,
+    matchingCertificateFailure
+  )
   const certificateError = isCertificateLoadError(presentationLoadError)
   const failure = describeBrowserLoadFailure(presentationLoadError, route)
   const description = formatLoadFailureDescription(presentationLoadError, failure, sshRoutedHint, t)

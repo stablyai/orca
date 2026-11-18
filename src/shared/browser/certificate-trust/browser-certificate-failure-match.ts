@@ -1,5 +1,6 @@
 import type {
   BrowserCertificateFailure,
+  BrowserCertificateProceedFailureReason,
   BrowserLoadError
 } from '../workspaces/browser-workspace-types'
 import { normalizeCertificateError } from './browser-certificate-errors'
@@ -49,4 +50,27 @@ export function browserCertificateFailureReason(
       : code === -202
         ? 'authority-invalid'
         : 'unverified'
+}
+
+/** Chromium can replace the certificate code with -1 after the host captured the exact challenge; show the challenge's. */
+export function browserCertificatePresentationLoadError(
+  loadError: BrowserLoadError,
+  match: BrowserCertificateFailure | null
+): BrowserLoadError {
+  return match && loadError.code === -1
+    ? { ...loadError, code: match.errorCode ?? loadError.code, description: match.error }
+    : loadError
+}
+
+/** Which sentence explains a refused Proceed; each surface words it from its own catalog. */
+export function browserCertificateProceedFailureKind(
+  reason: BrowserCertificateProceedFailureReason | 'request-failed'
+): 'expired' | 'changed' | 'request-failed' | 'unavailable' {
+  return reason === 'expired'
+    ? 'expired'
+    : reason === 'changed' || reason === 'navigated'
+      ? 'changed'
+      : reason === 'request-failed'
+        ? 'request-failed'
+        : 'unavailable'
 }

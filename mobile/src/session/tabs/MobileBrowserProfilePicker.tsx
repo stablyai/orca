@@ -18,7 +18,9 @@ export function useMobileNewBrowserProfile(client: RpcClient | null, sheetOpen: 
   const [profileId, setProfileId] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const profiles = useMobileBrowserProfiles(client, sheetOpen || pickerOpen)
-  return { profiles, profileId, setProfileId, pickerOpen, setPickerOpen }
+  // A profile deleted on the host since it was picked falls back to the workspace default.
+  const liveProfileId = profiles.some((profile) => profile.id === profileId) ? profileId : null
+  return { profiles, profileId: liveProfileId, setProfileId, pickerOpen, setPickerOpen }
 }
 
 export function useMobileBrowserProfileLabel(
