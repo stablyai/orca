@@ -8,11 +8,18 @@ import {
 } from 'electron'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
+import {
+  UtilityWorkerHostCrashLoop,
+  type UtilityWorkerHostCrashCap
+} from './utility-worker-host-crash-loop'
 import { HostedWorker } from './hosted-worker'
 import {
-  UtilityWorkerHostPausedError,
+  recordUtilityWorkerHeapPressure,
+  utilityWorkerHeapData
+} from './utility-worker-heap-report'
+import {
   type HostedWorkerThread,
+  type UtilityWorkerHeapReport,
   type UtilityWorkerHostEvent,
   type UtilityWorkerHostRequest,
   type UtilityWorkerSpawn
@@ -27,15 +34,6 @@ const HOST_IDLE_EXIT_MS = 30_000
 
 /** Electron stops utility processes as it quits; those exits are not failures. */
 let quitting = false
-
-/** After repeated crashes a capped host refuses work until a user retries; never moves it in-process. */
-export type UtilityWorkerHostCrashCap = {
-  crashes: number
-  windowMs: number
-  message: string
-  onPause: () => void
-  onResume: () => void
-}
 
 /** A new thread that can't get memory in a crowded host could load in a healthy one. */
 const RESOURCE_START_FAILURES = new Set(['ERR_WORKER_OUT_OF_MEMORY', 'ERR_WORKER_INIT_FAILED'])
@@ -52,6 +50,7 @@ type Host = {
   lossCounted: boolean
   /** The owner's context, taken at the first port close, before any worker fails. */
   exitContext?: CrashReportBreadcrumbData
+  heap?: UtilityWorkerHeapReport
 }
 
 /** A child still launching has no PID to kill yet; kill it once it has one. */
@@ -74,8 +73,7 @@ export class UtilityWorkerHost {
   private retryAt = 0
   private retryMs = 0
   private nextId = 0
-  private readonly crashes?: ManagedOrcadEventWindow
-  private paused = false
+  private readonly crashLoop?: UtilityWorkerHostCrashLoop
 
   constructor(
     private readonly serviceName: string,
@@ -85,20 +83,16 @@ export class UtilityWorkerHost {
     private readonly exitContext?: (
       workers: readonly HostedWorkerThread[]
     ) => CrashReportBreadcrumbData,
-    private readonly crashCap?: UtilityWorkerHostCrashCap
+    crashCap?: UtilityWorkerHostCrashCap
   ) {
-    if (crashCap) {
-      this.crashes = new ManagedOrcadEventWindow(crashCap.windowMs, Date.now)
-    }
+    this.crashLoop = crashCap && new UtilityWorkerHostCrashLoop(serviceName, crashCap)
     app.once('will-quit', () => {
       quitting = true
     })
   }
 
   spawn(spawn: UtilityWorkerSpawn): HostedWorkerThread {
-    if (this.paused) {
-      throw new UtilityWorkerHostPausedError(this.crashCap!.message)
-    }
+    this.crashLoop?.throwIfPaused()
     if (this.neverHost.has(spawn.filename) || Date.now() < this.retryAt) {
       return this.spawnInProcess(spawn)
     }
@@ -136,7 +130,7 @@ export class UtilityWorkerHost {
     host.workers.set(id, worker)
     clearTimeout(host.idleTimer)
     host.idleTimer = undefined
-    const request: UtilityWorkerHostRequest = { type: 'spawn', ...spawn }
+    const request: UtilityWorkerHostRequest = { type: 'spawn', id, ...spawn }
     if (host.ready) {
       host.child.postMessage(request, [port1])
     } else {
@@ -146,18 +140,12 @@ export class UtilityWorkerHost {
   }
 
   get pauseMessage(): string | null {
-    return this.paused ? this.crashCap!.message : null
+    return this.crashLoop?.pauseMessage ?? null
   }
 
   /** A user asked again: clear the crash history and let the next spawn start a fresh host. */
   retry(): void {
-    if (!this.paused) {
-      return
-    }
-    recordDurableCrashBreadcrumb('utility_worker_host_retried', { serviceName: this.serviceName })
-    this.paused = false
-    this.crashes?.forget(this.serviceName)
-    this.crashCap?.onResume()
+    this.crashLoop?.retry()
   }
 
   private liveHost(): Host {
@@ -189,7 +177,12 @@ export class UtilityWorkerHost {
   }
 
   private receive(host: Host, event: UtilityWorkerHostEvent): void {
-    if (host.retired || event.type !== 'ready') {
+    if (host.retired) {
+      return
+    }
+    if (event.type === 'heap') {
+      host.heap = event.report
+      recordUtilityWorkerHeapPressure(this.serviceName, event.report, [...host.workers.values()])
       return
     }
     clearTimeout(host.readyTimer)
@@ -245,19 +238,7 @@ export class UtilityWorkerHost {
   }
 
   private recordCrash(): void {
-    if (!this.crashes || !this.crashCap || this.paused) {
-      return
-    }
-    this.crashes.record(this.serviceName)
-    const recent = this.crashes.recent(this.serviceName).length
-    if (recent >= this.crashCap.crashes) {
-      this.paused = true
-      recordDurableCrashBreadcrumb('utility_worker_host_paused', {
-        serviceName: this.serviceName,
-        crashes: recent
-      })
-      this.crashCap.onPause()
-    }
+    this.crashLoop?.record()
   }
 
   private scheduleIdleExit(host: Host): void {
@@ -312,7 +293,8 @@ export class UtilityWorkerHost {
       const data: CrashReportBreadcrumbData = {
         serviceName: this.serviceName,
         code,
-        workers: workers.length
+        workers: workers.length,
+        ...utilityWorkerHeapData(host.heap, workers)
       }
       workers.forEach((worker, index) => {
         data[`w${index}_role`] = worker.spawn.name

@@ -39,6 +39,14 @@ class EditorSelection {
   }
 }
 
+// Tiptap reports an unmounted editor as destroyed too; only these may never mount a view again.
+const disposedEditors = new WeakSet<Editor>()
+
+function disposeEditor(editor: Editor): void {
+  disposedEditors.add(editor)
+  editor.destroy()
+}
+
 class ComposerEditors {
   private editors = new Map<string, OwnedEditor>()
   private generation = 0
@@ -51,7 +59,7 @@ class ComposerEditors {
         if (generation === this.generation) {
           for (const entry of this.editors.values()) {
             entry.release()
-            entry.editor.destroy()
+            disposeEditor(entry.editor)
           }
           this.editors.clear()
         }
@@ -74,6 +82,8 @@ class ComposerEditors {
       selection: new EditorSelection(),
       editor: new Editor({
         ...options,
+        // A view exists only while its composer is shown; see NativeChatComposerEditorView.
+        element: null,
         onTransaction: (event) => entry.options.onTransaction?.(event, entry.historyPaths),
         onUpdate: (...args) => entry.options.onUpdate?.(...args),
         onSelectionUpdate: (...args) => entry.options.onSelectionUpdate?.(...args)
@@ -85,7 +95,7 @@ class ComposerEditors {
         if (!ephemeralDrafts.has(scope)) {
           this.editors.delete(scope)
           entry.release()
-          entry.editor.destroy()
+          disposeEditor(entry.editor)
         }
       })
     }
@@ -95,7 +105,26 @@ class ComposerEditors {
 
 const ComposerEditorOwner = createContext<ComposerEditors | null>(null)
 
-/** The tab owns editors; a hidden or temporarily replaced composer only lends their view DOM. */
+/** Gives the owned editor a view while shown; hidden, it keeps its state but no view or document listeners.
+ *  Render before EditorContent so the view exists when EditorContent adopts it. */
+export function NativeChatComposerEditorView({ editor }: { editor: Editor }): null {
+  useLayoutEffect(() => {
+    // One view per editor: Tiptap would replace a live view without destroying it.
+    if (disposedEditors.has(editor) || !editor.isDestroyed) {
+      return
+    }
+    editor.mount(document.createElement('div'))
+    return () => {
+      // Without its stylesheet handle, unmount skips a whole-page `.tiptap` query and leaves the
+      // shared stylesheet in place; removing and re-adding it would restyle the page each switch.
+      Reflect.set(editor, 'css', null)
+      editor.unmount()
+    }
+  }, [editor])
+  return null
+}
+
+/** The tab owns editors and their state; only a shown composer gives one a view. */
 export function NativeChatComposerEditorOwner({ children }: { children: React.ReactNode }) {
   const [owner] = useState(() => new ComposerEditors())
   useEffect(() => owner.retain(), [owner])

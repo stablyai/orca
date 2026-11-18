@@ -20,11 +20,24 @@ export type UtilityWorkerSpawn = {
   largeSendLog?: string
 }
 
-/** Main to host over the process channel; each spawn carries its worker's port. */
-export type UtilityWorkerHostRequest = { type: 'spawn' } & UtilityWorkerSpawn
+/** Main to host over the process channel; each spawn carries its worker's port and id. */
+export type UtilityWorkerHostRequest = { type: 'spawn'; id: number } & UtilityWorkerSpawn
 
-/** Host to main over the process channel. */
-export type UtilityWorkerHostEvent = { type: 'ready' }
+/** Committed heap of the host isolate and of each worker by its spawn id; null when unknown. */
+export type UtilityWorkerHeapReport = {
+  sampledAt: number
+  hostBytes: number
+  workers: { id: number; bytes: number | null; estimated: boolean }[]
+}
+
+export function utilityWorkerHeapTotal(report: UtilityWorkerHeapReport): number {
+  return report.workers.reduce((sum, worker) => sum + (worker.bytes ?? 0), report.hostBytes)
+}
+
+/** Host to main over the process channel: readiness and the whole process's heaps. */
+export type UtilityWorkerHostEvent =
+  | { type: 'ready' }
+  | { type: 'heap'; report: UtilityWorkerHeapReport }
 
 export type UtilityWorkerFailure = { name: string; message: string; code?: string }
 

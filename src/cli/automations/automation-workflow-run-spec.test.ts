@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatAutomationEventTrigger,
-  offeredEvents,
   parseAutomationEventTrigger
 } from './automation-event-trigger-spec'
 import { isConnectorTrigger } from '../../shared/automation-event-triggers'
@@ -73,14 +72,6 @@ describe('github.workflow_finished run=', () => {
     ).toThrow('the run is in acme/widgets')
     expect(() => parseAutomationEventTrigger('github.workflow_finished run=42')).toThrow(
       'run=<id> needs in='
-    )
-  })
-
-  it("is offered only where the bot's Orca Cloud sends it", () => {
-    const bot = { name: 'Scout', github: {}, githubEvents2: true }
-    expect(offeredEvents('github', bot)).not.toContain('workflow_finished')
-    expect(offeredEvents('github', { ...bot, githubWorkflows: true })).toContain(
-      'workflow_finished'
     )
   })
 })

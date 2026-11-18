@@ -1,4 +1,6 @@
+import type { Worker } from 'node:worker_threads'
 import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
+import { sampleUtilityWorkerHeaps } from './utility-worker-heap-sampler'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { setWorkerLargeSendLog } from '../worker-threads/worker-send-ledger'
 import {
@@ -29,6 +31,11 @@ if (!parent) {
 }
 
 const LOADED = 'orca-hosted-worker-loaded'
+const control = parent
+const workers = new Map<number, Worker>()
+const heaps = sampleUtilityWorkerHeaps(workers, (report) =>
+  control.postMessage({ type: 'heap', report })
+)
 
 function failure(error: unknown): UtilityWorkerFailure {
   const value = error instanceof Error ? error : new Error(String(error))
@@ -95,9 +102,15 @@ function host(request: UtilityWorkerHostRequest, port: WorkerPort): void {
   worker.on('message', (bytes: Uint8Array | typeof LOADED) =>
     bytes === LOADED ? send(port, { type: 'loaded' }) : relay(port, bytes)
   )
+  workers.set(request.id, worker)
+  heaps.workersChanged()
   worker.on('error', (error) => send(port, { type: 'error', error: failure(error) }))
   // The consumer closes the port once it reads this, so the frame is never cut off.
-  worker.once('exit', (code) => send(port, { type: 'exit', code }))
+  worker.once('exit', (code) => {
+    workers.delete(request.id)
+    heaps.workersChanged()
+    send(port, { type: 'exit', code })
+  })
   port.on('message', ({ data }) => {
     if (data.type === 'post') {
       worker.postMessage(data.message)

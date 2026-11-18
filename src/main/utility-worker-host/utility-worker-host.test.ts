@@ -46,8 +46,10 @@ function portMain(port: MessagePort) {
     close: () => port.close()
   }
 }
+const breadcrumb = vi.hoisted(() => vi.fn())
 vi.mock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
-  recordDurableCrashBreadcrumb: vi.fn()
+  recordDurableCrashBreadcrumb: breadcrumb,
+  recordCoalescedDurableCrashBreadcrumb: vi.fn()
 }))
 
 const { UtilityWorkerHost } = await import('./utility-worker-host')
@@ -319,5 +321,40 @@ describe('UtilityWorkerHost', () => {
     expect(await nextMessage(worker)).toEqual({ hello: 'x' })
     expect(fork).toHaveBeenCalledTimes(4)
     await worker.terminate()
+  })
+
+  it("puts the host's last heap report into its exit breadcrumb", async () => {
+    const children: ReturnType<typeof threadUtilityProcess>[] = []
+    fork.mockImplementation(() => {
+      const child = threadUtilityProcess()
+      children.push(child)
+      return child
+    })
+    const host = newHost()
+    const first = host.spawn({
+      filename: echoEntry,
+      name: 'orca-journal-sql-reader',
+      workerData: { tag: 'i' }
+    })
+    await nextMessage(first)
+    // The host reports its heaps as soon as its last worker leaves.
+    await first.terminate()
+    const second = host.spawn({
+      filename: echoEntry,
+      name: 'orca-journal-sql-reader',
+      workerData: { tag: 'j' }
+    })
+    await nextMessage(second)
+    second.on('error', () => undefined)
+    const hostExited = new Promise((resolve) => children[0]?.once('exit', resolve))
+    breadcrumb.mockClear()
+    children[0]?.kill()
+    await Promise.all([nextExit(second), hostExited])
+    const exited = breadcrumb.mock.calls.find(([name]) => name === 'utility_worker_host_exited')
+    expect(exited?.[1]).toMatchObject({
+      hostHeapMB: expect.any(Number),
+      heapReportWorkers: 0,
+      w0_role: 'orca-journal-sql-reader'
+    })
   })
 })
