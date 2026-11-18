@@ -59,7 +59,8 @@
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
-      "resumeSession": "Reprendre la session d'agent"
+      "resumeSession": "Reprendre la session d'agent",
+      "continueInCli": "Continuer en CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Impossible de joindre l'hôte",
@@ -169,11 +170,13 @@
       "invalidUrl": "Saisissez une URL valide."
     },
     "paneView": {
-      "dialogTitle": "Boîte de dialogue du navigateur",
       "forward": "Suivant",
       "keyboardPlaceholder": "Saisir du texte sur la page…",
       "reload": "Recharger",
-      "sendText": "Envoyer le texte au navigateur"
+      "sendText": "Envoyer le texte au navigateur",
+      "dialogTitleWithOrigin": "{{origin}} indique",
+      "dialogTitleNoOrigin": "Cette page indique",
+      "dialogAnswer": "Réponse"
     },
     "pointerModifiers": {
       "clickModifier": "Modificateur de clic {{key}}"
@@ -186,6 +189,20 @@
     "viewModeSwitch": {
       "mobileView": "Afficher la version mobile du site",
       "webView": "Afficher la version pour ordinateur du site"
+    },
+    "loadFailure": {
+      "retry": "Réessayer",
+      "connectionNotSecure": "La connexion n'est pas sécurisée",
+      "certificateNameMismatch": "Le certificat ne correspond pas à {{value0}}.",
+      "certificateDateInvalid": "Le certificat de {{value0}} n'est pas valide à la date et à l'heure actuelles.",
+      "certificateAuthorityInvalid": "Orca ne fait pas confiance à l'autorité qui a émis le certificat de {{value0}}.",
+      "certificateVerificationFailed": "Orca n'a pas pu vérifier le certificat de {{value0}}.",
+      "proceedUnsafe": "Continuer quand même (non sécurisé)",
+      "connecting": "Connexion…",
+      "certificateChallengeExpired": "Cette approbation de certificat a expiré. Rechargez la page pour en demander une nouvelle.",
+      "certificateChallengeChanged": "La demande de certificat a changé. Rechargez la page et examinez le nouvel avertissement.",
+      "certificateProceedFailed": "Orca n'a pas pu approuver cette demande de certificat. Rechargez la page et réessayez.",
+      "certificateChallengeUnavailable": "Cette demande de certificat n'est plus disponible. Rechargez la page pour en demander une nouvelle."
     }
   },
   "chat": {
@@ -219,7 +236,8 @@
     "contextUsage": {
       "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
       "title": "Contexte",
-      "estimated": "Estimation basée sur la dernière réponse."
+      "estimated": "Estimation basée sur la dernière réponse.",
+      "deferredNote": "Chargé à la demande. Non compté dans le total utilisé."
     },
     "composerAttachments": {
       "attachedImage": "Image jointe",
@@ -687,7 +705,7 @@
       "confirm": "Revenir",
       "unsupported": "Ce chat ne peut pas revenir à un message antérieur.",
       "historyNotPaginated": "Ce chat Codex plus ancien ne peut pas revenir à un message antérieur. Démarrez un nouveau chat pour utiliser « Revenir ici ».",
-      "busy": "Disponible une fois que l'agent est inactif et que plus rien dans ce chat n'attend votre action.",
+      "busy": "Disponible lorsque le chat est inactif",
       "staleEpoch": "La conversation a changé. Examinez les derniers messages et réessayez.",
       "invalidTarget": "La conversation ne peut pas revenir à ce message. Rien n'a été modifié.",
       "historyLimit": "Cette conversation est trop longue pour y revenir. Rien n'a été modifié.",
@@ -968,7 +986,9 @@
       "label": "Script de setup",
       "run": "Exécuter",
       "runSetupCommand": "Exécuter la commande de setup",
-      "skip": "Ignorer"
+      "skip": "Ignorer",
+      "waitForSetup": "Attendre la fin du setup avant de démarrer l'agent",
+      "waitForSetupSaveFailed": "Échec de l'enregistrement du comportement de démarrage de la configuration."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Se connecter",
@@ -1173,6 +1193,9 @@
       "composer": {
         "planMode": "Planifier",
         "exitPlanMode": "Quitter le mode plan"
+      },
+      "goal": {
+        "sentAsGoal": "Envoyé comme objectif"
       }
     }
   },
@@ -2525,6 +2548,11 @@
       "sendReviewNotes": "Envoyer les notes de revue",
       "shortcut": "Raccourci",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "Invite CMD",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
       "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
@@ -2712,7 +2740,7 @@
       "disconnected": "Échec du collage (déconnexion)",
       "imageTooLarge": "Image trop volumineuse pour être collée",
       "pasteFailed": "Échec du collage",
-      "pasteTooLarge": "Contenu à coller trop volumineux (max. 256 Kio)",
+      "pasteTooLarge": "Le collage est trop volumineux.",
       "terminalChanged": "Collage annulé (changement de terminal)"
     },
     "worktreeLabel": {
@@ -2842,6 +2870,12 @@
     "structuredOpen": {
       "worktreeDeleted": "Le worktree a été supprimé.",
       "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "Ce message est introuvable."
+    },
+    "browserProfile": {
+      "default": "Par défaut"
     }
   },
   "settings": {
@@ -4440,6 +4474,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Jumeler un ordinateur",
+      "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur.",
+      "pairAction": "Jumeler un ordinateur",
+      "openFailed": "Impossible d’ouvrir ce lien",
+      "ambiguous": "Ce bot se trouve sur {{names}}. Ouvrez la conversation dans Orca sur l’ordinateur de votre choix.",
+      "computer": "votre ordinateur",
+      "updateNeeded": "Mettez Orca à jour sur {{names}} pour ouvrir ce lien.",
+      "unreachable": "Impossible de joindre {{names}}. Vérifiez qu’Orca est ouvert sur l’un d’eux, puis réessayez.",
+      "missing": "Aucun de vos ordinateurs jumelés ne possède ce bot.",
+      "offline": "{{name}} est hors ligne. Rouvrez le lien quand cet ordinateur sera de nouveau connecté.",
+      "chatOpenFailed": "{{name}} n’a pas pu ouvrir cette conversation. Réessayez le lien.",
+      "unreachableSingle": "Impossible de joindre {{name}}. Vérifiez qu’Orca y est ouvert, puis réessayez.",
+      "workspaceDeleted": "L’espace de travail de cette conversation a été supprimé sur {{name}}."
     }
   }
 }

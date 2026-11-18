@@ -133,6 +133,16 @@ export type WindowLayoutCommand =
     }
   | { type: 'promotePreviewTab'; tabId: string }
   | {
+      type: 'openRoomTab'
+      tabId: string
+      botGroupId: string
+      groupId: string
+      afterTabId?: string
+      index?: number
+      createdAt?: number
+      split?: NewGroupSplit
+    }
+  | {
       type: 'openSimulatorTab'
       tabId: string
       groupId: string
@@ -202,6 +212,7 @@ function drawnTabHolds(worktreeId: string, command: WindowLayoutCommand): DrawnT
     case 'setBrowserTabProfile':
     case 'openAgentSessionTab':
     case 'openSimulatorTab':
+    case 'openRoomTab':
     case 'openEditorTab':
     case 'promotePreviewTab':
     case 'moveTabToWorkspace':

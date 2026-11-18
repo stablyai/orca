@@ -71,6 +71,9 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract resolveOrchestrationWorkerServer(
     ...args: Calls.ResolveOrchestrationWorkerServerArgs
   ): Calls.ResolveOrchestrationWorkerServerResult
+  abstract listOrchestrationWorkerServers(): Promise<
+    readonly { environmentId: string; name: string }[]
+  >
   abstract callOrchestrationWorkerServer(
     ...args: Calls.CallOrchestrationWorkerServerArgs
   ): Calls.CallOrchestrationWorkerServerResult

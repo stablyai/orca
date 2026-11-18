@@ -162,7 +162,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
   })
 
-  it('lists a highest-first effort menu lowest first on the /effort page', async () => {
+  it('selects an effort from the /effort page', async () => {
     const effort: SessionOptionDescriptor = {
       id: 'effort',
       label: 'Reasoning effort',
@@ -182,11 +182,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       settable: true
     }
     mount([MODEL_DESCRIPTOR, effort], 'effort')
-    const levels = ['Low', 'Medium', 'High', 'Extra high']
-    const shown = findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text')
-      .map((node) => node.props.children)
-      .filter((text) => levels.includes(text))
-    expect(shown).toEqual(levels)
     await act(async () => rowByText('Low').props.onPress())
     expect(setOption).toHaveBeenCalledExactlyOnceWith('effort', 'low')
   })

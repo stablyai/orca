@@ -2,11 +2,12 @@ import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { measureJournalStoredRow } from './journal-stored-output-rows'
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 
 /**
  * A row-count page of tool output can reach hundreds of MB, which main decodes on its shared heap;
  * rows past this much JSON go to the next page, far below the reader reply limit. A lone larger
- * row still goes alone, so the visit always advances.
+ * row still goes alone, so the visit always advances; one past the reply limit goes shortened.
  */
 export const ITEMS_BY_KIND_PAGE_JSON_BUDGET = 8 * 2 ** 20
 
@@ -41,7 +42,8 @@ export function budgetItemsByKindPage(
 }
 
 /** Payload by primary key, so a page cut by the budget looks up no further rows. */
-export const ITEMS_BY_KIND_PAYLOAD_SQL = `SELECT payload_json,ordinal,output_blob FROM journal_items
+export const ITEMS_BY_KIND_PAYLOAD_SQL = `SELECT ${boundedStoredJsonSql('payload_json', 'payload_json', { shortenColumn: 'payload_json' })},
+  ordinal,output_blob FROM journal_items
   WHERE session_id=? AND epoch=? AND item_id=?`
 
 /** Each chosen item's row, in order, read only as the page budget asks for it. */
@@ -69,6 +71,10 @@ export function readItemsByKindPage(
     itemsByKindPayloads(chosen, (itemId) => payload.get(...prefix, itemId)),
     nextOrdinal,
     undefined,
-    (row) => measureJournalStoredRow(db, prefix, row)
+    (row) =>
+      measureJournalStoredRow(db, prefix, {
+        payload_json: boundedStoredJson(row, 'payload_json'),
+        output_blob: row.output_blob
+      })
   )
 }

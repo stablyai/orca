@@ -97,6 +97,16 @@
       "confirm": "Filter anpassen und anzeigen",
       "cancel": "Filter beibehalten"
     },
+    "revealCurrent": {
+      "label": "Aktuelles anzeigen",
+      "noWorkspace": "Nichts ist geöffnet",
+      "fullPageView": "Diese Seite hat keine Zeile in der Seitenleiste",
+      "archived": "Archivierte Arbeitsbereiche werden in der Seitenleiste nicht aufgeführt",
+      "botsOff": "Bots sind ausgeschaltet, daher wird dieser Bot nicht aufgeführt",
+      "botHidden": "Dieser Bot ist pausiert und durch die Bot-Optionen ausgeblendet",
+      "renameBotPage": "Die Seite eines Bots oder einer Gruppe ist kein Worktree. Zum Umbenennen „Umbenennen“ im Menü der Zeile verwenden.",
+      "renameUnlisted": "Dieser Arbeitsbereich wird gerade nicht in der Seitenleiste aufgeführt und kann dort daher nicht umbenannt werden."
+    },
     "wslMoved": {
       "movedToHost": "Auf den {{distro}}-Host verschoben",
       "sectionTitle": "Auf WSL-Hosts verschoben ({{count}})",
@@ -1066,6 +1076,13 @@
       "saving": "Wird gespeichert…",
       "save": "Formatierer speichern",
       "710343e374": "Formatierungsbefehl"
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "Jede Nacht nach 3 Uhr oder sobald dieser Computer wach ist",
+        "everyWeekLine": "Einmal pro Woche nach 3 Uhr oder sobald dieser Computer wach ist",
+        "everyDescriptionAwake": "Schläft dieser Computer zu dieser Zeit, läuft es, sobald er wach ist. Nur nach Nächten mit neuen Chats. Jedes Aufräumen nutzt deinen {{agent}}-Tarif wie ein kurzer Chat."
+      }
     }
   },
   "menu": {
@@ -6242,11 +6259,10 @@
           "removeDescriptionSsh": "Dies entfernt {{name}} nur aus Orca. Die Dateien bleiben auf {{host}} — zum Wiederherstellen diesen SSH-Host erneut hinzufügen.",
           "removeDescriptionLocal": "Dies entfernt {{name}} nur aus Orca. Es bleibt auf dem Datenträger erhalten.",
           "removeDescriptionVmRecipe": "Dies entfernt {{name}} aus Orca. Das zugehörige VM-Rezept legt fest, ob die Umgebung und ihre Dateien dauerhaft gelöscht werden.",
+          "linkedWorkspaceWarning_one": "{{count}} Arbeitsbereich in diesem Projekt wird ebenfalls aus Orca entfernt.",
+          "linkedWorkspaceWarning_other": "{{count}} Arbeitsbereiche in diesem Projekt werden ebenfalls aus Orca entfernt.",
           "openTerminalWarning_one": "{{count}} offenes Terminal in diesem Projekt wird geschlossen.",
           "openTerminalWarning_other": "{{count}} offene Terminals in diesem Projekt werden geschlossen."
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "Aktiven Arbeitsbereich anzeigen"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "Aus der Seitenleiste ausblenden",
@@ -8815,7 +8831,7 @@
           "112f3b934f": "KI für die Quellcodeverwaltung"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "Ein Widerruf hier verhindert nicht, dass sich jemand mit SSH-Zugriff auf diesen Computer erneut koppelt. Um den Zugriff vollständig zu entziehen, muss der SSH-Zugriff entfernt werden.",
+          "sshAccessCaveat": "Wenn du einen Link widerrufst, werden auch Links widerrufen, die in von ihm geöffneten Terminals erstellt wurden. Wer auf diesem Computer ein Terminal nutzen kann, per SSH oder über einen Link, kann sich weiterhin erneut koppeln.",
           "6f6d5188ed": "Zugriff für {{value0}} widerrufen",
           "434e4a6af6": "Aktueller Link",
           "df142657a5": "Noch nicht verwendet",
@@ -13552,10 +13568,8 @@
             "f61af83316": "Ordner erstellen",
             "37c875d827": "Datei erstellen",
             "b3e288bf41": "„{{value0}}“ konnte nicht heruntergeladen werden.",
-            "f729bcd97d": "Der Ordner „{{value0}}“ konnte nicht heruntergeladen werden.",
             "1a3df04ae1": "Öffnen",
             "bce4d4e44f": "„{{value0}}“ heruntergeladen",
-            "a4029c996b": "Ordner „{{value0}}“ heruntergeladen",
             "e26010014a": "Durch .gitignore ignoriert",
             "a06551beee": "Enter",
             "66a29dde82": "Relativen Pfad kopieren",
@@ -17315,7 +17329,7 @@
             "734e4343ec": "Browser-Anmerkungen entfernen",
             "95af781091": "Feedback an einen Agenten senden",
             "ac39b9366b": "Senden",
-            "366bf5d62c": "Neuen Tab öffnen",
+            "366bf5d62c": "Neuer Tab",
             "781d6459ad": "Erneut versuchen",
             "2fdca7df09": "Ausblenden",
             "0f41bf80c7": "Im Standardbrowser öffnen",
@@ -19851,7 +19865,7 @@
       "rewind": {
         "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
         "historyNotPaginated": "Dieser ältere Codex-Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden. Einen neuen Chat starten, um „Bis hierher zurücksetzen“ zu verwenden.",
-        "busy": "Verfügbar, sobald der Agent inaktiv ist und im Chat keine Aktion mehr aussteht.",
+        "busy": "Verfügbar, wenn der Chat inaktiv ist",
         "staleEpoch": "Das Gespräch hat sich geändert. Die neuesten Nachrichten prüfen und erneut versuchen.",
         "invalidTarget": "Das Gespräch kann nicht zu dieser Nachricht zurückgesetzt werden. Es wurde nichts geändert.",
         "historyLimit": "Dieses Gespräch ist zu lang, um darin zurückzugehen. Es wurde nichts geändert.",
@@ -22191,9 +22205,7 @@
     "updateFailed": "Projektfeld konnte nicht aktualisiert werden"
   },
   "mediaPreview": {
-    "unavailable": "Diese Mediendatei kann nicht wiedergegeben werden. Die Datei ist möglicherweise nicht verfügbar oder verwendet einen nicht unterstützten Codec.",
-    "openFailed": "Diese Datei konnte nicht in der Standard-App geöffnet werden.",
-    "openDefault": "In Standard-App öffnen"
+    "unavailable": "Diese Mediendatei kann nicht wiedergegeben werden. Die Datei ist möglicherweise nicht verfügbar oder verwendet einen nicht unterstützten Codec."
   },
   "workspace": {
     "branchChoice": {
@@ -22821,6 +22833,7 @@
     "controlledByHost": "Gesteuert von {{host}}"
   },
   "nativeChat": {
+    "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden.",
     "math": {
       "scrollDisplayEquation": "Abgesetzte Gleichung scrollen"
     }
@@ -23656,6 +23669,46 @@
   "wslDistroHold": {
     "terminalStopped": "Die WSL-Distribution {{distro}} ist gestoppt, daher hat Orca dieses Terminal nicht gestartet. Starte die Distribution und versuche es dann erneut.",
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
+  },
+  "bots": {
+    "activity": {
+      "title": "Aktivität"
+    },
+    "connectors": {
+      "tab": "Konnektoren"
+    },
+    "files": {
+      "tab": "Dateien"
+    },
+    "upcoming": {
+      "tidyNightAfter": "Jede Nacht ab {{from}} oder sobald dieser Computer wach ist",
+      "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist",
+      "lookDueNow": "Jetzt fällig · {{every}}"
+    },
+    "palette": {
+      "placeholder": "Bots, Chats, Terminals, Arbeitsbereiche, Aufgaben, Einstellungen und Aktionen suchen…",
+      "description": "Bots, Chats, Terminals, Arbeitsbereiche, Aufgaben, Einstellungen und Aktionen suchen",
+      "scopedPlaceholder": "Bots suchen…",
+      "scopedLabel": "Bots suchen",
+      "scopeHint": "@ eingeben, um nur Bots anzuzeigen",
+      "chip": "Bots",
+      "chipLabel": "Bots, alles anzeigen",
+      "searchEverything": "Überall nach „{{text}}“ suchen",
+      "searchBotsFor": "Bots nach „{{text}}“ durchsuchen",
+      "noMatch": "Keine Bots passen zu „{{text}}“",
+      "noBotsYet": "Noch keine Bots",
+      "filtersPaused": "Filter gelten für Arbeitsbereiche, nicht für Bots",
+      "showEverything": "Alles anzeigen",
+      "footerBots": "Bots",
+      "matchesPurpose": "Passt zum Zweck.",
+      "scopedStatus_one": "Nur Bots werden angezeigt. {{count}} Ergebnis gefunden.",
+      "scopedStatus_other": "Nur Bots werden angezeigt. {{count}} Ergebnisse gefunden.",
+      "sidebarSearchLabel": "Bots, Arbeitsbereiche und Browser-Tabs durchsuchen",
+      "section": "Bots"
+    },
+    "templates": {
+      "browse": "Vorlagen durchsuchen"
+    }
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
