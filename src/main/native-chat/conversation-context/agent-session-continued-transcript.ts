@@ -165,16 +165,15 @@ function surrogatePrefixLength(bytes: Buffer): number {
 }
 
 function replaceLoneSurrogates(bytes: Buffer): Buffer {
-  for (let index = 0; index + 2 < bytes.length; index++) {
+  for (let index = bytes.indexOf(0xed); index >= 0; index = bytes.indexOf(0xed, index + 1)) {
     if (
-      bytes[index] === 0xed &&
+      index + 2 < bytes.length &&
       (bytes[index + 1] & 0xe0) === 0xa0 &&
       (bytes[index + 2] & 0xc0) === 0x80
     ) {
       bytes[index] = 0xef
       bytes[index + 1] = 0xbf
       bytes[index + 2] = 0xbd
-      index += 2
     }
   }
   return bytes

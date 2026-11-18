@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { rm } from 'node:fs/promises'
+import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
 import { projectSavedChatContextItems } from '../../conversation-context/agent-session-saved-prompt-text'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../../shared/agent-session/agent-session-wire'
@@ -81,10 +82,14 @@ export function continuationContextReader(
       if (!(await ensureOwnedTempStagingRoot(spillRoot))) {
         throw new Error('Chat context snapshot folder is not private')
       }
+      await removeStaleSpills(spillRoot)
       const path = join(spillRoot, `${randomUUID()}.spill`)
       spills.push(path)
       const { itemId, revision, field } = part
-      const bytes = await session.journal.reads.continuationSpill({ itemId, revision, field, path })
+      // One extraction at a time across exports: each can hold a whole stored text in the reader.
+      const bytes = await runKeyedSerializedOperation(spillQueue, 'spill', () =>
+        session.journal.reads.continuationSpill({ itemId, revision, field, path })
+      )
       if (bytes === null) {
         throw new ContinuedPayloadSuperseded()
       }
@@ -119,3 +124,21 @@ export function continuationContextReader(
 }
 
 class ContinuedPayloadSuperseded extends Error {}
+
+const spillQueue = new Map<string, Promise<void>>()
+// Longer than any export takes; an older spill was left by a crash.
+const STALE_SPILL_MS = 60 * 60 * 1000
+
+async function removeStaleSpills(root: string): Promise<void> {
+  const names = await readdir(root).catch(() => [])
+  for (const name of names.filter((entry) => entry.endsWith('.spill'))) {
+    const path = join(root, name)
+    const modified = await stat(path).then(
+      (info) => info.mtimeMs,
+      () => Date.now()
+    )
+    if (Date.now() - modified > STALE_SPILL_MS) {
+      await rm(path, { force: true })
+    }
+  }
+}
