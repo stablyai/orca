@@ -23,6 +23,7 @@ import type {
   BotRequestAsker
 } from '../../../../../../shared/bots/bot-acts-for'
 import { botRequestActsFor, botRequestRecord } from './bot-request-record'
+import { chainOfTurn } from './bot-request-chain'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem
@@ -231,7 +232,7 @@ export async function readActingSender(
       return {
         sessionId: creator.sessionId,
         bot: creatorBot,
-        turn: { ...OWNER_TURN, askers: read.actsFor, askedBy: read.actsFor },
+        turn: { ...OWNER_TURN, ...chainOfTurn(read), askers: read.actsFor, askedBy: read.actsFor },
         conversation: read.conversation,
         triggeredBy: read.triggeredBy,
         worker: creator.dispatchId

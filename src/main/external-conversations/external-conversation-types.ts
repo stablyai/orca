@@ -79,7 +79,9 @@ export const CONNECTOR_REFUSALS = [
   'bot_not_found',
   'bot_paused',
   // A send whose linked chat was deleted (CHAT_GONE_REFUSAL), to a cloud that then starts anew.
-  'chat_gone'
+  'chat_gone',
+  // Another Orca bot's post past the hand-offs in a row a chain may take (BOT_CHAIN_LIMIT).
+  'bot_chain_limit'
 ] as const
 export type ConnectorRefusal = (typeof CONNECTOR_REFUSALS)[number]
 

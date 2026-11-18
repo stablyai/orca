@@ -6,10 +6,10 @@ import type {
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from '../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { structuredAgentTurnAnchors } from '../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConnectorSource } from '../../shared/connectors/external-conversation-link'
+import { chainRoleOf, isRootUserMessage } from './bot-chain-messages'
 import {
   distinctAskers,
   OWNER_ACTS_FOR,
@@ -44,6 +44,8 @@ export type BotActingTurn = {
   actingOnRequestId: string | null
   /** Every bot request the turn took, the first being actingOnRequestId. */
   requestIds: string[]
+  /** A person's own message joined the requests' turn: what it sends starts a new chain. */
+  personJoined?: true
   /** Where the message that opened the turn was asked; null for the owner's own or a bot request. */
   wokenAt: BotWakingPlace | null
   /** Who did the event behind the automation prompt that opened the turn, for the record only. */
@@ -75,15 +77,6 @@ export type BotRequestActsFor = {
 }
 
 const MAX_REQUEST_TEXT = 500
-
-function isRootUserMessage(item: AgentJournalRenderItem): boolean {
-  return (
-    item.body.kind === 'message' &&
-    item.body.role === 'user' &&
-    isRootAgentJournalItem(item) &&
-    !isStructuredAgentSessionCommandEntry(item.body)
-  )
-}
 
 function textOf(body: AgentJournalItemBody): string | null {
   if (body.kind !== 'message') {
@@ -280,6 +273,9 @@ export function readBotActingTurnWithin(
         request: null,
         actingOnRequestId: requestIds[0] ?? null,
         requestIds,
+        ...(window.some((item) => chainRoleOf(item.body) === 'person')
+          ? { personJoined: true as const }
+          : {}),
         wokenAt: null,
         ...(origin ? { origin } : {})
       }
