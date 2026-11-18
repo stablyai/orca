@@ -56,9 +56,9 @@ export type JournalSqlStorePrepare = (
   context: JournalReceiptStage
 ) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
 
-/** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
 type JournalHistoryAsk = Omit<JournalDomainHistoryRequest, 'sessionId'>
 
+/** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
 export class SqlAgentSessionJournal extends SqlJournalAppends {
   private readonly goalAttachments: JournalGoalAttachmentInverse
   readonly reads: JournalSqlReads
