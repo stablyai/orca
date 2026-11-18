@@ -1,18 +1,20 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { translateMain } from '../../i18n/main-i18n'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
-import { saveBrowserProfileSiteList } from '../../browser/sessions/site-list/browser-profile-site-list-store'
+import {
+  areBrowserProfileSiteListsReadable,
+  saveBrowserProfileSiteList
+} from '../../browser/sessions/site-list/browser-profile-site-list-store'
 import { getBrowserProfileSiteListEntries } from '../../browser/sessions/site-list/browser-session-site-list'
 import {
   compileBrowserSiteList,
   isSiteListEntryCovered,
   normalizeBrowserSiteListEntries
 } from '../../../shared/browser/profiles/browser-profile-site-list'
-import type { BrowserSiteListSetResult } from '../../../shared/browser/profiles/browser-profile-site-list-ipc'
+import type { BrowserSiteListSetResult } from '../../../shared/browser/profiles/browser-profile-site-list'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
 const MAX_HOSTS_IN_DIALOG = 15
-const MAX_CONFIRMATIONS_PER_EDIT = 3
 
 // One edit at a time: the dialog is async, so two edits must not both judge against the same list.
 let editQueue: Promise<unknown> = Promise.resolve()
@@ -82,34 +84,33 @@ async function applyEdit(
   profileId: string,
   entries: string[]
 ): Promise<BrowserSiteListSetResult> {
-  const confirmedHosts = new Set<string>()
-  let confirmedClear = false
-  for (let attempt = 0; attempt <= MAX_CONFIRMATIONS_PER_EDIT; attempt++) {
-    // Re-evaluated after every await: the profile may be gone, and widening is judged against the
-    // list enforced now. Nothing awaits between the last check and the write below.
-    const profile = browserSessionRegistry.getProfile(profileId)
-    if (!profile) {
-      return { ok: false, reason: 'unavailable' }
-    }
-    const added = wideningAgainstCurrent(profile.id, entries)
-    const alreadyConfirmed =
-      added === null ||
-      (added.length === 0 ? confirmedClear : added.every((host) => confirmedHosts.has(host)))
-    if (alreadyConfirmed) {
-      return saveBrowserProfileSiteList(profile.id, entries)
-        ? { ok: true, hosts: entries }
-        : { ok: false, reason: 'save-failed' }
-    }
-    if (
-      attempt === MAX_CONFIRMATIONS_PER_EDIT ||
-      !(await confirmWidening(BrowserWindow.fromWebContents(event.sender), profile.label, added))
-    ) {
+  if (!areBrowserProfileSiteListsReadable()) {
+    return { ok: false, reason: 'load-failed' }
+  }
+  const profile = browserSessionRegistry.getProfile(profileId)
+  if (!profile) {
+    return { ok: false, reason: 'unavailable' }
+  }
+  const added = wideningAgainstCurrent(profile.id, entries)
+  if (added !== null) {
+    if (!(await confirmWidening(BrowserWindow.fromWebContents(event.sender), profile.label, added))) {
       return { ok: false, reason: 'cancelled' }
     }
-    confirmedClear = confirmedClear || added.length === 0
-    added.forEach((host) => confirmedHosts.add(host))
+    // The owner approved exactly `added`. If the list or profile changed during the dialog and the
+    // edit now widens by anything else, refuse instead of prompting again.
+    const after = wideningAgainstCurrent(profile.id, entries)
+    if (!browserSessionRegistry.getProfile(profile.id)) {
+      return { ok: false, reason: 'unavailable' }
+    }
+    if (after !== null && !after.every((host) => added.includes(host))) {
+      return { ok: false, reason: 'changed' }
+    }
   }
-  return { ok: false, reason: 'cancelled' }
+  const saved = saveBrowserProfileSiteList(profile.id, entries)
+  if (saved === 'unreadable') {
+    return { ok: false, reason: 'load-failed' }
+  }
+  return saved === 'saved' ? { ok: true, hosts: entries } : { ok: false, reason: 'save-failed' }
 }
 
 // Renderer-only: agents driving the browser (runtime RPC, CLI) must not be able to edit the list.
@@ -119,12 +120,14 @@ export function registerBrowserSessionSiteListHandlers(): void {
 
   ipcMain.handle(
     'browser:session:getAllowedHosts',
-    (event, args: { profileId: string }): string[] => {
+    (event, args: { profileId: string }): string[] | null => {
+      // null: the caller is untrusted, the profile is gone, or the saved lists cannot be read.
       if (
         !isTrustedBrowserRenderer(event.sender) ||
-        !browserSessionRegistry.getProfile(args.profileId)
+        !browserSessionRegistry.getProfile(args.profileId) ||
+        !areBrowserProfileSiteListsReadable()
       ) {
-        return []
+        return null
       }
       return getBrowserProfileSiteListEntries(args.profileId)
     }

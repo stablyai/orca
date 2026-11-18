@@ -12,7 +12,7 @@ import {
 import type { PreloadApi } from '../../api-types'
 import type { BrowserUserAgentMode } from '../../../shared/browser/identity/browser-user-agent-mode'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
-import type { BrowserSiteListSetResult } from '../../../shared/browser/profiles/browser-profile-site-list-ipc'
+import type { BrowserSiteListSetResult } from '../../../shared/browser/profiles/browser-profile-site-list'
 import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserSitePermissionKey,
@@ -190,7 +190,7 @@ export const browserPageInteractionAndSessionsApi = {
   identitySet: (mode: BrowserUserAgentMode) => ipcRenderer.invoke('browser:identity:set', mode),
   sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:deleteProfile', args),
-  sessionGetAllowedHosts: (args: { profileId: string }): Promise<string[]> =>
+  sessionGetAllowedHosts: (args: { profileId: string }): Promise<string[] | null> =>
     ipcRenderer.invoke('browser:session:getAllowedHosts', args),
   sessionSetAllowedHosts: (args: {
     profileId: string

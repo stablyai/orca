@@ -153,3 +153,18 @@ export function isSiteListEntryCovered(list: CompiledBrowserSiteList, entry: str
   const base = entry.slice(2)
   return list.wildcardBases.has(base) || hostnameAllowed({ ...list, exact: new Set() }, base)
 }
+
+export type BrowserSiteListSetResult =
+  | { ok: true; hosts: string[] }
+  | {
+      ok: false
+      reason:
+        | 'unavailable'
+        | 'invalid'
+        | 'cancelled'
+        | 'save-failed'
+        // The saved lists could not be read, so edits are refused rather than risk overwriting them.
+        | 'load-failed'
+        // The list changed while the confirmation dialog was open; the edit was not applied.
+        | 'changed'
+    }

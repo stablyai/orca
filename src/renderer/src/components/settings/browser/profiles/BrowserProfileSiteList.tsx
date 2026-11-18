@@ -13,19 +13,34 @@ export function BrowserProfileSiteList({ profileId }: { profileId: string }): Re
   const [saved, setSaved] = useState<string[] | null>(null)
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    void Promise.resolve(window.api.browser.sessionGetAllowedHosts({ profileId })).then((hosts) => {
-      if (!cancelled) {
-        setSaved(hosts ?? [])
-        setText((hosts ?? []).join('\n'))
-      }
-    })
+    setLoadFailed(false)
+    window.api.browser
+      .sessionGetAllowedHosts({ profileId })
+      .then((hosts) => {
+        if (cancelled) {
+          return
+        }
+        if (hosts === null) {
+          setLoadFailed(true)
+          return
+        }
+        setSaved(hosts)
+        setText(hosts.join('\n'))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadFailed(true)
+        }
+      })
     return () => {
       cancelled = true
     }
-  }, [profileId])
+  }, [profileId, loadAttempt])
 
   const parsed = parseBrowserSiteList(text)
   let error: string | null = null
@@ -78,9 +93,21 @@ export function BrowserProfileSiteList({ profileId }: { profileId: string }): Re
             'Could not write the site list to disk, so it was not applied. The previous list is still in effect.'
           )
         )
+      } else if (result?.reason === 'load-failed') {
+        setSaved(null)
+        setLoadFailed(true)
+      } else if (result?.reason === 'changed') {
+        toast.error(
+          t(
+            'browser.siteList.changed',
+            'The site list changed while you were confirming, so nothing was saved. Review it and save again.'
+          )
+        )
       } else if (result?.reason !== 'cancelled') {
         toast.error(t('browser.siteList.saveFailed', 'Could not save the site list.'))
       }
+    } catch {
+      toast.error(t('browser.siteList.saveFailed', 'Could not save the site list.'))
     } finally {
       setSaving(false)
     }
@@ -98,13 +125,26 @@ export function BrowserProfileSiteList({ profileId }: { profileId: string }): Re
         variant="code"
         rows={4}
         value={text}
-        disabled={saved === null || saving}
+        disabled={saved === null || loadFailed || saving}
         spellCheck={false}
         aria-invalid={error !== null}
         aria-label={t('browser.siteList.label', 'Site list')}
         onChange={(e) => setText(e.target.value)}
       />
       {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
+      {loadFailed ? (
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] text-destructive">
+            {t(
+              'browser.siteList.loadFailed',
+              "Couldn't read the saved site lists, so editing is disabled until they can be read."
+            )}
+          </p>
+          <Button size="xs" variant="outline" onClick={() => setLoadAttempt((n) => n + 1)}>
+            {t('browser.siteList.retry', 'Retry')}
+          </Button>
+        </div>
+      ) : null}
       <Button size="xs" disabled={!dirty || error !== null || saving} onClick={() => void save()}>
         {t('browser.siteList.save', 'Save')}
       </Button>

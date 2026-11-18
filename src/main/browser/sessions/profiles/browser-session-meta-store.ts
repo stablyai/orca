@@ -43,7 +43,7 @@ function parseEnabledExtensionIds(value: unknown): Record<string, string[]> {
   return result
 }
 
-function parseAllowedHosts(value: unknown): Record<string, string[]> {
+export function parseAllowedHosts(value: unknown): Record<string, string[]> {
   const result: Record<string, string[]> = {}
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return result
