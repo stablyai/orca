@@ -1,4 +1,4 @@
-import { registerBrowserExtensionNamespace } from '../browser-extension-namespace-registry'
+import { registerBrowserExtensionNamespace } from '../api-runtime/browser-extension-namespace-registry'
 
 /** Events Orca forwards from its own session handlers (browser-extension-web-request.ts). */
 export const FORWARDED_WEB_REQUEST_EVENTS = [

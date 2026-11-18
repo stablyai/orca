@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   getDiscardAllPaths,
   getUnstageAllPaths
-} from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 
 const rename: GitStatusEntry = {
   path: 'new/file.txt',

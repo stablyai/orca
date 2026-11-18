@@ -1,13 +1,16 @@
 import { useMemo } from 'react'
+import { MobileForkMarkedName } from '../session/fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-name'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, Play } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { AutoHeight } from '../components/AutoHeight'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { recentSessionConversationTurns } from '../../../src/shared/ai-vault-session-display'
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { AutoHeight } from '../components/motion/AutoHeight'
+import { DisclosureChevron } from '../components/list/DisclosureChevron'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
+import { recentSessionConversationTurns } from '../../../src/shared/ai-vault/session-display/ai-vault-session-display'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type {
   MobileAgentHistoryCard,
   MobileAgentHistoryResumeActionState
@@ -50,7 +53,7 @@ export function AgentHistorySessionRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ expanded }}
-      accessibilityLabel={card.title}
+      accessibilityLabel={card.forked ? mobileForkAccessibleName(card.title) : card.title}
       accessibilityHint={
         expanded
           ? t('agentHistory.sessionHistoryList.hidePreview', 'Hides the recent messages.')
@@ -65,12 +68,12 @@ export function AgentHistorySessionRow({
           <View style={styles.main}>
             <View style={styles.titleRow}>
               <Text style={styles.title} numberOfLines={1}>
-                {card.title}
+                {card.forked ? <MobileForkMarkedName name={card.title} /> : card.title}
               </Text>
               {card.timeAgo ? <Text style={styles.timeAgo}>{card.timeAgo}</Text> : null}
-              <View style={expanded ? styles.chevronExpanded : null}>
+              <DisclosureChevron expanded={expanded} collapsedDeg={0} expandedDeg={180}>
                 <ChevronDown size={14} color={colors.textMuted} strokeWidth={2.2} />
-              </View>
+              </DisclosureChevron>
             </View>
             {card.lastMessage ? (
               <Text style={styles.lastMessage} numberOfLines={expanded ? undefined : 2}>
@@ -89,8 +92,8 @@ export function AgentHistorySessionRow({
                 </View>
               ) : null}
             </View>
-            <AutoHeight>
-              {expanded && session ? <PreviewTurns card={card} session={session} /> : null}
+            <AutoHeight open={expanded}>
+              {session ? <PreviewTurns card={card} session={session} /> : null}
             </AutoHeight>
           </View>
           {session && onResume ? (

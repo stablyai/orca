@@ -1,9 +1,8 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   REMOTE_VIEWER_CLIPBOARD_ENV
-} from '../../../../shared/remote-viewer-clipboard-env'
-export { CODEX_REMOTE_VIEWER_SSH_CONNECTION }
+} from '../../../../shared/clipboard/remote-viewer-clipboard-env'
 
 /** Pi's own opt-in to emit OSC 52 alongside its host clipboard write; inert for every other program. */
 export const PI_CLIPBOARD_OSC52_ENV = 'PI_CLIPBOARD_OSC52'

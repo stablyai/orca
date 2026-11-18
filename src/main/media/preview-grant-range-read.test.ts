@@ -3,18 +3,18 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 vi.mock('electron', () => ({ protocol: { handle: vi.fn() } }))
-vi.mock('../ipc/local-file-access-resolution', () => ({
+vi.mock('../ipc/filesystem/access/local-file-access-resolution', () => ({
   resolveLocalFileRequestPath: vi.fn(async (filePath: string) => filePath)
 }))
-vi.mock('../wsl/wsl-unc-access-gate', () => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({
   guardWslUncPathAccess: vi.fn((_path: string, access: () => Promise<unknown>) => access())
 }))
 
-import { resolveLocalFileRequestPath } from '../ipc/local-file-access-resolution'
-import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
+import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
+import { guardWslUncPathAccess } from '../wsl/filesystem/wsl-unc-access-gate'
 import { readLocalFilePreview } from './media-preview-protocol'
 import { readPreviewGrantRange } from './preview-grant-range-read'
 

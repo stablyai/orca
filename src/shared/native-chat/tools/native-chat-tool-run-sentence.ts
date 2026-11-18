@@ -6,7 +6,7 @@ import {
   type NativeChatToolCategoryCall
 } from './native-chat-tool-icon'
 import { toolInputCommand } from './native-chat-tool-summary'
-import { isToolCallBlock, type NativeChatBlock } from '../../native-chat-types'
+import { isToolCallBlock, type NativeChatBlock } from '../native-chat-types'
 
 /** Shared singular/plural category copy; desktop translates and mobile formats directly. */
 export const NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY: Record<
@@ -67,6 +67,15 @@ export function nativeChatToolRunClauses(
     counts.set(category, (counts.get(category) ?? 0) + 1)
   }
   return [...counts].map(([category, count]) => ({ category, count }))
+}
+
+// Only these languages start a mid-sentence clause lowercase; German nouns and others keep their casing.
+const LOWERCASE_CONTINUATION_LANGUAGES = new Set(['en', 'es', 'fr', 'pt', 'ru', 'tr'])
+
+export function continueNativeChatToolRunClause(clause: string, locale: string): string {
+  return LOWERCASE_CONTINUATION_LANGUAGES.has(locale.split('-')[0].toLowerCase())
+    ? `${clause.charAt(0).toLocaleLowerCase(locale)}${clause.slice(1)}`
+    : clause
 }
 
 /** Capitalize only the first clause; locale-lowercase later first characters while preserving internal acronyms. */

@@ -1,5 +1,5 @@
-import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
-import type { Store } from '../persistence'
+import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/feature-education/star-nag/star-nag-threshold'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 
 type ThresholdPromptInput = {

@@ -1,15 +1,15 @@
 import { z } from 'zod'
-import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
+import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 
 /**
  * Electron never fires chrome.storage.onChanged in extension service workers, so extension pages
  * report their own storage writes here and main forwards them to the same extension's worker in the
- * same session (see src/preload/browser-extension-storage-relay.ts). Workers deliver their own.
+ * same session (see src/preload/browser/extensions/storage/browser-extension-storage-relay.ts). Workers deliver their own.
  * Sync is not relayed: main owns that area and fires its events (api/storage-sync.ts).
  */
 const STORAGE_RELAY_NAMESPACE = 'orcaStorageRelay'

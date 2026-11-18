@@ -1,11 +1,14 @@
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
-import type { LocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   authorizeWindowsCheckout,
   usesNativeWindowsRemoval
-} from '../../../git/windows-worktree-removal'
-import { assertWorktreeCleanForRemoval } from '../../../git/worktree'
-import { formatWorktreeRemovalError, isOrphanCompatiblePreflightError } from '../../worktree-logic'
+} from '../../../git/worktrees/removal/windows-worktree-removal'
+import { assertWorktreeCleanForRemoval } from '../../../git/worktrees/removal/worktree-removal-preflight'
+import {
+  formatWorktreeRemovalError,
+  isOrphanCompatiblePreflightError
+} from '../paths/worktree-logic'
 
 export async function assertRegisteredLocalWorktreePreflight(
   repoPath: string,

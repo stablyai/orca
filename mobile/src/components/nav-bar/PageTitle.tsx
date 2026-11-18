@@ -14,8 +14,10 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
 // Title plus one subtitle line before the first layout reports the real height.
 const FALLBACK_TITLE_HEIGHT = 62
-// A scroll that rests this long with the title half under the bar finishes the fold.
-const SETTLE_DELAY_MS = 140
+// Native lists snap the fold themselves; a page only sees scroll events, so this many quiet frames
+// mean the scroll has stopped with the title half under the bar.
+const WEB_SETTLE_DELAY_MS = 80
+const NATIVE_SNAP = Platform.OS !== 'web'
 
 type PageTitleProps = {
   title: string
@@ -61,6 +63,9 @@ export function useCollapsingTitle(scrollTo: (offset: number) => void) {
 
   // Settles only once the finger is up and the scroll has stopped, so it never fights a held drag.
   const scheduleSettle = useCallback(() => {
+    if (NATIVE_SNAP) {
+      return
+    }
     if (settleTimer.current) {
       clearTimeout(settleTimer.current)
     }
@@ -69,7 +74,7 @@ export function useCollapsingTitle(scrollTo: (offset: number) => void) {
       if (!touching.current && offset > 0 && offset < titleHeight) {
         scrollTo(offset < titleHeight / 2 ? 0 : titleHeight)
       }
-    }, SETTLE_DELAY_MS)
+    }, WEB_SETTLE_DELAY_MS)
   }, [scrollTo, titleHeight])
 
   const onScroll = useMemo(
@@ -85,8 +90,11 @@ export function useCollapsingTitle(scrollTo: (offset: number) => void) {
   )
 
   // Touch events reach the list on native and in the page's WebView alike; drag callbacks don't on web.
+  // Native snaps at release like an iOS large title: half-folded titles land open or folded, and
+  // anything past the title scrolls freely.
   const touchHandlers = useMemo(
     () => ({
+      ...(NATIVE_SNAP ? { snapToOffsets: [0, titleHeight], snapToEnd: false } : null),
       onTouchStart: () => {
         touching.current = true
       },
@@ -99,7 +107,7 @@ export function useCollapsingTitle(scrollTo: (offset: number) => void) {
         scheduleSettle()
       }
     }),
-    [scheduleSettle]
+    [scheduleSettle, titleHeight]
   )
 
   const onTitleLayout = useCallback((event: LayoutChangeEvent) => {

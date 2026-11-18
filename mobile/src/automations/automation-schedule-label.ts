@@ -1,12 +1,14 @@
 import {
   describeAutomationSchedule,
   type AutomationScheduleDescriptor
-} from '../../../src/shared/automation-schedules'
+} from '../../../src/shared/automations/scheduling/automation-schedules'
 import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 
 // Translate whole sentences; the shared English formatter also serves the CLI.
-function formatAutomationScheduleDescriptor(descriptor: AutomationScheduleDescriptor): string {
+export function formatAutomationScheduleDescriptor(
+  descriptor: AutomationScheduleDescriptor
+): string {
   if (descriptor.kind === 'invalid') {
     return translate(
       'auto.components.automations.automation.schedule.label.086a5a9fe2',

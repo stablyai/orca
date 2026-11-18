@@ -1,13 +1,17 @@
 import { useCallback, useRef } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import {
+  isRemoteBrowserInputOpenedDialogError,
+  isRemoteBrowserPageMissingError
+} from './remote-browser-stream-errors'
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
+import type { BrowserPageEditCommand } from '../assemble-chrome/context-menu/browser-page-context-menu-items'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import {
   getRemoteBrowserMouseButton,
   mapRemoteBrowserClientPoint,
@@ -101,6 +105,7 @@ export function useRemoteBrowserPageInput({
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  runRemoteEditCommand: (command: BrowserPageEditCommand) => void
 } {
   const getRemoteImagePoint = useCallback(
     (event: { clientX: number; clientY: number }): { x: number; y: number } | null => {
@@ -175,6 +180,9 @@ export function useRemoteBrowserPageInput({
             closeMissingRemotePage(pageId)
             return
           }
+          if (isRemoteBrowserInputOpenedDialogError(error)) {
+            return
+          }
           setPaneNotice({
             kind: 'consequence',
             text: error instanceof Error ? error.message : 'Remote mouse input failed.'
@@ -226,6 +234,9 @@ export function useRemoteBrowserPageInput({
             closeMissingRemotePage(pageId)
             return
           }
+          if (isRemoteBrowserInputOpenedDialogError(error)) {
+            return
+          }
           setPaneNotice({
             kind: 'consequence',
             text: error instanceof Error ? error.message : 'Remote mouse input failed.'
@@ -235,7 +246,7 @@ export function useRemoteBrowserPageInput({
     })
   }
 
-  const { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste } =
+  const { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste, runRemoteEditCommand } =
     useRemoteBrowserPageKeyboard({
       runtimeTarget,
       lifecycle,
@@ -253,6 +264,7 @@ export function useRemoteBrowserPageInput({
     handleRemotePointerDown,
     handleRemotePointerUp,
     handleRemoteScreenshotKeyDown,
-    handleRemoteScreenshotPaste
+    handleRemoteScreenshotPaste,
+    runRemoteEditCommand
   }
 }

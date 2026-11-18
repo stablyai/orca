@@ -1,10 +1,10 @@
-import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import {
   resolveSourceControlBaseRef,
   resolveSourceControlCompareBaseRef,
   resolveSourceControlPickerBaseRef
-} from '../../../../../../shared/source-control-base-ref-resolution'
+} from '../../../../../../shared/source-control/decisions/source-control-base-ref-resolution'
 import { useSourceControlBaseRefDefault } from './use-base-ref-default'
 
 export function useSourceControlBaseRefs({

@@ -2,7 +2,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import type { MobileAutomationRun } from './automation-reply-schema'
 import { AutomationButton } from './AutomationControls'
 import type { AutomationRunObservation } from './use-automation-runs'
@@ -66,7 +66,7 @@ export function AutomationRunList(props: {
             }
           )}
           onPress={() => props.onSelect(run)}
-          style={styles.card}
+          style={({ pressed }) => [styles.card, pressed && pressedStyle]}
         >
           <View style={styles.row}>
             <Text style={[styles.heading, styles.grow]}>{run.title}</Text>

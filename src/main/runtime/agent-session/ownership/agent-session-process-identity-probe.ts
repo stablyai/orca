@@ -5,11 +5,11 @@ import { readFile } from 'node:fs/promises'
 import type {
   AgentSessionOwnerProbe,
   AgentSessionProcessIdentityField
-} from '../../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session-record'
+} from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { runProcess } from '@orca/process-host'
-import { psLocaleEnvironment } from '../../../../shared/ps-locale-environment'
-import { runPsInProcess } from '../../../../shared/libproc-process-table'
+import { psLocaleEnvironment } from '../../../../shared/process-observation/tables/ps-locale-environment'
+import { runPsInProcess } from '../../../../shared/process-observation/darwin/libproc-process-table'
 import {
   isWindowsProcessStartTimeAvailable,
   readWindowsProcessIdentityTableFresh

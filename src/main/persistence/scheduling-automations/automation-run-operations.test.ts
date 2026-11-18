@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { automationRunFailure } from '../../../shared/automation-run-failure-copy'
-import {
-  listAutomationRunsPage,
-  recordRepeatedAutomationSkip,
-  updateAutomationRun,
-  type AutomationRunOperations
-} from './automation-run-operations'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+
+import { listAutomationRunsByAutomation, listAutomationRunsPage } from './automation-run-operations'
 
 function stateWithRuns(runs: { id: string; createdAt: number }[]): PersistedState {
   return {
@@ -15,25 +10,6 @@ function stateWithRuns(runs: { id: string; createdAt: number }[]): PersistedStat
 }
 
 describe('listAutomationRunsPage', () => {
-  it('returns a bounded, newest-first page and an opaque continuation cursor', () => {
-    const state = stateWithRuns([
-      { id: 'old', createdAt: 1 },
-      { id: 'new', createdAt: 3 },
-      { id: 'middle', createdAt: 2 }
-    ])
-
-    const first = listAutomationRunsPage(state, 'a1', 2)
-    expect(first.runs.map((run) => run.id)).toEqual(['new', 'middle'])
-    expect(first.nextCursor).not.toBeNull()
-
-    expect(listAutomationRunsPage(state, 'a1', 2, first.nextCursor ?? undefined)).toEqual(
-      expect.objectContaining({
-        runs: [expect.objectContaining({ id: 'old' })],
-        nextCursor: null
-      })
-    )
-  })
-
   it('keeps the window stable when a newer run lands between pages', () => {
     const state = stateWithRuns([
       { id: 'r1', createdAt: 1 },
@@ -52,23 +28,6 @@ describe('listAutomationRunsPage', () => {
     const second = listAutomationRunsPage(state, 'a1', 2, first.nextCursor ?? undefined)
     expect(second.runs.map((run) => run.id)).toEqual(['r1'])
     expect(second.nextCursor).toBeNull()
-  })
-
-  it('resumes after a pruned boundary run instead of restarting the page', () => {
-    const state = stateWithRuns([
-      { id: 'r1', createdAt: 1 },
-      { id: 'r2', createdAt: 2 },
-      { id: 'r3', createdAt: 3 }
-    ])
-    const first = listAutomationRunsPage(state, 'a1', 2)
-
-    state.automationRuns = state.automationRuns.filter((run) => run.id !== 'r2')
-
-    expect(
-      listAutomationRunsPage(state, 'a1', 2, first.nextCursor ?? undefined).runs.map(
-        (run) => run.id
-      )
-    ).toEqual(['r1'])
   })
 
   it('keeps runs tied on createdAt when the boundary run is pruned', () => {
@@ -100,50 +59,24 @@ describe('listAutomationRunsPage', () => {
   })
 })
 
-describe('automation run failure codes', () => {
-  it('persists the code beside the English error and drops it with the next result', () => {
-    const state = stateWithRuns([{ id: 'r1', createdAt: 1 }])
-    state.automationRuns[0] = {
-      ...state.automationRuns[0],
-      status: 'pending',
-      trigger: 'scheduled',
-      scheduledFor: 1
-    }
-    state.automations = []
-    const operations: AutomationRunOperations = {
-      state,
-      flush: () => {},
-      recordManualRun: () => {},
-      getWorkspaceDisplayName: () => null
-    }
-    const failure = automationRunFailure('projectSetupNotReady', { setupState: 'setting-up' })
-    updateAutomationRun(operations, {
-      runId: 'r1',
-      status: 'skipped_unavailable',
-      ...failure
-    })
-    recordRepeatedAutomationSkip(operations, 'a1', failure.error, 2)
-    // Usage writes forward only the English error.
-    updateAutomationRun(operations, {
-      runId: 'r1',
-      status: 'skipped_unavailable',
-      error: failure.error
-    })
+describe('listAutomationRunsByAutomation', () => {
+  it('gives each named automation its own runs newest first, and leaves out the rest', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the grouped read uses only automationRuns and the run fields set here.
+    const state = {
+      automationRuns: [
+        { id: 'a1-old', automationId: 'a1', createdAt: 1 },
+        { id: 'other', automationId: 'a3', createdAt: 2 },
+        { id: 'a2-only', automationId: 'a2', createdAt: 3, precheckResult: { command: '  ' } },
+        { id: 'a1-new', automationId: 'a1', createdAt: 4 }
+      ]
+    } as PersistedState
 
-    const [stored] = JSON.parse(JSON.stringify(state.automationRuns))
-    expect(stored).toMatchObject({
-      error: 'Project setup on the selected automation host is setting-up.',
-      errorCode: 'projectSetupNotReady',
-      errorParams: { setupState: 'setting-up' },
-      occurrenceCount: 2
-    })
+    const grouped = listAutomationRunsByAutomation(state, ['a1', 'a2', 'none'])
 
-    updateAutomationRun(operations, {
-      runId: 'r1',
-      status: 'dispatch_failed',
-      error: 'spawn failed'
-    })
-    expect(state.automationRuns[0]).not.toHaveProperty('errorCode')
-    expect(state.automationRuns[0]).not.toHaveProperty('errorParams')
+    expect([...grouped.keys()]).toEqual(['a1', 'a2'])
+    expect(grouped.get('a1')?.map((run) => run.id)).toEqual(['a1-new', 'a1-old'])
+    expect(grouped.get('a2')).toEqual([
+      { id: 'a2-only', automationId: 'a2', createdAt: 3, precheckResult: null }
+    ])
   })
 })

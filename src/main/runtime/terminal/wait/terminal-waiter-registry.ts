@@ -1,5 +1,5 @@
-import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
-import type { TerminalWaiter } from '../../runtime-terminal-contracts'
+import type { RuntimeTerminalWait } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { TerminalWaiter } from './terminal-waiter'
 
 /** Waits keyed by the terminal they follow; the handle they were asked through only labels the result. */
 export class RuntimeTerminalWaiterRegistry {
@@ -51,9 +51,14 @@ export class RuntimeTerminalWaiterRegistry {
     }
   }
 
-  rejectAll(code: string): void {
-    for (const ptyId of this.byPtyId.keys()) {
-      this.rejectPty(ptyId, code)
+  /** Graph retirement: handle-named waits end with the handles; input custody follows its process instead. */
+  rejectRendererBound(code: string): void {
+    for (const ptyId of Array.from(this.byPtyId.keys())) {
+      for (const waiter of this.forPty(ptyId)) {
+        if (!waiter.outlivesRenderer) {
+          this.reject(waiter, code)
+        }
+      }
     }
   }
 

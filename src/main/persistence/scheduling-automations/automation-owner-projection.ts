@@ -1,11 +1,12 @@
-import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import { getRepoSshConnectionId } from '../../../shared/execution-host/execution-host'
 import {
   automationRequiresHostReselection,
   findAutomationRepo
-} from '../../../shared/automation-repo-target'
-import type { Repo } from '../../../shared/repo-types'
-import type { Automation, AutomationRun } from '../../../shared/automations-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+} from '../../../shared/automations/ownership/automation-repo-target'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   automationCapturedHostIssue as resolveAutomationCapturedHostIssue,
   automationSelectorMatchesScope,
@@ -17,29 +18,29 @@ import {
   type AutomationListParams,
   type AutomationListResult,
   type AutomationProjectionContext
-} from '../../../shared/automation-list-scope'
+} from '../../../shared/automations/ownership/automation-list-scope'
 import {
   assertAutomationOwnerFence as enforceAutomationOwnerFence,
   toAutomationOwnerPrecondition,
   type AutomationOwnerFenceOperation,
   type AutomationOwnerPrecondition
-} from '../../../shared/automation-owner-precondition'
+} from '../../../shared/automations/ownership/automation-owner-precondition'
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   AutomationOwnerConflictError
-} from '../../../shared/automation-owner-conflict'
+} from '../../../shared/automations/ownership/automation-owner-conflict'
 import {
   nextSshTargetGeneration,
   resolveSshTargetGenerationHighWaterMark,
   sanitizeSshTargetGeneration
-} from '../../../shared/ssh-target-generation'
+} from '../../../shared/remote-runtime/ssh/ssh-target-generation'
 import {
   resolveAutomationWorkspaceHost,
   resolveAutomationWorkspaceSshTargetId,
   type AutomationWorkspaceSshPin
-} from '../../../shared/automation-workspace-pin'
-import { summarizeAutomationRunUsage } from '../../../shared/automation-usage-summary'
-import type { FolderWorkspaceHostState } from '../../../shared/folder-workspace-execution-host'
+} from '../../../shared/automations/ownership/automation-workspace-pin'
+import { summarizeAutomationRunUsage } from '../../../shared/automations/history/automation-usage-summary'
+import type { FolderWorkspaceHostState } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 
 export type AutomationStorageAuthority = 'desktop' | 'runtime'
 

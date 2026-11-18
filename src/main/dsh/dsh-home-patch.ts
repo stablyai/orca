@@ -1,5 +1,7 @@
 /** Edit only Orca's marker-delimited region in the user-owned YAML patch layer. */
 
+import { DSH_HOOK_EXECUTOR_PACKAGE } from './dsh-hook-packages'
+
 const START_MARKER = '# >>> orca-managed-dsh-hooks (managed by Orca; do not edit) >>>'
 const END_MARKER = '# <<< orca-managed-dsh-hooks <<<'
 
@@ -33,7 +35,7 @@ function buildManagedBlock(managedHooksPath: string): string[] {
     START_MARKER,
     '- insert:',
     `    - id: ${MANAGED_ROW_ID}`,
-    "      name: '@deepseek-ai/dsh-hooks-claude-code'",
+    `      name: '${DSH_HOOK_EXECUTOR_PACKAGE}'`,
     '      config:',
     `        configPath: ${quoteYamlScalar(managedHooksPath)}`,
     END_MARKER

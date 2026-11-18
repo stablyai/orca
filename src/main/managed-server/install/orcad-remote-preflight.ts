@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../../shared/orcad-node-runtime-identity'
-import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/orcad-artifacts'
+import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../../shared/remote-runtime/orcad-distribution/orcad-node-runtime-identity'
+import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
   parseOrcadProfilePreflight,
   type OrcadProfilePreflightResponse
-} from '../../../shared/orcad-profile-preflight'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import {
   orcadWindowsNodeCommandLine,
@@ -17,13 +17,13 @@ import { readWindowsOrcadSlotEntry } from './orcad-remote-launch-windows'
 import { ORCAD_WINDOWS_RUNTIME_MARKER } from '../host-state/orcad-windows-host-script'
 import { orcadNodeSlotRuntimeCommand, selectOrcadSlotEntryCommand } from './orcad-remote-runtime'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import type { OrcadHostTransport } from './orcad-host-transport'
 
 export function orcadProfilePreflightCommand(
   host: RemoteHostPlatform,

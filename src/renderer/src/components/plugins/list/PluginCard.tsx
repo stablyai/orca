@@ -1,5 +1,5 @@
 import { BadgeCheck, Check } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { Badge } from '../../ui/badge'
 import { PluginCardArt, type PluginArtPalette } from './PluginCardArt'
@@ -19,6 +19,8 @@ type PluginCardProps = {
   /** Replaces the description, e.g. an install error; keeps the two-line height. */
   notice?: { text: string; tone: 'destructive' | 'warning' }
   chips?: React.ReactNode
+  /** Replaces the install count after the publisher, e.g. "Added 3h ago". */
+  metaDetail?: string
   action: React.ReactNode
   onOpen: () => void
   onIntent?: () => void
@@ -35,11 +37,14 @@ export function PluginCard({
   palettes,
   notice,
   chips,
+  metaDetail,
   action,
   onOpen,
   onIntent,
   onIntentEnd
 }: PluginCardProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const installCount = usePluginInstallCount(entry)
   const cover =
     servedPluginHostImages(entry.installed?.images)?.cover ??
@@ -76,7 +81,7 @@ export function PluginCard({
           // Why on the art: the first thing a scan of the grid hits, readable over any cover.
           <Badge variant="dot" data-plugin-installed-badge="" className="absolute top-2 left-2">
             <Check className="text-status-success" aria-hidden="true" />
-            {translate('auto.components.settings.PluginCardAction.installed', 'Installed')}
+            {t('auto.components.settings.PluginCardAction.installed', 'Installed')}
           </Badge>
         ) : null}
       </div>
@@ -97,16 +102,21 @@ export function PluginCard({
             <BadgeCheck
               className="plugin-security-chrome size-3.5 shrink-0 text-muted-foreground"
               role="img"
-              aria-label={pluginOfficialLabel()}
+              aria-label={pluginOfficialLabel(t)}
             />
           ) : null}
         </div>
         <p className="h-4 truncate text-xs text-muted-foreground">
           {entry.publisher}
-          {installCount !== null ? (
+          {metaDetail ? (
+            <span data-plugin-meta-detail="">
+              {entry.publisher ? ' · ' : ''}
+              {metaDetail}
+            </span>
+          ) : installCount !== null ? (
             <span data-plugin-install-count="">
               {entry.publisher ? ' · ' : ''}
-              {pluginInstallCountLabel(installCount)}
+              {pluginInstallCountLabel(installCount, t, intlLocale)}
             </span>
           ) : null}
         </p>

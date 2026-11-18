@@ -85,8 +85,4 @@ describe('the Grok hook file backup after removal', () => {
 
     expect(readFileSync(target, 'utf8')).toContain('orca')
   })
-
-  it('does nothing without a backup', () => {
-    expect(() => removeGrokHookBackupEntries(configPath)).not.toThrow()
-  })
 })

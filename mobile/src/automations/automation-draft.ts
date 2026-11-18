@@ -1,26 +1,27 @@
 import { translate } from '../i18n/mobile-i18n'
-import { assertAutomationExtraAgentArgs } from '../../../src/shared/automation-extra-agent-args-record'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
+import { assertAutomationExtraAgentArgs } from '../../../src/shared/automations/launch/automation-extra-agent-args-record'
+import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import type { MobileAutomation } from './automation-reply-schema'
 import type { AutomationTargets } from './automation-target-inventory'
 import { AutomationDraftValidationError } from './automation-error'
+import { automationSetupRedecided } from './automation-setup-redecision'
 import {
   automationTargetContext,
   automationTargetDestination,
   automationSetupKey,
   workspaceMatchesSetup
 } from './automation-target-inventory'
-import { acceptsAutomationDraftSchedule } from '../../../src/shared/automation-schedule-input-gate'
-import { isValidAutomationSchedule } from '../../../src/shared/automation-schedule-parsing'
-import { MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS } from '../../../src/shared/automation-precheck'
+import { acceptsAutomationDraftSchedule } from '../../../src/shared/automations/scheduling/automation-schedule-input-gate'
+import { isValidAutomationSchedule } from '../../../src/shared/automations/scheduling/automation-schedule-parsing'
+import { MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS } from '../../../src/shared/automations/launch/automation-precheck'
 
 export type AutomationDraft = {
   targetEdited?: boolean
   setupDecisionEdited?: boolean
   name: string
   prompt: string
-  agentId: TuiAgent | null
+  agentId: MobileAutomation['agentId'] | null
   surface?: MobileAutomation['surface']
   setupId: string
   workspaceId: string
@@ -29,6 +30,8 @@ export type AutomationDraft = {
   timezone: string
   baseBranch: string
   setupDecision: 'inherit' | 'run' | 'skip'
+  /** Set only by an approval that can't trust the repo; the host runs only this setup content. */
+  setupTrustHash?: string
   reuseSession: boolean
   extraAgentArgs: string
   precheckCommand: string
@@ -59,6 +62,33 @@ export function newAutomationDraft(current?: MobileAutomation): AutomationDraft 
   }
 }
 
+/** The fields that differ from `original`; null when nothing the user would lose did (the *Edited flags only record how a field changed). */
+export function automationDraftEdits(
+  original: AutomationDraft,
+  draft: AutomationDraft
+): Partial<AutomationDraft> | null {
+  const before = new Map(Object.entries(original))
+  const edits = Object.entries(draft).filter(([key, value]) => value !== before.get(key))
+  return edits.some(([key]) => key !== 'targetEdited' && key !== 'setupDecisionEdited')
+    ? Object.fromEntries(edits)
+    : null
+}
+
+export function automationDraftChanged(original: AutomationDraft, draft: AutomationDraft): boolean {
+  return automationDraftEdits(original, draft) !== null
+}
+
+// The host checks arguments for an agent or surface this build doesn't know.
+function assertKnownExtraAgentArgs(draft: AutomationDraft): void {
+  const { agentId, surface } = draft
+  if (
+    isTuiAgent(agentId) &&
+    (surface === undefined || surface === 'chat' || surface === 'terminal')
+  ) {
+    assertAutomationExtraAgentArgs({ ...draft, agentId, surface })
+  }
+}
+
 export function validateAutomationDraft(
   draft: AutomationDraft,
   step: number,
@@ -83,7 +113,7 @@ export function validateAutomationDraft(
     draft.reuseSession !== (saved.reuseSession ?? false)
   ) {
     try {
-      assertAutomationExtraAgentArgs({ ...draft, agentId: draft.agentId })
+      assertKnownExtraAgentArgs(draft)
     } catch (failure) {
       return failure instanceof Error
         ? failure.message
@@ -149,11 +179,15 @@ function editableFields(draft: AutomationDraft): UpdateFields {
   return {
     name: draft.name.trim(),
     prompt: draft.prompt.trim(),
-    ...(draft.agentId ? { agentId: draft.agentId } : {}),
+    // A saved agent this build doesn't know is never written back.
+    ...(isTuiAgent(draft.agentId) ? { agentId: draft.agentId } : {}),
     rrule: draft.rrule,
     timezone: draft.timezone,
     baseBranch: draft.baseBranch || null,
     setupDecision: draft.setupDecision,
+    ...(draft.setupDecision === 'run' && draft.setupTrustHash
+      ? { setupTrustHash: draft.setupTrustHash }
+      : {}),
     reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
     extraAgentArgs: draft.extraAgentArgs,
     precheck: draft.precheckCommand.trim()
@@ -169,7 +203,15 @@ export function automationDraftPatch(
 ): UpdateFields {
   const fields: Record<string, unknown> = editableFields(draft)
   const before: Record<string, unknown> = editableFields(original)
-  const patch: UpdateFields = {}
+  // The host keeps the saved pin unless a write names the decision, so a re-decided save always names it.
+  const patch: UpdateFields = automationSetupRedecided(draft, original)
+    ? {
+        setupDecision: draft.setupDecision,
+        ...(draft.setupDecision === 'run' && draft.setupTrustHash
+          ? { setupTrustHash: draft.setupTrustHash }
+          : {})
+      }
+    : {}
   for (const key of new Set([...Object.keys(before), ...Object.keys(fields)])) {
     if (fields[key] !== before[key]) {
       if (
@@ -184,16 +226,18 @@ export function automationDraftPatch(
   return patch
 }
 
-export function automationCreateParams(
-  draft: AutomationDraft,
-  targets: AutomationTargets,
-  creationKey?: string
-): RpcSendParams<'automation.create'> {
+type AutomationTarget = Pick<
+  RpcSendParams<'automation.create'>,
+  'repo' | 'workspaceMode' | 'workspace' | 'runContext' | 'destination'
+>
+
+// Retargeting a saved automation keeps its agent, which may be one this build doesn't know.
+function automationTarget(draft: AutomationDraft, targets: AutomationTargets): AutomationTarget {
   const setup = targets.setups.find((entry) => automationSetupKey(entry) === draft.setupId)
   if (!setup || !draft.agentId) {
     throw new AutomationDraftValidationError('project')
   }
-  assertAutomationExtraAgentArgs({ ...draft, agentId: draft.agentId })
+  assertKnownExtraAgentArgs(draft)
   const workspace = targets.workspaces.find(
     (entry) => entry.worktreeId === draft.workspaceId && workspaceMatchesSetup(entry, setup)
   )
@@ -204,12 +248,6 @@ export function automationCreateParams(
     throw new AutomationDraftValidationError('workspace')
   }
   return {
-    ...editableFields(draft),
-    baseBranch: draft.baseBranch || undefined,
-    name: draft.name.trim(),
-    prompt: draft.prompt.trim(),
-    agentId: draft.agentId,
-    creationKey,
     repo: `id:${setup.repoId}`,
     workspaceMode: draft.workspaceMode,
     ...(draft.workspaceMode === 'existing' && workspace
@@ -220,7 +258,28 @@ export function automationCreateParams(
       setup,
       draft.workspaceMode === 'existing' ? workspace : undefined,
       targets
-    ),
+    )
+  }
+}
+
+export function automationCreateParams(
+  draft: AutomationDraft,
+  targets: AutomationTargets,
+  creationKey?: string
+): RpcSendParams<'automation.create'> {
+  const target = automationTarget(draft, targets)
+  // A new automation's agent picker only offers agents this build knows.
+  if (!isTuiAgent(draft.agentId)) {
+    throw new AutomationDraftValidationError('project')
+  }
+  return {
+    ...editableFields(draft),
+    baseBranch: draft.baseBranch || undefined,
+    name: draft.name.trim(),
+    prompt: draft.prompt.trim(),
+    agentId: draft.agentId,
+    creationKey,
+    ...target,
     rrule: draft.rrule,
     dtstart: Date.now(),
     enabled: true,
@@ -243,7 +302,7 @@ export function automationUpdateParams(
   ) {
     return { id, updates }
   }
-  const target = automationCreateParams(draft, targets, '')
+  const target = automationTarget(draft, targets)
   return {
     id,
     destination: target.destination,

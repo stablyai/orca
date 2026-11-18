@@ -2,15 +2,20 @@ import { useEffect, useState, type ComponentType } from 'react'
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { X } from 'lucide-react-native'
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
+import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { MobileSearchField } from '../MobileSearchField'
+import { BOTTOM_DRAWER_EASING } from '../bottom-drawer/bottom-drawer-constants'
+import { MobileSearchField } from '../controls/MobileSearchField'
+import { useMobileDictationClearance } from '../../dictation/mobile-dictation-host-context'
 
 const FADE_ID = 'bottom-search-bar-fade'
 const BUTTON_SIZE = 44
+const LEADING_SLIDE_MS = 220
 
 type IconProps = { size?: number; color?: string; strokeWidth?: number }
 
@@ -72,6 +77,7 @@ export function BottomSearchBar({
   useEffect(() => {
     onCoveredHeightChange?.(coveredHeight)
   }, [coveredHeight, onCoveredHeightChange])
+  useMobileDictationClearance(coveredHeight)
   // Close stays until the keyboard is down: iOS's late click at the tapped spot would otherwise hit the primary action that replaced it.
   const searching = focused || keyboardUp || (hasSearch ?? value.trim() !== '')
 
@@ -107,7 +113,7 @@ export function BottomSearchBar({
         </Svg>
       </View>
       <View style={styles.row}>
-        {leading && !searching ? <RoundButton button={leading} /> : null}
+        {leading ? <LeadingSlot button={leading} hidden={searching} /> : null}
         <View style={styles.search}>
           <MobileSearchField
             value={value}
@@ -142,6 +148,34 @@ export function BottomSearchBar({
   )
 }
 
+// Folds the leading button's slot away while searching, so the field grows instead of jumping.
+function LeadingSlot({ button, hidden }: { button: BarButton; hidden: boolean }) {
+  const reducedMotion = useReducedMotionEnabled()
+  const shown = useSharedValue(hidden ? 0 : 1)
+  useEffect(() => {
+    shown.value = withTiming(hidden ? 0 : 1, {
+      duration: reducedMotion === true ? 0 : LEADING_SLIDE_MS,
+      easing: BOTTOM_DRAWER_EASING
+    })
+  }, [hidden, reducedMotion, shown])
+  // The page bundle has no worklet plugin, so web mappers read only the dependency list.
+  const slotStyle = useAnimatedStyle(
+    () => ({ width: shown.value * (BUTTON_SIZE + spacing.sm), opacity: shown.value }),
+    [shown]
+  )
+  return (
+    <Animated.View
+      style={[styles.leadingSlot, slotStyle]}
+      pointerEvents={hidden ? 'none' : 'auto'}
+      aria-hidden={hidden}
+      accessibilityElementsHidden={hidden}
+      importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
+    >
+      <RoundButton button={button} />
+    </Animated.View>
+  )
+}
+
 function RoundButton({ button, emphasis = false }: { button: BarButton; emphasis?: boolean }) {
   const { icon: Icon, badge = 0 } = button
   const lit = badge > 0
@@ -161,7 +195,11 @@ function RoundButton({ button, emphasis = false }: { button: BarButton; emphasis
         button.disabled && styles.disabled
       ]}
     >
-      <Icon size={20} color={emphasis ? colors.bgBase : colors.textPrimary} strokeWidth={2.2} />
+      <Icon
+        size={20}
+        color={emphasis ? colors.onCreateActionFill : colors.textPrimary}
+        strokeWidth={2.2}
+      />
       {lit ? (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{badge}</Text>
@@ -184,6 +222,10 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm
+  },
+  // The slot carries its own gap, so the row's gap is cancelled once it folds to zero.
+  leadingSlot: {
+    marginRight: -spacing.sm
   },
   search: {
     flex: 1,
@@ -214,17 +256,17 @@ const styles = themedStyleSheet(() => ({
     elevation: 6
   },
   buttonEmphasis: {
-    backgroundColor: colors.surfaceBright,
+    backgroundColor: colors.createActionFill,
     borderColor: 'transparent'
   },
   buttonLit: {
     borderColor: colors.textSecondary
   },
   pressed: {
-    opacity: 0.75
+    opacity: feedback.pressedOpacity
   },
   disabled: {
-    opacity: 0.4
+    opacity: feedback.disabledOpacity
   },
   badge: {
     position: 'absolute',

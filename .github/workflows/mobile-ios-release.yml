@@ -133,6 +133,8 @@ jobs:
           # Keep fastlane non-interactive and quiet about analytics in CI.
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'
+          # Metro's release transform of the 3.6 MB Mermaid module needs >2 GB heap; the runner's default cap sits at that edge.
+          NODE_OPTIONS: --max-old-space-size=4096
         run: bundle exec fastlane ios build_and_upload
 
       - name: Upload .ipa artifact

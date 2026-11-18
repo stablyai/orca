@@ -1,12 +1,24 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { getSecretStore } from '../../shared/secret-store'
-import { writeCredentialFileAtomic } from '../integration-credential-file'
-import type { AntigravityAccountSummary } from '../../shared/antigravity-account-types'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
+import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
+import type { AntigravityAccountSummary } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
+import type {
+  ProviderRateLimits,
+  RateLimitRuntimeTarget
+} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
-import { readPrivateWindowsFile } from '../../shared/secure-path-windows-acl'
+import { readPrivateWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
 
-export type StoredAntigravityAccount = AntigravityAccountSummary & { credentials: string }
+export type StoredAntigravityUsage = {
+  target: RateLimitRuntimeTarget
+  rateLimits: ProviderRateLimits
+}
+export type StoredAntigravityAccount = Omit<AntigravityAccountSummary, 'usage'> & {
+  credentials: string
+  /** Last verified reading per runtime this account was read on. */
+  usage?: StoredAntigravityUsage[]
+}
 export type AntigravityAccountVault = {
   accounts: StoredAntigravityAccount[]
   selectedAccountId: string | null
@@ -33,6 +45,18 @@ function isAccount(value: unknown): value is StoredAntigravityAccount {
     typeof value.createdAt === 'number' &&
     typeof value.updatedAt === 'number' &&
     typeof value.credentials === 'string'
+  )
+}
+
+function isStoredUsage(value: unknown): value is StoredAntigravityUsage {
+  return (
+    isRecord(value) &&
+    isRecord(value.target) &&
+    (value.target.runtime === 'host' || value.target.runtime === 'wsl') &&
+    (value.target.wslDistro === null || typeof value.target.wslDistro === 'string') &&
+    isRecord(value.rateLimits) &&
+    value.rateLimits.provider === 'antigravity' &&
+    typeof value.rateLimits.updatedAt === 'number'
   )
 }
 
@@ -95,6 +119,12 @@ export function createEncryptedAntigravityAccountStore(
             (credential.identity !== null && credential.identity.subject !== account.subject)
           ) {
             throw new Error('inconsistent identity')
+          }
+        }
+        for (const account of value.accounts) {
+          // A malformed reading is only a lost cache entry, never a reason to reject the vault.
+          if (account.usage !== undefined) {
+            account.usage = Array.isArray(account.usage) ? account.usage.filter(isStoredUsage) : []
           }
         }
         return { accounts: value.accounts, selectedAccountId: value.selectedAccountId }

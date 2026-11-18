@@ -4,7 +4,8 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { CalendarClock, ChevronRight } from 'lucide-react-native'
 import { Pressable, Switch, Text, View } from 'react-native'
 import { formatAutomationSchedule } from './automation-schedule-label'
-import { colors } from '../theme/mobile-theme'
+import { automationNextRunLabel } from './automation-next-run-label'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { AutomationButton } from './AutomationControls'
 import type { MobileAutomationRow } from './automation-reply-schema'
 import { automationDate, automationRunStatusLabel } from './automation-run-presentation'
@@ -58,7 +59,7 @@ export function AutomationList(props: {
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => props.onOpen(row)}
-                  style={styles.grow}
+                  style={({ pressed }) => [styles.grow, pressed && pressedStyle]}
                 >
                   <View style={styles.row}>
                     <Text style={[styles.heading, styles.grow]}>{automation.name}</Text>
@@ -79,13 +80,7 @@ export function AutomationList(props: {
               <Text style={styles.meta}>
                 {formatAutomationSchedule(automation.rrule)} · {automation.timezone}
               </Text>
-              <Text style={styles.meta}>
-                {automation.enabled
-                  ? t('automations.mobile.nextDate', 'Next: {{date}}', {
-                      date: automationDate(automation.nextRunAt, automation.timezone)
-                    })
-                  : t('automations.mobile.noNextScheduledRun', 'No next scheduled run')}
-              </Text>
+              <Text style={styles.meta}>{automationNextRunLabel(automation)}</Text>
               <Text style={styles.meta}>
                 {item.usageSummary?.lastRunStatus
                   ? t('automations.mobile.lastResult', 'Last: {{status}} · {{date}}', {

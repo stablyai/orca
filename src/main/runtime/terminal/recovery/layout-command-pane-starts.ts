@@ -4,7 +4,7 @@ import type {
   LayoutEffects,
   LayoutCommand
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { RestoredPane, StartedPty } from './restored-pane-start'
 
 /** Main's restored-pane starter: the pane's terminal, or null once main no longer holds it. */

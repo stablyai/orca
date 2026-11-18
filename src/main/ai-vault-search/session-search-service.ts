@@ -2,10 +2,10 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../shared/ai-vault-search-types'
-import type { SessionSearchEngine } from './session-search-engine'
-import type { SessionSearchIndexer } from './session-search-indexer'
-import { SessionSearchCursorError } from './session-search-page-cursor'
+} from '../../shared/ai-vault/search/ai-vault-search-types'
+import type { SessionSearchEngine } from './query/session-search-engine'
+import type { SessionSearchIndexer } from './indexing/session-search-indexer'
+import { SessionSearchCursorError } from './query/session-search-page-cursor'
 
 /** Host scope bypasses the client path cap; absent scope leaves request filters unchanged. */
 export type SessionSearchHostScope =

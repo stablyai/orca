@@ -1,14 +1,15 @@
-import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   BrowserAnnotationIntent,
   BrowserGrabPayload,
   BrowserPageAnnotation,
   GrabIntent
-} from '../../../../../shared/browser-grab-types'
-import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser-guest-events'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import type { GrabModeHook } from '../annotate/useGrabMode'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
+import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import type { BrowserOverlayViewport } from './browser-annotation-geometry'
 
 export type BrowserTabPageState = Partial<
@@ -18,15 +19,24 @@ export type BrowserTabPageState = Partial<
   >
 >
 
+export type BrowserPageStateWriter = (
+  pageId: string,
+  updates: BrowserTabPageState,
+  loadingOwner?: BrowserPageLoadingOwner
+) => void
+
 export type BrowserPageUrlSetter = (
   tabId: string,
   url: string,
   options?: { preserveLoadError?: boolean }
 ) => void
 
-export type BrowserChromeShortcutScope = 'focused' | 'inactive' | 'owned-target'
-
-export type { GrabIntent } from '../../../../../shared/browser-grab-types'
+/** 'owned-target' panes answer only chords from their own overlay; '-focused' marks the one in the focused split. */
+export type BrowserChromeShortcutScope =
+  | 'focused'
+  | 'inactive'
+  | 'owned-target'
+  | 'owned-target-focused'
 
 export type BrowserPageContextMenuState = Pick<
   BrowserContextMenuRequestedEvent,
@@ -71,6 +81,8 @@ export type BrowserPageGrabAnnotations = {
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
   grabToastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>
   dismissGrabToast: () => void
+  /** Copies a grab screenshot; `onSettled` runs only while that copy still owns the toast. */
+  copyGrabScreenshot: (dataUrl: string, onSettled: (copied: boolean) => void) => void
   handleGrabCopy: () => void
   handleGrabCopyScreenshot: () => void
   grabMenuActionTakenRef: MutableRefObject<boolean>
@@ -124,6 +136,23 @@ export type BrowserPageAnnotationTrayProps = {
     intent: BrowserAnnotationIntent,
     imagePaths: string[]
   ) => void
+}
+
+export type BrowserPagePaneProps = {
+  browserTab: BrowserPageState
+  workspaceId: string
+  worktreeId: string
+  sessionProfileId: string | null
+  sessionPartition: string | null
+  isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
+  isAutomationVisible: boolean
+  isMobileDriven: boolean
+  isRemotelyViewed: boolean
+  isMountAdmitted?: boolean
+  inputLocked: boolean
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onSetUrl: BrowserPageUrlSetter
 }
 
 export type ClientHostedBrowserPagePaneProps = {

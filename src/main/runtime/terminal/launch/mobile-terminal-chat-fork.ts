@@ -1,22 +1,23 @@
-import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
-import type { AiVaultResumeLaunchSettings } from '../../../../shared/ai-vault-resume-startup'
+import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { MobileTerminalCommand } from './mobile-terminal-startup'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
-import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
-import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
-import { resolveWslHostAgentCmdOverrides } from '../../wsl-host-agent-terminal-launch'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
+  type AgentLaunchRuntime,
+  agentLaunchQuotingShell
+} from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { resolveWslHostAgentCmdOverrides } from './wsl-host-agent-terminal-launch'
+import {
+  type AiVaultResumeLaunchSettings,
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
-  buildAiVaultLocalResumeStartup,
-  getAiVaultResumeCodexHome,
-  resolveAiVaultCopiedSessionAgentArgs
-} from '../../../../shared/ai-vault-resume-startup'
+  buildAiVaultLocalResumeStartup
+} from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
+import { getAiVaultResumeCodexHome } from '../../../../shared/ai-vault/resume/ai-vault-resume-path'
 
 /** One native execution fact builds the line and chooses the shell that receives it. */
 export function buildMobileTerminalChatFork(args: {
@@ -59,14 +60,7 @@ export function buildMobileTerminalChatFork(args: {
     assertAiVaultCopiedSessionStoreAllowed(startupArgs)
   }
   const startup = prepared.forkedSession
-    ? buildAiVaultLocalResumeStartup({
-        ...startupArgs,
-        agentArgs: resolveAiVaultCopiedSessionAgentArgs({
-          ...startupArgs,
-          sourceAgent: source.sourceAgent
-        }),
-        embedCwd: false
-      })
+    ? buildAiVaultLocalResumeStartup({ ...startupArgs, embedCwd: false })
     : buildAiVaultForkStartup(startupArgs)
   if (!startup) {
     throw new Error('chat_fork_source_unavailable')

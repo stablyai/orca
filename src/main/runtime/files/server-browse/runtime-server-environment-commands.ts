@@ -1,0 +1,79 @@
+import { readdir, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import type { Dirent } from 'node:fs'
+import { isAbsolute, join, resolve } from 'node:path'
+import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
+import type { FilesystemPathFlavor } from '../../../../shared/file-access/filesystem-path-flavor'
+import { sortDirEntries } from '../../../../shared/file-listing/file-name-sort'
+import { probeGitAvailability } from '../../../git/command-runner/host-routing/git-availability'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
+import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
+
+function resolveServerBrowsePath(pathValue: string): string {
+  const trimmed = pathValue.trim() || '~'
+  if (trimmed.includes('\0')) {
+    throw new Error('Path cannot contain null bytes')
+  }
+  if (trimmed === '~') {
+    return homedir()
+  }
+  if (/^~[\\/]/.test(trimmed)) {
+    return resolve(homedir(), trimmed.slice(2))
+  }
+  if (isAbsolute(trimmed)) {
+    return resolve(trimmed)
+  }
+  return resolve(homedir(), trimmed)
+}
+
+// Follow symlinked directories; Dirent alone reports false. Broken/looped links remain files (ENOENT/ELOOP).
+async function isBrowseEntryDirectory(dirPath: string, entry: Dirent): Promise<boolean> {
+  if (entry.isDirectory()) {
+    return true
+  }
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  try {
+    return (await stat(join(dirPath, entry.name))).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+export class RuntimeServerEnvironmentCommands {
+  async browseDirectory(pathValue: string): Promise<{
+    resolvedPath: string
+    entries: DirEntry[]
+    pathFlavor: FilesystemPathFlavor
+  }> {
+    if (isServerDriveListRequest(pathValue)) {
+      return listWindowsDrives()
+    }
+    const dirPath = resolveServerBrowsePath(pathValue)
+    const dirStat = await stat(dirPath)
+    if (!dirStat.isDirectory()) {
+      throw new Error(`${dirPath} is not a directory`)
+    }
+    const entries = await readdir(dirPath, { withFileTypes: true })
+    const mapped = await Promise.all(
+      entries
+        .filter((entry) => entry.name !== '.' && entry.name !== '..')
+        .map(async (entry) => ({
+          name: entry.name,
+          isDirectory: await isBrowseEntryDirectory(dirPath, entry),
+          isSymlink: entry.isSymbolicLink()
+        }))
+    )
+    sortDirEntries(mapped)
+    return {
+      resolvedPath: dirPath,
+      entries: mapped,
+      pathFlavor: process.platform === 'win32' ? 'win32' : 'posix'
+    }
+  }
+
+  async isGitAvailable(): Promise<boolean> {
+    return probeGitAvailability(gitExecFileAsync, { cwd: process.cwd(), timeout: 3000 })
+  }
+}

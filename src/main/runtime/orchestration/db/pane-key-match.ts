@@ -1,4 +1,4 @@
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 // Leaf UUIDs survive pane break-out; exact match also supports legacy/unparseable keys.
 export function isEquivalentPaneKey(a: string, b: string): boolean {

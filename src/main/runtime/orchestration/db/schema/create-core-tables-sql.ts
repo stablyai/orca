@@ -1,4 +1,4 @@
-import { LEGACY_RUN_ID } from '../contract-constants'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 
 export function createCoreTablesSql(): string {
   return `
@@ -210,9 +210,7 @@ CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_identity
 CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_release
   ON worker_terminal_resources(release_state);
 
--- One live agent-session operation id per structured worker mailbox. Persisted because the id is
--- the send's idempotency key: re-minting it after a restart would re-deliver an already-queued
--- pointer as a second turn.
+-- Read and written only by builds that sent chats a count notice per mailbox; kept for them.
 CREATE TABLE IF NOT EXISTS structured_pointer_operations (
   mailbox_handle    TEXT PRIMARY KEY,
   session_id        TEXT NOT NULL,
@@ -221,12 +219,31 @@ CREATE TABLE IF NOT EXISTS structured_pointer_operations (
   minted_at_ms      INTEGER NOT NULL
 );
 
+-- One row per orchestration message a chat session holds but has not yet been handed. Persisted
+-- because the operation id is the send's idempotency key and the only way to find its queued card.
+CREATE TABLE IF NOT EXISTS structured_mail_sends (
+  mailbox_handle TEXT NOT NULL,
+  message_id     TEXT NOT NULL,
+  session_id     TEXT NOT NULL,
+  operation_id   TEXT NOT NULL,
+  minted_at_ms   INTEGER NOT NULL,
+  PRIMARY KEY (mailbox_handle, message_id)
+);
+CREATE INDEX IF NOT EXISTS idx_structured_mail_sends_session ON structured_mail_sends(session_id);
+CREATE INDEX IF NOT EXISTS idx_structured_mail_sends_message ON structured_mail_sends(message_id);
+
 CREATE TABLE IF NOT EXISTS worker_terminal_archives (
   dispatch_id   TEXT PRIMARY KEY,
   resource_id   TEXT NOT NULL,
   kind          TEXT NOT NULL CHECK(kind IN ('transcript_pin', 'terminal_tail', 'structured_journal')),
   content       TEXT NOT NULL,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- When maintenance last pruned settled history (epoch ms), so a restart waits out the interval.
+CREATE TABLE IF NOT EXISTS orchestration_maintenance (
+  id        INTEGER PRIMARY KEY CHECK(id = 1),
+  pruned_at INTEGER
 );
 
   `

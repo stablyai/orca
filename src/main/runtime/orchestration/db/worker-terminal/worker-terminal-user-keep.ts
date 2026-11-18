@@ -3,14 +3,14 @@ import {
   USER_KEPT_WORKER_TERMINAL_SQL,
   WORKER_SETTLED_STATES,
   type WorkerTerminalResourceRow
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import {
   isEquivalentPaneKey,
   paneKeyMatchSuffix,
   WORKER_TERMINAL_PANE_KEY_MATCH_SUFFIX_SQL
 } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { WorkerAutoCloseState } from '../../../../../shared/worker-auto-close'
+import type { WorkerAutoCloseState } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import { exposeUtcTimestamp, toSqliteUtcTimestamp } from '../utc-timestamp'
 import { OrchestrationError } from '../../orchestration-error'
 import { retainTerminalResourceInTransaction } from './worker-terminal-archive'

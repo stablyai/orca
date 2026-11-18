@@ -16,6 +16,10 @@ export type PluginSystemSettings = {
   pluginConsents: Record<string, string>
   /** Local directories loaded as dev-mode plugins (manifest hot-reload). */
   devPluginPaths: string[]
+  /** Built-in action ids the person keeps for Orca: no plugin command runs in their place. */
+  pluginReplacementsOff?: string[]
+  /** Qualified plugin key → hosts the person always allows its frames to open. Main-only. */
+  pluginExternalHostGrants?: Record<string, string[]>
 }
 
 type PluginSystemDefaultOnSettings = Pick<

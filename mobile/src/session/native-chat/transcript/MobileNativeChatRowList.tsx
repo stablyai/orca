@@ -1,16 +1,20 @@
 import type { ComponentProps, ReactElement } from 'react'
 import { FlatList, Platform } from 'react-native'
-import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
-import { MobileNativeChatPageList } from '../../MobileNativeChatPageList'
+import type { LegacyComposedGesture } from 'react-native-gesture-handler'
+import { MobileNativeChatPinchZoom } from './viewport/mobile-native-chat-pinch-zoom'
+import type { MobileNativeChatRowKeys } from './projection/mobile-native-chat-row-keys'
+import { MobileNativeChatPageList } from './viewport/MobileNativeChatPageList'
+import { MobileNativeChatScrollRowToTopContext } from './viewport/mobile-native-chat-scroll-row-to-top-context'
 import {
   mobileNativeChatRowAnchor,
   type MobileNativeChatTailFollow
-} from '../../use-mobile-native-chat-tail-follow'
+} from './viewport/use-mobile-native-chat-tail-follow'
 
 type PageProps = ComponentProps<typeof MobileNativeChatPageList>
 
 type Props = Pick<
   PageProps,
+  | 'itemJump'
   | 'rows'
   | 'roots'
   | 'renderItem'
@@ -27,43 +31,51 @@ type Props = Pick<
   rowKeys: MobileNativeChatRowKeys
   /** With a header, the row below it anchors the native list's visible content. */
   hasHeader: boolean
+  pinchGesture: LegacyComposedGesture
 }
 
 export function MobileNativeChatRowList(props: Props): ReactElement {
   const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
   const { header, emptyStateView } = props
   if (Platform.OS === 'web') {
-    const { roots, runs, layoutKey, onNearTop } = props
+    const { roots, runs, layoutKey, onNearTop, itemJump } = props
     return (
-      <MobileNativeChatPageList
-        {...tail.pageListProps}
-        {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
-        {...{ header, footer, emptyStateView, onScroll, onNearTop }}
-      />
+      <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
+        {/* Only the page list draws row keys to scroll to. */}
+        <MobileNativeChatScrollRowToTopContext value={tail.scrollRowToTop}>
+          <MobileNativeChatPageList
+            {...tail.pageListProps}
+            {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
+            {...{ header, footer, emptyStateView, onScroll, onNearTop, itemJump }}
+          />
+        </MobileNativeChatScrollRowToTopContext>
+      </MobileNativeChatPinchZoom>
     )
   }
   return (
-    <FlatList
-      {...tail.listProps}
-      data={rows}
-      keyExtractor={rowKeys.keyOf}
-      renderItem={renderItem}
-      contentContainerStyle={contentContainerStyle}
-      // Let link/file taps land while the composer keyboard is up
-      // instead of being swallowed by the dismiss gesture.
-      keyboardShouldPersistTaps="handled"
-      onScroll={onScroll}
-      onScrollBeginDrag={tail.beginUserScroll}
-      onScrollEndDrag={tail.endUserDrag}
-      onMomentumScrollBegin={tail.beginMomentum}
-      onMomentumScrollEnd={tail.endMomentum}
-      scrollEventThrottle={32}
-      onContentSizeChange={tail.pinToTailAfterContentResize}
-      onLayout={tail.pinToTail}
-      maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
-      ListHeaderComponent={header}
-      ListFooterComponent={footer}
-      ListEmptyComponent={emptyStateView}
-    />
+    <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
+      <FlatList
+        {...tail.listProps}
+        data={rows}
+        keyExtractor={rowKeys.keyOf}
+        renderItem={renderItem}
+        contentContainerStyle={contentContainerStyle}
+        // Let link/file taps land while the composer keyboard is up
+        // instead of being swallowed by the dismiss gesture.
+        keyboardShouldPersistTaps="handled"
+        onScroll={onScroll}
+        onScrollBeginDrag={tail.beginUserScroll}
+        onScrollEndDrag={tail.endUserDrag}
+        onMomentumScrollBegin={tail.beginMomentum}
+        onMomentumScrollEnd={tail.endMomentum}
+        scrollEventThrottle={32}
+        onContentSizeChange={tail.pinToTailAfterContentResize}
+        onLayout={tail.pinToTail}
+        maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
+        ListHeaderComponent={header ?? undefined}
+        ListFooterComponent={footer ?? undefined}
+        ListEmptyComponent={emptyStateView ?? undefined}
+      />
+    </MobileNativeChatPinchZoom>
   )
 }

@@ -1,39 +1,51 @@
-import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
+import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
+import { mobileStructuredSessionOpenMessage } from '../session/native-chat/agent-session/mobile-structured-session-open-message'
+import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, CircleAlert, History, RefreshCw, SearchX } from 'lucide-react-native'
+import { ChevronLeft, History, RefreshCw } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
+import {
+  MobileSegmentedControl,
+  type MobileSegment
+} from '../components/controls/MobileSegmentedControl'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useSessionScreenHandlers } from '../session/session-screen-handlers'
-import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
-import { getWorktreeLabel } from '../session/worktree-label'
+import { worktreeCatalogRead } from '../worktree/catalog/worktree-catalog-operations'
+import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
   readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
-  resolveMobileAiVaultResumePlatform,
   resumeAiVaultSessionInTerminal
-} from '../session/ai-vault-resume-launch'
-import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
-import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+} from './ai-vault-resume-launch'
+import { prepareMobileAiVaultSessionResume } from './ai-vault-resume-preparation'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
+import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
+import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
+import { useRefreshHint } from '../query/refresh-hint'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
-import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
-import { AgentHistoryStateView } from './AgentHistoryStateView'
-import { AgentHistoryResumeNotice, AgentHistorySkippedNotice } from './AgentHistoryNotices'
+import {
+  MobileLoadErrorState,
+  MobileNoMatchState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/feedback/MobileStateView'
+import { AgentHistoryResumeNotice, AgentHistoryScanNotices } from './AgentHistoryNotices'
+import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
 import type { Translate } from '../i18n/mobile-i18n'
@@ -46,7 +58,7 @@ export type MobileAgentSessionHistoryPanelProps = {
   origin?: string
 }
 
-function scopeSegments(t: Translate): MobileSegment<AiVaultScope>[] {
+function scopeSegments(t: Translate): MobileSegment<AiVault.AiVaultScope>[] {
   return [
     { value: 'workspace', label: t('agentHistory.panel.workspace', 'Workspace') },
     { value: 'project', label: t('agentHistory.panel.project', 'Project') },
@@ -83,6 +95,7 @@ function MobileAgentSessionHistoryPanelContent({
   const insets = useSafeAreaInsets()
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
   const [resumeMessage, setResumeMessage] = useState<string | null>(null)
+  const { message: resumeToast, showToast: showResumeToast } = useTransientToast()
   const now = useNow(30_000)
   const resumeLaunchInFlightRef = useRef(false)
   const resumeMutationRegistryRef = useRef(
@@ -94,7 +107,7 @@ function MobileAgentSessionHistoryPanelContent({
     scope,
     screenState,
     refreshing,
-    hostStatusResult,
+    revalidating,
     activeWorktreePath,
     scopeFilterPaths,
     onSelectScope,
@@ -153,14 +166,7 @@ function MobileAgentSessionHistoryPanelContent({
     [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now, t]
   )
 
-  const resumeHost = useMemo(
-    () => readMobileAiVaultResumeHost(hostStatusResult),
-    [hostStatusResult]
-  )
-  const hostTerminalWindowsShell = useMemo(
-    () => readMobileRuntimeTerminalWindowsShell(hostStatusResult),
-    [hostStatusResult]
-  )
+  const showRefreshLine = useRefreshHint(revalidating)
 
   const resumeActionStateBySessionId = useMemo(
     () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId),
@@ -168,19 +174,12 @@ function MobileAgentSessionHistoryPanelContent({
   )
 
   const onResumeSession = useCallback(
-    async (session: AiVaultSession): Promise<void> => {
+    async (session: AiVault.AiVaultSession): Promise<void> => {
       if (resumeLaunchInFlightRef.current) {
         return
       }
       if (!client || connState !== 'connected') {
         setResumeMessage(t('agentHistory.panel.waitingForHost', 'Waiting for host...'))
-        triggerError()
-        return
-      }
-      if (!session.sessionId) {
-        setResumeMessage(
-          t('agentHistory.panel.missingResumeId', 'This session is missing a resume id.')
-        )
         triggerError()
         return
       }
@@ -190,46 +189,70 @@ function MobileAgentSessionHistoryPanelContent({
       setResumingSessionId(session.id)
       setResumeMessage(null)
       try {
-        const {
-          settings,
-          worktrees: freshWorktrees,
-          ...catalog
-        } = await loadMobileResumeMetadata(client)
-        assertCurrentOwner()
-        const target = resolveMobileAiVaultSessionResumeTarget({
-          session,
-          activeWorktreeId: worktreeId,
-          // Prefer live worktrees so deleted/archived workspace cannot be selected; fall back to mount list only on fetch failure.
-          worktrees: freshWorktrees ?? worktrees,
-          catalog,
-          hostPlatform: resumeHost.platform
-        })
-        if (target.status !== 'ready') {
-          setResumeMessage(target.message)
-          triggerError()
+        if (
+          await openMobileAgentHistoryChat({
+            client,
+            session,
+            hostId,
+            assertCurrentOwner,
+            opened: (href) => {
+              triggerSuccess()
+              router.replace(href)
+            },
+            failed: (reason, workspaceKind) => {
+              triggerError()
+              const message = mobileStructuredSessionOpenMessage(
+                reason,
+                session.agent,
+                undefined,
+                workspaceKind
+              )
+              const showMessage =
+                reason === 'workspace-missing' ? showResumeToast : setResumeMessage
+              showMessage(message)
+            }
+          })
+        ) {
           return
         }
-
-        const platform = resolveMobileAiVaultResumePlatform(
-          target.targetStatus,
-          resumeHost.platform,
-          target.workspacePath,
-          target.terminalPlatform
-        )
-        if (!platform) {
+        if (!session.sessionId) {
           setResumeMessage(
-            t('agentHistory.panel.unknownHostPlatform', 'Unable to determine host platform.')
+            t('agentHistory.panel.missingResumeId', 'This session is missing a resume id.')
           )
           triggerError()
           return
         }
+        // Read at resume, not on open: the Windows shell setting can change while connected.
+        const statusReply = await agentHistoryHostStatusRead.request(client)
+        assertCurrentOwner()
+        const hostStatus = interpretOrThrowRefusalMessage(
+          () => agentHistoryHostStatusRead.interpret(statusReply),
+          t('agentHistory.useAgentHistoryState.hostUnreachable', 'Unable to reach host')
+        )
+        const resumeHost = readMobileAiVaultResumeHost(hostStatus)
+        const preparedTarget = await prepareMobileHistoryResumeTarget({
+          client,
+          session,
+          worktreeId,
+          worktrees,
+          hostPlatform: resumeHost.platform,
+          assertCurrentOwner,
+          unknownPlatformMessage: () =>
+            t('agentHistory.panel.unknownHostPlatform', 'Unable to determine host platform.')
+        })
+        if (preparedTarget.status !== 'ready') {
+          setResumeMessage(preparedTarget.message)
+          triggerError()
+          return
+        }
+        const { target, platform, settings } = preparedTarget
 
         const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
         assertCurrentOwner()
         const launch = buildMobileAiVaultResumeLaunch({
           session: preparedSession,
           workspacePlatform: platform,
-          hostTerminalWindowsShell,
+          hostTerminalWindowsShell: readMobileRuntimeTerminalWindowsShell(hostStatus),
           settings
         })
         const resumed = await resumeAiVaultSessionInTerminal(
@@ -278,12 +301,11 @@ function MobileAgentSessionHistoryPanelContent({
       hostId,
       origin,
       sessionBelow,
-      resumeHost,
-      hostTerminalWindowsShell,
       router,
       worktreeId,
       worktrees,
       claimResumeOwnership,
+      showResumeToast,
       t
     ]
   )
@@ -301,6 +323,7 @@ function MobileAgentSessionHistoryPanelContent({
           }
           title={t('agentHistory.panel.title', 'Agent Session History')}
           subtitle={worktreeLabel}
+          refreshing={showRefreshLine}
           trailing={
             <NavBarButton
               icon={RefreshCw}
@@ -323,12 +346,12 @@ function MobileAgentSessionHistoryPanelContent({
       </SafeAreaView>
 
       {screenState.kind === 'loading' ? (
-        <AgentHistoryStateView
+        <MobileStateView
           loading
           title={t('agentHistory.panel.loading', 'Loading agent sessions…')}
         />
       ) : screenState.kind === 'unsupported' ? (
-        <AgentHistoryStateView
+        <MobileStateView
           icon={History}
           title={t('agentHistory.panel.unavailable', 'Agent Session History Unavailable')}
           message={t(
@@ -336,16 +359,13 @@ function MobileAgentSessionHistoryPanelContent({
             'Update Orca on this host to browse agent session history.'
           )}
         />
+      ) : screenState.kind === 'error' && connState !== 'connected' ? (
+        <MobileOfflineState onReconnect={retry} />
       ) : screenState.kind === 'error' ? (
-        <AgentHistoryStateView
-          icon={CircleAlert}
-          title={t('agentHistory.panel.loadFailed', 'Unable to Load')}
-          message={screenState.message}
-          action={retry ? { label: t('common.retry', 'Retry'), onPress: retry } : undefined}
-        />
+        <MobileLoadErrorState error={screenState.message} onRetry={retry} />
       ) : (
         <>
-          {issues.length > 0 ? <AgentHistorySkippedNotice issues={issues} /> : null}
+          <AgentHistoryScanNotices sessions={sessions} issues={issues} />
           {resumeMessage ? (
             <AgentHistoryResumeNotice
               message={resumeMessage}
@@ -354,18 +374,13 @@ function MobileAgentSessionHistoryPanelContent({
           ) : null}
           {sections.length === 0 ? (
             query ? (
-              <AgentHistoryStateView
-                icon={SearchX}
-                title={t('agentHistory.panel.noMatches', 'No matches')}
+              <MobileNoMatchState
                 message={t('agentHistory.panel.noSearchResults', 'No sessions match your search.')}
-                action={{
-                  label: t('agentHistory.panel.clearSearch', 'Clear search'),
-                  onPress: () => setQuery('')
-                }}
+                onClear={() => setQuery('')}
                 bottomInset={searchBarHeight}
               />
             ) : (
-              <AgentHistoryStateView
+              <MobileStateView
                 icon={History}
                 title={t('agentHistory.panel.noSessions', 'No agent sessions')}
                 message={t(
@@ -396,12 +411,13 @@ function MobileAgentSessionHistoryPanelContent({
           />
         </>
       )}
+      <TransientToast message={resumeToast} bottomInset={searchBarHeight} />
     </View>
   )
 }
 
-const EMPTY_SESSIONS: AiVaultSession[] = []
-const EMPTY_ISSUES: { agent: AiVaultSession['agent']; path: string; message: string }[] = []
+const EMPTY_SESSIONS: AiVault.AiVaultSession[] = []
+const EMPTY_ISSUES: AiVault.AiVaultScanIssue[] = []
 
 function createMobileAiVaultResumeMutationId(sessionId: string): string {
   const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'

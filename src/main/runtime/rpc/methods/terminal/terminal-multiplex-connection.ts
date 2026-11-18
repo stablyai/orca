@@ -1,18 +1,20 @@
+import type { RemoteTerminalViewer } from '../../../terminal/layout/terminal-view-presence'
 import type { z } from 'zod'
 import type { RpcContext } from '../../core'
 import type {
   TerminalInputAckKind,
   TerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../../../shared/terminal-stream-protocol'
-import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
+import type { TerminalOutputFrameChunk } from '../../terminal/terminal-output-frame-chunks'
 import type {
   TerminalMultiplexSnapshotRequestFrame,
   TerminalMultiplexSubscribeFrame
 } from './stream-schemas'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import type { MultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
-import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal-stream-end-verdict'
+import type { TerminalMultiplexLinkEstimate } from './terminal-multiplex-link-estimate'
+import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal/stream/terminal-stream-end-verdict'
 
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
 export type MultiplexSnapshotRequest = z.infer<typeof TerminalMultiplexSnapshotRequestFrame>
@@ -21,6 +23,8 @@ export type MultiplexEmit = (result: unknown) => void
 export type TerminalMultiplexConnectionBase = {
   runtime: RpcContext['runtime']
   connectionId: string
+  // The authenticated device, whose departure ends this connection's views.
+  viewer: RemoteTerminalViewer
   sendBinary: NonNullable<RpcContext['sendBinary']>
   registerBinaryStreamHandler: NonNullable<RpcContext['registerBinaryStreamHandler']>
   signal: RpcContext['signal']
@@ -32,6 +36,9 @@ export type TerminalMultiplexConnectionBase = {
   ptyWaitAdmission: MultiplexPtyWaitAdmission
   ackTotalInFlightBytes: number
   ackTotalWindowBytes: number
+  linkEstimate: TerminalMultiplexLinkEstimate
+  // Sum of streams' paced pending headroom, bounded by the connection window legacy would have used.
+  ackTotalHoldbackBytes: number
   ackFlushCursorStreamId: number | null
   resolveMultiplex: () => void
   multiplexClosed: Promise<void>
@@ -61,7 +68,11 @@ export type TerminalMultiplexFrameDelivery = {
     event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
   ) => void
   canSendAckGatedOutput: (stream: TerminalMultiplexStream, bytes: number) => boolean
-  sendAckGatedOutput: (stream: TerminalMultiplexStream, chunk: TerminalOutputFrameChunk) => boolean
+  sendAckGatedOutput: (
+    stream: TerminalMultiplexStream,
+    chunk: TerminalOutputFrameChunk,
+    fromBacklog?: boolean
+  ) => boolean
   queueOrSendOutput: (stream: TerminalMultiplexStream, chunk: TerminalOutputFrameChunk) => void
 }
 
