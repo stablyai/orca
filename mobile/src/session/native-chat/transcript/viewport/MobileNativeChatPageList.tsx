@@ -1,4 +1,5 @@
 import type { MobileNativeChatPageListProps } from '../mobile-native-chat-page-list-props'
+import { useMobileNativeChatPageItemJump } from './use-mobile-native-chat-page-item-jump'
 import {
   useCallback,
   useEffect,
@@ -52,16 +53,14 @@ type Scroller = MobileNativeChatScrollNode & {
 function isScroller(node: unknown): node is Scroller {
   return typeof node === 'object' && node !== null && 'addEventListener' in node
 }
-function isDomNode(node: unknown): node is Element {
-  return typeof node === 'object' && node !== null
-}
 function domElementOf(node: unknown): Element | null {
-  return isDomNode(node) ? node : null
+  return typeof Element !== 'undefined' && node instanceof Element ? node : null
 }
 
 // End anchoring preserves position when history prepends; restore after below-reader changes only at rest or on regroup.
 export function MobileNativeChatPageList({
   ref,
+  itemJump,
   roots,
   isFollowing,
   onEndDistance,
@@ -107,7 +106,7 @@ export function MobileNativeChatPageList({
   const kept = drawn.scope === rowKeys.scope ? drawn : savedMobileNativeChatDrawn(rowKeys.scope)
   const opening = Math.max(0, n - FIRST_ROWS)
   const firstKey = kept?.firstKey ?? null
-  const first = kept?.automatic
+  const normalFirst = kept?.automatic
     ? Math.max(0, n - kept.count)
     : kept?.fromStart
       ? 0
@@ -117,6 +116,7 @@ export function MobileNativeChatPageList({
           indexOf.get(rowKeys.current(firstKey) ?? '') ??
           Math.max(0, n - (kept?.count ?? FIRST_ROWS)))
 
+  const first = Math.min(normalFirst, indexOf.get(itemJump?.rowKey ?? '') ?? normalFirst)
   const rowHeights = useMemo(() => new Map<string, number>(), [rowKeys.scope, layoutKey])
   const beforeRowsHeight = mobileNativeChatUndrawnHeight(keys, first, rowHeights)
   const measureDrawn = useCallback(
@@ -146,7 +146,7 @@ export function MobileNativeChatPageList({
     live.current = { rows: liveRows, header: liveHeader, footer: liveFooter, renderItem }
   })
 
-  const write = useCallback((s: Scroller, to: number) => {
+  const write = useCallback((s: MobileNativeChatScrollNode, to: number) => {
     const top = Math.min(0, Math.max(to, s.clientHeight - s.scrollHeight))
     if (Math.abs(top - s.scrollTop) >= 0.5) {
       s.scrollTop = top
@@ -159,7 +159,7 @@ export function MobileNativeChatPageList({
     []
   )
 
-  const { notePlace, keepPlace } = useMobileNativeChatPlaceKeeper({
+  const { notePlace, keepPlace, forgetPlace } = useMobileNativeChatPlaceKeeper({
     latest,
     roots,
     isFollowing,
@@ -274,6 +274,16 @@ export function MobileNativeChatPageList({
     }),
     [scroller, write, notePlace]
   )
+
+  useMobileNativeChatPageItemJump({
+    itemJump,
+    scroller,
+    forgetPlace,
+    first,
+    keepDrawn: (at) =>
+      setDrawn({ scope: rowKeys.scope, firstKey: keys[at] ?? null, count: n - at }),
+    write
+  })
 
   const drawnHead = useRef<string | undefined>(undefined)
   useLayoutEffect(() => {
@@ -400,7 +410,7 @@ export function MobileNativeChatPageList({
             })}
           </div>
         )}
-        {footer}
+        {held ? held.footer : liveFooter}
       </MobileNativeChatGrowthHoldContext.Provider>
     </MobileNativeChatPageScroll>
   )

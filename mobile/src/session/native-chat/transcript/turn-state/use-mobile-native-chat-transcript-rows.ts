@@ -1,4 +1,8 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
+import {
+  botItemNoteJoins,
+  type BotItemNoteJoin
+} from '../../../../../../src/shared/bots/bot-item-note-runs'
 import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
@@ -78,11 +82,15 @@ export function useMobileNativeChatTranscriptRows({
   receipts,
   completedByTurn,
   expandedTurnKeys,
-  liveReasoningId
+  liveReasoningId,
+  turnDiffs
 }: TranscriptRows & {
   enabled: boolean
   scopeKey: string
   historyHead?: string
+  /** Turn diffs by the row they draw under (undefined: its turn changed nothing); one ends an
+   *  item-note cluster there. */
+  turnDiffs: ReadonlyMap<string, unknown>
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   expandedTurnKeys: ReadonlySet<string>
   liveReasoningId: string | undefined
@@ -91,6 +99,7 @@ export function useMobileNativeChatTranscriptRows({
   expandedTurnKeys: ReadonlySet<string>
   trailingRunIndex: number
   workRuns: MobileNativeChatWorkRuns
+  itemNoteJoins: ReadonlyMap<number, BotItemNoteJoin>
 } {
   const committedFold = useRef<NativeChatTurnFoldHistory | null>(null)
   const historyFold = useMemo(
@@ -134,10 +143,20 @@ export function useMobileNativeChatTranscriptRows({
         : NO_WORK_RUNS,
     [enabled, liveReasoningId, receipts, rows, turnKeys]
   )
+  const itemNoteJoins = useMemo(
+    () =>
+      botItemNoteJoins(
+        rows,
+        (index) => fold.foldedRows.has(index) || workRuns.joined.has(index),
+        (index) => turnDiffs.get(rows[index]!.id) !== undefined
+      ),
+    [fold, rows, turnDiffs, workRuns]
+  )
   return {
     fold,
     expandedTurnKeys: historyFold?.expandedTurnKeys ?? expandedTurnKeys,
     trailingRunIndex,
-    workRuns
+    workRuns,
+    itemNoteJoins
   }
 }

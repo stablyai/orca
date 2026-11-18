@@ -8,6 +8,7 @@ import {
   type StoreState
 } from './orcad-secret-key-resolution'
 import { openOrcadSecret, sealOrcadSecret } from './orcad-secret-sealing'
+import { describeOrcadHostKeyGap } from './orcad-secret-protection-gap'
 
 export type OrcadSecretStore = SecretStore & {
   prepare(options: OrcadSecretStorePrepareOptions): Promise<boolean>
@@ -41,6 +42,21 @@ export function createOrcadSecretStore(
           return state.reason
         case 'pending':
           return "Orca's headless server has not loaded its credential key yet."
+      }
+    },
+    describeSealing: () => {
+      switch (state.kind) {
+        case 'ready':
+          return { kind: 'host-key', warning: state.gap ?? describeOrcadHostKeyGap(false) }
+        case 'unavailable':
+          return { kind: 'none', reason: state.message }
+        case 'plaintext':
+          return { kind: 'none', reason: state.reason }
+        case 'pending':
+          return {
+            kind: 'none',
+            reason: "Orca's headless server has not loaded its credential key yet."
+          }
       }
     },
     async prepare(next) {

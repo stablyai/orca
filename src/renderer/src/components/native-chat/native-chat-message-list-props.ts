@@ -15,8 +15,12 @@ import type {
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/transcript/turns/native-chat-terminal-turn'
+import type { BotChatIdentity } from '../bots/use-bot-chat-identity'
+import type { NativeChatBotKickoffView } from './native-chat-bot-kickoff-view'
 
 export type NativeChatMessageListProps = {
+  turnBot?: BotChatIdentity | null
+  botHome?: NativeChatBotKickoffView
   ref?: Parameters<typeof useNativeChatMessageListHandle>[0]
   session: NativeChatLiveSession
   structuredAttachments?: boolean

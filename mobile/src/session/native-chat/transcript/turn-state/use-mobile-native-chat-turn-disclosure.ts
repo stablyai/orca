@@ -3,6 +3,7 @@ import { useMobileNativeChatTurnDiffs } from './use-mobile-native-chat-turn-diff
 import type { MobileNativeChatTurnRow } from '../projection/use-mobile-native-chat-row-props'
 import { useCallback, useMemo } from 'react'
 import { useMobileNativeChatScopedOpenKeys } from '../viewport/mobile-native-chat-disclosure-store'
+import { foldBotItemNotes } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import {
   isSubagentGroupBlock,
   type NativeChatMessage
@@ -83,7 +84,7 @@ export function useMobileNativeChatTurnDisclosure({
   } = useMemo(() => {
     if (!enabled) {
       return {
-        rows: messages,
+        rows: foldBotItemNotes(messages),
         turnKeys: NO_TURN_KEYS,
         liveTurnKey: undefined,
         unresolvedRowIds: undefined,
@@ -91,9 +92,10 @@ export function useMobileNativeChatTurnDisclosure({
       }
     }
     const membership = nativeChatTurnMembership(messages, turnJournal)
+    const turnKeys = nativeChatRowsInDrawOrder(membership.turnKeys, membership.drawOrder)
     return {
-      rows: nativeChatRowsInDrawOrder(messages, membership.drawOrder),
-      turnKeys: nativeChatRowsInDrawOrder(membership.turnKeys, membership.drawOrder),
+      rows: foldBotItemNotes(nativeChatRowsInDrawOrder(messages, membership.drawOrder), turnKeys),
+      turnKeys,
       liveTurnKey: membership.liveTurnKey,
       partialTurnKey: membership.partialTurnKey,
       unresolvedRowIds: membership.unresolvedRowIds
@@ -182,7 +184,8 @@ export function useMobileNativeChatTurnDisclosure({
     fold,
     expandedTurnKeys: historyExpandedTurns,
     trailingRunIndex,
-    workRuns
+    workRuns,
+    itemNoteJoins
   } = useMobileNativeChatTranscriptRows({
     enabled,
     scopeKey,
@@ -192,7 +195,8 @@ export function useMobileNativeChatTurnDisclosure({
     receipts,
     completedByTurn,
     expandedTurnKeys: expandedTurnIds,
-    liveReasoningId
+    liveReasoningId,
+    turnDiffs: summaries
   })
   const toggleHistoryTurn = useCallback(
     (key: string) => toggleExpandedTurn(key, historyExpandedTurns),
@@ -237,6 +241,7 @@ export function useMobileNativeChatTurnDisclosure({
           ? { workRun: workRuns.heads.get(index), openReasoning: expandedReasoning }
           : {}),
         ...(workRuns.joined.has(index) ? { joinsWorkRun: true } : {}),
+        ...(itemNoteJoins.has(index) ? { itemNoteJoin: itemNoteJoins.get(index) } : {}),
         mayStillGrow: !lineYields && message.id === latestAssistantId,
         reasoningIsLive: message.id === liveReasoningId,
         reasoningExpanded:
@@ -264,6 +269,7 @@ export function useMobileNativeChatTurnDisclosure({
       inLiveWorkingTurn,
       trailingRunIndex,
       workRuns,
+      itemNoteJoins,
       fold,
       rows,
       latestAssistantId,

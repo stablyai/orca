@@ -4,8 +4,10 @@ import type { NativeChatMessage } from '../../../../../src/shared/native-chat/na
 import type { MobileNativeChatRowKeys } from './projection/mobile-native-chat-row-keys'
 import type { MobileNativeChatListHandle } from './viewport/use-mobile-native-chat-tail-follow'
 import type { MobileNativeChatScrollRoots } from './viewport/mobile-native-chat-scroll-roots'
+import type { MobileNativeChatItemJump } from './viewport/use-mobile-native-chat-item-navigation'
 
 export type MobileNativeChatPageListProps = {
+  itemJump?: MobileNativeChatItemJump
   roots?: MobileNativeChatScrollRoots
   ref: Ref<MobileNativeChatListHandle>
   isFollowing: () => boolean

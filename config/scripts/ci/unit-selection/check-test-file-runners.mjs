@@ -35,6 +35,37 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["'tests/e2e/desktop/computer-use/computer-*.e2e.ts'"]
   },
   {
+    name: 'bot automation eval (pnpm eval:bot-automations)',
+    manual: true,
+    include: ['src/cli/bot-automation-eval/*.eval.ts'],
+    sources: ['config/vitest.bot-automation-eval.config.ts'],
+    mirrors: ["'src/cli/bot-automation-eval/*.eval.ts'"]
+  },
+  {
+    name: 'bot orchestration eval (pnpm eval:bot-orchestration)',
+    manual: true,
+    include: ['src/cli/bot-orchestration-eval/*.eval.ts'],
+    sources: ['config/vitest.bot-orchestration-eval.config.ts'],
+    mirrors: ["'src/cli/bot-orchestration-eval/*.eval.ts'"]
+  },
+  {
+    name: 'bots chat-tree bench (node tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-bench.mjs)',
+    manual: true,
+    include: ['tests/tools/benchmarks/bot-chat-tree/*-benchmark.{ts,test.tsx}'],
+    sources: ['tests/tools/benchmarks/bot-chat-tree/vitest.bot-chat-tree-bench.config.ts'],
+    mirrors: [
+      "'tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-notices-benchmark.ts'",
+      "'tests/tools/benchmarks/bot-chat-tree/bots-changed-renders-benchmark.test.tsx'"
+    ]
+  },
+  {
+    name: 'bot panel fold bench (pnpm exec vitest run --config tests/tools/benchmarks/bot-panel-fold/vitest.bot-panel-fold-bench.config.ts)',
+    manual: true,
+    include: ['tests/tools/benchmarks/bot-panel-fold/*-benchmark.test.tsx'],
+    sources: ['tests/tools/benchmarks/bot-panel-fold/vitest.bot-panel-fold-bench.config.ts'],
+    mirrors: ["'tests/tools/benchmarks/bot-panel-fold/bot-panel-fold-benchmark.test.tsx'"]
+  },
+  {
     name: 'mobile',
     include: ['mobile/src/**/*.test.ts', 'mobile/src/**/*.test.tsx', 'mobile/scripts/**/*.test.ts'],
     sources: ['mobile/vitest.config.ts'],

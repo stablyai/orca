@@ -14,6 +14,7 @@ type PageProps = ComponentProps<typeof MobileNativeChatPageList>
 
 type Props = Pick<
   PageProps,
+  | 'itemJump'
   | 'rows'
   | 'roots'
   | 'renderItem'
@@ -34,7 +35,7 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
   const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
   const { header, emptyStateView } = props
   if (Platform.OS === 'web') {
-    const { roots, layoutKey, onNearTop } = props
+    const { roots, layoutKey, onNearTop, itemJump } = props
     return (
       <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
         {/* Only the page list draws row keys to scroll to. */}
@@ -42,7 +43,7 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
           <MobileNativeChatPageList
             {...tail.pageListProps}
             {...{ rows, rowKeys, roots, renderItem, contentContainerStyle, layoutKey }}
-            {...{ header, footer, emptyStateView, onScroll, onNearTop }}
+            {...{ header, footer, emptyStateView, onScroll, onNearTop, itemJump }}
           />
         </MobileNativeChatScrollRowToTopContext>
       </MobileNativeChatPinchZoom>
