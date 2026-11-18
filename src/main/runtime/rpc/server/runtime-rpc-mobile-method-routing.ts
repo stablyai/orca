@@ -1,21 +1,41 @@
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
+import { MOBILE_BOT_RPC_METHODS } from './runtime-rpc-mobile-bot-methods'
 
 // Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac. This table also defines mobile allowlisting.
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
 export const EXECUTION_HOST_METHODS = [
+  // Signing in/out needs the same power as running commands on the host (workspace).
+  'orcaAccount.selectOrg',
+  'orcaAccount.signIn.cancel',
+  'orcaAccount.signIn.complete',
+  'orcaAccount.signIn.start',
+  'orcaAccount.signIn.wait',
+  'orcaAccount.signOut',
+  'orcaAccount.status',
+  'orcaAccount.subscribe',
+  'orcaAccount.unsubscribe',
   'ui.getJiraQuickFilters',
   'ui.setJiraQuickFilters',
   'ui.getJiraSavedFilters',
   'ui.mutateJiraSavedFilters',
   'agent.launch',
   'agent.launchReplay',
+  // Agent ids, chat records and transcripts live on the host that runs the agent.
+  'agent.list',
+  'agent.read',
+  'agent.show',
   // Read state lives with the host whose worktree.ps reports it.
   'agentActivity.clear',
   'agentActivity.setRead',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  ...MOBILE_BOT_RPC_METHODS,
+  // A bot chat's Slack thread switch and its posts' Retry, Dismiss and Delete, on the bot's host.
+  'connector.slackMirror.set',
+  'connector.slackMirror.post',
+  'connector.slackMirror.status',
   // Transcripts live on the host that ran the agent, which is also where resume launches it.
   'aiVault.listSessions',
   'aiVault.prepareSessionResume',
@@ -30,6 +50,8 @@ export const EXECUTION_HOST_METHODS = [
   'automation.runNow',
   'automation.runs',
   'browser.back',
+  // Gated on browser.certificate-trust.v1; older hosts refuse it here, which the phone treats as unavailable.
+  'browser.certificate.proceed',
   'browser.dialogAccept',
   'browser.dialogDismiss',
   'browser.forward',
@@ -41,6 +63,8 @@ export const EXECUTION_HOST_METHODS = [
   'browser.mouseMove',
   'browser.mouseUp',
   'browser.mouseWheel',
+  // Read-only list so the phone can name a tab's profile and offer the host's profiles for a new tab.
+  'browser.profileList',
   'browser.reload',
   'browser.screencast',
   'browser.screencast.ack',
@@ -82,6 +106,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.bulkUnstage',
   'git.cancelGenerateCommitMessage',
   'git.cancelGeneratePullRequestFields',
+  'git.checkIgnored',
   'git.checkout',
   'git.commit',
   'git.commitCompare',
@@ -208,6 +233,7 @@ export const EXECUTION_HOST_METHODS = [
   'session.tabs.closeLifecycle',
   'session.tabs.createTerminal',
   'session.tabs.list',
+  'session.tabs.terminalShellChoices',
   'session.tabs.listAll',
   'session.tabs.move',
   'session.tabs.subscribe',
@@ -241,6 +267,8 @@ export const EXECUTION_HOST_METHODS = [
   'worktree.activate',
   'worktree.create',
   'worktree.forceDeleteBranch',
+  // Read-only: the Bots section lists the workspaces a bot's workers made from its home.
+  'worktree.lineageList',
   'worktree.list',
   'worktree.listRetiredNames',
   'worktree.prefetchCreateBase',
@@ -248,6 +276,7 @@ export const EXECUTION_HOST_METHODS = [
   'worktree.resolveMrBase',
   'worktree.resolvePrBase',
   'worktree.rm',
+  'worktree.runApprovedSetup',
   'worktree.set',
   'worktree.show',
   'worktree.sleep'

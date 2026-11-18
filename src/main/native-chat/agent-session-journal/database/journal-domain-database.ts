@@ -9,7 +9,8 @@ import {
   journalPragmaNumber,
   type OpenJournalDatabase
 } from './journal-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
+import { tryFoldJournalTextTails } from '../journal-text-tail'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
   migrateJournalDomainSchema
@@ -17,13 +18,13 @@ import {
 import { importJournalDomainProfile } from './journal-domain-profile-import'
 import { openJournalLegacySource } from './journal-legacy-source'
 import {
+  JOURNAL_LEGACY_REVISIONS_KEPT,
+  reconcileJournalLegacySource
+} from './journal-legacy-reconcile'
+import {
   captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT
 } from './journal-legacy-source-receipt'
-
-export function journalDomainDatabasePath(stateDirectory: string): string {
-  return join(stateDirectory, 'agent-session-domain.db')
-}
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
 export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
@@ -35,6 +36,7 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     console.warn('[agent-session-journal] removing an abandoned initializer failed', error)
   }
   if (existsSync(destination)) {
+    absorbOlderOrcaWrites(stateDirectory, destination)
     return destination
   }
   const temporary = mkdtempSync(join(stateDirectory, `.journal-domain-import-${process.pid}-`))
@@ -52,10 +54,11 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
           source.close()
         }
       }
-      db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
-        JOURNAL_LEGACY_SOURCE_RECEIPT,
-        JSON.stringify(sourceReceipt)
+      const meta = db.prepare(
+        'INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)'
       )
+      meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(sourceReceipt))
+      meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
         throw new Error('chat initialization could not fold its private WAL')
@@ -74,6 +77,22 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     return destination
   } finally {
     rmSync(temporary, { recursive: true, force: true })
+  }
+}
+
+/** Best effort: a failure leaves the original unabsorbed for the next launch, never blocks chats. */
+function absorbOlderOrcaWrites(stateDirectory: string, destination: string): void {
+  try {
+    const { db, readOnly } = openJournalDomainDatabase(destination)
+    try {
+      if (!readOnly) {
+        reconcileJournalLegacySource(stateDirectory, db)
+      }
+    } finally {
+      db.close()
+    }
+  } catch (error) {
+    console.warn('[agent-session-journal] reading chats an older Orca saved failed', error)
   }
 }
 
@@ -118,6 +137,8 @@ export function openJournalDomainDatabase(filename: string): OpenJournalDatabase
     db.pragma('checkpoint_fullfsync = ON')
     db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)
     migrateJournalDomainSchema(db)
+    // Before any chat opens or reader starts, so recovery settles the whole saved text.
+    tryFoldJournalTextTails(db)
     ensurePRWatchTables(db)
     hardenSqliteDatabaseFiles(filename)
     transferred = true

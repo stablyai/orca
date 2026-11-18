@@ -10,7 +10,7 @@ import {
   agentStateLabel,
   agentStateProgressLabel,
   type AgentDotState
-} from '@/components/AgentStateDot'
+} from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -21,7 +21,7 @@ import { programStatusAttentionLine } from '../../../../shared/program-status/pr
 import {
   agentRowToolInput,
   showsAgentToolPreview
-} from '@/lib/agent-status/presentation/agent-row-tool-preview'
+} from '../../../../shared/agent-status/presentation/agent-row-tool-preview'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
 import {
@@ -31,12 +31,12 @@ import {
 import {
   agentRowDisplayDotState,
   agentRowDotState as asDotState
-} from '@/lib/agent-status/presentation/agent-row-dot-state'
+} from '../../../../shared/agent-row-dot-state'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
+import { agentVerdictStatusLine } from '../../../../shared/agent-status/presentation/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { useAgentRowConversationName } from './rows/use-agent-row-conversation-name'
@@ -44,7 +44,7 @@ import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
-} from '@/components/agent-child-row-text'
+} from '@/components/agent/status/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

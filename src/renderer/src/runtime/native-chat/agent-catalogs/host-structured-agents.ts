@@ -2,9 +2,9 @@ import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult,
   type AgentSessionRegisteredAgent
-} from '../../../../../shared/agent-session/agent-session-registered-agents'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+} from '../../../../../shared/agent-session/agent-discovery/agent-session-registered-agents'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
@@ -83,6 +83,16 @@ export function readHostStructuredAgents(
     executionHostId,
     currentRuntimeId(executionHostId, statuses)
   )
+}
+
+/** Agents the host publishes Orca's managed runtime for; undefined until its agents are read. */
+export function readHostManagedRuntimeAgents(
+  executionHostId: string,
+  state: { runtimeStatusByEnvironmentId: HostStructuredAgentsStatuses }
+): readonly string[] | undefined {
+  return readHostStructuredAgents(executionHostId, state.runtimeStatusByEnvironmentId)
+    ?.filter(({ managedRuntime }) => managedRuntime)
+    .map(({ agent }) => agent)
 }
 
 /** Asks a host for its agents unless its current runtime already answered. Never rejects: a

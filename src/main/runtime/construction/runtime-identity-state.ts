@@ -1,6 +1,6 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
 import * as savedChatOpen from '../agent-session/records/local-agent-session-record-store-startup-open'
-import type { SessionTitlePublisher } from '../session-tabs/session-title-publisher'
+import type { SessionTitlePublisher } from '../session-tabs/publication/session-title-publisher'
 import { randomUUID } from 'node:crypto'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -70,7 +70,7 @@ import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
 import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender-associations'
 
-import { RuntimeConstructionServices } from './runtime-construction-services'
+import { RuntimeBotConstructionHooks } from './runtime-bot-construction-hooks'
 
 export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
 
@@ -86,11 +86,10 @@ export type MobileSessionTabSubscription = {
   acceptsWorktree?: (worktree: string) => boolean
 }
 
-export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
+export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHooks {
   protected getLeafKey(tabId: string, leafId: string): string {
     return `${tabId}::${leafId}`
   }
-
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
   protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract terminalHandleAccess(): TerminalHandleAccess

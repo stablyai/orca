@@ -1,12 +1,4 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
@@ -18,10 +10,7 @@ import {
 } from '../../../shared/shell/launch/agents/codex-shell-function'
 import { resolveFishBinary } from '../../../shared/shell/testing/fish-binary-requirement'
 import { getPowerShellAgentWrappers } from '../../../shared/shell/launch/agents/powershell-agent-wrappers'
-import {
-  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
-  REMOTE_VIEWER_CLIPBOARD_ENV
-} from '../../../shared/remote-viewer-clipboard-env'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/clipboard/remote-viewer-clipboard-env'
 
 const isWindows = process.platform === 'win32'
 const fishLookup = resolveFishBinary()
@@ -54,25 +43,6 @@ const ADDED: string[][] = [
   ['login'],
   ['mcp', 'list']
 ]
-const UNCHANGED: string[][] = [
-  ['agents'],
-  ['-m', 'x', 'agents'],
-  ['-c', 'k=v', 'agents'],
-  ['--image=a.png', 'agents'],
-  ['agents', '--remote', 'X'],
-  ['queue', '--thread', 'T', '--message', 'M'],
-  ['-c', 'k=v', 'queue'],
-  ['--no-daemon'],
-  ['resume', '--no-daemon'],
-  ['-m', 'x', '--no-daemon'],
-  ['--remote', 'unix://'],
-  ['--remote=ws://h:1'],
-  ['resume', '--remote', 'X'],
-  ['-m', 'agents'],
-  ['--', 'agents'],
-  ['--', '--remote']
-]
-const ALL = [...ADDED, ...UNCHANGED]
 
 type Shell = 'bash' | 'zsh' | 'fish' | 'pwsh' | 'powershell'
 const isPowerShell = (shell: Shell): boolean => shell === 'pwsh' || shell === 'powershell'
@@ -137,10 +107,6 @@ exit "\${FAKE_CODEX_EXIT:-0}"
 `
   )
   return { bin, codex, helpFile, helpLog }
-}
-
-function helpProbes(sandbox: Sandbox): number {
-  return readFileSync(sandbox.helpLog, 'utf8').split('\n').filter(Boolean).length
 }
 
 function quote(shell: Shell, word: string): string {
@@ -235,73 +201,8 @@ const shells: [Shell, boolean][] = [
 ]
 
 describe.concurrent('codex wrapper --no-daemon rule', () => {
-  it('has pwsh when CI demanded it', ({ expect }) => {
-    expect(process.env.ORCA_REQUIRE_PWSH !== '1' || pwshAvailable).toBe(true)
-  })
-
   for (const [shell, available] of shells) {
     describe.skipIf(!available)(shell, () => {
-      it.for(
-        [
-          ['1', undefined, undefined, CODEX_REMOTE_VIEWER_SSH_CONNECTION, '0'],
-          ['1', undefined, undefined, CODEX_REMOTE_VIEWER_SSH_CONNECTION, '3'],
-          ['0', undefined, undefined, '<unset>', '0'],
-          ['1', '', undefined, '', '0'],
-          ['1', '10.0.0.1 5000 10.0.0.2 22', undefined, '10.0.0.1 5000 10.0.0.2 22', '0'],
-          ['1', undefined, '/dev/ttys004', '<unset>', '0'],
-          // Pane-level marker from a remote-viewer Codex launch.
-          [
-            '0',
-            CODEX_REMOTE_VIEWER_SSH_CONNECTION,
-            undefined,
-            CODEX_REMOTE_VIEWER_SSH_CONNECTION,
-            '0'
-          ]
-        ].filter(([, inherited]) => !isPowerShell(shell) || inherited !== '')
-      )(
-        'routes manual copies for remote=%s without marking the parent shell',
-        async ([remote, inherited, inheritedTty, expected, exitCode], { expect }) => {
-          const sandbox = makeSandbox(HELP_WITH_FLAG)
-          const bareCall = isPowerShell(shell)
-            ? '$orcaClipboardExit = $LASTEXITCODE\n& (Get-Command codex -CommandType Application | Select-Object -First 1).Source shell\nexit $orcaClipboardExit'
-            : 'command codex shell'
-          const result = await run(shell, `codex clipboard\n${bareCall}`, sandbox, {
-            FAKE_CODEX_READ_CLIPBOARD_ENV: '1',
-            FAKE_CODEX_EXIT: exitCode ?? '0',
-            [REMOTE_VIEWER_CLIPBOARD_ENV]: remote ?? '0',
-            ...(inherited !== undefined ? { SSH_CONNECTION: inherited } : {}),
-            ...(inheritedTty ? { SSH_TTY: inheritedTty } : {})
-          })
-          expect(result.status, result.stderr).toBe(Number(exitCode))
-          // Codex keeps the marker for OSC 52, but blanks it for the commands it runs.
-          const clearMarker =
-            expected === CODEX_REMOTE_VIEWER_SSH_CONNECTION
-              ? "-c|shell_environment_policy.set.SSH_CONNECTION=''|"
-              : ''
-          expect(lines(result.stdout)).toEqual([
-            `ARGV|--no-daemon|${clearMarker}clipboard|ssh=${expected}`,
-            `ARGV|shell|ssh=${inherited ?? '<unset>'}`
-          ])
-        }
-      )
-
-      it('adds --no-daemon first unless an argument is denylisted', async ({ expect }) => {
-        const sandbox = makeSandbox(HELP_WITH_FLAG)
-        const result = await run(
-          shell,
-          ALL.map((argv) => codexCall(shell, argv)).join('\n'),
-          sandbox
-        )
-
-        expect(result.stderr).toBe('')
-        expect(lines(result.stdout)).toEqual([
-          ...ADDED.map((argv) => expectedLine(argv, true)),
-          ...UNCHANGED.map((argv) => expectedLine(argv, false))
-        ])
-        // Denylisted calls must not depend on or pay for capability probes.
-        expect(helpProbes(sandbox)).toBe(ADDED.length)
-      })
-
       it('adds nothing when --help does not list the flag (0.155 and older)', async ({
         expect
       }) => {

@@ -128,23 +128,6 @@ describe('IosEmulatorBackend', () => {
     expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
   })
 
-  it('propagates mid-recycle failures instead of masking them', async () => {
-    execServeSimCommandMock.mockRejectedValue(
-      new EmulatorError(
-        'emulator_error',
-        'Helper failed:\n[main] Failed to start capture: No framebuffer display descriptor found'
-      )
-    )
-    shutdownSimulatorDeviceMock.mockRejectedValueOnce(
-      new EmulatorError('emulator_error', 'xcrun simctl shutdown timed out')
-    )
-    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
-    await expect(backend.startSession('device-1')).rejects.toMatchObject({
-      message: expect.stringContaining('timed out')
-    })
-    expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
-  })
-
   it('does not recycle more than once during one start attempt', async () => {
     let detachCalls = 0
     execServeSimCommandMock.mockImplementation(

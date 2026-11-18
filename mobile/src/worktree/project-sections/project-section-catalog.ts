@@ -2,11 +2,11 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import { filterProjectGroupsForVisibleHosts } from '../../../../src/shared/sidebar-list/hosts/host-filtering'
 import { getLogicalRepoOrderRankById } from '../../../../src/shared/sidebar-list/sections/project-section-order'
-import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
+import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import type { ServedProjectSections } from '../../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import {
   NO_PROJECT_SECTION_CATALOG,

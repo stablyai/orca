@@ -7,8 +7,8 @@ import { agentJournalLinkageFields } from '../../../shared/agent-session/journal
 import {
   agentSessionPromptQuestions,
   legacyAgentSessionQuestionAnswers
-} from '../../../shared/agent-session/agent-session-question-answer'
-import { nativeChatReceiptAnswers } from '../../../shared/native-chat/native-chat-resolution-receipt'
+} from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
+import { nativeChatReceiptAnswers } from '../../../shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 

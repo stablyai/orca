@@ -7,7 +7,7 @@ import {
   CLI_GLOBAL_FLAGS,
   CLI_GLOBAL_VALUE_FLAGS,
   findCliCommandIndex
-} from '../../shared/cli-argument-boundary'
+} from '../../shared/cli/cli-argument-boundary'
 
 export type ParsedArgs = {
   commandPath: string[]
@@ -87,7 +87,11 @@ export function parseArgs(
     }
 
     const flag = assignment
-    if (BOOLEAN_FLAGS.has(flag)) {
+    const spec = specForPathPrefix(specs, commandPath)
+    const isBoolean = spec?.valueFlags?.includes(flag)
+      ? false
+      : BOOLEAN_FLAGS.has(flag) || spec?.booleanFlags?.includes(flag) === true
+    if (isBoolean) {
       flagEntries.push([flag, true])
       continue
     }

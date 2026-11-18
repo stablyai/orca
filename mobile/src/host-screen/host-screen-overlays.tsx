@@ -17,6 +17,7 @@ import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options/workspace-options-sheet'
+import { HostNewBotSheet } from './host-new-bot-sheet'
 import { WorkspaceDetailsSheet } from './workspace-actions/workspace-details-sheet'
 import { WorkspaceRenameSheet } from './workspace-actions/workspace-rename-sheet'
 import type { HostScreenController } from './use-host-screen-controller'
@@ -55,6 +56,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
   return (
     <>
       <WorkspaceOptionsSheet controller={controller} />
+      <HostNewBotSheet controller={controller} />
 
       {/* iOS cannot present over a closing sibling Modal; delete's confirm, trust prompt and failure share one. */}
       <BottomDrawerModalHost>
@@ -150,20 +152,21 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                         icon: Edit3,
                         onPress: () => setRenameTarget(actionTarget)
                       },
-                      // Server sleep is not offered yet; the desktop would sleep its own id.
-                      ...(actionServer.server
-                        ? []
-                        : [
-                            {
-                              id: 'sleep',
-                              label: t('hostScreen.hostScreenOverlays.sleep', 'Sleep'),
-                              icon: Moon,
-                              onPress: () => {
-                                actions.putWorktreeToSleep(actionTarget)
-                                state.setActionTarget(null)
-                              }
-                            }
-                          ]),
+                      {
+                        id: 'sleep',
+                        label: t('hostScreen.hostScreenOverlays.sleep', 'Sleep'),
+                        icon: Moon,
+                        // Like desktop, greyed out with nothing to sleep; older hosts omit the fact.
+                        disabled:
+                          actionTarget.hasHostSidebarActivity === false ||
+                          (actionServer.server !== null &&
+                            (actionServer.routeHost === null ||
+                              actionServer.server.state !== 'connected')),
+                        onPress: () => {
+                          actions.putWorktreeToSleep(actionTarget)
+                          state.setActionTarget(null)
+                        }
+                      },
                       {
                         id: 'togglePin',
                         label: isWorktreePinned(actionTarget, state.pinnedIds)

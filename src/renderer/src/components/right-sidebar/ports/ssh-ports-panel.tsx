@@ -18,15 +18,7 @@ import { SshForwardedPortRow } from './ssh-forwarded-port-row'
 import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import { SshDetectedPortRow } from './ssh-detected-port-row'
 import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
-
-// Normalize loopback aliases only for deduplication across detected and forwarded ports.
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
-function normalizeHost(host: string | undefined): string {
-  if (!host || LOOPBACK_HOSTS.has(host)) {
-    return 'localhost'
-  }
-  return host
-}
+import { portForwardKey, portForwardRemoteHost } from './port-forward-remote-host'
 
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
 
@@ -55,7 +47,7 @@ export function SshPortsPanel({
   const forwardedKeys = useMemo(() => {
     const set = new Set<string>()
     for (const f of allForwards) {
-      set.add(`${normalizeHost(f.remoteHost)}:${f.remotePort}`)
+      set.add(portForwardKey(f.remoteHost, f.remotePort))
     }
     return set
   }, [allForwards])
@@ -63,7 +55,7 @@ export function SshPortsPanel({
   const allDetected = useMemo(() => {
     const ports = detectedPortsByConnection[activeConnectionId] ?? []
     return ports
-      .filter((p) => !forwardedKeys.has(`${normalizeHost(p.host)}:${p.port}`))
+      .filter((p) => !forwardedKeys.has(portForwardKey(p.host, p.port)))
       .map((p) => ({ ...p, targetId: activeConnectionId }))
       .sort((a, b) => a.port - b.port)
   }, [detectedPortsByConnection, activeConnectionId, forwardedKeys])
@@ -77,7 +69,7 @@ export function SshPortsPanel({
       mode: 'add',
       defaults: {
         remotePort: port.port,
-        remoteHost: normalizeHost(port.host),
+        remoteHost: portForwardRemoteHost(port.host),
         label: port.processName,
         targetId: port.targetId
       }

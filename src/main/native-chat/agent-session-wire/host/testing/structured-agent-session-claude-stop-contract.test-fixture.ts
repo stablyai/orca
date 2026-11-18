@@ -6,7 +6,7 @@ import type { AgentStatusStructuredSessionSubject } from '../../../../../shared/
 import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import { runClaudeControl } from '../../../../claude/sdk-transport/claude-agent-sdk-control-requests'
 import { ClaudeStructuredSessionAdapter } from '../../../../claude/structured/claude-structured-session-adapter'
-import type { ClaudeStructuredSessionEvent } from '../../../../claude/structured/claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from '../../../../claude/structured/lifecycle/claude-structured-session-event'
 import {
   fakeClaude,
   PROVIDER_SESSION_ID
@@ -141,7 +141,11 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
+  // Why 10s, as the actions fixture waits: under a loaded CI runner attach outlasts the 1s default.
+  await vi.waitFor(
+    () => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'),
+    { timeout: 10_000 }
+  )
   await Promise.all(lifecycle)
 })
 

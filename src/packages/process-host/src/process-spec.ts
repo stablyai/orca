@@ -30,9 +30,9 @@ export type ProcessSpec = {
   stdio?: NodeSpawnOptions['stdio']
   /** Bun and Node require JSON for an IPC channel shared between the two runtimes. */
   serialization?: NodeSpawnOptions['serialization']
-  /** Await tree termination or observed root exit, then settle at the final deadline if unverified. */
+  /** Native POSIX stops require group proof; the final caller deadline never releases physical ownership. */
   terminationBarrier?: boolean | ProcessTerminationBarrier
-  /** Called once when the child exits or tree termination is verified. */
+  /** Normal close or verified termination; native POSIX close after stop alone is insufficient. */
   onChildTerminated?: () => void
   /** Every raw stderr chunk as it arrives, including any past the capture cap. */
   onStderr?: (chunk: Buffer | string) => void

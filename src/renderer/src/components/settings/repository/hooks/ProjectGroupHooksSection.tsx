@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { GroupHookCheckResult } from '../../../../../../shared/project/groups/project-group-hooks'
 import { projectGroupHookOwner } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
@@ -21,7 +21,7 @@ import { groupHookYamlPresentation } from './repository-hook-settings-draft'
 import type {
   ProjectGroupHookSupport,
   ProjectGroupSettingsEntry
-} from '@/hooks/use-supported-group-hook-settings'
+} from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
 
 export function ProjectGroupHooksSection({
   group

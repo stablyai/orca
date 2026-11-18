@@ -17,7 +17,7 @@ import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folders/folder-workspace-lanes'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/sidebar-list/hosts/folder-workspace-host-id'

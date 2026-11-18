@@ -7,8 +7,10 @@ import {
   COMPAT_SLOT_ADDONS,
   findSlotProblems,
   isCompatSlot,
-  readManifest
+  readManifest,
+  slotNeedsProviderExec
 } from './orcad-prebuild-slot-contents.mjs'
+import { ORCAD_PROVIDER_EXEC_SLOT_FILE } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { ensurePinnedNodeExecutable } from './pinned-node-downloads.mjs'
 import { runProcessSync } from '@orca/process-host'
 
@@ -66,7 +68,21 @@ export async function runOrcadPrebuildSmoke({ slot, prebuildsDir }) {
       `[orcad-prebuilds] ${slot} smoke failed under pinned Node ${NODE_RUNTIME_PIN.version} (exit ${result.code}${result.timedOut ? ', timed out' : ''})`
     )
   }
+  if (slotNeedsProviderExec(slot)) {
+    smokeProviderExec(slot, join(prebuildsDir, slot, ...ORCAD_PROVIDER_EXEC_SLOT_FILE.split('/')))
+  }
   console.log(
     `[orcad-prebuilds] ${slot} loads and spawns under pinned Node ${NODE_RUNTIME_PIN.version}`
   )
+}
+
+// Exit 64 is its own argv refusal, so the slot's loader and libc ran it on this host.
+function smokeProviderExec(slot, helper) {
+  chmodSync(helper, 0o755)
+  const result = runProcessSync({ program: helper, args: [], timeoutMs: 10_000 })
+  if (result.code !== 64) {
+    throw new Error(
+      `[orcad-prebuilds] ${slot} provider exec helper did not run (exit ${result.code}${result.timedOut ? ', timed out' : ''})`
+    )
+  }
 }

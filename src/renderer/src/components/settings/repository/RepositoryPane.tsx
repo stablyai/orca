@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
-import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
+import type {
+  OrcaHooks,
+  RepoHookSettings
+} from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -9,7 +12,8 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+// oxfmt-ignore
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { Label } from '../../ui/label'
 import { useShallow } from 'zustand/react/shallow'
 import { RepositoryHooksSection } from './hooks/RepositoryHooksSection'

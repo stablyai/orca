@@ -3,8 +3,8 @@ import { OrcaRuntimeWithBrowserWorkspaceRouting } from '../../browser/client-pag
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceSelector
-} from '../../../../shared/floating-workspace-worktree'
-import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
+} from '../../../../shared/workspace/identity/floating-workspace-worktree'
+import { resolveFloatingTerminalCwd } from '../../../ipc/worktrees/floating-workspace-directory'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import {
   type ExecutionHostId,
@@ -12,7 +12,7 @@ import {
   getConnectionExecutionHostId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { resolveRuntimeBrowserNetworkExecutionHost } from '../../browser/network/runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
@@ -32,7 +32,7 @@ import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-
 import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
 
 import type { ResolvedTerminalWorkspaceLaunchTarget } from './terminal-workspace-launch-target'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
 import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../../shared/worktree/id'
@@ -136,7 +136,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   async resolveTerminalWorkspaceLaunchScope(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {},
+    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace
   ): Promise<TerminalWorkspaceLaunchScope> {
@@ -154,7 +154,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   protected async resolveTerminalWorkspaceLaunchTarget(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {},
+    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace,
     checkPath = true
@@ -177,7 +177,8 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       selector,
       options,
       resolvedFolder,
-      checkPath
+      // A read must not touch the disk: a WSL UNC path would start its distro.
+      checkPath && !options.readOnly
     )
     if (folderScope) {
       return {
@@ -202,7 +203,8 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
     triggerTerminalSpawnPushTargetMaterialization(
       worktree.path,
-      worktree.pushTarget,
+      // A read must not add remotes or fetch; only a spawn prepares the push target.
+      options.readOnly ? undefined : worktree.pushTarget,
       repo,
       this.store,
       worktree.repoId,

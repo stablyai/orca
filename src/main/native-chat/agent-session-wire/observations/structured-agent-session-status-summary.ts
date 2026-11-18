@@ -21,6 +21,7 @@ import type {
 } from './structured-agent-session-status-feed-deps'
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
+import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
 
 export function structuredAgentSessionStatusSummary({
   sessionId,
@@ -31,6 +32,7 @@ export function structuredAgentSessionStatusSummary({
   stopping,
   starting,
   usageLimitContinue,
+  runningPermissionMode,
   childWork,
   namingFailure,
   now
@@ -49,12 +51,14 @@ export function structuredAgentSessionStatusSummary({
   state: StructuredAgentSessionStatusState
   starting?: boolean
   usageLimitContinue?: AgentSessionStatusSummary['usageLimitContinue']
+  runningPermissionMode?: string
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
   now: () => number
 }): AgentSessionStatusSummary {
-  const projected = state.summary
+  const { openAsyncQuestion, ...projected } = state.summary
+  const skippedThrough = record?.asyncQuestionsSkippedThrough
   const providerSession = structuredAgentSessionProviderSessionMetadata(record)
   // Acknowledged record options remain authoritative across model switches.
   const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
@@ -78,6 +82,10 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(session.restartResume ? { restartResume: { phase: session.restartResume.phase } } : {}),
     ...projected,
+    ...(structuredAgentSessionAwaitsAnswer(openAsyncQuestion, skippedThrough)
+      ? { awaitsAnswer: true as const }
+      : {}),
+    ...(skippedThrough ? { asyncQuestionsSkippedThrough: skippedThrough } : {}),
     runtimePermission: structuredAgentSessionRuntimePermission(session.child ?? undefined),
     // Only a working session is still being stopped; any other status already ended that work.
     ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),
@@ -86,6 +94,12 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(model ? { model } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
+    ...(session.child?.permissionMode
+      ? {
+          launchPermissionMode: session.child.permissionMode,
+          runningPermissionMode: runningPermissionMode ?? session.child.permissionMode
+        }
+      : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
     ...(serviceTier ? { serviceTier } : {}),

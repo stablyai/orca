@@ -265,21 +265,28 @@ describe('reconcileCodexHooks', () => {
     expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
-  it('never makes a launch wait for startAfter', async () => {
-    writeHooks({ Stop: [olderBuildStop()] })
-    startCodexHooks({
-      isEnabled: () => enabled,
-      resolveLaunchHome: () => null,
-      pathReady: Promise.resolve(),
-      startAfter: new Promise<void>(() => {})
-    })
+  it.each(['managed chat', 'terminal pane'] as const)(
+    'never makes a %s launch wait for startAfter',
+    async (launch) => {
+      writeHooks({ Stop: [olderBuildStop()] })
+      startCodexHooks({
+        isEnabled: () => enabled,
+        resolveLaunchHome: () => null,
+        pathReady: Promise.resolve(),
+        startAfter: new Promise<void>(() => {})
+      })
 
-    await reconcileCodexHooksForLaunch()
+      if (launch === 'terminal pane') {
+        scheduleCodexHookReconcile()
+        await _internals.settledForTesting()
+      } else {
+        await reconcileCodexHooksForLaunch()
+      }
 
-    expect(mocks.realHomeRuns).toBe(1)
-    // The launch takes the startup run, so app start's conversion still happens.
-    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
-  })
+      // The launch takes the startup run, so app start's conversion still happens.
+      expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+    }
+  )
 
   it('rechecks a spawn that lands while a run is still finding Codex, which may miss a fresh install', async () => {
     const installed = mocks.codexPath
@@ -303,8 +310,8 @@ describe('reconcileCodexHooks', () => {
     await start()
     rmSync(hooksPath())
     const old = mocks.codexPath
-    // New bytes make the lookup ask this binary again.
-    writeFileSync(old, 'codex 0.161.0')
+    // A new size makes the lookup ask this binary again; same-size bytes can keep a coarse filesystem clock's mtime.
+    writeFileSync(old, 'codex 0.161.0 upgraded')
     const probe = Promise.withResolvers<string | null>()
     mocks.probeCodexVersion.mockReturnValueOnce(probe.promise)
     const probesBefore = mocks.probeCodexVersion.mock.calls.length

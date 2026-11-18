@@ -6,8 +6,8 @@ import type {
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDeleteState } from '../../../../store/slices/worktrees/teardown/worktree-delete-state-types'
-import { normalizeRelativePath } from '../../../../../../shared/cross-platform-path'
-import { buildStatusMap } from '../../../../lib/source-control/paths/git-path-decoration'
+import { normalizeRelativePath } from '../../../../../../shared/file-access/cross-platform-path'
+import { buildStatusMap } from '../../../../../../shared/git/status/git-path-decoration'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
@@ -16,18 +16,33 @@ export type DeleteWorktreeChangeCheckState = 'checking' | 'complete' | 'unavaila
 type DeleteWorktreeStatusInput<Entry> = {
   deleteTargets: readonly Worktree[]
   gitStatusByWorktree: Record<string, readonly Entry[] | undefined>
+  gitStatusReadErrorByWorktree: Record<string, string | undefined>
   gitStatusByWorktreeIdentity?: ReadonlyMap<string, readonly Entry[] | null>
   repoMap: ReadonlyMap<string, Repo>
+}
+
+export function getTrustedStoreGitStatus<Entries>(
+  item: Worktree,
+  store: {
+    gitStatusByWorktree: Record<string, Entries | undefined>
+    gitStatusReadErrorByWorktree: Record<string, string | undefined>
+  }
+): Entries | undefined {
+  // Why: after a failed refresh the store keeps the last known entries, which may be stale.
+  if (item.hostId || store.gitStatusReadErrorByWorktree[item.id] !== undefined) {
+    return undefined
+  }
+  return store.gitStatusByWorktree[item.id]
 }
 
 function getStatusEntries<Entry>(
   item: Worktree,
   input: DeleteWorktreeStatusInput<Entry>
 ): readonly Entry[] | null | undefined {
-  return item.hostId
-    ? input.gitStatusByWorktreeIdentity?.get(getWorktreeHostIdentity(item))
-    : (input.gitStatusByWorktree[item.id] ??
-        input.gitStatusByWorktreeIdentity?.get(getWorktreeHostIdentity(item)))
+  return (
+    getTrustedStoreGitStatus(item, input) ??
+    input.gitStatusByWorktreeIdentity?.get(getWorktreeHostIdentity(item))
+  )
 }
 
 export function getDeleteWorktreeChangeCheckStates(
@@ -71,35 +86,22 @@ export function orderDeleteWorktreeStatusHydrationTargets({
     .map(({ target }) => target)
 }
 
-export function getDeleteWorktreeDirtyChangeCounts({
-  deleteTargets,
-  deleteStateByWorktreeId,
-  gitStatusByWorktree,
-  gitStatusByWorktreeIdentity,
-  repoMap
-}: {
-  deleteTargets: readonly Worktree[]
-  deleteStateByWorktreeId: Record<string, WorktreeDeleteState | undefined>
-  gitStatusByWorktree: Record<string, readonly unknown[] | undefined>
-  gitStatusByWorktreeIdentity?: ReadonlyMap<string, readonly unknown[] | null>
-  repoMap: ReadonlyMap<string, Repo>
-}): Map<string, number> {
+export function getDeleteWorktreeDirtyChangeCounts(
+  input: DeleteWorktreeStatusInput<unknown> & {
+    deleteStateByWorktreeId: Record<string, WorktreeDeleteState | undefined>
+  }
+): Map<string, number> {
   const result = new Map<string, number>()
-  for (const item of deleteTargets) {
-    if (item.isMainWorktree || isFolderWorkspaceDelete(repoMap, item)) {
+  for (const item of input.deleteTargets) {
+    if (item.isMainWorktree || isFolderWorkspaceDelete(input.repoMap, item)) {
       continue
     }
     const resultKey = item.hostId ? getWorktreeHostIdentity(item) : item.id
     const forceDeleteReason = getDeleteStateForWorktreeHost(
       item,
-      deleteStateByWorktreeId
+      input.deleteStateByWorktreeId
     )?.forceDeleteReason
-    const changeCount = getStatusEntries(item, {
-      deleteTargets,
-      gitStatusByWorktree,
-      gitStatusByWorktreeIdentity,
-      repoMap
-    })?.length
+    const changeCount = getStatusEntries(item, input)?.length
     if ((changeCount ?? 0) > 0) {
       result.set(resultKey, changeCount ?? 0)
     } else if (forceDeleteReason === 'dirty') {
@@ -140,29 +142,16 @@ export function getDeleteWorktreeDirtyChangePreview(
   return { files, remainingPathCount: statusByPath.size - files.length }
 }
 
-export function getDeleteWorktreeDirtyChangePreviews({
-  deleteTargets,
-  gitStatusByWorktree,
-  gitStatusByWorktreeIdentity,
-  repoMap
-}: {
-  deleteTargets: readonly Worktree[]
-  gitStatusByWorktree: Record<string, readonly GitStatusEntry[] | undefined>
-  gitStatusByWorktreeIdentity?: ReadonlyMap<string, readonly GitStatusEntry[] | null>
-  repoMap: ReadonlyMap<string, Repo>
-}): Map<string, DeleteWorktreeDirtyChangePreview> {
+export function getDeleteWorktreeDirtyChangePreviews(
+  input: DeleteWorktreeStatusInput<GitStatusEntry>
+): Map<string, DeleteWorktreeDirtyChangePreview> {
   const result = new Map<string, DeleteWorktreeDirtyChangePreview>()
-  for (const item of deleteTargets) {
-    if (item.isMainWorktree || isFolderWorkspaceDelete(repoMap, item)) {
+  for (const item of input.deleteTargets) {
+    if (item.isMainWorktree || isFolderWorkspaceDelete(input.repoMap, item)) {
       continue
     }
     const resultKey = item.hostId ? getWorktreeHostIdentity(item) : item.id
-    const entries = getStatusEntries(item, {
-      deleteTargets,
-      gitStatusByWorktree,
-      gitStatusByWorktreeIdentity,
-      repoMap
-    })
+    const entries = getStatusEntries(item, input)
     if (entries?.length) {
       result.set(resultKey, getDeleteWorktreeDirtyChangePreview(entries))
     }

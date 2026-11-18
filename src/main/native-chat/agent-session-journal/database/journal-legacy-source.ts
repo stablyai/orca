@@ -52,3 +52,95 @@ function tableNames(db: Database.Database): string[] {
     .all()
     .map(({ name }) => String(name))
 }
+
+/**
+ * Where an original chat's history stands: its epoch, input tip and outcome coverage. Every turn an
+ * older Orca saves moves one of them, so an unchanged value means nothing new was written.
+ */
+export function journalLegacyChatRevision(
+  source: Database.Database,
+  sessionId: string
+): string | null {
+  const session = source
+    .prepare('SELECT epoch FROM journal_sessions WHERE session_id=?')
+    .get(sessionId)
+  if (!session) {
+    return null
+  }
+  const tip = source
+    .prepare(
+      'SELECT seq FROM journal_rows WHERE session_id=? AND epoch=? ORDER BY seq DESC LIMIT 1'
+    )
+    .get(sessionId, session.epoch)
+  const outcomes = source
+    .prepare(
+      'SELECT generation,through_seq FROM journal_outcome_epochs WHERE session_id=? AND epoch=?'
+    )
+    .get(sessionId, session.epoch)
+  return JSON.stringify([
+    session.epoch,
+    tip?.seq ?? 0,
+    outcomes?.generation ?? null,
+    outcomes?.through_seq ?? null
+  ])
+}
+
+/** The original chat revision whose turns this file already shows, keyed by the original's id. */
+export function journalLegacyChatRevisionKey(sessionId: string): string {
+  return `journal.legacy-revision:${sessionId}`
+}
+
+/** Absorbing a revision clears any failure an earlier one recorded. */
+export function recordJournalLegacyChatRevision(
+  db: Database.Database,
+  sessionId: string,
+  revision: string
+): void {
+  db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
+    journalLegacyChatRevisionKey(sessionId),
+    revision
+  )
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(
+    journalLegacyFailureKey(sessionId)
+  )
+}
+
+/** A chat, or a copy's history, that could not be kept, with its error; not retried by itself. */
+export function journalLegacyFailureKey(sessionId: string): string {
+  return `journal.legacy-failed:${sessionId}`
+}
+
+/** A copy kept for an original chat an older Orca continued converts its history from that chat. */
+export function journalLegacyCopySourceKey(copyId: string): string {
+  return `journal.legacy-copy-source:${copyId}`
+}
+
+/** The original chat a copy converts from, or the chat itself. */
+export function journalLegacyConversionSource(db: Database.Database, sessionId: string): string {
+  const row = db
+    .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+    .get(journalLegacyCopySourceKey(sessionId))
+  return row === undefined ? sessionId : String(row.value)
+}
+
+/** The copy kept for an original chat that hasn't converted here yet. */
+export function journalLegacyPendingCopyKey(sessionId: string): string {
+  return `journal.legacy-pending-copy:${sessionId}`
+}
+
+/** Once a copy is ready here its history no longer reads from the original. */
+export function settleJournalLegacyCopy(db: Database.Database, copyId: string): void {
+  const key = journalLegacyCopySourceKey(copyId)
+  const original = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)
+  if (original === undefined) {
+    return
+  }
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key IN (?,?)').run(
+    key,
+    journalLegacyFailureKey(copyId)
+  )
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key=? AND value=?').run(
+    journalLegacyPendingCopyKey(String(original.value)),
+    copyId
+  )
+}

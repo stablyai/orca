@@ -118,6 +118,8 @@ export class RuntimeBrowserTabClose {
       }
       if (explicitPage && !bridge.getRegisteredTabs(worktreeId).has(resolvedTabId)) {
         if (this.targets.retireGhostBrowserSessionRow(worktreeId, resolvedTabId)) {
+          // A freed page keeps its history and downloads in the backend until closed there too.
+          await offscreen.closeTab(resolvedTabId)
           return { closed: true }
         }
         const scope = worktreeId ? ' in this worktree' : ''

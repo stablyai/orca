@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import type { BrowserCookieImportSummary } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import { isHandledWireDiscriminant } from '../../../../../shared/handled-wire-discriminant'
+import { isHandledWireDiscriminant } from '../../../../../shared/rpc-contract/handled-wire-discriminant'
 import { translate } from '@/i18n/i18n'
 
 type CookieImportWarning = NonNullable<BrowserCookieImportSummary['warning']>

@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { resolveProviderChildEnv, type ProviderProcessLaunch } from './provider-process-launch'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
 
@@ -16,7 +18,10 @@ export const PROVIDER_GROUP_REAP_TIMEOUT_MS = 1_500
 export const PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS = 1_000
 /** Wrapper stop budget; killing it before both graces and reap finish can orphan the group. */
 export const PROVIDER_SUPERVISOR_MAX_STOP_MS =
-  PROVIDER_STDIN_END_GRACE_MS + PROVIDER_SIGTERM_GRACE_MS + PROVIDER_GROUP_REAP_TIMEOUT_MS
+  PROVIDER_STDIN_END_GRACE_MS +
+  PROVIDER_SIGTERM_GRACE_MS +
+  PROVIDER_GROUP_REAP_TIMEOUT_MS +
+  PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS
 
 /** Inline supervisor source kept dependency-free for the spawned Node child. */
 export const POSIX_PROVIDER_SUPERVISOR_SCRIPT = `
@@ -206,7 +211,7 @@ const PROVIDER_ONLY_NODE_ENV_KEYS = ['NODE_OPTIONS', 'NODE_REPL_EXTERNAL_MODULE'
 
 // A longer grace than the max stop allows would let recovery or close SIGKILL mid-stop.
 function assertGraceWithin(name: string, graceMs: number, maxMs: number): void {
-  if (!(graceMs >= 0 && graceMs <= maxMs)) {
+  if (!Number.isInteger(graceMs) || graceMs < 0 || graceMs > maxMs) {
     throw new RangeError(`Provider supervisor ${name} grace ${graceMs} ms is outside 0-${maxMs} ms`)
   }
 }
@@ -264,38 +269,62 @@ export function supervisedPosixLaunch(
   }
 }
 
+export function resolveProviderExecPath(platform: NodeJS.Platform = process.platform): string {
+  const app = getAppEnvironment()
+  if (!app.isPackaged()) {
+    return join(
+      app.getAppPath(),
+      'native/provider-exec/.build',
+      `${platform}-${process.arch}`,
+      'orca-provider-exec'
+    )
+  }
+  if (process.resourcesPath) {
+    return platform === 'darwin'
+      ? join(process.resourcesPath, '..', 'MacOS', 'orca-provider-exec')
+      : join(process.resourcesPath, 'bin', 'orca-provider-exec')
+  }
+  return join(app.getAppPath(), 'bin', 'orca-provider-exec')
+}
+
 export function createProviderSpawnSpec(
   launch: ProviderProcessLaunch,
   baseEnv: NodeJS.ProcessEnv,
   platform: NodeJS.Platform,
-  { lifetime, closeRequest }: Pick<ProviderSupervisorOptions, 'lifetime' | 'closeRequest'> = {}
-): {
-  program: string
-  args: string[]
-  env: NodeJS.ProcessEnv
-  cwd: string
-  detached: boolean
-  /** The child is the supervisor, whose SIGTERM stops the provider and then itself. */
-  supervised: boolean
-  /** IPC group-report channel appended after stdin/stdout/stderr. */
-  groupReportStdio: [] | ['ipc']
-} {
-  const childEnv = resolveProviderChildEnv(launch, baseEnv)
-  const supervisor =
-    platform === 'win32'
-      ? null
-      : supervisedPosixLaunch(
-          { command: launch.command, args: launch.args, cwd: launch.cwd },
-          childEnv,
-          { lifetime, closeRequest }
-        )
+  {
+    lifetime = 'session',
+    closeRequest = 'stdin-end-and-sigterm',
+    stdinEndGraceMs = PROVIDER_STDIN_END_GRACE_MS,
+    sigtermGraceMs = PROVIDER_SIGTERM_GRACE_MS
+  }: ProviderSupervisorOptions = {}
+) {
+  assertGraceWithin('stdin-end', stdinEndGraceMs, PROVIDER_STDIN_END_GRACE_MS)
+  assertGraceWithin('SIGTERM', sigtermGraceMs, PROVIDER_SIGTERM_GRACE_MS)
+  const supervised = platform !== 'win32'
   return {
-    program: supervisor?.command ?? launch.command,
-    args: supervisor?.args ?? launch.args,
-    env: supervisor?.env ?? childEnv,
+    program: supervised ? resolveProviderExecPath(platform) : launch.command,
+    args: supervised
+      ? [
+          '--cli-input-fd7',
+          String(stdinEndGraceMs),
+          String(sigtermGraceMs),
+          lifetime,
+          closeRequest,
+          '--',
+          launch.command,
+          ...launch.args
+        ]
+      : launch.args,
+    command: launch.command,
+    env: resolveProviderChildEnv(launch, baseEnv),
     cwd: launch.cwd ?? process.cwd(),
-    detached: platform !== 'win32',
-    supervised: supervisor !== null,
-    groupReportStdio: supervisor ? ['ipc'] : []
+    detached: supervised,
+    supervised,
+    lifetime,
+    closeRequest,
+    stdinEndGraceMs,
+    sigtermGraceMs
   }
 }
+
+export type ProviderSpawnSpec = ReturnType<typeof createProviderSpawnSpec>

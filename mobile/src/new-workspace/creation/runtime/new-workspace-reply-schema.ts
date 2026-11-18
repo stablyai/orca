@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { SetupRunPolicy } from '../../../../../src/shared/orca-yaml-hook-types'
+import type { SetupRunPolicy } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import {
   hostUnionArms,
   salvagedOptional,
@@ -32,7 +32,10 @@ export const newWorkspaceRepoHooksSchema = z.looseObject({
   ),
   source: z.string().nullable(),
   setupRunPolicy: salvagedOptional('setupRunPolicy', z.enum(SETUP_RUN_POLICIES)),
-  setupConfig: salvagedOptional('setupConfig', z.looseObject({ command: z.string() }).nullable()),
+  setupConfig: salvagedOptional(
+    'setupConfig',
+    z.looseObject({ command: z.string(), kind: salvagedOptional('kind', z.string()) }).nullable()
+  ),
   setupTrust: salvagedOptional(
     'setupTrust',
     z.looseObject({ contentHash: z.string(), scriptContent: z.string() }).nullable()

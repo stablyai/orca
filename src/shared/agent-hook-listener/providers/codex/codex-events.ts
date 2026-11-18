@@ -42,6 +42,7 @@ import {
   setCodexMainAgentTurnState
 } from './codex-state'
 import { pendingCodexAsyncQuestion, trackCodexAsyncQuestions } from './codex-async-questions'
+import { reviewerEvidenceDeferred } from './codex-rollout-prefetch-scope'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -149,7 +150,8 @@ function resolveCodexApprovalOwnedState(
   transcriptPath: string | undefined,
   stateName: 'working' | 'waiting' | 'done'
 ): 'working' | 'waiting' | 'done' {
-  if (stateName !== 'waiting' || eventName !== 'PermissionRequest') {
+  // Unread rollout bytes may hold a newer reviewer; show the prompt rather than risk hiding a human's approval.
+  if (stateName !== 'waiting' || eventName !== 'PermissionRequest' || reviewerEvidenceDeferred()) {
     return stateName
   }
   return codexTurnApprovalsAreAutoReviewed(

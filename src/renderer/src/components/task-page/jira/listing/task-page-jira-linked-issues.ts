@@ -1,7 +1,7 @@
 import type { JiraIssue } from '../../../../../../shared/jira/jira-types'
 import type { LinkedJiraIssueRef } from '@/lib/work-items/jira/jira-issue-workspace-attachment'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
-import { readLinkedTaskIssuesWithLimit } from '../../../read-linked-task-issues'
+import { readLinkedTaskIssuesWithLimit } from '../../linked-issues/read-linked-task-issues'
 import { createTaskPageJiraLoadFailureState } from './task-page-jira-load-state'
 import { translate } from '@/i18n/i18n'
 

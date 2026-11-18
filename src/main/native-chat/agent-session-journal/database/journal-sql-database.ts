@@ -2,7 +2,7 @@ import { JournalSqlForkCopy } from '../journal-sql-fork-copy'
 import type { JournalForkPreparationInput } from '../journal-fork-preparation'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { AgentSessionTabTable } from '../../../runtime/agent-session/agent-session-tab-table'
+import { agentSessionTabTableFromStored } from '../../../runtime/agent-session/records/agent-session-tab-table'
 import type { AgentSessionStoreState } from '../../../runtime/agent-session/records/agent-session-store-state'
 import { JournalSqlOwner } from '../journal-sql-owner'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
@@ -15,8 +15,7 @@ import type { JournalWriterEffect, JournalWriterEffectResult } from '../journal-
 import type { CommandReceiptScope } from '../writing/command-receipt-schema'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 import { assertJournalChatReadable } from '../replay/journal-open-failure'
-import { journalDatabasePath } from './journal-host-database'
-import { journalDomainDatabasePath } from './journal-domain-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import type { JournalSqlStoredRecords } from '../journal-sql-database-read'
 
 /** The runtime owns workers, never a writable connection or a retained chat projection. */
@@ -173,11 +172,11 @@ export class JournalSqlDatabase {
     return this.restoreRecordTabs(result.records)
   }
 
-  private restoreRecordTabs(records: JournalSqlStoredRecords): AgentSessionStoreState {
+  private restoreRecordTabs(stored: JournalSqlStoredRecords): AgentSessionStoreState {
+    const { backgroundSessions, sessionTabs, ...records } = stored
     return {
       ...records,
-      sessionTabs:
-        records.sessionTabs === null ? null : new AgentSessionTabTable(records.sessionTabs)
+      sessionTabs: sessionTabs && agentSessionTabTableFromStored(sessionTabs, backgroundSessions)
     }
   }
 
@@ -192,7 +191,16 @@ export class JournalSqlDatabase {
 
   async sessionEpoch(sessionId: string): Promise<string | null> {
     this.assertOpen()
-    return this.readEpoch(sessionId)
+    const result = await this.readers.database({ kind: 'epoch', sessionId })
+    if (result.kind !== 'epoch') {
+      throw new Error('journal reader returned no epoch')
+    }
+    return result.epoch
+  }
+
+  /** In the chat's lane: a fork install moves the physical epoch that later opens must target. */
+  rememberSessionEpoch(sessionId: string, epoch: string): void {
+    this.conversions.rememberReady(sessionId, epoch)
   }
 
   ensureSessionEpoch(sessionId: string): Promise<string | null> {
@@ -268,6 +276,12 @@ export class JournalSqlDatabase {
     })
   }
 
+  /** In the chat's lane after any conversion. Its epoch stays remembered as ready, so a conversion
+   *  page listed before the deletion returns it instead of importing the original again. */
+  forgetChat(sessionId: string, forget: () => Promise<boolean>): Promise<boolean> {
+    return this.serialize(sessionId, () => this.conversions.ensure(sessionId).then(forget))
+  }
+
   write(command: JournalWriterCommand): Promise<JournalWriterCommit> {
     return this.serialize(command.target.sessionId, () => this.writer.write(command))
   }
@@ -304,14 +318,6 @@ export class JournalSqlDatabase {
       throw error
     })
     return this.closing
-  }
-
-  private async readEpoch(sessionId: string): Promise<string | null> {
-    const result = await this.readers.database({ kind: 'epoch', sessionId })
-    if (result.kind !== 'epoch') {
-      throw new Error('journal reader returned no epoch')
-    }
-    return result.epoch
   }
 
   private assertOpen(): void {

@@ -1,7 +1,7 @@
 // Share desktop/mobile saved-conversation startups using host platform, actual shell and launch settings.
 
 import { isAntigravityReferenceSession } from '../../agent-session/lifecycle/provider-handles/antigravity-session-origin'
-import type { AiVaultAgent, AiVaultSession } from '../contracts/ai-vault-types'
+import type { AiVaultSession } from '../contracts/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand,
@@ -20,22 +20,19 @@ import {
 } from '../../agent-launch/choices/tui-agent-launch-defaults'
 import { buildAgentResumeStartupPlan } from '../../agent-launch/startup/tui-agent-resume-startup'
 import {
-  quoteStartupArg,
   resolveStartupShell,
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../agent-launch/startup/tui-agent-startup-shell'
 import {
   getTuiAgentLaunchCommand,
-  isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../agent-launch/catalog/tui-agent-config'
-import { findOptionOccurrence } from '../../command-option-occurrence'
 import { assertOpenCodeCopyUsesLocalStore } from '../../agent-launch/startup/opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../agent-session/view/structured-agent-cli-conversation-adoption'
-import type { GlobalSettings } from '../../global-settings-types'
-import { parseWslUncPath } from '../../file-access/wsl-paths'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import { managedDataAccountResumeEnv } from '../../agent-launch/environment/managed-data-account-resume'
+import { buildAntigravityReferenceStartup } from './ai-vault-antigravity-reference-startup'
 
 export type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -74,17 +71,6 @@ type AiVaultResumeStartupArgs = {
   commandOverride?: string | null
 }
 
-export function getAiVaultResumeCodexHome(
-  codexHome: string | null,
-  platform: NodeJS.Platform
-): string | null {
-  // Translate WSL UNC Codex homes to POSIX only for Linux targets.
-  if (!codexHome || platform !== 'linux') {
-    return codexHome
-  }
-  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
-}
-
 export function getAiVaultAgentProviderSession(
   session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
 ): AgentProviderSessionMetadata | null {
@@ -102,6 +88,10 @@ export function getAiVaultAgentProviderSession(
       ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
       : null
   }
+  // A Hermes row's `<store>#<id>` names the profile every resume, restore and host rebuild must pin.
+  if (session.agent === 'hermes' && session.filePath?.includes('#')) {
+    return { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
+  }
   return { key: 'session_id', id: session.sessionId }
 }
 
@@ -114,7 +104,7 @@ function resumeCommandOverrides(
   }
 }
 
-/** A resume run on the host itself: no prebuilt remote command and no Antigravity reference. */
+/** A resume run on the host itself: no prebuilt remote command. */
 export function buildAiVaultLocalResumeStartup(
   args: AiVaultResumeStartupArgs & {
     agentArgs?: string
@@ -134,6 +124,19 @@ export function buildAiVaultLocalResumeStartup(
   })
   const cwd = embedCwd ? session.cwd : null
   const startupCwd = !embedCwd && session.cwd ? { cwd: session.cwd } : {}
+  if (isAntigravityReferenceSession(session)) {
+    const reference = buildAntigravityReferenceStartup({
+      session: { sessionId: session.sessionId, filePath: resumeFilePath },
+      cwd,
+      platform,
+      shell: liveShell,
+      commandOverride: args.commandOverride,
+      settings
+    })
+    if (reference) {
+      return { ...reference, ...startupCwd }
+    }
+  }
   if (localProviderSession && isResumableTuiAgent(session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: session.agent,
@@ -254,54 +257,6 @@ export function buildAiVaultForkStartup(
     ...(session.cwd ? { cwd: session.cwd } : {}),
     launchConfig: plan.launchConfig
   }
-}
-
-/** The agent arguments a copied conversation opens with: the source chat's launch mode, then the
- *  configured arguments. */
-export function resolveAiVaultCopiedSessionAgentArgs(
-  args: AiVaultResumeStartupArgs & { sourceAgent: AiVaultAgent }
-): string {
-  const { session, settings, sourceAgent } = args
-  const { platform, liveShell } = args.host
-  const shell = resolveStartupShell(platform, liveShell)
-  const configuredArgs = isTuiAgent(session.agent)
-    ? resolveTuiAgentLaunchRawArgs(
-        session.agent,
-        settings,
-        undefined,
-        resolveStartupShell(platform, liveShell)
-      )
-    : ''
-  const configured = tokenizeStartupCommand(configuredArgs, shell)
-  if (!configured.ok) {
-    throw new Error('This session cannot be opened in the CLI.')
-  }
-  const commandOverride =
-    args.commandOverride?.trim() || settings?.agentCmdOverrides?.[session.agent]?.trim()
-  const mode =
-    sourceAgent !== session.agent &&
-    isTuiAgent(sourceAgent) &&
-    !commandOverride &&
-    !findOptionOccurrence(configured.tokens, ['--standalone'], true)
-      ? tokenizeStartupCommand(
-          getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[sourceAgent], platform),
-          shell
-        )
-      : null
-  if (mode && !mode.ok) {
-    throw new Error('This session cannot be opened in the CLI.')
-  }
-  return [
-    mode?.ok
-      ? mode.tokens
-          .slice(1)
-          .map((token) => quoteStartupArg(token, shell))
-          .join(' ')
-      : '',
-    configuredArgs
-  ]
-    .filter(Boolean)
-    .join(' ')
 }
 
 /** Check every possible chat-owning CLI before copying: OpenCode copies live in the local store and launch args must not redirect them. */

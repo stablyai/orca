@@ -4,7 +4,7 @@ import {
   getRepoExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -19,6 +19,7 @@ import {
   visibleProjectHostSetups,
   visibleRepos
 } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
+import { isBotsProjectGroup } from '../../../bots/bot-home'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 type CatalogSource = Pick<
@@ -42,7 +43,9 @@ export function runtimeVisibleRepos(store: CatalogSource | null): Repo[] {
 }
 
 export function runtimeVisibleProjectGroups(store: CatalogSource | null): ProjectGroup[] {
-  return store ? visibleProjectGroups(catalogStore(store)) : []
+  return store
+    ? visibleProjectGroups(catalogStore(store)).filter((group) => !isBotsProjectGroup(group))
+    : []
 }
 
 export function runtimeVisibleProjectHostSetups(store: CatalogSource | null): ProjectHostSetup[] {

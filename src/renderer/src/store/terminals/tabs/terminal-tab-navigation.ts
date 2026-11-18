@@ -2,7 +2,7 @@ import { resolveActiveTabOwnerWorktreeId } from '../ownership/active-tab-owner-w
 import { getTerminalTabOwnerWorktreeId } from '../ownership/terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { ownsGlobalSelection } from '../../workspaces/selection/global-selection-owner'
-import { replaceTabBuckets } from '../../keyed-record-transitions'
+import { replaceTabBuckets } from '../../record-transitions/keyed-record-transitions'
 
 export function createTerminalTabNavigationActions(
   set: TerminalStoreSet,
@@ -63,14 +63,16 @@ export function createTerminalTabNavigationActions(
         )
         const isActiveWorktreeTab =
           tabOwnerWorktreeId !== null && ownsGlobalSelection(s, tabOwnerWorktreeId)
-        return {
-          activeTabId: isActiveWorktreeTab ? tabId : s.activeTabId,
-          // Preserve map identity on redundant activation; duplicate tab IDs can prevent convergence and retrigger Terminal’s repair effect into React #185.
-          activeTabIdByWorktree:
-            tabOwnerWorktreeId !== null && s.activeTabIdByWorktree[tabOwnerWorktreeId] !== tabId
-              ? { ...s.activeTabIdByWorktree, [tabOwnerWorktreeId]: tabId }
-              : s.activeTabIdByWorktree
-        }
+        const activeTabId = isActiveWorktreeTab ? tabId : s.activeTabId
+        // Preserve map identity on redundant activation; duplicate tab IDs can prevent convergence and retrigger Terminal’s repair effect into React #185.
+        const activeTabIdByWorktree =
+          tabOwnerWorktreeId !== null && s.activeTabIdByWorktree[tabOwnerWorktreeId] !== tabId
+            ? { ...s.activeTabIdByWorktree, [tabOwnerWorktreeId]: tabId }
+            : s.activeTabIdByWorktree
+        // Unchanged selection publishes nothing; every publication wakes every store subscriber.
+        return activeTabId === s.activeTabId && activeTabIdByWorktree === s.activeTabIdByWorktree
+          ? s
+          : { activeTabId, activeTabIdByWorktree }
       })
       const state = get()
       const ownerUnifiedTabs =

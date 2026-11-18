@@ -9,7 +9,7 @@ import {
 import {
   getConnectionExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -37,6 +37,31 @@ export function getFollowUpDispatch(
   return db.db
     .prepare('SELECT * FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?')
     .get(dispatchId) as DispatchContextRow | undefined
+}
+
+/** Whether a report's task id names a Task from earlier in its Dispatch's follow-up chain, which a
+ *  worker that ran them all may still quote. Its own Task, or any other, is not. */
+export function isEarlierTaskOfDispatch(
+  db: { getDispatchContextById(dispatchId: string): DispatchContextRow | undefined },
+  dispatch: Pick<DispatchContextRow, 'id' | 'task_id' | 'follow_up_of_dispatch_id'>,
+  taskId: string
+): boolean {
+  const seen = new Set([dispatch.id])
+  for (
+    let earlier = dispatch.follow_up_of_dispatch_id
+      ? db.getDispatchContextById(dispatch.follow_up_of_dispatch_id)
+      : undefined;
+    earlier && !seen.has(earlier.id);
+    earlier = earlier.follow_up_of_dispatch_id
+      ? db.getDispatchContextById(earlier.follow_up_of_dispatch_id)
+      : undefined
+  ) {
+    if (earlier.task_id === taskId) {
+      return taskId !== dispatch.task_id
+    }
+    seen.add(earlier.id)
+  }
+  return false
 }
 
 export type WorkerLineage = {

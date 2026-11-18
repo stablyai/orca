@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/virtualized-list'
+import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/ui/virtualized-list'
 import { nativeChatTranscriptRange } from '../../viewport/virtualization/native-chat-pinned-rows'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 

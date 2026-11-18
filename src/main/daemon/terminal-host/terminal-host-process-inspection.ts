@@ -1,5 +1,5 @@
 import type { TerminalForegroundObservation } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
-import { pruneRetiredPtyIncarnations } from '../../../shared/retired-pty-incarnations'
+import { pruneRetiredPtyIncarnations } from '../../../shared/terminal/pty/lifecycle/retired-pty-incarnations'
 import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
@@ -18,7 +18,10 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
+import {
+  steadyPollJudgesByJobMembership,
+  type PtyProcessInspectionOptions
+} from '../../providers/pty/process-inspection'
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation
@@ -41,6 +44,8 @@ export async function inspectTerminalHostProcess(args: {
   foregroundOnly?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
+  /** A steady poll from a pane tracking no agent; Windows skips the Store-shell table read. */
+  jobMembershipOnly?: boolean
   ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation
   authorityGeneration: string
@@ -121,7 +126,8 @@ export async function inspectTerminalHostProcess(args: {
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     childProcessEvidence = await session.inspectChildProcesses(
       args.steadyState !== true,
-      args.ignoreDetached === true
+      args.ignoreDetached === true,
+      steadyPollJudgesByJobMembership(args, foregroundProcess)
     )
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')

@@ -4,14 +4,14 @@ import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
   NotificationSettings
-} from '../../shared/notification-settings-types'
+} from '../../shared/notifications/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { buildNotificationOptions } from '../ipc/notification-options'
+import { buildNotificationOptions } from '../ipc/notifications/notification-options'
 import { translateMain } from '../i18n/main-i18n'
-import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
+import { reserveNotificationCooldown } from '../../shared/notifications/notification-burst-cooldown'
 import { toHostSessionPaneKey } from '../../shared/workspace-layout/terminal-surface-id'
-import { isNotificationSourceEnabled } from '../../shared/notification-source-gate'
-import { notificationDeliveryId } from '../../shared/notification-delivery-id'
+import { isNotificationSourceEnabled } from '../../shared/notifications/notification-source-gate'
+import { notificationDeliveryId } from '../../shared/notifications/notification-delivery-id'
 
 type NativeNotificationReservation = {
   isCurrent: () => boolean

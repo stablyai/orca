@@ -1,7 +1,7 @@
 import type {
   DiffLineCounts,
   LargeDiffRenderLimit
-} from '../../../../../../shared/large-diff-render-limit'
+} from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 
 // Null diff results already imply clean state: dirty can only come from a mounted, loaded editor.
