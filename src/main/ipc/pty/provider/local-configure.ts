@@ -14,6 +14,7 @@ import {
 } from '../../../pty/shell-startup/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { buildPtyHostEnv } from '../host-env/assembly'
+import { detectBareShellPluginAgentsOnPath } from '../../../agent-hooks/installation/bare-shell-plugin-agent-presence'
 import { stampRuntimeSourceEnv } from '../../../../shared/remote-runtime/host-catalog/runtime-source-env'
 import { getRuntimeSourceStamp } from '../../../runtime/hosts/platform-probe/host-descriptor'
 import {
@@ -85,6 +86,10 @@ export function configureLocalPtyProvider(args: {
       launchAgent: ctx?.launchAgent,
       launchCommand: ctx?.command
     })
+    const agentStatusHooksEnabled = isAgentStatusHooksEnabled(ptySettings)
+    const agentsOnPath = agentStatusHooksEnabled
+      ? await detectBareShellPluginAgentsOnPath(ptySettings)
+      : undefined
     const env = buildPtyHostEnv(id, baseEnv, {
       isPackaged: getAppEnvironment().isPackaged(),
       resourcesPath: process.resourcesPath,
@@ -102,7 +107,8 @@ export function configureLocalPtyProvider(args: {
       shellPath: ctx?.shellPath,
       isWsl: ctx?.isWsl,
       wslDistro: ctx?.wslDistro ?? null,
-      agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+      agentStatusHooksEnabled,
+      agentsOnPath,
       claudeSubagentNavigationEnabled: ptySettings?.claudeSubagentNavigationEnabled,
       terminalInlineImages: ptySettings?.terminalInlineImages,
       disabledTuiAgents: ptySettings?.disabledTuiAgents,

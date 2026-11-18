@@ -124,7 +124,7 @@ export class RuntimeBrowserCommands {
     const queries = new RuntimeBrowserTabQueries(host, targets, catalog)
     const creation = new RuntimeBrowserTabCreation(host, targets)
     const close = new RuntimeBrowserTabClose(queries, host, targets)
-    const profiles = new RuntimeBrowserProfiles(host, targets, catalog)
+    const profiles = new RuntimeBrowserProfiles(host, targets, catalog, creation)
     const screencasts = new RuntimeBrowserScreencasts(host, targets, catalog)
     const dialogs = new RuntimeBrowserDialogs(targets)
     this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)

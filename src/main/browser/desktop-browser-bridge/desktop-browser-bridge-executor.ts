@@ -48,10 +48,9 @@ export type DesktopBrowserBridgeExecutorDeps = {
   audit(entry: DesktopBrowserBridgeAuditEntry): void
 }
 
-// Hosts cannot choose a new tab's desktop identity, profile, group or focus.
+// Hosts cannot choose a new tab's desktop identity, group or focus.
 const TAB_CREATE_STRIPPED_PARAMS = [
   'page',
-  'profileId',
   'placement',
   'targetGroupId',
   'activate',
@@ -144,6 +143,13 @@ async function scopeRequest(
       throw new BridgeRefusal(
         'invalid_argument',
         'tab create --split is not available from an SSH host; the desktop decides where its tabs open.'
+      )
+    }
+    // Refused, not dropped: the host would otherwise believe its tab used the profile.
+    if (params.profileId !== undefined) {
+      throw new BridgeRefusal(
+        'invalid_argument',
+        'tab create --profile is not available from an SSH host; the desktop picks the profile for new tabs. Drop --profile, or open the tab on the desktop.'
       )
     }
     for (const key of TAB_CREATE_STRIPPED_PARAMS) {

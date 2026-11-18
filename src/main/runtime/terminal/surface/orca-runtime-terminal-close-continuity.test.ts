@@ -4,9 +4,13 @@ import '../../../../shared/workspace-layout/stable-pane-id'
 
 import '../../../agent-launch/agent-launch-pane-attachment'
 import {
+  LEAF_ID,
   PTY_ID,
+  REPO_ID,
   SIBLING_INCARNATION_ID,
-  WORKTREE_ID
+  TAB_ID,
+  WORKTREE_ID,
+  WORKTREE_PATH
 } from '../../__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
 import {
   createHarness,
@@ -76,4 +80,53 @@ describe('terminal close and handle incarnation continuity', () => {
   })
 })
 
-/** CLI/headless path: PTY-backed tab without a paired-viewer surface. */
+describe('explicit terminal close when the window does not confirm the tab close', () => {
+  it('still stops the PTY when the window times out, so it is not left running orphaned', async () => {
+    const harness = await createHarness()
+    harness.rejectTerminalTabClose(new Error('terminal_tab_close_timeout'))
+    const [terminal] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+
+    await expect(harness.runtime.closeTerminal(terminal.handle)).rejects.toThrow(
+      'terminal_tab_close_timeout'
+    )
+
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, expect.anything())
+  })
+
+  it('does not fall back to killing a successor that took the PTY id during the stop', async () => {
+    const harness = await createHarness({ registerPtyBacked: true })
+    harness.setCloseTerminalTabAction(() => {})
+    harness.setStopAndWaitAction(() => {
+      harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+        tabId: TAB_ID,
+        leafId: LEAF_ID,
+        incarnationId: SIBLING_INCARNATION_ID
+      })
+    })
+    const [terminal] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+
+    await harness.runtime.closeTerminal(terminal.handle)
+
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, expect.anything())
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+
+  it('still stops the workspace terminals when closing them all times out on the window', async () => {
+    const harness = await createHarness()
+    harness.rejectTerminalTabClose(new Error('terminal_tab_close_timeout'))
+    // The harness has no git worktree catalog; close-all only needs the workspace identity.
+    const worktree = { id: WORKTREE_ID, path: WORKTREE_PATH, repoId: REPO_ID }
+    Object.defineProperty(harness.runtime, 'resolveWorkspaceSelector', {
+      value: async () => worktree
+    })
+
+    await expect(harness.runtime.closeTerminalsForWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
+      'terminal_tab_close_timeout'
+    )
+
+    const stoppedPtyIds = [...harness.stopAndWait.mock.calls, ...harness.kill.mock.calls].map(
+      ([ptyId]) => ptyId
+    )
+    expect(stoppedPtyIds).toContain(PTY_ID)
+  })
+})
