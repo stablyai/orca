@@ -47,7 +47,7 @@ type RemoteKeyboardInput =
   | {
       method: 'clipboardCommand'
       command: RemoteBrowserClipboardCommand
-      chord: RemoteBrowserClipboardChord
+      chord: RemoteBrowserClipboardChord | null
       fallbackKey: string
     }
   | { method: 'execCommand'; command: 'undo' | 'redo' | 'selectAll' }
@@ -257,23 +257,12 @@ export function useRemoteBrowserPageKeyboard({
   // The context menu's edit items: copy, cut and paste use this machine's clipboard, as the keys do.
   const runRemoteEditCommand = (command: BrowserPageEditCommand): void => {
     if (command === 'copy' || command === 'cut') {
-      const mac = getShortcutPlatform() === 'darwin'
       const key = command === 'copy' ? 'c' : 'x'
-      const keyCode = key.toUpperCase().charCodeAt(0)
       enqueueRemoteKeyboardInput({
         method: 'clipboardCommand',
         command,
-        chord: {
-          key,
-          code: `Key${key.toUpperCase()}`,
-          keyCode,
-          which: keyCode,
-          metaKey: mac,
-          ctrlKey: !mac,
-          altKey: false,
-          shiftKey: false
-        },
-        fallbackKey: `${mac ? 'Meta' : 'Control'}+${key}`
+        chord: null,
+        fallbackKey: `${getShortcutPlatform() === 'darwin' ? 'Meta' : 'Control'}+${key}`
       })
       return
     }

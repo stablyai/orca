@@ -138,7 +138,7 @@ export function buildRemoteContextMenuExpression(x: number, y: number): string {
         canCut: writable && !hidden && Boolean(selectionText),
         canCopy: !hidden && Boolean(selectionText),
         canPaste: writable,
-        canSelectAll: true
+        canSelectAll: !(field && field.disabled)
       } : null
     });
   })()`
