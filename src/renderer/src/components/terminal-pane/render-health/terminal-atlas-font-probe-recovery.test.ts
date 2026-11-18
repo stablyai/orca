@@ -5,7 +5,7 @@ import {
 } from './terminal-atlas-font-probe-recovery'
 
 const MISMATCH_WINDOW_MS = 2_000
-const scheduleBurst = vi.fn()
+const scheduleBurst = vi.hoisted(() => vi.fn())
 
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleWebglAtlasRecoveryBurst: (...args: unknown[]) => scheduleBurst(...args)
