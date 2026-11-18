@@ -135,6 +135,9 @@ vi.mock('../ipc/pty/register-headless-runtime', () => ({
   registerHeadlessPtyRuntime: async () => {}
 }))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: () => null }))
+vi.mock('./host-runtime/orcad-usage-service', () => ({
+  installOrcadUsageService: () => ({ claudeUsage: {}, codexUsage: {} })
+}))
 vi.mock('./profile-state/orcad-profile-state-startup', () => ({
   createOrcadProfileStateStartup: async () => {
     const error = state.profileStartupErrors.shift()
