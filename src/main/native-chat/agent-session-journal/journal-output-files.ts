@@ -33,6 +33,11 @@ export const JOURNAL_OUTPUT_FILE_SCHEMA = `CREATE TABLE IF NOT EXISTS journal_ou
   since INTEGER NOT NULL
 ) WITHOUT ROWID;`
 
+/**
+ * The sweep's ownership index. Writer open never builds it: its predicate reads every historical
+ * payload, so the change that turns writes on must build ownership lookup outside readiness.
+ * Until then the sweep keeps every file.
+ */
 export const JOURNAL_OUTPUT_FILE_INDEX = `CREATE INDEX IF NOT EXISTS journal_items_output_file
   ON journal_items(${OUTPUT_FILE}) WHERE ${OUTPUT_FILE_ROWS};`
 

@@ -58,14 +58,9 @@ export function continuationContextReader(
     }
     // A large tool output or patch arrives as an excerpt; its whole text streams into the file.
     const markers = new ContinuedTranscriptMarkers()
-    const files = await Promise.all(
-      context.continued.map((part) =>
-        continuedFile(deps.journalDatabase.stateDirectory, part, context.items[part.index])
-      )
-    )
     const items = [...context.items]
     context.continued.forEach((part, index) => {
-      items[part.index] = markers.mark(items[part.index], index, files[index] !== null)
+      items[part.index] = markers.mark(items[part.index], index, Boolean(part.file))
     })
     const messages = projectStructuredAgentSessionMessages(
       items,
@@ -91,7 +86,12 @@ export function continuationContextReader(
     // One extraction per text, written by the reader to a private file main then streams.
     const spill = async (index: number, trimEnd: boolean) => {
       const part = context.continued[index]
-      const file = files[index]
+      // Checked as its turn to stream comes, not all before the first.
+      const file = await continuedFile(
+        deps.journalDatabase.stateDirectory,
+        part,
+        context.items[part.index]
+      )
       if (file) {
         return continuedFileText(file, trimEnd)
       }
