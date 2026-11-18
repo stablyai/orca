@@ -12,6 +12,10 @@ import { dirname, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { removeDirectoryLink } from '../../../filesystem/merged-directory-link'
 import { CLAUDE_PROFILE_HISTORY_DIRS } from './claude-profile-history'
+import {
+  detachClaudeHistoryDirectory,
+  restoreClaudeHistorySnapshot
+} from './claude-profile-history-snapshot'
 
 export const CLAUDE_PRIVATE_HISTORY_MARKER = '.orca-private-history'
 
@@ -23,6 +27,9 @@ export async function isolateClaudeProfileHistory(
     throw new Error('The system Claude home cannot be isolated as an account profile.')
   }
   for (const name of [...CLAUDE_PROFILE_HISTORY_DIRS, 'sessions', 'history.jsonl']) {
+    if (name !== 'sessions' && name !== 'history.jsonl') {
+      await restoreClaudeHistorySnapshot(home, name)
+    }
     const target = join(home, name)
     const shared = join(defaultHome, name)
     const entry = await lstat(target).catch((error) => {
@@ -76,9 +83,11 @@ export async function isolateClaudeProfileHistory(
           throw error
         }
       })
-    } else {
+    } else if (name === 'sessions') {
       await removeDirectoryLink(target)
       await mkdir(target, { mode: 0o700 })
+    } else {
+      await detachClaudeHistoryDirectory(home, shared, name)
     }
   }
   await writeFile(join(home, CLAUDE_PRIVATE_HISTORY_MARKER), '', { mode: 0o600 })

@@ -64,10 +64,11 @@ export function WorkspaceProviderAccountSubMenu({
   )
   const [selection, setSelection] = useState<Selection | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [savingOwner, setSavingOwner] = useState<string | null>(null)
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   const targetKind = target?.kind
   const ownerKey = `${targetKind ?? 'none'}:${environmentId ?? ''}:${worktree.id}:${provider}`
+  const saving = savingOwner === ownerKey
   const ownerRef = useRef<string | null>(ownerKey)
   useLayoutEffect(() => {
     ownerRef.current = ownerKey
@@ -153,7 +154,7 @@ export function WorkspaceProviderAccountSubMenu({
     if (!target || saving) {
       return
     }
-    setSaving(true)
+    setSavingOwner(ownerKey)
     try {
       const result = await callRuntimeRpc<HostSettings>(target, 'settings.update', {
         [provider === 'codex' ? 'codexWorkspaceAccount' : 'claudeWorkspaceAccount']: {
@@ -186,6 +187,9 @@ export function WorkspaceProviderAccountSubMenu({
         )
       )
     } catch (failure) {
+      if (ownerRef.current !== ownerKey) {
+        return
+      }
       toast.error(
         t('workspace.account.failed', 'Could not save the workspace {{provider}} account.', {
           provider: name
@@ -194,8 +198,9 @@ export function WorkspaceProviderAccountSubMenu({
           description: failure instanceof Error ? failure.message : String(failure)
         }
       )
+    } finally {
+      setSavingOwner((current) => (current === ownerKey ? null : current))
     }
-    setSaving(false)
   }
 
   const distro = useAppStore((state) => {
@@ -243,7 +248,10 @@ export function WorkspaceProviderAccountSubMenu({
         wslHost
           ? t('workspace.codexAccount.wslHost', 'This WSL host uses the desktop account selection.')
           : !target
-            ? 'Account selection is unavailable on direct SSH hosts.'
+            ? t(
+                'workspace.account.directSshUnavailable',
+                'Account selection is unavailable on direct SSH hosts.'
+              )
             : error
       }
       onSelect={(value) => void save(value)}

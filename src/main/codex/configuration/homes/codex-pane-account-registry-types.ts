@@ -5,7 +5,6 @@ export type CodexPaneAccountRecord = {
   selectionKey: string
   /** Workspace whose launch choices this pane follows; absent from older records. */
   workspaceId?: string
-  pinnedByWorkspace?: boolean
   pinnedByResume?: boolean
   /** Managed account id, or null for the system-default account. */
   accountId: string | null
