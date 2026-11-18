@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { access, constants } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 
@@ -69,9 +69,12 @@ const TOP_SOURCE: FootprintSource = {
   parse: parseTopFootprints
 }
 
-function currentSource(): FootprintSource {
+async function currentSource(): Promise<FootprintSource> {
   const helperPath = join(dirname(process.execPath), HELPER_EXECUTABLE)
-  helperAvailable ??= existsSync(helperPath)
+  helperAvailable ??= await access(helperPath, constants.X_OK).then(
+    () => true,
+    () => false
+  )
   return helperAvailable
     ? { program: helperPath, args: [], refreshMs: 0, parse: parseHelperFootprints }
     : TOP_SOURCE
@@ -84,7 +87,7 @@ export async function readDarwinProcessFootprints(
   if (!supported) {
     return null
   }
-  const source = currentSource()
+  const source = await currentSource()
   if (cache && now - cache.sampledAt < source.refreshMs) {
     return cache.footprints
   }

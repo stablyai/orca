@@ -654,7 +654,6 @@
 2 src/main/ipc/linear/project-handlers.ts
 4 src/main/ipc/linear/register-handlers.ts
 4 src/main/ipc/linear/team-handlers.ts
-1 src/main/ipc/memory.ts
 1 src/main/ipc/native-chat.ts
 7 src/main/ipc/notebook.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
@@ -815,8 +814,6 @@
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
-3 src/main/memory/collector.ts
-1 src/main/memory/darwin-process-footprint.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
 13 src/main/mimo/hook-service.ts
 1 src/main/minimax/minimax-api-key-store.ts
@@ -1222,7 +1219,6 @@
 2 src/main/runtime/agent-session/records/agent-session-store-transactions.ts
 1 src/main/runtime/agent-session/records/local-agent-session-record-store-startup-open.ts
 4 src/main/runtime/browser/commands/browser-profiles.ts
-1 src/main/runtime/client/runtime-client-state.ts
 1 src/main/runtime/client/settings/runtime-client-settings.ts
 3 src/main/runtime/construction/desktop-workspace-services.ts
 1 src/main/runtime/construction/runtime-identity-state.ts
