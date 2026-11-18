@@ -2003,9 +2003,11 @@
     "paneView": {
       "forward": "Forward",
       "reload": "Reload",
-      "dialogTitle": "Browser Dialog",
       "keyboardPlaceholder": "Type on page…",
-      "sendText": "Send text to browser"
+      "sendText": "Send text to browser",
+      "dialogTitleWithOrigin": "{{origin}} says",
+      "dialogTitleNoOrigin": "This page says",
+      "dialogAnswer": "Answer"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} click modifier"
@@ -2025,6 +2027,9 @@
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
       "timedOut": "Browser stream timed out."
+    },
+    "loadFailure": {
+      "retry": "Retry"
     }
   },
   "files": {
@@ -3096,7 +3101,8 @@
     "contextUsage": {
       "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
       "title": "Context",
-      "estimated": "Estimated from the last response."
+      "estimated": "Estimated from the last response.",
+      "deferredNote": "Loaded on demand. Not counted in the used total."
     },
     "composerAttachments": {
       "file": "File",
@@ -5533,6 +5539,9 @@
       "worker": "Worker: {{name}}",
       "actionFor": "{{action}}: {{title}}",
       "open": "Open"
+    },
+    "chat": {
+      "nothingToReport": "Nothing to report"
     }
   },
   "mobileWebShell": {

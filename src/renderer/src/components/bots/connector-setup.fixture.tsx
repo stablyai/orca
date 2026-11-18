@@ -127,9 +127,9 @@ async function clickWhenShown(name: string): Promise<void> {
   }
 }
 
-const linearDialog = (): React.JSX.Element => (
+const linearDialog = (bot: Bot = triage): React.JSX.Element => (
   <ConfirmationDialogProvider>
-    <BotLinearSetupDialog bot={triage} open onOpenChange={() => {}} />
+    <BotLinearSetupDialog bot={bot} open onOpenChange={() => {}} />
   </ConfirmationDialogProvider>
 )
 /** GitHub's setup dialog as Add connector opens it: from the saved setup record. */
@@ -150,7 +150,7 @@ const gitHubDialog = (): React.JSX.Element => <GitHubSetup bot={triage} />
 export const linearOneWorkspace = defineFixture({
   width: 1100,
   setup: () => stubConnectors([linearWorkspace({})], [orcaBotTest]),
-  render: linearDialog
+  render: () => linearDialog()
 })
 
 export const linearTwoWorkspaces = defineFixture({
@@ -163,14 +163,45 @@ export const linearTwoWorkspaces = defineFixture({
       ],
       [orcaBotTest]
     ),
-  render: linearDialog
+  render: () => linearDialog()
 })
 
 export const linearNotYou = defineFixture({
   width: 1100,
   setup: () => stubConnectors([linearWorkspace({})], [orcaBotTest]),
-  render: linearDialog,
+  render: () => linearDialog(),
   interact: () => clickWhenShown('Not you?')
+})
+
+const issueTriage: Bot = { ...triage, name: 'GitHub issue triage', folder: 'github-issue-triage' }
+
+export const linearConnect = defineFixture({
+  width: 1100,
+  setup: () => stubConnectors([], [orcaBotTest]),
+  render: () => linearDialog(issueTriage)
+})
+
+// Turned on just now: how to ask, ready to copy.
+export const linearDone = defineFixture({
+  width: 1100,
+  setup: () => {
+    stubConnectors([linearWorkspace({})], [orcaBotTest])
+    publishBots([issueTriage])
+    // Turn on saves the bot on its host, then reads the list again; answer both here.
+    const on = { ...issueTriage, linearWorkspaces: [acme] }
+    const call = window.api.runtime.call
+    Reflect.set(window.api, 'runtime', {
+      ...window.api.runtime,
+      call: async (args: Parameters<typeof call>[0]) =>
+        args.method === 'bots.update'
+          ? { ok: true, result: { bot: on } }
+          : args.method === 'bots.list'
+            ? { ok: true, result: { bots: [on] } }
+            : call(args)
+    })
+  },
+  render: () => linearDialog(issueTriage),
+  interact: () => clickWhenShown('Turn on GitHub issue triage')
 })
 
 export const gitHubOneInstall = defineFixture({
@@ -305,7 +336,7 @@ export const linearAlreadyOn = defineFixture({
 export const linearPickerFailed = defineFixture({
   width: 1100,
   setup: () => stubConnectors([linearWorkspace({})], [orcaBotTest]),
-  render: linearDialog,
+  render: () => linearDialog(),
   interact: async () => {
     await clickWhenShown('Add')
     for (let tries = 0; tries < 50 && !document.querySelector('[role="alert"]'); tries++) {
@@ -332,7 +363,7 @@ export const linearConfirm = defineFixture({
     stubConnectors([linearWorkspace({})], [orcaBotTest])
     linearFake.members = people
   },
-  render: linearDialog,
+  render: () => linearDialog(),
   interact: async () => {
     await clickWhenShown('Add')
     for (let tries = 0; tries < 50; tries++) {

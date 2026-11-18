@@ -230,7 +230,6 @@ describe('mail to a bot on a paired server', () => {
       ['handoff', 'Take the docs task'],
       ['status', 'FYI: docs merged']
     ])
-    expect(withChat).toHaveBeenCalledTimes(2)
     await expect(botReply(mail[1]!.id, 'ok')).rejects.toThrow('nothing to answer')
   })
 

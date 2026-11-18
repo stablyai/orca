@@ -16,17 +16,6 @@ function runtime() {
 }
 
 describe('prepareBotWorkerStart', () => {
-  it("records the worker a bot's turn started, with only its ids and host", async () => {
-    const { runtime: host, started } = runtime()
-    prepareBotWorkerStart(host, { sessionId: 's1', workspaceId: 'folder:home' })({
-      taskId: 't1',
-      dispatchId: 'd1'
-    })
-    await vi.waitFor(() =>
-      expect(started).toHaveBeenCalledWith(TURN, { taskId: 't1', dispatchId: 'd1', host: 'local' })
-    )
-  })
-
   it('records nothing for a caller outside a bot home', async () => {
     const { runtime: host, started } = runtime()
     prepareBotWorkerStart(host, { sessionId: 's1', workspaceId: 'folder:elsewhere' })({

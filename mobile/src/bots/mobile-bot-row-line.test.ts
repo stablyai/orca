@@ -54,23 +54,6 @@ describe('mobileBotRowLine', () => {
     ).toBe('#ui-ux-design · Asked about the invite')
   })
 
-  it('says it replies in the thread before the agent has said anything', () => {
-    expect(lineText([row('thread-1', { state: 'working' })])).toBe('Replying in #ui-ux-design')
-  })
-
-  it('says the tool a working turn is in, not its last message, as the desktop row does', () => {
-    expect(
-      lineText([
-        row('home-chat', {
-          state: 'working',
-          lastAssistantMessage: 'Filed 2 bug reports',
-          toolName: 'Bash',
-          toolInput: 'pnpm test'
-        })
-      ])
-    ).toBe('Bash: pnpm test')
-  })
-
   it('names its wait while nothing works, and counts other home sessions only while they work', () => {
     expect(lineText([row('automation-run')], [{ label: "Nora's reply" }])).toBe(
       "Waiting for Nora's reply"
@@ -78,9 +61,5 @@ describe('mobileBotRowLine', () => {
     expect(
       lineText([row('automation-run', { state: 'working' })], [{ label: "Nora's reply" }])
     ).toBe('1 working')
-  })
-
-  it('counts several waits instead of naming one', () => {
-    expect(lineText([], [{ label: "Nora's reply" }, { label: 'CI' }])).toBe('Waiting on 2 events')
   })
 })

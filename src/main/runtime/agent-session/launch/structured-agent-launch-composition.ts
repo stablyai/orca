@@ -109,6 +109,8 @@ export type StructuredAgentLaunchPart<L> = {
   inheritedEnvToDelete: readonly string[]
   /** See `sealStructuredSessionChild`. */
   cliRuntimeCommand?: string
+  /** Added to the commands' environment (`SealedStructuredSessionChild.commandEnv`); the seal's identity wins. */
+  commandEnv?: Readonly<Record<string, string>>
 }
 
 /** An agent's own part of a launch; it sees the session, never the spawn token. */
@@ -245,13 +247,8 @@ export function composeStructuredLaunch<L>(
   part: StructuredAgentLaunchPartResolver<L>
 ): StructuredAgentLaunchResolver<L> {
   return async ({ identity, spawnToken, permissionMode }) => {
-    const { launch, cwd, env, inheritedEnvToDelete, cliRuntimeCommand } = await composedPart(
-      definition,
-      sources,
-      part,
-      identity,
-      permissionMode
-    )
+    const { launch, cwd, env, inheritedEnvToDelete, cliRuntimeCommand, commandEnv } =
+      await composedPart(definition, sources, part, identity, permissionMode)
     admittedRecord(definition, sources.store, identity.sessionId)
     const child = sealStructuredSessionChild({
       sessionId: identity.sessionId,
@@ -265,7 +262,7 @@ export function composeStructuredLaunch<L>(
       cwd,
       env: child.env,
       envToDelete: child.envToDelete,
-      commandEnv: child.commandEnv
+      commandEnv: { ...commandEnv, ...child.commandEnv }
     }
   }
 }

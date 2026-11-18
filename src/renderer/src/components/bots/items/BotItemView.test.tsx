@@ -1,6 +1,13 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderBare,
+  screen,
+  within
+} from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
@@ -33,6 +40,9 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { changePrompt } from '../../native-chat/composer/editor/native-chat-prompt-editor.test-support'
+
+// The app root provides tooltips; the mic's needs it here too.
+const render = (ui: React.ReactElement) => renderBare(ui, { wrapper: TooltipProvider })
 
 const BOT: Bot = {
   id: 'bot-a',
@@ -93,7 +103,7 @@ function readerScrollsToTop(): void {
   fireEvent.scroll(node)
 }
 
-const pill = (): HTMLElement => screen.getByText(/new$|Jump to latest/).closest('button')!
+const pill = (): HTMLElement => screen.getByText('Jump to latest').closest('button')!
 
 beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(VIEWPORT)
@@ -121,18 +131,17 @@ it('opens at the newest event and stays there as events arrive', () => {
   expect(pill().dataset.shown).toBe('false')
 })
 
-it('counts events that arrive while scrolled up, and jumps to the end when the pill is clicked', () => {
+it('shows Jump to latest once scrolled up from the end, and jumps there when clicked', () => {
   show(3)
   const view = render(<BotItemView bot={BOT} uid="uid-6" />)
-  readerScrollsToTop()
   expect(pill().dataset.shown).toBe('false')
+
+  readerScrollsToTop()
+  expect(pill().dataset.shown).toBe('true')
 
   show(5)
   view.rerender(<BotItemView bot={BOT} uid="uid-6" />)
-
   expect(scroller().scrollTop).toBe(0)
-  expect(pill().dataset.shown).toBe('true')
-  expect(pill().textContent).toBe('2 new')
 
   fireEvent.click(pill())
 
@@ -216,11 +225,7 @@ function showPrLink(): void {
     ])
   )
   show(1, { ...makeTestBotItem(6), links: [{ kind: 'url', ref: PR_URL }] })
-  render(
-    <TooltipProvider>
-      <BotItemView bot={BOT} uid="uid-6" />
-    </TooltipProvider>
-  )
+  render(<BotItemView bot={BOT} uid="uid-6" />)
 }
 
 it('opens a PR link in the workspace card’s link popover', () => {

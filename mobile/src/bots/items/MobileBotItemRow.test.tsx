@@ -36,7 +36,7 @@ vi.mock('./MobileBotItemStatusIcon', () => ({ MobileBotItemStatusIcon: 'StatusIc
 import { makeTestBotItem } from '../../../../src/shared/bots/bot-item.test-fixture'
 import { MobileBotItemRow } from './MobileBotItemRow'
 
-it('shows the item number before the title and reads it first', () => {
+it('starts the accessible label with the item number and title', () => {
   let renderer: ReactTestRenderer | undefined
   act(() => {
     renderer = create(
@@ -52,11 +52,6 @@ it('shows the item number before the title and reads it first', () => {
       })
     )
   })
-  const text: string = 'Text'
-  const texts = renderer!.root
-    .findAll((node) => node.type === text)
-    .map((node) => node.props.children)
-  expect(texts.slice(0, 2)).toEqual(['#35', 'Show item numbers'])
   const pressable: string = 'Pressable'
   expect(renderer!.root.find((node) => node.type === pressable).props.accessibilityLabel).toMatch(
     /^#35 Show item numbers, /

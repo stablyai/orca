@@ -230,6 +230,7 @@ export function codexStructuredLaunchPart(
         ),
         visuals
       ),
+      commandEnv: tools.commandEnv,
       inheritedEnvToDelete: nativeChatVisualsInheritedEnvToDelete(visuals),
       cliRuntimeCommand: command
     }

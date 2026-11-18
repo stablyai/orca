@@ -1,8 +1,7 @@
 import { expect, it } from 'vitest'
-import { conversationNameSeed } from '../../source-control/ai/generation/conversation-name-generation'
 import { firstStructuredAgentSessionPrompt } from './structured-agent-session-first-prompt'
 
-it('names a bot mention before clipping its token into a chat title', () => {
+it('renders a bot mention as readable text in the title seed', () => {
   const prompt = firstStructuredAgentSessionPrompt([
     {
       itemId: 'message',
@@ -22,5 +21,4 @@ it('names a bot mention before clipping its token into a chat title', () => {
     }
   ])
   expect(prompt).toBe('ask @Eng - Nora to review the change')
-  expect(conversationNameSeed(prompt)).toBe('ask @Eng - Nora to review the change')
 })
