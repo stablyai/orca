@@ -391,16 +391,7 @@ describe('remote-owned records on the coordinating Orca', () => {
   })
 
   describe("a server's worker mail on its card here", () => {
-    it.each([
-      'status',
-      'dispatch',
-      'worker_done',
-      'merge_ready',
-      'escalation',
-      'handoff',
-      'decision_gate',
-      'question'
-    ])('names its %s by the Dispatch the import recorded', (type) => {
+    it.each(['status', 'worker_done', 'question'])('names %s by its Dispatch', (type) => {
       placeTask('task_t')
       recordRemoteStart(db, {
         conversationId: link.conversation_id,

@@ -13717,10 +13717,8 @@
             "f61af83316": "Yeni Klasör",
             "37c875d827": "Yeni Dosya",
             "b3e288bf41": "'{{value0}}' indirilemedi.",
-            "f729bcd97d": "'{{value0}}' klasörü indirilemedi.",
             "1a3df04ae1": "Aç",
             "bce4d4e44f": "'{{value0}}' indirildi",
-            "a4029c996b": "'{{value0}}' klasörü indirildi",
             "e26010014a": ".gitignore tarafından yok sayılıyor",
             "a06551beee": "Enter",
             "66a29dde82": "Göreli Yolu Kopyala",
@@ -22348,9 +22346,7 @@
     "updateFailed": "Proje alanı güncellenemedi"
   },
   "mediaPreview": {
-    "unavailable": "Bu medya dosyası oynatılamıyor. Dosya kullanılamıyor olabilir veya desteklenmeyen bir codec kullanıyor olabilir.",
-    "openFailed": "Bu dosya varsayılan uygulamada açılamadı.",
-    "openDefault": "Varsayılan uygulamada aç"
+    "unavailable": "Bu medya dosyası oynatılamıyor. Dosya kullanılamıyor olabilir veya desteklenmeyen bir codec kullanıyor olabilir."
   },
   "workspace": {
     "branchChoice": {

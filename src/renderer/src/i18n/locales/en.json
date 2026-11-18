@@ -14905,10 +14905,8 @@
             "f61af83316": "New Folder",
             "37c875d827": "New File",
             "b3e288bf41": "Failed to download '{{value0}}'.",
-            "f729bcd97d": "Failed to download folder '{{value0}}'.",
             "1a3df04ae1": "Open",
             "bce4d4e44f": "Downloaded '{{value0}}'",
-            "a4029c996b": "Downloaded folder '{{value0}}'",
             "e26010014a": "Ignored by .gitignore",
             "a06551beee": "Enter",
             "66a29dde82": "Copy Relative Path",
@@ -25090,9 +25088,7 @@
     "updateFailed": "Failed to update project field"
   },
   "mediaPreview": {
-    "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec.",
-    "openFailed": "Could not open this file in the default app.",
-    "openDefault": "Open in Default App"
+    "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec."
   },
   "workspace": {
     "branchChoice": {
@@ -29026,6 +29022,15 @@
       "copyHowToAsk": "Copy {{text}}",
       "forOnHost": "for {{name}} on {{host}}",
       "for": "for {{name}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Continues at {{time}}",
+      "hitLimit": "Hit limit · resets {{time}}",
+      "continuesTip": "Continues automatically at {{time}}",
+      "hitTip": "{{agent}} hit its usage limit · resets {{time}}",
+      "continuesShort": "Continues {{time}}",
+      "hitShort": "Hit limit",
+      "stoppedCount": "{{count}} stopped"
     }
   },
   "plugins": {
@@ -29324,5 +29329,10 @@
     "statusOne": "CLI update",
     "statusCount": "{{count}} CLI updates",
     "statusTooltip": "Newer agent CLI versions are out"
+  },
+  "backgroundWorkerPaused": {
+    "title": "Some background work paused after crashing repeatedly",
+    "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
+    "retry": "Retry"
   }
 }

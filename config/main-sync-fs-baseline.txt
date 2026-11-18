@@ -33,7 +33,6 @@
 7 src/main/bitbucket/credential-store.ts
 2 src/main/bots/bot-access-request-watch.ts
 1 src/main/bots/bot-look-around-store.ts
-4 src/main/bots/bot-memory-history.ts
 3 src/main/bots/bot-tool-credentials.ts
 1 src/main/bots/bot-tool-secret-scrub.ts
 1 src/main/bots/bot-tools-claude.ts
@@ -171,7 +170,7 @@
 5 src/main/composio/composio-events-ingress.ts
 3 src/main/computer/macos-native/macos-native-provider-paths.ts
 1 src/main/computer/sidecar-transport/sidecar-client.ts
-3 src/main/connector-cloud/connector-turn-events.ts
+1 src/main/connector-cloud/connector-turn-outbox-file.ts
 1 src/main/copilot/hook-service.ts
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
 2 src/main/credentials/credential-file-protection.ts

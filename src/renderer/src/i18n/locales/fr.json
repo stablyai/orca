@@ -13458,10 +13458,8 @@
             "f61af83316": "Nouveau dossier",
             "37c875d827": "Nouveau fichier",
             "b3e288bf41": "Échec du téléchargement de « {{value0}} ».",
-            "f729bcd97d": "Échec du téléchargement du dossier « {{value0}} ».",
             "1a3df04ae1": "Ouvert",
             "bce4d4e44f": "« {{value0}} » téléchargé",
-            "a4029c996b": "Dossier « {{value0}} » téléchargé",
             "e26010014a": "Ignoré par .gitignore",
             "a06551beee": "Enter",
             "66a29dde82": "Copier le chemin relatif",
@@ -22608,9 +22606,7 @@
     }
   },
   "mediaPreview": {
-    "unavailable": "Impossible de lire ce fichier multimédia. Le fichier peut être indisponible ou utiliser un codec non pris en charge.",
-    "openFailed": "Impossible d’ouvrir ce fichier dans l’application par défaut.",
-    "openDefault": "Ouvrir dans l’application par défaut"
+    "unavailable": "Impossible de lire ce fichier multimédia. Le fichier peut être indisponible ou utiliser un codec non pris en charge."
   },
   "projectBoard": {
     "noColumnField": "Cette vue Board n'a pas de champ à sélection unique ni d'itération pour regrouper les éléments ; Orca les affiche donc sous forme de liste.",
