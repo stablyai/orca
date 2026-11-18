@@ -1,9 +1,8 @@
 import { createTerminalDocumentScope } from './document-scope'
 import { cancelDocumentFrames } from './document-frame-registry'
 import { startFitScale, stopFitScale } from './viewport/fit-scale'
-import { handleMsg } from './host-bridge/host-message-router'
 import { reportEngineError, startHostNotify, stopHostNotify } from './host-bridge/host-notify'
-import { startMessageBridge, stopMessageBridge } from './host-bridge/message-bridge'
+import { handleIncomingMessage, startMessageBridge, stopMessageBridge } from './host-bridge/message-bridge'
 import { stopNormalBufferSmoothScroll } from './viewport/normal-buffer-smooth-scroll'
 import { startSelectionMenuButtons } from './selection/selection-menu-buttons'
 import { stopSelectionOverlay } from './selection/selection-overlay'
@@ -26,7 +25,7 @@ export function createTerminalDocument(host: TerminalDocumentHost = {}): Termina
   startTerminalDocument(scope)
   return {
     send: (message) => {
-      handleMsg(scope, message)
+      handleIncomingMessage(scope, message)
     },
     stop: () => {
       stopTerminalDocument(scope)

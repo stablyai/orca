@@ -34,7 +34,11 @@ import {
   openCached,
   rendersRoute
 } from '../update-recovery/mobile-web-shell-cached-generation'
-import { step } from './mobile-web-shell-session-step'
+import {
+  acceptsSessionEventFlow,
+  step,
+  stepNewFlow
+} from './mobile-web-shell-session-step'
 import { reducePageDocumentLifecycle } from '../page-document/page-document-lifecycle'
 import {
   reduceShellFailed,
@@ -69,6 +73,7 @@ export function createMobileWebShellSession(
     cached: null,
     updateNotice: null,
     requestedBuildId: null,
+    offeredRoutes: null,
     requestedCompat: null,
     verdicted: false,
     flow: 0
@@ -86,6 +91,7 @@ function startFlow(
   const base = {
     updateNotice: null,
     requestedBuildId: null,
+    offeredRoutes: null,
     requestedCompat: null,
     verdicted: false,
     ...patch,
@@ -94,12 +100,13 @@ function startFlow(
   }
   const gated = gateState(gateVerdict(gates), patch.retriedOnce ?? session.retriedOnce)
   if (gated !== null) {
-    return step(session, { ...base, state: gated }, before)
+    return stepNewFlow(session, { ...base, state: gated }, before)
   }
   // Every other verdict reads cache: cached bytes may render before the host answers, and only talking waits for it.
-  return step(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
+  return stepNewFlow(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
 }
 
+// Unreachable opens the disk generation alone; connected opens a compatible one and still asks the host.
 function onCacheRead(
   session: MobileWebShellSession,
   generation: CachedGeneration | null
@@ -184,6 +191,7 @@ function onManifestRead(
       verdicted: true,
       requestedBuildId: manifest.buildId,
       requestedCompat: manifest,
+      offeredRoutes: null,
       state: {
         kind: 'fetching',
         completedAssets: 0,
@@ -221,7 +229,7 @@ export function reduceMobileWebShellSession(
   session: MobileWebShellSession,
   event: MobileWebShellSessionEvent
 ): MobileWebShellStep {
-  if ('flow' in event && event.flow !== session.flow) {
+  if (!acceptsSessionEventFlow(session, event)) {
     return step(session, {})
   }
   switch (event.type) {
@@ -305,7 +313,7 @@ export function reduceMobileWebShellSession(
         ? [{ kind: 'delete-cache' }]
         : []
       return session.gates === null
-        ? step(
+        ? stepNewFlow(
             session,
             {
               ...reset,

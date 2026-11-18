@@ -42,7 +42,11 @@ import {
   storageReadParamsSchema,
   type BridgeNativeVerb
 } from './bridge/native-capabilities/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
+import {
+  SHELL_HOST_OPENING_LABEL,
+  SHELL_OPENING_LABEL,
+  ShellPageCover
+} from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
 import {
   useReportedShellOverlayLoad,
@@ -148,8 +152,12 @@ export function MobileWebShellScreen({
     refreshStorage,
     writeStorage,
     readWorkspaceKey
-  } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
-  // Create the media registry before the bridge; staged files belong to this page session.
+  } = usePageHostSnapshot(
+    hostId,
+    route.pathname,
+    ownsHostArea || routeGrants.includes('native.storage.read')
+  )
+  // Create the media registry before the bridge; its staged files must belong to this page session.
   const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
@@ -331,11 +339,15 @@ export function MobileWebShellScreen({
   if (overlay && state.kind !== 'ready') {
     return null
   }
+  const openingLabel = isHostRouteOf(route.pathname, hostId)
+    ? SHELL_HOST_OPENING_LABEL
+    : SHELL_OPENING_LABEL
   if (state.kind !== 'ready') {
     return (
       <ShellStateScreen
         hostId={hostId}
         state={state}
+        openingLabel={openingLabel}
         onRetry={() => {
           if (unreadable) {
             retryHostSnapshot()
@@ -404,9 +416,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
-      )}
+      {overlay ? null : <ShellPageCover label={openingLabel} visible={pageFrame === 'unpainted'} />}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )

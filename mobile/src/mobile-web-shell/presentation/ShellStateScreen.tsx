@@ -15,7 +15,7 @@ import type {
 } from '../session/mobile-web-shell-session-contract'
 import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
 import { ShellDownloadProgress } from './ShellDownloadProgress'
-import { ShellWaitingFrame } from './ShellWaitingFrame'
+import { SHELL_OPENING_LABEL, ShellWaitingFrame } from './ShellWaitingFrame'
 
 function failureMessage(reason: MobileWebShellFailureCause, t: Translate): string {
   switch (reason) {
@@ -111,13 +111,15 @@ export function ShellStateScreen({
   state,
   onRetry,
   downloadProgress,
-  host
+  host,
+  openingLabel = SHELL_OPENING_LABEL
 }: {
   hostId: string
   state: Exclude<MobileWebShellSessionState, { kind: 'ready' }>
   onRetry: () => void
   downloadProgress: DownloadProgressFeed
   host: HostDisplaySource | null
+  openingLabel?: string
 }) {
   const t = useMobileTranslation()
   switch (state.kind) {
@@ -151,7 +153,9 @@ export function ShellStateScreen({
           <ShellWaitingFrame
             label={
               state.kind === 'activating'
-                ? t('webShell.shellStateScreen.openingWorkspace', 'Opening workspace')
+                ? openingLabel === SHELL_OPENING_LABEL
+                  ? t('webShell.shellStateScreen.openingWorkspace', 'Opening workspace')
+                  : openingLabel
                 : t('webShell.shellStateScreen.checkingHost', 'Checking host')
             }
           />
