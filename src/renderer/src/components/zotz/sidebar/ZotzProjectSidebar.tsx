@@ -162,8 +162,13 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
   useZotzGitHubRepoIcons(repos)
 
   const sections = useMemo(
-    () => buildZotzProjectSections({ repos, worktreesByRepo, tabsByWorkspace: tabsByWorktree }),
-    [repos, worktreesByRepo, tabsByWorktree]
+    () =>
+      buildZotzProjectSections({
+        repos,
+        worktreesByRepo,
+        workspacesWithAgents: new Set(statusByWorkspace.keys())
+      }),
+    [repos, worktreesByRepo, statusByWorkspace]
   )
   const folders = useMemo(
     () => buildZotzFolderConversations({ folderWorkspaces, tabsByWorkspace: tabsByWorktree }),

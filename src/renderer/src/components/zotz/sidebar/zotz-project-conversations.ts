@@ -34,10 +34,10 @@ function hasOpenTabs(tabsByWorkspace: TabsByWorkspace, key: string): boolean {
   return (tabsByWorkspace[key]?.length ?? 0) > 0
 }
 
-/** Workspaces the user started: no CLI/automation creations, and the main checkout only while it has open tabs. */
+/** Workspaces the user started: no CLI/automation creations; the main checkout only while an agent works in it. */
 export function isZotzUserConversation(
   worktree: Worktree,
-  tabsByWorkspace: TabsByWorkspace
+  workspacesWithAgents: ReadonlySet<string>
 ): boolean {
   if (worktree.isArchived || worktree.removing || worktree.cliProvenance) {
     return false
@@ -45,7 +45,7 @@ export function isZotzUserConversation(
   if (worktree.automationProvenance) {
     return false
   }
-  return !worktree.isMainWorktree || hasOpenTabs(tabsByWorkspace, worktree.id)
+  return !worktree.isMainWorktree || workspacesWithAgents.has(worktree.id)
 }
 
 function byRecentActivity(a: ZotzConversationRow, b: ZotzConversationRow): number {
@@ -55,7 +55,7 @@ function byRecentActivity(a: ZotzConversationRow, b: ZotzConversationRow): numbe
 export function buildZotzProjectSections(input: {
   repos: readonly Repo[]
   worktreesByRepo: Readonly<Record<string, readonly Worktree[] | undefined>>
-  tabsByWorkspace: TabsByWorkspace
+  workspacesWithAgents: ReadonlySet<string>
 }): ZotzProjectSection[] {
   const seen = new Set<string>()
   const sections: ZotzProjectSection[] = []
@@ -65,7 +65,7 @@ export function buildZotzProjectSections(input: {
     }
     seen.add(repo.id)
     const conversations = (input.worktreesByRepo[repo.id] ?? [])
-      .filter((worktree) => isZotzUserConversation(worktree, input.tabsByWorkspace))
+      .filter((worktree) => isZotzUserConversation(worktree, input.workspacesWithAgents))
       .map((worktree) => {
         const branch = branchLabel(worktree)
         return {
