@@ -148,9 +148,31 @@ function boundedHead(text: string): string {
 
 /** The digest of an existing file of this content, when the payload's sha256 already names one. */
 function savedJournalOutputFile(root: string, digest: string, bytes: number): string | null {
-  return /^[0-9a-f]{64}$/.test(digest) && fileSize(journalOutputFilePath(root, digest)) === bytes
-    ? digest
-    : null
+  if (!/^[0-9a-f]{64}$/.test(digest) || fileSize(journalOutputFilePath(root, digest)) !== bytes) {
+    return null
+  }
+  adoptJournalOutputFile(root, digest)
+  return digest
+}
+
+/**
+ * An existing file may be one whose publication failed before it was made durable, so it is
+ * synced, with every folder down to it, before a row names it.
+ */
+function adoptJournalOutputFile(root: string, digest: string): void {
+  const path = journalOutputFilePath(root, digest)
+  const fd = openSync(path, 'r')
+  try {
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  for (let folder = dirname(path); folder.startsWith(root); folder = dirname(folder)) {
+    syncDirectory(folder)
+    if (folder === root) {
+      break
+    }
+  }
 }
 
 /**
@@ -187,7 +209,9 @@ function saveJournalOutputFile(root: string, text: string): string {
     }
     const digest = hash.digest('hex')
     const path = journalOutputFilePath(root, digest)
-    if (fileSize(path) !== bytes) {
+    if (fileSize(path) === bytes) {
+      adoptJournalOutputFile(root, digest)
+    } else {
       durableDirectory(dirname(path))
       renameFileWithWindowsRetry(temporary, path)
       syncDirectory(dirname(path))
@@ -219,7 +243,10 @@ function durableDirectory(path: string): void {
   }
 }
 
-/** Makes a rename durable on POSIX; Windows has no directory handle to sync. */
+/**
+ * Makes a rename durable on POSIX; Windows has no directory handle to sync, and a file system
+ * that can't sync a folder (some FUSE and 9p mounts) offers nothing more to wait for.
+ */
 function syncDirectory(path: string): void {
   if (process.platform === 'win32') {
     return
@@ -227,6 +254,11 @@ function syncDirectory(path: string): void {
   const fd = openSync(path, 'r')
   try {
     fsyncSync(fd)
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error ? error.code : undefined
+    if (code !== 'EINVAL' && code !== 'ENOTSUP') {
+      throw error
+    }
   } finally {
     closeSync(fd)
   }
