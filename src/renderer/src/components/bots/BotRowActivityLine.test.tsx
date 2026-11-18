@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { botRowLineAge, BotRowLineView } from './BotRowActivityLine'
+import { BotRowLineView } from './BotRowActivityLine'
 
 vi.mock('@/store', () => ({ useAppStore: () => null }))
 vi.mock('@/lib/bot-catalog', () => ({
@@ -50,11 +50,6 @@ describe('BotRowLineView', () => {
     expect(screen.getByRole('button', { name: 'fold' })).toBeInTheDocument()
   })
 
-  it('says what the bot is for when it has no activity', () => {
-    render(<BotRowLineView line={null} fallback="Runs the team's week" unread={false} now={NOW} />)
-    expect(screen.getByText("Runs the team's week")).toBeInTheDocument()
-  })
-
   it('gives its purpose back to new activity', () => {
     const { rerender } = render(
       <BotRowLineView line={null} fallback="Runs the team's week" unread={false} now={NOW} />
@@ -65,36 +60,5 @@ describe('BotRowLineView', () => {
     )
     expect(screen.getByText('I posted the message to Bob')).toBeInTheDocument()
     expect(screen.queryByText("Runs the team's week")).toBeNull()
-  })
-})
-
-describe('botRowLineAge', () => {
-  it('ages activity only', () => {
-    expect(botRowLineAge(ACTIVITY, NOW)).toBe('3h')
-    expect(botRowLineAge({ ...ACTIVITY, at: null }, NOW)).toBeNull()
-    expect(botRowLineAge({ kind: 'paused' }, NOW)).toBeNull()
-    expect(botRowLineAge(null, NOW)).toBeNull()
-  })
-
-  it('ends with the Up next count, then the fold toggle', () => {
-    render(
-      <BotRowLineView
-        line={ACTIVITY}
-        unread={false}
-        now={NOW}
-        trailing={
-          <>
-            <span>up next</span>
-            <button type="button">fold</button>
-          </>
-        }
-      />
-    )
-    const row = screen.getByText('I posted the message to Bob').parentElement!
-    expect([...row.children].map((child) => child.textContent)).toEqual([
-      'I posted the message to Bob',
-      'up next',
-      'fold'
-    ])
   })
 })

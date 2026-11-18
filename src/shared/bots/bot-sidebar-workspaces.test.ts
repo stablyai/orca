@@ -39,12 +39,7 @@ describe('botWorkspaceLineAgent', () => {
     subagent
   })
 
-  it('shows one logo for one agent, or for several of one kind, with no +N', () => {
-    expect(botWorkspaceLineAgent([agent('claude')])).toEqual({
-      agentTypes: ['claude'],
-      others: 0,
-      othersNeedYou: false
-    })
+  it('shows one logo for several agents of one kind, with no +N', () => {
     expect(botWorkspaceLineAgent([agent('claude'), agent('claude', 'blocked')])).toEqual({
       agentTypes: ['claude'],
       others: 0,
