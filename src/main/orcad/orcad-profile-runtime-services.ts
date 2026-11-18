@@ -1,5 +1,8 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
-import { sessionSearchScopeCatalogFromStore, type SessionSearchScopeStore } from '../ai-vault-search/scope/session-search-store-scope-catalog'
+import {
+  sessionSearchScopeCatalogFromStore,
+  type SessionSearchScopeStore
+} from '../ai-vault-search/scope/session-search-store-scope-catalog'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -14,7 +17,8 @@ export async function installOrcadProfileRuntimeServices({
   registerCleanup
 }: {
   userDataPath: string
-  store: Pick<Store, 'getSettings' | 'getRepos' | 'getAllWorktreeMeta' | 'onWorktreeMetaWritten'> & SessionSearchScopeStore
+  store: Pick<Store, 'getSettings' | 'getRepos' | 'getAllWorktreeMeta' | 'onWorktreeMetaWritten'> &
+    SessionSearchScopeStore
   runtime: OrcaRuntimeService
   featureReadiness: Pick<OrcadFeatureReadiness, 'open'>
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
