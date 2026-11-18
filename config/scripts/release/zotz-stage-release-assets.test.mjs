@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -13,7 +13,7 @@ afterEach(() => {
 })
 
 describe('stageZotzReleaseAssets', () => {
-  it('keeps the names the manifest uses and adds the human-named copy', () => {
+  it('publishes only Zotz names and points the manifest at them', () => {
     const root = mkdtempSync(join(tmpdir(), 'zotz-stage-'))
     directories.push(root)
     const out = join(root, 'release')
@@ -35,9 +35,11 @@ describe('stageZotzReleaseAssets', () => {
     })
     expect(readdirSync(out).sort()).toEqual([
       'latest.yml',
-      'orca-windows-setup.exe',
-      'orca-windows-setup.exe.blockmap',
-      'zotz-windows-x64-setup.exe'
+      'zotz-windows-x64-setup.exe',
+      'zotz-windows-x64-setup.exe.blockmap'
     ])
+    expect(readFileSync(join(out, 'latest.yml'), 'utf8')).toBe(
+      'version: 1.4.21401\nfiles:\n  - url: zotz-windows-x64-setup.exe\n    sha512: x\npath: zotz-windows-x64-setup.exe\n'
+    )
   })
 })

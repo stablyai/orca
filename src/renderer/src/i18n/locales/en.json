@@ -25982,7 +25982,8 @@
       "fix": "Fix errors",
       "sent": "Sent the failing checks to the conversation",
       "launched": "No agent here: opened one to fix the checks",
-      "sendFailed": "Could not send the failing checks"
+      "sendFailed": "Could not send the failing checks",
+      "autofixHint": "Sends failing checks to the agent once per push"
     },
     "pr": {
       "merged": "Merged",
@@ -25992,15 +25993,7 @@
       "failing": "Checks failed",
       "pending": "Checks running…",
       "ready": "Ready to merge",
-      "open": "Open",
-      "none": "No pull request yet",
-      "create": "Create PR",
-      "createSent": "Asked the agent to open the pull request",
-      "createFailed": "Could not ask the agent to open the pull request",
-      "merge": "Merge",
-      "mergedToast": "Pull request #{{number}} merged",
-      "mergeFailed": "Could not merge the pull request",
-      "number": "PR #{{number}}"
+      "open": "Open"
     },
     "prChip": {
       "dismiss": "Hide the pull request bar"
