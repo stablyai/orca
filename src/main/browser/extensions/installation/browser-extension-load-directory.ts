@@ -274,7 +274,7 @@ export async function prepareBrowserExtensionDirectory(
     const result = await running
     // Forgotten meanwhile (its folder was replaced): this result describes the old contents.
     if (pending.get(key) === running) {
-      keepPrepared(key, result, extension.source === 'unpacked')
+      keepPrepared(key, result)
     }
     return result
   } finally {
@@ -284,29 +284,19 @@ export async function prepareBrowserExtensionDirectory(
   }
 }
 
-/** Unpacked copies, kept for the run so no profile's running copy is rewritten under it. */
-const unpackedKeys = new Set<string>()
-
-/** Store folders are kept only while installed, so failed installs, updates and removals never pile up. */
-function keepPrepared(
-  key: string,
-  result: PreparedBrowserExtensionDirectory,
-  unpacked: boolean
-): void {
+/** Folders are kept only while installed, so failed installs, updates and removals never pile up. */
+function keepPrepared(key: string, result: PreparedBrowserExtensionDirectory): void {
   const installed = new Set(
     getBrowserExtensionInstallStore()
       .list()
       .map((extension) => resolve(extension.path))
   )
   for (const path of preparedThisRun.keys()) {
-    if (!unpackedKeys.has(path) && !installed.has(path)) {
+    if (!installed.has(path)) {
       preparedThisRun.delete(path)
     }
   }
-  if (unpacked) {
-    unpackedKeys.add(key)
-  }
-  if (unpacked || installed.has(key)) {
+  if (installed.has(key)) {
     preparedThisRun.set(key, result)
   }
 }
@@ -315,6 +305,5 @@ function keepPrepared(
 export function forgetPreparedBrowserExtensionDirectory(path: string): void {
   const key = resolve(path)
   preparedThisRun.delete(key)
-  unpackedKeys.delete(key)
   pending.delete(key)
 }
