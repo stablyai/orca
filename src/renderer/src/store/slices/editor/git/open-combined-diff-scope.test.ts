@@ -26,6 +26,10 @@ function openWholeScope(summary: GitBranchCompareSummary | undefined) {
 }
 
 describe('openAllDiffs whole scope', () => {
+  it('does not open a partial tab when compare starts loading before the action', () => {
+    expect(openWholeScope({ ...READY, status: 'loading' })).toEqual([])
+  })
+
   it('opens uncommitted + branch as All Changes when branch compare is ready', () => {
     const [file] = openWholeScope(READY)
     expect(file).toMatchObject({

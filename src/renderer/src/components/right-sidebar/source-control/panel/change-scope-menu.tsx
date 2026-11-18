@@ -34,7 +34,7 @@ function ScopeItemText({ title, detail }: { title: string; detail?: string }): R
   return (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
       <span className="truncate">{title}</span>
-      {detail ? <span className="truncate text-[11px] text-muted-foreground">{detail}</span> : null}
+      {detail ? <span className="truncate text-2xs text-muted-foreground">{detail}</span> : null}
     </span>
   )
 }

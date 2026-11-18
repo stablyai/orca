@@ -33,10 +33,10 @@ function LineCounts({ added, removed }: { added: number; removed: number }): Rea
   return (
     <>
       {' '}
-      <span className="font-mono text-[10px] text-[color:var(--git-decoration-added)]">
+      <span className="font-mono text-3xs text-[color:var(--git-decoration-added)]">
         +{added}
       </span>{' '}
-      <span className="font-mono text-[10px] text-[color:var(--git-decoration-deleted)]">
+      <span className="font-mono text-3xs text-[color:var(--git-decoration-deleted)]">
         −{removed}
       </span>
     </>
@@ -214,7 +214,7 @@ export function SourceControlChangeScopeBar({
             openDiffButton
           )}
         </div>
-        <div className="truncate text-[11px] text-muted-foreground">
+        <div className="truncate text-2xs text-muted-foreground">
           {changeScope.kind === 'commit'
             ? `${commitMetaLine(changeScope.commit, intlLocale)} · `
             : null}
