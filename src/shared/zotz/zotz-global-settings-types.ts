@@ -12,4 +12,6 @@ export type ZotzGlobalSettings = {
   zotzAgentQueueEnabled?: boolean
   /** Download Orca's plugin catalogs and safety list; off unless set to true, since Zotz is a fork. */
   zotzOrcaPluginCatalogEnabled?: boolean
+  /** App version whose startup already checked (and if needed registered) the `zotz` command. */
+  zotzCliRegisteredVersion?: string
 }
