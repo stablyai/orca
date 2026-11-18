@@ -5,6 +5,7 @@ export type WorkerThreadRole =
   | 'orca-child-process-spawner'
   | 'orca-claude-profile-setup'
   | 'orca-claude-rewind-transcript'
+  | 'orca-codex-history-disk-usage'
   | 'orca-command-path-directory'
   | 'orca-environment-store'
   | 'orca-foreign-sqlite-reader'

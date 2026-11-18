@@ -321,7 +321,7 @@
 6 src/main/codex/history/backfill/codex-session-backfill.ts
 3 src/main/codex/history/backfill/desktop-codex-session-migration.ts
 22 src/main/codex/history/bridges/codex-session-bridge.ts
-3 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
+2 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
 1 src/main/codex/history/index/codex-account-session-index-heal.ts
 1 src/main/codex/history/index/codex-session-index-heal-state.ts
 13 src/main/codex/history/index/codex-session-index-heal.ts
