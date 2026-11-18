@@ -55,7 +55,6 @@ export function GitGraphOpenButton({
       type="button"
       variant="ghost"
       size="xs"
-      className="shrink-0 text-muted-foreground hover:text-foreground"
       disabled={support !== true}
       data-testid="source-control-git-graph-button"
       onClick={(event) => {

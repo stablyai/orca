@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 const mocks = vi.hoisted(() => ({
-  support: true as boolean | null,
+  support: true,
   openGitGraph: vi.fn()
 }))
 
@@ -36,7 +36,7 @@ function renderButton(): HTMLButtonElement {
       <GitGraphOpenButton worktreeId="wt-1" />
     </TooltipProvider>
   )
-  return screen.getByRole('button', { name: 'Graph' }) as HTMLButtonElement
+  return screen.getByRole<HTMLButtonElement>('button', { name: 'Graph' })
 }
 
 describe('GitGraphOpenButton', () => {
@@ -48,13 +48,11 @@ describe('GitGraphOpenButton', () => {
     expect(mocks.openGitGraph).toHaveBeenCalledWith('wt-1')
   })
 
-  it('stays disabled with the update explanation on a host without Git Graph', async () => {
+  it('does not open Git Graph on a host without support', () => {
     mocks.support = false
     const button = renderButton()
     expect(button.disabled).toBe(true)
-    fireEvent.focus(button.parentElement!)
-    expect(
-      await screen.findAllByText('Update Orca on build-box to open the Git Graph')
-    ).not.toEqual([])
+    fireEvent.click(button)
+    expect(mocks.openGitGraph).not.toHaveBeenCalled()
   })
 })

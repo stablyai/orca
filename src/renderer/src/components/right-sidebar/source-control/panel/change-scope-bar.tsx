@@ -147,7 +147,7 @@ export function SourceControlChangeScopeBar({
       type="button"
       variant="outline"
       size="xs"
-      className="gap-[5px] px-2 aria-disabled:cursor-default aria-disabled:opacity-50"
+      className="aria-disabled:cursor-default"
       disabled={openDiffDisabled && !branchCompareLoading}
       // Stays focusable while loading so the tooltip can say why.
       aria-disabled={branchCompareLoading || undefined}
@@ -175,7 +175,7 @@ export function SourceControlChangeScopeBar({
               type="button"
               variant="outline"
               size="xs"
-              className="min-w-0 shrink justify-start gap-1 pl-2 pr-1.5 font-semibold"
+              className="min-w-0 shrink justify-start"
               data-testid="source-control-change-scope-trigger"
             >
               <span className="min-w-0 truncate">{scopeTriggerLabel(t, changeScope)}</span>
@@ -189,7 +189,6 @@ export function SourceControlChangeScopeBar({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  className="size-5 text-muted-foreground hover:text-foreground"
                   aria-label={showAllLabel}
                   onClick={() => setChangeScope(ALL_CHANGES_SCOPE)}
                 >
