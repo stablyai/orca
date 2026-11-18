@@ -66,7 +66,8 @@ export function createHangWatchdogDetectionLoop(
           detected = null
           config.onStallEndedBySleep?.()
         }
-        if (!detected) {
+        // A heartbeat that already arrived after the wake marks main's own start; keep it.
+        if (!detected && lastHeartbeatAt <= now - tickGap) {
           lastHeartbeatAt = now
         }
         return

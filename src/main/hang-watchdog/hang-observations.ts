@@ -208,7 +208,9 @@ function priority(record: HangObservation): number {
 }
 export function retainHangObservation(
   collection: HangObservationCollection,
-  record: HangObservation
+  record: HangObservation,
+  // Only the running watchdog's live capture reserves a row; a startup replay must not evict pending hangs.
+  options: { reserve?: boolean } = {}
 ): HangObservationCollection {
   record = admitHangObservation(record)
   const existing = collection.observations.findIndex((item) => item.id === record.id)
@@ -256,10 +258,9 @@ export function retainHangObservation(
     return { ...collection, observations }
   }
   const candidates = [...collection.observations, record]
-  // An episode still being captured must keep a row to publish into.
   const anchors = new Set(
     [
-      record.kind === 'heartbeat-stall' && !record.selfRecovered ? record : undefined,
+      options.reserve ? record : undefined,
       candidates.find(isHangTierObservation),
       candidates.find((item) => item.kind === 'watchdog-gap' && !item.initialSleepAssociated)
     ].filter((item): item is HangObservation => !!item)

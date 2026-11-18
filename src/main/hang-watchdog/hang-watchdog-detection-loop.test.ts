@@ -216,4 +216,17 @@ describe('createHangWatchdogDetectionLoop', () => {
     }
     expect(stalls).toEqual([10_000, 10_000])
   })
+
+  it('keeps a wake heartbeat that arrived before the overdue tick, so a stall right after wake is timed from it', () => {
+    const { loop, onStallMissed, advance } = loopWithClock(0, 8_000)
+    loop.recordHeartbeat()
+    loop.tick()
+    advance(60_000)
+    loop.recordHeartbeat()
+    advance(1_000)
+    loop.tick()
+    advance(7_500)
+    loop.recordHeartbeat()
+    expect(onStallMissed).toHaveBeenCalledExactlyOnceWith(8_500, 60_000)
+  })
 })

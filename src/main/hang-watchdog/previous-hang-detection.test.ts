@@ -170,16 +170,20 @@ describe('previous hang detection', () => {
         tier: 'hang'
       })
     }
-    collection = retainHangObservation(collection, {
+    const stall: HangObservation = {
       ...gap,
       id: '789:900:9',
       kind: 'heartbeat-stall',
       detectedAt: 900,
       durationMs: 9_000,
       tier: 'stall'
-    })
-    expect(collection.observations.map((item) => item.id)).toContain('789:900:9')
-    expect(collection.observations).toHaveLength(4)
+    }
+    const live = retainHangObservation(collection, stall, { reserve: true })
+    expect(live.observations.map((item) => item.id)).toContain('789:900:9')
+    expect(live.observations).toHaveLength(4)
+    // A startup replay of the same unrecovered stall keeps every pending hang instead.
+    const replayed = retainHangObservation(collection, stall)
+    expect(replayed.observations.map((item) => item.id)).not.toContain('789:900:9')
   })
 
   it('reports an escalated hang that never recovered as lasting at least until escalation', () => {
