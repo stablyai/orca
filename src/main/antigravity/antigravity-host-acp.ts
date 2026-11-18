@@ -16,6 +16,7 @@ import {
 } from '../../shared/app-lifecycle/identity/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import {
+  antigravityKeyringFallbackMarker,
   createAntigravityHostCredentialBackend,
   isAntigravityFileStorageHost
 } from './native-credential-backend'
@@ -146,8 +147,12 @@ export async function hasManagedAntigravityChatSignIn(managedHome: string): Prom
   return (await stat(token).catch(() => null)) !== null
 }
 
-/** Whether agy itself is signed in on this host; an unreadable store counts as signed out. */
+/** Whether agy itself may be signed in on this host; an unreadable store counts as signed out. */
 export async function hasAgyCredential(homePath: string): Promise<boolean> {
+  // After a keyring timeout agy may use either store, so the ACP readiness probe decides.
+  if (await stat(antigravityKeyringFallbackMarker(homePath)).catch(() => null)) {
+    return true
+  }
   try {
     // Reading the macOS secret would ask the person for keychain access; its attributes do not.
     if (process.platform === 'darwin' && !isAntigravityFileStorageHost(process.env)) {

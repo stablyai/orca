@@ -3,7 +3,7 @@ import {
   type ConnectionVerdict
 } from '../../../transport/connection/connection-health'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
-import type { ServerHostDesktopReach } from '../../../worktree/execution-hosts/server-workspaces'
+import type { ServerHostDesktopReach } from '../../../worktree/execution-hosts/server-host-health'
 import { translate, type Translate } from '../../../i18n/mobile-i18n'
 import { formatOfflineAsOfTime } from '../../../components/host-connection/offline-as-of-time'
 import type { MobileSessionController } from '../../use-mobile-session-controller'

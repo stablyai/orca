@@ -46,7 +46,8 @@ export class OrcadStdioBridgePortForwardProvider implements SshPortForwardProvid
 export async function startOrcadStdioBridge(
   host: OrcadHostTransport,
   options: PortForwardStartOptions,
-  deps: OrcadStdioBridgeDependencies
+  deps: OrcadStdioBridgeDependencies,
+  maxChannels?: number
 ): Promise<StartedPortForward> {
   let bridge: Promise<OrcadStdioBridge> | null = null
   // Retry failed bridge resolution on the next socket.
@@ -66,8 +67,12 @@ export async function startOrcadStdioBridge(
     // Lost contact does not prove bridge absence; let new sockets resolve it again.
     console.warn('[ssh] Orca stdio bridge check was unverifiable:', error)
   }
-  return listenOrcadStdioBridge(options, async () => {
-    const resolved = await resolveBridge()
-    return { channel: await deps.openChannel(host, resolved), mode: resolved.mode }
-  })
+  return listenOrcadStdioBridge(
+    options,
+    async () => {
+      const resolved = await resolveBridge()
+      return { channel: await deps.openChannel(host, resolved), mode: resolved.mode }
+    },
+    maxChannels
+  )
 }

@@ -11,6 +11,9 @@ import type { AppState } from '../../../store/types'
 import { resolveBrowserSessionTabTarget } from '../browser/browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from '../session-tabs/host-session-tab-target'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
+import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { isBotPage } from '@/components/bots/bot-workspace'
+import { structuredAgentSessionIdOfTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 import { isStructuredAgentSessionHostTabId } from '../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
@@ -194,6 +197,15 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         return
       }
       if (!tab) {
+        const chatSessionId =
+          userInitiated && isBotPage(worktreeId) ? structuredAgentSessionIdOfTab(tabId) : null
+        if (chatSessionId) {
+          // A bot's thread or run chat has no tab here; it opens the way Session History opens one.
+          void activateAiVaultStructuredSession({
+            structuredSession: { sessionId: chatSessionId, workspaceId: worktreeId }
+          })
+          return
+        }
         if (userInitiated && isStructuredAgentSessionHostTabId(tabId)) {
           focusChatWhenListed(worktreeId, tabId)
           return

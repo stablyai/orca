@@ -289,6 +289,7 @@ function MobileNativeChatOverlayContent({
                       tasks={controller.nativeChatBackgroundTasks}
                     >
                       <MobileNativeChatView
+                        itemNavigation={session.itemNavigation}
                         messages={session.messages}
                         folded={folded}
                         status={session.status}

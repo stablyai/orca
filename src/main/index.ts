@@ -24,6 +24,7 @@ import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-boots
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/quit/main-process-quit'
 import { shouldActivateDesktopForSecondInstance } from './startup/profile-startup/single-instance-lock'
+import type { DeepLink } from './startup/deep-link-state'
 import { resolveOsOpenedDocuments } from './startup/open-routing/os-opened-documents'
 import {
   formatProfileStateStartupFailure,
@@ -83,10 +84,21 @@ const requestDesktopHandoff = createDesktopHandoff({
   drainArguments: () => desktopHandoffArguments(state)
 })
 
+function publishDeepLink(link: DeepLink): void {
+  const window = state.mainWindow
+  if (!window || window.isDestroyed()) {
+    return
+  }
+  if (link.kind === 'skill-share') {
+    window.webContents.send('ui:openSkillShare', link.shareId)
+  } else {
+    // Only a doorbell: the renderer pulls the link, so it is delivered exactly once.
+    window.webContents.send('ui:botLinkPending')
+  }
+}
+
 function requestDesktopActivation(argv: readonly string[] = []): void {
-  state.skillShareDeepLinks.capture(argv, (shareId) => {
-    state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
-  })
+  state.deepLinks.capture(argv, publishDeepLink)
   state.pluginInstallLinks.capture(argv, (link) => {
     state.mainWindow?.webContents.send('ui:openPluginInstallLink', link)
   })
@@ -166,7 +178,7 @@ if (preflightReady) {
     void readWslInstallation()
   }
   app.on('open-url', (event, url) => {
-    if (!isRoutedOrcaDeepLink(url)) {
+    if (!state.deepLinks.accepts(url) && !isRoutedOrcaDeepLink(url)) {
       return
     }
     event.preventDefault()
@@ -187,7 +199,7 @@ if (preflightReady) {
     platform: process.platform,
     desktopLaunch: !state.isServeMode && !isBackgroundLaunch() && !isOrcadSidecarLaunch()
   })
-  state.skillShareDeepLinks.capture(process.argv)
+  state.deepLinks.capture(process.argv)
   state.pluginInstallLinks.capture(process.argv)
   // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)
