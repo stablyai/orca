@@ -88,7 +88,8 @@ export function createCodexSkillsProbePools(
       if (owner.pending.size === 0) {
         return
       }
-      deps.prepareHome?.(owner.accountHomePath)
+      await deps.prepareHome?.(owner.accountHomePath)
+      owner.controller.signal.throwIfAborted()
       owner.started = true
       await probe(deps, owner, now(), () => {
         initialized = true

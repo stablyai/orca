@@ -161,7 +161,7 @@ orca workspace cleanup run --json
 orca workspace cleanup report --json
 ```
 
-`preview` shows what your cleanup rules would remove now and why every other workspace stays. `run` applies the rules now: each workspace is checked again right before removal and nothing is forced. `report` lists recent runs and when the next one is due. With no rule on, nothing is removed. With **Delete chat history with the workspace** on, `run` also deletes Orca, Claude Code and Codex chats from workspaces that no longer exist. Rules are set in Orca settings; these commands never change them. Add `--environment <id>` to run them on a paired server.
+`preview` shows what your cleanup rules would remove now and why every other workspace stays. `run` applies the rules now: each workspace is checked again right before removal and nothing is forced. `report` lists recent runs and when the next one is due. With no rule on, nothing is removed. With **Delete agent history when a workspace is deleted** (Settings > Agents) on, `run` also deletes Orca, Claude Code and Codex chats from workspaces that no longer exist. Rules are set in Orca settings; these commands never change them. Add `--environment <id>` to run them on a paired server.
 
 ## Ports
 
@@ -360,6 +360,17 @@ Coordinates are normalized from `0` to `1`. Prefer `tap` for single taps, and us
 ## Linear
 
 The `orca linear` surface is what agents use via the `orca-linear` skill (legacy install name `linear-tickets` still works). Prefer `--json`. Linked worktrees resolve with `--current`.
+
+### Connect
+
+Each Orca host keeps its own Linear connection. Connect a headless server or recipe VM from a shell, with the API key on stdin:
+
+```bash
+printf %s "$LINEAR_API_KEY" | orca linear connect
+printf %s "$LINEAR_API_KEY" | orca linear connect --environment build-vm --json
+# PowerShell
+$env:LINEAR_API_KEY | orca linear connect
+```
 
 ### Read
 

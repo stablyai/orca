@@ -18,10 +18,8 @@ import {
   HISTORY_CATCH_UP_MAX_OPERATIONS,
   type HistoryCatchUpPlan
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
-import {
-  legacyItemBody,
-  LEGACY_IMPORT_BLOCK_LIMITS
-} from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { LEGACY_IMPORT_BLOCK_LIMITS } from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { legacyItemBody } from '../../native-chat/agent-session-journal/history-import/journal-replacement-items'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions

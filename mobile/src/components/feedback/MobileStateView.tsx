@@ -150,11 +150,10 @@ export function MobileOfflineState({
       title={
         hostName
           ? t('common.offline.waitingFor', 'Waiting for {{host}}', { host: hostName })
-          : t('common.offline.waiting', 'Waiting for desktop')
+          : t('common.offline.waiting', 'Waiting for host')
       }
       message={
-        message ??
-        t('common.offline.message', 'Check that your computer is awake and Orca is running.')
+        message ?? t('common.offline.message', 'Check that the host is awake and Orca is running.')
       }
       action={
         onReconnect
