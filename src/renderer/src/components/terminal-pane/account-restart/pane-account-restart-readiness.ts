@@ -8,7 +8,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 export function selectReadyAccountRestartPtyIds(state: AppState, tabId: string): string[] {
   const pending = state.pendingPaneAccountRestarts
   const layout = state.terminalLayoutsByTabId[tabId]
-  const ready = collectLeafIds(layout?.root)
+  const ready: string[] = collectLeafIds(layout?.root)
     .map((leafId) => makePaneKey(tabId, leafId))
     .filter((key) => {
       const request = pending[key]
