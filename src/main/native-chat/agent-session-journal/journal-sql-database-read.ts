@@ -126,12 +126,13 @@ function read(
       if (through === null || through === undefined) {
         return { kind: 'retired-heads', heads: [], through: null }
       }
+      // The first page has no lower bound; later pages keep an indexed range from the cursor.
+      const after = operation.after === null ? '' : 'pending.session_id>? AND '
       const rows = db
         .prepare(`SELECT pending.session_id,pending.generation,head.epoch FROM journal_retire_pending AS pending
           LEFT JOIN journal_chat_state AS head ON head.session_id=pending.session_id
-          WHERE (? IS NULL OR pending.session_id>?) AND pending.session_id<=?
-          ORDER BY pending.session_id LIMIT 16`)
-        .all(operation.after, operation.after, through)
+          WHERE ${after}pending.session_id<=? ORDER BY pending.session_id LIMIT 16`)
+        .all(...(operation.after === null ? [through] : [operation.after, through]))
       return {
         kind: 'retired-heads',
         through: String(through),
