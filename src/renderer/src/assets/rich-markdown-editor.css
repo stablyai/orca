@@ -538,11 +538,19 @@
 .rich-markdown-search-match {
   padding: 0;
   border-radius: 2px;
-  background: color-mix(in srgb, #facc15 50%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--text-link, var(--callout-note)) var(--search-match-mix),
+    transparent
+  );
 }
 
 .rich-markdown-search-match[data-active='true'] {
-  background: color-mix(in srgb, #38bdf8 50%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--text-link, var(--callout-note)) var(--search-match-active-mix),
+    transparent
+  );
 }
 
 .rich-markdown-editor {

@@ -358,8 +358,6 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #f59e0b;
-  --markdown-search-match: #facc15;
-  --markdown-search-match-active: #fb923c;
   /* Split dividers must clear 3:1 against --card even before hover; --border is too faint. */
   --split-divider: #868690;
   --split-divider-hover: #71717a;
@@ -508,8 +506,6 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #fbbf24;
-  --markdown-search-match: #facc15;
-  --markdown-search-match-active: #fb923c;
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --split-divider: #71717a;
   --split-divider-hover: #a1a1aa;
@@ -549,6 +545,10 @@
   /* Keep in step with accentInkHex (src/shared/color/accent-ink.ts): white reads better on this accent. */
   --theme-accent-foreground: #fafafa;
   --callout-important: #8250df;
+  /* Mix depths for the theme accent; each use site resolves the current --text-link. */
+  --text-selection-mix: 28%;
+  --search-match-mix: 22%;
+  --search-match-active-mix: 45%;
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
   --git-decoration-deleted: #ad0707;
@@ -588,6 +588,9 @@
   /* Keep in step with accentInkHex (src/shared/color/accent-ink.ts): near-black reads better on this accent. */
   --theme-accent-foreground: #171717;
   --callout-important: #ab7df8;
+  --text-selection-mix: 34%;
+  --search-match-mix: 26%;
+  --search-match-active-mix: 50%;
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
   --git-decoration-deleted: #c74e39;
@@ -956,6 +959,14 @@ body[data-modal-overlay-open]
   *::before,
   *::after {
     @apply border-border outline-ring/50;
+  }
+
+  ::selection {
+    background-color: color-mix(
+      in srgb,
+      var(--text-link, var(--callout-note)) var(--text-selection-mix),
+      transparent
+    );
   }
 
   body {
