@@ -2,7 +2,7 @@ import type { StructuredAgentSessionIdleDeath } from '../../../../native-chat/ag
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import { reportWorkerTurnStop, type WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
-/** A chat worker's provider died with no turn running: nothing else tells its coordinator. Once per provider
+/** A chat worker's provider died with no turn running: nothing else tells its coordinator. Once per session and provider
  *  generation, since mail starts the chat again and a later death is news again. */
 export function reportChatWorkerProviderDeath(
   death: StructuredAgentSessionIdleDeath,
@@ -25,7 +25,7 @@ export function reportChatWorkerProviderDeath(
         {
           from,
           reason: 'exited',
-          stopKey: `exit:${death.fence}`,
+          stopKey: `exit:${death.sessionId}:${death.fence}`,
           ...(death.reason ? { cause: death.reason } : {}),
           restartsOnMail: true,
           lastOutput: undefined
