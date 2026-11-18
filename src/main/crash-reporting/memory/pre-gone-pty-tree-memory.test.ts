@@ -22,7 +22,9 @@ const row = (pid: number, ppid: number, name: string, ws: number, commit: number
   cpu: 0,
   memory: ws * MB,
   privateMemory: commit * MB,
-  name
+  name,
+  // Parents start before children, as Windows creation times prove.
+  startTicks: BigInt(pid)
 })
 
 // 32 GB commit limit: pressure starts below min(4096, 20%) = 4096 MB.

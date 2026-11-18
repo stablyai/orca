@@ -268,18 +268,21 @@ function summarizePtyTreeMemory(
   addMemoryDetails(details, '', sumMemory(rows))
   // getAppMetrics omits the detached daemon. Its other descendants (console hosts, PTYs
   // the registry could not attribute) are reported apart so they never read as daemon memory.
-  // The authenticated pid may be stale (restart, pid reuse): require it to parent a PTY root
-  // and, where creation times exist (Windows keeps a dead parent's pid), to predate that root.
+  // The authenticated pid may be stale (restart, pid reuse): require it to parent a PTY root.
+  // Windows keeps a dead parent's pid, so there it must also provably predate that root.
   const daemonStart = daemonPid === null ? undefined : index.byPid.get(daemonPid)?.startTicks
   const parentsPtyRoot =
     daemonPid !== null &&
     ptys.some((pty) => {
       const root = pty.pid == null ? undefined : index.byPid.get(pty.pid)
+      if (root?.ppid !== daemonPid) {
+        return false
+      }
+      if (process.platform !== 'win32') {
+        return true
+      }
       return (
-        root?.ppid === daemonPid &&
-        (daemonStart === undefined ||
-          root.startTicks === undefined ||
-          daemonStart <= root.startTicks)
+        daemonStart !== undefined && root.startTicks !== undefined && daemonStart <= root.startTicks
       )
     })
   if (daemonPid !== null && parentsPtyRoot) {
