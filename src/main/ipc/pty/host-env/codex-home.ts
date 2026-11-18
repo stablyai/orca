@@ -1,4 +1,3 @@
-import { codexWorkspaceAccountId } from '../../../../shared/agent-accounts/codex/codex-workspace-account'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
@@ -227,10 +226,6 @@ export function recordCodexPaneAccountForSpawn(args: {
   }
   recordCodexPaneAccount(args.ptyId, {
     ...record,
-    ...(codexWorkspaceAccountId(args.settings?.codexWorkspaceAccounts, args.workspaceId) ===
-    record.accountId
-      ? { pinnedByWorkspace: true }
-      : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {})
   })
 }

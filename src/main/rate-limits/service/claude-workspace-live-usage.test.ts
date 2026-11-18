@@ -38,9 +38,15 @@ it('records live workspace usage with OAuth polling disabled and leaves host def
     fiveHour: { used_percentage: 27 },
     sevenDay: { used_percentage: 42 }
   })
+  service.ingestLiveClaudeRateLimits({
+    configDir: join(root, 'data', 'claude-profiles', 'work', 'home'),
+    fiveHour: { used_percentage: 28 },
+    sevenDay: null
+  })
+  service.discardClaudeOAuthUsage()
   const state = service.getState()
-  expect(state.claude).toBeNull()
-  expect(state.inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent).toBe(27)
+  expect(state.claude?.session).toBeNull()
+  expect(state.inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent).toBe(28)
   expect(state.inactiveClaudeAccounts[0]?.rateLimits?.weekly?.usedPercent).toBe(42)
   expect(state.inactiveClaudeAccounts[0]?.rateLimits?.usageMetadata?.readingAccount).toEqual({
     accountId: 'work',
@@ -52,8 +58,8 @@ it('records live workspace usage with OAuth polling disabled and leaves host def
     fiveHour: { used_percentage: 99 },
     sevenDay: null
   })
-  expect(service.getState().inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent).toBe(27)
-  expect(service.getState().claude).toBeNull()
+  expect(service.getState().inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent).toBe(28)
+  expect(service.getState().claude?.session).toBeNull()
 })
 
 it('attributes the first live reading when the bound account is also the host default', async () => {

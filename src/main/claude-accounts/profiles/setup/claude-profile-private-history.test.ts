@@ -51,3 +51,30 @@ it('detaches retired prompt hardlinks and broken shared project links while pres
   expect(await readFile(join(home, 'file-history', 'private'), 'utf8')).toBe('private account file')
   expect((await stat(join(home, 'projects'))).isDirectory()).toBe(true)
 })
+
+it('keeps formerly shared conversations resumable in an independent private projects directory', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-private-resume-')))
+  directories.push(root)
+  const home = join(root, 'account')
+  const shared = join(root, 'system')
+  await mkdir(home)
+  await mkdir(join(shared, 'projects', 'project'), { recursive: true })
+  await writeFile(join(shared, 'projects', 'project', 'session.jsonl'), 'existing conversation\n')
+  await symlink(
+    join(shared, 'projects'),
+    join(home, 'projects'),
+    process.platform === 'win32' ? 'junction' : 'dir'
+  )
+  await isolateClaudeProfileHistory(home, shared)
+  expect(await readFile(join(home, 'projects', 'project', 'session.jsonl'), 'utf8')).toBe(
+    'existing conversation\n'
+  )
+  await writeFile(join(home, 'projects', 'project', 'session.jsonl'), 'private continuation\n')
+  await isolateClaudeProfileHistory(home, shared)
+  expect(await readFile(join(shared, 'projects', 'project', 'session.jsonl'), 'utf8')).toBe(
+    'existing conversation\n'
+  )
+  expect(await readFile(join(home, 'projects', 'project', 'session.jsonl'), 'utf8')).toBe(
+    'private continuation\n'
+  )
+})

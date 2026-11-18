@@ -245,6 +245,9 @@ export function resolveOwnerUsageRateLimits(
   return {
     ...base,
     ...mapProviders((key) => {
+      if (ACCOUNT_OWNED_PROVIDERS.has(key)) {
+        return stamp(key)
+      }
       const provider = base[key]
       // Preserve absent slots, but end loading for real fetching slots when contact is lost.
       if (

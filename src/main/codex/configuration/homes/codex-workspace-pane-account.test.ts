@@ -49,3 +49,36 @@ it('records the launched workspace home and keeps its pane current when only the
     { ptyId: 'workspace-pane', launchAccountId: 'work', activeAccountId: 'personal' }
   ])
 })
+
+it('detects a new workspace binding for an inherited pane and ignores runtime-mismatched bindings', () => {
+  const settings = createSettings({
+    codexManagedAccounts: ['personal', 'work', 'guest'].map((id) => ({
+      id,
+      email: `${id}@example.com`,
+      managedHomePath: join(testState.userDataDir, id),
+      ...(id === 'guest' ? { managedHomeRuntime: 'wsl' as const, wslDistro: 'Ubuntu' } : {}),
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1
+    })),
+    activeCodexManagedAccountId: 'personal',
+    activeCodexManagedAccountIdsByRuntime: { host: 'personal', wsl: {} },
+    codexWorkspaceAccounts: {}
+  })
+  recordCodexPaneAccountForSpawn({
+    ptyId: 'inherited',
+    workspaceId: 'folder:client',
+    isDaemonHostSpawn: true,
+    isReattach: false,
+    pinnedByResume: false,
+    launchCodexHomePath: join(testState.userDataDir, 'personal'),
+    target: { runtime: 'host' },
+    settings
+  })
+  settings.codexWorkspaceAccounts = { 'folder:client': 'work' }
+  expect(listStaleCodexPanes({ ptyIds: ['inherited'], settings })).toEqual([
+    { ptyId: 'inherited', launchAccountId: 'personal', activeAccountId: 'work' }
+  ])
+  settings.codexWorkspaceAccounts = { 'folder:client': 'guest' }
+  expect(listStaleCodexPanes({ ptyIds: ['inherited'], settings })).toEqual([])
+})

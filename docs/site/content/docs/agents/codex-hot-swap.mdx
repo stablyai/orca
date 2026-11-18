@@ -28,6 +28,10 @@ Accounts belong to the host running the workspace. A missing or incompatible ass
 
 When opening a saved conversation, History instead prefers the account Orca last recorded for it. A different workspace binding triggers an account choice for that continuation; it does not rewrite the workspace binding. See [Accounts and independent continuations](/docs/agents/session-history#accounts-and-independent-continuations).
 
+When an older Claude profile still shares history through directory links, its first workspace-bound setup snapshots the history it could already see into independent private directories before removing those links. Existing transcripts and companion files remain available; later writes are no longer shared. Stop active Claude writers before migrating legacy shared profiles so a turn cannot append to the old store after its snapshot.
+
+Restarting a terminal uses the workspace's current compatible account binding, then the host default when the workspace inherits it. A conversation opened with an explicit History account choice retains that choice instead. Changing a binding while launch preparation is running refuses that launch and asks you to try again.
+
 ## Swap accounts
 
 Click the Codex chip in the status bar to open the account switcher, or pick an account in Settings. New sessions without a workspace binding use that account, and new chats use that selection. Existing chats retain the account associated with their conversation. Terminal sessions already running keep their original account until restarted.
