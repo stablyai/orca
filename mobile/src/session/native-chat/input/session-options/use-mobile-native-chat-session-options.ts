@@ -1,4 +1,5 @@
 import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
+import type { ClaudeSessionStatus } from '../../../../../../src/shared/native-chat/claude-session-status'
 import {
   useCallback,
   useEffect,
@@ -35,8 +36,11 @@ import {
 import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
+import { withAnsweringModelLabel } from './mobile-answering-model-label'
 
 export type MobileNativeChatSessionOptionsController = {
+  /** Read by the composer's status row; only a terminal-backed Claude chat has one. */
+  claudeSessionStatus?: ClaudeSessionStatus | null
   optionSurface?: SessionOptionsSurface
   conversationCommands?: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
@@ -66,6 +70,8 @@ type HookArgs = {
   agent: string | null
   scopeKey: string | null
   reportedModel: string | null
+  /** The session file's view of the chat; its model outranks the hook's. */
+  sessionReport?: ClaudeSessionStatus | null
   discoveredModels?: CatalogModel[] | null
   modelSwitchCommand?: string
   dispatchCommand: (
@@ -83,6 +89,8 @@ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 // Kept across remounts: a repeated hook model is not fresh evidence, and reapplying it would revert a newer pick.
 const appliedReportByScope = new Map<string, string>()
+// Apart from the hook's: the hook model lands first on each visit and must not make the same reply look new.
+const appliedFileReportByScope = new Map<string, string>()
 
 /** A tab that runs another agent starts over: a new session there carries none of the old one's picks. */
 function startScopeOverForAgent(scopeKey: string, agent: string): void {
@@ -165,6 +173,8 @@ export function useMobileNativeChatSessionOptions(
   args: HookArgs
 ): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, discoveredModels } = args
+  const fileModel = args.sessionReport?.model ?? null
+  const fileEffort = args.sessionReport?.effort ?? null
   const catalog = agent ? getAgentSessionOptionCatalog(agent) : null
   const identity = agent && scopeKey && catalog ? `${scopeKey}\0${agent}` : null
   const canSwitchOmpModel = args.modelSwitchCommand === 'orca-model'
@@ -221,30 +231,46 @@ export function useMobileNativeChatSessionOptions(
   }, [discoveredModels, entry])
 
   useEffect(() => {
-    if (!surface || !scopeKey || !catalog || !reportedModel) {
+    const reported = fileModel ?? reportedModel
+    if (!surface || !scopeKey || !catalog || !reported) {
       return
     }
     // Phone-only: desktop reads Claude's model from its terminal screen, which the phone cannot see, so Claude keeps the hook model too.
     // OMP reports exact selectors, including models absent from cached discovery.
-    const matched =
+    const searched = { ...catalog, models: discoveredModels ?? catalog.models }
+    const listed =
       agent === 'omp'
-        ? reportedModel.trim()
-        : matchNativeChatCatalogModelId(
-            { ...catalog, models: discoveredModels ?? catalog.models },
-            reportedModel,
-            { allowUnlisted: agent === 'codex' }
-          )
-    if (!matched || appliedReportByScope.get(scopeKey) === matched) {
+        ? reported.trim()
+        : matchNativeChatCatalogModelId(searched, reported, { allowUnlisted: agent === 'codex' })
+    // The session file names the model that actually answered, even one this catalog predates.
+    const matched =
+      listed ??
+      (fileModel
+        ? matchNativeChatCatalogModelId(searched, reported, { allowUnlisted: true })
+        : null)
+    const applied = fileEffort ? `${matched}\0${fileEffort}` : matched
+    const appliedByScope = fileModel ? appliedFileReportByScope : appliedReportByScope
+    if (!matched || !applied || appliedByScope.get(scopeKey) === applied) {
       return
     }
-    setBoundedScopeCacheEntry(appliedReportByScope, scopeKey, matched)
-    surface.reportSessionOptions({ model: matched })
-  }, [agent, catalog, discoveredModels, reportedModel, scopeKey, surface])
+    setBoundedScopeCacheEntry(appliedByScope, scopeKey, applied)
+    surface.reportSessionOptions(
+      fileEffort ? { model: matched, effort: fileEffort } : { model: matched }
+    )
+  }, [agent, catalog, discoveredModels, fileEffort, fileModel, reportedModel, scopeKey, surface])
 
-  const snapshot = useSyncExternalStore(
+  const liveSnapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,
     surface?.getSnapshot ?? getEmptySnapshot,
     surface?.getSnapshot ?? getEmptySnapshot
+  )
+  // The catalog names a family; the session file names the version that actually answered.
+  const snapshot = useMemo(
+    () =>
+      fileModel
+        ? liveSnapshot.map((descriptor) => withAnsweringModelLabel(descriptor, fileModel))
+        : liveSnapshot,
+    [fileModel, liveSnapshot]
   )
 
   const track = useCallback(
@@ -291,7 +317,14 @@ export function useMobileNativeChatSessionOptions(
   const pendingId = pending && pending.identity === identity ? pending.id : null
 
   return useMemo(
-    () => ({ snapshot, pendingId, setOption, invokeAction, recordCommand }),
-    [snapshot, pendingId, setOption, invokeAction, recordCommand]
+    () => ({
+      snapshot,
+      pendingId,
+      setOption,
+      invokeAction,
+      recordCommand,
+      claudeSessionStatus: args.sessionReport
+    }),
+    [snapshot, pendingId, setOption, invokeAction, recordCommand, args.sessionReport]
   )
 }
