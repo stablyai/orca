@@ -16,7 +16,8 @@ import {
   normalizeAppIconId,
   type BuiltInAppIconId
 } from '../../../shared/app-lifecycle/identity/app-icon'
-import { getCustomAppIconPath, hasCustomAppIcon } from './custom-app-icon'
+import { getCustomAppIconPath, getCustomAppIconRevision, hasCustomAppIcon } from './custom-app-icon'
+import { fitAppIconToPlatformShape } from './platform-app-icon-shape'
 
 const APP_ICON_PATHS = {
   classic: !app.isPackaged ? classicDevIcon : classicIcon,
@@ -86,8 +87,21 @@ export function getAppIconPath(value: unknown): string {
   return APP_ICON_PATHS[iconId]
 }
 
+let customAppIconImageCache: { revision: number; image: Electron.NativeImage } | null = null
+
 export function createAppIconImage(value: unknown): Electron.NativeImage {
-  return nativeImage.createFromPath(getAppIconPath(value))
+  const iconPath = getAppIconPath(value)
+  // Built-in assets already follow each platform's icon shape; only imported art needs fitting.
+  if (iconPath !== getCustomAppIconPath()) {
+    return nativeImage.createFromPath(iconPath)
+  }
+  const revision = getCustomAppIconRevision()
+  if (customAppIconImageCache?.revision !== revision) {
+    // Shaping is a full-size pixel pass, so run it once per imported file.
+    const image = fitAppIconToPlatformShape(nativeImage.createFromPath(iconPath))
+    customAppIconImageCache = { revision, image }
+  }
+  return customAppIconImageCache.image
 }
 
 function getMacAppBundlePath(): string | undefined {
