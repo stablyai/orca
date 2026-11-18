@@ -89,12 +89,12 @@ vi.mock('@/components/native-chat/composer/focus/native-chat-composer-mount', ()
   nativeChatComposerSelection: () => undefined,
   waitForNativeChatComposerHandoff: mocks.waitForComposerMount
 }))
-vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
+vi.mock('@/components/terminal/workspace-mounting/background-terminal-worktree-mount', () => ({
   requestBackgroundTerminalWorktreeMount: vi.fn()
 }))
 
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
-import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 
 const request = {
   repoId: 'repo-1',

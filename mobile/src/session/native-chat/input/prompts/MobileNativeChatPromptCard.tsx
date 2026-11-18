@@ -28,6 +28,7 @@ import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
+import type { MobileNativeChatCollapsedPrompt } from './MobileNativeChatPromptStrip'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import {
   useMobileNativeChatLowerGeometry,
@@ -73,7 +74,7 @@ export function MobileNativeChatPromptCard({
   onCancelPrompt?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   onCollapseAsk?: () => void
   onCollapsePrompt?: () => void
-  collapsedPrompt?: { title: string; expand: () => void } | null
+  collapsedPrompt?: MobileNativeChatCollapsedPrompt | null
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
   question?: MobileChatQuestion | null
@@ -139,6 +140,7 @@ export function MobileNativeChatPromptCard({
         questions={question.questions}
         onAnswer={async (answers) => (await onAnswerQuestion?.(answers, question.prompt)) ?? false}
         onCancel={onCancelPrompt && (() => onCancelPrompt(question.prompt))}
+        onCollapse={onCollapsePrompt}
       />
     ) : question ? (
       <MobileNativeChatQuestion
@@ -146,6 +148,7 @@ export function MobileNativeChatPromptCard({
         question={question}
         onAnswer={async (text) => (await onAnswerQuestion?.(text)) ?? false}
         onCancel={onCancelPrompt}
+        onCollapse={onCollapsePrompt}
       />
     ) : null
   const arrival = usePromptCardArrival(card !== null)

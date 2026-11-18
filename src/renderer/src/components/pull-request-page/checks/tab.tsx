@@ -1,5 +1,5 @@
 import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
-import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
+import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
 import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
@@ -9,14 +9,14 @@ import {
   resolveGitHubChecksTabState,
   toggleGitHubChecksTabExpandedKey,
   type GitHubChecksContextOwner
-} from '@/components/github-checks-tab-state'
+} from '@/components/github/github-checks-tab-state'
 
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import {
   getCheckCounts,
   getOverallCheckCounts,
   getChecksSummaryLabel
-} from '@/components/pr-check-counts'
+} from '@/components/github/pr-check-counts'
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'

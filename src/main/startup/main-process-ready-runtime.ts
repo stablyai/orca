@@ -27,7 +27,8 @@ import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/m
 import { shouldInstallManagedHooks } from './configure-process'
 import { mainProcessState as state } from './main-process-state'
 import { initializeMainProcessObservers } from './main-process-observers'
-import { installFirstWorkRenameHookSubscription } from './workspace-startup/branch-rename-hook'
+import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
+import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
 import { initializeMainProcessAccountServices } from './agent-accounts/main-process-account-services'
 import {
   initializeMainProcessRuntime,
@@ -48,6 +49,7 @@ import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/
 import { pruneDesktopOrcadArtifactCache } from '../orcad/artifact-slots/orcad-artifact-cache-retention'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
+import { reapLeftoverMacOSPermissionStatusHelpers } from '../computer/macos-permissions/macos-permission-status-leftover-reap'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
@@ -72,7 +74,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   initializeMainProcessAutomations()
   startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(runtime)
-  installFirstWorkRenameHookSubscription()
+  installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
   await initializeMainProcessPlugins(runtime)
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
@@ -126,6 +128,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   runAfterFirstWindowShown(() => {
     new WslUsageReporter(store, app.getPath('userData')).start()
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // Suspended permission probes left by older builds hold LaunchServices slots until every app launch hangs.
+  runAfterFirstWindowShown(() => {
+    void reapLeftoverMacOSPermissionStatusHelpers()
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   runAfterFirstWindowShown(() => {
     void pruneDesktopOrcadArtifactCache(app.getPath('userData')).catch((error) => {

@@ -4,14 +4,13 @@ import {
   createManagedCommandMatcher,
   removeManagedCommands
 } from '../agent-hooks/installation/commands/managed-hook-command-matching'
-import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
 import type { HookDefinition } from '../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote
 } from '../agent-hooks/installation/configuration/hooks-json-remote'
 import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
-import { COPILOT_EVENTS } from './copilot-managed-hook-definitions'
+import { COPILOT_EVENTS, getPosixManagedCommand } from './copilot-managed-hook-definitions'
 import { getManagedScript } from './copilot-managed-script'
 
 function getRemoteManagedHookDefinition(command: string): HookDefinition {
@@ -59,9 +58,7 @@ export async function installCopilotHooksRemote(
       const cleaned = removeManagedCommands(current, isManagedCommand)
       nextHooks[eventName] = [
         ...cleaned,
-        getRemoteManagedHookDefinition(
-          wrapPosixHookCommand(remoteScriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
-        )
+        getRemoteManagedHookDefinition(getPosixManagedCommand(remoteScriptPath, eventName))
       ]
     }
 

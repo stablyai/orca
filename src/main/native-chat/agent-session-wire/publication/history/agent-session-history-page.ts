@@ -26,16 +26,26 @@ type HistoryReadOptions = {
   scope?: AgentSessionHistoryScope
   reader?: HistoryReader
   rowReplay?: boolean
+  acceptedUnopened?: true
 }
 
-export type AgentSessionHistoryFrame<T> = { result: T; work?: JournalSqlWorkResult }
+export type AgentSessionHistoryFrame<T> = {
+  result: T
+  work?: JournalSqlWorkResult
+  acceptedUnopened?: boolean
+}
 
 /** The page and any requested work share one reader snapshot. `inLane`: the caller already holds
  *  the chat's command lane, which is not reentrant. */
 export async function readAgentSessionHistoryFrame(
   journal: SqlAgentSessionJournal,
   request: AgentSessionHistoryRequest,
-  { scope = 'every-agent', reader = CLIENT_HISTORY_READER, rowReplay = false }: HistoryReadOptions,
+  {
+    scope = 'every-agent',
+    reader = CLIENT_HISTORY_READER,
+    rowReplay = false,
+    acceptedUnopened
+  }: HistoryReadOptions,
   work?: JournalDomainHistoryWork,
   inLane = false
 ): Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> {
@@ -45,6 +55,7 @@ export async function readAgentSessionHistoryFrame(
         ...request,
         scope,
         rowReplay,
+        ...(acceptedUnopened ? { acceptedUnopened } : {}),
         reader: {
           form: reader.wireForm ?? 'client',
           budgetBytes: reader.budgetBytes,

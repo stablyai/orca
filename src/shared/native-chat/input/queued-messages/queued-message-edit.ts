@@ -13,7 +13,10 @@ import {
   MAX_BLOCKS,
   MAX_PROMPT_BYTES
 } from '../../../rpc-contract/structured-agent-session/structured-agent-session-message-params'
-import { imageReferenceInsertion, withoutImageReference } from '../../native-chat-image-reference'
+import {
+  imageReferenceInsertion,
+  withoutImageReference
+} from '../../attachments/native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences,
@@ -40,7 +43,12 @@ export type QueuedMessageEditResult =
 /** The text an in-place edit starts from, or null when the card is not editable: a command is
  *  not a draft, and a block this edit cannot carry over unchanged refuses rather than drops. */
 export function queuedMessageEditableText(body: AgentJournalMessageItem): string | null {
-  if (body.command || body.blocks.some((b) => b.type !== 'text' && b.type !== 'image-ref')) {
+  // An automation's run is its saved prompt and Orca's record of the event, not the person's words.
+  if (
+    body.command ||
+    body.origin === 'automation-run' ||
+    body.blocks.some((b) => b.type !== 'text' && b.type !== 'image-ref')
+  ) {
     return null
   }
   return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
@@ -209,8 +217,17 @@ export function queuedMessageWithEdit(
   ) {
     return { ok: true, body }
   }
-  // Plain-text edits cannot retain which occurrence owned a picked file.
-  const { skills: _pickedSkills, ...withoutSkills } = body
+  // Plain-text edits cannot retain which occurrence owned a picked file. Edited text is the
+  // person's own, no longer the labelled message Orca delivered.
+  const {
+    skills: _pickedSkills,
+    origin: _delivered,
+    asker: _asker,
+    connectorConversation: _conversation,
+    memorySource: _run,
+    triggeredBy: _trigger,
+    ...withoutSkills
+  } = body
   const plainBody = { ...withoutSkills, ...(skills?.length ? { skills } : {}) }
   if (images) {
     const blocks: AgentJournalMessageItem['blocks'] = [

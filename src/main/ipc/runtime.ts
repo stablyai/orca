@@ -10,12 +10,12 @@ import type {
 import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
-import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './runtime-client/desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
-import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
+import { DesktopRuntimeSenderLifecycle } from './runtime-client/desktop-runtime-sender-lifecycle'
 import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
 import { publishMobileProjectSections } from '../runtime/sidebar-inputs/catalog/mobile-project-sections-snapshot'
 
@@ -101,7 +101,11 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     'runtime:call',
     async (
       event,
-      args: { method: string; params?: unknown }
+      args: {
+        method: string
+        params?: unknown
+        orchestration?: { contractVersion: number; requestId: string }
+      }
     ): Promise<RuntimeRpcResponse<unknown>> => {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
@@ -113,7 +117,13 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           // The renderer ships with this main process, so it always speaks the current contract.
           orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
           method: args.method,
-          params: args.params
+          params: args.params,
+          ...(args.orchestration
+            ? {
+                orchestrationContractVersion: args.orchestration.contractVersion,
+                orchestrationRequestId: args.orchestration.requestId
+              }
+            : {})
         },
         {
           clientId: 'desktop-renderer',

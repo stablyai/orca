@@ -123,7 +123,9 @@ export class StructuredAgentSessionClientDelivery {
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
       readCurrentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       readWorkFrame: (sessionId, journal, rows) =>
-        this.statusFeed.journalProjection.workFrame(sessionId, journal, rows)
+        this.statusFeed.journalProjection.workFrame(sessionId, journal, rows),
+      onPromptSuggestionInterest: (sessionId, wanted) =>
+        this.deps().adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
     })
   }
 
@@ -264,6 +266,9 @@ export class StructuredAgentSessionClientDelivery {
 
   readStatusSummary = (sessionId: string): AgentSessionStatusSummary | undefined =>
     this.statusFeed.readPublished(sessionId)
+
+  /** A live chat's current work as of its last status publish; sync, for bot readers. */
+  readPublishedWork = (sessionId: string) => this.statusFeed.readPublishedWork(sessionId)
 
   subscribeTurnCompletions = (subscriber: TurnCompletionSubscriber): (() => void) =>
     this.turnCompletionFeed.subscribe(subscriber)

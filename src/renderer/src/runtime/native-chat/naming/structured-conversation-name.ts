@@ -5,7 +5,7 @@ import {
 } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useMemo } from 'react'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { isAgentSessionConversationName } from '../../../../../shared/agent-session/agent-session-conversation-name'
+import { isAgentSessionConversationName } from '../../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 import type {
   AgentSessionNamingError,
   AgentSessionConversationName
@@ -18,7 +18,7 @@ import {
   getStructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusFeedOwner
 } from '../status/structured-agent-session-status-feed'
-import { agentSessionShownName } from '../../../../../shared/agent-session/agent-session-fork-name'
+import { agentSessionShownName } from '../../../../../shared/agent-session/conversation-naming/agent-session-fork-name'
 import {
   structuredChatForkSourceId,
   structuredChatForkSourceSavedName,

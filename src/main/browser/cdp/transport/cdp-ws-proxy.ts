@@ -53,7 +53,8 @@ export class CdpWsProxy {
       this.responder,
       this.sessions,
       () => this.client,
-      () => this.stop()
+      () => this.stop(),
+      holdPaint
     )
     this.navigation = new CdpPageNavigationCommands(
       webContents,
@@ -196,6 +197,7 @@ export class CdpWsProxy {
 
   private clearClientState(): void {
     // Never carry session, focus, or capture state across client replacement.
+    this.debuggerChannel.releaseScreencastPaint()
     this.domFocusReplay.clear()
     this.pageCapture.clear()
     this.sessions.clear()

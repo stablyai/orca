@@ -28,8 +28,14 @@ vi.mock('react-native-gesture-handler', () => {
     runOnJS: () => GestureChain
     onStart: () => GestureChain
     onUpdate: () => GestureChain
+    onFinalize: () => GestureChain
   }
-  const chain: GestureChain = { runOnJS: () => chain, onStart: () => chain, onUpdate: () => chain }
+  const chain: GestureChain = {
+    runOnJS: () => chain,
+    onStart: () => chain,
+    onUpdate: () => chain,
+    onFinalize: () => chain
+  }
   return {
     Gesture: { Simultaneous: () => ({}), Native: () => ({}), Pinch: () => chain },
     GestureDetector: 'GestureDetector',
@@ -54,7 +60,13 @@ vi.mock('lucide-react-native', () =>
       'Square',
       'X',
       'Check',
-      'CircleHelp'
+      'CircleHelp',
+      // The automation mark's icon table is read when its module loads.
+      'Clock',
+      'Hourglass',
+      'Play',
+      'Webhook',
+      'Zap'
     ].map((x) => [x, x])
   )
 )

@@ -2,7 +2,7 @@ import { settleStructuredLaunchFirstMessageFromJournal } from '@/lib/agent-sessi
 import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { structuredAgentSessionSendBody } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionFirstMessage } from '../../../../../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { AgentSessionWriteFailure } from '../../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import {
