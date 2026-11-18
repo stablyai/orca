@@ -1,57 +1,53 @@
 import { OrcaRuntimeWithWorktreeSleepResumeRecording } from './worktree-sleep-resume-recording'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { completedAgentTurnAllowsStop } from '../../../../shared/agent-session/lifecycle/stopping/completed-agent-turn-stop'
-import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
-type QuitStopTarget = { ptyId: string; incarnationId: string | null }
+export type QuitStopTarget = { ptyId: string; incarnationId: string | null }
 
-/** Input from the turn's start on may be a queued or unsent draft; with no turn start, any input may be. */
-function inputMayHoldDraft(status: AgentStatusIpcPayload, inputAt: number | null): boolean {
-  return inputAt !== null && (status.turnStartedAt === undefined || inputAt >= status.turnStartedAt)
+/** Typing from the turn's start on may be a queued or unsent draft (with no turn start, any typing
+ *  may be); any write after the turn ended, Orca's own deliveries included, may start the next turn. */
+function inputMayOpenTurn(
+  status: AgentStatusIpcPayload,
+  typedAt: number | null,
+  writtenAt: number | null
+): boolean {
+  return (
+    (typedAt !== null && (status.turnStartedAt === undefined || typedAt >= status.turnStartedAt)) ||
+    (writtenAt !== null && writtenAt >= status.stateStartedAt)
+  )
+}
+
+/** The PTY this machine's saved layout binds to the pane; window graphs are gone by quit. */
+function savedPanePtyId(session: WorkspaceSessionState, paneKey: string): string | undefined {
+  const pane = parsePaneKey(paneKey)
+  return pane ? session.terminalLayoutsByTabId?.[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] : undefined
 }
 
 export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithWorktreeSleepResumeRecording {
   protected abstract ptyShowsComposerDraft(ptyId: string): boolean
 
   /**
-   * Stop this machine's agents that finished their turn and whose conversation the saved profile
-   * can resume; mid-turn agents and plain shells keep running. Call only after the final profile
-   * save, so the next launch finds each stopped pane as after a reboot and resumes it.
+   * This machine's agents that finished their turn and whose conversation the saved profile
+   * resumes; mid-turn agents and plain shells are never picked. Read before quit teardown
+   * clears hook rows and remote viewers.
    */
-  async stopIdleAgentTerminalsForQuit(deadlineMs: number): Promise<string[]> {
-    const stopAndWait = this.ptyController?.stopAndWait?.bind(this.ptyController)
-    if (!stopAndWait) {
+  selectIdleAgentTerminalsForQuit(): QuitStopTarget[] {
+    // Local panes (SSH ones included) live in this machine's partition; a paired server stops its own.
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session) {
       return []
     }
-    const stopped = await Promise.all(
-      this.idleAgentQuitStopTargets().map(async ({ ptyId, incarnationId }) => {
-        // Reversible: the exit must not retire the saved conversation the next launch resumes.
-        const settleStop = this.intentionalPtyStops.mark(ptyId, 'reversible', incarnationId)
-        let done = false
-        try {
-          done = await stopAndWait(ptyId, { keepHistory: true, deadlineMs })
-        } catch (error) {
-          console.warn('[quit] Idle agent stayed running:', ptyId, error)
-        } finally {
-          settleStop(done)
-        }
-        return done ? [ptyId] : []
-      })
-    )
-    return stopped.flat()
-  }
-
-  private idleAgentQuitStopTargets(): QuitStopTarget[] {
     const rows = this.getAgentProviderSessionSnapshotFn?.() ?? []
     return rows.flatMap((row) => {
       // Placeholder and structured rows claim no finished turn; remote and WSL agents stay on their host.
       if (row.providerSessionOnly || row.structuredHost || row.connectionId !== null) {
         return []
       }
-      const pty = this.getPtyRecordForPaneKey(row.paneKey)
+      const ptyId = savedPanePtyId(session, row.paneKey)
+      const pty = ptyId ? this.ptysById.get(ptyId) : undefined
       if (
         !pty?.connected ||
         pty.connectionId !== null ||
@@ -60,7 +56,7 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
       ) {
         return []
       }
-      const savedRecord = this.savedRecordForQuitStop(row.paneKey, pty.worktreeId)
+      const savedRecord = session.sleepingAgentSessionsByPaneKey?.[row.paneKey]
       const identity = this.readPaneAgentIdentity(row.paneKey, savedRecord)
       // A shared process (tmux) outlives the pane, and an ended or suspended agent is not idle.
       if (
@@ -76,7 +72,11 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
       if (
         !completedAgentTurnAllowsStop(status) ||
         attention.shownRemotely ||
-        inputMayHoldDraft(status, attention.lastInputAt) ||
+        inputMayOpenTurn(
+          status,
+          attention.lastInputAt,
+          this.terminalRunFacts.readLastInputAt(pty.ptyId)
+        ) ||
         this.ptyShowsComposerDraft(pty.ptyId)
       ) {
         return []
@@ -97,16 +97,31 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
     })
   }
 
-  private savedRecordForQuitStop(
-    paneKey: string,
-    worktreeId: string
-  ): SleepingAgentSessionRecord | undefined {
-    const tabId = parsePaneKey(paneKey)?.tabId
-    const hostId = tabId ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)[0] : undefined
-    // A paired server's panes are that server's to stop.
-    if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
-      return undefined
+  /** Stop the picked agents, keeping history, once the final profile save holds their records;
+   *  the next launch finds each pane as after a reboot and resumes it. */
+  async stopIdleAgentTerminalsForQuit(
+    targets: readonly QuitStopTarget[],
+    deadlineMs: number
+  ): Promise<string[]> {
+    const stopAndWait = this.ptyController?.stopAndWait?.bind(this.ptyController)
+    if (!stopAndWait) {
+      return []
     }
-    return this.store?.getWorkspaceSession?.(hostId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
+    const stopped = await Promise.all(
+      targets.map(async ({ ptyId, incarnationId }) => {
+        // Reversible: the exit must not retire the saved conversation the next launch resumes.
+        const settleStop = this.intentionalPtyStops.mark(ptyId, 'reversible', incarnationId)
+        let done = false
+        try {
+          done = await stopAndWait(ptyId, { keepHistory: true, deadlineMs })
+        } catch (error) {
+          console.warn('[quit] Idle agent stayed running:', ptyId, error)
+        } finally {
+          settleStop(done)
+        }
+        return done ? [ptyId] : []
+      })
+    )
+    return stopped.flat()
   }
 }

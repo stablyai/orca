@@ -20,7 +20,8 @@ const SCENARIOS = [
   ['a working agent', []],
   ['a draft typed after the turn ended', []],
   ['a saved record of another conversation', []],
-  ['an agent inside tmux', []]
+  ['an agent inside tmux', []],
+  ['a turn Orca delivered after the turn ended', []]
 ] as const
 
 describe('quit stops idle agents', () => {
@@ -44,12 +45,13 @@ describe('quit stops idle agents', () => {
             state: 'done',
             capturedAt: 300,
             updatedAt: 300,
-            origin: 'quit',
+            origin: 'live',
             connectionId: null
           }
         }
       })
     )
+    let rows: AgentStatusIpcPayload[] = []
     const row: AgentStatusIpcPayload = {
       paneKey: PANE_KEY,
       state: scenario === 'a working agent' ? 'working' : 'done',
@@ -64,7 +66,7 @@ describe('quit stops idle agents', () => {
       providerSession: { key: 'session_id', id: 'claude-session-1' }
     }
     const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
-      getAgentProviderSessionSnapshot: () => [row],
+      getAgentProviderSessionSnapshot: () => rows,
       getPaneAgentIdentity: () => ({
         status: row,
         ended: false,
@@ -105,8 +107,16 @@ describe('quit stops idle agents', () => {
     if (scenario === 'a draft typed after the turn ended') {
       runtime.terminalRunFacts.recordInput('persisted-pty', 'driving', 'and then', 250)
     }
+    if (scenario === 'a turn Orca delivered after the turn ended') {
+      runtime.terminalRunFacts.recordInput('persisted-pty', 'orchestration', 'next task\r', 250)
+    }
+    rows = [row]
+    // Quit runs after the window closed, and its teardown clears hook rows before the stop.
+    runtime.markGraphUnavailable(1)
+    const targets = runtime.selectIdleAgentTerminalsForQuit()
+    rows = []
 
-    const stopped = await runtime.stopIdleAgentTerminalsForQuit(Date.now() + 4_000)
+    const stopped = await runtime.stopIdleAgentTerminalsForQuit(targets, Date.now() + 4_000)
 
     expect(stopped).toEqual(expectedStopped)
     expect(stopAndWait.mock.calls).toEqual(
