@@ -122,7 +122,12 @@ export function isAgentSessionRewindTarget(
   item: Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'turnScope'>,
   turnOpener: (turnItemId: string) => string | undefined
 ): boolean {
-  if (item.body.kind !== 'message' || item.body.role !== 'user') {
+  // An automation's run was Orca's send, not the person's turn to take back; refused for every client.
+  if (
+    item.body.kind !== 'message' ||
+    item.body.role !== 'user' ||
+    item.body.origin === 'automation-run'
+  ) {
     return false
   }
   return (

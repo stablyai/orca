@@ -7,6 +7,8 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  // Inside a sheet's tab, the tree sits on the sheet.
+  onSheet: { backgroundColor: 'transparent' },
   header: {
     backgroundColor: colors.bgBase
   },

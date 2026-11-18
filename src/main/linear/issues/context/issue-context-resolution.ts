@@ -42,7 +42,7 @@ export async function searchLinearIssuesForAgents(args: {
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
-    throw linearNotConnectedError('search')
+    throw linearNotConnectedError()
   }
 
   const perWorkspace = await readSearchWorkspaces(
@@ -93,7 +93,7 @@ export async function resolveIssue(
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
-    throw linearNotConnectedError('issue read')
+    throw linearNotConnectedError()
   }
 
   const results = await readIssueWorkspaces(entries, identifier, selection, entryFailures, signal)

@@ -36,6 +36,8 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
     conversationNaming?: StructuredAgentSessionConversationNaming
+    quietTurnEnd?: StructuredAgentSessionStatusFeedDeps['quietTurnEnd']
+    isBotHome?: StructuredAgentSessionStatusFeedDeps['isBotHome']
   }
   onPublished?: StructuredAgentSessionStatusFeedDeps['onPublished']
   onAgentStarted?: (sessionId: string) => void
@@ -74,6 +76,8 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
     listConversations: () => args.deps().store.listConversations(),
     replacedRuntime: (sessionId) => args.deps().store.replacedRuntime(sessionId),
+    quietTurnEnd: (sessionId, outcome) => args.deps().quietTurnEnd?.(sessionId, outcome) === true,
+    isBotHome: (workspaceId) => args.deps().isBotHome?.(workspaceId) === true,
     // A closed chat's agent can still run (a send, a worker); its row shows while it does.
     rowRetired: (sessionId) =>
       !args.sessions.get(sessionId)?.child && args.deps().store.isSessionTabRetired(sessionId),
