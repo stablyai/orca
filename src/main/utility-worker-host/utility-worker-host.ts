@@ -52,7 +52,7 @@ export class UtilityWorkerHost {
     private readonly serviceName: string,
     private readonly entryPath: () => string,
     private readonly spawnInProcess: (spawn: UtilityWorkerSpawn) => Worker,
-    /** The owner's account of what this host's workers were doing, for the exit breadcrumb. */
+    /** The owner's account of what this host's workers were doing, for exit and OOM breadcrumbs. */
     private readonly exitContext?: (
       workers: readonly HostedWorkerThread[]
     ) => CrashReportBreadcrumbData,
@@ -91,7 +91,10 @@ export class UtilityWorkerHost {
           }
         }
       },
-      outOfMemory: () => this.recordCrashUnlessLost(host),
+      outOfMemory: () => {
+        this.recordWorkerOutOfMemory(host, worker)
+        this.recordCrashUnlessLost(host)
+      },
       // A lost host keeps its workers listed for the exit breadcrumb; retiring it clears them.
       exited: (exited) => {
         if (!host.lossCounted && host.workers.get(id) === exited) {
@@ -199,6 +202,7 @@ export class UtilityWorkerHost {
   ): void {
     host.workers.delete(worker.id)
     if (error?.code && RESOURCE_START_FAILURES.has(error.code)) {
+      this.recordWorkerOutOfMemory(host, worker, error.code)
       this.recordCrashUnlessLost(host)
       worker.fail(error, 1)
     } else {
@@ -226,6 +230,22 @@ export class UtilityWorkerHost {
       worker.adopt(this.spawnInProcess(worker.spawn))
     } catch (error) {
       worker.fail(asError(error), 1)
+    }
+  }
+
+  /** The host outlives a worker's own OOM, so no exit breadcrumb would name what it was doing. */
+  private recordWorkerOutOfMemory(host: Host, worker: HostedWorker, code?: string): void {
+    if (!quitting) {
+      recordDurableCrashBreadcrumb('worker_thread_failed', {
+        serviceName: this.serviceName,
+        role: worker.spawn.name,
+        code: code ?? 'ERR_WORKER_OUT_OF_MEMORY',
+        lastReply: worker.lastReplyType,
+        receivedMB: Math.round(worker.receivedBytes / 2 ** 20),
+        ...utilityWorkerHeapData(host.heap, [worker]),
+        // Before the worker fails, which ends what its owner was waiting on.
+        ...this.exitContext?.([worker])
+      })
     }
   }
 
