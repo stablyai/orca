@@ -212,6 +212,7 @@
     "bench:worktree-refresh-churn": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/performance/source-control/worktree-refresh-churn-benchmark.mjs",
     "bench:cold-park-reveal": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/terminal-cold-park-reveal-bench.mjs",
     "bench:cold-park-resource": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/terminal-cold-park-resource-bench.mjs",
+    "perf:fleet-gate": "node config/scripts/performance/fleet-gate/run-fleet-gate.mjs",
     "bench:compare": "node config/scripts/performance/measurement/compare-benchmark-artifacts.mjs",
     "repro:live-remote-bulk-open-freeze": "node config/scripts/diagnostics/remote-freeze/live-remote-bulk-open-freeze-repro.mjs",
     "repro:live-remote-realistic-freeze": "node config/scripts/diagnostics/remote-freeze/live-remote-realistic-freeze-repro.mjs",
