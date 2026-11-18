@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore, type RefObject } from 'react'
-import { BoundedMap } from '../../../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../../../shared/collections/bounded-map'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
@@ -70,7 +70,7 @@ function pageKeyMatches(key: GitHistoryPageKey, fence: GitHistoryFence): boolean
     return false
   }
   // A plain HEAD page does not depend on the base OID; a branch page needs the same resolved base.
-  return key.baseOid === null || fence.baseOid === null || key.baseOid === fence.baseOid
+  return key.baseOid === null || key.baseOid === fence.baseOid
 }
 
 /** Never show another host's, HEAD's or base's commits; a mismatched page reads as loading until replaced. */

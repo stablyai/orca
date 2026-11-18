@@ -1,4 +1,3 @@
-import type React from 'react'
 import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -9,8 +8,8 @@ import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
-import type { SourceControlCommitScopeFiles } from './change-scope'
+import { useTranslate } from '@/i18n/use-translate'
+import { commitScopeFilesStatus } from './commit-scope-files-status'
 
 const NO_COMMENT_COUNTS = new Map<string, number>()
 
@@ -144,7 +143,9 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           unresolvedConflicts.length,
           conflictOperation,
           recovery.supported
-        ) && <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />}
+        ) && (
+          <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />
+        )}
 
       {hasFilteredUncommittedEntries && (
         <SourceControlUncommittedSections
@@ -287,35 +288,5 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         </SourceControlBranchSection>
       ) : null}
     </>
-  )
-}
-
-/** Undefined lets the section render its rows. */
-function commitScopeFilesStatus(
-  t: Translate,
-  files: SourceControlCommitScopeFiles | null,
-  rowsOrFilterNotice: boolean
-): React.JSX.Element | undefined {
-  if (!files || files.status === 'loading') {
-    return <div className="h-6" aria-busy="true" />
-  }
-  if (files.status === 'error') {
-    return (
-      <div className="px-4 py-2 text-xs text-destructive" title={files.error}>
-        {files.error}
-      </div>
-    )
-  }
-  // The content status already explains a filter that hides every row.
-  if (rowsOrFilterNotice) {
-    return undefined
-  }
-  return (
-    <div className="px-4 py-2 text-xs text-muted-foreground">
-      {t(
-        'auto.components.right.sidebar.GitHistoryCommitFiles.b2c3d4e5f6',
-        'No file changes in this commit'
-      )}
-    </div>
   )
 }

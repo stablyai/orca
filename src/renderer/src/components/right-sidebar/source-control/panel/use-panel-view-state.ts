@@ -7,6 +7,7 @@ import { normalizeSourceControlViewMode } from '../commit/commit-drafts'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import {
+  ALL_CHANGES_SCOPE,
   readRememberedChangeScope,
   rememberChangeScope,
   type SourceControlChangeScope,
@@ -89,7 +90,8 @@ export function useSourceControlPanelViewState({
     setBaseRefDialogOpen(false)
     // Preserve repo-scoped defaultBaseRef and per-worktree in-flight commits so switches cannot clobber defaults or enable duplicate commits.
     setFilterQuery('')
-    setChangeScopeState(readRememberedChangeScope(activeWorktreeId))
+    rememberChangeScope(activeWorktreeId, ALL_CHANGES_SCOPE)
+    setChangeScopeState(ALL_CHANGES_SCOPE)
     setCommitScopeFiles(null)
     setChangeScopeMenuOpen(false)
     // Why: don't reset commit-in-flight state — it's per-worktree; resetting would re-enable Commit for an incoming worktree mid-commit.

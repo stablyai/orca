@@ -25,6 +25,12 @@ export function createOpenCombinedDiff(
 ): Pick<EditorSlice, 'openAllDiffs' | 'openBranchAllDiffs' | 'openCommitAllDiffs'> {
   return {
     openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot, options) => {
+      if (
+        options?.wholeScope &&
+        get().gitBranchCompareSummaryByWorktree[worktreeId]?.status === 'loading'
+      ) {
+        return
+      }
       const contentOwner = editorOpenOwner(get(), worktreeId, options)
       // Decided from the same synchronous state the tab is built from, so a whole-scope open
       // never titles an uncommitted-only tab "All Changes".
