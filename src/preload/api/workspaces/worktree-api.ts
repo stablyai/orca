@@ -1,3 +1,4 @@
+import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
 import type {
   FolderWorkspaceCreateInput,
   FolderWorkspaceCreateResult
@@ -140,7 +141,7 @@ export type WorktreeApi = {
   updateMeta: (args: {
     worktreeId: string
     executionHostId?: ExecutionHostId
-    updates: Partial<WorktreeMeta>
+    updates: Partial<WorktreeMeta> & DiffCommentBaseMutation
   }) => Promise<Worktree | null>
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>

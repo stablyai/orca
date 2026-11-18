@@ -31,3 +31,8 @@ export function acpLaunchPermission(
     launchArgsGrantFullAccess: fullAccess && args(true) !== args(false)
   }
 }
+
+/** Whether Orca answers the agent's permission requests itself under full access. */
+export function acpAnswersRequests(spec: Pick<AcpLaunchSpec, 'permissionModeConfig'>) {
+  return !spec.permissionModeConfig || spec.permissionModeConfig.fullAccessAnswersRequests === true
+}

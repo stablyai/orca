@@ -18736,6 +18736,7 @@
         "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
         "optionUpdateFailed": "옵션을 업데이트하지 못했습니다",
         "optionValue": {
+          "none": "없음",
           "fast": "빠름",
           "minimal": "최소",
           "low": "낮음",
@@ -19416,18 +19417,13 @@
         "effortApplyFailed": "{{value}} 추론 수준을 적용하지 못했습니다."
       },
       "usageLimitActions": {
-        "continueNow": "지금 계속",
-        "leadIn": "기다리지 않고 이 채팅을 계속하세요:",
         "switchAccount": "계정 전환",
         "addAccount": "계정 추가…",
         "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "자동 계속을 취소하지 못했습니다. 다시 시도하세요.",
-        "openSetting": "한도가 재설정되면 자동으로 계속하기",
-        "cancelled": "Orca가 이 채팅을 자동으로 계속하지 않습니다.",
-        "scheduled": "Orca가 {{time}}에 이 채팅을 계속합니다.",
-        "cancel": "계속하지 않기"
+        "scheduled": "Orca가 {{time}}에 이 채팅을 계속합니다."
       },
       "settings": "채팅 설정",
       "textAttachmentPreview": {

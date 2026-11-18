@@ -1584,7 +1584,7 @@
         "ssh": "SSH",
         "connected": "Connected",
         "notConnected": "Not connected.",
-        "notConnectedRun": "Not connected. Run <cmd>{{command}}</cmd> on the host."
+        "notConnectedRetry": "Not connected. Connect this host, then Retry."
       },
       "summary": {
         "hooksIn": "hooks in {{targets}}",
@@ -5436,6 +5436,7 @@
             "e159fc1fd7": "Reset now",
             "972a1ff497": "Reset Codex limits?",
             "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "confirmHostReset": "This uses one Codex rate-limit reset credit for {{account}} on {{host}} and resets any eligible usage windows immediately.",
             "f077f586db": "Don't ask again",
             "c0e972d726": "Cancel",
             "3bbf140864": "MiniMax Usage",
@@ -20908,6 +20909,7 @@
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
+          "none": "None",
           "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
@@ -21655,18 +21657,42 @@
         "unavailable": "No preview for this page."
       },
       "usageLimitActions": {
-        "continueNow": "Continue Now",
-        "leadIn": "Continue this chat without waiting:",
-        "switchAccount": "Switch Account",
-        "addAccount": "Add Account…",
-        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
+        "switchAccount": "Switch account",
+        "addAccount": "Add account…",
+        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead.",
+        "copyTruncated": "Copied text was shortened to fit {{count}} characters.",
+        "copyFailed": "Couldn't copy the error.",
+        "cancelAt": "Don't continue at {{time}}",
+        "wontContinue": "Won't continue automatically",
+        "autoContinueSettings": "Auto-continue settings",
+        "hideDetails": "Hide details",
+        "showDetails": "Show details",
+        "copyError": "Copy error",
+        "settingsMenu": "Auto-continue settings…",
+        "handOff": "Hand off to another agent",
+        "more": "More actions",
+        "statusUnknown": "Reset time unknown.",
+        "statusCanContinueAtAuto": "You can continue at {{time}}. Orca will continue this chat at {{autoTime}}.",
+        "statusCanContinueAtNoAuto": "You can continue at {{time}}. Orca won't continue this chat automatically.",
+        "statusCanContinueAt": "You can continue at {{time}}.",
+        "resetUnknown": "Reset time unknown",
+        "continuesAt": "Continues at {{time}}",
+        "autoContinuesAt": "Auto-continues at {{time}}",
+        "srSummary": "{{sentence}} {{status}}",
+        "canContinueAt": "Can continue at {{time}}",
+        "titleWeeklyReached": "{{agent}} weekly limit reached",
+        "titleExtraUsageReached": "{{agent}} extra usage limit reached",
+        "titleUsageReached": "{{agent}} usage limit reached",
+        "statusHasUsageAuto": "{{agent}} has usage again. Orca will continue this chat at {{time}}.",
+        "statusHasUsage": "{{agent}} has usage again.",
+        "titleHasUsage": "{{agent}} has usage again",
+        "statusCanContinueNowAuto": "{{agent}} can continue now. Orca will continue this chat at {{time}}.",
+        "statusCanContinueNow": "{{agent}} can continue now.",
+        "titleCanContinueNow": "{{agent}} can continue now"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
-        "openSetting": "Continue automatically when limits reset",
-        "cancelled": "Orca won't continue this chat automatically.",
-        "scheduled": "Orca will continue this chat at {{time}}.",
-        "cancel": "Don't continue"
+        "scheduled": "Orca will continue this chat at {{time}}."
       },
       "settings": "Chat settings",
       "composerWorkspace": {
@@ -23965,6 +23991,7 @@
     "new": "New sparse preset",
     "edit": "Edit sparse preset",
     "saveFailed": "Could not save the preset. Try again.",
+    "updateServerToRemove": "Update Orca on this project’s server to remove its presets.",
     "nameRequired": "Name is required.",
     "nameTooLong": "Name must be 80 characters or fewer.",
     "nameExists": "A preset named “{{name}}” already exists.",
@@ -24806,7 +24833,8 @@
       "review": "Back to projects",
       "browserLoginsHostUnknown": "Browser logins were not copied, because Orca could not identify the host’s browser profile. Sign in again in the host’s browser tabs.",
       "browserLoginsConflict": "Browser logins were not copied, because the host’s browser profile is already in use. Sign in again in the host’s browser tabs.",
-      "browserLoginsNotCopied": "Browser logins were not copied to the host. Sign in again in the host’s browser tabs."
+      "browserLoginsNotCopied": "Browser logins were not copied to the host. Sign in again in the host’s browser tabs.",
+      "droppedForMappedDrives": "Not moved, because their drive letter no longer points into {{distro}}: {{names}}. Check the drive, then move them again."
     },
     "runtime": {
       "label": "Project runtime",
@@ -24836,7 +24864,9 @@
       "pauseFailed": "Orca could not pause the terminals in these projects, so nothing was moved. Paused terminals start again when you open them. Try again.",
       "scopeChanged": "A project changed while the move was getting ready, so nothing was moved. Check the projects and try again.",
       "cancelled": "Move cancelled. Nothing was moved.",
-      "finishedEarlierMove": "Orca first finished an earlier move into {{distro}}. Reload the window, then start this move again."
+      "finishedEarlierMove": "Orca first finished an earlier move into {{distro}}. Reload the window, then start this move again.",
+      "mappedDriveUnverifiable": "Orca could not check a drive letter some projects are saved on. Make sure the drive is connected, then try again.",
+      "nothingMovable": "None of these projects can move to the {{distro}} host yet. Each one says why."
     },
     "step": {
       "preparing": "Preparing",
@@ -24874,7 +24904,11 @@
       "windowsDrive": "Its folder is on a Windows drive, so it stays on this computer.",
       "mixedLocations": "Some of its folders are outside this distro, so it stays on this computer.",
       "notLocal": "It already runs on another host.",
-      "other": "It cannot move."
+      "other": "It cannot move.",
+      "windowsGitWorktrees": "Git for Windows recorded some of its worktrees, including any since deleted, and Git on the WSL host can’t use those records. Remove those worktrees, or run git worktree repair from WSL, then move it.",
+      "windowsGitDir": "Its Git folder is linked by a Windows path (a worktree or a separate Git folder Git for Windows set up), which Git on the WSL host can’t follow.",
+      "gitUnreadable": "Orca couldn’t read its Git details in time to check them, so it stays on this computer. Check again in a moment.",
+      "mappedDriveUnverifiable": "Orca couldn’t check where its drive letter points just now. Make sure the drive is connected, then check again."
     },
     "reloadToast": {
       "title": "Reload to finish the move"
