@@ -4,8 +4,8 @@ import {
   scanIssueTextFromError
 } from '../../../parsing/session-scan-issues'
 import { existsSync } from 'node:fs'
-import type { Worker } from 'node:worker_threads'
-import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
+import { spawnHeavyWorker } from '../../../../utility-worker-host/heavy-worker-spawn'
+import type { HostedWorkerThread } from '../../../../utility-worker-host/utility-worker-host-protocol'
 import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
 import { openCodeTranscriptPageLimit } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
@@ -38,13 +38,13 @@ export function resolveOpenCodeSqliteWorkerEntryPath(
   return findForeignSqliteReaderEntry(runtimeDir, pathExists)
 }
 
-function defaultWorkerFactory(): Worker {
+function defaultWorkerFactory(): HostedWorkerThread {
   const workerPath = resolveOpenCodeSqliteWorkerEntryPath()
   // Fail synchronously for missing bundles rather than waiting for an impossible worker response.
   if (!existsSync(workerPath)) {
     throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath, { name: 'orca-opencode-sqlite-reader' })
+  return spawnHeavyWorker(workerPath, { name: 'orca-opencode-sqlite-reader' })
 }
 
 let sharedClient: OpenCodeSqliteWorkerClient | null = null

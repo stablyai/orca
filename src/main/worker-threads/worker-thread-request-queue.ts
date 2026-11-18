@@ -263,7 +263,12 @@ export class WorkerThreadRequestQueue<
   private failQueuedAsUnavailable(): void {
     const pending = this.queue
     this.queue = []
-    const reason = this.host.isRetiring ? 'previous worker still exiting' : 'worker spawn failed'
+    const failure = this.host.spawnFailure
+    const reason = this.host.isRetiring
+      ? 'previous worker still exiting'
+      : failure instanceof Error
+        ? failure.message
+        : 'worker spawn failed'
     for (const call of pending) {
       this.settle(call, () => call.reject(this.options.createUnavailableError(reason)))
     }

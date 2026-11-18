@@ -3,17 +3,37 @@ import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { Worker } from 'node:worker_threads'
+import { MessageChannel, type MessagePort, Worker } from 'node:worker_threads'
 import { build } from 'esbuild'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fork = vi.hoisted(() => vi.fn())
-vi.mock('electron', () => ({ app: { once: vi.fn() }, utilityProcess: { fork } }))
+/** Electron's MessagePortMain shape over a node port: listeners get `{ data }`. */
+const portMainSource = `(port) => ({
+  raw: port,
+  postMessage: (message) => port.postMessage(message),
+  on: (event, listener) =>
+    event === 'message' ? port.on('message', (data) => listener({ data })) : port.on(event, listener),
+  start: () => port.start(),
+  close: () => port.close()
+})`
+const channel = vi.hoisted(() => ({ create: (): unknown => undefined }))
+vi.mock('electron', () => ({
+  app: { once: vi.fn() },
+  utilityProcess: { fork },
+  MessageChannelMain: vi.fn(() => channel.create())
+}))
 vi.mock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: vi.fn()
 }))
 
 const { UtilityWorkerHost } = await import('./utility-worker-host')
+// eslint-disable-next-line no-eval -- the same adapter runs on the main side and inside the host thread.
+const portMain = (0, eval)(portMainSource) as (port: MessagePort) => { raw: MessagePort }
+channel.create = () => {
+  const { port1, port2 } = new MessageChannel()
+  return { port1: portMain(port1), port2: portMain(port2) }
+}
 
 let root = ''
 let hostEntry = ''
@@ -41,9 +61,16 @@ parentPort.on('message', (message) =>
 )`
   )
 })
+let dyingEntry = ''
 beforeAll(() => {
   quietEntry = join(root, 'quiet.js')
   writeFileSync(quietEntry, 'setInterval(() => undefined, 1000)')
+  // Loads, then dies on its first request before replying, as an out-of-memory parse would.
+  dyingEntry = join(root, 'dying.js')
+  writeFileSync(
+    dyingEntry,
+    `require('node:worker_threads').parentPort.on('message', () => process.exit(7))`
+  )
 })
 const threads: Worker[] = []
 // A host thread still starting must not outlive the bundle it loads.
@@ -59,8 +86,10 @@ function threadUtilityProcess(): EventEmitter & {
 } {
   const thread = new Worker(
     `const { parentPort, workerData } = require('node:worker_threads')
+const portMain = ${portMainSource}
 process.parentPort = {
-  on: (_event, listener) => parentPort.on('message', (data) => listener({ data })),
+  on: (_event, listener) =>
+    parentPort.on('message', ({ data, port }) => listener({ data, ports: port ? [portMain(port)] : [] })),
   postMessage: (message) => parentPort.postMessage(message)
 }
 require(workerData)`,
@@ -69,7 +98,10 @@ require(workerData)`,
   threads.push(thread)
   const child = Object.assign(new EventEmitter(), {
     stderr: null,
-    postMessage: (message: unknown) => thread.postMessage(message),
+    postMessage: (data: unknown, ports: { raw: MessagePort }[] = []) => {
+      const port = ports[0]?.raw
+      thread.postMessage({ data, port }, port ? [port] : [])
+    },
     kill: () => {
       void thread.terminate()
       return true
@@ -93,12 +125,15 @@ function silentUtilityProcess(): EventEmitter & { postMessage(): void; kill(): v
   return child
 }
 
-function newHost(): InstanceType<typeof UtilityWorkerHost> {
-  return new UtilityWorkerHost(
-    'test host',
-    () => hostEntry,
-    ({ filename, workerData }) => new Worker(filename, { workerData })
-  )
+const inProcess = vi.fn(
+  ({ filename, workerData }: { filename: string; workerData?: unknown }) =>
+    new Worker(filename, { workerData })
+)
+
+function newHost(
+  crashCap?: ConstructorParameters<typeof UtilityWorkerHost>[3]
+): InstanceType<typeof UtilityWorkerHost> {
+  return new UtilityWorkerHost('test host', () => hostEntry, inProcess, crashCap)
 }
 
 function nextMessage(worker: {
@@ -112,7 +147,10 @@ function nextExit(worker: { once(event: 'exit', listener: (code: number) => void
 }
 
 describe('UtilityWorkerHost', () => {
-  beforeEach(() => fork.mockReset())
+  beforeEach(() => {
+    fork.mockReset()
+    inProcess.mockClear()
+  })
 
   it('relays a hosted worker both ways, including a message past one IPC chunk', async () => {
     fork.mockImplementation(threadUtilityProcess)
@@ -208,7 +246,52 @@ describe('UtilityWorkerHost', () => {
     const failed = new Promise<Error>((resolve) => worker.once('error', resolve))
     const exited = nextExit(worker)
     children[0]?.kill()
-    expect((await failed).message).toMatch(/^test host exited/)
+    expect((await failed).message).toMatch(/^test host (exited|stopped)/)
     await exited
+  })
+
+  it('fails, never reruns in main, a worker that dies on its work before its first reply', async () => {
+    fork.mockImplementation(threadUtilityProcess)
+    const host = newHost()
+    const worker = host.spawn({ filename: dyingEntry, name: 'orca-claude-rewind-transcript' })
+    const exited = nextExit(worker)
+    worker.postMessage('parse')
+    expect(await exited).toBe(7)
+    expect(inProcess).not.toHaveBeenCalled()
+    const next = host.spawn({
+      filename: echoEntry,
+      name: 'orca-workspace-space-scan',
+      workerData: { tag: 'h' }
+    })
+    expect(await nextMessage(next)).toEqual({ hello: 'h' })
+    expect(fork).toHaveBeenCalledTimes(1)
+    await next.terminate()
+  })
+
+  it('pauses after repeated host crashes, without moving work in-process, until a retry', async () => {
+    const children: ReturnType<typeof threadUtilityProcess>[] = []
+    fork.mockImplementation(() => {
+      const child = threadUtilityProcess()
+      children.push(child)
+      return child
+    })
+    const host = newHost({ crashes: 3, windowMs: 60_000, message: 'paused' })
+    const spawnEcho = () =>
+      host.spawn({ filename: echoEntry, name: 'orca-workspace-space-scan', workerData: { tag: 'x' } })
+    for (let crash = 0; crash < 3; crash++) {
+      const worker = spawnEcho()
+      await nextMessage(worker)
+      const hostExited = new Promise((resolve) => children[crash]?.once('exit', resolve))
+      children[crash]?.kill()
+      await Promise.all([nextExit(worker), hostExited])
+    }
+    expect(spawnEcho).toThrow('paused')
+    expect(fork).toHaveBeenCalledTimes(3)
+    expect(inProcess).not.toHaveBeenCalled()
+    host.retry()
+    const worker = spawnEcho()
+    expect(await nextMessage(worker)).toEqual({ hello: 'x' })
+    expect(fork).toHaveBeenCalledTimes(4)
+    await worker.terminate()
   })
 })
