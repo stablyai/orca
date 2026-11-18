@@ -1,11 +1,10 @@
 // Gate runs on one machine share ~/.cache/orca-fleet-gate; a lock keeps two runs from building the same entry at once.
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
 const POLL_MS = 5_000
-const WRITE_GRACE_MS = 60_000
 const sleeper = new Int32Array(new SharedArrayBuffer(4))
 const held = new Set()
 
@@ -25,86 +24,51 @@ function processIdentity(pid) {
 }
 
 const ownIdentity = processIdentity(process.pid)
-const TOMBSTONE_KEEP_MS = 24 * 60 * 60 * 1000
 
 function readOwner(lockDir) {
   try {
-    return fs.readFileSync(`${lockDir}/owner`, 'utf8')
+    return fs.readFileSync(path.join(lockDir, 'owner'), 'utf8') || null
   } catch {
     return null
   }
-}
-
-function ownerAlive(lockDir) {
-  const owner = readOwner(lockDir)
-  if (owner === null) {
-    // The owner made the lock but hasn't written it yet, unless it died in between long ago.
-    return (
-      Date.now() - (fs.statSync(lockDir, { throwIfNoEntry: false })?.mtimeMs ?? 0) < WRITE_GRACE_MS
-    )
-  }
-  return processIdentity(Number(owner.split(' ')[0])) === owner
 }
 
 /**
- * Retires a dead owner's lock by renaming it to a tombstone named after that owner. The rename can succeed only once
- * per dead owner (later renames hit the existing, non-empty tombstone), so a run acting on a stale view can never
- * move a newer, live lock aside. Tombstones are pruned after a day.
+ * Takes the lock or reports who holds it. A lock is published with its owner already inside (rename is atomic), and
+ * a dead owner's lock is never taken over automatically: every takeover scheme races with a third run, so the run
+ * stops and says which lock to remove.
  */
-function clearStaleLock(lockDir, deadOwner) {
-  const key = createHash('sha256')
-    .update(
-      deadOwner ?? `unwritten ${String(fs.statSync(lockDir, { throwIfNoEntry: false })?.mtimeMs)}`
-    )
-    .digest('hex')
-    .slice(0, 16)
-  const tombstone = `${lockDir}.dead-${key}`
-  try {
-    fs.renameSync(lockDir, tombstone)
-    // Keep it non-empty: an empty directory can be renamed over.
-    fs.writeFileSync(path.join(tombstone, 'retired'), deadOwner ?? 'unwritten')
-  } catch {
-    // Someone else retired it first, or the lock changed hands; just try again.
-  }
-  pruneTombstones(lockDir)
-}
-
-function pruneTombstones(lockDir) {
-  const dir = path.dirname(lockDir)
-  const prefix = `${path.basename(lockDir)}.dead-`
-  for (const name of fs.readdirSync(dir)) {
-    const full = path.join(dir, name)
-    if (
-      name.startsWith(prefix) &&
-      Date.now() - (fs.statSync(full, { throwIfNoEntry: false })?.mtimeMs ?? Date.now()) >
-        TOMBSTONE_KEEP_MS
-    ) {
-      fs.rmSync(full, { recursive: true, force: true })
-    }
-  }
-}
-
-function tryLock(lockDir) {
+function tryLock(entryDir) {
+  const lockDir = `${entryDir}.lock`
   if (!ownIdentity) {
     throw new Error(`can't read this process's start time with ps, so can't lock ${lockDir}`)
   }
+  const staging = `${lockDir}.new-${String(process.pid)}-${randomUUID()}`
+  fs.mkdirSync(staging)
+  fs.writeFileSync(path.join(staging, 'owner'), ownIdentity)
   try {
-    fs.mkdirSync(lockDir)
+    fs.renameSync(staging, lockDir)
   } catch (error) {
-    if (error?.code !== 'EEXIST') {
+    fs.rmSync(staging, { recursive: true, force: true })
+    if (!['EEXIST', 'ENOTEMPTY'].includes(error?.code)) {
       throw error
     }
     const owner = readOwner(lockDir)
-    if (!ownerAlive(lockDir)) {
-      clearStaleLock(lockDir, owner)
+    if (owner === null || processIdentity(Number(owner.split(' ')[0])) !== owner) {
+      throw new Error(
+        `stale cache lock ${lockDir} (owner ${owner ?? 'unknown'} is no longer running). ` +
+          `If no gate run is using ${entryDir}, remove it: rm -rf '${lockDir}' '${entryDir}'`
+      )
     }
     return null
   }
-  fs.writeFileSync(`${lockDir}/owner`, ownIdentity)
   const release = () => {
     held.delete(release)
     if (readOwner(lockDir) === ownIdentity) {
-      fs.rmSync(lockDir, { recursive: true, force: true })
+      // Moved aside first, so the path never holds a half-deleted lock.
+      const aside = `${lockDir}.released-${String(process.pid)}-${randomUUID()}`
+      fs.renameSync(lockDir, aside)
+      fs.rmSync(aside, { recursive: true, force: true })
     }
   }
   held.add(release)
@@ -122,7 +86,7 @@ function announce(entryDir, state) {
 export function lockCacheEntry(entryDir) {
   const state = { announced: false }
   for (;;) {
-    const release = tryLock(`${entryDir}.lock`)
+    const release = tryLock(entryDir)
     if (release) {
       return release
     }
@@ -135,7 +99,7 @@ export function lockCacheEntry(entryDir) {
 export async function lockCacheEntryAsync(entryDir) {
   const state = { announced: false }
   for (;;) {
-    const release = tryLock(`${entryDir}.lock`)
+    const release = tryLock(entryDir)
     if (release) {
       return release
     }

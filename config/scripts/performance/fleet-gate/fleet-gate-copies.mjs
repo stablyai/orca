@@ -36,13 +36,18 @@ function processInfo(pid) {
   }
 }
 
-/** A live process is this copy's daemon only if it runs the recorded entry and started when the record says. */
-function isRecordedDaemon(record) {
+/**
+ * A live process is this copy's daemon only if it was launched for this very pid record with the recorded launch
+ * nonce (both are on its command line) and started when the record says; a reused pid or another copy's daemon fails.
+ */
+function isRecordedDaemon(record, recordPath) {
   const live = processInfo(record.pid)
   return (
     live !== null &&
-    typeof record.entryPath === 'string' &&
-    live.args.includes(record.entryPath) &&
+    typeof record.launchNonce === 'string' &&
+    record.launchNonce !== '' &&
+    live.args.includes(`--launch-nonce ${record.launchNonce}`) &&
+    live.args.includes(`--pid-record ${recordPath}`) &&
     typeof record.startedAtMs === 'number' &&
     Math.abs(live.startedAtMs - record.startedAtMs) < 60_000
   )
@@ -58,9 +63,10 @@ function readDaemonPids(userDataDir) {
     if (!entry.endsWith('.pid')) {
       continue
     }
+    const recordPath = path.join(daemonDir, entry)
     try {
-      const record = JSON.parse(fs.readFileSync(path.join(daemonDir, entry), 'utf8'))
-      if (Number.isInteger(record.pid) && record.pid > 1 && isRecordedDaemon(record)) {
+      const record = JSON.parse(fs.readFileSync(recordPath, 'utf8'))
+      if (Number.isInteger(record.pid) && record.pid > 1 && isRecordedDaemon(record, recordPath)) {
         pids.push(record.pid)
       }
     } catch {
