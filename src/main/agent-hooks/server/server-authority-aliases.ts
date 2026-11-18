@@ -266,7 +266,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
-    this.clearTranscriptPoll(previousOwnerPaneKey)
+    this.moveTranscriptPoll(previousOwnerPaneKey, toPaneKey)
     // Detached processes keep posting the physical key; retain its mapping to the current owner.
     this.legacyPaneKeyAliases.set(physicalPaneKey, {
       stablePaneKey: toPaneKey,

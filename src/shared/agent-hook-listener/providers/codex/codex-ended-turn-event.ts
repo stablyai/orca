@@ -1,4 +1,4 @@
-import { codexTranscriptTurnEnd } from './codex-subagent-transcript'
+import { codexTranscriptTurnEnd } from './codex-rollout-state'
 import type { HookListenerState } from '../../listener-state'
 import { readString } from '../../tool-input-preview'
 
@@ -18,7 +18,7 @@ export function codexHookEventForEndedTurn(
   ) {
     return eventName
   }
-  if (!codexTranscriptTurnEnd(state.codexSubagentTranscriptByPaneKey.get(paneKey), turnId)) {
+  if (!codexTranscriptTurnEnd(state.codexRolloutByPaneKey.get(paneKey), turnId)) {
     return eventName
   }
   const leadTurnId = state.codexLeadStateByPaneKey.get(paneKey)?.turnId

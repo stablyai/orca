@@ -1,21 +1,7 @@
-import { readJsonlCursor } from './codex-rollout-jsonl-cursor'
-import type { JsonRecord } from './codex-rollout-jsonl-format'
-import {
-  markReviewerEvidenceDeferred,
-  rolloutCursorReadDeferred
-} from './codex-rollout-prefetch-scope'
-import { normalizedTranscriptPath } from './codex-rollout-paths'
-import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
-import type { CodexSubagentTranscriptState } from './codex-subagent-transcript'
-
-const REVIEWER_CURSOR_MAX_PATHS = 64
+import { record, type JsonRecord } from './codex-rollout-jsonl-format'
 
 /** Codex's `approvals_reviewer`: `user` is a human, `auto_review` is Codex's own review agent. */
 export type CodexApprovalsReviewer = 'user' | 'auto_review'
-
-function record(value: unknown): JsonRecord | undefined {
-  return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
-}
 
 /** Latest reviewer evidence from turn or thread-settings records. */
 export function readApprovalsReviewer(records: JsonRecord[]): CodexApprovalsReviewer | undefined {
@@ -37,57 +23,4 @@ export function readApprovalsReviewer(records: JsonRecord[]): CodexApprovalsRevi
     }
   }
   return reviewer
-}
-
-/** Whether the transcript's own review agent resolves this permission request. */
-export function codexTurnApprovalsAreAutoReviewed(
-  state: CodexSubagentTranscriptState | undefined,
-  transcriptPath?: string
-): boolean {
-  const normalizedPath = normalizedTranscriptPath(transcriptPath)
-  if (!state || !normalizedPath) {
-    return false
-  }
-  const reviewer =
-    normalizedPath === state.parent.filePath
-      ? state.approvalsReviewer
-      : state.reviewersByPath.get(normalizedPath)
-  return reviewer === 'auto_review'
-}
-
-/** Reads reviewer ownership from a child rollout without replacing the parent lifecycle cursor. */
-export function reconcileCodexSubagentReviewer(
-  state: CodexSubagentTranscriptState,
-  transcriptPath: string | undefined
-): void {
-  const normalizedPath = normalizedTranscriptPath(transcriptPath)
-  if (!normalizedPath) {
-    return
-  }
-  let cursor = state.reviewerCursorsByPath.get(normalizedPath)
-  if (!cursor) {
-    if (state.reviewerCursorsByPath.size >= REVIEWER_CURSOR_MAX_PATHS) {
-      const oldestPath = state.reviewerCursorsByPath.keys().next().value
-      if (typeof oldestPath === 'string') {
-        state.reviewerCursorsByPath.delete(oldestPath)
-        state.reviewersByPath.delete(oldestPath)
-      }
-    }
-    cursor = { filePath: normalizedPath, offset: 0, carry: '' }
-    state.reviewerCursorsByPath.set(normalizedPath, cursor)
-  }
-  if (rolloutCursorReadDeferred(cursor)) {
-    markReviewerEvidenceDeferred()
-    return
-  }
-  const records = readJsonlCursor(cursor, isCodexStatusTranscriptLine)
-  if (records === undefined) {
-    state.reviewerCursorsByPath.delete(normalizedPath)
-    state.reviewersByPath.delete(normalizedPath)
-    return
-  }
-  const reviewer = readApprovalsReviewer(records)
-  if (reviewer !== undefined) {
-    state.reviewersByPath.set(normalizedPath, reviewer)
-  }
 }

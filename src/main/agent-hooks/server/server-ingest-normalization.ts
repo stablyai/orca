@@ -23,18 +23,7 @@ import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './serve
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
-import {
-  type PrefetchedRolloutReads,
-  withPrefetchedRolloutReads
-} from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
-import {
-  CodexHookRolloutPrefetcher,
-  prefetchCodexHookRolloutReadsWithin
-} from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
-
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
-  protected readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
-
   protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
   /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
   protected readHookRootEvidence: HookRootEvidenceReader | undefined
@@ -248,29 +237,19 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
     const token = this.token
     const statusHookGeneration = this.statusHookGeneration
-    const apply = (reads?: PrefetchedRolloutReads) => {
-      try {
-        if (
-          !this.statusHooksEnabled ||
-          this.token !== token ||
-          this.statusHookGeneration !== statusHookGeneration
-        ) {
-          throw new Error('Status hook spool replay interrupted')
-        }
-        withPrefetchedRolloutReads(reads, () => this.applySpoolHook(record, body))
-      } finally {
-        reads?.batch.release()
+    const apply = () => {
+      if (
+        !this.statusHooksEnabled ||
+        this.token !== token ||
+        this.statusHookGeneration !== statusHookGeneration
+      ) {
+        throw new Error('Status hook spool replay interrupted')
       }
+      this.applySpoolHook(record, body)
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
     const pending = this.checkHookOwner(record.source, body, answerBy)
-    if (record.source === 'codex') {
-      // Replayed Codex hooks read live rollouts too; keep those opens off the main thread (#43539).
-      return Promise.resolve(pending)
-        .then(() => prefetchCodexHookRolloutReadsWithin(this.state, body))
-        .then(apply)
-    }
-    return pending ? pending.then(() => apply()) : apply()
+    return pending ? pending.then(apply) : apply()
   }
 
   private applySpoolHook(record: SpoolRecord, body: unknown): void {
@@ -303,7 +282,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
     this.recordCurrentAuthorityObservation(event)
     const enriched = this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
-    // Replay defers children whose rollout path is unresolved; only the poll finds and reads them.
+    // A replayed Codex hook starts its rollout reads (names, reviewer, tail) like a live one.
     if (enriched && record.source === 'codex') {
       this.requestReplayTranscriptPoll(body, enriched)
     }

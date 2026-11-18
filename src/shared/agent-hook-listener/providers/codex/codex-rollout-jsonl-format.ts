@@ -2,7 +2,6 @@ import { constants } from 'node:fs'
 
 export const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 export const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
-const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
 
 export type JsonlCursor = {
   filePath?: string
@@ -145,10 +144,4 @@ export function applyJsonlCursorBytes(
     }
   }
   return records
-}
-
-export function boundTranscriptDirectory(entries: string[]): string[] {
-  return entries.length > TRANSCRIPT_DIRECTORY_MAX_ENTRIES
-    ? entries.slice(-TRANSCRIPT_DIRECTORY_MAX_ENTRIES)
-    : entries
 }

@@ -1624,12 +1624,7 @@
 3 src/shared/agent-hook-listener/grok-result-discovery.ts
 1 src/shared/agent-hook-listener/normalization/normalize-hook-payload.ts
 4 src/shared/agent-hook-listener/pane-provider-session.ts
-4 src/shared/agent-hook-listener/provider-dispatch.ts
-7 src/shared/agent-hook-listener/providers/codex/codex-events.ts
-1 src/shared/agent-hook-listener/providers/codex/codex-subagent-identity.ts
-1 src/shared/agent-hook-listener/providers/codex/codex-subagent-reviewer.ts
-2 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts
-3 src/shared/agent-hook-listener/providers/codex/codex-subagent-transcript.ts
+3 src/shared/agent-hook-listener/provider-dispatch.ts
 1 src/shared/agent-hook-listener/providers/grok/grok-session-paths.ts
 1 src/shared/agent-hook-listener/providers/grok/grok-tool-fields.ts
 3 src/shared/agent-hook-listener/providers/jcode/jcode-session-files.ts

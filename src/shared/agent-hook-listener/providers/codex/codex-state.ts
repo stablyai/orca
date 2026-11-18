@@ -15,13 +15,8 @@ import {
   seedCodexSubagentRoster,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
-import {
-  createCodexSubagentTranscriptState,
-  hasTrackedCodexTranscriptSubagents,
-  type CodexSubagentTranscriptState
-} from './codex-subagent-transcript'
+import { createCodexRolloutState, type CodexRolloutState } from './codex-rollout-state'
 import type { HookListenerState } from '../../listener-state'
-import { parentReadDeferred } from './codex-rollout-prefetch-scope'
 import type { CodexLeadTurnState } from '../../main-agent-turn-state'
 
 export function getOrCreateCodexSubagentRoster(
@@ -36,30 +31,16 @@ export function getOrCreateCodexSubagentRoster(
   return roster
 }
 
-export function getOrCreateCodexSubagentTranscriptState(
+export function getOrCreateCodexRolloutState(
   state: HookListenerState,
   paneKey: string
-): CodexSubagentTranscriptState {
-  let transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
-  if (!transcriptState) {
-    transcriptState = createCodexSubagentTranscriptState()
-    state.codexSubagentTranscriptByPaneKey.set(paneKey, transcriptState)
+): CodexRolloutState {
+  let rollout = state.codexRolloutByPaneKey.get(paneKey)
+  if (!rollout) {
+    rollout = createCodexRolloutState()
+    state.codexRolloutByPaneKey.set(paneKey, rollout)
   }
-  return transcriptState
-}
-
-export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: string): boolean {
-  return hasTrackedCodexTranscriptSubagents(state.codexSubagentTranscriptByPaneKey.get(paneKey))
-}
-
-/**
- * Whether a replayed hook left rollout work only the transcript poll can do: a child whose path is
- * unresolved, or a parent read the replay scope gave up on. A stale root-only row would otherwise
- * poll a dead rollout forever.
- */
-export function codexReplayLeftTranscriptWork(state: HookListenerState, paneKey: string): boolean {
-  const subagents = state.codexSubagentTranscriptByPaneKey.get(paneKey)?.subagents.values()
-  return parentReadDeferred() || [...(subagents ?? [])].some((child) => !child.filePath)
+  return rollout
 }
 
 /** The only writer of the root record; the root's clock keeps continuity across same-state writes. */

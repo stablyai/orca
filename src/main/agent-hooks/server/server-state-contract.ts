@@ -112,6 +112,7 @@ export abstract class AgentHookServerStateContract {
   protected abstract clearAssistantMessageRetry(paneKey: string): void
 
   protected abstract clearTranscriptPoll(paneKey: string): void
+  protected abstract moveTranscriptPoll(fromPaneKey: string, toPaneKey: string): void
 
   protected abstract clearAllTranscriptPolls(): void
 
