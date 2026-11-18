@@ -17,7 +17,7 @@ import { readJournalSqlWorkAnswer } from './journal-sql-work-answer'
 import { JournalEpochReplacements } from './context-epochs/journal-epoch-replacements'
 import { journalWroteBeforeOpen, sameJournalCursor } from './replay/journal-cursor'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
-import type { JournalSqlOwner } from './journal-sql-owner'
+import type { JournalSqlLaneWriter } from './journal-sql-conversions'
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterOperation, JournalWriterTarget } from './journal-writer-command'
 import type { JournalWriterHostFacts } from './journal-writer-host-facts'
@@ -313,9 +313,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     return this.closing
   }
 
-  private admit<T>(
-    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects' | 'maintain'>) => T | Promise<T>
-  ): Promise<T> {
+  private admit<T>(run: (writer: JournalSqlLaneWriter) => T | Promise<T>): Promise<T> {
     if (this.closed) {
       return Promise.reject(
         new AgentSessionJournalError(

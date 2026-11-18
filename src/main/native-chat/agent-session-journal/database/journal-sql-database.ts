@@ -6,7 +6,7 @@ import { agentSessionTabTableFromStored } from '../../../runtime/agent-session/r
 import type { AgentSessionStoreState } from '../../../runtime/agent-session/records/agent-session-store-state'
 import { JournalSqlOwner } from '../journal-sql-owner'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
-import { JournalSqlConversions } from '../journal-sql-conversions'
+import { JournalSqlConversions, type JournalSqlLaneWriter } from '../journal-sql-conversions'
 import { JournalSqlActivity } from '../journal-sql-activity'
 import { JournalSqlBackgroundMaintenance } from '../journal-sql-background-maintenance'
 import type { JournalWriterCommand } from '../journal-writer-command'
@@ -32,6 +32,7 @@ export class JournalSqlDatabase {
   private readonly activity = new JournalSqlActivity()
   private readonly maintenance: JournalSqlBackgroundMaintenance
   private readonly sessions = new Map<string, Promise<unknown>>()
+  private readonly lane: JournalSqlLaneWriter
   private closing: Promise<void> | undefined
   private closed = false
 
@@ -57,6 +58,7 @@ export class JournalSqlDatabase {
       () => assertJournalChatReadable(this.readOnly)
     )
     this.conversions = new JournalSqlConversions(writer, this.readers, this.activity.waitForIdle)
+    this.lane = this.conversions.lane(writer)
     this.maintenance = new JournalSqlBackgroundMaintenance(
       writer,
       this.readers,
@@ -274,7 +276,7 @@ export class JournalSqlDatabase {
   }
 
   write(command: JournalWriterCommand): Promise<JournalWriterCommit> {
-    return this.serialize(command.target.sessionId, () => this.writer.write(command))
+    return this.serialize(command.target.sessionId, (lane) => lane.write(command))
   }
 
   effects(effects: readonly JournalWriterEffect[]): Promise<JournalWriterEffectResult[]> {
@@ -286,11 +288,11 @@ export class JournalSqlDatabase {
   /** Planning and ordered reads share the chat's lane; ordinary readers see the last COMMIT. */
   serialize<T>(
     sessionId: string,
-    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects' | 'maintain'>) => T | Promise<T>
+    run: (writer: JournalSqlLaneWriter) => T | Promise<T>
   ): Promise<T> {
     this.assertOpen()
     const release = this.activity.hold()
-    const result = (this.sessions.get(sessionId) ?? Promise.resolve()).then(() => run(this.writer))
+    const result = (this.sessions.get(sessionId) ?? Promise.resolve()).then(() => run(this.lane))
     const settled = result
       .catch(() => {})
       .finally(() => {

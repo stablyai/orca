@@ -5,6 +5,7 @@ import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares
 import { isJournalSqlSourceContentFailure } from './journal-sql-failure'
 import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
 
+export type JournalSqlLaneWriter = Pick<JournalSqlOwner, 'write' | 'effects' | 'maintain'>
 type Conversion = { promotion: AbortController; result: Promise<string | null> }
 
 function warnLegacy(step: string, sessionId: string, error: unknown): void {
@@ -94,9 +95,24 @@ export class JournalSqlConversions {
       .catch((failure: unknown) => warnLegacy('recording', sessionId, failure))
   }
 
-  /** A ready physical epoch survives context changes for the lifetime of the database owner. */
+  /** A ready physical epoch survives context changes; only a fork install replaces it. */
   rememberReady(sessionId: string, epoch: string): void {
     this.ready.set(sessionId, epoch)
+  }
+
+  /** Chat-lane writes; a fork install moves its chat to a new epoch that later opens must target. */
+  lane(owner: JournalSqlLaneWriter): JournalSqlLaneWriter {
+    return {
+      write: async (command) => {
+        const commit = await owner.write(command)
+        if (commit.forkInstalled) {
+          this.rememberReady(command.target.sessionId, commit.forkInstalled.epoch)
+        }
+        return commit
+      },
+      effects: (effects) => owner.effects(effects),
+      maintain: (operation) => owner.maintain(operation)
+    }
   }
 
   async close(): Promise<void> {
