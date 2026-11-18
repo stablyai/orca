@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   ArrowUpCircle,
   Info,
   RefreshCw,
@@ -35,6 +36,8 @@ type RuntimeServerRowMenuProps = {
   onMakeDefault: () => void
   onCheckForUpdates?: (options: UpdateCheckOptions) => void
   onSshAccess: () => void
+  /** Absent hides the item: settings copy needs a reachable server. */
+  onCopySettings?: () => void
   onToggleDetails: () => void
   onRemove: () => void
 }
@@ -56,6 +59,7 @@ export function RuntimeServerRowMenuItems({
   onMakeDefault,
   onCheckForUpdates,
   onSshAccess,
+  onCopySettings,
   onToggleDetails,
   onRemove
 }: RuntimeServerRowMenuProps): React.JSX.Element {
@@ -93,6 +97,12 @@ export function RuntimeServerRowMenuItems({
           {sshAccessLinked
             ? t('auto.components.settings.serverList.sshAccessLinked', 'SSH route…')
             : t('auto.components.settings.serverList.sshAccess', 'Connect through SSH…')}
+        </DropdownMenuItem>
+      ) : null}
+      {onCopySettings ? (
+        <DropdownMenuItem onSelect={onCopySettings}>
+          <ArrowLeftRight />
+          {t('auto.components.settings.serverList.copySettings', 'Copy settings…')}
         </DropdownMenuItem>
       ) : null}
       {onCheckForUpdates ? (
