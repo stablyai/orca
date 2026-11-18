@@ -164,7 +164,7 @@ describe('an automation-saved journal item', () => {
       throw new Error('automation-saved item did not project')
     }
     expect(message).toMatchObject({ role: 'system', automationSaved: DAILY, timestamp: 1_000 })
-    expect(nativeChatTurnFoldRow(message, 'turn', false)).toMatchObject({
+    expect(nativeChatTurnFoldRow(message, 'turn', undefined)).toMatchObject({
       draws: true,
       outlivesTurn: true
     })
