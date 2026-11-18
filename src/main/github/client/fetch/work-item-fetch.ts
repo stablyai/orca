@@ -8,7 +8,11 @@ import {
 } from '../../repositories/github-repository-identity'
 import { githubHostExecOptions } from '../../repositories/github-repository-host'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
-import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
+import {
+  githubPRStackExecutionScope,
+  ownerRepoFromPullRequestUrl,
+  type GhExecOptions
+} from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import { getCachedGitHubPRStackSummary } from './../lookup/pr-stack-summary-cache'
@@ -21,7 +25,6 @@ import {
 import { mapIssueWorkItem, mapPullRequestWorkItem } from './../map/work-item'
 import { readCompletePRCheckObservation } from '../check/complete-pr-check-observation'
 import { summarizePRCheckRollup } from '../../../../shared/source-control/checks/pr-check-status'
-import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
 
 async function withCompletePRChecks(
   item: MainWorkItem,
