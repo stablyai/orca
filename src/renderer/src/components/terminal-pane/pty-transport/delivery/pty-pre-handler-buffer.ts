@@ -29,6 +29,8 @@ const preHandlerPtyData = new Map<string, BufferedPreHandlerPtyState>()
 const preHandlerPtyExit = new Map<string, BufferedPreHandlerPtyExit[]>()
 const consumedPreHandlerPtyExits = new Map<string, true>()
 const discardedPreHandlerPtyStates = new Map<string, ReturnType<typeof setTimeout>>()
+// The host typed this lifetime's startup launch before the pane watched for it.
+const preHandlerLaunchTyped = new Map<string, { incarnationId: string; sequence: number }>()
 const DISCARDED_PRE_HANDLER_PTY_STATE_TTL_MS = 60_000
 
 // Windows startup output can precede spawn reply/handler registration; buffer it rather than ACK and lose setup bytes.
@@ -184,6 +186,24 @@ export function replayPreHandlerPtyData(ptyId: string, observer: (data: string) 
   }
 }
 
+export function bufferPreHandlerPtyLaunchTyped(ptyId: string, incarnationId: string): void {
+  if (discardedPreHandlerPtyStates.has(ptyId)) {
+    return
+  }
+  evictOldestPtyIfAtCap(preHandlerLaunchTyped, ptyId, PRE_HANDLER_PTY_EXIT_MAX_PTYS)
+  preHandlerLaunchTyped.set(ptyId, { incarnationId, sequence: nextPreHandlerPtySequence() })
+}
+
+/** Consumes the buffered fact; true only when it belongs to `incarnationId` (or that is unknown). */
+export function takePreHandlerPtyLaunchTyped(ptyId: string, incarnationId?: string): boolean {
+  const buffered = preHandlerLaunchTyped.get(ptyId)
+  preHandlerLaunchTyped.delete(ptyId)
+  return (
+    buffered !== undefined &&
+    (incarnationId === undefined || buffered.incarnationId === incarnationId)
+  )
+}
+
 export function bufferPreHandlerPtyExit(
   ptyId: string,
   code: number,
@@ -222,6 +242,9 @@ export function discardPreHandlerPtyStateFromPriorIncarnation(
   fenceSequence: number
 ): void {
   retainPreHandlerPtyExits(ptyId, (exit) => exit.sequence > fenceSequence)
+  if ((preHandlerLaunchTyped.get(ptyId)?.sequence ?? Infinity) <= fenceSequence) {
+    preHandlerLaunchTyped.delete(ptyId)
+  }
   const data = preHandlerPtyData.get(ptyId)
   if (data && data.sequence <= fenceSequence) {
     preHandlerPtyData.delete(ptyId)
@@ -316,6 +339,7 @@ export function drainPreHandlerPtyExit(
 
 export function clearPreHandlerPtyState(ptyId: string): void {
   preHandlerPtyData.delete(ptyId)
+  preHandlerLaunchTyped.delete(ptyId)
   preHandlerPtyExit.delete(ptyId)
   consumedPreHandlerPtyExits.delete(ptyId)
   const discardTimer = discardedPreHandlerPtyStates.get(ptyId)

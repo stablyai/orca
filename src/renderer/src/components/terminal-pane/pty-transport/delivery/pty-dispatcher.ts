@@ -15,6 +15,7 @@ import {
   drainPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
 import { deliverPtyExitToHandlers } from './pty-exit-delivery'
+import { deliverPtyLaunchTyped, forgetPtyLaunchTyped } from './pty-startup-launch-typed'
 import {
   clearReceivedPtyCharTotal,
   isPtyPushDeliveryBlackholed,
@@ -165,8 +166,11 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
   const unsubscribeWriteUnavailable = window.api.pty.onWriteUnavailable?.((payload) => {
     ptyWriteUnavailableHandlers.get(payload.id)?.()
   })
-  if (unsubscribeWriteUnavailable) {
-    unsubscribes.push(unsubscribeWriteUnavailable)
+  const unsubscribeLaunchTyped = window.api.pty.onStartupLaunchTyped?.(deliverPtyLaunchTyped)
+  for (const unsubscribe of [unsubscribeWriteUnavailable, unsubscribeLaunchTyped]) {
+    if (unsubscribe) {
+      unsubscribes.push(unsubscribe)
+    }
   }
   unsubscribes.push(
     window.api.pty.onReplay((payload) => {
@@ -185,6 +189,7 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
       // Why: main drops its accounting on exit; drop totals too so a reused id restarts at zero on both sides.
       clearProcessedPtyCharTotal(payload.id)
       clearReceivedPtyCharTotal(payload.id)
+      forgetPtyLaunchTyped(payload.id, payload.incarnationId)
       const sidecars = ptyExitSidecars.get(payload.id)
       if (sidecars) {
         ptyExitSidecars.delete(payload.id)

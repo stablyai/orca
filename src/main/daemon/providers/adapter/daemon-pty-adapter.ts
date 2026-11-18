@@ -197,9 +197,8 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
           kind: 'transientFact',
           fact: event.payload
         })
-      } else if (event.event === 'inputClosed') {
-        // Kept per incarnation: the report can land before its own spawn reply.
-        this.inputClosedIncarnations.record(event.sessionId, event.payload.incarnationId)
+      } else if (event.event === 'inputClosed' || event.event === 'startupLaunchTyped') {
+        this.noteIncarnationFlag(event)
       } else if (event.event === 'exit') {
         const currentIncarnationId = this.ptyInventory.currentIncarnation(event.sessionId)
         const pendingOperations = new Set([

@@ -16,8 +16,20 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import { providerSnapshotRequiredPtys, visibleRendererPtys } from '../delivery/visibility-state'
 import { markPtyEscapeBoundaryUnknown } from '../delivery/pty-escape-boundary'
 import { discardPendingPtyDataAcrossGap } from '../delivery/accept'
-import type { PtyIpcSession } from '../session'
+import type { PtyIpcSession, PtyRendererDelivery } from '../session'
 import { publishPtyEndpointLoss } from '../../../runtime/terminal/pty-endpoint-loss-signal'
+
+function liveRendererContents(session: PtyIpcSession): PtyRendererDelivery['webContents'] | null {
+  const owner = session.mainWindow
+  if (
+    !owner ||
+    owner.isDestroyed() ||
+    (typeof owner.webContents.isDestroyed === 'function' && owner.webContents.isDestroyed())
+  ) {
+    return null
+  }
+  return owner.webContents
+}
 
 export function bindProviderListeners(session: PtyIpcSession): void {
   localDataUnsub?.()
@@ -31,15 +43,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       // Before the window check: a headless host has no window, only remote streams.
       publishPtyEndpointLoss(payload.id)
       session.runtime?.notePtyEndpointLoss(payload.id)
-      if (
-        !session.mainWindow ||
-        session.mainWindow.isDestroyed() ||
-        (typeof session.mainWindow.webContents.isDestroyed === 'function' &&
-          session.mainWindow.webContents.isDestroyed())
-      ) {
-        return
-      }
-      session.mainWindow.webContents.send('pty:writeUnavailable', { id: payload.id })
+      liveRendererContents(session)?.send('pty:writeUnavailable', { id: payload.id })
     }) ?? null
   )
 
@@ -66,6 +70,13 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           'hidden-drop',
           session.runtime?.getPtyOutputSequence(payload.id)
         )
+        return
+      }
+      if (payload.kind === 'startupLaunchTyped') {
+        liveRendererContents(session)?.send('pty:startupLaunchTyped', {
+          id: payload.id,
+          incarnationId: payload.incarnationId
+        })
         return
       }
       session.runtime?.emitDaemonPtyTransientFact(payload.id, payload.fact)

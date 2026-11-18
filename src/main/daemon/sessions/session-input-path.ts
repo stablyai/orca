@@ -6,6 +6,7 @@ import type { CreateOrAttachOptions } from '../terminal-host/terminal-host-creat
 type SessionInputPath = {
   subprocess: SubprocessHandle
   viewer: CreateOrAttachOptions['streamClient'] | null
+  startupLaunchTyped: boolean
 }
 
 // Keyed by Session so an exited or replaced generation can never answer for its successor.
@@ -17,7 +18,7 @@ export function trackSessionInput(
   subprocess: SubprocessHandle,
   report?: (event: string, details: Record<string, unknown>) => void
 ): void {
-  const path: SessionInputPath = { subprocess, viewer: null }
+  const path: SessionInputPath = { subprocess, viewer: null, startupLaunchTyped: false }
   inputPaths.set(session, path)
   subprocess.onInputClosed?.((reason) => {
     if (!session.isAlive) {
@@ -41,6 +42,20 @@ export function attachSessionInputViewer(
   if (path) {
     path.viewer = viewer
   }
+}
+
+/** The host typed the startup launch itself; keys the viewer sent ahead for the wrapper were erased. */
+export function markSessionStartupLaunchTyped(session: Session): void {
+  const path = inputPaths.get(session)
+  if (!path || !session.isAlive) {
+    return
+  }
+  path.startupLaunchTyped = true
+  path.viewer?.onStartupLaunchTyped?.(session.incarnationId)
+}
+
+export function isSessionStartupLaunchTyped(session: Session): boolean {
+  return session.isAlive && inputPaths.get(session)?.startupLaunchTyped === true
 }
 
 export function isSessionInputClosed(session: Session): boolean {

@@ -14,6 +14,7 @@ import { paneHasStartupWork } from '../pane-transport-options'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { appendTypedDraftText } from '../../input/draft/typed-draft-text'
 import { TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from '../../../../../../shared/agent-launch/startup/startup-line-prompt-carry'
+import { watchPtyLaunchTyped } from '../../pty-transport/delivery/pty-startup-launch-typed'
 
 const encoder = new TextEncoder()
 
@@ -24,6 +25,13 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
   let draft = ''
   let liveInputSinceBind = false
   let agent: TuiAgent | null | undefined
+  let watchedLaunchPtyId: string | null = null
+  let stopWatchingLaunch = (): void => {}
+  const forgetSentAtBind = (): void => {
+    stopWatchingLaunch()
+    stopWatchingLaunch = () => {}
+    watchedLaunchPtyId = null
+  }
 
   const resolveAgent = (): TuiAgent | null => {
     if (agent === undefined) {
@@ -115,7 +123,18 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     ).catch(() => false)
   }
 
+  const deliverAfterAgentReady = (ptyId: string, draftAgent: TuiAgent): void => {
+    void waitForAgentDraftInputReady(
+      ptyId,
+      resolveDraftPasteReadyTimeoutMs(draftAgent),
+      TUI_AGENT_CONFIG[draftAgent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
+    ).then((ready) => (ready ? pasteDraft(ptyId, draftAgent) : dropDraft(draftAgent)))
+  }
+
   session.onAgentPreReadyDraftPtyBound = (ptyId: string, freshSpawn: boolean): void => {
+    if (watchedLaunchPtyId !== null && watchedLaunchPtyId !== ptyId) {
+      forgetSentAtBind()
+    }
     if (phase !== 'capturing') {
       return
     }
@@ -139,7 +158,19 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       if (!session.transport.sendInput(text, 'driving')) {
         draft = text
         dropDraft(draftAgent)
+        return
       }
+      // The host's own typed launch erases keys sent at bind; deliver them to the agent instead.
+      watchedLaunchPtyId = ptyId
+      stopWatchingLaunch = watchPtyLaunchTyped(ptyId, session.spawnIncarnationId, () => {
+        watchedLaunchPtyId = null
+        if (session.disposed || session.transport.getPtyId() !== ptyId) {
+          return
+        }
+        draft = text
+        phase = 'delivering'
+        deliverAfterAgentReady(ptyId, draftAgent)
+      })
       return
     }
     phase = 'delivering'
@@ -148,16 +179,13 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       dropDraft(draftAgent)
       return
     }
-    void waitForAgentDraftInputReady(
-      ptyId,
-      resolveDraftPasteReadyTimeoutMs(draftAgent),
-      TUI_AGENT_CONFIG[draftAgent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-    ).then((ready) => (ready ? pasteDraft(ptyId, draftAgent) : dropDraft(draftAgent)))
+    deliverAfterAgentReady(ptyId, draftAgent)
   }
 
   session.discardAgentPreReadyDraft = (): void => {
     draft = ''
     phase = 'closed'
+    forgetSentAtBind()
   }
 }
 

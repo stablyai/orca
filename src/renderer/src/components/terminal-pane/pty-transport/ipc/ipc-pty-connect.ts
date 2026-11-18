@@ -125,7 +125,8 @@ export async function connectIpcPty(
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id, {
-        shellWrapperLaunch: spawnResult.shellWrapperLaunch === true
+        shellWrapperLaunch: spawnResult.shellWrapperLaunch === true,
+        incarnationId: spawnResult.incarnationId
       })
       if (context.isDestroyed()) {
         return

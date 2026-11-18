@@ -118,6 +118,16 @@ export const ptySessionControlApi = {
     ipcRenderer.on('pty:writeUnavailable', handler)
     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
   },
+  onStartupLaunchTyped: (
+    callback: (payload: { id: string; incarnationId: string }) => void
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: { id: string; incarnationId: string }
+    ): void => callback(payload)
+    ipcRenderer.on('pty:startupLaunchTyped', handler)
+    return () => ipcRenderer.removeListener('pty:startupLaunchTyped', handler)
+  },
   resize: (id: string, cols: number, rows: number): void => {
     ipcRenderer.send('pty:resize', { id, cols, rows })
   },

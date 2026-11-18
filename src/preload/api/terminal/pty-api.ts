@@ -132,6 +132,10 @@ export type PtyApi = {
     options?: { requireWriteSettlement?: true; requireStartupDialog?: string }
   ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
+  /** The host typed the startup launch itself, erasing keys sent ahead for the shell wrapper. */
+  onStartupLaunchTyped?: (
+    callback: (payload: { id: string; incarnationId: string }) => void
+  ) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
   /** Who besides this window is viewing or typing into these PTYs; empty for unknown ids. */

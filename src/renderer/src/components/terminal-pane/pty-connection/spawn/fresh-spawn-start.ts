@@ -237,6 +237,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           // Daemon adoption can turn fresh spawn into reattach, which skips onPtySpawn to preserve recency.
           // A cold restore still starts a new process; its wrapper-run launch takes typed-ahead keys like a fresh one.
           session.spawnShellWrapperLaunch = spawnedPtyId.shellWrapperLaunch === true
+          session.spawnIncarnationId = spawnedPtyId.incarnationId
           session.bindActivePanePty(resolvedPtyId, {
             updateTabPtyId: 'if-missing',
             sampleVisibleForegroundAgent: true,
