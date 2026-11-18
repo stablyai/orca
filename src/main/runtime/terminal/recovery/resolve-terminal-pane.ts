@@ -21,6 +21,7 @@ import {
   labelTerminalReadSource,
   readTerminalTail
 } from '../output/tail/terminal-tail-read'
+import { readSleptAgentTerminal } from './slept-agent-terminal-read'
 import { getTerminalState } from '../wait/terminal-wait-results'
 import { readStructuredWorkerTerminal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -261,6 +262,12 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     if (starting) {
       const target = await starting
       return { ...(await this.readTerminal(target, opts, providerSnapshot)), handle }
+    }
+    const slept = this.sleptAgentHandle(handle)
+    if (slept) {
+      return readSleptAgentTerminal(handle, slept, opts, (pty) =>
+        this.readPtyTerminal(handle, pty, opts)
+      )
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {

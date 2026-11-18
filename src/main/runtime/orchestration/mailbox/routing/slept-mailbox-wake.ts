@@ -34,6 +34,8 @@ type WakeDeps = {
   waiters: (mailbox: string) => ReadonlySet<OrchestrationMessageWaiter> | undefined
   prepare: (record: SleptMailRecord) => Promise<void>
   wake: (record: SleptMailRecord) => Promise<boolean>
+  /** The slept pane a terminal handle's own mailbox reaches; Run and Dispatch mailboxes resolve from the db. */
+  handlePane?: (mailbox: string) => string | null
 }
 
 /** Durable mail derives the obligation; only a proven wake suppresses the same unconsumed batch. */
@@ -56,13 +58,17 @@ export class SleptMailboxWake {
 
   constructor(private readonly deps: WakeDeps) {}
 
+  private ownerPane(db: OrchestrationDb, mailbox: string): string | null {
+    return mailboxOwnerPane(db, mailbox) ?? this.deps.handlePane?.(mailbox) ?? null
+  }
+
   failedToWake(record: SleptMailRecord): boolean {
     return this.failed.get(record.paneKey) === record.capturedAt
   }
 
   batch(mailbox: string, reservedTypes?: ReadonlySet<string>) {
     const db = this.deps.db()
-    const paneKey = db ? mailboxOwnerPane(db, mailbox) : null
+    const paneKey = db ? this.ownerPane(db, mailbox) : null
     const record = paneKey ? this.deps.record(paneKey) : null
     if (!db || !record || !mailWakeObligation(record)) {
       return null
@@ -73,7 +79,7 @@ export class SleptMailboxWake {
 
   private selection(mailbox: string, reservedTypes?: ReadonlySet<string>) {
     const db = this.deps.db()
-    const paneKey = db && mailboxOwnerPane(db, mailbox)
+    const paneKey = db && this.ownerPane(db, mailbox)
     if (
       !db ||
       !paneKey ||

@@ -58,6 +58,9 @@ export async function stopRendererOwnedPty(
   args: { id: string; keepHistory?: boolean }
 ): Promise<void> {
   // Hibernation must retain the pane's wake binding.
+  if (args?.keepHistory === true && typeof args.id === 'string') {
+    deps.runtime?.assertAgentSleepAdmitted(args.id)
+  }
   await stopRendererOwnedPtyAs(deps, args, args?.keepHistory === true ? 'reversible' : null)
 }
 

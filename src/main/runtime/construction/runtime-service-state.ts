@@ -1,3 +1,4 @@
+import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 
@@ -44,6 +45,7 @@ import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-scr
 import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithPtyForegroundState {
+  protected abstract isSleptAgentLeaf(leaf: RuntimeLeafRecord): boolean
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
@@ -133,6 +135,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTopologyRevision: (worktreeId) => this.getTerminalTopologyRevision(worktreeId),
     buildHostScope: (targetWorktreeId, terminals, worktrees, queriedHostIds) =>
       this.buildTerminalListHostScope(targetWorktreeId, terminals, worktrees, queriedHostIds),
+    isSleptAgentLeaf: (leaf) => this.isSleptAgentLeaf(leaf),
     ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { listsEveryPane: (id) => mainListsEveryPane(this, id) } : {})
   })
 

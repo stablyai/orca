@@ -16,6 +16,11 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
   protected abstract readonly sleptMailboxWake: SleptMailboxWake
   protected abstract watchSleepingMail(): void
   protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
+  /** A pane woken for something other than mail; its custody is not this mail's to settle. */
+  protected holdsSleptPaneWake(_paneKey: string): boolean {
+    return false
+  }
+
   async readSleepingMailHold(mailbox: string): Promise<MailboxDeliveryHold | null> {
     this.watchSleepingMail()
     const record = this.sleptMailboxWake.batch(mailbox)?.record

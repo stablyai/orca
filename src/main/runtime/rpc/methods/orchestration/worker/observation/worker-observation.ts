@@ -4,7 +4,10 @@ import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrchestrationFleetWorker } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { projectWorkerFleet } from '../fleet/worker-list-projection'
-import { createSessionWorkerLivenessReader } from '../../../../../orchestration/workers/lifecycle/session-worker-liveness'
+import {
+  createSessionWorkerLivenessReader,
+  withSleptAgentWorkers
+} from '../../../../../orchestration/workers/lifecycle/session-worker-liveness'
 import { inspectSessionWorker } from './session-worker-observation'
 import type {
   DispatchContextRow,
@@ -42,6 +45,15 @@ export async function inspectWorkerTerminal(
   const session = await inspectSessionWorker(runtime, db, dispatchId, terminalHandle)
   if (session) {
     return session
+  }
+  // Agent Sleep stopped the process, not the worker: same pane and conversation, idle until input wakes it.
+  const sleptHandle = runtime.sleptAgentHandleForPane(
+    db.getWorkerTerminalResourceByOwner(dispatchId)?.pane_key ??
+      db.getDispatchContextById(dispatchId)?.assignee_pane_key
+  )
+  if (sleptHandle) {
+    const terminal = await runtime.showTerminal(sleptHandle).catch(() => null)
+    return { terminal, exact: true, status: 'live', agentWait: null, terminalHandle: sleptHandle }
   }
   let effectiveHandle = terminalHandle
   let terminal = await runtime.showTerminal(effectiveHandle).catch(() => null)
@@ -221,7 +233,11 @@ export function projectFleetWorkerPage(
     statuses,
     limit: 1,
     now,
-    observeSession: createSessionWorkerLivenessReader(db, statuses)
+    observeSession: withSleptAgentWorkers(
+      createSessionWorkerLivenessReader(db, statuses),
+      statuses,
+      (paneKey) => runtime.sleptAgentHandleForPane(paneKey) !== null
+    )
   })
 }
 

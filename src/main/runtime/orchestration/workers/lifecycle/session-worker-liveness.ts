@@ -21,7 +21,24 @@ import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
 
 export type SessionWorkerSubject = {
   agentTerminalHandle: string | null
-  resource?: { processIncarnation?: string | null } | null
+  resource?: { processIncarnation?: string | null; paneKey?: string | null } | null
+}
+
+/** Agent-slept terminal workers read as live and idle; their pane's kept status row is their activity. */
+export function withSleptAgentWorkers(
+  observe: (worker: SessionWorkerSubject) => FleetSessionObservation | undefined,
+  statuses: readonly FleetAgentStatusEvidence[],
+  isSleptAgentPane: (paneKey: string) => boolean
+): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
+  return (worker) => {
+    const observed = observe(worker)
+    const paneKey = worker.resource?.paneKey
+    if (observed || !paneKey || !isSleptAgentPane(paneKey)) {
+      return observed
+    }
+    const activity = statuses.find((status) => status.activity.paneKey === paneKey)
+    return activity ? { status: 'live', activity } : { status: 'live' }
+  }
 }
 
 /** Chat-mode workers' liveness for every fleet surface, from in-memory session records; undefined selects the terminal path. */

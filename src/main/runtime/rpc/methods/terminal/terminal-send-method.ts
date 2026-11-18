@@ -98,6 +98,10 @@ export const TERMINAL_SEND_METHODS = [
         if (replayObservation) {
           return replayObservation
         }
+        // A slept agent resumes in place first, so every check below reads its woken process.
+        if (params.inputKind !== 'query-reply') {
+          await runtime.wakeSleptAgentHandle(params.terminal, { signal })
+        }
         // Reject stale handles before evaluating driver/lock state on the wrong PTY (#7718).
         const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
         const driver = leaf?.ptyId ? runtime.getDriver(leaf.ptyId) : null

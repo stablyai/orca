@@ -158,6 +158,10 @@ async function hibernatePaneIfStillEligible(
       })
     )
   } catch (err) {
+    // Main refuses while orchestration mail or a Dispatch is in flight; a later tick retries.
+    if (String(err).includes('orchestration_busy')) {
+      return
+    }
     console.warn('[agent-hibernation] failed to hibernate agent pane:', id, err)
   } finally {
     coordinator.shuttingDownCandidateIds.delete(id)
