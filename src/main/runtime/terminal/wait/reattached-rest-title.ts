@@ -36,20 +36,21 @@ export function reattachedRestTitleAgent(pty: Omit<RestTitlePty, 'ptyId'>): TuiA
 }
 
 /** One foreground read per pane per quiet stretch (or retry interval), for pending waits only, so a
- *  restart pays no fleet-wide process reads. */
-export class ReattachedRestTitleReads {
+ *  restart pays no fleet-wide process reads. Shared by every wait on a pane. */
+export class ReattachedRestTitleReads<Pty extends RestTitlePty> {
   private readonly lastReadByPtyId = new Map<string, { outputClockAt: number | null; at: number }>()
+  private readonly inFlight = new Set<string>()
 
   constructor(
-    private readonly outputClockOf: (pty: RestTitlePty) => number | null,
+    private readonly outputClockOf: (pty: Pty) => number | null,
     private readonly confirmRestTitle?: (ptyId: string, agent: TuiAgent) => Promise<boolean>
   ) {}
 
   /** Null when there is nothing to ask now; else whether the rest title's own agent was confirmed
    *  in front, with the pane unchanged, and its idle admitted. */
-  confirm(pty: RestTitlePty): Promise<boolean> | null {
+  confirm(pty: Pty): Promise<boolean> | null {
     const agent = reattachedRestTitleAgent(pty)
-    if (!agent || !this.confirmRestTitle) {
+    if (!agent || !this.confirmRestTitle || this.inFlight.has(pty.ptyId)) {
       return null
     }
     const outputClockAt = this.outputClockOf(pty)
@@ -58,9 +59,13 @@ export class ReattachedRestTitleReads {
       return null
     }
     this.lastReadByPtyId.set(pty.ptyId, { outputClockAt, at: Date.now() })
-    return this.confirmRestTitle(pty.ptyId, agent).catch(() => false)
+    this.inFlight.add(pty.ptyId)
+    return this.confirmRestTitle(pty.ptyId, agent)
+      .catch(() => false)
+      .finally(() => this.inFlight.delete(pty.ptyId))
   }
 
+  /** The pane's last wait ended. */
   forget(ptyId: string): void {
     this.lastReadByPtyId.delete(ptyId)
   }

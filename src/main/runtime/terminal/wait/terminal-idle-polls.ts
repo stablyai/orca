@@ -83,7 +83,7 @@ export class RuntimeTerminalIdlePolls {
   private readonly entries = new Set<IdlePollEntry>()
   private sweepTimer: ReturnType<typeof setInterval> | null = null
   private readonly quietForegroundByPtyId = new Map<string, QuietForegroundRead>()
-  private readonly restTitleReads: ReattachedRestTitleReads
+  private readonly restTitleReads: ReattachedRestTitleReads<RuntimePtyWorktreeRecord>
   /** The evidence source the polls evaluate with: the shared one plus this poll's own foreground reads. */
   private readonly evidenceSource: TuiIdleEvidenceSource
 
@@ -295,23 +295,15 @@ export class RuntimeTerminalIdlePolls {
     entry: IdlePollEntry,
     sample: IdlePollSample
   ): Promise<boolean> {
-    if (entry.foregroundPollInFlight || !sample.isQuiet('closed')) {
+    const read = sample.isQuiet('closed') ? this.restTitleReads.confirm(entry.pty) : null
+    if (!read) {
       return false
     }
-    entry.foregroundPollInFlight = true
-    try {
-      const read = this.restTitleReads.confirm(entry.pty)
-      if (!read) {
-        return false
-      }
-      const resample = (await read) && this.entries.has(entry) ? this.sample(entry) : null
-      if (resample?.verdict.kind === 'ready-strong') {
-        this.settle(entry, resample.ready())
-      }
-      return true
-    } finally {
-      entry.foregroundPollInFlight = false
+    const resample = (await read) && this.entries.has(entry) ? this.sample(entry) : null
+    if (resample?.verdict.kind === 'ready-strong') {
+      this.settle(entry, resample.ready())
     }
+    return true
   }
 
   /** Why the screen too: a dialog that parks the cursor above its own options (Claude's
@@ -342,7 +334,9 @@ export class RuntimeTerminalIdlePolls {
       return
     }
     this.quietForegroundByPtyId.delete(entry.pty.ptyId)
-    this.restTitleReads.forget(entry.pty.ptyId)
+    if (![...this.entries].some((other) => other.pty.ptyId === entry.pty.ptyId)) {
+      this.restTitleReads.forget(entry.pty.ptyId)
+    }
     entry.waiter.cancelIdlePoll = null
     clearTimeout(entry.recheckTimer)
     if (this.entries.size === 0 && this.sweepTimer) {

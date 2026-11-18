@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   awaitReattachedTerminalPaint,
   hasTerminalAgentPainted,
@@ -8,6 +8,8 @@ import {
   vouchTerminalSpawn,
   type TerminalCommandPaintRecord
 } from './terminal-command-paint'
+
+const FINISH_MARKER = '\x1b]133;D;0\x07'
 
 describe('terminal command paint after a reattach', () => {
   it('waits for the reattached program to paint something visible', () => {
@@ -44,6 +46,14 @@ describe('terminal command paint after a reattach', () => {
     expect(hasTerminalAgentPainted(record, 'hermes')).toBe(true)
     expect(isCurrentCommandReport(record, null)).toBe(true)
     expect(takeReattachedRepaintRequest(record)).toBe(false)
+  })
+
+  it('stops holding a finished reattached command once output was lost', () => {
+    const record: TerminalCommandPaintRecord = {}
+    awaitReattachedTerminalPaint(record, 1_000)
+    observeTerminalCommandPaint(record, FINISH_MARKER, FINISH_MARKER, 2_000)
+    record.commandPaint?.noteGap()
+    expect(hasTerminalAgentPainted(record, 'hermes')).toBe(true)
   })
 
   it('remembers a process this run saw start across lost output', () => {
@@ -85,7 +95,9 @@ describe('the command an agent report speaks for', () => {
     const record: TerminalCommandPaintRecord = {}
     observeTerminalCommandPaint(record, START, START, 1_000)
     const handoff = `${FINISH}~/repo % codex\r\n${START}`
+    vi.useFakeTimers({ now: 5_000 })
     observeTerminalCommandPaint(record, handoff, handoff, 5_000)
+    vi.useRealTimers()
     expect(isCurrentCommandReport(record, 2_000)).toBe(false)
     // A report stamped while that read was handled may precede its finish.
     expect(isCurrentCommandReport(record, 5_000)).toBe(false)

@@ -95,9 +95,9 @@ export class TerminalCommandPaint {
     if (this.markerEndInChunk !== -1) {
       // Why only at a boundary: an agent that writes its own 133;C mid-session is not a new command.
       // Why a finish before it too: then this C starts the next command, not the agent's own. Why
-      // after the read then: a report earlier in it, stamped no sooner, is the finished command's.
+      // after now then: this read's reports, stamped before this runs, are the finished command's.
       if (!this.startSeen || finishEnd !== -1) {
-        this.startedAt = finishEnd === -1 ? at : at + 1
+        this.startedAt = finishEnd === -1 ? at : Math.max(at, Date.now()) + 1
         this.startSeen = true
       }
       this.betweenCommands = false
@@ -166,7 +166,8 @@ export class TerminalCommandPaint {
   /** Output was lost: paint and boundaries since are unknown. A reattach fence still awaiting its
    *  command keeps holding; otherwise every report and any paint count, as with no markers. */
   noteGap(): void {
-    if (this.reattach === 'armed' && !this.startSeen) {
+    this.scanner.reset()
+    if (this.awaitsReattachedCommand()) {
       return
     }
     this.startedAt = null

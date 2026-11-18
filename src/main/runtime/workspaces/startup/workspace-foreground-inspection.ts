@@ -39,11 +39,13 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
   protected async confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean> {
     const pty = this.ptysById.get(ptyId)
     const outputClockAt = this.readOutputClockAt(ptyId)
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     const foreground = await readExactAgentForeground(this, this.ptyController, ptyId, agent)
     if (
       foreground !== 'agent' ||
       !pty ||
       this.ptysById.get(ptyId) !== pty ||
+      this.getPtyLifecycleGeneration(ptyId) !== generation ||
       this.readOutputClockAt(ptyId) !== outputClockAt ||
       reattachedRestTitleAgent(pty) !== agent
     ) {
