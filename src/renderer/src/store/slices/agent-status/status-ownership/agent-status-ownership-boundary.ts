@@ -44,7 +44,42 @@ export function withAgentStatusOwnership(
         )
         publishProjection()
         publishStatuses()
-        write(next, true)
+        {
+          const g = globalThis as unknown as {
+            __orcaDispatch?: {
+              depth: number
+              child: number[]
+              timings: { kind: string; ms: number }[]
+            }
+          }
+          const d = (g.__orcaDispatch ??= { depth: 0, child: [0], timings: [] })
+          const keys = Object.keys(requested).filter(
+            (key) =>
+              !Object.is(
+                (current as unknown as Record<string, unknown>)[key],
+                (next as unknown as Record<string, unknown>)[key]
+              )
+          )
+          const kind = keys.includes('agentStatusByPaneKey')
+            ? 'agent-status'
+            : keys.includes('runtimeStatusByEnvironmentId')
+              ? 'host-status'
+              : 'other'
+          d.depth += 1
+          d.child.push(0)
+          const started = performance.now()
+          try {
+            write(next, true)
+          } finally {
+            const total = performance.now() - started
+            const nested = d.child.pop() ?? 0
+            d.depth -= 1
+            d.child[d.child.length - 1] += total
+            if (d.timings.length < 50_000) {
+              d.timings.push({ kind, ms: total - nested })
+            }
+          }
+        }
         statuses.projection.notify()
       }
     api.setState = wrap(api.setState)

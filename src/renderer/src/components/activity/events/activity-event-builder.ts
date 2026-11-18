@@ -77,7 +77,14 @@ export function buildActivityEvents(
     }
   }
 
+  const measure = ((
+    globalThis as unknown as {
+      __orcaActivity?: { builds: number; visits: number; rebuilt: number }
+    }
+  ).__orcaActivity ??= { builds: 0, visits: 0, rebuilt: 0 })
+  measure.builds += 1
   for (const [paneKey, entry] of Array.from(args.agentStatusByPaneKey.entries())) {
+    measure.visits += 1
     const parsed = parseAgentStatusPaneIdentity(
       paneKey,
       args.unifiedTabsByWorktree
