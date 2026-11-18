@@ -11,7 +11,7 @@ import {
   journalImportTime
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import type { JournalAcpHistory } from '../../native-chat/agent-session-journal/journal-domain-acp-history'
-import type { JournalHistoryItem } from '../../native-chat/agent-session-journal/journal-history-items'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
   continuedOutsideRecordId,
@@ -22,8 +22,8 @@ import type { AcpHistoryScope } from './acp-history-translation'
 import type { AcpHistoryCandidate, AcpHistoryReadJournal } from './acp-history-turn-matching'
 import { acpHistoryHasOutput } from './acp-history-turn-content'
 
-/** Keys per keyed read, so one page of saved bodies stays far below the read's own bound. */
-const SAVED_ITEMS_PAGE = 64
+/** Keys named per keyed read; the reader also ends a page at its byte budget. */
+const SAVED_ITEMS_KEYS = 1_024
 
 const KINDS: ReadonlySet<AgentJournalItemBody['kind']> = new Set([
   'message',
@@ -71,29 +71,45 @@ function admission(scope: AcpHistoryScope, journal: JournalAcpHistory, dividers:
   return { placed, admits }
 }
 
+/** Saved rows by key plus the turn rows and openers they name, each read once. */
 async function savedItems(
   history: StructuredAgentSessionHistoryJournal,
   keys: readonly string[]
-): Promise<JournalHistoryItem[]> {
-  const entries: JournalHistoryItem[] = []
-  for (let offset = 0; offset < keys.length; offset += SAVED_ITEMS_PAGE) {
-    entries.push(
-      ...(await history.reads.historyItems(keys.slice(offset, offset + SAVED_ITEMS_PAGE)))
-    )
+): Promise<SavedItems> {
+  const items = new Map<string, AgentJournalRenderItem>()
+  const canonical = new Map<string, string>()
+  let pending = [...new Set(keys)]
+  while (pending.length > 0) {
+    const next = new Set<string>()
+    for (let offset = 0; offset < pending.length;) {
+      const page = await history.reads.acpHistoryItems(
+        pending.slice(offset, offset + SAVED_ITEMS_KEYS)
+      )
+      for (const item of page.items) {
+        items.set(item.itemId, item)
+        next.add(item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : '')
+        next.add(readAgentJournalTurn(item.body)?.userItemId ?? '')
+      }
+      for (const [key, canonicalItemId] of page.canonical) {
+        canonical.set(key, canonicalItemId)
+      }
+      offset += page.consumed
+    }
+    pending = [...next].filter((key) => key !== '' && !canonical.has(key))
   }
-  return entries
+  return { items, canonical }
 }
 
-function itemReader(
-  entries: readonly JournalHistoryItem[],
-  admits: (item: AgentJournalRenderItem) => boolean
-) {
-  const items = new Map(
-    entries.flatMap((entry) =>
-      entry.item && admits(entry.item) ? [[entry.item.itemId, entry.item] as const] : []
-    )
-  )
-  return (key: string) => items.get(key) ?? null
+type SavedItems = {
+  items: ReadonlyMap<string, AgentJournalRenderItem>
+  canonical: ReadonlyMap<string, string>
+}
+
+function itemReader(saved: SavedItems, admits: (item: AgentJournalRenderItem) => boolean) {
+  return (key: string) => {
+    const item = saved.items.get(key)
+    return item && admits(item) ? item : null
+  }
 }
 
 /** Coverage reads turn facts, placements and saved turn rows; no saved output reaches main. */
@@ -117,7 +133,7 @@ export async function readAcpHistoryJournal(
         agent: scope.agent,
         sessionId: scope.sessionId,
         providerSessionId: scope.providerSessionId,
-        itemIds: outputKeys
+        itemIds: [...new Set(outputKeys)]
       }),
       savedItems(history, turnKeys),
       history.reads.historyOrigin()
@@ -162,8 +178,8 @@ export async function readAcpHistoryBodies(
   if (keys.length === 0) {
     return { read: () => null, canonical: new Map<string, string>() }
   }
-  const { entries, physicalCursor } = await captureHistoryCatchUpView(history, async () => ({
-    entries: await savedItems(history, keys)
+  const { saved, physicalCursor } = await captureHistoryCatchUpView(history, async () => ({
+    saved: await savedItems(history, keys)
   }))
   if (
     physicalCursor.epoch !== baseline.physicalCursor.epoch ||
@@ -172,7 +188,7 @@ export async function readAcpHistoryBodies(
     throw new Error('stale-history')
   }
   return {
-    read: itemReader(entries, baseline.admits),
-    canonical: new Map(entries.map((entry) => [entry.key, entry.canonicalItemId]))
+    read: itemReader(saved, baseline.admits),
+    canonical: saved.canonical
   }
 }

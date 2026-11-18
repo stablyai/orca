@@ -11,7 +11,11 @@ import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-re
 import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
-import type { JournalAcpHistory, JournalAcpHistoryRead } from './journal-domain-acp-history'
+import type {
+  JournalAcpHistory,
+  JournalAcpHistoryItems,
+  JournalAcpHistoryRead
+} from './journal-domain-acp-history'
 import type { BotMemorySources } from '../../../shared/bots/bot-memory-source'
 import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
@@ -67,6 +71,8 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   historySourceItems(clientMessageIds: readonly string[]): Promise<AgentJournalRenderItem[]>
   /** ACP catch-up's turn facts and placements, never saved bodies. */
   acpHistory(read: Omit<JournalAcpHistoryRead, 'kind'>): Promise<JournalAcpHistory>
+  /** One byte-budgeted page of saved rows by key, as an item visit shortens them. */
+  acpHistoryItems(itemIds: readonly string[]): Promise<JournalAcpHistoryItems>
   hasProviderTurn(nativeId: string, sinceFence?: number): Promise<boolean>
   savedItemIds(itemIds: readonly string[]): Promise<string[]>
   forkMarkerGroup(
@@ -177,6 +183,10 @@ export function journalSqlReads(
       return items
     },
     acpHistory: async (input) => (await read({ kind: 'acp-history', ...input })).history,
+    acpHistoryItems: async (itemIds) => {
+      const { items, canonical, consumed } = await read({ kind: 'acp-history-items', itemIds })
+      return { items, canonical, consumed }
+    },
     hasProviderTurn: async (namespace, sinceFence) =>
       (
         await read({

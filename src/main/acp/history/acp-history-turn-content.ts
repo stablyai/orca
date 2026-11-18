@@ -19,11 +19,16 @@ export function acpHistoryHasOutput(body: AgentJournalItemBody): boolean {
   )
 }
 
-/** Prompts compare by digest so a long saved prompt never crosses the reader reply. */
+/** Prompts compare by digest of their UTF-16 code units, so lone surrogates stay distinct. */
 export function acpPromptDigest(blocks: readonly NativeChatBlock[]): string | null {
   return blocks.every((block) => block.type === 'text')
     ? createHash('sha256')
-        .update(blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n'))
+        .update(
+          Buffer.from(
+            blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n'),
+            'utf16le'
+          )
+        )
         .digest('hex')
     : null
 }

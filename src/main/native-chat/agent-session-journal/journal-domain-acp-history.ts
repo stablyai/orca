@@ -8,7 +8,11 @@ import {
   acpPromptDigest,
   type AcpNativeTurn
 } from '../../acp/history/acp-history-turn-content'
-import { journalVisibleItem } from './journal-sql-item-reads'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { journalCanonicalItemId, journalVisibleItem } from './journal-sql-item-reads'
+import { ITEMS_BY_KIND_PAGE_JSON_BUDGET } from './journal-items-by-kind-page'
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
+import { measureJournalStoredRow } from './journal-stored-output-rows'
 import type { JournalSqlScope } from './journal-sql-scope'
 
 export type JournalAcpHistoryRead = {
@@ -29,6 +33,15 @@ export type JournalAcpHistory = {
   held: { itemId: string; turnItemId: string | null }[]
 }
 
+export type JournalAcpHistoryItemsRead = { kind: 'acp-history-items'; itemIds: readonly string[] }
+
+export type JournalAcpHistoryItems = {
+  items: AgentJournalRenderItem[]
+  canonical: [itemId: string, canonicalItemId: string][]
+  /** How many leading `itemIds` this page answered. */
+  consumed: number
+}
+
 /** The kinds ACP catch-up reads; every kind but Orca cards. */
 const KINDS = `('message','tool-call','diff','approval','question','status','turn')`
 
@@ -43,8 +56,7 @@ export function readJournalDomainAcpHistory(
   const natives: AcpNativeTurn[] = []
   const scoped =
     db.prepare(`SELECT item_id,kind FROM journal_items INDEXED BY journal_items_stop_turn
-    WHERE session_id=? AND epoch=? AND hidden=0 AND turn_item_id=? AND kind IN ${KINDS}
-    ORDER BY ordinal`)
+    WHERE session_id=? AND epoch=? AND hidden=0 AND turn_item_id=? AND kind IN ${KINDS}`)
   for (const row of db
     .prepare(`SELECT item_id,sequence,turn_id,opener_item_id FROM journal_items
     INDEXED BY journal_items_named_turn
@@ -115,4 +127,35 @@ export function readJournalDomainAcpHistory(
     return row ? [{ itemId, turnItemId: row.turn_item_id ? String(row.turn_item_id) : null }] : []
   })
   return { turns, natives: natives.toSorted((a, b) => a.sequence - b.sequence), adopted, held }
+}
+
+/** Saved rows by key, paged and shortened as an item visit reads them; a lone larger row still goes. */
+export function readJournalDomainAcpHistoryItems(
+  scope: JournalSqlScope,
+  itemIds: readonly string[]
+): JournalAcpHistoryItems {
+  const { db, prefix } = scope
+  const canonicalOf = journalCanonicalItemId(db, prefix)
+  const payload =
+    db.prepare(`SELECT ${boundedStoredJsonSql('payload_json', 'payload_json', { shortenColumn: 'payload_json' })},
+    output_blob FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
+  const items: AgentJournalRenderItem[] = []
+  const canonical: JournalAcpHistoryItems['canonical'] = []
+  let used = 0
+  for (const itemId of itemIds) {
+    const row = payload.get(...prefix, itemId)
+    if (row) {
+      const { bytes, item } = measureJournalStoredRow(db, prefix, {
+        payload_json: boundedStoredJson(row, 'payload_json'),
+        output_blob: row.output_blob
+      })
+      if (items.length > 0 && used + bytes > ITEMS_BY_KIND_PAGE_JSON_BUDGET) {
+        break
+      }
+      used += bytes
+      items.push(item())
+    }
+    canonical.push([itemId, canonicalOf(itemId)])
+  }
+  return { items, canonical, consumed: canonical.length }
 }
