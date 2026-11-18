@@ -15,7 +15,6 @@ import type { RateLimitService } from '../rate-limits/service/rate-limit-service
 import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from '../../shared/agent-accounts/codex/codex-selection-lane'
 import { CodexAccountIdentity } from './credentials/codex-account-identity'
-import type { CodexAuthIdentity as ResolvedCodexIdentity } from './credentials/codex-auth-identity'
 import { CodexConfigMirror } from './managed-homes/codex-config-mirror'
 import { runCodexLoginSession, type CodexLoginChild } from './login/codex-login-session'
 import { CodexManagedHomePath } from './managed-homes/codex-managed-home-path'
@@ -25,6 +24,7 @@ import { CodexAccountSelection } from './account-management/codex-account-select
 import { CodexAccountRegistration } from './account-management/codex-account-registration'
 import type {
   CodexAccountAddTarget,
+  CodexAccountImportOptions,
   CodexAccountReauthenticateOptions,
   CodexAccountServiceLifecycle,
   CodexResetCreditConsumeResult
@@ -124,7 +124,7 @@ export class CodexAccountService {
       store,
       rateLimits,
       runtimeHome,
-      readIdentityFromHome: (path, accountId) => this.readIdentityFromHome(path, accountId),
+      readIdentityFromHome: (path, accountId) => this.identity.readFromHome(path, accountId),
       selection: this.selection,
       configMirror: this.configMirror,
       managedHomePaths: this.managedHomePaths,
@@ -210,7 +210,7 @@ export class CodexAccountService {
   /** Import credentials from a terminal login on a headless host. */
   async addAccountFromHome(
     sourceHome: string,
-    target?: CodexAccountAddTarget
+    target?: CodexAccountImportOptions
   ): Promise<CodexRateLimitAccountsState> {
     return this.serializeMutation(() => this.registration.addFromHome(sourceHome, target))
   }
@@ -278,15 +278,8 @@ export class CodexAccountService {
     return this.selection.snapshot()
   }
 
-  private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
+  resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
     return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
-  }
-
-  private readIdentityFromHome(
-    managedHomePath: string,
-    expectedAccountId: string
-  ): Promise<ResolvedCodexIdentity> {
-    return this.identity.readFromHome(managedHomePath, expectedAccountId)
   }
 
   private toSummary(account: CodexManagedAccount): CodexManagedAccountSummary {

@@ -1,4 +1,5 @@
 import { stat } from 'node:fs/promises'
+import { historyContinuationAccountHome } from '../../../providers/accounts/workspace-account-session-resume'
 import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
@@ -135,8 +136,14 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
 }) {
   try {
     const source = input.resolveTranscriptSource?.()
+    const pinned = await historyContinuationAccountHome(input.agent, input.providerSessionId)
+    if (pinned) {
+      input = { ...input, selectedAccountHome: pinned }
+    }
     const transcriptPath = source?.kind === 'matched' ? source.transcriptPath : undefined
-    const candidates = await input.transcriptImport.accountHomeCandidates(input)
+    const candidates = pinned
+      ? [input.selectedAccountHome]
+      : await input.transcriptImport.accountHomeCandidates(input)
     // Resolve each account store once so lookup, hook path and re-admission agree despite environment changes.
     const stores = new Map<AgentSessionAccountHome, string | null>()
     const storeOf = (accountHome: AgentSessionAccountHome): string | null => {

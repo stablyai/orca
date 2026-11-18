@@ -12,6 +12,12 @@ import type { ZcodePlanCredentialsStatus } from '../../../shared/agent-accounts/
 import type { MiniMaxCredentialsStatus } from '../../../shared/agent-accounts/usage-credentials/minimax-credentials-status'
 
 export type CodexAccountsApi = {
+  importHome: (args: {
+    sourceHome: string
+    importHistory?: boolean
+    runtime?: 'host' | 'wsl'
+    wslDistro?: string | null
+  }) => Promise<CodexRateLimitAccountsState>
   list: () => Promise<CodexRateLimitAccountsState>
   add: (args?: {
     runtime?: 'host' | 'wsl'
@@ -50,6 +56,10 @@ export type CodexAccountsApi = {
 }
 
 export type ClaudeAccountsApi = {
+  importHome: (args: {
+    sourceHome: string
+    importHistory?: boolean
+  }) => Promise<ClaudeRateLimitAccountsState>
   list: () => Promise<ClaudeRateLimitAccountsState>
   add: (args?: {
     runtime?: 'host' | 'wsl'

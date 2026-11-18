@@ -2,6 +2,7 @@ import type { AiVaultScanIssueText } from '../scanning/ai-vault-scan-issue-copy'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { AgentSessionAccountHome } from '../../agent-session/lifecycle/accounts/agent-session-account-home'
 import type { ExecutionHostId, ExecutionHostScope } from '../../execution-host/execution-host'
+import type { HistoryContinuation } from '../resume/history-resume-accounts'
 
 export const AI_VAULT_AGENTS = [
   'claude',
@@ -111,6 +112,9 @@ export type AiVaultSessionSubagentInfo = {
 export type AiVaultSessionTitleKind = 'named' | 'fallback'
 
 export type AiVaultSession = {
+  resumeReceipt?: string
+  resumeExactVersion?: boolean
+  continuationVersions?: HistoryContinuation[]
   /** Recorded account home; null proves System default, absent means unknown. */
   accountHome?: AgentSessionAccountHome | null
   accountWslDistro?: string | null

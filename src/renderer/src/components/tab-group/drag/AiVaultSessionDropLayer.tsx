@@ -18,6 +18,8 @@ import { buildAiVaultDropRepinStartup } from '@/lib/agent-session/resume/history
 import { getAiVaultAgentProviderSession } from '../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { launchAiVaultSessionInNewTab } from '@/lib/agent-session/resume/history/launch-ai-vault-session'
 import { prepareAiVaultTerminalResumeRequest } from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
+import { commitHistoryDropResume } from '@/lib/agent-session/resume/history/history-resume-receipts'
+import { notifyAiVaultSessionPreparationFailure } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback'
 import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
 import { useAppStore } from '@/store/index'
 import { resolveDropZone } from './tab-drop-zone'
@@ -229,22 +231,30 @@ export default function AiVaultSessionDropLayer({
         )
         return true
       }
-      const preparation = prepareAiVaultTerminalResumeRequest({
-        agent: payload.agent,
-        sessionId: payload.sessionId,
-        filePath: payload.sessionFilePath,
-        executionHostId: payload.sessionExecutionHostId,
-        codexHome: payload.codexHome ?? null
-      })
+      const preparation = prepareAiVaultTerminalResumeRequest(
+        {
+          agent: payload.agent,
+          sessionId: payload.sessionId,
+          filePath: payload.sessionFilePath,
+          executionHostId: payload.sessionExecutionHostId,
+          codexHome: payload.codexHome ?? null
+        },
+        worktreeId
+      )
       void preparation
         .then((result) => {
           const startup = result.useRealCodexHome
             ? payload.realHomeStartup
-            : result.substituteCodexHome
+            : result.substituteCodexHome || result.substituteClaudeConfigDir
               ? buildAiVaultDropRepinStartup({
                   state: useAppStore.getState(),
-                  payload,
+                  payload: {
+                    ...payload,
+                    sessionId: result.substituteSessionId ?? payload.sessionId
+                  },
                   substituteCodexHome: result.substituteCodexHome,
+                  substituteClaudeConfigDir: result.substituteClaudeConfigDir,
+                  substituteTranscriptPath: result.substituteTranscriptPath,
                   worktreeId
                 })
               : payload
@@ -264,8 +274,8 @@ export default function AiVaultSessionDropLayer({
           }
           const providerSession = getAiVaultAgentProviderSession({
             agent: payload.agent,
-            sessionId: payload.sessionId,
-            filePath: payload.sessionFilePath
+            sessionId: result.substituteSessionId ?? payload.sessionId,
+            filePath: result.substituteTranscriptPath ?? payload.sessionFilePath
           })
           const launchResult = launchAiVaultSessionInNewTab({
             agent: payload.agent,
@@ -294,15 +304,15 @@ export default function AiVaultSessionDropLayer({
                 )
                 return
               }
+              void commitHistoryDropResume(payload, result)
               showQueuedToast()
             })
             return
           }
+          void commitHistoryDropResume(payload, result, launchResult.tabId)
           showQueuedToast()
         })
-        .catch((error: unknown) => {
-          toast.error(describeAiVaultResumeFailure(error, payload.agent))
-        })
+        .catch((error: unknown) => notifyAiVaultSessionPreparationFailure(error, payload.agent))
       return true
     },
     [clearDragState, target, updateTarget, worktreeId]

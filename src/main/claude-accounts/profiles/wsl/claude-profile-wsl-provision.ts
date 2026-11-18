@@ -12,8 +12,15 @@ import { wslClaudeProfile } from './claude-profile-wsl-paths'
 export function provisionWslClaudeAccountProfile(
   userHome: string,
   distro: string,
-  accountId: string
+  accountId: string,
+  privateHistory = false
 ): Promise<ClaudeProfileSetupReport> {
   const { dataRoot, profile } = wslClaudeProfile(userHome, distro, accountId)
-  return provisionClaudeAccountProfile({ dataRoot, profile, userHome, installHooks: null })
+  return provisionClaudeAccountProfile({
+    dataRoot,
+    profile,
+    userHome,
+    privateHistory,
+    installHooks: null
+  })
 }

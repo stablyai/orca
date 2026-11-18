@@ -1,3 +1,4 @@
+import { installProviderWorkspaceSessionResume } from './workspace-account-resume-installation'
 // Keep Electron imports out: both desktop and orcad bundle these account services.
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import type { Store } from '../../persistence/loading-store/store'
@@ -12,6 +13,8 @@ import { resolveKimiHome } from '../../kimi/kimi-runtime-home'
 import { resolveLocalAccountUsageTarget } from '../../../shared/agent-accounts/local-account-runtime'
 import { resolveCodexRateLimitHomeUnlessStopped } from '../../rate-limits/providers/codex/codex-rate-limit-wsl-home-gate'
 import { inactiveCodexHomeUnlessStopped } from '../../rate-limits/inactive-codex-home'
+import { getSystemCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
+import { codexSystemDefaultUsagePreview } from '../../rate-limits/providers/codex/codex-system-default-usage-preview'
 import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { readZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
@@ -43,6 +46,12 @@ export function createProviderAccountServices(
   const agentView = getClaudeAgentViewService()
   void agentView.reconcile(store.getSettings())
   const rateLimits = new RateLimitService()
+  rateLimits.setClaudeWorkspaceAccountsResolver(
+    () => store.getSettings().claudeWorkspaceAccounts ?? {}
+  )
+  rateLimits.setCodexWorkspaceAccountsResolver(
+    () => store.getSettings().codexWorkspaceAccounts ?? {}
+  )
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
   const codexAccounts = new CodexAccountService(
     store,
@@ -52,6 +61,10 @@ export function createProviderAccountServices(
   )
   const claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   const claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
+  installProviderWorkspaceSessionResume(store, codexRuntimeHome, claudeRuntimeAuth, {
+    codex: () => codexAccounts.listAccounts(),
+    claude: () => claudeAccounts.listAccounts()
+  })
   // Background quota polls must not boot stopped distros; user-driven resets may prepare them.
   rateLimits.setCodexHomePathResolver((target) =>
     resolveCodexRateLimitHomeUnlessStopped(codexRuntimeHome, target)
@@ -175,7 +188,11 @@ export function createProviderAccountServices(
       ].filter(Boolean)
     )
     return settings.claudeManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
+      .filter(
+        (account) =>
+          !activeIds.has(account.id) ||
+          Object.values(settings.claudeWorkspaceAccounts ?? {}).includes(account.id)
+      )
       .map((account) => ({
         id: account.id,
         managedAuthRuntime: account.managedAuthRuntime,
@@ -191,28 +208,37 @@ export function createProviderAccountServices(
         ...Object.values(normalizeCodexRuntimeSelection(settings).wsl)
       ].filter(Boolean)
     )
-    return settings.codexManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
-      .map((account) => ({
-        id: account.id,
-        ...(account.managedHomeRuntime === 'wsl'
-          ? account.wslDistro
-            ? {
-                readingAccount: {
-                  accountId: account.id,
-                  runtime: 'wsl' as const,
-                  wslDistro: account.wslDistro
+    const workspaceIds = new Set(Object.values(settings.codexWorkspaceAccounts ?? {}))
+    const systemDefault = codexSystemDefaultUsagePreview(
+      normalizeCodexRuntimeSelection(settings).host,
+      codexAccounts.resolveSystemDefaultIdentity(),
+      getSystemCodexHomePath()
+    )
+    return [
+      ...(systemDefault ? [systemDefault] : []),
+      ...settings.codexManagedAccounts
+        .filter((account) => !activeIds.has(account.id) || workspaceIds.has(account.id))
+        .map((account) => ({
+          id: account.id,
+          ...(account.managedHomeRuntime === 'wsl'
+            ? account.wslDistro
+              ? {
+                  readingAccount: {
+                    accountId: account.id,
+                    runtime: 'wsl' as const,
+                    wslDistro: account.wslDistro
+                  }
                 }
-              }
-            : {}
-          : {
-              readingAccount: { accountId: account.id, runtime: 'host' as const, wslDistro: null }
-            }),
-        resolveHome: () =>
-          inactiveCodexHomeUnlessStopped(
-            codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)
-          )
-      }))
+              : {}
+            : {
+                readingAccount: { accountId: account.id, runtime: 'host' as const, wslDistro: null }
+              }),
+          resolveHome: () =>
+            inactiveCodexHomeUnlessStopped(
+              codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)
+            )
+        }))
+    ]
   })
   // Every host runs the poll timer; ticks fetch only while a window or remote reader watches.
   rateLimits.start({ fetchImmediately: false })

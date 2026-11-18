@@ -116,6 +116,7 @@ function servingHostLabel(): string {
 // Paired server owns accounts; list/select/remove use accounts.* RPCs, while sign-in requires the host login flow.
 export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
   return {
+    importHome: rejectHostOnlySignIn,
     list: async () => (await fetchAccountsSnapshot(false)).claude,
     add: rejectHostOnlySignIn,
     cancelPendingLogin: () => Promise.resolve(false),
@@ -159,6 +160,7 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
 
 export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
   return {
+    importHome: rejectHostOnlySignIn,
     list: async () => (await fetchAccountsSnapshot(false)).codex,
     add: rejectHostOnlySignIn,
     cancelPendingLogin: () => Promise.resolve(false),

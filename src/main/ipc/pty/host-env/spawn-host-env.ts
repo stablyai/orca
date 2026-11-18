@@ -74,6 +74,7 @@ type PtySpawnHostEnvArgs = {
   /** The lane's spawn env before Orca's host env. */
   env: Record<string, string> | undefined
   cwd: string | undefined
+  worktreeId?: string
   shellOverride: string | undefined
   expectedWslDistro: string | null
   codexSelectionTarget: CodexAccountSelectionTarget
@@ -139,7 +140,10 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
   const baseEnv = deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch)
   const launchesCodex = args.launchAgent === 'codex'
   const selectLaunchCodexHome = async (): Promise<string | null> =>
-    (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null
+    (await deps.getSelectedCodexHomePath?.(target, baseEnv, {
+      launchesCodex,
+      workspaceId: args.worktreeId
+    })) ?? null
   let selectedCodexHomePath = !args.preAdopted
     ? getCompatibleSelectedCodexHomePath(
         target,
@@ -159,12 +163,16 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       resolveCurrent: async () =>
         getCompatibleSelectedCodexHomePath(
           target,
-          (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null
+          (await deps.getSelectedCodexHomePath?.(target, baseEnv, {
+            launchesCodex,
+            workspaceId: args.worktreeId
+          })) ?? null
         ),
       resolveAfterUnavailable: async (unavailableManagedHomePath) =>
         getCompatibleSelectedCodexHomePath(
           target,
           (await deps.getSelectedCodexHomePath?.(target, baseEnv, {
+            workspaceId: args.worktreeId,
             unavailableManagedHomePath,
             launchesCodex
           })) ?? null

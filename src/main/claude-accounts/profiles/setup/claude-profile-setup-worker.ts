@@ -9,6 +9,7 @@ import type { ClaudeProfileDescriptor } from '../claude-profile-paths'
 import type { ClaudeProfileSetupReport } from './claude-profile-setup'
 
 export type ClaudeProfileSetupJob = {
+  privateHistory?: boolean
   dataRoot: string
   profile: ClaudeProfileDescriptor
   userHome: string

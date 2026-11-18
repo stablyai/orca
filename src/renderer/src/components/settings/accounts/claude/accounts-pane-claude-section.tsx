@@ -1,3 +1,5 @@
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { ClaudeHomeImport } from './ClaudeHomeImport'
 import { Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -117,6 +119,15 @@ export function renderClaudeAccountsSection(
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              {!isRemoteAccountScope &&
+                !isWebClientLocation() &&
+                accountRuntime.runtime === 'host' && (
+                  <ClaudeHomeImport
+                    runtime={accountRuntime}
+                    disabled={addDisabled}
+                    runAction={runClaudeAccountAction}
+                  />
+                )}
               <ButtonGroup>
                 <Button
                   variant="outline"

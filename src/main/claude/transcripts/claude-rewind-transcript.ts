@@ -1,6 +1,5 @@
 import { AgentConversationCopyError } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
-import { existsSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { access, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
@@ -46,7 +45,7 @@ export async function materializeClaudeConversationTranscript(input: {
     destinationDirectory,
     temporaryPath
   }
-  const worker = spawnClaudeConversationWorker(workerData)
+  const worker = await spawnClaudeConversationWorker(workerData)
   let abort: () => void = () => undefined
   try {
     return await new Promise<ConversationCopy | null>((resolve, reject) => {
@@ -130,15 +129,26 @@ export async function materializeClaudeRewindTranscript(
       }
 }
 
-export function spawnClaudeConversationWorker(workerData: unknown) {
+export async function spawnClaudeConversationWorker(workerData: unknown) {
   const compiled = resolveWorkerThreadEntryPath(
     currentWorkerEntryLayout(__dirname),
     'claude-conversation-fork-worker-entry.js'
   )
-  const installed = [
+  let installed: string | undefined
+  for (const candidate of [
     compiled,
     join(dirname(compiled), '..', 'claude-conversation-fork-worker-entry.js')
-  ].find(existsSync)
+  ]) {
+    if (
+      await access(candidate).then(
+        () => true,
+        () => false
+      )
+    ) {
+      installed = candidate
+      break
+    }
+  }
   const entry = installed
     ? installed
     : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)

@@ -1,5 +1,6 @@
 /** Thread names: crash reports and native samples show these instead of "WorkerThread". */
 export type WorkerThreadRole =
+  | 'orca-account-home-preparation'
   | 'orca-agent-identity'
   | 'orca-child-process-spawner'
   | 'orca-claude-profile-setup'

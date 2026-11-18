@@ -1,3 +1,4 @@
+import { workspaceAccountId } from '../../../../../../shared/agent-accounts/workspace-account-binding'
 /** Local terminal panes that run Claude, found from status rows, saved records, process reads or launches. */
 import {
   confirmRuntimeTerminalForegroundProcess,
@@ -100,6 +101,9 @@ export function* localClaudePanes(
 ): Generator<LocalClaudePane> {
   const isLaneInScope = getCodexAccountSwitchLaneMatcher({ owner, target })
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    if (workspaceAccountId(state.settings?.claudeWorkspaceAccounts, worktreeId)) {
+      continue
+    }
     for (const tab of tabs) {
       const boundPtyIds = new Set(state.ptyIdsByTabId[tab.id] ?? [])
       const leaves = Object.entries(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})

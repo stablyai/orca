@@ -5,6 +5,7 @@ import { basename, dirname, join } from 'node:path'
 import { readKeychainPassword } from '../../macos-keychain/generic-password'
 
 const ACTIVE_CLAUDE_SERVICE = 'Claude Code-credentials'
+
 export async function readActiveClaudeKeychainCredentialsStrict(
   configDir?: string
 ): Promise<string | null> {
@@ -24,7 +25,7 @@ export async function readActiveClaudeKeychainCredentialsStrict(
 const KEYCHAIN_ACCOUNT_PATTERN = /^[a-zA-Z0-9._-]+$/
 const CLAUDE_CODE_FALLBACK_USER = 'claude-code-user'
 
-function getKeychainUser(): string {
+export function getKeychainUser(): string {
   // Match Claude 2.1+ fallback naming for invalid usernames, including SSO email addresses.
   let user: string
   try {

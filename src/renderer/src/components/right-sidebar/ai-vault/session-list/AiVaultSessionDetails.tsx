@@ -1,3 +1,5 @@
+import { conversationRoleLabel } from './ai-vault-session-row-display'
+import { SessionDetailEmptyState } from './SessionDetailEmptyState'
 import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 
 import type React from 'react'
@@ -19,8 +21,7 @@ import {
   type AiVaultScope,
   type AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
 import { ResumeInNewCliTooltipText } from '../session-actions/ai-vault-session-cli-fork-copy'
 import {
@@ -32,8 +33,11 @@ import {
   SessionSubagentsSection
 } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
-import { useAiVaultSessionAccount } from '../accounts/ai-vault-session-account'
-import { SessionAccountSection } from '../accounts/AiVaultSessionAccount'
+import { HistorySessionContinuations } from '../accounts/HistorySessionContinuations'
+import {
+  HistorySessionResumeSummary,
+  HistorySessionStorageAccount
+} from '../accounts/HistorySessionResumeSummary'
 import { SessionReceiptSection } from './AiVaultSessionReceiptSection'
 import './ai-vault-session-worktree'
 import {
@@ -62,7 +66,9 @@ export function SessionInlineDetails({
   onResumeInNewChat,
   onResumeInNewCli,
   onOpenLog,
-  actionsHidden = false
+  actionsHidden = false,
+  onResumeVersion,
+  pending = false
 }: {
   id: string
   session: AiVaultSession
@@ -81,6 +87,8 @@ export function SessionInlineDetails({
   onOpenLog?: () => void
   /** Hides the action bar; the details stay. */
   actionsHidden?: boolean
+  onResumeVersion?: (session: AiVaultSession) => void
+  pending?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   // Zero-turn sessions cannot resume meaningful content; show not-saved status instead.
@@ -92,7 +100,6 @@ export function SessionInlineDetails({
     (!resumeActions.worktree.worktreeId || Boolean(resumeActions.newTab.worktreeId))
   const promptPreview = sessionPromptPreview(session)
   const detailTurns = sessionDetailConversationTurns(session, 3)
-  const accountLabel = useAiVaultSessionAccount(session)
 
   return (
     <div
@@ -106,6 +113,12 @@ export function SessionInlineDetails({
         event.stopPropagation()
       }}
     >
+      {!actionsHidden && (
+        <HistorySessionResumeSummary
+          session={session}
+          workspaceId={resumeActions.worktree.worktreeId ?? undefined}
+        />
+      )}
       {!actionsHidden &&
       (showResumeInWorktree ||
         showResumeInNewTab ||
@@ -157,6 +170,7 @@ export function SessionInlineDetails({
           ) : null}
           {onResumeInNewChat ? (
             <Button
+              disabled={pending}
               type="button"
               variant="secondary"
               size="xs"
@@ -295,7 +309,8 @@ export function SessionInlineDetails({
             <WorktreeMetadataLines worktreeInfo={worktreeInfo} vaultScope={vaultScope} />
           </SessionReceiptSection>
         ) : null}
-        <SessionAccountSection accountLabel={accountLabel} />
+        <HistorySessionContinuations session={session} onResume={onResumeVersion} />
+        <HistorySessionStorageAccount session={session} />
       </div>
     </div>
   )
@@ -386,31 +401,4 @@ function WorktreePathHint({
       </TooltipContent>
     </Tooltip>
   )
-}
-
-function SessionDetailEmptyState({ message }: { message: string }): React.JSX.Element {
-  return (
-    <div className="rounded-md border border-dashed border-sidebar-border/80 px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
-      {message}
-    </div>
-  )
-}
-
-function conversationRoleLabel(
-  role: AiVaultSession['previewMessages'][number]['role'],
-  t: Translate = translate
-): string {
-  if (role === 'user') {
-    return t('auto.components.right.sidebar.AiVaultSessionDetails.userRole', 'You')
-  }
-  if (role === 'assistant') {
-    return t('auto.components.right.sidebar.AiVaultSessionDetails.agentRole', 'Agent')
-  }
-  if (role === 'tool') {
-    return t('auto.components.right.sidebar.AiVaultSessionDetails.toolRole', 'Tool')
-  }
-  if (role === 'system') {
-    return t('auto.components.right.sidebar.AiVaultSessionDetails.systemRole', 'System')
-  }
-  return t('auto.components.right.sidebar.AiVaultSessionDetails.sessionRole', 'Session')
 }

@@ -162,7 +162,10 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
       ...process.env,
       ...args.baseEnv
     }
-    const auth = args.prepareAuth && this.prepareClaudeAuth ? await this.prepareClaudeAuth() : null
+    const auth =
+      args.prepareAuth && this.prepareClaudeAuth
+        ? await this.prepareClaudeAuth(undefined, this.handles.get(args.handle)?.worktreeId)
+        : null
     if (auth) {
       applyClaudeEnvPatch(baseEnv, auth.envPatch)
     }

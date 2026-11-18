@@ -10,6 +10,7 @@ import { getRuntimeEnvironmentRevision } from '../environment-revisions/runtime-
 import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-environment-pairing-refresh'
 import { answerBrowserClientHostRequest } from '../../browser/client-hosting/browser-client-host-request-answer'
 import { readHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
+import { notifyWorkspaceAccountSettingsChanged } from '../../provider-accounts/observations/workspace-account-settings-changes'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
@@ -85,6 +86,7 @@ function handleRuntimeClientEventResponse(
   }
   // The host's own PR auto-refresh setting governs this client's timers for that host's workspaces.
   if (message.type === 'settingsChanged') {
+    notifyWorkspaceAccountSettingsChanged({ kind: 'environment', environmentId }, message.keys)
     if (Array.isArray(message.keys) && message.keys.includes('prAutoRefresh')) {
       void readHostPRAutoRefreshCadence(environmentId)
     }

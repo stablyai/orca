@@ -1,3 +1,4 @@
+import { codexWorkspaceAccountId } from '../../../../shared/agent-accounts/codex/codex-workspace-account'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { getSelectedCodexAccountIdForTarget } from '../../../codex-accounts/account-management/runtime-selection'
 import {
@@ -23,10 +24,9 @@ export function listStaleCodexPanes(args: {
     if (!record) {
       continue
     }
-    const activeAccountId = getSelectedCodexAccountIdForTarget(
-      args.settings,
-      parseSelectionLaneKey(record.selectionKey)
-    )
+    const activeAccountId =
+      codexWorkspaceAccountId(args.settings.codexWorkspaceAccounts, record.workspaceId) ??
+      getSelectedCodexAccountIdForTarget(args.settings, parseSelectionLaneKey(record.selectionKey))
     if (record.accountId !== activeAccountId) {
       stalePanes.push({ ptyId, launchAccountId: record.accountId, activeAccountId })
     }

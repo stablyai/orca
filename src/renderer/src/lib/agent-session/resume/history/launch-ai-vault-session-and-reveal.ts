@@ -2,6 +2,8 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { launchAiVaultSessionInNewTab } from './launch-ai-vault-session'
+import { commitHistorySessionResume, waitForHistoryTerminalOpen } from './history-resume-receipts'
+import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { activateAiVaultResumeWorkspace } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-launch'
 import { notifyAiVaultSessionQueued } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback'
 import '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-filters'
@@ -9,7 +11,8 @@ import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai
 
 /** Resolves to the new terminal tab's id when this client created it, else null. */
 export async function launchAiVaultSessionAndReveal(
-  args: Parameters<typeof launchAiVaultSessionInNewTab>[0],
+  args: Parameters<typeof launchAiVaultSessionInNewTab>[0] &
+    Pick<AiVaultResumeStartup, 'historyResume'>,
   describeFailure: (message: string) => string = (message) => message
 ): Promise<string | null> {
   const launch = launchAiVaultSessionInNewTab(args)
@@ -31,5 +34,11 @@ export async function launchAiVaultSessionAndReveal(
     activateAiVaultResumeWorkspace(args.worktreeId)
   }
   notifyAiVaultSessionQueued(args.agent)
+  if (args.historyResume) {
+    if (launch.tabId !== null) {
+      await waitForHistoryTerminalOpen(launch.tabId)
+    }
+    await commitHistorySessionResume(args.historyResume)
+  }
   return launch.tabId
 }
