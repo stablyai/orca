@@ -9,29 +9,47 @@ export type StructuredAgentLaunchEnvSettings = Pick<
   'agentDefaultEnv' | 'httpProxyUrl' | 'httpProxyBypassRules'
 >
 
-/** The settings overlay every chat agent child launches with: the configured proxy, as terminals get it, under the agent's own env. */
-export function structuredAgentSettingsEnv(
-  agent: string,
+/** The configured proxy minus every spelling of a variable an override sets; proxy readers prefer
+ * the lowercase name, so a leftover alias would mask the user's own value on any platform. */
+function configuredProxyEnvUnder(
   settings: Partial<StructuredAgentLaunchEnvSettings>,
-  platform: NodeJS.Platform = process.platform
+  overrides: readonly Readonly<Record<string, string>>[]
 ): Record<string, string> {
-  return overlayEnvironmentVariables(
-    buildConfiguredProxyEnv(settings),
-    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
-    platform
+  const overridden = new Set(
+    overrides.flatMap((env) => Object.keys(env).map((key) => key.toUpperCase()))
+  )
+  return Object.fromEntries(
+    Object.entries(buildConfiguredProxyEnv(settings)).filter(
+      ([key]) => !overridden.has(key.toUpperCase())
+    )
   )
 }
 
-/** The settings overlay with the host's account overlay for `agent` on top. */
+/** The settings overlay with the host's account overlay for `agent` on top: the configured proxy, as
+ * terminals get it, under the agent's own env and account. */
 export function structuredAgentLaunchEnv(
   agent: string,
   settings: Partial<StructuredAgentLaunchEnvSettings>,
   accountEnv: Readonly<Record<string, string>>,
   platform: NodeJS.Platform = process.platform
 ): Record<string, string> {
+  const agentEnv = isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {}
   return overlayEnvironmentVariables(
-    structuredAgentSettingsEnv(agent, settings, platform),
+    overlayEnvironmentVariables(
+      configuredProxyEnvUnder(settings, [agentEnv, accountEnv]),
+      agentEnv,
+      platform
+    ),
     accountEnv,
     platform
   )
+}
+
+/** The same overlay for a launch that has no account binding yet. */
+export function structuredAgentSettingsEnv(
+  agent: string,
+  settings: Partial<StructuredAgentLaunchEnvSettings>,
+  platform: NodeJS.Platform = process.platform
+): Record<string, string> {
+  return structuredAgentLaunchEnv(agent, settings, {}, platform)
 }

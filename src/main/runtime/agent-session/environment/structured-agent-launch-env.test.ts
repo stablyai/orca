@@ -24,16 +24,16 @@ describe('structuredAgentLaunchEnv', () => {
     expect(structuredAgentLaunchEnv('claude', { httpProxyUrl: '' }, {}, 'darwin')).toEqual({})
   })
 
-  it("lets the agent's own env replace every Windows spelling of a proxy key", () => {
+  it("lets the agent's own proxy replace every spelling of the configured one", () => {
     const env = structuredAgentLaunchEnv(
       'codex',
-      { ...proxy, agentDefaultEnv: { codex: { Https_Proxy: 'http://mine:1' } } },
+      { ...proxy, agentDefaultEnv: { codex: { HTTPS_PROXY: 'http://mine:1' } } },
       {},
-      'win32'
+      'darwin'
     )
     expect(Object.entries(env).filter(([key]) => key.toUpperCase() === 'HTTPS_PROXY')).toEqual([
       ['HTTPS_PROXY', 'http://mine:1']
     ])
-    expect(env.HTTP_PROXY).toBe('http://proxy.test:8080')
+    expect(env.http_proxy).toBe('http://proxy.test:8080')
   })
 })
