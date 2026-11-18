@@ -54,7 +54,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     state.writeChain = state.writeChain
       .then(async () => {
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
-        await state.emulator.write('\x18')
+        // Without recovery, RIS too: the screen restarts from the kept output, as a fresh model would.
+        await state.emulator.write(state.gapReseedAbandoned ? '\x18\x1bc' : '\x18')
         // Here, in stream order: chunks queued before the gap finished their carries already.
         resetFreebuffTerminalStatusAfterGap(
           state.emulator,
@@ -278,9 +279,9 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     const contextChangePending = state.gapReseed?.contextChangePending === true
     state.gapReseed = undefined
     this.headlessHydrationState.set(ptyId, 'done')
+    this.providerSnapshotPreferredPtys.delete(ptyId)
     if (rebuilt) {
       state.historyFromProvider = true
-      this.providerSnapshotPreferredPtys.delete(ptyId)
     }
     // No new text: observers confirm candidates that arrived while untrusted, with their own arrival times.
     this.observeHeadlessChunk(ptyId, state, '', Date.now())
@@ -294,14 +295,14 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     }
   }
 
-  /** Back to the live parse as it was before recovery existed until a stamp arrives; readers and reveal prefer the provider's screen. */
+  /** As before recovery existed, until a stamp arrives: the screen restarts from the output after the gap. */
   private abandonGapRecovery(
     ptyId: string,
     state: RuntimeHeadlessTerminal,
     recovery: GapRecovery
   ): void {
     state.writeChain = state.writeChain
-      .then(() => {
+      .then(async () => {
         if (!this.isGapRecovering(ptyId, state, recovery)) {
           return
         }
@@ -311,6 +312,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
           return
         }
         state.gapReseedAbandoned = true
+        await state.emulator.write('\x18\x1bc')
         this.finishGapRecovery(ptyId, state, { rebuilt: false })
       })
       .catch(() => {})

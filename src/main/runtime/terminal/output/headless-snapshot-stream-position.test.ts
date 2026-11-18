@@ -221,7 +221,7 @@ it('places a snapshot by the stream stamps when a reattach left this count ahead
   }
 })
 
-it('keeps the live screen until the stream is stamped, then rebuilds from the provider', async () => {
+it('restarts the screen at a gap until the stream is stamped, then rebuilds from the provider', async () => {
   const runtime = createRuntime()
   runtime.setPtyController({
     write: () => true,
@@ -231,7 +231,7 @@ it('keeps the live screen until the stream is stamped, then rebuilds from the pr
     serializeProviderBuffer: async () => ({
       data: '\x1b[H\x1b[2Jprovider\r\nok',
       ...grid,
-      seq: 17,
+      seq: 22,
       source: 'headless' as const
     })
   })
@@ -243,14 +243,16 @@ it('keeps the live screen until the stream is stamped, then rebuilds from the pr
       6
     )
     runtime.notePtyDataGap('pty-unstamped', 9)
+    runtime.onPtyData('pty-unstamped', 'after', 2)
+    // As a fresh model would: the screen restarts from the output after the gap.
     const live = await vi.waitFor(async () => {
       const screen = await headlessOf(runtime).serializeHeadlessTerminalBuffer('pty-unstamped')
       assert(screen)
       return screen
     })
-    expect(await replay(live, '')).toEqual(['live'])
+    expect(await replay(live, '')).toEqual(['after'])
 
-    stamped(runtime, 'pty-unstamped', 'ok', 17)
+    stamped(runtime, 'pty-unstamped', 'ok', 22)
     await vi.waitFor(async () => {
       const screen = await headlessOf(runtime).serializeHeadlessTerminalBuffer('pty-unstamped')
       expect(await replay(screen, '')).toEqual(['provider', 'ok'])
