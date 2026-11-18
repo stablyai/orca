@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readSavedStatus } from '../persistence/last-status.test-fixtures'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -104,7 +105,7 @@ describe('Claude session continued into a daemon job', () => {
     expect(after?.prompt).toBe(before?.prompt)
     server.flushStatusPersistSync()
     const persisted = JSON.parse(
-      readFileSync(join(root, 'orca', 'agent-hooks', 'last-status.json'), 'utf8')
+      readSavedStatus(join(root, 'orca', 'agent-hooks', 'last-status.json'))
     )
     expect(persisted.entries[PANE].providerSession.id).toBe(FORK)
   })

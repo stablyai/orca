@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { BrowserPasswordImportResult } from '../../../../../../shared/browser-passwords-types'
+import type { BrowserPasswordImportResult } from '../../../../../../shared/browser/passwords/browser-passwords-types'
 
 export function toastBrowserPasswordImportResult(result: BrowserPasswordImportResult): void {
   if (!result.ok) {
@@ -45,12 +45,4 @@ export function toastBrowserPasswordImportResult(result: BrowserPasswordImportRe
     }),
     skipped.length > 0 ? { description: skipped.join(' · ') } : undefined
   )
-}
-
-export function browserPasswordHostOf(origin: string): string {
-  try {
-    return new URL(origin).host
-  } catch {
-    return origin
-  }
 }

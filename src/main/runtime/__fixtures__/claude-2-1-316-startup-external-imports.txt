@@ -1,0 +1,18 @@
+7[r8[?25h[?25l[?2004h[?2031h[?1004h
+[38;2;255;193;7m────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[3G[38;2;255;193;7m[1mAllow[9Gexternal[18GCLAUDE.md[28Gfile[33Gimports?[22m[39m
+
+[3GThis[8Gproject's[18GCLAUDE.md[28Gor[31G.claude/rules[45Gimports[53Gfiles[59Goutside[67Gthe[71Gcurrent[79Gworking[87Gdirectory.
+[3GNever[9Gallow[15Gthis[20Gfor[24Gthird-party[36Grepositories.
+
+[3G[38;2;153;153;153mExternal[12Gimports:[39m
+[3G[38;2;153;153;153m [5G/private/tmp/xxxxxxxxxx/xxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxx/xxxxxxxxxx/outside/notes.md[39m
+
+[3G[38;2;153;153;153mImportant:[14GOnly[19Guse[23GClaude[30GCode[35Gwith[40Gfiles[46Gyou[50Gtrust.[57GAccessing[67Guntrusted[77Gfiles[83Gmay[87Gpose[39m
+[3G[38;2;153;153;153msecurity[12Grisks[18G]8;id=zaxmda;https://code.claude.com/docs/en/securityhttps://code.claude.com/docs/en/security[39m]8;;
+
+[3G[38;2;177;185;249m❯[5GNo,[9Gdisable[17Gexternal[26Gimports[39m
+[5GYes,[10Gallow[16Gexternal[25Gimports
+
+[3G[38;2;153;153;153m[3mEnter[9Gto[12Gconfirm[20G·[22GEsc[26Gto[29Gcancel[23m[39m
+[2C[4A[>0q[?u]7501;?[c

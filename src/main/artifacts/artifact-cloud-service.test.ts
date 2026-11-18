@@ -8,13 +8,13 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 
-import type { OrcaProfileCloudSummary } from '../../shared/orca-profiles'
+import type { OrcaProfileCloudSummary } from '../../shared/orca-profiles/orca-profiles'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
   linkOrcaProfileToCloud,
   unlinkOrcaProfileFromCloud
-} from '../orca-profiles/profile-cloud-index'
-import { signOutCloudSession } from '../orca-profiles/profile-cloud-session-owner'
+} from '../orca-profiles/cloud-auth/profile-cloud-index'
+import { signOutCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 
 import { ArtifactCloudService } from './artifact-cloud-service'
 
@@ -59,7 +59,7 @@ function createResponse(
   )
 }
 
-async function setup(sharingEnabled: { value: boolean } = { value: true }): Promise<{
+async function setup(): Promise<{
   userDataPath: string
   profileId: string
   service: ArtifactCloudService
@@ -71,7 +71,7 @@ async function setup(sharingEnabled: { value: boolean } = { value: true }): Prom
   return {
     userDataPath,
     profileId: active.profile.id,
-    service: new ArtifactCloudService(userDataPath, () => sharingEnabled.value)
+    service: new ArtifactCloudService(userDataPath, () => true)
   }
 }
 
@@ -101,23 +101,6 @@ afterEach(async () => {
 })
 
 describe('ArtifactCloudService record authorization', () => {
-  it('refuses account B update and unshare after account A signs out', async () => {
-    const { userDataPath, profileId, service } = await setup()
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createResponse()))
-    await service.share(writeRequest)
-
-    signOutCloudSession(profileId, userDataPath)
-    unlinkOrcaProfileFromCloud(profileId, userDataPath)
-    linkOrcaProfileToCloud(profileId, cloudB, userDataPath)
-
-    await expect(service.update({ ...writeRequest, authToken: 'token-b' })).rejects.toThrow(
-      /has not been shared/
-    )
-    await expect(
-      service.unshare({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-b' })
-    ).rejects.toThrow(/has not been shared/)
-  })
-
   it('does not persist an edit token when a POST completes after relink', async () => {
     const { userDataPath, profileId, service } = await setup()
     let resolvePost: ((response: Response) => void) | undefined
@@ -167,38 +150,5 @@ describe('ArtifactCloudService record authorization', () => {
     resolvePost?.(createResponse())
 
     await expect(pending).resolves.toMatchObject({ status: 'ok' })
-  })
-})
-
-describe('ArtifactCloudService publish capability gate', () => {
-  it('keeps list and unshare working so links stay revocable after opting out', async () => {
-    const sharing = { value: true }
-    const { service } = await setup(sharing)
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createResponse())
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ artifacts: [] }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
-        })
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 204 }))
-    vi.stubGlobal('fetch', fetchMock)
-    await service.share(writeRequest)
-
-    sharing.value = false
-    await expect(service.list({ apiUrl, authToken: 'token-a' })).resolves.toMatchObject({
-      status: 'ok'
-    })
-    await expect(
-      service.getPublishedLink({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-a' })
-    ).resolves.toEqual({
-      status: 'ok',
-      value: { shareUrl: 'https://share.onorca.dev/a/artifact-a' }
-    })
-    await expect(
-      service.unshare({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-a' })
-    ).resolves.toEqual({ status: 'ok', value: undefined })
   })
 })

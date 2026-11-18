@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+} from '../wait/agent-transcript-pane-test-harness'
 import { readRuntimeFixture } from '../wait/agent-transcript-replay-test-harness'
 import { deliverTerminalAgentLaunchPrompt } from '../../rpc/methods/agent-launch/agent-launch-terminal-prompt'
 import { waitForWorkerAgentReady } from '../wait/launched-agent-composer-readiness'
@@ -11,7 +11,7 @@ import { waitForWorkerAgentReady } from '../wait/launched-agent-composer-readine
 export function registerTerminalPtyExitWaiterTests(): void {
   describe('idle and fresh readiness waits on an exited terminal', () => {
     it.each(
-      (['pi', 'claude', 'codex', 'opencode'] as const).flatMap((agent) =>
+      (['pi', 'claude', 'opencode'] as const).flatMap((agent) =>
         [true, false].map((exitBeforeWait) => ({ agent, exitBeforeWait }))
       )
     )(

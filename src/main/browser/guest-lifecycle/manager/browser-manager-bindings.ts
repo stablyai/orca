@@ -1,10 +1,12 @@
+import { isTrustedBrowserRenderer } from '../../../ipc/browser/browser-renderer-trust'
 import { resolveRendererWebContents } from '../browser-guest-renderer-target'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { setupGuestContextMenu } from '../input/browser-guest-context-menu'
-import { setupGrabShortcutForwarding } from '../input/browser-guest-grab-shortcuts'
+import { setupGrabShortcutForwarding } from '../input/shortcuts/browser-guest-grab-shortcuts'
 import { setupGuestMouseWheelZoomForwarding } from '../input/browser-guest-wheel-zoom'
-import { setupGuestShortcutForwarding } from '../input/browser-guest-shortcut-forwarding'
+import { setupGuestShortcutForwarding } from '../input/shortcuts/browser-guest-shortcut-forwarding'
 import { setupGuestTargetUrlForwarding } from '../input/browser-guest-target-url'
-import { BrowserManagerGrab } from './browser-manager-grab'
+import { BrowserManagerGrab } from './grab/browser-manager-grab'
 
 export abstract class BrowserManagerBindings extends BrowserManagerGrab {
   protected setupContextMenu(browserTabId: string, guest: Electron.WebContents): void {
@@ -52,6 +54,7 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
         guest,
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+        isLocalRenderer: isTrustedBrowserRenderer,
         shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
         isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
         getKeybindings: () => this.settingsResolver?.().keybindings,

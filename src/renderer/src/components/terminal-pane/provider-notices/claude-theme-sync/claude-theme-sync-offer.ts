@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { TRAILING_ACTIONS_CLASS_NAMES } from '@/components/ui/sonner'
 import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
 
@@ -64,7 +64,7 @@ function showClaudeThemeSyncOffer(): void {
   })
 }
 
-/** Offers theme sync to profiles that predate it, once, when Claude Code first runs in an Orca terminal. */
+/** Offers theme sync once, when Claude Code first runs in an Orca terminal. */
 export function useClaudeThemeSyncOffer(): void {
   const due = useAppStore(isOfferDue)
 

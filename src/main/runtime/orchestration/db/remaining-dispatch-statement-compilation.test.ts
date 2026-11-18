@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isOrcaSessionId } from '../../../../shared/orca-session-address'
+import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import { OrchestrationDb } from './orchestration-db'
 import { createRootDispatch } from './root-dispatch-test-fixture'
 import { LEGACY_CONTRACT_VERSION } from './contract-constants'
@@ -61,6 +61,8 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
       ${DROP_REMOVED_WORK_TRIGGERS_SQL}
       DROP INDEX idx_runs_coordinator_orca_session_id;
       DROP INDEX idx_dispatch_assignee_orca_session_id;
+      DROP INDEX idx_dispatch_assignee_orca_session_backfill;
+      DROP INDEX idx_dispatch_creator_orca_session_backfill;
       DROP INDEX idx_dispatch_session_presentation;
       DROP TRIGGER trg_runs_remember_coordinator_insert;
       DROP TRIGGER trg_runs_remember_coordinator_update;

@@ -1,14 +1,14 @@
 import { editorPlacementIntent } from '../tabs/editor-placement-intent'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
+import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { createUntitledFileInActiveWorkspace } from '../opening/untitled-file-creation'
 import type { OpenFile } from '../types/open-file'
 import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
 import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
-import type { Tab } from '../../../../../../shared/tab-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { withPreviewEnded } from '../../tabs/tab-preview-flag'
 import { previewEditorTabsOf } from '../tabs/editor-tab-layout-owner'
 import {
@@ -19,6 +19,7 @@ import {
   endsPreviewHere,
   promotePreviewTabsThroughLayoutOwner
 } from '../../tabs/preview-tab-promotion'
+import { replaceTabBuckets } from '../../../record-transitions/keyed-record-transitions'
 
 type FileReadAuthority = Pick<
   OpenFile,
@@ -205,9 +206,10 @@ export function createMarkdownPreviewActions(
           changed = true
           return { ...file, isPreview: undefined }
         })
-        const unifiedTabsByWorktree: typeof s.unifiedTabsByWorktree = {}
+        const replacements: [string, Tab[]][] = []
         for (const [worktreeId, tabs] of Object.entries(s.unifiedTabsByWorktree ?? {})) {
-          unifiedTabsByWorktree[worktreeId] = tabs.map((tab) => {
+          let bucketChanged = false
+          const nextTabs = tabs.map((tab) => {
             if (tab.entityId !== fileId || (tabId && tab.id !== tabId) || !tab.isPreview) {
               return tab
             }
@@ -215,10 +217,18 @@ export function createMarkdownPreviewActions(
             if (!endsPreviewHere(s, worktreeId)) {
               return tab
             }
-            changed = true
+            bucketChanged = true
             return withPreviewEnded(tab)
           })
+          if (bucketChanged) {
+            changed = true
+            replacements.push([worktreeId, nextTabs])
+          }
         }
+        const unifiedTabsByWorktree =
+          replacements.length > 0
+            ? replaceTabBuckets(s.unifiedTabsByWorktree ?? {}, replacements)
+            : s.unifiedTabsByWorktree
         return changed ? { openFiles, unifiedTabsByWorktree } : s
       })
       // Switch point: main makes the preview tabs the user kept permanent.

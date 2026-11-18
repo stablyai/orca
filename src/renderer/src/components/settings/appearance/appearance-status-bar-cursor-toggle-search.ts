@@ -1,4 +1,4 @@
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 
@@ -11,7 +11,10 @@ export function getCursorStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'cursor',
-    title: translate('auto.components.settings.appearance.search.cursor.title', 'Cursor Usage'),
+    title: translate(
+      'auto.components.settings.appearance.search.cursor.34f2b8c539',
+      'Cursor usage'
+    ),
     description: translate(
       'auto.components.settings.appearance.search.cursor.description',
       'Show Cursor plan usage from the Cursor sign-in on this computer.'

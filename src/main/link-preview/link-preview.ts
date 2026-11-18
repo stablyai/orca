@@ -2,7 +2,7 @@ import {
   linkPreviewSize,
   type LinkPreviewRequest,
   type LinkPreviewResult
-} from '../../shared/link-preview'
+} from '../../shared/browser/link-preview'
 import { fetchLinkPreviewResource } from './link-preview-page-fetch'
 import { decodeHtmlBody, readLinkPreviewMetadata } from './link-preview-page-metadata'
 

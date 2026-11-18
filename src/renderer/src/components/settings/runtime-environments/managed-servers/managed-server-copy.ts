@@ -1,11 +1,11 @@
 import type {
   OrcadManagedPendingMigrationRow,
   OrcadManagedRuntimeStatus
-} from '../../../../../../shared/orcad-managed-runtime'
+} from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { OrcadMigrationBlocker } from '../../../../../../shared/orcad-migration/orcad-migration-preflight'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../../../../shared/wsl-host-types'
+import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { dependencyKindLabel } from './managed-server-dependency-kinds'
 
 export function migrationPhaseLabel(

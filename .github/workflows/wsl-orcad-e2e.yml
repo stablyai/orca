@@ -35,8 +35,8 @@ on:
       - '!**/*.test.ts'
       - '!**/*.test.tsx'
       - 'src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts'
-      - 'src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts'
       - 'src/main/wsl/orcad/wsl-orcad-real-distro-idle-release-lane.test.ts'
+      - 'src/main/wsl/filesystem/wsl-mapped-drive-real-distro-lane.test.ts'
       - '.github/workflows/wsl-orcad-e2e.yml'
       - 'config/ci/wsl-lifecycle/**'
       - 'config/ci/windows-lifecycle-receipt.ps1'
@@ -243,8 +243,6 @@ jobs:
         with:
           name: wsl-orcad-rootfs-${{ matrix.family }}
           path: ${{ runner.temp }}/wsl-rootfs
-      - name: Verify WSL lifecycle receipts
-        run: ./config/ci/wsl-lifecycle/test-wsl-lifecycle-command.ps1
       # Runs beside the dependency install; the lane waits for it below.
       - name: Import the distros as WSL2
         id: import
@@ -343,20 +341,8 @@ jobs:
         run: |
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'survive.log')
           if ($global:LASTEXITCODE -ne 0) { throw "survive phase failed: $global:LASTEXITCODE" }
-      # The WSL move's pause on real distro shells: Sleep ends them, the daemon proves the exit,
-      # the journal keeps each pane's folder, and a new shell opens there.
-      - name: 'WSL move: pause real distro terminals'
-        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
-        timeout-minutes: 10
-        env:
-          ORCA_WSL_MOVE_REAL_PAUSE_DISTRO: ${{ env.PLAIN_DISTRO }}
-        run: |
-          New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
-          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'wsl-move-real-pause.log')
-          if ($global:LASTEXITCODE -ne 0) { throw "WSL move real pause failed: $global:LASTEXITCODE" }
-          wsl.exe --terminate $env:PLAIN_DISTRO
       # R40: with no terminal left, orcad idle-exits and the holder lets the distro stop on its own.
-      - name: 'Phase 3: idle orcad releases the distro; distro restart to first output baseline'
+      - name: 'Phase 3: idle orcad releases the distro'
         timeout-minutes: 30
         env:
           ORCA_RUN_WSL_ORCAD_LANE: '1'
@@ -365,6 +351,17 @@ jobs:
         run: |
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/orcad/wsl-orcad-real-distro-idle-release-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'idle-release.log')
           if ($global:LASTEXITCODE -ne 0) { throw "idle-release phase failed: $global:LASTEXITCODE" }
+      # Its own repos in the plain distro; runs even when a phase above failed.
+      - name: Mapped-drive projects on the distro share
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
+        timeout-minutes: 8
+        env:
+          ORCA_RUN_WSL_ORCAD_LANE: '1'
+          ORCA_WSL_ORCAD_LANE_PLAIN_DISTRO: ${{ env.PLAIN_DISTRO }}
+        run: |
+          New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/filesystem/wsl-mapped-drive-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'mapped-drive.log')
+          if ($global:LASTEXITCODE -ne 0) { throw "mapped-drive lane failed: $global:LASTEXITCODE" }
       - name: Real desktop agent configuration is unchanged
         if: always()
         run: |

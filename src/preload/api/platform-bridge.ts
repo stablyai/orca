@@ -1,5 +1,5 @@
-import { getLinuxDisplayServer } from '../preload-runtime-support'
-import { parseWindowMaterialArgument } from '../../shared/window-material'
+import { getLinuxDisplayServer } from '../renderer/renderer-runtime'
+import { parseWindowMaterialArgument } from '../../shared/app-lifecycle/windows/window-material'
 import type { PreloadApi } from '../api-types'
 
 type PlatformInfo = ReturnType<PreloadApi['platform']['get']>

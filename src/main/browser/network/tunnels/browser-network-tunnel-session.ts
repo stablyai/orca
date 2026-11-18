@@ -2,8 +2,9 @@ import {
   BrowserNetworkTunnelOpcode,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { admitBrowserNetworkTunnelOpen } from './browser-network-tunnel-open-admission'
+import { browserTunnelDestinationFailureCode } from './browser-network-tunnel-destination-policy'
 import {
   BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW,
   flushBrowserNetworkDestination,
@@ -137,7 +138,9 @@ export class BrowserNetworkTunnelSession {
     socket.on('data', (data) => this.onDestinationData(stream, data))
     socket.on('end', () => this.onDestinationEnd(stream))
     socket.on('close', () => this.onDestinationClose(stream))
-    socket.on('error', () => this.failStream(stream, 'destination_error'))
+    socket.on('error', (error) =>
+      this.failStream(stream, browserTunnelDestinationFailureCode(error, 'destination_error'))
+    )
   }
 
   private onDestinationConnected(stream: BrowserNetworkTunnelStream): void {

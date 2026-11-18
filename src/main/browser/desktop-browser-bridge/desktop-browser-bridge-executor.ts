@@ -8,7 +8,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE,
   isDesktopBrowserBridgeMethod,
   type DesktopBrowserBridgeRequest
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'
@@ -48,10 +48,9 @@ export type DesktopBrowserBridgeExecutorDeps = {
   audit(entry: DesktopBrowserBridgeAuditEntry): void
 }
 
-// Hosts cannot choose a new tab's desktop identity, profile, group or focus.
+// Hosts cannot choose a new tab's desktop identity, group or focus.
 const TAB_CREATE_STRIPPED_PARAMS = [
   'page',
-  'profileId',
   'placement',
   'targetGroupId',
   'activate',
@@ -144,6 +143,13 @@ async function scopeRequest(
       throw new BridgeRefusal(
         'invalid_argument',
         'tab create --split is not available from an SSH host; the desktop decides where its tabs open.'
+      )
+    }
+    // Refused, not dropped: the host would otherwise believe its tab used the profile.
+    if (params.profileId !== undefined) {
+      throw new BridgeRefusal(
+        'invalid_argument',
+        'tab create --profile is not available from an SSH host; the desktop picks the profile for new tabs. Drop --profile, or open the tab on the desktop.'
       )
     }
     for (const key of TAB_CREATE_STRIPPED_PARAMS) {
@@ -254,24 +260,5 @@ function urlOrigin(value: unknown): string | null {
     return new URL(value).origin
   } catch {
     return null
-  }
-}
-
-// Routed tabs can still display local files; those remain off-limits to hosts.
-// Allow chrome-error: so hosts can navigate away from failed loads.
-const HOST_REACHABLE_DOCUMENT_PROTOCOLS = new Set([
-  'http:',
-  'https:',
-  'about:',
-  'blob:',
-  'data:',
-  'chrome-error:'
-])
-
-export function isHostReachableDocument(url: string): boolean {
-  try {
-    return HOST_REACHABLE_DOCUMENT_PROTOCOLS.has(new URL(url).protocol)
-  } catch {
-    return url === ''
   }
 }

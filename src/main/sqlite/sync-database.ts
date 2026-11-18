@@ -91,6 +91,10 @@ class SyncDatabase {
     this.db.exec(sql)
   }
 
+  function(name: string, callback: Parameters<DatabaseSync['function']>[1]): void {
+    this.db.function(name, callback)
+  }
+
   prepare(sql: string): SqliteStatement {
     const cached = this.statementCache.get(sql)
     if (cached) {
@@ -98,7 +102,7 @@ class SyncDatabase {
       this.statementCache.set(sql, cached)
       return cached
     }
-    const statement = new NodeSqliteStatement(this.db.prepare(sql))
+    const statement = new NodeSqliteStatement(() => this.db.prepare(sql))
     if (isStatementCacheable(sql)) {
       if (this.statementCache.size >= STATEMENT_CACHE_LIMIT) {
         const oldest = this.statementCache.keys().next().value

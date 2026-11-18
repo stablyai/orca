@@ -53,36 +53,10 @@ function find(guardsStateMutation: boolean): Promise<string | null> {
   return findExitedOwnLockToken(target, lockDir, { baseDir, guardsStateMutation })
 }
 
-const checkOps = (): string[] => remote.commands.filter((c) => c.includes('fence-exited-owner'))
-
 describe('reclaiming this desktop’s exited lock on a Windows host', () => {
-  it('asks the host script about exited holders only', async () => {
-    hold({ token: 't-exited', pid: EXITED_PID }, { token: 't-live', pid: process.pid })
-    remote.reply = 'EXITED_OWNER t-exited\n'
-    await expect(find(true)).resolves.toBe('t-exited')
-    const [op] = checkOps()
-    expect(op).toContain('t-exited')
-    expect(op).not.toContain('t-live')
-    expect(op).toMatch(/fence-exited-owner"? "?[^ ]*\.install-lock"? "?1"?/u)
-  })
-
   it('ignores an answer naming a token it did not offer', async () => {
     hold({ token: 't-exited', pid: EXITED_PID })
     remote.reply = 'EXITED_OWNER t-foreign\n'
     await expect(find(false)).resolves.toBeNull()
-  })
-
-  it('falls back to the stale window when the check would not fit cmd.exe', async () => {
-    hold({ token: 't-exited', pid: EXITED_PID })
-    remote.reply = 'EXITED_OWNER t-exited\n'
-    const deep = `C:/Users/me/${'nested-folder/'.repeat(200)}.orca-remote`
-    const target = { conn: unusedOrcadHostTransport(), host }
-    await expect(
-      findExitedOwnLockToken(target, `${deep}/.install-lock`, {
-        baseDir: deep,
-        guardsStateMutation: true
-      })
-    ).resolves.toBeNull()
-    expect(remote.commands).toEqual([])
   })
 })

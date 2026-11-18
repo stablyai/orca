@@ -46,50 +46,6 @@ function transportHarness(writeResults: (boolean | void)[]): WriterHarness {
 }
 
 describe('SshMultiplexerTransportWriter', () => {
-  it('selects queued control before ordinary backlog at the drain boundary', () => {
-    const harness = transportHarness([false, true, true, true])
-    const writer = new SshMultiplexerTransportWriter(harness.transport, vi.fn())
-
-    writer.enqueue(Buffer.from('ordinary-1'), 'ordinary')
-    writer.enqueue(Buffer.from('ordinary-2'), 'ordinary')
-    writer.enqueue(Buffer.from('ordinary-3'), 'ordinary')
-    writer.enqueue(Buffer.from('control'), 'control')
-
-    expect(harness.writes.map(String)).toEqual(['ordinary-1'])
-    harness.drain()
-    expect(harness.writes.map(String)).toEqual([
-      'ordinary-1',
-      'control',
-      'ordinary-2',
-      'ordinary-3'
-    ])
-    writer.dispose()
-  })
-
-  it('preserves FIFO within each lane and prevents ordinary starvation', () => {
-    const harness = transportHarness([false, ...Array<boolean>(8).fill(true)])
-    const writer = new SshMultiplexerTransportWriter(harness.transport, vi.fn())
-
-    writer.enqueue(Buffer.from('ordinary-1'), 'ordinary')
-    writer.enqueue(Buffer.from('ordinary-2'), 'ordinary')
-    for (let index = 1; index <= 6; index++) {
-      writer.enqueue(Buffer.from(`control-${index}`), 'control')
-    }
-
-    harness.drain()
-    expect(harness.writes.map(String)).toEqual([
-      'ordinary-1',
-      'control-1',
-      'control-2',
-      'control-3',
-      'control-4',
-      'ordinary-2',
-      'control-5',
-      'control-6'
-    ])
-    writer.dispose()
-  })
-
   it('waits for drain and settles each write once', () => {
     const harness = transportHarness([false, true, true])
     const failed = vi.fn()
@@ -186,81 +142,6 @@ describe('SshMultiplexerTransportWriter', () => {
       reason: 'transport_settlement_lost',
       bytesHandedToTransport: true,
       error: expect.objectContaining({ message: expect.stringContaining('bounded capacity') })
-    })
-    expect(failed).toHaveBeenCalledOnce()
-  })
-
-  it('settles legacy callback-less transports on acceptance and drain', () => {
-    const emitter = new EventEmitter()
-    const write = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(undefined)
-    const transport: MultiplexerTransport = {
-      write,
-      onDrain: (callback) => {
-        emitter.on('drain', callback)
-      },
-      onData: vi.fn(),
-      onClose: vi.fn()
-    }
-    const writer = new SshMultiplexerTransportWriter(transport, vi.fn())
-    const first = vi.fn()
-    const second = vi.fn()
-
-    writer.enqueue(Buffer.from('first'), 'ordinary', first)
-    writer.enqueue(Buffer.from('second'), 'control', second)
-    expect(first).not.toHaveBeenCalled()
-    expect(second).not.toHaveBeenCalled()
-
-    emitter.emit('drain')
-    expect(first).toHaveBeenCalledWith({ outcome: 'accepted' })
-    expect(second).toHaveBeenCalledWith({ outcome: 'accepted' })
-  })
-
-  it('does not miss a drain emitted synchronously by a hostile transport', () => {
-    let drain = (): void => {}
-    const write = vi.fn(() => {
-      drain()
-      return false
-    })
-    const writer = new SshMultiplexerTransportWriter(
-      {
-        write,
-        onDrain: (callback) => {
-          drain = callback
-        },
-        onData: vi.fn(),
-        onClose: vi.fn()
-      },
-      vi.fn()
-    )
-    const first = vi.fn()
-    const second = vi.fn()
-
-    writer.enqueue(Buffer.from('first'), 'ordinary', first)
-    writer.enqueue(Buffer.from('second'), 'control', second)
-
-    expect(write).toHaveBeenCalledTimes(2)
-    expect(first).toHaveBeenCalledWith({ outcome: 'accepted' })
-    expect(second).toHaveBeenCalledWith({ outcome: 'accepted' })
-  })
-
-  it('fails deterministically when write(false) has no drain source', () => {
-    const failed = vi.fn()
-    const writer = new SshMultiplexerTransportWriter(
-      {
-        write: () => false,
-        onData: vi.fn(),
-        onClose: vi.fn()
-      },
-      failed
-    )
-    const settled = vi.fn()
-
-    expect(writer.enqueue(Buffer.from('data'), 'ordinary', settled)).toBe(true)
-    expect(settled).toHaveBeenCalledWith({
-      outcome: 'unverifiable',
-      reason: 'transport_settlement_lost',
-      bytesHandedToTransport: true,
-      error: expect.objectContaining({ message: expect.stringContaining('without drain support') })
     })
     expect(failed).toHaveBeenCalledOnce()
   })

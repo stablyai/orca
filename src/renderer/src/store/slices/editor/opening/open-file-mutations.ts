@@ -1,8 +1,8 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
-import type { Tab } from '../../../../../../shared/tab-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { withPreviewEnded } from '../../tabs/tab-preview-flag'
 import { previewEditorTabsOf } from '../tabs/editor-tab-layout-owner'
 import {
@@ -15,9 +15,11 @@ import {
   writeEditorBuffer
 } from '../buffers/editor-buffer-record'
 import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
-import { isSameEditorFileOperationIdentity } from '@/lib/editor-file-operation-owner'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import { isSameEditorFileOperationIdentity } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
+import { replaceTabBuckets } from '../../../record-transitions/keyed-record-transitions'
+import type { AppState } from '../../../types'
 
 function withoutKeys<T>(record: Record<string, T>, keys: readonly string[]): Record<string, T> {
   const next = { ...record }
@@ -25,6 +27,31 @@ function withoutKeys<T>(record: Record<string, T>, keys: readonly string[]): Rec
     delete next[key]
   }
   return next
+}
+
+function endPreviewTabsOfFile(s: AppState, fileId: string): AppState['unifiedTabsByWorktree'] {
+  const replacements: [string, Tab[]][] = []
+  for (const [worktreeId, tabs] of Object.entries(s.unifiedTabsByWorktree ?? {})) {
+    let bucketChanged = false
+    const nextTabs = tabs.map((tab) => {
+      if (
+        tab.entityId !== fileId ||
+        !isEditorTabContentType(tab.contentType) ||
+        // Switch point: main's frame ends a preview main owns.
+        !endsPreviewHere(s, worktreeId)
+      ) {
+        return tab
+      }
+      bucketChanged = true
+      return withPreviewEnded(tab)
+    })
+    if (bucketChanged) {
+      replacements.push([worktreeId, nextTabs])
+    }
+  }
+  return replacements.length > 0
+    ? replaceTabBuckets(s.unifiedTabsByWorktree ?? {}, replacements)
+    : s.unifiedTabsByWorktree
 }
 
 export function createOpenFileMutations(
@@ -161,19 +188,7 @@ export function createOpenFileMutations(
             : {}),
           ...(needsPreviewClear
             ? {
-                unifiedTabsByWorktree: Object.fromEntries(
-                  Object.entries(s.unifiedTabsByWorktree ?? {}).map(([worktreeId, tabs]) => [
-                    worktreeId,
-                    tabs.map((tab) =>
-                      tab.entityId === fileId &&
-                      isEditorTabContentType(tab.contentType) &&
-                      // Switch point: main's frame ends a preview main owns.
-                      endsPreviewHere(s, worktreeId)
-                        ? withPreviewEnded(tab)
-                        : tab
-                    )
-                  ])
-                )
+                unifiedTabsByWorktree: endPreviewTabsOfFile(s, fileId)
               }
             : {})
         }

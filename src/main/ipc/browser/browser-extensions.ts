@@ -16,6 +16,7 @@ import {
 } from '../../browser/extensions/browser-extension-management'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { registerBrowserExtensionToolbarHandlers } from './browser-extension-toolbar'
+import { registerBrowserExtensionSidePanelHandlers } from './browser-extension-side-panels'
 import { registerBrowserExtensionWebStoreHandlers } from './browser-extension-webstore'
 
 const profileArgs = z.object({ profileId: z.string().min(1) })
@@ -38,6 +39,7 @@ export function registerBrowserExtensionHandlers(): void {
     ipcMain.removeHandler(channel)
   }
   registerBrowserExtensionToolbarHandlers()
+  registerBrowserExtensionSidePanelHandlers()
   registerBrowserExtensionWebStoreHandlers()
   ipcMain.handle(
     'browserExtensions:list',

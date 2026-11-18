@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
@@ -8,12 +8,12 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { workspaceSessionPartitionHostId } from '../../../../../shared/workspace-session/workspace-session-partition-owner'
 import {
   parseWorkspaceKey,
   normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId
-} from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import {
   attachHostSessionShadow,
@@ -35,7 +35,7 @@ import {
 import {
   indexWorkspaceRuntimeHostOwnership,
   type WorkspaceRuntimeOwnerProjection
-} from '../../workspace-runtime-host-ownership'
+} from '../ownership/workspace-runtime-host-ownership'
 import {
   buildWorktreeIdByTabId,
   extendWorktreeIdByTabId,

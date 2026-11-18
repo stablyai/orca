@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { mobileChatShownName } from '../session/fork/mobile-fork-marked-name'
 import { useQueryClient } from '@tanstack/react-query'
-import { mobileStructuredSessionStatusFeed } from '../session/mobile-structured-session-status-feed'
-import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/agent-session-conversation-names'
+import { mobileStructuredSessionStatusFeed } from '../session/native-chat/agent-session/mobile-structured-session-status-feed'
+import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/conversation-naming/agent-session-conversation-names'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
-import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import type {
@@ -11,13 +12,13 @@ import type {
   AiVaultScope,
   AiVaultSession
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { defineHostQuery, readHostQueryLive, useHostQuery } from '../query/host-query'
 import { hostScreenState } from '../query/host-query-screen-state'
 import {
   deriveMobileAiVaultScopePaths,
-  mobileAiVaultScanScopePaths
+  mobileAiVaultScanScopeArgs
 } from './agent-history-scope-paths'
 import {
   agentHistoryCapabilityRead,
@@ -38,13 +39,16 @@ const noSubscription = () => () => {}
 const noNames = () => EMPTY_NAMES
 const noRevision = () => 0
 
+/** A history row; `forked` when its host says the chat is a fork, so its title follows the mark. */
+export type MobileAgentHistorySession = AiVaultSession & { forked?: true }
+
 export type AgentHistoryScreenState =
   | { kind: 'loading' }
   | { kind: 'unsupported' }
   | { kind: 'error'; message: string }
   | {
       kind: 'ready'
-      sessions: AiVaultSession[]
+      sessions: MobileAgentHistorySession[]
       issues: AiVaultScanIssue[]
     }
 
@@ -65,6 +69,7 @@ type ScanScope = { scopeFilterPaths: string[]; activeWorktreePath: string | null
 
 async function readAgentHistory(
   client: RpcClient,
+  scope: AiVaultScope,
   scan: ScanScope,
   force: boolean,
   associationRevision: number
@@ -81,7 +86,8 @@ async function readAgentHistory(
   const reply = await agentHistorySessionScan.request(client, {
     limit: MOBILE_AI_VAULT_SESSION_LIMIT,
     force,
-    scopePaths: mobileAiVaultScanScopePaths(scan.scopeFilterPaths)
+    // From the query's own scope key, so rows cached under Workspace are always Workspace-only ones.
+    ...mobileAiVaultScanScopeArgs(scope, scan.scopeFilterPaths)
   })
   const result = interpretOrThrowRefusalMessage(
     () => agentHistorySessionScan.interpret(reply),
@@ -111,7 +117,7 @@ function agentHistoryQuery(
     // No desktop signal for new transcripts, so foreground revalidates once older than 30 s.
     refetchOnWindowFocus: true,
     fetch: (client, _target, input: { scope: AiVaultScope }) =>
-      readAgentHistory(client, scan, force, startRevision(input.scope))
+      readAgentHistory(client, input.scope, scan, force, startRevision(input.scope))
   })
 }
 
@@ -240,15 +246,19 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       return read
     }
     if (read) {
-      return {
-        kind: 'ready',
-        issues: read.issues,
-        sessions: read.sessions.map((session) => {
-          const id = session.structuredSession?.sessionId
-          const title = id ? names.get(id)?.conversationName : null
-          return title ? { ...session, title } : session
-        })
-      }
+      const sessions = read.sessions.map((session): MobileAgentHistorySession => {
+        const id = session.structuredSession?.sessionId
+        const note = id ? names.get(id) : undefined
+        const title = note ? mobileChatShownName(names, note, session.agent) : null
+        return title || note?.forkedFrom
+          ? {
+              ...session,
+              ...(title ? { title } : {}),
+              ...(note?.forkedFrom ? { forked: true } : {})
+            }
+          : session
+      })
+      return { kind: 'ready', issues: read.issues, sessions }
     }
     switch (hostScreenState({ data: read, error, isFetching }, connState)) {
       case 'empty-error':

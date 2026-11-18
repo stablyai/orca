@@ -2,12 +2,12 @@ import React from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { openWslHostsExperimentalSetting } from '../../../sidebar/use-wsl-hosts-enabled'
+import { openWslHostsExperimentalSetting } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
   getWslHostsTurnedOffLabel,
   getWslHostsTurnOnLabel
-} from '../../../sidebar/wsl-host-row-status'
-import type { StoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
+} from '../../../sidebar/host-admission/wsl/wsl-host-row-status'
+import type { WslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { WslHostStoppedNotice } from '../../../wsl-host-stopped/WslHostStoppedNotice'
 
 type FileExplorerTreeStatusProps = {
@@ -18,8 +18,8 @@ type FileExplorerTreeStatusProps = {
   emptyMessage?: string
   /** The workspace's WSL host is turned off: offer the switch instead of a read error. */
   wslHostsTurnedOff?: boolean
-  /** The workspace's WSL host is stopped: offer Start instead of a read error. */
-  stoppedWslHost?: StoppedWslHost | null
+  /** The workspace's WSL host is stopped or still connecting: its notice instead of a read error. */
+  stoppedWslHost?: WslHostReadOutage | null
   onWslHostStarted?: () => void
 }
 
@@ -62,6 +62,7 @@ export function FileExplorerTreeStatus({
       <WslHostStoppedNotice
         environmentId={stoppedWslHost.environmentId}
         distro={stoppedWslHost.distro}
+        connecting={stoppedWslHost.connecting}
         className="h-full text-[11px]"
         onStarted={onWslHostStarted}
       />

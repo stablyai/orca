@@ -17,7 +17,7 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExec
 }))
 
-vi.mock('../../command-runner/wsl-path-translation', async (importOriginal) => ({
+vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   translateWslOutputPaths: (output: string) => output
 }))
@@ -25,7 +25,7 @@ vi.mock('../../../../shared/git/worktrees/git-worktree-admin', () => ({
   annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: GitWorktreeInfo[]) => rows
 }))
 
-import { clearGitCapabilityStateForTests } from '../../command-runner/git-capability-state'
+import { clearGitCapabilityStateForTests } from '../../command-runner/host-routing/git-capability-state'
 import { readWorktreeList } from './worktree-list-reader'
 
 function porcelainRow(worktreePath: string, markers: string[] = []): string {

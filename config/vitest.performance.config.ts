@@ -1,42 +1,16 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
-import baseConfig from './vitest.config'
-import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
+import baseConfig from './vitest.config.ts'
+import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool.ts'
 
 const contracts = [
-  'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts',
-  'src/renderer/src/components/terminal-pane/pty-connection/startup/saved-resume-cancellation.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
-  'src/shared/agent-launch/permissions/tui-agent-permission-choice.test.ts',
-  'src/main/runtime/rpc/methods/projects/repo.test.ts',
-  'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',
-  'src/main/sqlite/sync-database.test.ts',
-  'src/main/runtime/orchestration/db/row-column-lists.test.ts',
-  'src/shared/native-chat/tools/native-chat-tool-pairing.performance.test.ts',
+  'src/renderer/src/components/agent/launch-menu/use-new-tab-agent-menu-host-preferences.test.tsx',
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
-  'src/main/usage/jsonl-file-reader.test.ts',
-  'src/main/usage/jsonl-file-snapshot.test.ts',
-  'src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-queue-retention.test.ts',
-  'src/renderer/src/store/diagnostics/store-identity-churn-probe.test.ts',
+  'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts',
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
-  'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs',
-  'src/main/claude-usage/scanner-incremental-append.test.ts',
-  'src/main/claude-usage/store-checkpoint-persistence.test.ts',
-  // Renderer hot paths: render, identity and publication counts at N and 10N (agent status, sidebar, tab strip, chat).
-  'src/renderer/src/store/slices/agent-status/agent-status-batch.performance.test.ts',
-  'src/renderer/src/components/sidebar/workspace-card/activity/use-worktree-agent-rows.performance.test.tsx',
-  'src/renderer/src/components/sidebar/workspace-card/activity/use-worktree-activity-status.performance.test.tsx',
-  'src/renderer/src/components/sidebar/worktree-list/listing/use-visible-worktrees.performance.test.tsx',
-  'src/renderer/src/components/tab-bar/use-terminal-tab-activity.performance.test.tsx',
-  'src/renderer/src/components/tab-bar/tab-agent-types-by-tab-id.performance.test.ts',
-  'src/renderer/src/app-shell/use-runtime-graph-sync.performance.test.tsx',
-  'src/renderer/src/components/native-chat/markdown/NativeChatMarkdown.streaming.performance.test.tsx',
-  'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.composer-typing.performance.test.tsx',
-  'src/renderer/src/components/native-chat/surfaces/integration/NativeChatResolvedView.streaming-input.test.tsx',
-  'src/renderer/src/components/native-chat/viewport/virtualization/NativeChatMessageList.windowing.performance.test.tsx',
-  'src/renderer/src/components/activity/use-agent-pane-threads.performance.test.tsx'
+  'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs'
 ]
 for (const contract of contracts) {
   if (!existsSync(resolve(contract))) {

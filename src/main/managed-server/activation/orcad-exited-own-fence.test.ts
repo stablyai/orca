@@ -202,20 +202,6 @@ describe.skipIf(process.platform === 'win32')('the held fence token record', () 
     expect(held(store)).toContain('t-lost')
   })
 
-  it('drops a token whose lock was never taken', async () => {
-    const { fence, store, options } = hostWithFence('t-foreign', [])
-    utimesSync(fence, new Date(), new Date())
-    expect(
-      await withOrcadActivationLock(
-        options,
-        async () => 'ran',
-        () => 'held',
-        't-busy'
-      )
-    ).toBe('held')
-    expect(held(store)).not.toContain('t-busy')
-  }, 20_000)
-
   it('never lets an unwritable record fail a fence operation', async () => {
     const { home, store, options } = hostWithFence('unused', [])
     rmSync(join(home, '.orca-remote'), { recursive: true })

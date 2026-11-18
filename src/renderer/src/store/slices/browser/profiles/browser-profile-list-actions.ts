@@ -1,12 +1,15 @@
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
-import type { BrowserSessionProfile } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserProfileCreateResult,
   BrowserProfileDeleteResult,
   BrowserProfileListResult
-} from '../../../../../../shared/runtime-browser-contracts'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getBrowserProfilesForHost,

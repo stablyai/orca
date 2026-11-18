@@ -1,5 +1,6 @@
+import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -72,7 +73,7 @@ describe('removed-worktree foreign authority', () => {
       expect(server.getCurrentAuthorityObservations()).toEqual([])
       server.flushStatusPersistSync()
       const file = JSON.parse(
-        readFileSync(join(userDataPath, 'agent-hooks', 'last-status.json'), 'utf8')
+        readSavedStatus(join(userDataPath, 'agent-hooks', 'last-status.json'))
       )
       expect(file.authorityCommitments[PANE]).toBeUndefined()
     } finally {
@@ -141,7 +142,7 @@ describe('removed-worktree foreign authority', () => {
         )
         server.flushStatusPersistSync()
         const file = JSON.parse(
-          readFileSync(join(userDataPath, 'agent-hooks', 'last-status.json'), 'utf8')
+          readSavedStatus(join(userDataPath, 'agent-hooks', 'last-status.json'))
         )
         expect(file.authorityCommitments[PANE]).toMatchObject({
           worktreeId: KEPT,
@@ -219,7 +220,7 @@ describe('removed-worktree foreign authority', () => {
         }
         server.flushStatusPersistSync()
         const file = JSON.parse(
-          readFileSync(join(userDataPath, 'agent-hooks', 'last-status.json'), 'utf8')
+          readSavedStatus(join(userDataPath, 'agent-hooks', 'last-status.json'))
         )
         expect(file.authorityCommitments[PANE]).toMatchObject({
           worktreeId: KEPT,

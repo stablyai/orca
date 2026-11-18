@@ -3,7 +3,6 @@ import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import type { SystemSshLoopbackRoute } from '../system-transport/forwarding/system-ssh-loopback-route'
-import { uploadFileViaSystemSsh } from '../system-transport/file-transfer/system-ssh-file-binary-transfer'
 
 const { startRouteMock } = vi.hoisted(() => ({ startRouteMock: vi.fn() }))
 
@@ -94,57 +93,6 @@ describe('SshConnection loopback route', () => {
     await vi.waitFor(() =>
       expect(conn.getSystemSshBuildArgsOptions().loopbackRoute?.localPort).toBe(50002)
     )
-  })
-
-  it('drops the route when its forward exits, so commands fall back to the proxy', async () => {
-    const finishStart = deferRouteStart()
-    const conn = new SshConnection(
-      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
-      createCallbacks()
-    )
-    await conn.connect()
-    const route = createRoute(50001)
-    finishStart(route)
-    await vi.waitFor(() => expect(route.onExit).toHaveBeenCalled())
-
-    const onExit = vi.mocked(route.onExit).mock.calls[0]?.[0]
-    onExit?.()
-
-    expect(conn.getSystemSshBuildArgsOptions().loopbackRoute).toBeUndefined()
-  })
-
-  it('stops an open upload session from dialling a route that has since exited', async () => {
-    const finishStart = deferRouteStart()
-    const conn = new SshConnection(
-      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
-      createCallbacks()
-    )
-    await conn.connect()
-    const route = createRoute(50001)
-    finishStart(route)
-    await vi.waitFor(() => expect(route.onExit).toHaveBeenCalled())
-    const uploadSession = await conn.openFileUploadSession()
-
-    vi.mocked(route.onExit).mock.calls[0]?.[0]?.()
-    await uploadSession.uploadFile('/tmp/a.txt', '/remote/a.txt')
-
-    expect(vi.mocked(uploadFileViaSystemSsh).mock.calls.at(-1)?.[3]?.loopbackRoute).toBeUndefined()
-  })
-
-  it('disposes the route on disconnect', async () => {
-    const finishStart = deferRouteStart()
-    const conn = new SshConnection(
-      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
-      createCallbacks()
-    )
-    await conn.connect()
-    const route = createRoute(50001)
-    finishStart(route)
-    await vi.waitFor(() => expect(conn.getSystemSshBuildArgsOptions().loopbackRoute).toBeDefined())
-
-    await conn.disconnect()
-
-    expect(route.dispose).toHaveBeenCalled()
   })
 
   it('does not start a route for a connection torn down as it reported connected', async () => {

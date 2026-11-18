@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react'
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { useCoveredTerminalFocusHandoff } from './use-covered-terminal-focus-handoff'
 import { requestNativeChatCoverPaste } from '../input/paste/native-chat-cover-paste'

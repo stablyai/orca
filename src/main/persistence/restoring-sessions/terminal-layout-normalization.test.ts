@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
-import {
-  collectLayoutLeafIdsInOrder,
-  normalizeTerminalLayoutSnapshotForPersistence
-} from './terminal-layout-normalization'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import { normalizeTerminalLayoutSnapshotForPersistence } from './terminal-layout-normalization'
 
 const STABLE_A = '11111111-1111-4111-8111-111111111111'
 const STABLE_B = '22222222-2222-4222-8222-222222222222'

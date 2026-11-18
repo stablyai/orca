@@ -9,8 +9,11 @@ import {
   Waypoints
 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
-import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'
+import {
+  getUpdateCheckClickOptions,
+  getUpdateCheckHint
+} from '@/app-shell/updates/update-check-click-options'
+import type { UpdateCheckOptions } from '../../../../../../shared/updater/update-status-types'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../../ui/dropdown-menu'
 
 type RuntimeServerRowMenuProps = {

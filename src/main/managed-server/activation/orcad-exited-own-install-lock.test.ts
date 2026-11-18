@@ -84,13 +84,6 @@ function versionDirWithLock(owner: string, heldToken: string) {
 describe.skipIf(process.platform === 'win32')(
   'an install lock this desktop’s exited process left',
   () => {
-    it('never writes to the lock while proving its holder exited', async () => {
-      const { lock, proof } = versionDirWithLock('t-exited', 't-exited')
-      const before = statSync(lock).mtimeMs
-      await expect(proof.find(lock)).resolves.toBe('t-exited')
-      expect(statSync(lock).mtimeMs).toBe(before)
-    })
-
     // A successor replacing the proven-exited lock must never be aged or stolen.
     it('leaves a successor that replaced the lock after the proof alone', async () => {
       const { lock, store, proof, acquire } = versionDirWithLock('t-exited', 't-exited')

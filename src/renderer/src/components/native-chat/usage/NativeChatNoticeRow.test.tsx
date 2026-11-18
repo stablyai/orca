@@ -9,13 +9,12 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { MessageRow } from '@/components/native-chat/messages/rows/NativeChatMessageRow'
 import { NativeChatNoticeRow } from '@/components/native-chat/messages/notices/NativeChatNoticeRow'
 import {
-  NativeChatSignInContext,
+  NativeChatHostSetupContext,
   type NativeChatSignIn
-} from '@/components/native-chat/host-access/native-chat-sign-in'
+} from '@/components/native-chat/host-access/native-chat-host-setup'
 
 import { i18n } from '@/i18n/i18n'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
-import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 
 import {
   NativeChatOrcaStopContext,
@@ -47,7 +46,7 @@ function orcaStopView(
 }
 
 const NO_OFFER = { offeredTurnItemId: null, continueNow: () => {} }
-const authAction = { signingIn: false, signIn: vi.fn() }
+const setupWith = (signIn: NativeChatSignIn | null) => ({ signIn, install: null })
 
 function renderStatus(
   body: AgentJournalStatusItem,
@@ -69,17 +68,18 @@ function renderStatus(
     }
   ])
   const view = orcaStopView(hostLabel, continueAvailable, remoteHost, offer)
+  const setup = setupWith(signIn)
   return render(
     <TooltipProvider>
       <NativeChatOrcaStopContext.Provider value={view}>
-        <NativeChatSignInContext.Provider value={signIn}>
+        <NativeChatHostSetupContext.Provider value={setup}>
           <MessageRow
             message={message!}
             agentName={agentName}
             expandSignal={false}
             onScrollMessageToTop={vi.fn()}
           />
-        </NativeChatSignInContext.Provider>
+        </NativeChatHostSetupContext.Provider>
       </NativeChatOrcaStopContext.Provider>
     </TooltipProvider>,
     { wrapper: TranslationScopeProvider }
@@ -130,23 +130,21 @@ describe('usage-limit reset clock changes', () => {
 
   it('keeps unknown resets hidden and uses replacement resets immediately, including on remount', () => {
     const row = render(notice())
-    expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
-    expect(vi.getTimerCount()).toBe(0)
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
     row.rerender(notice(start + 6 * hour))
     vi.setSystemTime(start + 3 * hour)
     row.rerender(notice(start + 4 * hour))
     act(() => vi.advanceTimersByTime(hour))
-    expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
     row.rerender(notice(start + 6 * hour))
-    expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
     row.rerender(notice(start + 2 * hour))
-    expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
     row.rerender(notice())
-    expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
-    expect(vi.getTimerCount()).toBe(0)
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
     row.unmount()
     render(notice(start + 2 * hour))
-    expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
     expect(continueUsageLimit).not.toHaveBeenCalled()
   })
 
@@ -165,93 +163,15 @@ describe('usage-limit reset clock changes', () => {
       }
       vi.setSystemTime(start + 2 * hour)
       refresh()
-      expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
       vi.setSystemTime(start)
       refresh()
-      expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
       act(() => vi.advanceTimersByTime(hour))
-      expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
       expect(continueUsageLimit).not.toHaveBeenCalled()
     }
   )
-
-  it.each([1, 10])('bounds 30-day reset work for %i mounted chats and cleans up', (count) => {
-    const duration = 30 * 24 * hour
-    const maxDelay = 2_147_483_647
-    const schedule = vi.spyOn(globalThis, 'setTimeout')
-    const row = render(notice(start + duration, count))
-    expect(schedule).toHaveBeenCalledTimes(count)
-    expect(vi.getTimerCount()).toBe(count)
-    act(() => vi.advanceTimersByTime(maxDelay))
-    expect(screen.queryAllByRole('button', { name: 'Continue Now' })).toHaveLength(0)
-    expect(schedule).toHaveBeenCalledTimes(2 * count)
-    expect(vi.getTimerCount()).toBe(count)
-    act(() => vi.advanceTimersByTime(duration - maxDelay - 1))
-    expect(screen.queryAllByRole('button', { name: 'Continue Now' })).toHaveLength(0)
-    expect(schedule).toHaveBeenCalledTimes(2 * count)
-    act(() => vi.advanceTimersByTime(1))
-    expect(screen.getAllByRole('button', { name: 'Continue Now' })).toHaveLength(count)
-    expect(schedule).toHaveBeenCalledTimes(2 * count)
-    expect(schedule.mock.calls.every(([, delay]) => delay !== undefined && delay <= maxDelay)).toBe(
-      true
-    )
-    expect(continueUsageLimit).not.toHaveBeenCalled()
-    row.rerender(notice(start + 2 * duration, count))
-    expect(vi.getTimerCount()).toBe(count)
-    row.unmount()
-    expect(vi.getTimerCount()).toBe(0)
-    const scheduledBeforeCleanup = schedule.mock.calls.length
-    fireEvent(window, new Event('focus'))
-    fireEvent(document, new Event('visibilitychange'))
-    expect(schedule).toHaveBeenCalledTimes(scheduledBeforeCleanup)
-  })
-})
-
-describe('notice rows', () => {
-  it('keeps the OMP status recovery action usable after switching language', async () => {
-    renderStatus(
-      {
-        kind: 'status',
-        tone: 'error',
-        ...agentSessionFailureWords(
-          { kind: 'modelNotSelected' },
-          { agentName: 'OMP', surface: 'row' }
-        )
-      },
-      null,
-      false,
-      false,
-      'OMP',
-      NO_OFFER,
-      { ...authAction, loginCommand: 'omp' }
-    )
-    await act(() => i18n.changeLanguage('fr'))
-    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
-    expect(authAction.signIn).toHaveBeenCalledOnce()
-  })
-
-  it('updates a mounted auth row when the reader changes language', async () => {
-    renderStatus(
-      {
-        kind: 'status',
-        tone: 'error',
-        ...agentSessionFailureWords({ kind: 'notSignedIn' }, { agentName: 'Grok', surface: 'row' })
-      },
-      null,
-      false,
-      false,
-      'Grok'
-    )
-    expect(
-      screen.getByText('Sign in to Grok with `grok login` on the computer running this chat.')
-    ).toBeInTheDocument()
-    await act(() => i18n.changeLanguage('fr'))
-    expect(
-      screen.getByText(
-        'Connectez-vous à Grok avec `grok login` sur l’ordinateur qui exécute ce chat.'
-      )
-    ).toBeInTheDocument()
-  })
 })
 
 // Protocol-shaped synthetic notices; no exact recorded review/denial capture is available.

@@ -1,4 +1,4 @@
-import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
 
 const MAX_CONCURRENT_RECOVERY_RPCS = 4
 const MAX_WAITING_RECOVERY_RPCS = 64

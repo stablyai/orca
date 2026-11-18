@@ -1,0 +1,276 @@
+import React from 'react'
+import { WorkspaceSetupSection } from '../setup/WorkspaceSetupSection'
+import { selectWorkspaceSetupCopy } from '../setup/workspace-setup-section-model'
+import {
+  getComposerWorkspaceSetupLabels,
+  getComposerSetupStartupLabel
+} from '../setup/workspace-setup-composer-copy'
+import { toast } from 'sonner'
+import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
+import { cn } from '@/lib/class-names'
+import { TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES } from '@/lib/text-input/paste/text-control-paste-model'
+import {
+  measureTextControlPasteByteLength,
+  pasteTextIntoTextControl,
+  shouldHandleTextControlPaste
+} from '@/lib/text-input/paste/text-control-paste'
+import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { ComposerParentWorktreePicker } from '../branch-selection/ComposerParentWorktreePicker'
+import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
+
+type NewWorkspaceComposerAdvancedSectionProps = Pick<
+  NewWorkspaceComposerCardProps,
+  | 'advancedOpen'
+  | 'setupChoiceRevealRequest'
+  | 'onSetupChoiceRevealed'
+  | 'smartNameSelection'
+  | 'name'
+  | 'onNameValueChange'
+  | 'selectedRepoIsGit'
+  | 'branchesEnabled'
+  | 'canReuseSelectedBranch'
+  | 'branchNameOverride'
+  | 'onBranchNameOverrideChange'
+  | 'parentWorktreeId'
+  | 'onParentWorktreeIdChange'
+  | 'selectedRepoExecutionHostId'
+  | 'selectedRepoProjectId'
+  | 'activeFolderWorkspaceId'
+  | 'note'
+  | 'onNoteChange'
+  | 'setupControlsEnabled'
+  | 'setupConfig'
+  | 'requiresExplicitSetupChoice'
+  | 'resolvedSetupDecision'
+  | 'onSetupDecisionChange'
+  | 'setupAgentStartupPolicy'
+  | 'onSetupAgentStartupPolicyChange'
+  | 'setupDecision'
+  | 'shouldWaitForSetupCheck'
+  | 'sparseControlsEnabled'
+  | 'repoId'
+  | 'sparsePresets'
+  | 'sparseSelectedPresetId'
+  | 'onSparseSelectPreset'
+  | 'canUseSparseCheckout'
+> & {
+  sparseEditing?: boolean
+  onSparseEditingChange: (editing: boolean) => void
+  branchNameInputId: string
+  showSetupAgentStartupPolicy: boolean
+}
+
+export function NewWorkspaceComposerAdvancedSection({
+  advancedOpen,
+  setupChoiceRevealRequest,
+  onSetupChoiceRevealed,
+  sparseEditing,
+  onSparseEditingChange,
+  smartNameSelection,
+  name,
+  onNameValueChange,
+  selectedRepoIsGit,
+  branchesEnabled = true,
+  canReuseSelectedBranch,
+  branchNameInputId,
+  branchNameOverride,
+  onBranchNameOverrideChange,
+  parentWorktreeId = null,
+  onParentWorktreeIdChange,
+  selectedRepoExecutionHostId,
+  selectedRepoProjectId,
+  activeFolderWorkspaceId = null,
+  note,
+  onNoteChange,
+  setupControlsEnabled = true,
+  setupConfig,
+  requiresExplicitSetupChoice,
+  resolvedSetupDecision,
+  onSetupDecisionChange,
+  showSetupAgentStartupPolicy,
+  setupAgentStartupPolicy,
+  onSetupAgentStartupPolicyChange,
+  setupDecision,
+  shouldWaitForSetupCheck,
+  sparseControlsEnabled = true,
+  repoId,
+  sparsePresets,
+  sparseSelectedPresetId,
+  onSparseSelectPreset,
+  canUseSparseCheckout
+}: NewWorkspaceComposerAdvancedSectionProps): React.JSX.Element {
+  const t = useTranslate()
+  const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = event.clipboardData.getData('text/plain')
+    const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
+      stopAfterBytes: TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
+    })
+    if (
+      !byteLengthMeasurement.exceededLimit &&
+      !shouldHandleTextControlPaste(text, { measuredByteLength: byteLengthMeasurement.byteLength })
+    ) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    const textarea = event.currentTarget
+    void pasteTextIntoTextControl(textarea, text, {
+      source: 'clipboard',
+      canContinue: (target) => target.ownerDocument.activeElement === target
+    })
+      .then((result) => {
+        if (result.status === 'rejected' && result.reason === 'too-large') {
+          toast.error(
+            translate(
+              'auto.components.NewWorkspaceComposerCard.notePasteTooLarge',
+              'Paste is too large for the note field.'
+            )
+          )
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  return (
+    <div
+      className={cn(
+        'grid transition-[grid-template-rows] duration-200 ease-out',
+        advancedOpen && sparseEditing ? 'overflow-visible' : 'overflow-hidden',
+        !advancedOpen && '!mt-2',
+        advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+      )}
+      aria-hidden={!advancedOpen}
+      inert={!advancedOpen}
+    >
+      <div className="min-h-0">
+        <div
+          className={cn(
+            'space-y-4 px-1 pt-1 pb-3 transition-[opacity,transform] duration-150 ease-out',
+            advancedOpen
+              ? 'translate-y-0 opacity-100 delay-200'
+              : '-translate-y-1 opacity-0 delay-0'
+          )}
+        >
+          {smartNameSelection ? (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                {t('auto.components.NewWorkspaceComposerCard.2688050e4b', 'Name')}
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => onNameValueChange(event.target.value)}
+                placeholder={t(
+                  'auto.components.NewWorkspaceComposerCard.0ee17638fe',
+                  'Workspace name'
+                )}
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
+            </div>
+          ) : null}
+
+          {selectedRepoIsGit &&
+          branchesEnabled &&
+          !canReuseSelectedBranch &&
+          (!smartNameSelection || smartNameSelection.kind === 'branch') ? (
+            <div className="space-y-1">
+              <label
+                htmlFor={branchNameInputId}
+                className="text-xs font-medium text-muted-foreground"
+              >
+                {t('auto.components.NewWorkspaceComposerCard.branchName', 'Branch name')}
+              </label>
+              <input
+                id={branchNameInputId}
+                type="text"
+                value={branchNameOverride ?? ''}
+                onChange={(event) => onBranchNameOverrideChange(event.target.value)}
+                placeholder={t(
+                  'auto.components.NewWorkspaceComposerCard.branchNamePlaceholder',
+                  'feature/my-branch'
+                )}
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
+            </div>
+          ) : null}
+
+          {selectedRepoIsGit && branchesEnabled && onParentWorktreeIdChange ? (
+            <ComposerParentWorktreePicker
+              repoId={repoId}
+              executionHostId={selectedRepoExecutionHostId}
+              projectId={selectedRepoProjectId}
+              value={parentWorktreeId}
+              onChange={onParentWorktreeIdChange}
+              activeFolderWorkspaceId={activeFolderWorkspaceId}
+              disabled={!advancedOpen}
+            />
+          ) : null}
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              {t('auto.components.NewWorkspaceComposerCard.f8728aa4f9', 'Note')}
+            </label>
+            <textarea
+              value={note}
+              onChange={(event) => onNoteChange(event.target.value)}
+              onPaste={handleNotePaste}
+              placeholder={t('auto.components.NewWorkspaceComposerCard.090cfedeb4', 'Write a note')}
+              rows={1}
+              className="w-full min-w-0 resize-none overflow-y-auto scrollbar-sleek rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [field-sizing:content] max-h-40"
+            />
+          </div>
+
+          {setupControlsEnabled && setupConfig ? (
+            <WorkspaceSetupSection
+              setupConfig={setupConfig}
+              copy={selectWorkspaceSetupCopy(setupConfig, getComposerWorkspaceSetupLabels(t))}
+              requiresExplicitSetupChoice={requiresExplicitSetupChoice}
+              revealRequest={setupChoiceRevealRequest}
+              onRevealed={onSetupChoiceRevealed}
+              resolvedSetupDecision={resolvedSetupDecision}
+              setupDecision={setupDecision}
+              onSetupDecisionChange={onSetupDecisionChange}
+              shouldWaitForSetupCheck={shouldWaitForSetupCheck}
+              startupPolicy={
+                showSetupAgentStartupPolicy
+                  ? {
+                      value: setupAgentStartupPolicy,
+                      onChange: onSetupAgentStartupPolicyChange,
+                      label: getComposerSetupStartupLabel(t)
+                    }
+                  : undefined
+              }
+            />
+          ) : null}
+
+          {sparseControlsEnabled ? (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                {t('auto.components.NewWorkspaceComposerCard.d861de981b', 'Sparse checkout')}
+              </label>
+              <SparseCheckoutPresetSelect
+                key={repoId}
+                repoId={repoId}
+                onEditingChange={onSparseEditingChange}
+                presets={sparsePresets}
+                selectedPresetId={sparseSelectedPresetId}
+                onSelectPreset={onSparseSelectPreset}
+                disabled={!canUseSparseCheckout}
+              />
+              {!canUseSparseCheckout ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {t(
+                    'auto.components.NewWorkspaceComposerCard.cbb47ee0dc',
+                    'Only available for local Git projects.'
+                  )}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}

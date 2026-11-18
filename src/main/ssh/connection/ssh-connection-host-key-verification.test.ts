@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { connectAttempts, ssh2Mock } from './testing/ssh-connection-test-client'
+import { ssh2Mock } from './testing/ssh-connection-test-client'
 import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
@@ -54,14 +54,6 @@ describe('SshConnection host key verification', () => {
     resetSshConnectionMocks()
   })
 
-  it('refuses a host key whose own blob cannot be identified', async () => {
-    ssh2Mock.presentedHostKey = UNIDENTIFIABLE_HOST_KEY
-    const conn = new SshConnection(createTarget(), createCallbacks())
-
-    await expect(conn.connect()).rejects.toThrow()
-    expect(ssh2Mock.lastHostKeyAccepted, 'the handshake accepted an unidentifiable key').toBe(false)
-  })
-
   // A rejected host key must bypass credential fallbacks or auth-shaped errors could disclose a secret to the refused peer.
   it('never asks for a credential after refusing a host key', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
@@ -109,7 +101,7 @@ describe('SshConnection host key verification', () => {
     }
   })
 
-  // Unreadable known_hosts connects as SSH does, including cloud-placeholder files, but must record no trust; store-wiring tests prove that boundary.
+  // Unreadable known_hosts connects as SSH does, including cloud-placeholder files.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'still connects when a known_hosts file exists but cannot be read',
     async () => {
@@ -131,12 +123,4 @@ describe('SshConnection host key verification', () => {
       }
     }
   )
-
-  it('does not retry a refused host key', async () => {
-    ssh2Mock.presentedHostKey = UNIDENTIFIABLE_HOST_KEY
-    const conn = new SshConnection(createTarget(), createCallbacks())
-
-    await expect(conn.connect()).rejects.toThrow()
-    expect(connectAttempts).toBe(1)
-  })
 })

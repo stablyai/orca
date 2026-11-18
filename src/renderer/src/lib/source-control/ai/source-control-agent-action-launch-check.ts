@@ -1,10 +1,10 @@
 import { buildAgentStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-startup'
 import { planAgentCliArgsSuffix } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 
 /** Validate user-fixable agent/arguments/input; the host’s agent.launch owns prompt delivery, never predictions here. */
 export type SourceControlLaunchCheckResult = { ok: true } | { ok: false; error: string }

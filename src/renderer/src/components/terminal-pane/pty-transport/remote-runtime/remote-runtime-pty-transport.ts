@@ -1,13 +1,13 @@
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
-import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
+import { pairedAgentLaunchInputs } from '@/lib/agent-session/launch/routing/paired-agent-launch-inputs'
 import {
   agentSessionCreateCapabilities,
   agentSessionCreateRequest,
   createAgentSessionTrustWorktreeOptions
 } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
-import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
+import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import {
   planHostedAgentPrompt,
   hostedAgentPromptHostFacts,
@@ -23,7 +23,10 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
-import { agentProviderSessionForHostEnsure } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
+import {
+  agentProviderSessionForHostEnsure,
+  restoreSourcePaneOptions
+} from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
 import { createRemoteRuntimeDisconnectedInputGrace } from './input/remote-runtime-disconnected-input-grace'
 import {
   createRemoteRuntimeRecoveryInputHold,
@@ -38,7 +41,7 @@ import type { TerminalInputKind } from '../../../../../../shared/terminal/input/
 import { isSshSignInPendingTerminalError } from '../../errors/terminal-ssh-sign-in-error'
 import { terminalCreateThemeParams } from '../../appearance/terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   isRuntimeRpcQueueOverloadError,
@@ -47,21 +50,21 @@ import {
 import type {
   RuntimeCreateAgentSessionResult,
   RuntimeEnsureAgentSessionResult
-} from '../../../../../../shared/agent-session/agent-session-host-authority'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { TabActivationIntent } from '../../../../../../shared/tab-activation-intent'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { TabActivationIntent } from '../../../../../../shared/workspace-layout/tab-groups/tab-activation-intent'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeStatus
-} from '../../../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
+} from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalShow
-} from '../../../../../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-send-contract'
-import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalSend } from '../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
+import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { agentResumeHostAuthorityCapability } from '../../../../runtime/hosted-terminals/creation/agent-launch/agent-resume-host-authority-capability'
 import {
@@ -76,7 +79,7 @@ import type {
   PtyTransportRecoveryState
 } from '../pty-transport-types'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
-import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
+import { localizeWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import {
   RuntimeRpcCallError,
@@ -115,12 +118,15 @@ import { RemoteRuntimePtyRecoveryState } from './recovery/remote-runtime-pty-rec
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 import { registerRemoteRuntimePtyControlReadyReviver } from './recovery/remote-runtime-pty-control-ready-revivers'
 import type { RemoteRuntimePtyRecoveryPhase } from './recovery/remote-runtime-pty-recovery-state'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
 } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-operation'
-import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  replaceFitOverridePtyId,
+  setFitOverride
+} from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import {
   isWebTerminalSurfaceTabId,
@@ -249,6 +255,7 @@ export function createRemoteRuntimePtyTransport(
     launchConfig,
     resumeProviderSession,
     resumeOrigin,
+    resumeSourcePaneKey,
     launchToken,
     launchAgent,
     terminalColorQueryReplies,
@@ -3773,6 +3780,10 @@ export function createRemoteRuntimePtyTransport(
               resumeProviderSessionToSend
             )
           : undefined
+        const sourcePaneOptions =
+          ensureProviderSession && originOptions.resumeOrigin && resumeSourcePaneKey
+            ? await restoreSourcePaneOptions(createEnvironmentId, resumeSourcePaneKey)
+            : {}
         const result = await createWithUnknownOutcomeRecovery(
           'agent-session',
           (timeoutMs) =>
@@ -3784,6 +3795,7 @@ export function createRemoteRuntimePtyTransport(
                     kind: 'explicit',
                     ...keyboardOptions,
                     ...originOptions,
+                    ...sourcePaneOptions,
                     worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                     agent: launchAgentToSend!,
                     providerSession: ensureProviderSession,
@@ -3933,7 +3945,7 @@ export function createRemoteRuntimePtyTransport(
             .catch(() => false)
             .then(async (promptDelivered) => {
               const { completeWebHostAgentLaunch } =
-                await import('@/lib/web-host-agent-launch-completion')
+                await import('@/lib/agent-session/launch/new-tab/web-host-agent-launch-completion')
               completeWebHostAgentLaunch({
                 agent: launchAgentToSend,
                 worktreeId,
@@ -4141,6 +4153,8 @@ export function createRemoteRuntimePtyTransport(
     ownsRecovery() {
       return !destroyed && !terminalEnded && recoveryBlocksIo()
     },
+
+    isHoldingInput: shouldHoldInput,
 
     hasUndeliveredInput() {
       return (

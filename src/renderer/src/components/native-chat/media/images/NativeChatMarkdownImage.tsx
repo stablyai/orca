@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { FileText } from 'lucide-react'
-import { ExpandableMarkdownImage } from '@/components/sidebar/MarkdownImageLightbox'
+import { ExpandableMarkdownImage } from '@/components/comment-markdown/MarkdownImageLightbox'
 import {
   GitHubUserAttachmentImage,
   isGitHubUserAttachmentUrl
-} from '@/components/sidebar/comment-markdown-github-attachment-media'
+} from '@/components/comment-markdown/comment-markdown-github-attachment-media'
 import {
   getLocalImageCacheKey,
   useLocalImageSrc
@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { chatImageAccess } from '@/lib/local-file-access'
+import { chatImageAccess } from '@/lib/files/access/local-file-access'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { basename } from '@/lib/path'
 import { useTranslate } from '@/i18n/use-translate'
@@ -28,7 +28,7 @@ import { filesystemPathToFileUri } from '../../../../../../shared/file-links/fil
 import {
   createNativeChatFileHref,
   routeNativeChatHref
-} from '../../../../../../shared/native-chat/native-chat-href-routing'
+} from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
 import { nativeChatLinkActions } from '../../links/actions/native-chat-link-target-actions'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'

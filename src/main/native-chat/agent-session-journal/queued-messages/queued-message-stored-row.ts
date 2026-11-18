@@ -5,30 +5,27 @@ import type { AgentJournalMessageItem } from '../../../../shared/agent-session/j
 import { readAgentJournalMessageBody } from '../../../../shared/agent-session/journal/agent-session-journal-body-admission'
 import { readStoredRejectionFact } from '../projection/journal-dispatch-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
-import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { storedMessageBody } from '../durable-rows/journal-storage-schema'
 import { storageVerdict, strictStorage } from '../durable-rows/journal-storage-strict'
 
 const strictBody = strictStorage(storedMessageBody)
 
-export const LEGACY_QUEUED_MESSAGE_COLUMNS =
-  'message_id, position, body_json, fingerprint, state, hold_reason, returned_reason, returned_rejection, consumed_as, queued_epoch, queued_sequence, options_json'
-
 export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: rows come from the legacy SELECTs (`LEGACY_QUEUED_MESSAGE_COLUMNS`), which name exactly these columns; better-sqlite3 types them as unknown.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: rows come from the frozen legacy table; additive columns may be absent in earlier version-four files.
   const record = row as {
     message_id: string
     position: number
     body_json: string
     fingerprint: string
     state: string
-    hold_reason: string | null
-    returned_reason: string | null
-    returned_rejection: string | null
-    consumed_as: string | null
-    queued_epoch: string | null
-    queued_sequence: number | null
-    options_json: string | null
+    hold_reason?: string | null
+    returned_reason?: string | null
+    returned_rejection?: string | null
+    consumed_as?: string | null
+    queued_epoch?: string | null
+    queued_sequence?: number | null
+    options_json?: string | null
   }
   let body: AgentJournalMessageItem
   try {
@@ -52,15 +49,15 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     body,
     fingerprint: record.fingerprint,
     state,
-    holdReason: storedHoldReason(record.hold_reason),
-    returnedReason: record.returned_reason,
-    returnedRejection: storedRejection(record.returned_rejection),
-    consumedAs: record.consumed_as,
+    holdReason: storedHoldReason(record.hold_reason ?? null),
+    returnedReason: record.returned_reason ?? null,
+    returnedRejection: storedRejection(record.returned_rejection ?? null),
+    consumedAs: record.consumed_as ?? null,
     queuedAt:
-      record.queued_epoch !== null && typeof record.queued_sequence === 'number'
+      typeof record.queued_epoch === 'string' && typeof record.queued_sequence === 'number'
         ? { epoch: record.queued_epoch, sequence: record.queued_sequence }
         : null,
-    ...storedOptions(record.options_json)
+    ...storedOptions(record.options_json ?? null)
   }
 }
 

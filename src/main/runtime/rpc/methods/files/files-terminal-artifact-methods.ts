@@ -4,7 +4,7 @@ import {
   TerminalArtifactFile,
   TerminalArtifactFileChunk,
   TerminalArtifactFileWrite
-} from '../../../../../shared/rpc-contract/files-terminal-artifact-params'
+} from '../../../../../shared/rpc-contract/filesystem/files-terminal-artifact-params'
 
 export const FILE_TERMINAL_ARTIFACT_METHODS = [
   defineMethod({

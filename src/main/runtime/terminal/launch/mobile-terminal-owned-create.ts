@@ -1,20 +1,20 @@
-import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/session-tabs-change-publication'
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/publication/session-tabs-change-publication'
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './mobile-terminal-startup'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
 import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { mintServePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
-import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
+import { placeCreatedSessionTab } from '../../../../shared/workspace-layout/tab-groups/session-tab-placement'
+import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 import {
   buildHeadlessMobileSessionTabGroups,
@@ -181,7 +181,12 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       }
       if (recipe) {
         livePty.pty.launchAgent ??= recipe.launchAgent ?? null
-        if (!livePty.pty.launchConfig && recipe.launchConfig) {
+        // A finished launch's recipe must not return to the shell left behind.
+        if (
+          !livePty.pty.launchConfig &&
+          recipe.launchConfig &&
+          livePty.pty.launchEvidence?.kind !== 'gone'
+        ) {
           livePty.pty.launchConfig = copySleepingAgentLaunchConfig(recipe.launchConfig)
         }
       }

@@ -1,8 +1,8 @@
 import { Badge } from '@/components/ui/badge'
 import { recomputeOn } from '@/lib/recompute-on'
 import { formatTimeAgo } from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-time'
-import { cn } from '@/lib/utils'
-import { useNow } from '@/hooks/use-now'
+import { cn } from '@/lib/class-names'
+import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 

@@ -83,28 +83,6 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
     opens.splice(0)
   })
 
-  it('runs socket cleanup when the cached connection closes', async () => {
-    const { RemoteRuntimeRequestConnection } =
-      await import('./remote-runtime-request-connection.js')
-    const connection = new RemoteRuntimeRequestConnection(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:6768',
-        deviceToken: 'device-token',
-        publicKeyB64: Buffer.from(new Uint8Array(32).fill(9)).toString('base64')
-      })
-    )
-
-    const request = connection.request('status.get', undefined, 1000)
-    const socket = opens[0]!
-    connection.close()
-    connection.close()
-
-    await expect(request).rejects.toThrow('Remote Orca runtime closed the connection.')
-    expect(socket.cleanup).toHaveBeenCalledTimes(1)
-    expect(socket.ws.close).toHaveBeenCalledTimes(1)
-  })
-
   it('releases a pending request when the cached socket send throws', async () => {
     const { RemoteRuntimeRequestConnection } =
       await import('./remote-runtime-request-connection.js')

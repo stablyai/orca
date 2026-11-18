@@ -3,9 +3,9 @@ import {
   resolveProviderChildEnv,
   type ProviderProcessLaunch
 } from '../provider-process/provider-process-launch'
-import { runLocalSourceControlPlan } from '../text-generation/source-control-local-process'
-import { spawnSourceControlAgent } from '../text-generation/source-control-agent-launch'
-import { cancelLocalGeneration } from '../text-generation/source-control-generation-lanes'
+import { runLocalSourceControlPlan } from '../text-generation/execution/source-control-local-process'
+import { spawnSourceControlAgent } from '../text-generation/execution/source-control-agent-launch'
+import { cancelLocalGeneration } from '../text-generation/execution/source-control-generation-lanes'
 
 export const GROK_TEXT_TASK_ENV = { GROK_STORAGE_MODE: 'local' } as const
 

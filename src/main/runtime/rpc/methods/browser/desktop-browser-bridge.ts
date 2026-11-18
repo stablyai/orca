@@ -4,7 +4,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
-} from '../../../../../shared/desktop-browser-bridge-protocol'
+} from '../../../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import {
   getDesktopBrowserBridgeRegistry,
   isDesktopBrowserBridgeHostEnabled
@@ -45,6 +45,7 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
         enforcesExpectUrl:
           context.clientCapabilities?.includes(DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY) ??
           false,
+        capabilities: context.clientCapabilities ?? [],
         emit
       })
       let release = (): void => {}

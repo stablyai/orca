@@ -22,7 +22,7 @@ import { useNativeChatComposerSessionOptions } from './controls/use-native-chat-
 import { useNativeChatDictation } from './editor/use-native-chat-dictation'
 import { useNativeChatPtyComposerSend } from './submit/use-native-chat-pty-composer-send'
 import { useNativeChatStructuredComposerSend } from './submit/use-native-chat-structured-composer-send'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './focus/use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './submit/use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './pickers/use-native-chat-composer-command-picker'
@@ -204,12 +204,17 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const dictation = useNativeChatDictation(textareaRef, disabled)
-    const sessionOptions = useNativeChatComposerSessionOptions({
+    // What option commands and PTY sends share to reach, and read, the agent's input line.
+    const ptyCommandTarget = {
       agent,
       disabled,
+      resolveTarget,
       onSlashCommand,
       onSubmitted,
-      resolveTarget,
+      readTerminalDraft: launchSeed?.readTerminalDraft
+    }
+    const sessionOptions = useNativeChatComposerSessionOptions({
+      ...ptyCommandTarget,
       terminalTabId,
       targetPtyId,
       onSwitchToTerminal,
@@ -231,14 +236,9 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const ptyCommandRouting = {
-      agent,
-      disabled,
-      isDispatchingSessionOption: sessionOptions.isDispatching,
-      resolveTarget,
-      onSlashCommand,
-      onSubmitted,
+      ...ptyCommandTarget,
+      ...sessionOptions.ptyCommandRouting,
       answerCommandLocally,
-      sessionOptionsSurface: sessionOptions.pty.surface,
       trackPendingSend,
       setDraft,
       setCaret,
@@ -253,7 +253,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       imageAttachments,
       launchDraft: launchSeed?.launchDraft,
       launchDraftResolved: launchSeed?.launchDraftResolved === true,
-      readTerminalDraft: launchSeed?.readTerminalDraft,
       classifySend,
       onOptimisticSend,
       optimisticSendOutcome,
@@ -337,7 +336,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && steerHead ? { steerHead } : {}),
       chordSteersHead: sendButton.chordSteersHead,
-      setActiveSuggestion,
+      setActiveSuggestion: picker.navigateSuggestion,
       setDraft,
       setCaret
     })

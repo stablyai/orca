@@ -1,7 +1,7 @@
 // SSH-driven workspaces lose programmatic clipboard reads until quit; user paste still works.
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../shared/browser/extensions/browser-extension-url'
-import { browserManager } from '../browser-manager'
+import { browserManager } from '../guest-lifecycle/manager/browser-manager'
 
 const drivenWorkspaceIds = new Set<string>()
 

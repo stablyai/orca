@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { persistWorktreeSortOrderByHost } from '@/lib/workspace/persistence/worktree-sort-order-persistence'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   NO_LIVE_SMART_SORT_SOURCES,
-  rankWorktreesForSort,
-  type SortBy
-} from '../../../../../../shared/sidebar-list/smart-sort'
+  rankWorktreesForSort
+} from '../../../../../../shared/sidebar-list/sorting/smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import {
   ranksFollowPersistedOrder,
   smartSortPhase
-} from '../../../../../../shared/sidebar-list/smart-sort-phase'
+} from '../../../../../../shared/sidebar-list/sorting/smart-sort-phase'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
-import { useSidebarListSession } from '@/lib/sidebar-list-session'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import { useSidebarListSession } from '@/components/sidebar/sidebar-feed/sidebar-list-session'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import {
   getWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
@@ -50,7 +50,16 @@ function useSettledSidebarWorktreeSortOrder(args: {
       latched: sessionHasHadLiveSmartSignal.current,
       repoMap,
       now: Date.now(),
-      sources: state
+      sources: {
+        ...state,
+        attentionForWorktree: (worktree, now) =>
+          state.agentStatusByPaneKey.projection.attention(
+            worktree.id,
+            worktree.lastActivityAt,
+            now
+          ),
+        hasFreshAttributedStatus: () => state.agentStatusByPaneKey.projection.hasFreshEvidence()
+      }
     })
     return {
       // Why host identity: same-id copies on two machines are separate cards with their own ranks.

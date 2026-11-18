@@ -1,21 +1,23 @@
+import type { RendererStatusPublication } from '../../shared/agent-status/renderer-status-publication'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
-  RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeTerminalDriverState
-} from '../../shared/runtime-types'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
+} from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { ClientHostedBrowserRowsEvent } from '../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
-import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './runtime-client/desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
+import { DESKTOP_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
-import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
-import { publishMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
+import { DesktopRuntimeSenderLifecycle } from './runtime-client/desktop-runtime-sender-lifecycle'
+import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
+import { publishMobileProjectSections } from '../runtime/sidebar-inputs/catalog/mobile-project-sections-snapshot'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -35,15 +37,23 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('runtime:subscribe')
   ipcMain.removeAllListeners('runtime:unsubscribe')
   ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
+  ipcMain.removeHandler('ephemeralVm:suspendWorkspace')
 
   // The window's wake shares the runtime's single VM wake path with its sleep's suspend.
   ipcMain.handle('ephemeralVm:resumeWorkspace', (_event, args: { workspaceId: string }) =>
-    runtime.wakeWorkspaceVm(args.workspaceId)
+    toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId))
+  )
+  // Suspend VM with nothing open; a workspace with open panels sleeps, which suspends it after.
+  ipcMain.handle('ephemeralVm:suspendWorkspace', (_event, args: { workspaceId: string }) =>
+    toWorkspaceLifecycleResult(async () => {
+      await runtime.suspendWorkspaceVm(args.workspaceId)
+      return null
+    })
   )
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
-    (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
+    async (event, graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> => {
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
@@ -55,7 +65,11 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
-      const result = runtime.syncWindowGraph(window.id, graph)
+      const frame = event.senderFrame
+      const result = await runtime.syncWindowGraph(window.id, graph)
+      if (window.isDestroyed() || frame !== event.sender.mainFrame) {
+        throw new Error('Runtime graph sender changed during publication')
+      }
       // Only the authoritative window's accepted graph may publish its project catalog.
       if (
         graph.projectSectionCatalog &&
@@ -67,6 +81,15 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       return result
     }
   )
+
+  ipcMain.removeHandler('runtime:syncAgentStatus')
+  ipcMain.handle('runtime:syncAgentStatus', (event, batch: RendererStatusPublication) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || event.senderFrame !== event.sender.mainFrame) {
+      return { accepted: false, reason: 'superseded' }
+    }
+    return runtime.syncRendererAgentStatus(window.id, batch)
+  })
 
   ipcMain.handle('runtime:getStatus', async (): Promise<RuntimeStatus> => {
     // Match status.get's capped name wait; later reads pick up a lookup that is still running.
@@ -87,6 +110,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         {
           id: 'desktop-ipc',
           authToken: 'desktop-ipc',
+          // The renderer ships with this main process, so it always speaks the current contract.
+          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
           method: args.method,
           params: args.params
         },
@@ -178,7 +203,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('runtime:getBrowserDrivers')
   ipcMain.handle(
     'runtime:getBrowserDrivers',
-    (): { browserPageId: string; driver: RuntimeBrowserDriverState }[] => {
+    (): { browserPageId: string; driver: RuntimeTerminalDriverState }[] => {
       const drivers = runtime.getAllBrowserDrivers()
       return Array.from(drivers.entries()).map(([browserPageId, driver]) => ({
         browserPageId,

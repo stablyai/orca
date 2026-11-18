@@ -1,5 +1,5 @@
-import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
-import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
+import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
+import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   hasPendingAgentResultText,
@@ -105,6 +105,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
     this.claudeHelperKills.clear(paneKey)
+  }
+
+  protected replaceTranscriptPollRow(
+    previous: EnrichedAgentHookEventPayload,
+    next: EnrichedAgentHookEventPayload
+  ): void {
+    const poll = this.transcriptPollScheduler.peek(previous.paneKey)
+    if (poll?.original === previous && next.paneKey === previous.paneKey) {
+      poll.original = next
+    }
   }
 
   protected scheduleTranscriptPoll(

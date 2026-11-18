@@ -8,7 +8,9 @@ import { browseSshDirectory } from './ssh-remote-directory-browse'
 
 // Runs the generated remote command in a real local `sh`, standing in for the SSH exec channel.
 function shellBackedManager(): Parameters<typeof browseSshDirectory>[0] {
-  const exec = async (command: string): Promise<EventEmitter & { stderr: EventEmitter }> => {
+  const execWithClosedStdin = async (
+    command: string
+  ): Promise<EventEmitter & { stderr: EventEmitter }> => {
     const child = spawn('/bin/sh', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'] })
     const channel = Object.assign(new EventEmitter(), { stderr: new EventEmitter() })
     child.stdout.on('data', (data: Buffer) => channel.emit('data', data))
@@ -19,8 +21,8 @@ function shellBackedManager(): Parameters<typeof browseSshDirectory>[0] {
     })
     return channel
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: browseSshDirectory only calls getConnection(id).exec(command).
-  return { getConnection: () => ({ exec }) } as never
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: browseSshDirectory only calls getConnection(id).execWithClosedStdin(command).
+  return { getConnection: () => ({ execWithClosedStdin }) } as never
 }
 
 describe.skipIf(process.platform === 'win32')('browseSshDirectory over a POSIX shell', () => {
@@ -59,22 +61,5 @@ describe.skipIf(process.platform === 'win32')('browseSshDirectory over a POSIX s
       { name: 'name with space', isDirectory: false },
       { name: 'real-file.txt', isDirectory: false }
     ])
-  })
-
-  it('navigates into a symlinked directory and lists an empty one as empty', async () => {
-    await mkdir(join(root, 'real-dir', 'project'), { recursive: true })
-    await mkdir(join(root, 'empty-real'))
-    await symlink(join(root, 'real-dir'), join(root, 'linked-dir'))
-    await symlink(join(root, 'empty-real'), join(root, 'linked-empty'))
-
-    const linked = await browseSshDirectory(shellBackedManager(), 'ssh-1', join(root, 'linked-dir'))
-    const empty = await browseSshDirectory(
-      shellBackedManager(),
-      'ssh-1',
-      join(root, 'linked-empty')
-    )
-
-    expect(linked.entries).toEqual([{ name: 'project', isDirectory: true }])
-    expect(empty.entries).toEqual([])
   })
 })

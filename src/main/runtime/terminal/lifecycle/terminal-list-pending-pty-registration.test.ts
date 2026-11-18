@@ -12,7 +12,7 @@ import {
   PTY,
   WORKTREE
 } from './pty-inventory-lifecycle-fixture'
-import { registerBoundPty } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { registerBoundPty } from '../layout/bind-first-pane.test-fixture'
 
 const TAB = '40000000-0000-4000-8000-000000000001'
 const LEAF = '40000000-0000-4000-8000-000000000002'
@@ -41,7 +41,7 @@ describe('terminal listing while a spawn binding is being persisted', () => {
       const bindingPersisted = deferred<void>()
       const { runtime } = createInventoryRuntime(async () => [processRow(ptyId)])
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [{ tabId: TAB, worktreeId: WORKTREE, title: '', activeLeafId: LEAF, layout: null }],
         leaves: [
           {

@@ -6,20 +6,20 @@ import type {
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   getRuntimeTargetHostId,
   type HostRoute
 } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
-import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import {
   lineageStoreKeyOfTarget,
   withoutChildCrossStoreLineage,
   withStoreCrossStoreLineage,
   type HostLineageList
 } from './cross-store-lineage-state'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { replaceWorktreeInRepoLists } from '../listing/worktree-owner-settings'
 import {
   withRepoHostOwnership,
