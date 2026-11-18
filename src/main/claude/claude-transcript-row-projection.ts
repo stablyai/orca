@@ -1,4 +1,4 @@
-import { isDeepStrictEqual } from 'node:util'
+import { sameSavedJournalItemBody } from '../native-chat/agent-session-journal/journal-saved-body-equality'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -50,7 +50,7 @@ export function createClaudeTranscriptRowProjection(input: {
       }
       turnScope = scopeOf(existing)
       body = claudeRestoredItemBody(body, existing.body)
-      if (isDeepStrictEqual(existing.body, body)) {
+      if (sameSavedJournalItemBody(existing, body)) {
         return { accepted: true } as const
       }
     }

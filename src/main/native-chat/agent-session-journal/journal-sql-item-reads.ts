@@ -8,7 +8,11 @@ import {
   type JournalHistoryReadOptions,
   type JournalHistoryPrompt
 } from './journal-history-items'
-import { journalDomainHistoryOpeners, journalDomainUserItemIds } from './journal-sql-history-items'
+import {
+  journalDomainHistoryItem,
+  journalDomainHistoryOpeners,
+  journalDomainUserItemIds
+} from './journal-sql-history-items'
 import { readItemsByKindPage } from './journal-items-by-kind-page'
 import type {
   AgentJournalItemBody,
@@ -116,7 +120,7 @@ export function readJournalDomainItems(
         items: readJournalHistoryItems(
           {
             canonicalItemId: canonical,
-            item: (itemId) => visibleItem(db, prefix, itemId),
+            item: (itemId) => journalDomainHistoryItem(db, prefix, itemId),
             presentationRemoved: (key) => Boolean(removed.get(...prefix, canonical(key))!.removed),
             ...(operation.options?.includeOpeners
               ? {

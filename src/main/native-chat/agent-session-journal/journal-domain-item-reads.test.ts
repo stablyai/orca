@@ -9,6 +9,7 @@ import type {
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { readJournalDomainItems, type JournalDomainItemRead } from './journal-sql-item-reads'
+import { sameSavedJournalItemBody } from './journal-saved-body-equality'
 
 import { runJournalTransaction } from './database/journal-database'
 import {
@@ -442,4 +443,41 @@ it('visits every item after a grouped import, placement revisions and command re
     'orca:admitted',
     'orca:command-result%3Aadmitted'
   ])
+})
+
+it('observes a huge saved tool output cut in history, still equal to the whole output', () => {
+  const { seed, read } = chat()
+  const whole = {
+    kind: 'tool-call' as const,
+    name: 'Read',
+    input: {},
+    state: 'completed' as const,
+    output: {
+      head: 'h'.repeat(20 * 1024 * 1024),
+      byteLength: 20_971_520,
+      digest: 'whole',
+      truncated: false
+    }
+  }
+  seed(row('tool', 1, whole))
+
+  const [entry] = read({ kind: 'history-items', itemIds: ['tool'] }).items
+  expect(entry.item).toMatchObject({
+    shortened: true,
+    body: {
+      output: {
+        head: 'h'.repeat(16 * 1024),
+        byteLength: 20_971_520,
+        digest: 'whole',
+        truncated: true
+      }
+    }
+  })
+  expect(sameSavedJournalItemBody(entry.item!, whole)).toBe(true)
+  expect(
+    sameSavedJournalItemBody(entry.item!, {
+      ...whole,
+      output: { ...whole.output, digest: 'changed' }
+    })
+  ).toBe(false)
 })

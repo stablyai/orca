@@ -15,11 +15,12 @@ const SHORTENED_HEAD_CHARS = 16 * 1024
 export function boundedStoredJsonSql(
   expression: string,
   as: string,
-  options: { bytes?: string; shortenColumn?: string } = {}
+  /** `shortenFrom`: shorten from this size instead, for a read that needs no full outputs. */
+  options: { bytes?: string; shortenColumn?: string; shortenFrom?: number } = {}
 ): string {
   const bytes = options.bytes ?? `octet_length(${expression})`
   const value = options.shortenColumn
-    ? `CASE WHEN ${bytes}<=${LIMIT / 2} THEN ${expression}
+    ? `CASE WHEN ${bytes}<=${Math.min(options.shortenFrom ?? LIMIT / 2, LIMIT / 2)} THEN ${expression}
       ELSE COALESCE(${shortenedJsonSql(options.shortenColumn)},
         CASE WHEN ${bytes}<=${LIMIT} THEN ${expression} END) END`
     : `CASE WHEN ${bytes}<=${LIMIT} THEN ${expression} END`

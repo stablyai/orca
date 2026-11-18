@@ -1,5 +1,8 @@
 import type Database from '../../sqlite/sync-database'
 import { JOURNAL_HISTORY_ITEMS_LIMIT } from './journal-history-items'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 /** Only item IDs cross the deterministic prompt lookup; historical bodies stay in SQLite. */
 export function* journalDomainUserItemIds(
@@ -32,4 +35,31 @@ export function journalDomainHistoryOpeners(
     throw new Error('history-workspace-too-large')
   }
   return rows.map((row) => String(row.item_id))
+}
+
+// A history observation compares outputs by size and digest, so a large one comes back cut.
+const HISTORY_ITEM_SHORTEN_BYTES = 1024 * 1024
+
+/** A visible item, with a tool output or patch over 1 MiB cut and the item marked shortened. */
+export function journalDomainHistoryItem(
+  db: Database.Database,
+  prefix: readonly [string, string],
+  itemId: string
+): AgentJournalRenderItem | null {
+  const row = db
+    .prepare(
+      `SELECT ${boundedStoredJsonSql('payload_json', 'payload_json', {
+        bytes: 'octet_length(payload_json)',
+        shortenColumn: 'payload_json',
+        shortenFrom: HISTORY_ITEM_SHORTEN_BYTES
+      })} FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`
+    )
+    .get(...prefix, itemId)
+  if (!row) {
+    return null
+  }
+  const json = String(boundedStoredJson(row, 'payload_json'))
+  const item = readJournalStoredItem(db, prefix, json)
+  const cut = Number(row.payload_json_bytes) > Buffer.byteLength(json, 'utf8')
+  return cut ? { ...item, shortened: true } : item
 }

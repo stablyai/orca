@@ -1,5 +1,5 @@
 import { projectCodexHistoryItem } from './codex-history-projection'
-import { isDeepStrictEqual } from 'node:util'
+import { sameSavedJournalItemBody } from '../../../native-chat/agent-session-journal/journal-saved-body-equality'
 import { CodexSubagentExecutions } from '../../structured/background-work/codex-subagent-executions'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -96,7 +96,7 @@ export function createCodexHistoryImportPlan(input: {
         journal.presentationRemoved(key) ||
         (saved &&
           ((body.kind === 'message' && body.role === 'user') ||
-            isDeepStrictEqual(saved.body, body)))
+            sameSavedJournalItemBody(saved, body)))
       ) {
         return false
       }
