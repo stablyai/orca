@@ -177,8 +177,8 @@ export const CURSOR_ACP_DIALECT: AcpDialect = {
         : undefined,
   settleRequest,
   normalizeToolUpdate,
-  skillDescription: ({ description }) =>
-    description && SKILL_SCOPE_TAG.test(description)
-      ? description.replace(SKILL_SCOPE_TAG, '')
-      : null
+  skillDescription: ({ description }) => {
+    const untagged = description.replace(SKILL_SCOPE_TAG, '')
+    return untagged === description ? null : untagged
+  }
 }

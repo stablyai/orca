@@ -87,6 +87,14 @@ function providerRepoSources(
   })
 }
 
+// Project folders these agents also read; they install into the canonical `.agents/skills` root.
+const PROJECT_SKILL_FOLDERS: readonly (readonly [AgentType, string, SkillProvider[]])[] = [
+  ['codex', '.codex', ['codex']],
+  ['cursor', '.cursor', ['agent-skills']],
+  ['qoder', '.qoder', ['agent-skills']],
+  ['opencode', '.opencode', ['agent-skills']]
+]
+
 export function buildSkillDiscoverySources(
   args: {
     homeDir?: string
@@ -221,38 +229,15 @@ export function buildSkillDiscoverySources(
         null
       ),
       ...providerRepoSources(repoPath, label, pathApi),
-      // Codex, Cursor, OpenCode and Qoder also read their own project folders; they install into the canonical root above.
-      source(
-        `repo-codex-${stablePathId(repoPath)}`,
-        `${label} .codex`,
-        pathApi.join(repoPath, '.codex', 'skills'),
-        'repo',
-        ['codex'],
-        'codex'
-      ),
-      source(
-        `repo-cursor-${stablePathId(repoPath)}`,
-        `${label} .cursor`,
-        pathApi.join(repoPath, '.cursor', 'skills'),
-        'repo',
-        ['agent-skills'],
-        'cursor'
-      ),
-      source(
-        `repo-qoder-${stablePathId(repoPath)}`,
-        `${label} .qoder`,
-        pathApi.join(repoPath, '.qoder', 'skills'),
-        'repo',
-        ['agent-skills'],
-        'qoder'
-      ),
-      source(
-        `repo-opencode-${stablePathId(repoPath)}`,
-        `${label} .opencode`,
-        pathApi.join(repoPath, '.opencode', 'skills'),
-        'repo',
-        ['agent-skills'],
-        'opencode'
+      ...PROJECT_SKILL_FOLDERS.map(([owner, folder, providers]) =>
+        source(
+          `repo-${owner}-${stablePathId(repoPath)}`,
+          `${label} ${folder}`,
+          pathApi.join(repoPath, folder, 'skills'),
+          'repo',
+          providers,
+          owner
+        )
       )
     )
   }

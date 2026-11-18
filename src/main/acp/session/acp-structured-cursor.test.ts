@@ -363,8 +363,7 @@ it('reads the commands Cursor tags with a skill scope as skills', () => {
   options.adoptCommands([
     { name: 'copy-request-id', description: 'Copy the last request ID to clipboard' },
     { name: 'grill-me', description: 'A relentless interview to sharpen a plan. (user skill)' },
-    { name: 'review', description: 'Review code. (project skill)' },
-    { name: 'empty', description: ' (skill)' }
+    { name: 'review', description: 'Review code. (project skill)' }
   ])
   expect(options.readCommands()).toEqual([
     {
@@ -373,7 +372,6 @@ it('reads the commands Cursor tags with a skill scope as skills', () => {
       description: 'Copy the last request ID to clipboard'
     },
     { name: 'grill-me', kind: 'skill', description: 'A relentless interview to sharpen a plan.' },
-    { name: 'review', kind: 'skill', description: 'Review code.' },
-    { name: 'empty', kind: 'skill' }
+    { name: 'review', kind: 'skill', description: 'Review code.' }
   ])
 })

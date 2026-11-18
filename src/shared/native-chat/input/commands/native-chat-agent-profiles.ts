@@ -53,7 +53,7 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     expandsSlashCommandsFromText: true
   },
   opencode: OPENCODE_PROFILE,
-  // Cursor also loads Claude, Codex and Grok skill folders; its ACP reports skills only once a session starts.
+  // Cursor's ACP reports skills only once a session starts, so resting chats rely on the scan.
   cursor: {
     skillPrefix: '/',
     skillSourceOwner: 'cursor',
