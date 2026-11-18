@@ -8,6 +8,10 @@ import {
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
 import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/remote-server-version-skew'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { getUpdateRemoteServersWithAppSearchEntry } from '../general/general-search'
+import { matchesSettingsSearch } from '../search/settings-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
@@ -18,6 +22,11 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
+  const updateRemoteServersWithApp = useAppStore(
+    (state) => state.settings?.updateRemoteServersWithApp !== false
+  )
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const query = useAppStateValue((state) => state.settingsSearchQuery)
   const updateCheckHint = getUpdateCheckHint()
 
   if (entries.length === 0) {
@@ -78,6 +87,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     .filter(Boolean)
     .join(' · ')
 
+  const updateWithOrca = getUpdateRemoteServersWithAppSearchEntry(t)
   return (
     <SearchableSetting
       title={t(
@@ -89,6 +99,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         'Check and update paired Orca servers from this client.'
       )}
       keywords={['remote server', 'update all', 'paired', 'version']}
+      forceVisible={matchesSettingsSearch(query, updateWithOrca)}
       className="space-y-3 py-3"
     >
       <div className="space-y-0.5">
@@ -132,6 +143,14 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">{summary}</p>
+      <SettingsSwitchRow
+        label={updateWithOrca.title}
+        description={updateWithOrca.description}
+        checked={updateRemoteServersWithApp}
+        onChange={() =>
+          void updateSettings({ updateRemoteServersWithApp: !updateRemoteServersWithApp })
+        }
+      />
     </SearchableSetting>
   )
 }

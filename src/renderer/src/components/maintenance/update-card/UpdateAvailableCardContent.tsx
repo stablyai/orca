@@ -3,6 +3,7 @@ import type { ChangelogData } from '../../../../../shared/updater/update-status-
 import { Button } from '../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { PairedServersFollowUpdateNote } from './PairedServersFollowUpdateNote'
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
@@ -110,9 +111,12 @@ export function UpdateAvailableRichContent({
       {externallyManaged ? (
         <ExternallyManagedNote />
       ) : (
-        <Button variant="default" size="sm" onClick={onUpdate} className="w-full cursor-pointer">
-          {t('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
-        </Button>
+        <>
+          <PairedServersFollowUpdateNote />
+          <Button variant="default" size="sm" onClick={onUpdate} className="w-full cursor-pointer">
+            {t('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
+          </Button>
+        </>
       )}
     </div>
   )
@@ -156,9 +160,12 @@ export function UpdateAvailableSimpleContent({
       {externallyManaged ? (
         <ExternallyManagedNote />
       ) : (
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          {t('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
-        </p>
+        <div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
+          </p>
+          <PairedServersFollowUpdateNote />
+        </div>
       )}
       {releaseUrl && (
         <button
