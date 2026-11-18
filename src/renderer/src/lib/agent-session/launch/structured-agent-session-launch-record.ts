@@ -8,7 +8,7 @@ import type {
   StructuredAgentSessionFirstMessage,
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
-} from '../../../../../shared/agent-session/structured-agent-session-create'
+} from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 export type StructuredAgentLaunchPersistedLifecycle = 'pending' | 'visibility-unknown' | 'failed'

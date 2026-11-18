@@ -1,7 +1,7 @@
 import type { BaseWindow, BrowserWindow, WebContents } from 'electron'
 import type { HoldQuitNotice } from '../../../../../shared/mac-hold-quit'
 
-// Window-wide menu and renderer routing must distinguish web popups from Orca renderers.
+// Window-wide menu and renderer routing must distinguish web popups and extension windows from Orca renderers.
 const nativeBrowserPopupWindows = new WeakSet<BrowserWindow>()
 export type NativePopupQuitSurface = {
   window: BaseWindow

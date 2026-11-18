@@ -5,8 +5,8 @@ import { createStore } from 'zustand/vanilla'
 import { getDefaultSettings } from '../../../shared/orca-profiles/constants'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
-import { createFreshnessScheduler } from '@/store/slices/agent-status/agent-status-freshness-scheduler'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { createFreshnessScheduler } from '@/store/slices/agent-status/status-ownership/agent-status-freshness-scheduler'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { resetRendererAppPlatformCacheForTests } from '@/app-shell/platform/renderer-app-platform'
 
 const initialEntries = acceptedAgentStatuses()

@@ -1,4 +1,4 @@
-import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentStatusEvidenceObservedAt } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'

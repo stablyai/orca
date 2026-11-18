@@ -149,6 +149,10 @@ export function projectAutomationSelector(
   if (workspaceHost.kind === 'ssh') {
     return workspacePinSelector(automation, workspaceHost.targetId, context)
   }
+  // A bot automation has no project; its bot lives on this computer.
+  if (automation.bot) {
+    return { kind: 'self' }
+  }
   const connectionId = context.repoConnectionId(getAutomationRunRepoId(automation), automation)
   if (connectionId === undefined) {
     return orphan(AUTOMATION_ORPHAN_ISSUES.projectMissing)

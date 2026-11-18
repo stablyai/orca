@@ -1,4 +1,5 @@
 import type { IPtyProvider } from './provider-contract'
+import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import {
   classifyTerminalProcessInspectionFailure,
@@ -22,9 +23,23 @@ export type PtyProcessInspectionOptions = {
   ignoreDetached?: boolean
   /** Name-only cadence polls may use cheap captures and omit evidence; evidence consumers must never set this. */
   steadyState?: boolean
+  /** With steadyState: the caller tracks no agent, so Windows judges children by PTY job membership alone. */
+  jobMembershipOnly?: boolean
   /** Also reach a session the daemon still runs that no window has reattached since a relaunch.
    *  The WSL move gate and the cleanup runner, which must see what teardown would stop; others read it as gone. */
   includeUnattached?: boolean
+}
+
+/** Steady polls may skip the Windows escaped-child table read when the caller asked, or when the
+ *  foreground already names an agent: the completion poll then never reads child evidence. */
+export function steadyPollJudgesByJobMembership(
+  options: Pick<PtyProcessInspectionOptions, 'steadyState' | 'jobMembershipOnly'> | undefined,
+  foregroundProcess: string | null
+): boolean {
+  return (
+    options?.steadyState === true &&
+    (options.jobMembershipOnly === true || recognizeAgentProcess(foregroundProcess) !== null)
+  )
 }
 
 export async function inspectPtyProviderProcess(

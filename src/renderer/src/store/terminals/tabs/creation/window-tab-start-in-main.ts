@@ -1,4 +1,4 @@
-import { replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
 // Main starts window-drawn tabs under their IDs after recording them; panes wait (D1b-1). Inputs main cannot carry retain window spawn (L252).
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'

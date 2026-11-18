@@ -5,18 +5,16 @@ import {
   BrowserNavigationControlRow,
   type BrowserNavigationControls
 } from './browser-navigation-control-row'
+import { useBrowserChromeToolFold } from './use-browser-chrome-tool-fold'
 import {
-  BROWSER_CHROME_FOLD_ORDER,
-  useBrowserChromeToolFold,
-  type BrowserChromeFoldStage
-} from './use-browser-chrome-tool-fold'
-import {
-  BrowserAnnotateSplitButton,
+  BrowserAnnotateToolButton,
+  BrowserAnnotateToolMenuItems,
   type BrowserChromeElementTools,
   type BrowserChromeMarkupTool,
   type BrowserChromeNoteActions
-} from './browser-annotate-split-button'
+} from './browser-annotate-tool-button'
 import { useFloatingSplitBrowserClose } from './use-floating-split-browser-close'
+import { MarkupDrawButton } from '../../annotate/markup-tools/MarkupDrawButton'
 
 export type BrowserChromeToolAction = {
   onSelect: () => void
@@ -29,6 +27,8 @@ export type BrowserChromeOverflowMenuProps = {
   /** Run after menu close without focus return; focusing the ⋯ trigger would immediately dismiss a new popover or dialog. */
   deferUntilClose: (action: () => void) => void
   onMenuCloseAutoFocus: (event: Event) => void
+  /** Grab and Draw, which the annotate icon otherwise shows only on right-click. */
+  annotateToolItems: React.ReactNode
 }
 
 /**
@@ -47,8 +47,7 @@ export function BrowserChromeToolbar({
   shareControl,
   overflowMenu,
   closeTabOwner,
-  showTourAnchors = false,
-  pinAnnotateLabel = false
+  showTourAnchors = false
 }: {
   controls: BrowserNavigationControls
   addressSlot: React.ReactNode
@@ -61,7 +60,8 @@ export function BrowserChromeToolbar({
         menuTriggerRef: React.RefObject<HTMLButtonElement | null>
       ) => React.ReactNode)
     | null
-  elementTools: BrowserChromeElementTools
+  /** Null where the page can't run the element picker; the row then offers Draw alone. */
+  elementTools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   notes?: BrowserChromeNoteActions | null
   /** Share beside a document chip, which can't hold a nested button the way the address field does. */
@@ -71,8 +71,6 @@ export function BrowserChromeToolbar({
   closeTabOwner: { worktreeId: string; browserPageId: string }
   /** Only the browsing pane anchors the contextual tour; a second anchor would steal its steps. */
   showTourAnchors?: boolean
-  /** Keeps the tour's target fully labelled while it is pointed at. */
-  pinAnnotateLabel?: boolean
 }): React.JSX.Element {
   const closeTab = useFloatingSplitBrowserClose(
     closeTabOwner.worktreeId,
@@ -80,14 +78,7 @@ export function BrowserChromeToolbar({
   )
   const rowRef = useRef<HTMLDivElement>(null)
   const overflowTriggerRef = useRef<HTMLButtonElement>(null)
-  const present: Record<BrowserChromeFoldStage, boolean> = {
-    extensions: extensionActions != null,
-    'annotate-label': !pinAnnotateLabel
-  }
-  const folded = useBrowserChromeToolFold(
-    rowRef,
-    BROWSER_CHROME_FOLD_ORDER.filter((stage) => present[stage])
-  )
+  const folded = useBrowserChromeToolFold(rowRef, extensionActions == null ? [] : ['extensions'])
 
   const afterMenuCloseRef = useRef<(() => void) | null>(null)
   const deferUntilClose = (action: () => void): void => {
@@ -113,34 +104,42 @@ export function BrowserChromeToolbar({
       showTourAnchors={showTourAnchors}
     >
       {shareControl}
-      <BrowserAnnotateSplitButton
-        tools={elementTools}
-        markup={markup}
-        notes={notes}
-        compact={folded.has('annotate-label')}
-        showTourAnchors={showTourAnchors}
-      />
+      {elementTools ? (
+        <BrowserAnnotateToolButton
+          tools={elementTools}
+          markup={markup}
+          notes={notes}
+          showTourAnchors={showTourAnchors}
+        />
+      ) : (
+        <MarkupDrawButton
+          onClick={markup.onToggle}
+          disabled={markup.disabled}
+          active={markup.active}
+          surfaceActive={markup.canShowDiscoveryHint}
+        />
+      )}
       <span className="flex shrink-0 items-center">
         {extensionActions?.(folded.has('extensions'), overflowTriggerRef)}
         {overflowMenu({
           triggerRef: overflowTriggerRef,
           deferUntilClose,
-          onMenuCloseAutoFocus
+          onMenuCloseAutoFocus,
+          annotateToolItems: <BrowserAnnotateToolMenuItems tools={elementTools} markup={markup} />
         })}
       </span>
       {closeTab ? (
         <>
           <span className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden />
           <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
+            size="icon-xs"
+            variant="muted-field-icon"
             onClick={closeTab.onSelect}
             title={closeTab.label}
             aria-label={closeTab.label}
             disabled={closeTab.disabled}
           >
-            <X className="size-4" />
+            <X className="size-3.5" />
           </Button>
         </>
       ) : null}

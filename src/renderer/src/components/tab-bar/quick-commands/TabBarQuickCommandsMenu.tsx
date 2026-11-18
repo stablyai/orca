@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { TabBarQuickCommandsList } from './TabBarQuickCommandsList'
 import {
   getTerminalQuickCommandBody,
@@ -18,7 +18,7 @@ import { TabBarQuickCommandItem } from './TabBarQuickCommandItem'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useTabBarQuickCommandsShortcut } from './tab-bar-quick-commands-shortcut'
 import { TabBarQuickCommandAddActions } from './TabBarQuickCommandAddActions'
 import { TabBarQuickCommandHostLoadStatus } from './TabBarQuickCommandHostLoadStatus'
@@ -27,7 +27,7 @@ import { useTabBarQuickCommandSearchInput } from './use-tab-bar-quick-command-se
 import type {
   HostedTerminalQuickCommand,
   TerminalQuickCommandHost
-} from '@/hooks/use-terminal-quick-command-hosts'
+} from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 type TabBarQuickCommandsMenuProps = {
   isFocused: boolean
   repoCommands: readonly HostedTerminalQuickCommand[]
@@ -315,9 +315,9 @@ export function TabBarQuickCommandsMenu({
               menuImeEnter.setComposing(true)
             }
           }}
-          onCompositionEnd={(event) => {
+          onCompositionEnd={() => {
             if (!showSearch) {
-              menuImeEnter.setComposing(false, event.data)
+              menuImeEnter.setComposing(false)
             }
           }}
           onKeyDown={(event) => {
@@ -329,11 +329,6 @@ export function TabBarQuickCommandsMenu({
             }
             event.preventDefault()
             runAndClose(filteredVisibleCommands[0])
-          }}
-          onKeyUp={(event) => {
-            if (!showSearch) {
-              menuImeEnter.onKeyUp(event)
-            }
           }}
           onBlur={menuImeEnter.reset}
         >

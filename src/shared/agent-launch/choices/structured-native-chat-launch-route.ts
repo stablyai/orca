@@ -6,9 +6,9 @@ import type { ProjectExecutionRuntimeResolution } from '../../execution-host/pro
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../agent-session/agent-session-runtime-capabilities'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../agent-session/structured-agent-session-surface-capabilities'
-import type { AgentDefaultSurface } from '../../native-chat/native-chat-appearance-settings'
+} from '../../agent-session/capabilities/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../agent-session/capabilities/structured-agent-session-surface-capabilities'
+import type { AgentDefaultSurface } from '../../native-chat/settings/native-chat-appearance-settings'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { WorkspaceLaunchKind } from '../contracts/workspace-launch-kind'
 

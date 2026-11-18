@@ -52,6 +52,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     // Seed shown/scale before document startup, matching native pre-content state.
     const [atMount] = useState(() => ({
       textScale: props.textScale ?? 1,
+      fontStyle: props.fontStyle,
       shown: props.shownAtMount ?? true
     }))
 

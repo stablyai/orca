@@ -1,6 +1,7 @@
-import type { RefObject } from 'react'
+import { useContext, type RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
+  ALargeSmall,
   Columns2,
   Folder,
   GitBranch,
@@ -15,6 +16,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
 
 type Props = {
   controller: MobileSessionController
@@ -37,11 +39,16 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     canSplitTerminals,
     terminalSplitActive,
     setShowTerminalLayout,
+    setTextSizeSheet,
+    showNativeChat,
+    activeSessionTab,
     connState,
     createTabBusy,
     handleOpenNewTab,
-    handleOpenQuickCommands
+    handleOpenQuickCommands,
+    itemsOnPhone
   } = controller
+  const botActions = useContext(MobileSessionBotActionsContext)
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
     ...(!isFloatingWorkspaceRoute
@@ -55,7 +62,8 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []),
-    ...(actionsCollapsed && !isFloatingWorkspaceRoute
+    // A bot's screen has no source control, even folded into ⋯.
+    ...(actionsCollapsed && !isFloatingWorkspaceRoute && !itemsOnPhone
       ? [
           {
             id: 'sourceControl',
@@ -102,8 +110,13 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       onPress: handleOpenQuickCommands
     }
   ]
-  const view: ActionSheetAction[] =
-    canSplitTerminals || terminalSplitActive
+  const textSizeSheet = showNativeChat
+    ? 'chat'
+    : activeSessionTab?.type === 'terminal'
+      ? 'terminal'
+      : null
+  const view: ActionSheetAction[] = [
+    ...(canSplitTerminals || terminalSplitActive
       ? [
           {
             id: 'terminalLayout',
@@ -113,7 +126,19 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setShowTerminalLayout(true)
           }
         ]
-      : []
+      : []),
+    ...(textSizeSheet
+      ? [
+          {
+            id: 'textSize',
+            label: t('session.header.textSize', 'Text size'),
+            icon: ALargeSmall,
+            closeBeforePress: true,
+            onPress: () => setTextSizeSheet(textSizeSheet)
+          }
+        ]
+      : [])
+  ]
   const tabs: ActionSheetAction[] = actionsCollapsed
     ? [
         {
@@ -130,7 +155,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     <PullDownMenu
       visible={showHeaderMoreActions}
       anchorRef={anchorRef}
-      groups={[panels, view, tabs]}
+      groups={botActions.length > 0 ? [botActions, panels, view, tabs] : [panels, view, tabs]}
       onClose={() => setShowHeaderMoreActions(false)}
     />
   )

@@ -1,3 +1,4 @@
+import type { MobileSessionItemLink } from '../../mobile-session-item-target'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
@@ -11,12 +12,13 @@ import type { MobileChatPermission } from '../input/prompts/mobile-native-chat-p
 import type { MobileChatQuestion } from '../input/prompts/mobile-native-chat-question'
 import type { MobileNativeChatSession } from '../conversation/use-mobile-native-chat-session'
 import type { NativeChatLiveTurnIndicator } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion/use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from '../composer/delivery/use-mobile-structured-send-with-outcome'
 import type {
   AgentJournalSkillRef,
+  AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
@@ -39,6 +41,7 @@ export type StructuredMobileSession = Omit<
   'contextUsageSupport'
 > &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
+    journal: Pick<AgentJournalSnapshot, 'items' | 'submissions'>
     /** The composer ring's readout; null until the session reports usage. */
     contextUsage: NativeChatContextUsageSummary | null
     submissions: readonly AgentJournalSubmission[]
@@ -86,6 +89,7 @@ export type StructuredMobileSession = Omit<
   }
 
 export type MobileStructuredAgentSessionArgs = {
+  itemLink?: MobileSessionItemLink
   client: RpcClient | null
   /** The paired host the route opened: its query cache holds the chat's last model lists. */
   hostId?: string

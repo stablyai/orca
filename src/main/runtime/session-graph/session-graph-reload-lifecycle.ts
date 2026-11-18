@@ -1,6 +1,6 @@
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as TransitionGraphReloadToTerminalStateMethods } from './session-graph-authority'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
-import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/session-title-publisher'
+import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/publication/session-title-publisher'
 import type { RuntimeRendererReloadFence } from './renderer-reload-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -224,9 +224,10 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
     // Keep pre-allocated CLI handles for reconnect adoption.
-    this.terminalWaiters.rejectAll('terminal_handle_stale')
+    this.terminalWaiters.rejectRendererBound('terminal_handle_stale')
     this.releaseUnseededPhoneFrames()
     this.republishSessionTitleAuthorityChanges(titleAuthority, this.republishBrowserSessionTabs())
+    this.releaseAgentSenderHistoryIfUnobserved()
   }
 
   // Renderer browser rows are listed only while their window exists; a version bump lets every client apply the drop.

@@ -1,4 +1,4 @@
-import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { resolveGuestNativeAgentCommand } from '../../../codex-cli/command'
 import {
   isWindowsOnlyAgentCommand,

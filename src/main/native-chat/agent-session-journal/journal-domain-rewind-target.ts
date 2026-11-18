@@ -6,6 +6,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'
+import { journalCanonicalItemId } from './journal-sql-item-reads'
 
 export type JournalRewindTarget = {
   cursor: AgentJournalCursor
@@ -62,10 +63,11 @@ export function readJournalDomainRewindTarget(
       selected &&
       !inherited &&
       (!floor || selected.sequence > floor.sequence) &&
-      isAgentSessionRewindTarget(
-        selected,
-        (turnItemId) => readAgentJournalTurn(item(turnItemId)?.body)?.userItemId
-      )
+      isAgentSessionRewindTarget(selected, (turnItemId) => {
+        // A Claude turn names its send's echo, an alias of the selected send's row.
+        const opener = readAgentJournalTurn(item(turnItemId)?.body)?.userItemId
+        return opener && journalCanonicalItemId(scope.db, scope.prefix)(opener)
+      })
     )
   }
 }

@@ -10,7 +10,7 @@ import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runt
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
-} from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
@@ -26,7 +26,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: rpc.supports
 }))
-vi.mock('@/hooks/useDetectedAgents', () => ({
+vi.mock('@/lib/agent-session/launch/inventory/useDetectedAgents', () => ({
   useDetectedAgents: () => ({ detectedIds: ['claude', 'codex', 'opencode'] })
 }))
 const initial = useAppStore.getState()

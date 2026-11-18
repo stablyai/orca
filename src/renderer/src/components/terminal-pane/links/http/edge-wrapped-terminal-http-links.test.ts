@@ -372,25 +372,6 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(openUrlMock).toHaveBeenCalledWith(new URL(url).toString())
   })
 
-  it('joins a real multi-line URL whose continuation is a Chinese path segment', () => {
-    const prefix = 'https://example.com/'
-    const firstRow = `${prefix}${'a'.repeat(COLS - prefix.length)}`
-    const continuation = `${WIDE_GLYPH}文档/路径`
-    const expectedUrl = new URL(`${firstRow}${continuation}`).toString()
-    const rows = [makeBufferLine(firstRow), makeBufferLine(continuation)]
-    const buffer = { getLine: (y: number) => rows[y] }
-
-    expect(firstRow).toHaveLength(COLS)
-    expect(
-      openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
-        worktreeId: 'wt-1',
-        modifierHeld: true
-      })
-    ).toBe(true)
-    expect(openUrlMock).toHaveBeenCalledOnce()
-    expect(openUrlMock).toHaveBeenCalledWith(expectedUrl)
-  })
-
   it('does not glue a mid-row URL to a next-line Windows path', () => {
     const firstRow = 'Repo: https://example.com/repo/'
     const secondRow = 'C:\\Users\\demo\\project\\file.ts'

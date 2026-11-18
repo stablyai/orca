@@ -3,7 +3,7 @@ import { resolveWorkspaceDirectory } from '@/lib/workspace/paths/workspace-direc
 import type { WorkspaceDirectoryState } from '@/lib/workspace/paths/workspace-directory'
 import { firstRegisteredStructuredChatTab } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import type { StructuredSessionLaunchDirectory } from '@/store/slices/agent-status/structured-session-launch-directories'
+import type { StructuredSessionLaunchDirectory } from '@/store/slices/agent-status/structured-sessions/structured-session-launch-directories'
 
 type NativeChatDirectoryTab = {
   id: string

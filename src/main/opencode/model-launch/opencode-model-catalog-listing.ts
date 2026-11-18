@@ -1,7 +1,7 @@
 // OpenCode 1.x models --verbose emits each provider/model ID followed by indented JSON.
 
 import { z } from 'zod'
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { assertJsonTextStructureWithinLimits } from '../../../shared/json-stream/json-text-structure-limit'
 
 export const OPENCODE_MODEL_LISTING_ARGS = ['models', '--verbose'] as const

@@ -1,8 +1,5 @@
 import { AiVaultChatForkSourceSchema } from '../../../../../../shared/ai-vault/contracts/ai-vault-chat-fork-contract'
-import type {
-  AiVaultAgent,
-  AiVaultSession
-} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 
 import {
   type AiVaultPrepareSessionResumeArgs,
@@ -96,11 +93,11 @@ export function prepareAiVaultSessionForFork(
 export function prepareAiVaultSessionForFork(
   session: AiVaultPrepareChatForkArgs,
   request?: ForkPreparationRequest
-): Promise<{ session: AiVaultResumeCommandSession; copied: boolean; sourceAgent?: AiVaultAgent }>
+): Promise<{ session: AiVaultResumeCommandSession; copied: boolean }>
 export async function prepareAiVaultSessionForFork(
   session: AiVaultSession | AiVaultPrepareChatForkArgs,
   request: ForkPreparationRequest = (args) => window.api.aiVault.prepareSessionResume(args)
-): Promise<{ session: AiVaultResumeCommandSession; copied: boolean; sourceAgent?: AiVaultAgent }> {
+): Promise<{ session: AiVaultResumeCommandSession; copied: boolean }> {
   if ('sourceChat' in session) {
     const result = await request(session)
     const source = AiVaultChatForkSourceSchema.parse(result.cliForkSource)
@@ -110,7 +107,6 @@ export async function prepareAiVaultSessionForFork(
         executionHostId:
           parseExecutionHostId(session.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID
       },
-      sourceAgent: source.sourceAgent,
       copied: result.forkedSession !== undefined
     }
   }

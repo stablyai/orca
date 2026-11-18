@@ -28,6 +28,7 @@ type GitHubRepositoryQueryCommandName =
   | 'getRepoWorkItemByOwnerRepo'
   | 'getRepoWorkItemDetails'
   | 'countRepoWorkItems'
+  | 'getRepoIssueSource'
   | 'listRepoLabels'
   | 'listRepoAssignableUsers'
   | 'getGitHubRateLimit'
@@ -64,8 +65,10 @@ export type RuntimeRepositoryCommandSurface = {
   isGitAvailable: RuntimeServerEnvironmentCommands['isGitAvailable']
   listSparsePresets: RuntimeRepositorySparsePresets['list']
   saveSparsePreset: RuntimeRepositorySparsePresets['save']
+  removeSparsePreset: RuntimeRepositorySparsePresets['remove']
   addRepo: RuntimeRepositoryRegistrationController['add']
   createRepo: RuntimeRepositoryRegistrationController['create']
+  getDefaultCreateProjectParent: RuntimeRepositoryRegistrationController['defaultCreateParent']
   cloneRepo: RuntimeRepositoryCloneController['clone']
   checkCloneTarget: RuntimeRepositoryCloneController['checkTarget']
   showRepo: RuntimeRepositorySettingsController['show']
@@ -148,6 +151,7 @@ export function installRuntimeRepositoryCommandSurface(
     isGitAvailable: server.isGitAvailable.bind(server),
     listSparsePresets: sparse.list.bind(sparse),
     saveSparsePreset: sparse.save.bind(sparse),
+    removeSparsePreset: sparse.remove.bind(sparse),
     addRepo: async (...args: Parameters<typeof registrations.add>) => {
       const repo = await registrations.add(...args)
       void target.repositoryForkBackfill.enqueue([repo])
@@ -160,6 +164,7 @@ export function installRuntimeRepositoryCommandSurface(
       }
       return result
     },
+    getDefaultCreateProjectParent: registrations.defaultCreateParent.bind(registrations),
     cloneRepo: async (...args: Parameters<typeof clones.clone>) => {
       const repo = await clones.clone(...args)
       void target.repositoryForkBackfill.enqueue([repo])
@@ -186,6 +191,7 @@ export function installRuntimeRepositoryCommandSurface(
     getRepoWorkItemByOwnerRepo: queries.getRepoWorkItemByOwnerRepo.bind(queries),
     getRepoWorkItemDetails: queries.getRepoWorkItemDetails.bind(queries),
     countRepoWorkItems: queries.countRepoWorkItems.bind(queries),
+    getRepoIssueSource: queries.getRepoIssueSource.bind(queries),
     listRepoLabels: queries.listRepoLabels.bind(queries),
     listRepoAssignableUsers: queries.listRepoAssignableUsers.bind(queries),
     getGitHubRateLimit: queries.getGitHubRateLimit.bind(queries),

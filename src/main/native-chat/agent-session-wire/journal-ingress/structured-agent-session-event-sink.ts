@@ -7,7 +7,10 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionPromptSuggestion,
+  AgentSessionTurnActivity
+} from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionPublishOptions } from './structured-agent-session-dispatch'
 export type { StructuredAgentSessionPublishOptions } from './structured-agent-session-dispatch'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
@@ -16,6 +19,7 @@ import type { JournalTimelineItemResolution } from '../../agent-session-journal/
 import type { JournalStepOutcome } from '../../agent-session-journal/writing/journal-writer-step'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
+import { structuredAgentSessionEphemeralPublications } from './structured-agent-session-ephemeral-publications'
 import type { StructuredAgentSessionSnapshotSource } from './structured-agent-session-sink-snapshots'
 import type { ClaudeJournalSnapshot } from '../../../claude/subagents/claude-subagent-journaled-identities'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
@@ -88,6 +92,8 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   /** Not ok if any admitted write failed or close dropped it unwritten. */
   written?(): Promise<StructuredAgentSessionSinkBarrier>
   setActivity?(activity: AgentSessionTurnActivity | null): void
+  /** Never journaled; null clears the session's suggestion. */
+  setPromptSuggestion?(suggestion: AgentSessionPromptSuggestion | null): void
   tryAppendItem?(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -150,6 +156,7 @@ export type StructuredAgentSessionEventTarget = {
   journal: SqlAgentSessionJournal
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
+  publishPromptSuggestion?: (suggestion: AgentSessionPromptSuggestion | null) => void
   publishLiveText?: (items: readonly AgentJournalRenderItem[]) => void
   /** Turn rows any writer's commit left terminal on this journal. */
   observeSettledTurns?: (listener: (turnItemIds: readonly string[]) => void) => () => void
@@ -308,13 +315,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       publish: (options = {}) => void publish(options),
       publishChildWork: queue.publishChildWork,
       written: queue.written,
-      setActivity: (activity) => {
-        queue.submit({
-          bytes: Buffer.byteLength(JSON.stringify(activity), 'utf8') + 64,
-          publicationKey: 'turn-activity',
-          run: (bound) => bound.publish(activity)
-        })
-      },
+      ...structuredAgentSessionEphemeralPublications(queue),
       tryPublish: publish
     },
     bind: (next) => queue.bind(next),

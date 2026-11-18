@@ -142,11 +142,13 @@ export function mergeContextualTourSeenIds(
   return [...merged]
 }
 
-/** One-shot notices set when shown: only an explicit true counts as seen. */
+/** One-shot notices: only an explicit true counts as seen or dismissed. */
 export function hydrateOneShotNoticesSeen(
   ui: PersistedUIState
 ): Pick<
   UISlice,
+  | 'usageEmptyStateDismissed'
+  | 'pluginsAlphaNoticeDismissed'
   | 'codexTerminalServerIsolationNoticeSeen'
   | 'codexSharedSettingsNoticeSeen'
   | 'worktreeCardsUpdateNoticeSeen'
@@ -154,6 +156,9 @@ export function hydrateOneShotNoticesSeen(
   | 'claudeDiffPanelNoticeSeen'
 > {
   return {
+    // Default false so existing users still see the usage CTA.
+    usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+    pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
     codexTerminalServerIsolationNoticeSeen: ui.codexTerminalServerIsolationNoticeSeen === true,
     codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
     worktreeCardsUpdateNoticeSeen: ui.worktreeCardsUpdateNoticeSeen === true,
@@ -162,7 +167,7 @@ export function hydrateOneShotNoticesSeen(
   }
 }
 
-/** Stale acks/marks are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth past HYDRATE_MAX_AGE_MS. */
+/** Stale acks/marks/cutoffs are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth. */
 export function hydrateAgentReadState(
   ui: PersistedUIState
 ): Pick<

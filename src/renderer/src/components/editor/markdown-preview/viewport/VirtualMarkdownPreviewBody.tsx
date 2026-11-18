@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Components } from 'react-markdown'
-import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { scrollTopCache } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'

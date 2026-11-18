@@ -21,7 +21,7 @@ import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-dro
 import { HoldQuitNotice } from './components/HoldQuitNotice'
 import { Toaster } from './components/ui/sonner'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
-import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
+import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
