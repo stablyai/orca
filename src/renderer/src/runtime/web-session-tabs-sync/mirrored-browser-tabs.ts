@@ -296,7 +296,10 @@ export function buildMirroredBrowserTabs(
       ...(tab.placement ? { placement: tab.placement } : {}),
       unifiedTab:
         existing?.unifiedTab && existing.unifiedTab.worktreeId !== snapshot.worktree
-          ? existing.unifiedTab
+          ? {
+              ...existing.unifiedTab,
+              isPinned: tab.isPinned ?? existing.unifiedTab.isPinned
+            }
           : buildBrowserUnifiedTab(
               workspace,
               tab,

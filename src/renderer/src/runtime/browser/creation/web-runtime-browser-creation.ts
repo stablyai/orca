@@ -272,7 +272,7 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
     }
   }
   if (materializedPageId) {
-    args.onMaterialized?.(materializedPageId, context.staged?.workspaceId)
+    args.onMaterialized?.(materializedPageId, stagedWorkspaceId)
   }
   return true
 }

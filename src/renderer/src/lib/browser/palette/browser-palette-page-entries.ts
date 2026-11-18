@@ -86,8 +86,8 @@ export function buildSearchableBrowserPages({
       Number.MAX_SAFE_INTEGER
     const unifiedBrowserTabsByWorkspaceId = new Map<string, Tab>()
     const focusedAtByWorkspaceId = new Map<string, number>()
-    const unifiedTabs = unifiedTabsByWorktree?.[worktree.id] ?? []
-    for (const tab of unifiedTabs) {
+    const unifiedTabs = unifiedTabsByWorktree?.[worktree.id]
+    for (const tab of unifiedTabs ?? []) {
       if (tab.contentType === 'browser' && !unifiedBrowserTabsByWorkspaceId.has(tab.entityId)) {
         unifiedBrowserTabsByWorkspaceId.set(tab.entityId, tab)
       }
