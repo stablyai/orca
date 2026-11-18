@@ -1,8 +1,6 @@
 import { takeKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import { describe, expect, it, vi } from 'vitest'
 
-import { type BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
-
 import '../../../../../shared/orca-profiles/constants'
 import '../../../../../shared/workspace-layout/layout-owner-switch'
 

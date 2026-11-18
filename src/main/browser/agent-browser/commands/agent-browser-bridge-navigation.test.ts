@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import type * as BrowserErrorTypes from '../../browser-error'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -135,8 +134,6 @@ describe('AgentBrowserBridge', () => {
       bridge.goto('https://example.com/', undefined, 'tab-1', { reportEffects: false })
     ).rejects.toThrow('ERR_CONNECTION_REFUSED (-102) loading https://example.com/')
   })
-
-  type EarlySettledNavigation = { commit: (url: string) => void; emit: (event: string) => void }
 
   // Electron resolves loadURL on the old page's beforeunload replaceState while the request is open.
 })

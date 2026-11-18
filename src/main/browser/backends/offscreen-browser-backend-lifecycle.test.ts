@@ -81,7 +81,6 @@ vi.mock('../sessions/profiles/browser-session-registry', () => ({
 }))
 
 import { OffscreenBrowserBackend } from './offscreen-browser-backend'
-import { isWorkspaceDocPageId } from '../document-preview/doc-preview-guest-policy'
 
 describe('OffscreenBrowserBackend lifecycle', () => {
   beforeEach(() => {
