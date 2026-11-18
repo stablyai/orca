@@ -28,6 +28,11 @@ import {
 } from '../document-parts/profile-state-document-parts-storage'
 import { isProfileStateSplitDomain } from '../document-parts/profile-state-document-parts'
 import {
+  prepareProfileStateDomainPatches,
+  type ProfileStateDomainPatch
+} from './profile-state-domain-patches'
+import { preparePatchedProfileStateDomain } from './profile-state-patched-domains'
+import {
   prepareProfileStateDomainMutation,
   validateProfileStateDomainTransaction,
   type PreparedProfileStateMutation
@@ -51,6 +56,8 @@ export type ProfileStateDomainTransaction = {
   replacements: readonly ProfileStateDomainMutation[]
   /** Enable selective run-row updates from Store's changed projection. */
   automationRunsAfter?: readonly unknown[]
+  /** Changed entries of split domains, applied to their stored copies in this transaction. */
+  patches?: readonly ProfileStateDomainPatch[]
 }
 
 export type ProfileStateDomainWriteResult = {
@@ -89,6 +96,10 @@ export function writeProfileStateDomains(
   validateProfileStateDomainTransaction(transaction)
 
   const prepared = transaction.replacements.map(prepareProfileStateDomainMutation)
+  const patches = prepareProfileStateDomainPatches(transaction.patches ?? [])
+  if (patches.some(({ domain }) => prepared.some((mutation) => mutation.domain === domain))) {
+    throw new Error('Profile state domain transaction patches a replaced domain')
+  }
 
   return withProfileStateWriteTransaction(db, () => {
     const actualRevision = readProfileStateRevision(db)
@@ -156,6 +167,9 @@ export function writeProfileStateDomains(
     }
     for (const mutation of prepared) {
       admit(mutation)
+    }
+    for (const patch of patches) {
+      admit(preparePatchedProfileStateDomain(db, patch))
     }
     if (transaction.automationRunsAfter !== undefined) {
       const delta = prepareProfileStateAutomationRunsDelta(

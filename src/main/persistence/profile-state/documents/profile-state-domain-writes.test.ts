@@ -65,6 +65,56 @@ describe('profile state dirty-domain writes', () => {
     }
   })
 
+  it('applies session entry patches to the stored parts in order', () => {
+    const db = openTestDatabase()
+    try {
+      writeProfileStateDomains(db, {
+        expectedRevision: 0,
+        replacements: [
+          {
+            domain: 'workspaceSession',
+            payload: '{"unifiedTabs":{"w1":[1],"w2":[2]},"lastVisited":{"a":1,"b":2},"active":"w1"}'
+          }
+        ]
+      })
+      expect(
+        writeProfileStateDomains(db, {
+          expectedRevision: 1,
+          replacements: [],
+          patches: [
+            {
+              domain: 'workspaceSession',
+              operations: [
+                { kind: 'set', path: ['unifiedTabs', 'w3'], payload: '[3]' },
+                { kind: 'remove', path: ['unifiedTabs', 'w1'] },
+                { kind: 'order', path: ['lastVisited'], keys: ['b', 'a'] },
+                { kind: 'set', path: ['active'], payload: '"w3"' }
+              ]
+            }
+          ]
+        })
+      ).toEqual({ changed: true, revision: 2, changedDomains: ['workspaceSession'] })
+      expect(JSON.stringify(JSON.parse(exportProfileStateJson(db)).workspaceSession)).toBe(
+        '{"unifiedTabs":{"w2":[2],"w3":[3]},"lastVisited":{"b":2,"a":1},"active":"w3"}'
+      )
+      expect(() =>
+        writeProfileStateDomains(db, {
+          expectedRevision: 2,
+          replacements: [],
+          patches: [
+            {
+              domain: 'workspaceSession',
+              operations: [{ kind: 'remove', path: ['unifiedTabs', 'w1'] }]
+            }
+          ]
+        })
+      ).toThrow('Profile state patch removal is missing')
+      expect(readProfileStateRevision(db)).toBe(2)
+    } finally {
+      db.close()
+    }
+  })
+
   it('rolls back every domain when a later mutation fails', () => {
     const db = openTestDatabase()
     try {

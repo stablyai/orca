@@ -20,13 +20,13 @@ function pauseCommit(authority: ProfileStateWorkerAuthority) {
   let held = false
   for (const name of ['writeSerializedDomains', 'writeCompleteSerializedDomains'] as const) {
     const original = authority[name].bind(authority)
-    vi.spyOn(authority, name).mockImplementation(async (replacements) => {
+    vi.spyOn(authority, name).mockImplementation(async (...args) => {
       if (!held) {
         held = true
         started.resolve()
         await finish.promise
       }
-      await original(replacements)
+      await (original as (...forwarded: typeof args) => Promise<void>)(...args)
     })
   }
   return { started: started.promise, release: finish.resolve }

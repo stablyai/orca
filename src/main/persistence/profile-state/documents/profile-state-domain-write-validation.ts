@@ -26,7 +26,9 @@ export function validateProfileStateDomainTransaction(
   }
   if (
     !Array.isArray(transaction.replacements) ||
-    (transaction.replacements.length === 0 && transaction.automationRunsAfter === undefined)
+    (transaction.replacements.length === 0 &&
+      transaction.automationRunsAfter === undefined &&
+      !transaction.patches?.length)
   ) {
     throw new Error('Profile state domain transaction requires at least one replacement')
   }

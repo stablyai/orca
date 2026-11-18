@@ -50,7 +50,7 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
       authority.writeCompleteSerializedDomains(request.replacements)
       break
     case 'write-domains':
-      authority.writeSerializedDomains(request.replacements)
+      authority.writeSerializedDomains(request.replacements, { patches: request.patches })
       break
     case 'write-automation':
       authority.writeSerializedAutomationRuns(
