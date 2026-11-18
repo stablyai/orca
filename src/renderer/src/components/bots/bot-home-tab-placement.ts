@@ -8,7 +8,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import {
   isBotHomeTab,
   isBotSideChatTab,
-  isLocalBotChatTab
+  selectLocalBotHomeTabs
 } from '../../../../shared/bots/bot-home-tab'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -29,11 +29,11 @@ export function botHomeTabMove(
   worktreeId: string,
   bot: Pick<Bot, 'chatSessionId' | 'hostId' | 'folderWorkspaceId'>
 ): BotHomeTabMove | null {
-  const home = state.unifiedTabsByWorktree[worktreeId]?.find(
-    (tab) =>
-      isBotHomeTab(tab, bot) &&
-      (bot.hostId !== LOCAL_EXECUTION_HOST_ID || isLocalBotChatTab(tab, bot))
-  )
+  const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const home =
+    bot.hostId === LOCAL_EXECUTION_HOST_ID
+      ? selectLocalBotHomeTabs(tabs, bot)?.home
+      : tabs.find((tab) => isBotHomeTab(tab, bot))
   const groups = state.groupsByWorktree[worktreeId] ?? []
   if (!home) {
     return null
@@ -71,18 +71,12 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
         continue
       }
       const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-      const homes = tabs
-        .filter((tab) => isLocalBotChatTab(tab, bot) && isBotHomeTab(tab, bot))
-        .sort(
-          (left, right) =>
-            left.createdAt - right.createdAt ||
-            (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
-        )
-      const home = homes[0]
-      if (!home || home.isPreview) {
+      const selection = selectLocalBotHomeTabs(tabs, bot)
+      if (!selection) {
         continue
       }
-      for (const duplicate of homes.slice(1)) {
+      const { home, duplicates } = selection
+      for (const duplicate of duplicates) {
         const focusedDuplicate =
           state.activeGroupIdByWorktree[worktreeId] === duplicate.groupId &&
           state.groupsByWorktree[worktreeId]?.some(

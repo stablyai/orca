@@ -330,7 +330,7 @@ describe('bot Home tab placement', () => {
     expect(strips()[0]?.[0]).toBe('tab-home')
   })
 
-  it('keeps the oldest Home view and accepts later inventory without retiring its conversation', () => {
+  it('keeps the oldest published Home despite an older preview, without retiring its conversation', () => {
     uninstall()
     open('home')
     const duplicate = store.getState().createUnifiedTab(WT, 'agent-session', {
@@ -340,11 +340,19 @@ describe('bot Home tab placement', () => {
       agentSessionAgent: 'claude',
       label: 'Home'
     })
+    store.getState().createUnifiedTab(WT, 'agent-session', {
+      id: 'preview-home',
+      entityId: 'home',
+      executionHostId: 'local',
+      agentSessionAgent: 'claude',
+      label: 'Home',
+      isPreview: true
+    })
     store.setState((state) => ({
       unifiedTabsByWorktree: {
         [WT]: state.unifiedTabsByWorktree[WT]!.map((tab) => ({
           ...tab,
-          createdAt: tab.id === 'tab-home' ? 1 : 2
+          createdAt: tab.id === 'preview-home' ? 0 : tab.id === 'tab-home' ? 1 : 2
         }))
       }
     }))

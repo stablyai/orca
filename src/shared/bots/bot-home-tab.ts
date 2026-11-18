@@ -32,3 +32,20 @@ export function isLocalBotChatTab(tab: HostedChatTab, bot: HostedBotHome | null)
 export function isBotSideChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
   return bot?.chatSessionId != null && isLocalBotChatTab(tab, bot) && !isBotHomeTab(tab, bot)
 }
+
+/** Publication precedes age: a preview cannot displace the oldest ready Home. */
+export function selectLocalBotHomeTabs(
+  tabs: readonly Tab[],
+  bot: HostedBotHome
+): { home: Tab; duplicates: Tab[] } | null {
+  const homes = tabs
+    .filter((tab) => isLocalBotChatTab(tab, bot) && isBotHomeTab(tab, bot))
+    .sort(
+      (left, right) =>
+        Number(left.isPreview === true) - Number(right.isPreview === true) ||
+        left.createdAt - right.createdAt ||
+        (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+    )
+  const [home, ...duplicates] = homes
+  return home && !home.isPreview ? { home, duplicates } : null
+}
