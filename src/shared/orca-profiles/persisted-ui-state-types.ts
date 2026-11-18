@@ -55,6 +55,8 @@ export type PersistedUIState = {
   rightSidebarWidth: number
   /** Right sidebar activity-bar edge. Missing on older profiles, which stay at the top. */
   activityBarPosition?: ActivityBarPosition
+  activityBarOrder?: string[]
+  activityBarHidden?: string[]
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'

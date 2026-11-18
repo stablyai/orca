@@ -20,6 +20,10 @@ export type RightSidebarState = {
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
   /** In memory: the tab the mounted sidebar renders, which differs from rightSidebarTab when that tab is hidden here. */
   rightSidebarEffectiveTab: ActiveRightSidebarTab | null
+  activityBarOrder: string[]
+  activityBarHidden: string[]
+  setActivityBarOrder: (order: string[]) => void
+  setActivityBarHidden: (hidden: string[]) => void
   activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
@@ -50,6 +54,10 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     rightSidebarExplorerViewByWorktree: {},
     rightSidebarEffectiveTab: null,
     activityBarPosition: 'top',
+    activityBarOrder: [],
+    activityBarHidden: [],
+    setActivityBarOrder: (activityBarOrder) => set({ activityBarOrder }),
+    setActivityBarHidden: (activityBarHidden) => set({ activityBarHidden }),
     toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
     setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
     setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
