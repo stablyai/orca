@@ -356,3 +356,24 @@ it('closes a signed-out chat without opening a browser sign-in', async () => {
   expect(rig.sent('authenticate')).toEqual([])
   expect(rig.openVerdict()).toMatchObject({ fact: { kind: 'notSignedIn' } })
 })
+
+it('reads the commands Cursor tags with a skill scope as skills', () => {
+  const options = new AcpStructuredOptions(CURSOR.dialect)
+  // Shaped as cursor-agent 2026.11.17 reports them: skill descriptions end in their scope.
+  options.adoptCommands([
+    { name: 'copy-request-id', description: 'Copy the last request ID to clipboard' },
+    { name: 'grill-me', description: 'A relentless interview to sharpen a plan. (user skill)' },
+    { name: 'review', description: 'Review code. (project skill)' },
+    { name: 'empty', description: ' (skill)' }
+  ])
+  expect(options.readCommands()).toEqual([
+    {
+      name: 'copy-request-id',
+      kind: 'command',
+      description: 'Copy the last request ID to clipboard'
+    },
+    { name: 'grill-me', kind: 'skill', description: 'A relentless interview to sharpen a plan.' },
+    { name: 'review', kind: 'skill', description: 'Review code.' },
+    { name: 'empty', kind: 'skill' }
+  ])
+})

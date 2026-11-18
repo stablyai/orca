@@ -33,6 +33,8 @@ beforeEach(() => {
   // HERMES_HOME can escape the fixture; isolate it from developer installs.
   vi.stubEnv('HERMES_HOME', '')
   vi.stubEnv('LOCALAPPDATA', '')
+  vi.stubEnv('CLAUDE_CONFIG_DIR', '')
+  vi.stubEnv('GROK_HOME', '')
   vi.spyOn(console, 'info').mockImplementation(() => undefined)
 })
 
@@ -179,6 +181,7 @@ describe('skill discovery', () => {
       [join(home, '.codex', 'skills'), 'codex-home'],
       [join(home, '.grok', 'skills'), 'grok-home'],
       [join(repo, '.cursor', 'skills'), 'cursor-project'],
+      [join(repo, '.codex', 'skills'), 'codex-project'],
       [join(home, '.pi', 'agent', 'skills'), 'pi-only']
     ]
     for (const [folder, name] of folders) {
@@ -197,6 +200,7 @@ describe('skill discovery', () => {
       'agents-home',
       'claude-home',
       'codex-home',
+      'codex-project',
       'cursor-home',
       'cursor-project',
       'grok-home'

@@ -53,12 +53,11 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     expandsSlashCommandsFromText: true
   },
   opencode: OPENCODE_PROFILE,
-  // Cursor also loads Claude, Codex and Grok skill folders, and ACP reports skills as plain commands.
+  // Cursor also loads Claude, Codex and Grok skill folders; its ACP reports skills only once a session starts.
   cursor: {
     skillPrefix: '/',
     skillSourceOwner: 'cursor',
-    readsSkillFoldersOf: ['claude', 'codex', 'grok'],
-    keepsScannedSkills: true
+    readsSkillFoldersOf: ['claude', 'codex', 'grok']
   },
   opencode2: OPENCODE_PROFILE,
   // ACP reports built-in commands but no skills; the server never reads Gemini CLI's ~/.gemini/skills.
