@@ -296,7 +296,7 @@ describe('a blank chat whose first start never answers', () => {
       ([key]) => key === 'orca:structuredAgentLaunches:v1'
     )
     expect(launchWrites).toHaveLength(1)
-    const saved = JSON.parse(launchWrites[0][1]) as { lifecycle: string }[]
+    const saved: { lifecycle: string }[] = JSON.parse(launchWrites[0][1])
     expect(saved.filter((record) => record.lifecycle === 'visibility-unknown')).toHaveLength(count)
     setItem.mockRestore()
     vi.useRealTimers()
