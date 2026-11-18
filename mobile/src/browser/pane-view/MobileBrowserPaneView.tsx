@@ -15,6 +15,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
+import { MobileBrowserJavaScriptDialog } from './MobileBrowserJavaScriptDialog'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
 import {
@@ -62,9 +63,13 @@ type MobileBrowserPaneViewProps = {
   panResponder: PanResponderInstance
   pointerModifiers: BrowserPointerModifier[]
   reloadPage: () => void
+  retryFailedLoad: () => void
   renderedFrameSource: { uri: string } | null
   selectBrowserViewMode: (mode: MobileBrowserViewMode) => void
-  sendDialogCommand: (method: 'browser.dialogDismiss' | 'browser.dialogAccept') => Promise<void>
+  sendDialogCommand: (
+    method: 'browser.dialogDismiss' | 'browser.dialogAccept',
+    promptText?: string
+  ) => Promise<void>
   sendKeyboardText: () => Promise<void>
   sendKeypress: (key: string) => Promise<void>
   setAddressFocused: Dispatch<SetStateAction<boolean>>
@@ -102,6 +107,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     panResponder,
     pointerModifiers,
     reloadPage,
+    retryFailedLoad,
     renderedFrameSource,
     selectBrowserViewMode,
     sendDialogCommand,
@@ -246,7 +252,13 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             )}
           </View>
         ) : null}
-        {tab.loadError ? <MobileBrowserLoadFailure loadError={tab.loadError} /> : null}
+        {tab.loadError ? (
+          <MobileBrowserLoadFailure
+            loadError={tab.loadError}
+            retryDisabled={controlsDisabled}
+            onRetry={retryFailedLoad}
+          />
+        ) : null}
         {!renderedFrameSource || busy || error ? (
           <View pointerEvents="none" style={styles.overlay}>
             {/* Key busy indicator on received pixels, not ready status: ready streams may send no frames. */}
@@ -257,45 +269,12 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           </View>
         ) : null}
         {dialog ? (
-          <View style={styles.dialogOverlay}>
-            <View style={styles.dialogCard}>
-              <Text style={styles.dialogTitle}>
-                {t('browser.paneView.dialogTitle', 'Browser Dialog')}
-              </Text>
-              <Text style={styles.dialogMessage}>{dialog.message}</Text>
-              {/* The page is still blocked, so the buttons stay live and the card says why. */}
-              {dialog.error ? <Text style={styles.dialogError}>{dialog.error}</Text> : null}
-              <View style={styles.dialogActions}>
-                {dialog.dialogType !== 'alert' ? (
-                  <Pressable
-                    disabled={dialog.pending !== undefined}
-                    style={({ pressed }) => [
-                      styles.dialogButton,
-                      pressed && styles.dialogButtonPressed,
-                      dialog.pending !== undefined && styles.dialogButtonDisabled
-                    ]}
-                    onPress={() => void sendDialogCommand('browser.dialogDismiss')}
-                  >
-                    <Text style={styles.dialogButtonText}>{t('common.cancel', 'Cancel')}</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  disabled={dialog.pending !== undefined}
-                  style={({ pressed }) => [
-                    styles.dialogButton,
-                    styles.dialogButtonPrimary,
-                    pressed && styles.dialogButtonPressed,
-                    dialog.pending !== undefined && styles.dialogButtonDisabled
-                  ]}
-                  onPress={() => void sendDialogCommand('browser.dialogAccept')}
-                >
-                  <Text style={[styles.dialogButtonText, styles.dialogButtonPrimaryText]}>
-                    {t('common.ok', 'OK')}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
+          <MobileBrowserJavaScriptDialog
+            key={dialog.occurrence}
+            dialog={dialog}
+            keyboardLift={keyboardLift}
+            sendDialogCommand={sendDialogCommand}
+          />
         ) : null}
       </View>
 

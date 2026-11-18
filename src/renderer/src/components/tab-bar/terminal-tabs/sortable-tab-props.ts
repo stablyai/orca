@@ -44,6 +44,16 @@ export type SortableTabProps = {
   nativeChat?: NativeChatTabSession
   /** A native chat whose generated name failed, unless the user named the tab. */
   namingFailure?: StructuredChatTabNamingFailure | null
+  /** False for a tab that stays open, such as a bot's Home; it also cannot be pinned or renamed. */
+  closable?: boolean
+  /** False for a bot's chats, which stay native chats. */
+  canContinueInTerminal?: boolean
+  /** Shown in place of the agent's icon, as a bot's picture on its chats. */
+  identityIcon?: React.ReactNode
+  /** Who the identity icon stands for when it cannot show all of them, as a group's members. */
+  identityDetail?: string
+  /** Unread raised outside the tab's own panes, as a group room's members' replies. */
+  unread?: boolean
   /** A forked chat: the title carries the fork mark; the hover card names the source. */
   fork?: { describeSource: () => string; markedTitle: string }
 }

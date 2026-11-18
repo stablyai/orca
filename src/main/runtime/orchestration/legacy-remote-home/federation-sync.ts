@@ -132,6 +132,7 @@ async function syncFederatedDispatchPages(
       message: {
         id: item.message_id,
         runId: dispatch.run_id,
+        // isFederatedRelaySender depends on this exact shape: this from and no sender pane key.
         from: `dispatch:${dispatchId}`,
         to: `run:${dispatch.run_id}`,
         subject: message.subject,
