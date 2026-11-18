@@ -1,3 +1,4 @@
+import { CurrentSideChatPanePlacement } from './CurrentSideChatPanePlacement'
 import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { TabGroupSplitNodeTree } from './TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from './WorkspaceTabDragLayer'
@@ -34,6 +35,7 @@ export default function TabGroupSplitLayout({
               hoveredTabInsertion={hoveredTabInsertion}
             />
           </div>
+          {isWorktreeActive ? <CurrentSideChatPanePlacement worktreeId={worktreeId} /> : null}
           {isWorktreeActive ? <BotHomeChat workspaceId={worktreeId} /> : null}
         </div>
       )}
