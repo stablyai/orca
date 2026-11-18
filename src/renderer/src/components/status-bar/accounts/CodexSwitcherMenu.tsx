@@ -39,6 +39,7 @@ export function CodexSwitcherMenu({
     activeTarget,
     activeUsage,
     canRedeemReset,
+    confirmedResetAccountId,
     handleConfirmReset,
     handleOpenChange,
     handleResetMenuSelect,
@@ -193,7 +194,12 @@ export function CodexSwitcherMenu({
         isRedeemingReset={isRedeemingReset}
         onConfirm={handleConfirmReset}
         {...(providerAccountHostLabel
-          ? { accountLabel: activeTarget?.label, hostLabel: providerAccountHostLabel }
+          ? {
+              accountLabel: selectedGroup?.targets.find(
+                (target) => target.id === confirmedResetAccountId
+              )?.label,
+              hostLabel: providerAccountHostLabel
+            }
           : {})}
       />
       {open ? <CodexRestartStatusPrompt /> : null}

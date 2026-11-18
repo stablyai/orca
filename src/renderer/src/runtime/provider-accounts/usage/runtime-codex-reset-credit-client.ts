@@ -2,6 +2,7 @@ import type { CodexResetCreditExpectedScope } from '../../../../../shared/agent-
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { CODEX_RESET_CREDIT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { isLostHostAnswer } from '../sign-in/runtime-host-account-sign-in-client'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 
 // Why: the host waits on Codex's reset endpoint and then refetches usage.
@@ -33,13 +34,19 @@ export async function consumeHostCodexResetCredit(
     return
   }
   unansweredAttemptByHost.set(environmentId, attempt)
-  await callRuntimeRpc(
-    { kind: 'environment', environmentId },
-    'accounts.consumeCodexResetCredit',
-    attempt,
-    {
-      timeoutMs: HOST_RESET_TIMEOUT_MS
+  try {
+    await callRuntimeRpc(
+      { kind: 'environment', environmentId },
+      'accounts.consumeCodexResetCredit',
+      attempt,
+      { timeoutMs: HOST_RESET_TIMEOUT_MS }
+    )
+  } catch (error) {
+    // Why: only a lost answer leaves the outcome unknown; a host refusal is final and a retry starts fresh.
+    if (!isLostHostAnswer(error)) {
+      unansweredAttemptByHost.delete(environmentId)
     }
-  )
+    throw error
+  }
   unansweredAttemptByHost.delete(environmentId)
 }

@@ -37,7 +37,7 @@ export function useCodexResetAction(
     environmentId: string
     supported: boolean
   } | null>(null)
-  const confirmedScopeRef = useRef<CodexResetCreditExpectedScope | null>(null)
+  const [confirmedScope, setConfirmedScope] = useState<CodexResetCreditExpectedScope | null>(null)
   const mountedRef = useRef(true)
   const skipResetConfirm = useAppStore((s) => s.settings?.skipCodexRateLimitResetConfirm === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -100,7 +100,7 @@ export function useCodexResetAction(
       return
     }
     // Why: the confirmation names one account; a host switch while it is open must not spend another's credit.
-    confirmedScopeRef.current = hostScope
+    setConfirmedScope(hostScope)
     setSkipFutureResetConfirm(false)
     setResetConfirmOpen(true)
   }
@@ -116,7 +116,7 @@ export function useCodexResetAction(
         console.error('Failed to save Codex reset confirmation preference:', error)
       }
     }
-    await redeem(confirmedScopeRef.current)
+    await redeem(confirmedScope)
     if (mountedRef.current) {
       setResetConfirmOpen(false)
       setSkipFutureResetConfirm(false)
@@ -130,6 +130,8 @@ export function useCodexResetAction(
     : true
   return {
     ...getCodexResetProjection(codex, redeemable, t),
+    /** The host account the open confirmation will spend for, so its label can't drift. */
+    confirmedResetAccountId: confirmedScope?.accountId ?? null,
     handleConfirmReset,
     handleResetMenuSelect,
     isRedeemingReset,
