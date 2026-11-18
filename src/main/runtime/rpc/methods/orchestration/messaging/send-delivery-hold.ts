@@ -60,20 +60,36 @@ async function readDeliveryHoldWarning(
 }
 
 /** A stored send's receipt with the hold line added, when the delivery gate would hold it. A message
- *  a waiting `check --wait` took is read by that call, so no hold applies to it. */
+ *  a waiting `check --wait` took is read by that call, so no hold applies to it; `waiterTakesType` is
+ *  the type a waiter was found for before storing, or null. */
 export async function withDeliveryHoldWarning<T>(
   sent: T,
   runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliCommand'>,
   db: OrchestrationDb,
   recipient: string,
-  takenByWaiter: boolean
+  waiterTakesType: string | null
 ): Promise<T | (T & { warnings: unknown[] })> {
-  const held = takenByWaiter ? null : await sendDeliveryHoldWarning(runtime, db, recipient)
+  const held =
+    waiterTakesType !== null && storedMessageType(sent) === waiterTakesType
+      ? null
+      : await sendDeliveryHoldWarning(runtime, db, recipient)
   if (!held || typeof sent !== 'object' || sent === null) {
     return sent
   }
   const prior = 'warnings' in sent && Array.isArray(sent.warnings) ? sent.warnings : []
   return { ...sent, warnings: [...prior, held] }
+}
+
+// A refused escalation is stored as a status rejection, which a waiter filtered to the asked type won't take.
+function storedMessageType(sent: unknown): unknown {
+  return typeof sent === 'object' &&
+    sent !== null &&
+    'message' in sent &&
+    typeof sent.message === 'object' &&
+    sent.message !== null &&
+    'type' in sent.message
+    ? sent.message.type
+    : undefined
 }
 
 /** A paired server's worker: this Orca sees only that the relay took the mail. */

@@ -265,7 +265,10 @@ export const ORCHESTRATION_SEND_METHODS = [
             return federatedControl
           }
           // Before storing, as arrival does: a waiter the nudge resolves is gone by the time the receipt reads.
-          const takenByWaiter = runtime.hasMessageWaiterFor(to, params.type ?? 'status')
+          const requestedType = params.type ?? 'status'
+          const waiterTakesType = runtime.hasMessageWaiterFor(to, requestedType)
+            ? requestedType
+            : null
           const sent = sendPointToPointMessage({
             params,
             runtime,
@@ -291,7 +294,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           // Read only once the mail is stored: an await before it could let the worker settle and miss it.
           return federatedTarget || params.type === 'worker_done' || params.type === 'heartbeat'
             ? sent
-            : withDeliveryHoldWarning(sent, runtime, db, to, takenByWaiter)
+            : withDeliveryHoldWarning(sent, runtime, db, to, waiterTakesType)
         }
         return sendGroupMessage({
           params,
