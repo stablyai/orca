@@ -42,15 +42,24 @@ export function structuredMailSource(input: {
   /** The chat reading it, so an answer to a thread ask it passed on goes back to that thread. */
   sessionId?: string
 }): AgentMessageSource & { orchestration: OrchestrationMailNotice } {
-  const groups = new Map<string, { message: MailSourceMessage; report: ReportFact }[]>()
+  const groups = new Map<
+    string,
+    { message: MailSourceMessage; report: ReportFact; imported: string | undefined }[]
+  >()
   for (const message of input.batch) {
-    const key = JSON.stringify([message.from_handle, message.answer_sender_snapshot ?? null])
+    // A server's reused terminal can send for several Dispatches; each is its own sender.
+    const imported = importedDispatch(input.db, message)
+    const key = JSON.stringify([
+      message.from_handle,
+      message.answer_sender_snapshot ?? null,
+      imported ?? null
+    ])
     let group = groups.get(key)
     if (!group) {
       group = []
       groups.set(key, group)
     }
-    group.push({ message, report: reportFact(message) })
+    group.push({ message, report: reportFact(message), imported })
   }
   const senders: AgentMessageSender[] = []
   for (const group of groups.values()) {
@@ -68,7 +77,7 @@ export function structuredMailSource(input: {
         address,
         input.db,
         input.senderSnapshot,
-        senderDispatchHint(input.db, group[0]!.message, reported),
+        group[0]!.imported ?? (reported?.kind === 'valid' ? reported.dispatchId : undefined),
         // The oldest message decides, so mail sent before a rebind never takes the new coordinator.
         group.map(({ message }) => message.created_at).toSorted()[0]
       )
@@ -216,19 +225,17 @@ function withConversationNote(
   return [{ type: 'text', text: note ? `${text}\n\n${note}` : text }]
 }
 
-/** The Dispatch a paired server's import recorded for the sender's mail, else a `worker_done`'s own. */
-function senderDispatchHint(
+/** The paired server's Dispatch the import recorded for this mail. */
+function importedDispatch(
   db: OrchestrationDb | null,
-  message: MailSourceMessage,
-  reported: ReportFact | undefined
+  message: MailSourceMessage
 ): string | undefined {
-  let imported: string | undefined
   try {
-    imported = db ? importedRemoteDispatchId(db, message.id) : undefined
+    return db ? importedRemoteDispatchId(db, message.id) : undefined
   } catch {
     // Failure to resolve a label must not block delivery.
+    return undefined
   }
-  return imported ?? (reported?.kind === 'valid' ? reported.dispatchId : undefined)
 }
 
 type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }
