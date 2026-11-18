@@ -76,7 +76,7 @@ export class RuntimeTerminalIdlePolls {
   private sweepTimer: ReturnType<typeof setInterval> | null = null
   private readonly quietForegroundByPtyId = new Map<string, QuietForegroundRead>()
   /** Pending waits per pane: pane-shared read state lives until the last of them ends. */
-  private readonly waitCountByPtyId = new Map<string, number>()
+  private readonly entriesByPtyId = new Map<string, Set<IdlePollEntry>>()
   private readonly restTitleReads: ReattachedRestTitleReads<RuntimePtyWorktreeRecord>
   /** The evidence source the polls evaluate with: the shared one plus this poll's own foreground reads. */
   private readonly evidenceSource: TuiIdleEvidenceSource
@@ -101,7 +101,9 @@ export class RuntimeTerminalIdlePolls {
   start(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord, verdict?: TuiIdleVerdict): void {
     const entry = { waiter, pty, foregroundPollInFlight: false, screenReadInFlight: false }
     this.entries.add(entry)
-    this.waitCountByPtyId.set(pty.ptyId, (this.waitCountByPtyId.get(pty.ptyId) ?? 0) + 1)
+    const paneEntries = this.entriesByPtyId.get(pty.ptyId) ?? new Set<IdlePollEntry>()
+    paneEntries.add(entry)
+    this.entriesByPtyId.set(pty.ptyId, paneEntries)
     entry.waiter.cancelIdlePoll = () => this.stop(entry)
     // Share one sweep timer so idle main wakeups do not scale with waiter count.
     if (!this.sweepTimer) {
@@ -289,8 +291,11 @@ export class RuntimeTerminalIdlePolls {
       this.quietForegroundByPtyId.set(ptyId, { ...read, process, pending: false })
       // Why a tick now, not settling here: the weak-ready path reads the cached answer and checks
       // the rendered screen for a blocker first; waiting for the next sweep could outlast a short wait.
-      if (process !== null && this.entries.has(entry)) {
-        queueMicrotask(() => void this.tick(entry))
+      // Every wait on the pane, not only the one that asked: that one may have ended meanwhile.
+      if (process !== null) {
+        for (const peer of this.entriesByPtyId.get(ptyId) ?? []) {
+          queueMicrotask(() => void this.tick(peer))
+        }
       }
     } finally {
       entry.foregroundPollInFlight = false
@@ -341,11 +346,10 @@ export class RuntimeTerminalIdlePolls {
       return
     }
     const { ptyId } = entry.pty
-    const waits = (this.waitCountByPtyId.get(ptyId) ?? 1) - 1
-    if (waits > 0) {
-      this.waitCountByPtyId.set(ptyId, waits)
-    } else {
-      this.waitCountByPtyId.delete(ptyId)
+    const paneEntries = this.entriesByPtyId.get(ptyId)
+    paneEntries?.delete(entry)
+    if (!paneEntries?.size) {
+      this.entriesByPtyId.delete(ptyId)
       this.quietForegroundByPtyId.delete(ptyId)
       this.restTitleReads.forget(ptyId)
     }

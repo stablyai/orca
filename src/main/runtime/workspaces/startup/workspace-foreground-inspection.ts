@@ -44,6 +44,7 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
       return false
     }
     const pty = this.ptysById.get(ptyId)
+    const incarnationId = pty?.incarnationId
     const outputClockAt = this.readOutputClockAt(ptyId)
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const foreground = await this.readRestTitleForeground(pty, ptyId, agent)
@@ -51,6 +52,8 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
       foreground !== 'agent' ||
       !pty ||
       this.ptysById.get(ptyId) !== pty ||
+      // Why: an in-place rebind keeps the record, generation and clock but runs another process.
+      pty.incarnationId !== incarnationId ||
       this.getPtyLifecycleGeneration(ptyId) !== generation ||
       this.readOutputClockAt(ptyId) !== outputClockAt ||
       reattachedRestTitleAgent(pty) !== agent

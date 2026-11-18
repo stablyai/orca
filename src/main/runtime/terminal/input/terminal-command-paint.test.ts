@@ -107,6 +107,16 @@ describe('the command an agent report speaks for', () => {
     expect(isCurrentCommandStatus(record, 6_000)).toBe(true)
   })
 
+  it("keeps a finished agent's title retired across lost output, while a newer title counts", () => {
+    const record: TerminalCommandPaintRecord = { lastOscTitleAt: 3 }
+    awaitReattachedTerminalPaint(record, 1_000)
+    observeTerminalCommandPaint(record, FINISH, FINISH, 2_000)
+    record.commandPaint?.noteGap()
+    expect(isCurrentCommandStatus(record, 500)).toBe(false)
+    Object.assign(record, { lastOscTitleAt: 4 })
+    expect(isCurrentCommandStatus(record, 3_000)).toBe(true)
+  })
+
   it("retires the last command's title at a start in its own read, even in the same millisecond", () => {
     const record: TerminalCommandPaintRecord = { lastOscTitleAt: 3 }
     observeTerminalCommandPaint(record, START, START, 1_000)

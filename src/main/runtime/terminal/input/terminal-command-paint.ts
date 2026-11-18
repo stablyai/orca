@@ -108,6 +108,10 @@ export class TerminalCommandPaint {
       }
       this.betweenCommands = true
       this.boundarySinceReattach = this.reattach === 'armed'
+      // Why identity at the finish: a gap later clears betweenCommands, and the finished
+      // program's reports must stay retired even then.
+      this.retiredTitleAt = reports.lastOscTitleAt ?? null
+      this.retiredStatus = reports.lastExplicitAgentStatus ?? null
       this.startSeen = false
       this.repaintRequestable = false
       this.composers = new Map()
@@ -192,7 +196,8 @@ export class TerminalCommandPaint {
   }
 
   /** Output was lost: paint and boundaries since are unknown. A reattach fence still awaiting its
-   *  command keeps holding; otherwise every report and any paint count, as with no markers. */
+   *  command keeps holding; otherwise every report and any paint count, as with no markers, except
+   *  the reports a seen boundary already retired. */
   noteGap(): void {
     this.scanner.reset()
     if (this.awaitsReattachedCommand()) {
@@ -201,8 +206,6 @@ export class TerminalCommandPaint {
     this.startedAt = null
     this.startSeen = false
     this.startFollowsFinishInRead = false
-    this.retiredTitleAt = null
-    this.retiredStatus = null
     this.betweenCommands = false
     this.awaitingPaint = false
     this.composers = null
