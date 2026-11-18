@@ -36,7 +36,9 @@ function inputMayOpenTurn(
 /** The PTY this machine's saved layout binds to the pane; window graphs are gone by quit. */
 function savedPanePtyId(session: WorkspaceSessionState, paneKey: string): string | undefined {
   const pane = parsePaneKey(paneKey)
-  return pane ? session.terminalLayoutsByTabId?.[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] : undefined
+  return pane
+    ? session.terminalLayoutsByTabId?.[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
+    : undefined
 }
 
 export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithWorktreeSleepResumeRecording {
