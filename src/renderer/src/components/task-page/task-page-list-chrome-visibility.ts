@@ -29,5 +29,8 @@ export function shouldHideTaskPageListChrome({
       return hasJiraDetail
     case 'linear':
       return hasLinearIssueDetail || hasLinearProjectContext || hasLinearViewContext
+    case 'todoist':
+      // Why: the Todoist drawer overlays the list instead of replacing it.
+      return false
   }
 }

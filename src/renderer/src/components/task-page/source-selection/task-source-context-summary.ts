@@ -62,7 +62,7 @@ export function getTaskSourceContextSummary(
   args:
     | ({ provider: Extract<TaskProvider, 'github' | 'gitlab'> } & RepoBackedTaskSourceSummaryArgs)
     | {
-        provider: Extract<TaskProvider, 'linear' | 'jira'>
+        provider: Extract<TaskProvider, 'linear' | 'jira' | 'todoist'>
         providerLabel: string
         hostAvailability?: readonly TaskSourceHostAvailability[]
         hostLabelById?: HostLabelLookup
@@ -92,6 +92,17 @@ export function getTaskSourceContextSummary(
         args.providerLabel,
         {
           accountLabel: args.jiraSiteName,
+          accountHostId: args.accountHostId,
+          hostLabelById: args.hostLabelById,
+          hostAvailability: args.hostAvailability
+        },
+        t
+      )
+    case 'todoist':
+      return getAccountBackedTaskSourceSummary(
+        args.providerLabel,
+        {
+          accountLabel: null,
           accountHostId: args.accountHostId,
           hostLabelById: args.hostLabelById,
           hostAvailability: args.hostAvailability
@@ -239,6 +250,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'todoist':
+      return identity.projectName ?? identity.projectId ?? null
   }
 }
 

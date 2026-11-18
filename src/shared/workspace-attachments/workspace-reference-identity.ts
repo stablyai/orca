@@ -199,6 +199,7 @@ function externalUrl(item: WorkspaceAttachment): string | undefined {
         ? `${identity.siteUrl.replace(/\/+$/, '')}/browse/${identifier}`
         : undefined
     case 'linear':
+    case 'todoist':
       return undefined
   }
 }
