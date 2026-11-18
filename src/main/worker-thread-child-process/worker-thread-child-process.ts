@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events'
-import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
@@ -189,10 +188,14 @@ export class WorkerThreadChildProcessHost {
 
   /** Starts or reuses the worker; false while it cannot run, including during an idle retirement or after it failed to start. */
   available(): boolean {
-    return !this.failedToStart && this.ensureWorker()
+    return this.ensureWorker()
   }
 
   private ensureWorker(): boolean {
+    // A worker that died before answering is not started again; direct spawns report it unavailable.
+    if (this.failedToStart) {
+      return false
+    }
     if (!this.host.current) {
       // A fresh worker (first use or after idle teardown) has not proven it starts yet.
       this.workerAnswered = false
@@ -285,10 +288,7 @@ function defaultWorkerFactory(): Worker {
     currentWorkerEntryLayout(__dirname),
     WORKER_ENTRY_FILENAME
   )
-  // Reject missing worker synchronously so spawning fails closed instead of awaiting impossible readiness.
-  if (!existsSync(workerPath)) {
-    throw new Error(`Child process worker entry not found: ${workerPath}`)
-  }
+  // A missing entry surfaces as the worker's own error before it answers, which retires the host (failedToStart).
   return spawnWorkerThread(workerPath, { name: 'orca-child-process-spawner' })
 }
 
