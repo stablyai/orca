@@ -35,7 +35,7 @@ const DEFAULT_ON_STATUS_BAR_ITEMS = [
 type DefaultOnStatusBarFlag = (typeof DEFAULT_ON_STATUS_BAR_ITEMS)[number][0]
 
 export function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarItem[] {
-  const source = items ?? DEFAULT_STATUS_BAR_ITEMS
+  const source = Array.isArray(items) ? items : DEFAULT_STATUS_BAR_ITEMS
   const out: string[] = []
   for (const id of source) {
     const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
