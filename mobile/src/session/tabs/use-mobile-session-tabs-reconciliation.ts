@@ -150,22 +150,41 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
     [controller, suspendTerminalInventoryRecovery]
   )
 
-  useEffect(() => {
-    if (!client || !controller || connState !== 'connected') {
-      return
-    }
-    resetPendingTerminalRecovery()
-    const subscription = controller.beginSubscription()
-    const unsubscribe = client.subscribe(
-      'session.tabs.subscribe',
-      { worktree: `id:${worktreeId}` },
-      subscription.listener
-    )
-    return () => {
-      subscription.cancel()
-      unsubscribe()
-    }
-  }, [client, connState, controller, resetPendingTerminalRecovery, worktreeId])
+  useFocusEffect(
+    useCallback(() => {
+      if (!client || !controller || connState !== 'connected') {
+        return
+      }
+      let unsubscribe = (): void => {}
+      const updatePresence = (active: boolean): void => {
+        unsubscribe()
+        unsubscribe = () => {}
+        if (!active) {
+          return
+        }
+        resetPendingTerminalRecovery()
+        const subscription = controller.beginSubscription()
+        const stop = client.subscribe(
+          'session.tabs.subscribe',
+          { worktree: `id:${worktreeId}` },
+          subscription.listener
+        )
+        unsubscribe = () => {
+          subscription.cancel()
+          stop()
+        }
+      }
+      // The host treats this subscription as viewing the workspace, including retained screens.
+      updatePresence(AppState.currentState === 'active')
+      const appStateSubscription = AppState.addEventListener('change', (state) => {
+        updatePresence(state === 'active')
+      })
+      return () => {
+        appStateSubscription.remove()
+        unsubscribe()
+      }
+    }, [client, connState, controller, resetPendingTerminalRecovery, worktreeId])
+  )
 
   useFocusEffect(
     useCallback(() => {

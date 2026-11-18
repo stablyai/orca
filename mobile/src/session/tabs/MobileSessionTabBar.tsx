@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Bell, Plus } from 'lucide-react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
@@ -33,6 +33,15 @@ import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
+import { useHostQuery } from '../../query/host-query'
+import {
+  hostWorktreeCatalogQuery,
+  NO_HOST_LIST_INPUT,
+  HOST_LIST_BACKSTOP_POLL_MS
+} from '../../host-screen/catalog/host-list-queries'
+import { listedAgentVerdict } from '../../agents/agent-list-rows'
+import { notificationPaneTab } from './notification-pane-tab'
 
 const SWIPE_SETTLE_MS = 250
 // A tab arriving from the side starts this far out, as a share of the tab cell's width.
@@ -78,6 +87,9 @@ export function MobileSessionTabBar({
   const t = useMobileTranslation()
   const {
     activeSessionTabId,
+    client,
+    hostId,
+    worktreeId,
     connState,
     createTabBusy,
     handleOpenNewTab,
@@ -89,10 +101,35 @@ export function MobileSessionTabBar({
   // Why: the first tap must reach the bar with the keyboard open instead of only dismissing it (#5106).
   const keepsKeyboard = useKeyboardPersistingTaps('handled')
   const now = useNow(60_000)
-  const rows = useMemo(
-    () => visibleTabs.map((tab) => buildMobileSessionTabSummary(tab, terminals, now)),
-    [visibleTabs, terminals, now]
+  const executionHost = useWorkspaceExecutionHost() ?? 'local'
+  const catalog = useHostQuery(
+    hostWorktreeCatalogQuery,
+    { hostId, client },
+    { exec: executionHost },
+    NO_HOST_LIST_INPUT,
+    {
+      enabled: connState === 'connected',
+      refetchInterval: HOST_LIST_BACKSTOP_POLL_MS
+    }
   )
+  const rows = useMemo(() => {
+    const unreadTabIds = new Set<string>()
+    if (connState === 'connected') {
+      const agents = catalog.data?.worktrees.find((row) => row.worktreeId === worktreeId)?.agents
+      for (const agent of agents ?? []) {
+        if (listedAgentVerdict(agent)?.unread) {
+          const tab = notificationPaneTab(visibleTabs, agent.paneKey)
+          if (tab) {
+            unreadTabIds.add(tab.id)
+          }
+        }
+      }
+    }
+    return visibleTabs.map((tab) => ({
+      ...buildMobileSessionTabSummary(tab, terminals, now),
+      unread: unreadTabIds.has(tab.id)
+    }))
+  }, [visibleTabs, terminals, now, catalog.data, connState, worktreeId])
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
   const active: MobileSessionTabSummary | undefined = rows[activeIndex]
   const previous = activeIndex > 0 ? rows[activeIndex - 1] : undefined
@@ -169,12 +206,14 @@ export function MobileSessionTabBar({
       : t('session.tabBar.tabCount', '{{count}} tabs', { count: rows.length })
   const tabLabel = [
     active && isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title) : active?.title,
-    status ? agentStateLabel(status) : null
+    status ? agentStateLabel(status) : null,
+    active?.unread ? t('agents.list.unread', 'Unread') : null
   ]
     .filter(Boolean)
     .join(', ')
   const countAccessibilityLabel = [
     countLabel,
+    rows.some((row) => row.unread) ? t('agents.list.unread', 'Unread') : null,
     othersNeedYou ? t('session.tabBar.anotherNeedsYou', 'another tab needs you') : null
   ]
     .filter(Boolean)
@@ -260,6 +299,9 @@ export function MobileSessionTabBar({
         <View style={styles.countBox}>
           <Text style={styles.countText}>{rows.length}</Text>
         </View>
+        {rows.some((row) => row.unread) ? (
+          <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} />
+        ) : null}
         {othersNeedYou ? <View style={styles.alert} /> : null}
       </Pressable>
       {/* A collapsed bar's + lives in the header's ⋯ menu. */}

@@ -24,6 +24,7 @@ export type MobileSessionTabSummary = {
   agentId: string | null
   dotState: AgentDotState | undefined
   group: MobileSessionTabGroup
+  unread?: boolean
 }
 
 /** A row of the all-tabs sheet: the summary plus what only the open sheet shows. */

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { colors, radii, spacing } from '../../../theme/mobile-theme'
@@ -7,6 +7,9 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { agentDotState } from '../agent-row-display'
 import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
+
+import { listedAgentVerdict } from '../../../agents/agent-list-rows'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
 const MAX_VISIBLE_AGENTS = 3
 
@@ -19,6 +22,7 @@ type Props = {
 
 export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const visibleAgents = agents.slice(0, MAX_VISIBLE_AGENTS)
   const hiddenCount = agents.length - visibleAgents.length
   const subject = `${agents.length} agents`
@@ -51,6 +55,14 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
           {hiddenCount > 0 ? <Text style={styles.hiddenCount}>+{hiddenCount}</Text> : null}
         </View>
       )}
+      {agents.some((agent) => listedAgentVerdict(agent)?.unread) ? (
+        <Bell
+          size={12}
+          color={colors.statusAmber}
+          fill={colors.statusAmber}
+          accessibilityLabel={t('agents.list.unread', 'Unread')}
+        />
+      ) : null}
       {expanded ? (
         <ChevronDown size={12} color={colors.textMuted} />
       ) : (
