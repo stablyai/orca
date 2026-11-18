@@ -34,3 +34,34 @@ it('launches with no effort once the Default level replaces a picked one', () =>
     sessionOptions: { model: 'opus' }
   })
 })
+
+it('publishes one effort-free Arguments value for a combined permission and Default edit', () => {
+  const changed = applyAgentPickerEdit(
+    entry,
+    { ...agentPickerDraft(entry), arguments: '--effort high --add-dir docs' },
+    {
+      kind: 'choice',
+      patch: { permissionMode: 'full-access', options: { effort: TEXT_ACTION_DEFAULT_MODEL } }
+    }
+  )
+  expect(agentPickerLaunchInputs(changed, entry)).toEqual({
+    omitEffort: true,
+    agentArgs: '--dangerously-skip-permissions --add-dir docs',
+    sessionOptions: { permissionMode: 'full-access' }
+  })
+})
+
+it.each(['--effort high', '--effort high --effort low'])(
+  'newly authored effort replaces Default: %s',
+  (text) => {
+    const cleared = applyAgentPickerEdit(entry, agentPickerDraft(entry), {
+      kind: 'choice',
+      patch: { options: { effort: TEXT_ACTION_DEFAULT_MODEL } }
+    })
+    const typing = applyAgentPickerEdit(entry, cleared, { kind: 'arguments', text })
+    const accepted = applyAgentPickerEdit(entry, typing, { kind: 'accept-arguments' })
+    expect(agentPickerLaunchInputs(accepted, entry).omitEffort).toBeUndefined()
+    expect(accepted.acceptedEdits?.arguments).toBe(text)
+    expect(accepted.acceptedEdits?.choices.options?.effort).toBeUndefined()
+  }
+)

@@ -117,10 +117,10 @@ export async function buildWorktreeStartupForDraft(
     platform,
     shell,
     isRemote: repoIsRemote(repo),
+    omitEffort: environment.omitEffort,
     ...(agent === (environment.originalAgent ?? environment.requestedAgent)
       ? {
           ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
-          omitEffort: environment.omitEffort,
           sessionOptions: environment.sessionOptions
         }
       : {})

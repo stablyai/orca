@@ -7,6 +7,7 @@ import {
   type ResolvedSessionOptionLaunch
 } from '../../agent-session/options/launch/agent-session-option-launch'
 import type { AgentPermissionChoice } from '../permissions/tui-agent-permission-choice'
+import { agentChoiceSettingsOccurrences, readAgentChoiceSettings } from './agent-choice-settings'
 
 export type AgentChoicePublicationContext = {
   shell: AgentStartupShell
@@ -87,6 +88,23 @@ export function withoutAgentEffortArgs(
   }))
   if (parsed.some((entry) => !entry.parsed.ok)) {
     return null
+  }
+  if (agent === 'claude') {
+    for (const entry of parsed) {
+      if (!entry.parsed.ok) {
+        return null
+      }
+      for (const occurrence of agentChoiceSettingsOccurrences(
+        agent,
+        ['--settings'],
+        entry.parsed.tokens
+      )) {
+        const settings = readAgentChoiceSettings(occurrence.value)
+        if (!settings || Object.hasOwn(settings, 'effortLevel')) {
+          return null
+        }
+      }
+    }
   }
   const analysis = analyzeChoiceArgs(agent, text, grammars)
   const effort = analysis.occurrences.filter((entry) => entry.key === 'effort')

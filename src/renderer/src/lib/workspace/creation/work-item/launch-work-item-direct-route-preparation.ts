@@ -172,7 +172,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         : args.sessionOptions
       : undefined
   const chatSessionOptions = inputs ? inputs.chatSessionOptions : args.chatSessionOptions
-  const omitEffort = inputs ? inputs.omitEffort : args.omitEffort
+  const omitEffort = inputs?.omitEffort ?? args.omitEffort
   const plan =
     effectiveAgent === null
       ? null

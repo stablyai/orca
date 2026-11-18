@@ -189,3 +189,30 @@ it.each([false, true])(
     )
   }
 )
+
+it.each([
+  `--settings '{"effortLevel":"high","fastMode":true}'`,
+  `--settings '{"effortLevel":{"opus":"high"},"fastMode":true}'`,
+  '--settings /tmp/claude-settings.json'
+])('refuses Default when Claude settings can carry effort: %s', (raw) => {
+  expect(() =>
+    terminalSessionOptionInputs({
+      agent: 'claude',
+      shell: 'posix',
+      agentArgs: raw,
+      sessionOptions: undefined,
+      omitEffort: true
+    })
+  ).toThrow()
+})
+
+it('preserves fast-mode-only Claude settings with Default effort', () => {
+  const result = terminalSessionOptionInputs({
+    agent: 'claude',
+    shell: 'posix',
+    agentArgs: `--settings '{"fastMode":true}'`,
+    sessionOptions: undefined,
+    omitEffort: true
+  })
+  expect(result.agentArgs).toBe(`--settings '{"fastMode":true}'`)
+})

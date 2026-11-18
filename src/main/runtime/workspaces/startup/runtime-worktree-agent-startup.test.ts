@@ -111,6 +111,23 @@ describe('workspace create with Default effort', () => {
   })
 })
 
+it('keeps Default effort when a draft delegates agent selection to Settings', async () => {
+  const result = await buildWorktreeStartupForDraft({
+    repo: makeRepo({}),
+    settings: {
+      ...settings,
+      defaultTuiAgent: 'claude',
+      agentDefaultArgs: { claude: '--effort high --add-dir docs' }
+    },
+    draft: 'ship it',
+    omitEffort: true,
+    getLaunchRuntime: () => LINUX
+  })
+  expect(result?.startup.command).toBe(
+    "claude '--dangerously-skip-permissions' '--add-dir' 'docs' --prefill 'ship it'"
+  )
+})
+
 describe('buildWorktreeStartupForDraft agent detection', () => {
   it('never probes this client for an SSH host named only by executionHostId', async () => {
     mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['claude'])

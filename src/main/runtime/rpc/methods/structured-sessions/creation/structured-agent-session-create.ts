@@ -131,104 +131,109 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
     ...(args.forkFrom ? { forkFrom: args.forkFrom } : {})
   })
-  const omitEffort =
-    (args.omitEffort ?? resolved.omitEffort) && args.options?.effort === undefined
-      ? true
-      : undefined
-  const attachFingerprint = computeAgentSessionPayloadFingerprint({
-    method: 'agentSession.attach',
-    sessionId: args.envelope.sessionId,
-    fields: attachFingerprintFields({
-      ...resolved,
-      ...(omitEffort ? { omitEffort } : {}),
-      envelope: args.envelope
+  try {
+    const omitEffort =
+      (args.omitEffort ?? resolved.omitEffort) && args.options?.effort === undefined
+        ? true
+        : undefined
+    const attachFingerprint = computeAgentSessionPayloadFingerprint({
+      method: 'agentSession.attach',
+      sessionId: args.envelope.sessionId,
+      fields: attachFingerprintFields({
+        ...resolved,
+        ...(omitEffort ? { omitEffort } : {}),
+        envelope: args.envelope
+      })
     })
-  })
-  host ??= await args.ensureHost()
-  const priorOperation =
-    args.atRest === undefined
-      ? null
-      : host.deps.store.getOperationRow(args.caller.callerKey, args.envelope.clientOperationId)
-  if (omitEffort && priorOperation?.outcome.status !== 'succeeded') {
-    const settings = args.runtime.requireStore().getSettings()
-    assertStructuredAgentEffortCommand(args.agent, settings)
-    if (args.agent === 'claude' || args.agent === 'codex') {
-      structuredAgentConfiguredArgs(args.agent, settings, process.platform, true)
+    host ??= await args.ensureHost()
+    const priorOperation =
+      args.atRest === undefined
+        ? null
+        : host.deps.store.getOperationRow(args.caller.callerKey, args.envelope.clientOperationId)
+    if (omitEffort && priorOperation?.outcome.status !== 'succeeded') {
+      const settings = args.runtime.requireStore().getSettings()
+      assertStructuredAgentEffortCommand(args.agent, settings)
+      if (args.agent === 'claude' || args.agent === 'codex') {
+        structuredAgentConfiguredArgs(args.agent, settings, process.platform, true)
+      }
     }
-  }
-  // A capability update cannot change the contract of an already-recorded create.
-  const legacyReplay =
-    args.firstMessage === undefined &&
-    args.options === undefined &&
-    priorOperation?.fingerprint === attachFingerprint
-  const atRest =
-    args.atRest !== undefined &&
-    (priorOperation?.fingerprint === args.envelope.payloadFingerprint ||
-      (args.atRest === true && !legacyReplay))
-  const hostFingerprint = atRest ? args.envelope.payloadFingerprint : attachFingerprint
-  if (atRest && args.options) {
-    const refusal = structuredAgentSessionOptionOverridesRefusal(
-      host.deps.agents,
-      args.agent,
-      args.options
-    )
-    if (refusal) {
-      throw new AgentSessionRefusalError(refusal)
+    // A capability update cannot change the contract of an already-recorded create.
+    const legacyReplay =
+      args.firstMessage === undefined &&
+      args.options === undefined &&
+      priorOperation?.fingerprint === attachFingerprint
+    const atRest =
+      args.atRest !== undefined &&
+      (priorOperation?.fingerprint === args.envelope.payloadFingerprint ||
+        (args.atRest === true && !legacyReplay))
+    const hostFingerprint = atRest ? args.envelope.payloadFingerprint : attachFingerprint
+    if (atRest && args.options) {
+      const refusal = structuredAgentSessionOptionOverridesRefusal(
+        host.deps.agents,
+        args.agent,
+        args.options
+      )
+      if (refusal) {
+        throw new AgentSessionRefusalError(refusal)
+      }
     }
-  }
-  const {
-    agent: _agent,
-    provider: _provider,
-    omitEffort: _resolvedOmitEffort,
-    hostLaunchDirectory,
-    ...resolvedAttach
-  } = resolved
-  // Fingerprint explicit picks, never replay-varying defaults; explicit options replace saved seeds, while permission default stays chat-owned.
-  const overlays = atRest
-    ? args.optionsMode !== 'replace-model-selection'
-    : Object.keys(args.options ?? {}).every((id) => id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
-  const picked = args.options
-    ? overlays
-      ? { ...resolved.options, ...args.options }
-      : { ...seededPermissionMode(resolved.options), ...args.options }
-    : resolved.options
-  const options = { ...picked }
-  if (omitEffort) {
-    delete options.effort
-  }
-  return {
-    host,
-    ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
-    attachParams: {
-      ...resolvedAttach,
-      ...(picked ? { options } : {}),
-      ...(omitEffort ? { omitEffort } : {}),
-      ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
-      provider: resolved.provider,
-      agent: resolved.agent,
-      envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
-    },
-    ...(atRest
-      ? {
-          atRest: args.firstMessage
-            ? {
-                firstMessage: {
-                  ...args.firstMessage,
-                  ...(omitEffort && args.firstMessage.selection
-                    ? {
-                        selection: Object.fromEntries(
-                          Object.entries(args.firstMessage.selection).filter(
-                            ([key]) => key !== 'effort'
+    const {
+      agent: _agent,
+      provider: _provider,
+      omitEffort: _resolvedOmitEffort,
+      hostLaunchDirectory,
+      ...resolvedAttach
+    } = resolved
+    // Fingerprint explicit picks, never replay-varying defaults; explicit options replace saved seeds, while permission default stays chat-owned.
+    const overlays = atRest
+      ? args.optionsMode !== 'replace-model-selection'
+      : Object.keys(args.options ?? {}).every((id) => id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
+    const picked = args.options
+      ? overlays
+        ? { ...resolved.options, ...args.options }
+        : { ...seededPermissionMode(resolved.options), ...args.options }
+      : resolved.options
+    const options = { ...picked }
+    if (omitEffort) {
+      delete options.effort
+    }
+    return {
+      host,
+      ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
+      attachParams: {
+        ...resolvedAttach,
+        ...(picked ? { options } : {}),
+        ...(omitEffort ? { omitEffort } : {}),
+        ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
+        provider: resolved.provider,
+        agent: resolved.agent,
+        envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
+      },
+      ...(atRest
+        ? {
+            atRest: args.firstMessage
+              ? {
+                  firstMessage: {
+                    ...args.firstMessage,
+                    ...(omitEffort && args.firstMessage.selection
+                      ? {
+                          selection: Object.fromEntries(
+                            Object.entries(args.firstMessage.selection).filter(
+                              ([key]) => key !== 'effort'
+                            )
                           )
-                        )
-                      }
-                    : {})
+                        }
+                      : {})
+                  }
                 }
-              }
-            : {}
-        }
-      : {}),
-    tab: { workspaceId: resolved.location.workspaceId, agent: resolved.agent }
+              : {}
+          }
+        : {}),
+      tab: { workspaceId: resolved.location.workspaceId, agent: resolved.agent }
+    }
+  } catch (error) {
+    await resolved.fork?.prepared.close()
+    throw error
   }
 }
 

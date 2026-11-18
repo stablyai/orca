@@ -2,7 +2,10 @@ import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-p
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { ClientWorktreeCreateSettings } from './client-worktree-create-settings'
@@ -37,13 +40,23 @@ export async function createWorktreeOnRuntimeHost(
     )
   const creationLaunch = request.options?.creationAgentLaunch
   if (
+    creationLaunch?.inputs?.omitEffort &&
+    (!(await hostSupportsCapability(environmentId, AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY)) ||
+      !(await hostSupportsCapability(
+        environmentId,
+        WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY
+      )))
+  ) {
+    throw new Error('This host cannot launch with Default effort. Update the host, then try again.')
+  }
+  if (
     creationLaunch &&
     (await hostSupportsCapability(environmentId, WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY))
   ) {
     try {
       return await call(undefined, creationLaunch)
     } catch (error) {
-      if (!isUnknownAgentRefusal(error)) {
+      if (creationLaunch.inputs?.omitEffort || !isUnknownAgentRefusal(error)) {
         throw error
       }
     }

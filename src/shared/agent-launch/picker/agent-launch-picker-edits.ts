@@ -116,7 +116,7 @@ export function acceptAgentPickerArguments(
     keys,
     retainedKeys
   })
-  return publishAccepted(
+  const accepted = publishAccepted(
     entry,
     draft,
     result,
@@ -125,6 +125,14 @@ export function acceptAgentPickerArguments(
     result.userArgs || null,
     original
   )
+  if (
+    pending.opaqueKeys.has('effort') ||
+    pending.occurrences.some((item) => item.key === 'effort')
+  ) {
+    accepted.delegated = accepted.delegated?.filter((key) => key !== 'effort')
+    delete accepted.acceptedEdits?.choices.options?.effort
+  }
+  return accepted
 }
 
 /** One accepted breakdown feeds the full launch draft and the captured own-source writer. */
@@ -232,7 +240,11 @@ export function applyAgentPickerEdit(
   }
   const domain =
     patch.permissionMode && patch.permissionMode !== 'default'
-      ? editAgentPickerPermission(entry, draft, patch.permissionMode)
+      ? editAgentPickerPermission(
+          entry,
+          clearedEffort === null ? draft : { ...draft, arguments: clearedEffort },
+          patch.permissionMode
+        )
       : edit.kind === 'speed' ||
           (edit.kind === 'remove-chip' && (edit.key === 'fastMode' || edit.key === 'serviceTier'))
         ? (edit.kind === 'remove-chip' ? removeAgentPickerSpeed : editAgentPickerSpeed)(
