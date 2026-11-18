@@ -53,6 +53,9 @@ import { macosTccPromptsApi } from './api/desktop-permissions/macos-tcc-prompts-
 import { developerPermissionsApi } from './api/desktop-permissions/developer-permissions-bridge'
 import { computerUsePermissionsApi } from './api/desktop-permissions/computer-use-permissions-bridge'
 import { shellApi } from './api/terminal/shell-bridge'
+import { botChangesApi } from './api/bot-changes-bridge'
+import { googleSetupApi } from './api/google-setup-bridge'
+import { slackHandOffApi } from './api/slack-hand-off-bridge'
 import { skillsApi } from './api/skills/skills-bridge'
 import { petApi } from './api/pets/pet-bridge'
 import { appIconApi } from './api/window-ui/app-icon-bridge'
@@ -163,6 +166,9 @@ const api = {
   developerPermissions: developerPermissionsApi,
   computerUsePermissions: computerUsePermissionsApi,
   shell: shellApi,
+  botChanges: botChangesApi,
+  googleSetup: googleSetupApi,
+  slackHandOff: slackHandOffApi,
   skills: skillsApi,
   pet: petApi,
   appIcon: appIconApi,

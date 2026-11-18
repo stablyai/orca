@@ -19,7 +19,8 @@ export function listProcessTree(
   for (let i = 0; i < pids.length; i++) {
     let tids: string[]
     try {
-      tids = readdirSync(`${procRoot}/${pids[i]}/task`)
+      // readdir order is unspecified on Linux; thread-id order keeps the walk deterministic.
+      tids = readdirSync(`${procRoot}/${pids[i]}/task`).sort((a, b) => Number(a) - Number(b))
     } catch {
       // The process exited, so it has nothing left to lower.
       continue
