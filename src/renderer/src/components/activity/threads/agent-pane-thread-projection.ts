@@ -55,6 +55,7 @@ function samePaneInputs(previous: Inputs, next: Inputs): boolean {
     a.folderWorkspaces === b.folderWorkspaces &&
     a.floatingWorkspacePath === b.floatingWorkspacePath &&
     a.detectedWorktreesByRepo === b.detectedWorktreesByRepo &&
+    a.projectGroups === b.projectGroups &&
     a.repoMap === b.repoMap &&
     a.repos === b.repos &&
     a.getKnownWorktreeById === b.getKnownWorktreeById &&

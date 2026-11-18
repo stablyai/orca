@@ -26,6 +26,7 @@ export type AllAgentPaneThreadsStoreData = Pick<
   | 'folderWorkspaces'
   | 'floatingWorkspacePath'
   | 'detectedWorktreesByRepo'
+  | 'projectGroups'
   | 'getKnownWorktreeById'
   | 'acknowledgedAgentsByPaneKey'
   | 'activityClearedAtByPaneKey'
@@ -76,6 +77,7 @@ export function selectAllAgentPaneThreadStoreData(
     folderWorkspaces: selectFolderWorkspaces(s),
     floatingWorkspacePath: s.floatingWorkspacePath,
     detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
+    projectGroups: s.projectGroups,
     getKnownWorktreeById: s.getKnownWorktreeById,
     worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(s)),
     repoMap: getIndexedRepoMap(s.repos),
