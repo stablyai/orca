@@ -36,6 +36,16 @@ import {
   type SavedProviderTurnReads
 } from '../../native-chat/agent-session-journal/journal-provider-turn-saved'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
+import { withoutCallerIdentity } from '../../runtime/agent-session/environment/structured-session-child-env'
+
+/** The environment a launch's process gets; see `AcpLaunchSpec.sharedToolProcess`. */
+export function acpProcessEnvironment(
+  launch: Pick<AcpStructuredLaunch, 'spec' | 'env' | 'envToDelete'>
+): { env: Record<string, string>; envToDelete: string[] } {
+  return launch.spec.sharedToolProcess
+    ? withoutCallerIdentity(launch.env, launch.envToDelete)
+    : { env: launch.env, envToDelete: launch.envToDelete }
+}
 
 export type AcpStructuredLaunch = StructuredAgentCommand & {
   spec: AcpLaunchSpec

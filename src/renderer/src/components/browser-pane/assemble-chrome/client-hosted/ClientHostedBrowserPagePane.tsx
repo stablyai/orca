@@ -7,7 +7,6 @@ import { BrowserLinkStatusBubble } from '../feedback/browser-link-status-bubble'
 import { useAppStore } from '@/store/index'
 import { createBrowserClientPageLoadFailureHandler } from '../../navigate/browser-client-page-guest-metadata'
 import {
-  issueBrowserGuestNavigation,
   browserGuestPreservesRequestedDocument,
   subscribeBrowserGuestMetadata
 } from '../../host-guest/metadata/browser-guest-metadata-cache'
@@ -24,20 +23,22 @@ import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-un
 import { watchBrowserClientPageGuestLoss } from '../../host-guest/recovery/browser-client-page-guest-loss'
 import { useClientHostedBrowserMarkup } from '../../annotate/capture/use-client-hosted-browser-markup'
 import BrowserFind from '../find/BrowserFind'
-import { BrowserNavigationControlRow } from '../toolbar/browser-navigation-control-row'
-import BrowserAddressBar from '../address-bar/BrowserAddressBar'
+import { ClientHostedBrowserPageToolbar } from './client-hosted-browser-page-toolbar'
+import { bindBrowserClientPageChromeListeners } from './browser-client-page-chrome-listeners'
+import {
+  ClientHostedBrowserPageBox,
+  useClientHostedBrowserPageViewport
+} from './client-hosted-browser-page-box'
 import { BrowserPageContextMenu } from '../context-menu/browser-page-context-menu'
 import { useBrowserPageChromeFocus } from '../focus/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from '../address-bar/use-browser-address-bar-edit-session'
 import { useBrowserPageFindShortcuts } from '../find/use-browser-page-find-shortcuts'
 import { useWebviewGuestFocus } from '../focus/browser-page-guest-focus'
-import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicator'
 import { useBrowserPageWebviewShortcuts } from '../../host-guest/input/use-browser-page-webview-shortcuts'
 import { useBrowserPageZoomFeedback } from '../../host-guest/viewport/use-browser-page-zoom-feedback'
 import { ClientHostedBrowserLoadFailure } from '../../navigate/client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from '../../navigate/use-client-hosted-page-url-submission'
-import '@/lib/browser/documents/file-preview'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import { useClientPageWorkspaceFileDrop } from '../../navigate/browser-page-workspace-file-drop'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { BrowserNewTabPage } from '../../new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
@@ -61,16 +62,19 @@ export function ClientHostedBrowserPagePane(props: Props) {
     onUpdatePageState,
     onSetUrl
   } = props
-  const viewportRef = useRef<HTMLDivElement | null>(null)
+  const viewportPresetId = browserTab.viewportPresetId ?? null
+  const pageBox = useClientHostedBrowserPageViewport(browserTab.id, viewportPresetId)
   const devToolsPageFlex = useBrowserDevToolsDockPageFlex(browserTab.id)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+  const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
   // Seed retained failures from the page: a fresh null on remount would clear both the error and its certificate record.
   const loadFailureRef = useRef<BrowserGuestMetadata['loadError']>(browserTab.loadError ?? null)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const isActiveRef = useRef(isActive)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [findOpen, setFindOpen] = useState(false)
+  const [paneRoot, setPaneRoot] = useState<HTMLDivElement | null>(null)
   const updatePageStateFromGuest = useEffectEvent(onUpdatePageState)
   const setUrlFromGuest = useEffectEvent(onSetUrl)
   const recordHistoryFromGuest = useEffectEvent(useAppStore((s) => s.addBrowserHistoryEntry))
@@ -140,14 +144,12 @@ export function ClientHostedBrowserPagePane(props: Props) {
       .getState()
       .browserPagesByWorkspace[workspaceId]?.find((page) => page.id === browserTab.id)
   )
-  const getAgentCursorHost = useCallback(
-    () => webviewRef.current?.parentElement ?? null,
-    [webviewRef]
-  )
+  const getAgentCursorHost = useCallback(() => webviewRef.current?.parentElement ?? null, [])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
+  const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
 
   useLayoutEffect(() => {
-    const viewport = viewportRef.current
+    const viewport = pageBox.contentRef.current
     if (initialization.suppressAttachment) {
       setAttachmentError(null)
       return
@@ -269,6 +271,12 @@ export function ClientHostedBrowserPagePane(props: Props) {
     }
     const onNavigate = (): void => setFindOpen(false)
     webview.addEventListener('did-navigate', onNavigate)
+    const unbindChrome = bindBrowserClientPageChromeListeners(webview, {
+      browserPageId: browserTab.id,
+      updatePageState: (pageId, updates) => updatePageStateFromGuest(pageId, updates),
+      dismissAddressBarSuggestions: () => dismissAddressBarSuggestionsRef.current?.(),
+      applyViewportPreset: pageBox.applyOverride
+    })
     const onFailLoad = createBrowserClientPageLoadFailureHandler(webview, (loadError) => {
       loadFailureRef.current = loadError
       updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
@@ -279,6 +287,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       unsubscribeMetadata()
       webview.removeEventListener('did-fail-load', onFailLoad)
       webview.removeEventListener('did-navigate', onNavigate)
+      unbindChrome()
       guestLoss.dispose()
       publisher.dispose()
       forgetBrowserClientPageMetadataReports(browserTab.id)
@@ -297,6 +306,8 @@ export function ClientHostedBrowserPagePane(props: Props) {
     return cleanupGuest
   }, [
     browserTab.id,
+    pageBox.contentRef,
+    pageBox.applyOverride,
     initialization.suppressAttachment,
     browserHostClientId,
     browserHostGeneration,
@@ -312,11 +323,13 @@ export function ClientHostedBrowserPagePane(props: Props) {
     placement,
     isActive,
     unavailable: initialization.unavailable,
-    showFailureOverlay: initialization.showFailureOverlay
+    showFailureOverlay: initialization.showFailureOverlay,
+    controlsContainer: viewportPresetId ? paneRoot : null
   })
 
   return (
     <div
+      ref={setPaneRoot}
       className="relative flex h-full min-h-0 flex-1 flex-col bg-background"
       data-browser-page-pane-id={browserTab.id}
     >
@@ -329,52 +342,37 @@ export function ClientHostedBrowserPagePane(props: Props) {
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
       />
       <div data-contextual-tour-target="client-hosted-browser-controls">
-        <BrowserNavigationControlRow
-          controls={{
-            canGoBack: browserTab.canGoBack,
-            canGoForward: browserTab.canGoForward,
-            goBack: () =>
-              issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack()),
-            goForward: () =>
-              issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward()),
-            reload: () => reload.runReloadTrigger('button'),
-            navigate: navigateToUrl
-          }}
-          addressSlot={
-            <BrowserAddressBar
-              pageId={browserTab.id}
-              value={addressBarValue}
-              onChange={setAddressBarValue}
-              onSubmit={() => navigateToUrl(addressBarValue)}
-              onNavigate={navigateToUrl}
-              onOpenWorkspaceDoc={(docLocation) =>
-                convertBrowserPageToWorkspaceDoc(browserTab.id, docLocation)
-              }
-              inputRef={addressBarInputRef}
-              editSession={addressBarEditSession}
-              leadingIcon={
-                <RemoteRuntimeEgressIndicator
-                  runtimeEnvironmentId={runtimeEnvironmentId}
-                  presentation="client-hosted"
-                />
-              }
-              loading={initialization.loading}
-              loadFailed={browserTab.loadError !== null}
-            />
-          }
-          reloadLabel={reload.reloadButtonLabel}
-          reloadShowsStop={reload.reloadButtonLabelKind === 'stop'}
-        >
-          {markup.drawButton}
-        </BrowserNavigationControlRow>
+        <ClientHostedBrowserPageToolbar
+          browserTab={browserTab}
+          workspaceId={workspaceId}
+          worktreeId={worktreeId}
+          runtimeEnvironmentId={runtimeEnvironmentId}
+          isActive={isActive}
+          loading={initialization.loading}
+          webviewRef={webviewRef}
+          reload={reload}
+          addressBarValue={addressBarValue}
+          setAddressBarValue={setAddressBarValue}
+          addressBarEditSession={addressBarEditSession}
+          addressBarInputRef={addressBarInputRef}
+          dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
+          navigateToUrl={navigateToUrl}
+          markup={markup.tool}
+          onOpenFind={() => setFindOpen(true)}
+        />
       </div>
       <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
         <div
-          ref={viewportRef}
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
+          {...fileDrop}
         >
-          {markup.overlay}
+          <ClientHostedBrowserPageBox
+            scrollerRef={pageBox.scrollerRef}
+            contentRef={pageBox.contentRef}
+          >
+            {markup.overlay}
+          </ClientHostedBrowserPageBox>
           <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
           <BrowserFind
             browserPageId={browserTab.id}

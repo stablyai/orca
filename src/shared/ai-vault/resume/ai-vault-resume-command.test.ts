@@ -93,3 +93,23 @@ describe('OMP profile session resume', () => {
     ])
   })
 })
+
+describe('Hermes profile session resume', () => {
+  it.each([
+    ['/home/u/.hermes/state.db#local-1', 'default'],
+    ['/home/u/.hermes/profiles/work/state.db#local-1', 'work'],
+    ['\\\\wsl.localhost\\Ubuntu\\home\\u\\.hermes\\profiles\\ops\\state.db#local-1', 'ops']
+  ])('resumes %s under profile %s, from the row and from a restored pane', (row, profile) => {
+    const command = buildAiVaultResumeCommand({
+      agent: 'hermes',
+      sessionId: 'local-1',
+      resumeFilePath: row,
+      cwd: null,
+      platform: 'linux'
+    })
+    expect(command).toBe(`hermes -p ${profile} --resume 'local-1'`)
+    expect(
+      getAgentResumeArgv('hermes', { key: 'session_id', id: 'local-1', transcriptPath: row })
+    ).toEqual(['hermes', '-p', profile, '--resume', 'local-1'])
+  })
+})

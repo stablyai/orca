@@ -4,6 +4,8 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 const NODE_RUNTIME_INCLUDE = [
   // Exercises a real peer reset through Node's native Socket.setTypeOfService.
   'src/main/network/best-effort-socket-type-of-service.test.ts',
+  // Relays nested worker_threads through Node's serializer, as Electron's utility process does.
+  'src/main/utility-worker-host/utility-worker-host.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
   'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',

@@ -114,12 +114,20 @@ const annotatedBlockComponents = {
       return <li {...props}>{children}</li>
     }
     const blockKey = `li:${range.startLine}-${range.endLine}`
-    const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
     const controls = renderAnnotationControls(
       range,
       blockKey,
       getMarkdownPreviewAnnotationQuote(children)
     )
+    if (!controls) {
+      // Why: the list wrapper reserves the review-note grid column, so skip it like wrapAnnotatedBlock.
+      return (
+        <li {...props} data-source-line={range.startLine} data-source-end-line={range.endLine}>
+          {children}
+        </li>
+      )
+    }
+    const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
     return (
       <li {...props}>
         <div
@@ -128,7 +136,7 @@ const annotatedBlockComponents = {
           }`.trim()}
           data-source-line={range.startLine}
           data-source-end-line={range.endLine}
-          data-annotation-block-key={controls ? blockKey : undefined}
+          data-annotation-block-key={blockKey}
           onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
         >
           <span className="markdown-annotation-list-content">{children}</span>

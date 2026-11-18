@@ -1496,6 +1496,10 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Issue vinculado",
         "listeningPort": "Puerto en escucha"
+      },
+      "projectHostSetupOptions": {
+        "hostLocalGitProject": "Este proyecto no tiene remoto de Git coincidente",
+        "hostLocalFolderProject": "Los proyectos de carpeta no pueden vincularse a otros hosts"
       }
     },
     "hooks": {
@@ -5201,8 +5205,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Cerrar",
           "64c71cf7b9": "Orca aún no ha instalado ninguna habilidad en esta máquina.",
-          "0900db719a": "— desconectado",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "esta computadora",
           "3677ae58e7": "Habilidades que Orca instaló desde un enlace. Reinstálelas, vuelva a una versión anterior o elimínelas.",
           "44d118a8f7": "Instaladas por Orca",
@@ -5237,8 +5239,6 @@
           "a4dfd33095": "Un espacio de trabajo",
           "c779621aa0": "Habilidades globales",
           "63cc9e31fe": "Destino",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— desconectado",
           "0785d0a503": "— actualización requerida",
           "8562dd1e6e": "esta computadora",
           "b8a0b706ad": "Máquina"
@@ -5783,6 +5783,9 @@
           "removeDescriptionSsh": "Esto solo elimina {{name}} de Orca. Sus archivos permanecen en {{host}}; vuelve a añadir ese host SSH para recuperarlo.",
           "removeDescriptionLocal": "Esto solo elimina {{name}} de Orca. Sigue estando en tu disco.",
           "removeDescriptionVmRecipe": "Esto elimina {{name}} de Orca. Su receta de VM determina si el entorno y sus archivos se eliminan permanentemente.",
+          "linkedWorkspaceWarning_one": "También se eliminará de Orca {{count}} espacio de trabajo de este proyecto.",
+          "linkedWorkspaceWarning_other": "También se eliminarán de Orca {{count}} espacios de trabajo de este proyecto.",
+          "linkedWorkspaceWarning_many": "También se eliminarán de Orca {{count}} espacios de trabajo de este proyecto.",
           "openTerminalWarning_one": "Se cerrará {{count}} terminal abierto en este proyecto.",
           "openTerminalWarning_other": "Se cerrarán {{count}} terminales abiertos en este proyecto.",
           "openTerminalWarning_many": "Se cerrarán {{count}} terminales abiertos en este proyecto."
@@ -19158,6 +19161,7 @@
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
         "optionUpdateFailed": "No se pudo actualizar la opción",
         "optionValue": {
+          "none": "Ninguno",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Bajo",

@@ -128,7 +128,7 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
     return {
       kind: 'error',
       itemKey,
-      message: t('session.useDiffReviewDiffLoading.waitingForDesktop', 'Waiting for desktop...')
+      message: t('common.waitingForHost', 'Waiting for host…')
     }
   }
   if (diff.error && !diff.isFetching) {
