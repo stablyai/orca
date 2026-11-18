@@ -599,5 +599,17 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     await flush()
     expect(rowNames()).toEqual(['alpha', 'beta'])
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
+
+    await act(async () => {
+      ;[...(container?.querySelectorAll('button') ?? [])]
+        .find((button) => button.textContent?.includes('Delete selected'))
+        ?.click()
+    })
+    await flush()
+    // Confirmation's header Back is the first button in the view.
+    await act(async () => container?.querySelector('button')?.click())
+    await flush()
+    expect(rowNames()).toEqual(['alpha', 'beta'])
+    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
   })
 })
