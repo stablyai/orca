@@ -166,6 +166,31 @@ async function setup(viewedSurface: 'editor' | 'terminal'): Promise<{
   }
 }
 
+function screenState(store: TestStore): unknown {
+  const s = store.getState()
+  return {
+    activeWorktreeId: s.activeWorktreeId,
+    activeView: s.activeView,
+    activeTabType: s.activeTabType,
+    activeFileId: s.activeFileId,
+    activeTabId: s.activeTabId,
+    viewedActiveFile: s.activeFileIdByWorktree[VIEWED],
+    viewedActiveTabType: s.activeTabTypeByWorktree[VIEWED],
+    viewedActiveGroup: s.activeGroupIdByWorktree[VIEWED],
+    viewedGroups: s.groupsByWorktree[VIEWED]?.map((group) => ({
+      id: group.id,
+      activeTabId: group.activeTabId
+    })),
+    pendingEditorFocusRequest: s.pendingEditorFocusRequest,
+    pendingRevealWorktree: s.pendingRevealWorktree,
+    backgroundVisitedAt: s.lastVisitedAtByWorktreeId[BACKGROUND]
+  }
+}
+
+function tabEntityIds(store: TestStore, worktreeId: string): string[] {
+  return (store.getState().unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.entityId)
+}
+
 function activeEditorEntityId(store: TestStore, worktreeId: string): string | undefined {
   const state = store.getState()
   const group = state.groupsByWorktree[worktreeId]?.find(

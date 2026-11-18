@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { ProjectConversationList } from './ProjectConversationList'
@@ -60,7 +61,9 @@ afterEach(cleanup)
 function mount(props = conversationListProps()) {
   return render(
     <TooltipProvider>
-      <ProjectConversationList {...props} />
+      <ConfirmationDialogProvider>
+        <ProjectConversationList {...props} />
+      </ConfirmationDialogProvider>
     </TooltipProvider>
   )
 }
@@ -79,7 +82,9 @@ describe('Projects containing conversations', () => {
     expect(screen.getByRole('status').textContent).toBe('Loading chats…')
     view.rerender(
       <TooltipProvider>
-        <ProjectConversationList {...props} loading={false} />
+        <ConfirmationDialogProvider>
+          <ProjectConversationList {...props} loading={false} />
+        </ConfirmationDialogProvider>
       </TooltipProvider>
     )
     expect(screen.queryByRole('status')).toBeNull()
@@ -220,7 +225,9 @@ it('hides a history-only group and restores it through management without requir
   const redraw = () =>
     view.rerender(
       <TooltipProvider>
-        <ProjectConversationList {...props} />
+        <ConfirmationDialogProvider>
+          <ProjectConversationList {...props} />
+        </ConfirmationDialogProvider>
       </TooltipProvider>
     )
   redraw()

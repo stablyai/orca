@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import SidebarHeader from './SidebarHeader'
+import SidebarHeader from './chrome/SidebarHeader'
 
 export const Projects = defineFixture({
   width: 280,

@@ -12,7 +12,7 @@ import type {
 import type { ExecutionHostScope } from '../../../../../../shared/execution-host/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import {
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh

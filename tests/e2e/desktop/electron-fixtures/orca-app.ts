@@ -11,7 +11,7 @@ import {
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { selectSidebarBody } from './store'
+import { selectSidebarBody } from '../renderer-probes/store'
 import { closeElectronAppForE2E } from './electron-process-shutdown'
 import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'

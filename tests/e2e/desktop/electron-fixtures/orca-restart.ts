@@ -25,7 +25,7 @@ import {
   type ElectronHomeIsolation
 } from './electron-home-isolation'
 import type { LaunchOptions } from './orca-restart-launch-options'
-import { selectSidebarBody } from './store'
+import { selectSidebarBody } from '../renderer-probes/store'
 
 type LaunchedOrca = {
   app: ElectronApplication

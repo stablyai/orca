@@ -22,7 +22,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
     await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/hooks/useAgentDetectionTarget', () => ({
+vi.mock('@/lib/agent-session/launch/inventory/useAgentDetectionTarget', () => ({
   useAgentDetectionTargetForWorktree: () => ({ kind: 'local' })
 }))
 vi.mock('@/components/agent/launch-menu/use-new-tab-agent-menu-rows', () => ({
