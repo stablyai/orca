@@ -23,7 +23,8 @@ describe('process sweep executable names', () => {
       [
         '"(PDH-CSV 4.0)","\\\\H\\Process(node#1)\\ID Process","\\\\H\\Process(node#1)\\Creating Process ID","\\\\H\\Process(node#1)\\Working Set","\\\\H\\Process(node#1)\\Private Bytes"',
         '"11/17/2026 10:00:00.000","42","7","1048576","2097152"'
-      ].join('\n')
+      ].join('\n'),
+      true
     )
     expect(typeperf).toEqual([
       { pid: 42, ppid: 7, cpu: 0, memory: 1048576, privateMemory: 2097152, name: 'node' }

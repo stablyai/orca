@@ -107,7 +107,10 @@ export function parseWindowsProcessOutput(stdout: string): WindowsProcessResourc
   return parseWindowsProcessSample(stdout).rows
 }
 
-export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResourceRow[] {
+export function parseTypeperfProcessOutput(
+  stdout: string,
+  withNames = false
+): WindowsProcessResourceRow[] {
   let headers: string[] | null = null
   let values: string[] | null = null
 
@@ -141,9 +144,9 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
       continue
     }
     // Instances are `<exe without .exe>#<n>` when names repeat.
-    const row = byInstance.get(path.instance) ?? {
-      name: executableBasename(path.instance.replace(/#\d+$/, ''))
-    }
+    const row =
+      byInstance.get(path.instance) ??
+      (withNames ? { name: executableBasename(path.instance.replace(/#\d+$/, '')) } : {})
     if (path.counter === 'ID Process') {
       row.pid = Math.trunc(value)
     } else if (path.counter === 'Creating Process ID') {

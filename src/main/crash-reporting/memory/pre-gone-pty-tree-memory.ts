@@ -130,6 +130,10 @@ function admitSweep(nowMs: number): boolean {
     admission.bucketMs = Math.min(FULL_BUCKET_MS, admission.bucketMs + elapsedMs)
   }
   admission.refilledAtMs = nowMs
+  // A wall clock set backwards must not lock sampling out until it catches up.
+  if (admission.lastAttemptAtMs !== null && admission.lastAttemptAtMs > nowMs) {
+    admission.lastAttemptAtMs = nowMs - FAILED_PROBE_INTERVAL_MS
+  }
   const sinceAttemptMs =
     admission.lastAttemptAtMs === null ? Infinity : nowMs - admission.lastAttemptAtMs
   const spacingMs =
@@ -230,27 +234,44 @@ function addMemoryDetails(
   }
 }
 
+/** One linear pass keeping the largest few; no sort of the whole tree. */
 function topByCommit(rows: readonly ProcRow[]): ProcRow[] {
   const rank = (row: ProcRow): number => row.privateMemory ?? row.memory
-  return [...rows].sort((a, b) => rank(b) - rank(a)).slice(0, TOP_PROCESS_COUNT)
+  const top: ProcRow[] = []
+  for (const row of rows) {
+    let at = top.length
+    while (at > 0 && rank(top[at - 1]) < rank(row)) {
+      at -= 1
+    }
+    if (at < TOP_PROCESS_COUNT) {
+      top.splice(at, 0, row)
+      top.length = Math.min(top.length, TOP_PROCESS_COUNT)
+    }
+  }
+  return top
 }
 
-/** The process most PTY roots hang from, other than Orca's main process: the terminal daemon. */
+/** The parent most PTY roots hang from: the terminal daemon. Reparented (orphaned) roots
+ * point at init or a subreaper, so require a majority and skip PID 1 and Orca's main. */
 function daemonPidFromPtyRoots(index: ProcIndex, ptys: readonly PtyRegistration[]): number | null {
   const parents = new Map<number, number>()
+  let roots = 0
   for (const pty of ptys) {
     const ppid = pty.pid == null ? undefined : index.byPid.get(pty.pid)?.ppid
-    if (ppid !== undefined && ppid !== process.pid && index.byPid.has(ppid)) {
+    if (ppid === undefined) {
+      continue
+    }
+    roots += 1
+    if (ppid > 1 && ppid !== process.pid && index.byPid.has(ppid)) {
       parents.set(ppid, (parents.get(ppid) ?? 0) + 1)
     }
   }
-  let best: number | null = null
   for (const [pid, count] of parents) {
-    if (best === null || count > (parents.get(best) ?? 0)) {
-      best = pid
+    if (count * 2 > roots) {
+      return pid
     }
   }
-  return best
+  return null
 }
 
 function summarizePtyTreeMemory(

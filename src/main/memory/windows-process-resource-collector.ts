@@ -34,7 +34,7 @@ export async function enumerateWindowsProcessResources({
   // Reuse one CIM sweep for resources and identity instead of spawning PowerShell twice per poll.
   if (processBackend === 'typeperf') {
     if (performance.now() < retryCimAtMs) {
-      return enumerateWindowsWithTypeperf()
+      return enumerateWindowsWithTypeperf(withNames)
     }
     processBackend = 'cim'
   }
@@ -49,7 +49,7 @@ export async function enumerateWindowsProcessResources({
   if (trackCpu) {
     previousCpuSample = null
   }
-  return enumerateWindowsWithTypeperf()
+  return enumerateWindowsWithTypeperf(withNames)
 }
 
 function applyWindowsCpuSample(sample: WindowsProcessSample): WindowsProcessResourceRow[] {
@@ -111,7 +111,9 @@ async function enumerateWindowsWithCim(withNames: boolean): Promise<WindowsProce
   }
 }
 
-async function enumerateWindowsWithTypeperf(): Promise<WindowsProcessResourceRow[]> {
+async function enumerateWindowsWithTypeperf(
+  withNames: boolean
+): Promise<WindowsProcessResourceRow[]> {
   try {
     // Immediate fallback fits the two-second poll budget without inventing CPU rates.
     const stdout = await execFileText('typeperf.exe', [
@@ -121,7 +123,7 @@ async function enumerateWindowsWithTypeperf(): Promise<WindowsProcessResourceRow
       '-si',
       '0'
     ])
-    return parseTypeperfProcessOutput(stdout)
+    return parseTypeperfProcessOutput(stdout, withNames)
   } catch (err) {
     console.warn('[memory] typeperf process enumeration failed', err)
     return []
