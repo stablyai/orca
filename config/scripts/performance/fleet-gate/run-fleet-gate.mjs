@@ -207,7 +207,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     await pointClaudeAtStub(first.page, stub.command)
     // The stub keeps a prompt containing "slow" running until interrupted, so these chats quit mid-turn.
     result.midTurn = await createChatBurst(first.page, BURST_CHATS, 0, 'slow fleet gate turn')
-    result.midTurnLaunched = await waitForLaunches(stub.launchLog, result.midTurn.requested)
+    result.midTurnLaunched = await waitForLaunches(stub.launchLog, result.midTurn.sessionIds.length)
     await new Promise((resolve) => setTimeout(resolve, 3_000))
   } finally {
     stderrOwnership += first.ownershipText()
@@ -231,7 +231,8 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
         'fleet gate cold turn'
       )
       result.coldLaunched =
-        (await waitForLaunches(stub.launchLog, coldBefore + result.cold.requested)) - coldBefore
+        (await waitForLaunches(stub.launchLog, coldBefore + result.cold.sessionIds.length)) -
+        coldBefore
     } finally {
       stderrOwnership += second.ownershipText()
       await second.close()
@@ -354,7 +355,7 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       const undriven =
         driven.undriven ??
         (ptyWrites < (driven.ptyWritesNeeded ?? 0)
-          ? `${String(ptyWrites)} of ${String(driven.ptyWritesNeeded)} typed keys reached the terminal`
+          ? `${String(ptyWrites)} of ${String(driven.ptyWritesNeeded)} needed keys reached the terminal`
           : null)
       if (undriven) {
         result.incomplete.push(`${name}: ${undriven}`)

@@ -258,7 +258,8 @@ async function typeIntoComposer({ page, windowMs }) {
   }
   const grew = (await textLength()) - lengthBefore
   const planned = Math.floor((windowMs / 1_000) * TYPING_CHARS_PER_SECOND)
-  const enough = typed * (1 - MAX_MISSED_SHARE)
+  // Delivery is judged against the plan, not just the keys sent, so the two allowances can't compound.
+  const enough = planned * (1 - MAX_MISSED_SHARE)
   // Receipts: a terminal's keys reach main as pty:write (checked by the runner); a composer's land in its text.
   return {
     note: `${String(typed)} keys into ${target.label}`,
@@ -267,13 +268,15 @@ async function typeIntoComposer({ page, windowMs }) {
       typed < planned * (1 - MAX_MISSED_SHARE)
         ? `${String(typed)} of ${String(planned)} planned keys typed`
         : !target.terminal && grew < enough
-          ? `${String(grew)} of ${String(typed)} typed keys reached the input`
+          ? `${String(grew)} of ${String(planned)} planned keys reached the input`
           : null,
     // Run by the runner after its snapshot: leave the draft empty so the next window starts the same way.
     cleanup: async () => {
       for (let index = 0; index < typed; index += 1) {
         await page.keyboard.press('Backspace')
       }
+      // Let the echo of those keys drain before the next window's probes reset.
+      await sleep(2_000)
     }
   }
 }

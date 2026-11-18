@@ -160,11 +160,18 @@ export async function stopCopyDaemons(userDataDir) {
   for (const root of readDaemonPids(userDataDir)) {
     const pids = [...descendantPids(root), root]
     // Start times now, so the SIGKILL below never reaches a process that reused one of these pids.
-    const startedAt = processStartTimes() ?? new Map()
+    let startedAt = processStartTimes()
+    for (let attempt = 0; startedAt === null && attempt < 5; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      startedAt = processStartTimes()
+    }
+    // No baseline: nothing can be proven gone or safe to SIGKILL, so the loop below waits out the full grace.
+    const unknownBaseline = startedAt === null
+    startedAt ??= new Map()
     const same = (table) => (pid) => startedAt.has(pid) && table?.get(pid) === startedAt.get(pid)
     const stillRunning = () => {
       const table = processStartTimes()
-      return table === null ? pids : pids.filter(same(table))
+      return table === null || unknownBaseline ? pids : pids.filter(same(table))
     }
     for (const pid of pids.toReversed()) {
       try {
