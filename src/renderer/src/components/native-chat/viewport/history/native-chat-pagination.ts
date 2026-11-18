@@ -49,19 +49,16 @@ export function isNativeChatPageBefore(
   })
 }
 
-/** A bounded live tail that dropped its first base row may hide a gap only a full reread repairs. */
+/** A bounded live tail that starts after the held window's last row hides a gap only a full reread repairs. */
 export function nativeChatLiveTailJoinsBase(
+  agent: AgentType,
   base: readonly NativeChatMessage[],
-  appended: readonly NativeChatMessage[]
+  liveTail: readonly NativeChatMessage[]
 ): boolean {
-  const first = appended[0]
-  return (
-    !first ||
-    base.some(
-      (message) =>
-        message.id === first.id &&
-        message.transcriptOrder === first.transcriptOrder &&
-        message.transcriptOffset === first.transcriptOffset
-    )
-  )
+  if (liveTail.length === 0) {
+    return true
+  }
+  const start = nativeChatHistoryCursor(agent, liveTail[0])
+  const end = nativeChatHistoryCursor(agent, base.at(-1))
+  return start !== undefined && end !== undefined && start <= end
 }

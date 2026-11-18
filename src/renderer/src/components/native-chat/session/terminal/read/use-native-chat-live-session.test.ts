@@ -368,33 +368,42 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.hasMore).toBe(false)
   })
 
-  it('rereads the whole window when the live tail has dropped its overlap with history', async () => {
+  it('repairs a live-tail gap with a full reread, then resumes cursor paging', async () => {
     const transport = getMockTransport('env-1')
     const at = (id: string, offset: number) => ({
       ...assistant(id, 't'),
       transcriptOrder: offset
     })
-    const held = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
-      at(`held-${n}`, 1000 + n)
-    )
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
     await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
-    const live = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT + 1 }, (_unused, n) =>
-      at(`live-${n}`, 5000 + n)
-    )
+    // 301 appends push the bounded live tail past live-0, leaving a gap after held-299.
+    const live = Array.from({ length: 301 }, (_unused, n) => at(`live-${n}`, 5000 + n))
     await act(async () => transport.emit({ type: 'appended', messages: live }))
+    expect(latest?.messages.map((m) => m.id)).not.toContain('live-0')
+    transport.readSession.mockResolvedValueOnce({
+      messages: [at('bridge-0', 4900), ...live],
+      hasMore: true
+    })
 
     await act(async () => {
       await latest?.loadEarlier()
     })
 
-    expect(transport.readSession).toHaveBeenLastCalledWith(
-      AGENT,
-      SESSION,
-      NATIVE_CHAT_INITIAL_LIMIT + 200,
-      undefined,
-      { wakeWslDistro: true }
-    )
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 500, undefined, {
+      wakeWslDistro: true
+    })
+    expect(latest?.messages.slice(0, 2).map((m) => m.id)).toEqual(['bridge-0', 'live-0'])
+
+    transport.readSession.mockResolvedValueOnce({ messages: [], hasMore: false })
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 200, undefined, {
+      wakeWslDistro: true,
+      beforeOffset: 4900
+    })
   })
 })
 

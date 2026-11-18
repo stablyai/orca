@@ -57,6 +57,9 @@ export function useNativeChatOlderHistory({
     epoch: number
     promise: Promise<NativeChatOlderPageResult>
   } | null>(null)
+  // A caller holding a stale callback must not apply a page to a base that has since moved.
+  const latestReadRef = useRef(read)
+  latestReadRef.current = read
   return useCallback((): Promise<NativeChatOlderPageResult> => {
     const inFlight = olderPageRef.current
     if (inFlight?.epoch === transcriptEpochRef.current) {
@@ -93,12 +96,12 @@ export function useNativeChatOlderHistory({
           // Replace the ordered base tail to prepend history; preserve separate live appends.
           setRead({ phase: 'ready', messages: result.messages })
           transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
-          const more = hasMoreNativeChatHistory(result.messages.length, nextLimit)
+          const more = result.hasMore ?? hasMoreNativeChatHistory(result.messages.length, nextLimit)
           setHasMore(more)
           return result.messages.length > loadedCount ? 'applied' : more ? 'unchanged' : 'exhausted'
         })
 
-    const cursor = nativeChatLiveTailJoinsBase(read.messages, liveTailRef.current.list)
+    const cursor = nativeChatLiveTailJoinsBase(agent, read.messages, liveTailRef.current.list)
       ? nativeChatHistoryCursor(agent, read.messages[0])
       : undefined
     // Reads one page strictly before the oldest held row, so cost stays flat with depth.
@@ -119,6 +122,13 @@ export function useNativeChatOlderHistory({
           if (!isNativeChatPageBefore(agent, page, before)) {
             return reread()
           }
+          const held = latestReadRef.current
+          if (
+            held.phase !== 'ready' ||
+            nativeChatHistoryCursor(agent, held.messages[0]) !== before
+          ) {
+            return 'superseded'
+          }
           // Keep every source row; the assembler resolves shared ids exactly as a full reread would.
           // A rewrite racing this page is corrected by the replacement frame that follows it.
           setRead((current) =>
@@ -127,7 +137,7 @@ export function useNativeChatOlderHistory({
               ? { phase: 'ready', messages: [...page, ...current.messages] }
               : current
           )
-          limitRef.current = Math.max(nextLimit, loadedCount + page.length)
+          limitRef.current = Math.max(nextLimit, held.messages.length + page.length)
           const more = result.hasMore ?? page.length >= NATIVE_CHAT_PAGE
           setHasMore(more)
           return page.length > 0 ? 'applied' : more ? 'unchanged' : 'exhausted'
