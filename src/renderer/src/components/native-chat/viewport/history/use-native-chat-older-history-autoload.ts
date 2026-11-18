@@ -13,7 +13,11 @@ export type NativeChatOlderHistoryAutoload = {
   loadFailed: boolean
   /** Manual load: clears a failure so auto-load resumes if it succeeds. */
   loadEarlierManually: () => void
+  /** The lane's load, recording a failure so any caller's (a history jump's) shows the error. */
+  loadEarlier: () => Promise<NativeChatOlderPageResult>
 }
+
+const NO_FAILURES: ReadonlySet<string> = new Set()
 
 export function useNativeChatOlderHistoryAutoload({
   scrollRef,
@@ -39,13 +43,14 @@ export function useNativeChatOlderHistoryAutoload({
   const [sentinel, setSentinel] = useState<HTMLElement | null>(null)
   // A swapped transcript must not inherit another history’s failure.
   const [failedHistoryKey, setFailedHistoryKey] = useState<string | null>(null)
-  const [readFailedHistoryKey, setReadFailedHistoryKey] = useState<string | null>(null)
-  // Any page load (a retry, a history jump) starts fresh; only its own failure brings the error back.
+  // Keyed per history, so a late failure from an older key never replaces the current key's.
+  const [readFailedKeys, setReadFailedKeys] = useState(NO_FAILURES)
+  // Any page load (a retry, a history jump) starts fresh; only a failure brings the error back.
   const [wasLoading, setWasLoading] = useState(loadingEarlier)
   if (loadingEarlier !== wasLoading) {
     setWasLoading(loadingEarlier)
     if (loadingEarlier) {
-      setReadFailedHistoryKey(null)
+      setReadFailedKeys(NO_FAILURES)
     }
   }
 
@@ -54,13 +59,19 @@ export function useNativeChatOlderHistoryAutoload({
   const shouldObserve = isAutoLoadEnabled && isVisible && hasMore && !loadingEarlier
 
   // Let the lane own in-flight state so abandoned reads cannot strand a latch; stop on no progress to prevent endless observer reloads.
+  const loadRecorded = (): Promise<NativeChatOlderPageResult> => {
+    const key = historyKey
+    return loadEarlier().then((result) => {
+      if (result === 'failed') {
+        setReadFailedKeys((failed) => (failed.has(key) ? failed : new Set(failed).add(key)))
+      }
+      return result
+    })
+  }
   const loadPage = (): void => {
-    void loadEarlier().then((result) => {
+    void loadRecorded().then((result) => {
       if (result === 'failed' || result === 'unchanged') {
         setFailedHistoryKey(historyKey)
-      }
-      if (result === 'failed') {
-        setReadFailedHistoryKey(historyKey)
       }
     })
   }
@@ -70,7 +81,7 @@ export function useNativeChatOlderHistoryAutoload({
   const loadEarlierManually = (): void => {
     onManualLoad?.()
     setFailedHistoryKey(null)
-    setReadFailedHistoryKey(null)
+    setReadFailedKeys(NO_FAILURES)
     loadPage()
   }
 
@@ -95,7 +106,8 @@ export function useNativeChatOlderHistoryAutoload({
   return {
     sentinelRef: setSentinel,
     isAutoLoadEnabled,
-    loadFailed: readFailedHistoryKey === historyKey,
-    loadEarlierManually
+    loadFailed: readFailedKeys.has(historyKey),
+    loadEarlierManually,
+    loadEarlier: loadRecorded
   }
 }
