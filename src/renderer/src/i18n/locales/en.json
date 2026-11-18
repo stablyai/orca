@@ -12819,7 +12819,8 @@
           "updating": "Updating servers…",
           "serverCountOne": "1 paired server",
           "fdd271abf0": "Remote Orca servers",
-          "e4e5937469": "Check for server updates"
+          "e4e5937469": "Check for server updates",
+          "newerCount": "{{value0}} newer than this app"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Version unavailable",
@@ -13927,7 +13928,8 @@
           "settingUpInBackground": "Setting up Orca on {{name}} in the background. It appears in the list when it’s ready.",
           "setUpOnSshHost": "Set up Orca on an SSH host",
           "setUp": "Set up",
-          "overYourSsh": "Over your SSH connection"
+          "overYourSsh": "Over your SSH connection",
+          "newerThanApp": "Newer than this app (v{{version}})"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",
