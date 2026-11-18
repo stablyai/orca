@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useLayoutEffect } from 'react'
 import { useAppStore } from '../../store'
 import { useTranslate } from '@/i18n/use-translate'
 import { usageHostKey } from '../../store/slices/usage/usage-host'
-import { runtimeEnvironmentSupportsCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
+import { useRuntimeEnvironmentCapabilityAnswer } from '../../runtime/rpc/compatibility/use-runtime-environment-capability'
 import { USAGE_ANALYTICS_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
@@ -18,43 +18,19 @@ export function StatsHostScope({
   children
 }: {
   host: StatsHost
-  children: (usageSupported: boolean | null) => React.ReactNode
+  /** True only when the host answered that its Orca predates host-computed usage. */
+  children: (usageUnsupported: boolean) => React.ReactNode
 }): React.JSX.Element | null {
   const key = usageHostKey(host.target)
   const shownKey = useAppStore((state) => usageHostKey(state.statsHost))
   const setStatsHost = useAppStore((state) => state.setStatsHost)
-  const usageSupported = useHostUsageSupport(host.target)
+  const usageSupported = useRuntimeEnvironmentCapabilityAnswer(
+    host.target.kind === 'environment' ? host.target.environmentId : null,
+    USAGE_ANALYTICS_RUNTIME_CAPABILITY
+  )
   // Layout effect: children's mount effects must already read this host. Same-host calls are no-ops.
   useLayoutEffect(() => setStatsHost(host.target), [host.target, setStatsHost])
-  return shownKey === key ? <>{children(usageSupported)}</> : null
-}
-
-/** Whether the host's Orca computes its own usage; null while asking. This computer always does. */
-function useHostUsageSupport(target: RuntimeClientTarget): boolean | null {
-  const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const [answer, setAnswer] = useState<{ environmentId: string; supported: boolean } | null>(null)
-  useEffect(() => {
-    if (!environmentId) {
-      return
-    }
-    let active = true
-    const settle = (supported: boolean): void => {
-      if (active) {
-        setAnswer({ environmentId, supported })
-      }
-    }
-    runtimeEnvironmentSupportsCapability(environmentId, USAGE_ANALYTICS_RUNTIME_CAPABILITY)
-      .then(settle)
-      // An unreachable host is not an old one; the usage reads report that failure themselves.
-      .catch(() => settle(true))
-    return () => {
-      active = false
-    }
-  }, [environmentId])
-  if (!environmentId) {
-    return true
-  }
-  return answer?.environmentId === environmentId ? answer.supported : null
+  return shownKey === key ? <>{children(usageSupported === false)}</> : null
 }
 
 export function StatsHostCaption({ name }: { name: string }): React.JSX.Element {

@@ -119,11 +119,11 @@ const LOCAL_STATS_HOST: StatsHost = { target: { kind: 'local' }, name: null }
 export function StatsPane({ host = LOCAL_STATS_HOST }: { host?: StatsHost }): React.JSX.Element {
   return (
     <StatsHostScope host={host}>
-      {(usageSupported) => (
+      {(usageUnsupported) => (
         <StatsPaneContent
           key={usageHostKey(host.target)}
           hostName={host.name}
-          usageSupported={usageSupported}
+          usageUnsupported={usageUnsupported}
         />
       )}
     </StatsHostScope>
@@ -132,10 +132,10 @@ export function StatsPane({ host = LOCAL_STATS_HOST }: { host?: StatsHost }): Re
 
 function StatsPaneContent({
   hostName,
-  usageSupported
+  usageUnsupported
 }: {
   hostName: string | null
-  usageSupported: boolean | null
+  usageUnsupported: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -243,7 +243,7 @@ function StatsPaneContent({
 
         {/* Mount only the active panel to avoid hidden layout/focus churn jittering the scroll-tracked settings page. */}
         <div>
-          {usageSupported === null ? null : !usageSupported && hostName ? (
+          {usageUnsupported && hostName ? (
             <StatsHostTooOldNotice name={hostName} />
           ) : activeUsageTab === 'overview' ? (
             <UsageOverviewPane />
