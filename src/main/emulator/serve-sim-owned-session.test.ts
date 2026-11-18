@@ -169,6 +169,20 @@ describe('owned iOS helper sessions', () => {
         async () => {},
         async () => true
       )
+      const canceledShutdown = vi.fn(async () => {
+        throw new Error('deadline expired')
+      })
+      await expect(sessions.stop(A, afterTeardown.helperPid, canceledShutdown)).rejects.toThrow(
+        'deadline expired'
+      )
+      await expect(
+        foreign.start(
+          A,
+          executable,
+          async () => {},
+          async () => true
+        )
+      ).rejects.toThrow('claimed')
       await sessions.stop(A, afterTeardown.helperPid)
       await sessions.stopOwnedHelpers()
       expect(sessions.owns(second)).toBe(false)

@@ -190,18 +190,22 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
       shutdownDevice?: boolean
       instanceId?: string
       requireInstanceId?: boolean
+      assertShutdownAllowed?: () => void
     } = {}
   ): Promise<void> {
-    await this.streams.stopForCleanup(deviceId, options, () => this.shutdownDevice(deviceId))
+    await this.streams.stopForCleanup(deviceId, options, () =>
+      this.shutdownDevice(deviceId, options.assertShutdownAllowed)
+    )
   }
 
   async stopOwnedHelpers(): Promise<void> {
     this.streams.stopAll()
   }
 
-  async shutdownDevice(deviceId: string): Promise<void> {
+  async shutdownDevice(deviceId: string, assertShutdownAllowed?: () => void): Promise<void> {
     const sdk = this.requireSdk()
     const serial = await this.resolveDeviceId(deviceId)
+    assertShutdownAllowed?.()
     this.input.forgetScreenSize(serial)
     ensureAdbOk(await this.runner(sdk.adb, emuKillArgs(serial)), 'adb emulator shutdown')
   }

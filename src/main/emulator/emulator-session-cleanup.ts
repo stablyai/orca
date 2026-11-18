@@ -34,9 +34,10 @@ export async function destroySessions(
   registry: EmulatorSessionRegistry,
   leases: EmulatorStartLeaseRegistry,
   backendForKind: (kind: EmulatorBackendKind) => EmulatorBackend | null,
-  backends: EmulatorBackend[]
+  backends: EmulatorBackend[],
+  options: { deadline?: number; signal?: AbortSignal } = {}
 ): Promise<void> {
-  await leases.closeAndDrain()
+  await leases.closeAndDrain(options)
   const promises = registry
     .listSessions()
     .filter((session) => session.managed)
@@ -75,6 +76,10 @@ export async function destroySessions(
   const failure = remaining.find((result) => result.status === 'rejected')
   if (failure?.status === 'rejected') {
     throw failure.reason
+  }
+  const shutdownFailure = results.find((result) => result.status === 'rejected')
+  if (shutdownFailure?.status === 'rejected') {
+    throw shutdownFailure.reason
   }
 }
 

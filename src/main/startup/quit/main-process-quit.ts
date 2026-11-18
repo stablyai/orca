@@ -21,6 +21,7 @@ import { stopCodexAccountHistoryWork } from '../../codex/history/shared-store/co
 import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
+import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../shared/app-lifecycle/shutdown/quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../../dock/unread-badge'
 import { destroySystemTray } from '../../tray/system-tray'
@@ -193,8 +194,12 @@ function installWillQuitHandler(): void {
         .catch(() => {})
     browserManager.setBrowserGuestStateChangedListener(null)
     browserManager.setOffscreenTabOpener(null)
+    const emulatorShutdownController = new AbortController()
     const emulatorShutdown =
-      state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
+      state.runtime?.getEmulatorBridge()?.destroyAllSessions({
+        deadline: performance.now() + WILL_QUIT_TEARDOWN_DEADLINE_MS,
+        signal: emulatorShutdownController.signal
+      }) ?? Promise.resolve()
     const finalStore = state.store
     const beginSshShutdownAndFinalSave = (removalStopped: boolean) => {
       // Mark SSH leases detached synchronously immediately before final flush; no await may separate mutation from save.
@@ -291,6 +296,7 @@ function installWillQuitHandler(): void {
     ])
       .then((pendingTeardowns) => {
         if (pendingTeardowns.length > 0) {
+          emulatorShutdownController.abort()
           console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
         }
       })

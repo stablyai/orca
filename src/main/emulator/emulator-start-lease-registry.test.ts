@@ -194,6 +194,33 @@ describe('EmulatorStartLeaseRegistry', () => {
     await closing
   })
 
+  it('rejects a queued shutdown after teardown expires while a lease is held', async () => {
+    const { backend, stopHelperForDevice, shutdownDevice } = makeBackend()
+    stopHelperForDevice.mockImplementation(
+      async (_device: string, options: { assertShutdownAllowed: () => void }) => {
+        options.assertShutdownAllowed()
+        await backend.shutdownDevice('emulator-5554')
+      }
+    )
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'device', () => false)
+    const queued = registry.cleanupWhenIdle(backend, lease.info, () => false, {
+      force: true,
+      shutdownDevice: true
+    })
+    const result = queued.then(
+      () => 'stopped',
+      (error: Error) => error.message
+    )
+    const controller = new AbortController()
+    const closing = registry.closeAndDrain({ signal: controller.signal })
+    controller.abort()
+    await lease.release()
+    await closing
+    expect(await result).toContain('deadline expired')
+    expect(shutdownDevice).not.toHaveBeenCalled()
+  })
+
   it('preserves a forced stop when a conditional detach is queued later', async () => {
     const { backend, stopHelperForDevice } = makeBackend()
     const registry = new EmulatorStartLeaseRegistry()

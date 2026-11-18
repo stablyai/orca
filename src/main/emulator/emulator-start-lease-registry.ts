@@ -31,6 +31,8 @@ export class EmulatorStartLeaseRegistry {
     Map<string, PendingCleanup[]>
   >()
   private closed = false
+  private shutdownDeadline = Infinity
+  private readonly shutdownSignals = new Set<AbortSignal>()
   private readonly idleWaiters = new Set<() => void>()
 
   async acquire(
@@ -78,8 +80,12 @@ export class EmulatorStartLeaseRegistry {
     }
   }
 
-  async closeAndDrain(): Promise<void> {
+  async closeAndDrain(options: { deadline?: number; signal?: AbortSignal } = {}): Promise<void> {
     this.closed = true
+    this.shutdownDeadline = Math.min(this.shutdownDeadline, options.deadline ?? Infinity)
+    if (options.signal) {
+      this.shutdownSignals.add(options.signal)
+    }
     if (this.claimsByBackend.size) {
       await new Promise<void>((resolve) => this.idleWaiters.add(resolve))
     }
@@ -87,6 +93,18 @@ export class EmulatorStartLeaseRegistry {
       await this.drainCleanup(backend)
     }
     await Promise.all(this.cleanupByBackend.values())
+  }
+
+  private assertShutdownAllowed = (): void => {
+    if (
+      [...this.shutdownSignals].some((signal) => signal.aborted) ||
+      performance.now() >= this.shutdownDeadline
+    ) {
+      throw new EmulatorError(
+        'emulator_error',
+        'Emulator shutdown deadline expired; ownership retained.'
+      )
+    }
   }
 
   async cleanupWhenIdle(
@@ -198,6 +216,7 @@ export class EmulatorStartLeaseRegistry {
           requireInstanceId: backend.kind === 'android',
           includeOrphaned: eligible.some((request) => request.options.includeOrphaned),
           shutdownDevice: eligible.some((request) => request.options.shutdownDevice),
+          assertShutdownAllowed: this.assertShutdownAllowed,
           releaseOnShutdownFailure: eligible.some(
             (request) => request.options.releaseOnShutdownFailure
           )

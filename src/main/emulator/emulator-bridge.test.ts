@@ -66,6 +66,7 @@ vi.mock('os', async (importOriginal) => {
 })
 import { EmulatorBridge } from './emulator-bridge'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
+import { ServeSimOwnedSessions } from './serve-sim-owned-session'
 import { RuntimeEmulatorCommands } from '../runtime/emulator/runtime-emulator-commands'
 
 function session(deviceUdid: string): EmulatorSessionInfo {
@@ -96,6 +97,38 @@ describe('EmulatorBridge helper ownership', () => {
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
     netFetchMock.mockReset()
+  })
+
+  it('checks the shutdown deadline after an owned iOS helper has exited', async () => {
+    const backend = new IosEmulatorBackend()
+    let finish!: () => void
+    const stop = vi
+      .spyOn(ServeSimOwnedSessions.prototype, 'stop')
+      .mockImplementationOnce(async (_device, _pid, shutdown) => {
+        await new Promise<void>((resolve) => {
+          finish = resolve
+        })
+        await shutdown?.()
+      })
+    let expired = false
+    try {
+      const stopping = backend.stopHelperForDevice('device-1', {
+        helperPid: 1234,
+        shutdownDevice: true,
+        assertShutdownAllowed: () => {
+          if (expired) {
+            throw new Error('deadline expired')
+          }
+        }
+      })
+      await vi.waitFor(() => expect(finish).toBeDefined())
+      expired = true
+      finish()
+      await expect(stopping).rejects.toThrow('deadline expired')
+      expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
+    } finally {
+      stop.mockRestore()
+    }
   })
 
   it('detaches but does not kill a terminal-started helper', async () => {
@@ -135,6 +168,37 @@ describe('EmulatorBridge helper ownership', () => {
     expect(await result).toContain('shutdown')
     await destroying
     expect(cleanup).toHaveBeenCalledOnce()
+  })
+
+  it('reports incomplete shutdown if a lease drains after the deadline', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const ios = bridge.listBackends().find((backend) => backend.kind === 'ios')!
+    vi.spyOn(ios, 'ownsDevice').mockResolvedValue(true)
+    let finish!: (info: EmulatorSessionInfo) => void
+    vi.spyOn(ios, 'startSession').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    vi.spyOn(ios, 'stopOwnedHelpers').mockResolvedValue()
+    const stop = vi
+      .spyOn(ios, 'stopHelperForDevice')
+      .mockImplementation(async (_device, options) => {
+        options?.assertShutdownAllowed?.()
+      })
+    const starting = bridge.acquireHelperForDevice('device-1').catch(() => undefined)
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    const closing = bridge.destroyAllSessions({ deadline: performance.now() - 1 })
+    const result = closing.then(
+      () => 'stopped',
+      (error: Error) => error.message
+    )
+    finish(session('device-1'))
+    await starting
+    expect(await result).toContain('deadline expired')
+    expect(stop).toHaveBeenCalledOnce()
   })
 
   it('stops a workspace association without an asynchronous device lookup', async () => {

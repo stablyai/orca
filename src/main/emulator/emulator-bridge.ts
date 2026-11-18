@@ -7,10 +7,8 @@ import type { EmulatorGesturePoint } from './emulator-gesture-sender'
 import { EmulatorSessionRegistry } from './emulator-session-registry'
 import { destroySessions, reusableForWorkspace } from './emulator-session-cleanup'
 import { stopForSwitch, stopTargetSession } from './emulator-session-cleanup'
-import {
-  EmulatorStartLeaseRegistry,
-  type EmulatorStartLease
-} from './emulator-start-lease-registry'
+import { EmulatorStartLeaseRegistry } from './emulator-start-lease-registry'
+import type { EmulatorStartLease } from './emulator-start-lease-registry'
 import { listAvailableEmulatorDevices } from './emulator-device-inventory'
 import { deriveAxUrlFromStreamUrl } from './serve-sim-detached-session'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
@@ -289,12 +287,13 @@ export class EmulatorBridge {
     return this.sessionRegistry.pruneGoneManagedSessions((kind) => this.backendForKind(kind))
   }
 
-  destroyAllSessions(): Promise<void> {
+  destroyAllSessions(options?: { deadline?: number; signal?: AbortSignal }): Promise<void> {
     return destroySessions(
       this.sessionRegistry,
       this.startLeases,
       (kind) => this.backendForKind(kind),
-      this.backends
+      this.backends,
+      options
     )
   }
 

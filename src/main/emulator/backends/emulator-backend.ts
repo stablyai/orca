@@ -67,6 +67,7 @@ export type EmulatorBackend = {
       releaseOnShutdownFailure?: boolean
       instanceId?: string
       requireInstanceId?: boolean
+      assertShutdownAllowed?: () => void
     }
   ): Promise<void>
   shutdownDevice(deviceId: string): Promise<void>

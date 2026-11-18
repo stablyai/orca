@@ -225,12 +225,18 @@ export class IosEmulatorBackend implements EmulatorBackend {
       includeOrphaned?: boolean
       shutdownDevice?: boolean
       releaseOnShutdownFailure?: boolean
+      assertShutdownAllowed?: () => void
     } = {}
   ): Promise<void> {
     await this.sessions.stop(
       deviceId,
       options.helperPid,
-      options.shutdownDevice ? () => this.shutdownDevice(deviceId) : undefined,
+      options.shutdownDevice
+        ? () => {
+            options.assertShutdownAllowed?.()
+            return this.shutdownDevice(deviceId)
+          }
+        : undefined,
       options.releaseOnShutdownFailure
     )
   }
