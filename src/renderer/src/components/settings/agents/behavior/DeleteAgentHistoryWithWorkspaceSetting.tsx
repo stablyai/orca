@@ -83,9 +83,9 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
                     {/* Focusable so keyboard users reach the explanation too. */}
                     <span
                       tabIndex={0}
-                      className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <SettingsBadge tone="muted">
+                      <SettingsBadge tone="muted" className="whitespace-nowrap">
                         {diskUsage.complete
                           ? t(
                               'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryBadge',
