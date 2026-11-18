@@ -26,12 +26,12 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
 
   /** Restarts a pane's agent conversation in a new terminal in the same tab and leaf; the spawn
    *  applies whatever account is selected now. Refusals other than `stop_failed` and
-   *  `create_failed` stop nothing. `stillCurrent` says, just before the stop, that the pane still
-   *  runs `session`. */
+   *  `create_failed` stop nothing. `stillCurrent` confirms, last before the stop, that the pane still
+   *  runs `session` and should move. */
   async restartAgentPaneInPlace(
     ptyId: string,
     session: { agent: TuiAgent; providerSession: AgentProviderSessionMetadata },
-    stillCurrent: () => boolean = () => true
+    stillCurrent: () => boolean | Promise<boolean> = () => true
   ): Promise<AgentPaneRestartResult> {
     const pty = this.ptysById.get(ptyId)
     const recorded = this.paneOfPty(pty)
@@ -91,8 +91,19 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
               tab.leafId === pane.leafId &&
               tab.isActive
           ) === true
-      // The awaits above let the pane move, change conversation or gain a viewer: checked again
-      // with no await before the stop.
+      if (
+        !(await Promise.resolve()
+          .then(stillCurrent)
+          .catch(() => false))
+      ) {
+        return refuse('busy')
+      }
+      // A conversation started outside Orca holds no claim; it may have appeared during that await.
+      if (await this.isProviderSessionLiveInAnotherPane(session, ownPaneKey).catch(() => true)) {
+        return refuse('busy')
+      }
+      // The awaits above let the pane move, change process or gain a viewer: checked again with no
+      // await before the stop.
       const current = this.ptysById.get(ptyId)
       if (
         !current?.connected ||
@@ -100,15 +111,6 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         this.paneOfPty(current).paneKey !== recorded.paneKey
       ) {
         return refuse('not_local')
-      }
-      let stillRunsSession = false
-      try {
-        stillRunsSession = stillCurrent()
-      } catch {
-        stillRunsSession = false
-      }
-      if (!stillRunsSession) {
-        return refuse('busy')
       }
       if (!this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(ptyId)) {
         return refuse('viewer_cannot_follow')

@@ -220,7 +220,8 @@
     "contextUsage": {
       "label": "Bağlam: {{used}} / {{window}} token kullanıldı (%{{percent}})",
       "title": "Bağlam",
-      "estimated": "Son yanıta göre tahmin edilmiştir."
+      "estimated": "Son yanıta göre tahmin edilmiştir.",
+      "deferredNote": "İhtiyaç olduğunda yüklenir. Kullanılan toplama dahil değildir."
     },
     "composerAttachments": {
       "attachedImage": "Ekli görsel",

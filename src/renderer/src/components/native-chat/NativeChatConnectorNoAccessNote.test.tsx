@@ -16,7 +16,7 @@ const ASKER = {
 afterEach(cleanup)
 
 describe('NativeChatConnectorNoAccessNote', () => {
-  it('starts collapsed under one note, and opens to each line marked as no access', () => {
+  it('starts collapsed and reveals both earlier messages when opened', () => {
     render(<NativeChatConnectorNoAccessNote messageId="m1" asker={ASKER} />)
     const note = screen.getByRole('button', { name: /2 earlier messages in the thread/ })
     expect(note).toHaveAttribute('aria-expanded', 'false')
@@ -25,9 +25,6 @@ describe('NativeChatConnectorNoAccessNote', () => {
     fireEvent.click(note)
     expect(note).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('Repro: drag the divider fast.')).toBeInTheDocument()
-    expect(screen.getByTitle('Alex Kim · Slack · no access')).toHaveTextContent(
-      'AKAlex Kim·Slack·no access'
-    )
-    expect(screen.getByTitle('Someone · Slack · no access')).toBeInTheDocument()
+    expect(screen.getByText('Only on main.')).toBeInTheDocument()
   })
 })

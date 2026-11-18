@@ -35,6 +35,9 @@ const UNFAILED_COPY = `NOT EXISTS (SELECT 1 FROM agent_session_store_meta f
     AND EXISTS (SELECT 1 FROM agent_session_store_meta m
       WHERE m.key='${journalLegacyCopySourceKey('')}'||c.session_id))`
 
+/** A pending chat; epoch is null once its head is gone, generation settles exactly this entry. */
+export type JournalRetiredHead = { sessionId: string; epoch: string | null; generation: number }
+
 export type JournalSqlDatabaseRead =
   | { kind: 'pr-watch'; operation: PRWatchRead }
   | { kind: 'records'; unreconciled?: true }
@@ -55,11 +58,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
   | { kind: 'legacy-compares'; compares: JournalLegacyCompare[] }
-  | {
-      kind: 'retired-heads'
-      heads: { sessionId: string; epoch: string }[]
-      through: string | null
-    }
+  | { kind: 'retired-heads'; heads: JournalRetiredHead[]; through: string | null }
   | {
       kind: 'attachment-claims'
       claims: { rowid: number; uploadId: string; sessionId: string }[]
@@ -143,30 +142,28 @@ function read(
       return { kind: 'sessions', sessionIds: rows.map((row) => String(row.session_id)) }
     }
     case 'retired-heads': {
+      // A pass ends at the highest key pending when it began, so later arrivals can't extend it.
       const through =
         operation.through ??
-        db
-          .prepare(
-            'SELECT session_id FROM journal_chat_state WHERE epoch IS NOT NULL ORDER BY session_id DESC LIMIT 1'
-          )
-          .get()?.session_id
-      if (through === undefined) {
+        db.prepare('SELECT max(session_id) AS through FROM journal_retire_pending').get()?.through
+      if (through === null || through === undefined) {
         return { kind: 'retired-heads', heads: [], through: null }
       }
-      const rows =
-        operation.after === null
-          ? db
-              .prepare(`SELECT session_id,epoch FROM journal_chat_state
-                WHERE epoch IS NOT NULL AND session_id<=? ORDER BY session_id LIMIT 16`)
-              .all(through)
-          : db
-              .prepare(`SELECT session_id,epoch FROM journal_chat_state
-                WHERE epoch IS NOT NULL AND session_id>? AND session_id<=? ORDER BY session_id LIMIT 16`)
-              .all(operation.after, through)
+      // The first page has no lower bound; later pages keep an indexed range from the cursor.
+      const after = operation.after === null ? '' : 'pending.session_id>? AND '
+      const rows = db
+        .prepare(`SELECT pending.session_id,pending.generation,head.epoch FROM journal_retire_pending AS pending
+          LEFT JOIN journal_chat_state AS head ON head.session_id=pending.session_id
+          WHERE ${after}pending.session_id<=? ORDER BY pending.session_id LIMIT 16`)
+        .all(...(operation.after === null ? [through] : [operation.after, through]))
       return {
         kind: 'retired-heads',
-        heads: rows.map((row) => ({ sessionId: String(row.session_id), epoch: String(row.epoch) })),
-        through: String(through)
+        through: String(through),
+        heads: rows.map((row) => ({
+          sessionId: String(row.session_id),
+          epoch: row.epoch === null || row.epoch === undefined ? null : String(row.epoch),
+          generation: Number(row.generation)
+        }))
       }
     }
     case 'attachment-claims':

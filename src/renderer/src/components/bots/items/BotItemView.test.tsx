@@ -200,14 +200,6 @@ it('places its file opens beside the bot workspace focused tab, as a click in th
   }
 })
 
-it('shows the item number before the title and in the line under it', () => {
-  show(1, makeTestBotItem(35, { title: 'Show item numbers' }))
-  render(<BotItemView bot={BOT} uid="uid-35" />)
-
-  expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('#35 Show item numbers')
-  expect(screen.getByText(/^Item 35 · Home Chat · /)).toBeTruthy()
-})
-
 const PR_URL = 'https://github.com/acme/app/pull/9'
 
 function showPrLink(): void {

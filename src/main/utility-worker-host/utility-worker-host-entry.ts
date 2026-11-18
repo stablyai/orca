@@ -2,6 +2,7 @@ import type { Worker } from 'node:worker_threads'
 import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { setWorkerLargeSendLog } from '../worker-threads/worker-send-ledger'
+import { sampleUtilityWorkerHeaps } from './utility-worker-heap-sampler'
 import {
   UTILITY_WORKER_MESSAGE_CHUNK_BYTES,
   type UtilityWorkerFailure,
@@ -22,6 +23,9 @@ if (!parent) {
 }
 const port = parent
 const workers = new Map<number, Worker>()
+const heaps = sampleUtilityWorkerHeaps(workers, (report) =>
+  port.postMessage({ type: 'heap', report })
+)
 
 function failure(error: unknown): UtilityWorkerFailure {
   const value = error instanceof Error ? error : new Error(String(error))
@@ -77,10 +81,12 @@ port.on('message', ({ data: request }) => {
         execArgv: []
       })
       workers.set(id, worker)
+      heaps.workersChanged()
       worker.on('message', (bytes: Uint8Array) => relay(id, bytes))
       worker.on('error', (error) => port.postMessage({ type: 'error', id, error: failure(error) }))
       worker.once('exit', (code) => {
         workers.delete(id)
+        heaps.workersChanged()
         port.postMessage({ type: 'exit', id, code })
       })
     } catch (error) {
