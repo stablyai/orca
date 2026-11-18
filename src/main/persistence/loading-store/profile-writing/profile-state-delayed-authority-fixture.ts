@@ -76,10 +76,17 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
       true
     )
   }
-  async writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]) {
+  async writeCompleteSerializedDomains(
+    replacements: readonly ProfileStateDomainReplacement[],
+    patches?: readonly ProfileStateDomainPatch[]
+  ) {
     const captured = structuredClone(replacements)
+    const capturedPatches = patches && structuredClone(patches)
     this.captures.push([...captured])
-    await this.dispatch(() => this.inner.writeCompleteSerializedDomains(captured), true)
+    await this.dispatch(
+      () => this.inner.writeCompleteSerializedDomains(captured, capturedPatches),
+      true
+    )
   }
   async writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],

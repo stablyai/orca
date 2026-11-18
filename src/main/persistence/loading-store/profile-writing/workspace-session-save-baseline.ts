@@ -42,6 +42,25 @@ function snapshot(value: unknown, depth: number): SavedNode {
   return { value, keys, children }
 }
 
+function deepFreeze(value: unknown): void {
+  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) {
+    return
+  }
+  Object.freeze(value)
+  for (const child of Object.values(value)) {
+    deepFreeze(child)
+  }
+}
+
+// Saves compare entries by identity, so an in-place edit would never be saved; make it throw instead.
+function freezeEntries(node: SavedNode): void {
+  if (node.children) {
+    node.children.forEach(freezeEntries)
+  } else {
+    deepFreeze(node.value)
+  }
+}
+
 function sameKeys(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((key, index) => key === b[index])
 }
@@ -128,6 +147,9 @@ export class WorkspaceSessionSaveBaseline {
         continue
       }
       if (node) {
+        if (import.meta.env.DEV) {
+          freezeEntries(node)
+        }
         this.acknowledged.set(domain, node)
       } else {
         this.acknowledged.delete(domain)
