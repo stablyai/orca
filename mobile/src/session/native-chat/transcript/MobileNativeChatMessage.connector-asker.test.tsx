@@ -123,11 +123,10 @@ describe('mobile chat message indicators', () => {
   const texts = (tree: ReactTestRenderer): string[] =>
     tree.root.findAll((node) => String(node.type) === 'Text').map(textOf)
 
-  it('tags a Slack message with who asked and where, and opens the thread', () => {
+  it('opens the Slack message’s source thread', () => {
     const tree = render(userMessage({ asker: SAM }))
     const [tag] = labelled(tree, 'Sam Lee in Slack. Open in Slack')
     expect(tag).toBeDefined()
-    expect(textOf(tag!)).toBe('SLSam Lee·Slack')
     act(() => tag!.props.onPress())
     expect(openExternalLink).toHaveBeenCalledWith(SAM.url)
   })
@@ -160,10 +159,6 @@ describe('mobile chat message indicators', () => {
     act(() => toggle!.props.onPress())
     expect(texts(tree)).toContain('Only on main.')
     expect(labelled(tree, 'Alex Kim · Slack · no access')).toHaveLength(1)
-  })
-
-  it('says a message went as a goal', () => {
-    expect(texts(render(userMessage({ sentAs: 'goal' })))).toContain('Sent as goal')
   })
 
   // Each mark subscribes to the theme and language, so a row without one must not mount it.

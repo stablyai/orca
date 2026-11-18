@@ -1,3 +1,4 @@
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 import { readJournalStoredItem } from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -246,10 +247,10 @@ function visibleItem(
   itemId: string
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT payload_json FROM journal_items
+    .prepare(`SELECT ${boundedStoredJsonSql('payload_json', 'payload_json')} FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(...prefix, itemId)
-  return row ? readJournalStoredItem(db, prefix, row.payload_json) : null
+  return row ? readJournalStoredItem(db, prefix, boundedStoredJson(row, 'payload_json')) : null
 }
 
 /** The input order's newest turn: latest position, then the greatest item ID among ties. */

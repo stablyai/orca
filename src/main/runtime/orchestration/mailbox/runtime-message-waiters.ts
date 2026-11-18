@@ -147,6 +147,10 @@ export class RuntimeMessageWaiters {
     return this.waitersByHandle.get(handle)
   }
 
+  has(handle: string): boolean {
+    return (this.waitersByHandle.get(handle)?.size ?? 0) > 0
+  }
+
   get map(): ReadonlyMap<string, ReadonlySet<RuntimeMessageWaiter>> {
     return this.waitersByHandle
   }

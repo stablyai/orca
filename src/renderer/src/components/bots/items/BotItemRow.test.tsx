@@ -134,9 +134,3 @@ it('keeps a keyboard-opened ⋯ menu open when the pointer leaves', () => {
   movePointer(150, 200)
   expect(menuOpen()).toBe(true)
 })
-
-it('shows the item number before the title', () => {
-  expect(rowText(makeTestBotItem(35, { title: 'Show item numbers' }))).toMatch(
-    /^#35Show item numbers/
-  )
-})

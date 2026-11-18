@@ -16,6 +16,7 @@ import {
   nativeChatSetupAction,
   type NativeChatHostSetup
 } from '../../host-access/native-chat-host-setup'
+import { nativeChatCliUpdateAction } from '../../host-access/native-chat-cli-update'
 import type {
   NativeChatComposerNotice,
   NativeChatComposerNoticeContent
@@ -89,6 +90,12 @@ function nativeChatLaunchNotice(
     text: cause ? (saysStartFailure ? cause : joinSentences([message, cause])) : message,
     action:
       nativeChatSetupAction(failure?.details?.reason, setup, t) ??
+      nativeChatCliUpdateAction(
+        failure?.code === 'agent_session_operation_invalid' &&
+          Boolean(failure.details?.agentInstallation ?? failure.details?.codexInstallation),
+        setup,
+        t
+      ) ??
       (signInContent || !retryable
         ? undefined
         : {

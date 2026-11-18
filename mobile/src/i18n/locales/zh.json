@@ -63,6 +63,7 @@
       "messages_one": "{{count}} 条消息",
       "messages_other": "{{count}} 条消息",
       "resumeSession": "恢复智能体会话",
+      "continueInCli": "在 CLI 中继续",
       "hidePreview": "隐藏最近的消息",
       "showPreview": "显示最近的消息",
       "you": "你"
@@ -242,7 +243,8 @@
     "contextUsage": {
       "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
       "title": "上下文",
-      "estimated": "根据上一次响应的估算值。"
+      "estimated": "根据上一次响应的估算值。",
+      "deferredNote": "按需加载，不计入已用总量。"
     },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
@@ -704,7 +706,7 @@
       "confirm": "回溯",
       "unsupported": "此聊天无法返回到更早的消息。",
       "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息。请开始新聊天以使用“回溯到此处”。",
-      "busy": "当智能体空闲且此聊天中没有等待您处理的内容时可用。",
+      "busy": "聊天空闲时可用",
       "staleEpoch": "对话已发生变化。请查看最新消息后重试。",
       "invalidTarget": "对话无法返回到此消息。未做任何更改。",
       "historyLimit": "此对话过长，无法回溯。未做任何更改。",

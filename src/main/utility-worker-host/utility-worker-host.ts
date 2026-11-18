@@ -3,8 +3,13 @@ import { app, utilityProcess, type UtilityProcess } from 'electron'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { HostedWorker } from './hosted-worker'
+import {
+  recordUtilityWorkerHeapPressure,
+  utilityWorkerHeapData
+} from './utility-worker-heap-report'
 import type {
   HostedWorkerThread,
+  UtilityWorkerHeapReport,
   UtilityWorkerHostEvent,
   UtilityWorkerHostRequest,
   UtilityWorkerSpawn
@@ -28,6 +33,7 @@ type Host = {
   readyTimer: ReturnType<typeof setTimeout>
   idleTimer?: ReturnType<typeof setTimeout>
   retired: boolean
+  heap?: UtilityWorkerHeapReport
 }
 
 /** A child still launching has no PID to kill yet; kill it once it has one. */
@@ -135,6 +141,11 @@ export class UtilityWorkerHost {
       }
       return
     }
+    if (event.type === 'heap') {
+      host.heap = event.report
+      recordUtilityWorkerHeapPressure(this.serviceName, event.report, [...host.workers.values()])
+      return
+    }
     const worker = host.workers.get(event.id)
     if (!worker) {
       return
@@ -223,7 +234,8 @@ export class UtilityWorkerHost {
       const data: CrashReportBreadcrumbData = {
         serviceName: this.serviceName,
         code,
-        workers: workers.length
+        workers: workers.length,
+        ...utilityWorkerHeapData(host.heap, workers)
       }
       workers.forEach((worker, index) => {
         data[`w${index}_lastReply`] = worker.lastReplyType

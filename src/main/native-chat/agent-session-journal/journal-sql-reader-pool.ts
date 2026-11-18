@@ -4,6 +4,7 @@ import { JOURNAL_SQL_READERS } from './journal-sql-reader-requests'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { JournalOutlineCache } from './journal-domain-outline'
+import type { JournalLegacyChatComparison } from './journal-sql-reader-protocol'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -125,6 +126,15 @@ export class JournalSqlReaderPool {
       this.conversionSlot = this.slot()
     }
     return this.conversionSlot.prepareConversion(sessionId)
+  }
+
+  /** Null when the original journal is gone. */
+  async compareLegacyChat(sessionId: string): Promise<JournalLegacyChatComparison | null> {
+    const response = await this.slot().request({ kind: 'legacy-compare', sessionId })
+    if (response.type !== 'legacy-compare') {
+      throw new Error('journal reader returned no legacy compare')
+    }
+    return response.result
   }
 
   async importState(sessionId: string) {
