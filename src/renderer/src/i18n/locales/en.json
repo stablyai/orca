@@ -1903,6 +1903,19 @@
       },
       "stepFailed": "Orca could not finish this step.",
       "finishFailed": "Orca could not do that."
+    },
+    "fileExplorerSortMode": {
+      "foldersFirst": "Folders first",
+      "filesFirst": "Files first",
+      "mixed": "Mixed",
+      "title": "Sort order",
+      "description": "Show folders before files, after files, or mixed in by name.",
+      "keywords": {
+        "sort": "sort",
+        "foldersFirst": "folders first",
+        "filesFirst": "files first",
+        "fileExplorer": "file explorer"
+      }
     }
   },
   "menu": {

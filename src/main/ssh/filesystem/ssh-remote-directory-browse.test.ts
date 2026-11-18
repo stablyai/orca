@@ -51,15 +51,15 @@ describe.skipIf(process.platform === 'win32')('browseSshDirectory over a POSIX s
 
     expect(result.pathFlavor).toBe('posix')
     expect(result.entries).toEqual([
+      { name: 'linked-dir', isDirectory: true },
+      { name: 'real-dir', isDirectory: true },
       { name: '.hidden', isDirectory: false },
       { name: 'broken-link', isDirectory: false },
       { name: 'linked-file', isDirectory: false },
       { name: 'loop-a', isDirectory: false },
       { name: 'loop-b', isDirectory: false },
       { name: 'name with space', isDirectory: false },
-      { name: 'real-file.txt', isDirectory: false },
-      { name: 'linked-dir', isDirectory: true },
-      { name: 'real-dir', isDirectory: true }
+      { name: 'real-file.txt', isDirectory: false }
     ])
   })
 })

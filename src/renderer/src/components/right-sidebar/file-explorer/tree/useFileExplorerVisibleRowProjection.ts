@@ -17,6 +17,11 @@ import {
   type FileExplorerNameFilterProjectionSource
 } from './file-explorer-name-filter-projection'
 import { useFileExplorerIgnoredPaths } from './use-file-explorer-ignored-paths'
+import {
+  normalizeFileExplorerSortMode,
+  orderDirEntriesForSortMode,
+  type FileExplorerSortMode
+} from '../../../../../../shared/file-listing/file-name-sort'
 
 const EMPTY_RELATIVE_PATHS: string[] = []
 
@@ -26,6 +31,7 @@ type VisibleFileExplorerRowProjectionOptions = {
   nameFilterCollapsedPaths?: ReadonlySet<string> | null
   showDotfiles: boolean
   showGitIgnoredFiles: boolean
+  sortMode: FileExplorerSortMode
 }
 
 type VisibleFileExplorerRowProjectionInput = {
@@ -85,6 +91,7 @@ export function createVisibleFileExplorerRowProjection(
       nameFilter: options.nameFilter,
       showDotfiles: options.showDotfiles,
       showGitIgnoredFiles: options.showGitIgnoredFiles,
+      sortMode: options.sortMode,
       worktreePath,
       displayRootPath: displayRootPath ?? worktreePath
     })
@@ -102,7 +109,7 @@ export function createVisibleFileExplorerRowProjection(
     if (!cached?.children) {
       return
     }
-    for (const row of cached.children) {
+    for (const row of orderDirEntriesForSortMode(cached.children, options.sortMode)) {
       if (shouldHideRow(row)) {
         continue
       }
@@ -168,6 +175,7 @@ export function useFileExplorerVisibleRowProjection(
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const showGitIgnoredFiles = settings?.showGitIgnoredFiles ?? true
+  const sortMode = normalizeFileExplorerSortMode(settings?.fileExplorerSortMode)
   const rebuiltRelativePaths = useMemo(
     () =>
       activeRepoSupportsGit
@@ -220,7 +228,8 @@ export function useFileExplorerVisibleRowProjection(
           nameFilter,
           nameFilterCollapsedPaths,
           showDotfiles,
-          showGitIgnoredFiles
+          showGitIgnoredFiles,
+          sortMode
         }
       ),
     [
@@ -231,6 +240,7 @@ export function useFileExplorerVisibleRowProjection(
       nameFilterCollapsedPaths,
       showDotfiles,
       showGitIgnoredFiles,
+      sortMode,
       worktreePath,
       displayRootPath
     ]

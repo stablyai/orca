@@ -11,15 +11,41 @@ export function compareFileNames(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
-/** Files-first, then natural name order — the File Explorer listing contract. */
+/** Where the File Explorer shows folders among files; listings and page cursors stay folders-first. */
+export type FileExplorerSortMode = 'folders-first' | 'files-first' | 'mixed'
+
+export function normalizeFileExplorerSortMode(value: unknown): FileExplorerSortMode {
+  return value === 'files-first' || value === 'mixed' ? value : 'folders-first'
+}
+
+export function compareDirEntriesForSortMode(
+  a: { name: string; isDirectory: boolean },
+  b: { name: string; isDirectory: boolean },
+  mode: FileExplorerSortMode
+): number {
+  if (mode !== 'mixed' && a.isDirectory !== b.isDirectory) {
+    return a.isDirectory === (mode === 'folders-first') ? -1 : 1
+  }
+  return compareFileNames(a.name, b.name)
+}
+
+/** Directories-first, then natural name order — the File Explorer listing contract. */
 export function compareDirEntries(
   a: { name: string; isDirectory: boolean },
   b: { name: string; isDirectory: boolean }
 ): number {
-  if (a.isDirectory !== b.isDirectory) {
-    return a.isDirectory ? 1 : -1
+  return compareDirEntriesForSortMode(a, b, 'folders-first')
+}
+
+/** Display order of a folders-first listing; folders-first returns the same array. */
+export function orderDirEntriesForSortMode<T extends { name: string; isDirectory: boolean }>(
+  entries: readonly T[],
+  mode: FileExplorerSortMode
+): readonly T[] {
+  if (mode === 'folders-first') {
+    return entries
   }
-  return compareFileNames(a.name, b.name)
+  return [...entries].sort((a, b) => compareDirEntriesForSortMode(a, b, mode))
 }
 
 export function sortDirEntries<T extends { name: string; isDirectory: boolean }>(
