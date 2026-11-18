@@ -107,7 +107,8 @@ const ComposerEditorOwner = createContext<ComposerEditors | null>(null)
  *  Render before EditorContent so the view exists when EditorContent adopts it. */
 export function NativeChatComposerEditorView({ editor }: { editor: Editor }): null {
   useLayoutEffect(() => {
-    if (disposedEditors.has(editor)) {
+    // One view per editor: Tiptap would replace a live view without destroying it.
+    if (disposedEditors.has(editor) || !editor.isDestroyed) {
       return
     }
     editor.mount(document.createElement('div'))
