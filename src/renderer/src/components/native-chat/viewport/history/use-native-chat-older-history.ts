@@ -62,7 +62,12 @@ export function useNativeChatOlderHistory({
   } | null>(null)
   // Latest held base, advanced synchronously by applied pages so a retained callback cannot reuse its stale cursor.
   const heldRef = useRef(read)
-  heldRef.current = read
+  // A render that skipped a queued page update still carries the older read; only a new read replaces the ref.
+  const renderedReadRef = useRef(read)
+  if (renderedReadRef.current !== read) {
+    renderedReadRef.current = read
+    heldRef.current = read
+  }
   return useCallback((): Promise<NativeChatOlderPageResult> => {
     // A callback from before a trim, snapshot or rebind holds a base that has since moved.
     if (transcriptEpochRef.current !== olderHistoryGeneration) {
