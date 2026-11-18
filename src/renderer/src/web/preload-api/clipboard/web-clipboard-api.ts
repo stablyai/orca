@@ -102,6 +102,26 @@ export async function writeWebClipboardText(text: string): Promise<void> {
   }
 }
 
+// Matches the desktop's secret clear (clipboard-secret-clear.ts).
+const SECRET_CLIPBOARD_CLEAR_MS = 60_000
+
+/** A secret copy: cleared after a minute only if the browser still lets this page read it, so never promised. */
+export async function writeWebSecretClipboardText(text: string): Promise<{ clearsLater: false }> {
+  await writeWebClipboardText(text)
+  setTimeout(() => {
+    const clipboard = navigator.clipboard
+    // Some contexts can write but not read; then nothing can be compared, so nothing is cleared.
+    if (typeof clipboard?.readText !== 'function' || typeof clipboard.writeText !== 'function') {
+      return
+    }
+    Promise.resolve()
+      .then(() => clipboard.readText())
+      .then((current) => (current === text ? clipboard.writeText('') : undefined))
+      .catch(() => {})
+  }, SECRET_CLIPBOARD_CLEAR_MS)
+  return { clearsLater: false }
+}
+
 const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
 
 export async function writeWebClipboardImage(dataUrl: string): Promise<void> {

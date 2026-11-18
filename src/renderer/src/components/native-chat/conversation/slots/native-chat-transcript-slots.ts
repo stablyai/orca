@@ -4,6 +4,9 @@ import type {
   NativeChatMessage,
   NativeChatSubagentEntry
 } from '../../../../../../shared/native-chat/native-chat-types'
+import { nativeChatAutomationTurnKeys } from '../../../../../../shared/native-chat/transcript/turns/native-chat-automation-turns'
+import { isNativeChatOrcaCard } from '../../../../../../shared/native-chat/native-chat-orca-card'
+import { foldBotItemNotes } from '../../../../../../shared/bots/bot-item-note-runs'
 import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-live-turn-membership'
 import { nativeChatTurnBarRows } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
@@ -30,6 +33,7 @@ import {
   nativeChatRowSpeaksOrActs
 } from '../../../../../../shared/native-chat/transcript/folding/native-chat-trailing-run'
 import { nativeChatTranscriptWorkRuns } from '../../tools/runs/native-chat-transcript-work-runs'
+import { nativeChatBotItemNoteClusters } from '../../bot-items/native-chat-bot-item-note-clusters'
 import {
   nativeChatAgentRowHasImages,
   nativeChatAgentRowWords
@@ -79,6 +83,8 @@ export type NativeChatMessageSlot = {
   turnFolds: boolean
   /** The agent's next row in the same turn follows directly, so the two sit close. */
   continuesTurn?: boolean
+  /** Its turn opens with an automation's row, which stands for a quiet reply. */
+  inAutomationTurn?: boolean
   /** In a turn: whether this row holds its response actions, even when tools or thoughts follow:
    *  the last drawn response with words, else the last with images. Absent outside a turn. */
   endsResponse?: boolean
@@ -95,6 +101,8 @@ export type NativeChatMessageSlot = {
   estimatedHeight: number
   /** Members of an unbroken work run, with message as its head. */
   workRun?: readonly NativeChatMessage[]
+  /** Consecutive quiet item notes drawn close together, with message as the first. */
+  itemNotes?: readonly NativeChatMessage[]
 }
 
 const NO_SUBAGENT_HEADS: readonly NativeChatSubagentHead[] = []
@@ -138,7 +146,7 @@ export function buildNativeChatTranscript(
       .map(([turnKey]) => turnKey)
   )
   const messages = nativeChatGeneratedImageAnswers(
-    sourceMessages,
+    foldBotItemNotes(sourceMessages, turnKeys),
     turnKeys,
     settledTurnKeys,
     imageSources
@@ -157,6 +165,7 @@ export function buildNativeChatTranscript(
     expandedTurnKeys
   })
   const bars = nativeChatTurnBarRows(messages, turnKeys)
+  const automationTurns = nativeChatAutomationTurnKeys(messages, turnKeys)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
   turnKeys.forEach((turnKey, index) => {
@@ -208,7 +217,7 @@ export function buildNativeChatTranscript(
     const drawsRow =
       receipt !== undefined ||
       (!folded &&
-        (message.agentStart || nativeChatRowRendersContent(message.blocks)) &&
+        (isNativeChatOrcaCard(message) || nativeChatRowRendersContent(message.blocks)) &&
         message.id !== liveReasoningId)
     if (
       drawsRow ||
@@ -228,6 +237,9 @@ export function buildNativeChatTranscript(
         folded,
         drawsMessage: drawsRow,
         turnFolds: turnKey !== undefined && foldableTurnKeys.has(turnKey),
+        ...(turnKey !== undefined && automationTurns.has(turnKey)
+          ? { inAutomationTurn: true }
+          : {}),
         turnDiff,
         openedPullRequests,
         estimatedHeight: estimateNativeChatRowHeight(
@@ -246,7 +258,10 @@ export function buildNativeChatTranscript(
     }
   }
   pushHeadsBefore(undefined)
-  const drawn = nativeChatTranscriptWorkRuns(slots, typography)
+  const drawn = nativeChatBotItemNoteClusters(
+    nativeChatTranscriptWorkRuns(slots, typography),
+    typography
+  )
   // One action holder per turn: its last drawn response with words, else (when folding hid them)
   // its last drawn image response. Tools and thoughts never hold them.
   const lastWordsByTurn = new Map<string, NativeChatMessageSlot>()

@@ -212,7 +212,10 @@ export const WorktreeSet = WorktreeSelector.extend({
   matchFolderWorkspaces: MatchFolderWorkspaces,
   /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
   crossStoreParent: CrossStoreParentRefSchema.optional(),
-  noParent: OptionalBoolean
+  noParent: OptionalBoolean,
+  /** With a parent change: apply it only while the current parent is this workspace key (`folder:<id>`,
+   *  `worktree:<id>`); refuses with lineage_parent_changed otherwise, so a newer move stands. */
+  ifParentWorkspace: OptionalString
 }).superRefine((params, ctx) => {
   assertLinkedWorkItemSourceContextMatch(params, ctx)
   if ((params.parentWorktree || params.crossStoreParent) && params.noParent === true) {

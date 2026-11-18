@@ -45,6 +45,7 @@ import { aiVaultLocalScanKey } from '../../../../../../shared/ai-vault/scanning/
 import { useAiVaultPanelWorkspace } from '../scope/use-ai-vault-panel-workspace'
 import { useAiVaultPanelQuery } from '../scope/use-ai-vault-panel-query'
 import { ProjectConversationList } from '../../../sidebar/ProjectConversationList'
+import { useAiVaultGroupRoomRows } from './use-ai-vault-group-room-rows'
 import {
   aiVaultPanelKeyboardRootProps,
   type AiVaultSessionListKeyboard
@@ -243,7 +244,7 @@ export default function AiVaultPanel({
     sessions,
     listMode,
     conversationNavigation ? 'project' : group,
-    filters
+    { ...filters, roomRows: useAiVaultGroupRoomRows() }
   )
   const searchHitHostLabels = useMemo(
     () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions, t) : null),

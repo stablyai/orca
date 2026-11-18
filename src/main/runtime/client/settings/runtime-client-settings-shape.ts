@@ -71,7 +71,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
   | 'claudeSubagentNavigationEnabled'
-  | 'experimentalConnectors'
+  | 'botsEnabled'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'
   | 'agentDefaultArgs'

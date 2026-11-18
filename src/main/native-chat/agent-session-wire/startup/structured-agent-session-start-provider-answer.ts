@@ -125,7 +125,8 @@ export async function recordStartedHandle(
   try {
     const committed = await store.updateRecord(event.sessionId, {
       kind: 'provider-handle',
-      args: { fence: event.fence, link, now: context.now() }
+      args: { fence: event.fence, link, now: context.now() },
+      launched: context.deps.turnContext?.launchedInstructions?.(event.sessionId) ?? null
     })
     // Inherit only a committed new context; a resumed CLI keeps its own later title.
     if (event.newConversation ?? (link.origin === 'created' || link.origin === 'forked')) {

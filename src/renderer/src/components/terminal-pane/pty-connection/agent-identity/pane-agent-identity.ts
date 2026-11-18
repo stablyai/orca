@@ -1,6 +1,6 @@
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '@/store/index'
 import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {

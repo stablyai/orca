@@ -34,6 +34,27 @@ const PATH_PATTERNS = [
   /%(?:USERPROFILE|APPDATA|LOCALAPPDATA|HOMEDRIVE|HOMEPATH)%[^\s"'`<>)]*/gi
 ]
 
+/** Whether text holds a token, key or credentialed URL these patterns would redact. */
+export function containsSecretLike(value: string): boolean {
+  return [...SECRET_PATTERNS, CREDENTIAL_URL_PATTERN].some((pattern) =>
+    new RegExp(pattern.source, pattern.flags.replace('g', '')).test(value)
+  )
+}
+
+/** `value` with tokens, keys, credentialed URLs and `password=`-style assignments redacted, and
+ *  nothing else touched. */
+export function redactSecretLike(value: string): string {
+  let redacted = value.replace(CREDENTIAL_URL_PATTERN, '[redacted-credential]@')
+  redacted = redacted.replace(
+    SECRET_ASSIGNMENT_PATTERN,
+    (_match, key: string) => `${key}=[redacted]`
+  )
+  for (const pattern of SECRET_PATTERNS) {
+    redacted = redacted.replace(pattern, '[redacted-secret]')
+  }
+  return redacted
+}
+
 export function sanitizeCrashReportString(
   value: string,
   maxLength = MAX_STRING_DETAIL_LENGTH
