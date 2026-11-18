@@ -24,43 +24,46 @@ function botById(context: RpcContext, botId: string) {
   return bot
 }
 
-// Whether each bot's latest summary row was undone. A poll never waits on slow history behind a check
-// already running: it answers with the last known result while one check per bot refreshes it.
-const undoneByBot = new Map<
-  string,
-  { rowId: string; known: boolean | undefined; check: Promise<boolean> | null }
->()
-function undoneCheck(
+// Whether a summary row was undone, read from history. Reads at the same time share one check, and a
+// view waits for it at most this long: behind a stalled disk a poll answers "not undone" instead of
+// piling up, and the next read after the check lands starts a fresh one.
+const UNDONE_CHECK_WAIT_MS = 2_000
+const undoneChecks = new Map<string, Promise<boolean>>()
+
+const undoneIn = (memory: Pick<BotMemoryRecord, 'history'>, botId: string, rowId: string) =>
+  memory
+    .history(botId)
+    .then((rows) => rows.some((row) => row.by.kind === 'undo' && row.by.of === rowId))
+
+async function undoneCheck(
   memory: Pick<BotMemoryRecord, 'history'>,
   botId: string,
   rowId: string,
   fresh: boolean
-): Promise<boolean> | boolean {
-  let entry = undoneByBot.get(botId)
-  if (entry?.rowId !== rowId) {
-    entry = { rowId, known: undefined, check: null }
-    undoneByBot.set(botId, entry)
-  }
-  const current = entry
-  const check = (): Promise<boolean> =>
-    memory
-      .history(botId)
-      .then((rows) => rows.some((row) => row.by.kind === 'undo' && row.by.of === rowId))
-      .then((undone) => {
-        current.known = undone
-        return undone
-      })
+): Promise<boolean> {
   if (fresh) {
     // Read behind the Undo's own row, so its answer can't be an earlier check's.
-    return check()
+    return await undoneIn(memory, botId, rowId)
   }
-  if (current.check) {
-    return current.known ?? false
+  const key = `${botId}\u0000${rowId}`
+  let check = undoneChecks.get(key)
+  if (!check) {
+    check = undoneIn(memory, botId, rowId).finally(() => undoneChecks.delete(key))
+    // A view that stopped waiting no longer observes it.
+    check.catch(() => {})
+    undoneChecks.set(key, check)
   }
-  current.check = check().finally(() => {
-    current.check = null
-  })
-  return current.known ?? current.check
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      check,
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), UNDONE_CHECK_WAIT_MS)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export async function botTidyUpView(

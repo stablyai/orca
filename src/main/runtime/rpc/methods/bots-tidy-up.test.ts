@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { initDataPath } from '../../../persistence/loading-store/user-data-path'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
@@ -78,9 +78,11 @@ describe('Undo of a tidy-up', () => {
 })
 
 describe('a polled Tidy-up view', () => {
-  it('reads slow history once, and answers later polls without waiting on it', async () => {
+  it('shares one read of slow history and answers each poll within the wait', async () => {
     installFakeAppEnvironment({ getPath: () => join('/isolated', 'profile') })
     initDataPath()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    onTestFinished(() => vi.useRealTimers())
     let release = (): void => {}
     const stalled = new Promise<void>((resolve) => (release = resolve))
     const history = vi.fn(async () => {
@@ -92,13 +94,14 @@ describe('a polled Tidy-up view', () => {
     const poll = () =>
       dispatcher.dispatch({ ...request({ botId: 'b1' }), method: 'bots.tidyUp.get' })
 
-    const first = poll()
-    const later = await Promise.all(Array.from({ length: 50 }, poll))
-    expect(later.every((answer) => answer.ok)).toBe(true)
+    const polls = Promise.all(Array.from({ length: 50 }, poll))
+    await vi.advanceTimersByTimeAsync(2_000)
+    const answers = await polls
+    expect(answers.every((answer) => answer.ok)).toBe(true)
+    expect(answers[0]).toMatchObject({ result: { tidyUp: { last: { undone: false } } } })
     expect(history).toHaveBeenCalledTimes(1)
 
     release()
-    expect(await first).toMatchObject({ ok: true, result: { tidyUp: { last: { undone: true } } } })
     expect(await poll()).toMatchObject({ result: { tidyUp: { last: { undone: true } } } })
   })
 })
