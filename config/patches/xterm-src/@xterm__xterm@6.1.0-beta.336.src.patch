@@ -1499,10 +1499,33 @@ index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e353738
    private _ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
  
 diff --git a/src/common/InputHandler.ts b/src/common/InputHandler.ts
-index 30657812f49d3dd2ec706b5e0084788afa968168..a71b12e37ee7aee974337bdfd02f5b1a4be1fe35 100644
+index 30657812f49d3dd2ec706b5e0084788afa968168..900c3fd58fceb5606a4c531cc6a2e6691119636d 100644
 --- a/src/common/InputHandler.ts
 +++ b/src/common/InputHandler.ts
-@@ -2469,6 +2469,7 @@ export class InputHandler extends Disposable implements IInputHandler {
+@@ -2432,10 +2432,22 @@ export class InputHandler extends Disposable implements IInputHandler {
+       if (params.hasSubParams(pos + advance)) {
+         const subparams = params.getSubParams(pos + advance)!;
+         let i = 0;
++        // Orca (#43868): ITU T.416 compact colon truecolor. With color mode 2 followed by
++        // exactly three value subparams they are direct RGB; the stock loop always routed
++        // the first value into the colorspace slot, shifting RGB left and dropping blue.
++        // Four values keep the leading colorspace id (xterm reference behavior).
++        // 48;2:r:g:b - mode came from a param, so the subparams are pure RGB.
++        if (accu[1] === 2 && subparams.length === 3) {
++          cSpace = 1;
++        }
+         do {
+           if (accu[1] === 5) {
+             cSpace = 1;
+           }
++          // Orca (#43868): 48:2:r:g:b - mode is subparams[0], written at i === 0.
++          else if (accu[1] === 2 && i >= 1 && subparams.length === 4 && subparams[0] === 2) {
++            cSpace = 1;
++          }
+           accu[advance + i + 1 + cSpace] = subparams[i];
+         } while (++i < subparams.length && i + advance + 1 + cSpace < accu.length);
+         break;
+@@ -2469,6 +2481,7 @@ export class InputHandler extends Disposable implements IInputHandler {
        case 58:
          attr.extended = attr.extended.clone();
          attr.extended.underlineColor = this._updateAttrColor(attr.extended.underlineColor, accu[1], accu[3], accu[4], accu[5]);
