@@ -159,7 +159,7 @@ export function useSourceControlGitHistory({
     : EMPTY_GIT_HISTORY_STATE
 
   useEffect(() => {
-    for (const key of gitHistorySlots.keys()) {
+    for (const key of latestGitHistoryRequest.keys()) {
       if (!worktreeMap.has(key)) {
         gitHistorySlots.delete(key)
         latestGitHistoryRequest.delete(key)

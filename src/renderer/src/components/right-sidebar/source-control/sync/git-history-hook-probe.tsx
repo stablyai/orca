@@ -4,7 +4,9 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, vi } from 'vitest'
 
-export const mocks = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
+const mocks = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
+
+export { mocks }
 
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitHistory: mocks.getRuntimeGitHistory
