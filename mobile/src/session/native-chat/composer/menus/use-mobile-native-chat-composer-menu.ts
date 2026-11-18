@@ -25,7 +25,8 @@ import {
   mobileComposerSkillTokens,
   type MobileComposerStructuredCatalog
 } from './mobile-native-chat-composer-menu'
-import type { ComposerMenuRow } from './MobileNativeChatComposerMenu'
+import type { ComposerMenuRow, ComposerRoomMention } from './MobileNativeChatComposerMenu'
+import { rankNativeChatRoomMentions } from '../../../../../../src/shared/native-chat/input/native-chat-room-mentions'
 
 type Selection = { start: number; end: number }
 /** Opening the menu from the + sheet narrows it to what that row named. */
@@ -39,6 +40,8 @@ export function useMobileNativeChatComposerMenu(input: {
   /** Undefined on a terminal-backed chat. */
   structuredCatalog: MobileComposerStructuredCatalog | undefined
   filePaths: readonly string[]
+  /** Set in a room: `@` lists these members instead of files. */
+  roomMentions?: readonly ComposerRoomMention[]
   onNeedFiles?: (query: string) => void
   skillDiscovery?: NativeChatSkillDiscoverySnapshot
   onNeedSkills?: () => void
@@ -56,7 +59,8 @@ export function useMobileNativeChatComposerMenu(input: {
   goalMode?: { hostSetsGoals: boolean; enter?: () => void }
   focusField: () => void
 }) {
-  const { value, onChangeText, agent, structuredCatalog, filePaths, skillDiscovery } = input
+  const { value, onChangeText, agent, structuredCatalog, filePaths, roomMentions, skillDiscovery } =
+    input
   const [cursor, setCursor] = useState(0)
   // Drives the caret only right after an insert; a permanently controlled `selection` breaks
   // manual caret placement in React Native.
@@ -129,6 +133,17 @@ export function useMobileNativeChatComposerMenu(input: {
     [beforeCaret, catalog, commandAvailable]
   )
   const rows = useMemo<ComposerMenuRow[]>(() => {
+    if (autocomplete.mode === 'mention' && roomMentions) {
+      const icons = new Map(roomMentions.map((mention) => [mention.name, mention.icon]))
+      return rankNativeChatRoomMentions([...icons.keys()], autocomplete.query)
+        .slice(0, MENU_ROWS_PER_GROUP)
+        .map((name) => ({
+          kind: 'member' as const,
+          id: `member:${name}`,
+          name,
+          icon: icons.get(name)
+        }))
+    }
     if (autocomplete.mode === 'mention') {
       return filePaths.slice(0, MENU_ROWS_PER_GROUP).map((path) => ({
         kind: 'file' as const,
@@ -140,7 +155,7 @@ export function useMobileNativeChatComposerMenu(input: {
       return []
     }
     return narrowedMenuItems(boundedMenuItems(autocomplete.items), menuKind)
-  }, [autocomplete, filePaths, menuKind])
+  }, [autocomplete, filePaths, menuKind, roomMentions])
 
   const { onNeedFiles, onNeedSkills, onSlashMenuOpen } = input
   // Scan disk skills only once a token needs them, as desktop does.
@@ -156,7 +171,7 @@ export function useMobileNativeChatComposerMenu(input: {
       onNeedSkills?.()
     }
   }, [onNeedSkills, skillsTriggered, leadingSkillTriggered])
-  const mentionQuery = autocomplete.mode === 'mention' ? autocomplete.query : null
+  const mentionQuery = autocomplete.mode === 'mention' && !roomMentions ? autocomplete.query : null
   useEffect(() => {
     if (mentionQuery !== null) {
       onNeedFiles?.(mentionQuery)
@@ -208,8 +223,11 @@ export function useMobileNativeChatComposerMenu(input: {
     setMenuKind(null)
     // Restore page field focus after a menu tap so typing continues at the inserted pick.
     input.focusField()
-    if (row.kind === 'file') {
-      const next = applyMentionSuggestion(value, cursor, row.path)
+    if (row.kind === 'file' || row.kind === 'member') {
+      const next =
+        row.kind === 'file'
+          ? applyMentionSuggestion(value, cursor, row.path)
+          : applyMentionSuggestion(value, cursor, row.name, `@${row.name}`)
       setDraft(next.draft)
       placeCaret(next.caret)
       return

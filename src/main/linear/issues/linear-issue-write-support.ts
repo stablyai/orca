@@ -123,7 +123,7 @@ export async function runLinearWrite<T>(
   await acquire(signal)
   try {
     signal?.throwIfAborted()
-    const client = signal ? createLinearClient({ apiKey: entry.apiKey, signal }) : entry.client
+    const client = signal ? createLinearClient({ ...entry.credential, signal }) : entry.client
     beforeInvoke?.()
     return await write(client)
   } catch (error) {
