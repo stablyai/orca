@@ -63,10 +63,10 @@ export async function getScopedBrowserWorktreeSelector(
   if (!client.isRemote && (hasStructuredSessionMarker() || readInjectedAgentSessionId())) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'This agent is not inside an Orca workspace folder, so this browser command would act on the tab the user is looking at. Nothing was sent.',
+      'This browser command names no workspace or page, so it would act on the tab the user is looking at. Nothing was sent.',
       {
         nextSteps: [
-          'Run it from your workspace folder, or pass --page <browserPageId> from `orca tab list --json`.'
+          'Run it from your workspace folder or pass --worktree <selector>; page commands also take --page <browserPageId> from `orca tab list --json`.'
         ]
       }
     )
