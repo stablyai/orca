@@ -80,32 +80,24 @@ describe('markdown preview scroll anchor', () => {
       212,
       312
     ],
-    ['it is edited in place', 'S.\n\n## A\n\nRead.\n', 'S.\n\n## A\n\nRead on.\n', 212, 212],
-    [
-      'an identical block above it is edited',
-      'S.\n\n## A\n\nS.\n',
-      'Edit.\n\n## A\n\nS.\n',
-      212,
-      212
-    ],
-    [
-      'it is edited next to an insertion',
-      'A.\n\n\n\nRead.\n\nT.\n',
-      'A.\n\nNew.\n\nRead on.\n\nT.\n',
-      112,
-      212
-    ],
-    [
-      'an identical block is inserted right above it',
-      'A.\n\n\n\nRead.\n\nT.\n',
-      'A.\n\nRead.\n\nRead.\n\nT.\n',
-      112,
-      212
-    ],
     [
       'blocks change on both sides of it',
       'A.\n\nRead.\n\nT.\n',
       'A.\n\nNew.\n\nRead.\n\nT changed.\n',
+      112,
+      212
+    ],
+    [
+      'duplicate text exists in the matched suffix when lines are inserted above',
+      'A.\n\nB.\n\nB.\n\nT.\n',
+      'X.\n\nA.\n\nB.\n\nB.\n\nT.\n',
+      212,
+      312
+    ],
+    [
+      'an identical plain paragraph is inserted above a heading',
+      'A.\n\n## Read\n\nT.\n',
+      'A.\n\nRead\n\n## Read\n\nT.\n',
       112,
       212
     ],

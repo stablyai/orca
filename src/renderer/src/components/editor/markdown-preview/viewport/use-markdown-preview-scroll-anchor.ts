@@ -68,14 +68,15 @@ function followMarkdownPreviewAnchor(
     const signature = previous[index].contentSignature
     return previousSpanCounts.get(signature) === 1 ? (nextSpanIndexes.get(signature) ?? null) : null
   }
-  // Keep the key when the block can't be followed, or while it still names the same text; identical text can't be told apart.
+  // Prefix/suffix matches uniquely resolve moved duplicates; within the edited span, keep same-key matches.
   const follow = (key: string): string => {
     const index = previousIndexByKey.get(key)
     const nextIndex = index === undefined ? null : nextIndexOf(index)
+    const inEdgeMatch = index !== undefined && (index < start || index >= previous.length - end)
     if (
       index === undefined ||
       nextIndex === null ||
-      nextSignatureByKey.get(key) === previous[index].contentSignature
+      (!inEdgeMatch && nextSignatureByKey.get(key) === previous[index].contentSignature)
     ) {
       return key
     }

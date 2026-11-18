@@ -139,13 +139,14 @@ export function parseMarkdownPreviewDocument(content: string): {
     const anchors: string[] = []
     collectAnchors(node, anchors, headings)
     const text = getMarkdownPreviewTreeText(node)
+    const blockKind = node.type === 'element' ? node.tagName : node.type
     return {
       index,
       anchors,
       sourceColumn: node.position?.start.column,
       estimate: Math.min(1200, Math.max(40, Math.ceil(text.length / 90) * 24 + 32)),
-      // Length stays the visible text. Src is hashed so empty-alt images do not collide.
-      contentSignature: `${getDiffContentSignature(`${text}\n${imageSourceText(node)}`)}:${text.length}`,
+      // Length stays the visible text. Tag + image src distinguish headings from paragraphs and empty-alt images.
+      contentSignature: `${getDiffContentSignature(`${blockKind}\n${text}\n${imageSourceText(node)}`)}:${text.length}`,
       ...sourceBounds(node)
     }
   })
