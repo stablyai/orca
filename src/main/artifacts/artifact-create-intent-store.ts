@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import {
   ARTIFACT_MAX_CONTENT_BYTES,
   ARTIFACT_MAX_REQUEST_BYTES,
@@ -43,9 +44,14 @@ function ensureIntentDirectory(profileId: string, userDataPath: string): string 
 const waitingCreatesByFolder = new Map<string, number>()
 
 function persistedIntentCount(folder: string): number {
-  return existsSync(folder)
-    ? readdirSync(folder).filter((name) => name.endsWith('.json')).length
-    : 0
+  try {
+    return readdirSync(folder).filter((name) => name.endsWith('.json')).length
+  } catch (error) {
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
+      return 0
+    }
+    throw error
+  }
 }
 
 function removeTemporaryIntents(directory: string): void {
@@ -199,7 +205,7 @@ export async function getOrCreateArtifactCreateIntent(
     }
     const directory = ensureIntentDirectory(profileId, userDataPath)
     removeTemporaryIntents(directory)
-    const pendingCount = readdirSync(directory).filter((name) => name.endsWith('.json')).length
+    const pendingCount = persistedIntentCount(directory)
     if (pendingCount >= MAX_PENDING_ARTIFACT_CREATES) {
       throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
     }

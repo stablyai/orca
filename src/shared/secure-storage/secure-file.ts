@@ -116,6 +116,8 @@ export function writeDurableSecureJsonFile(
   return writeSecureFile(targetPath, JSON.stringify(value, null, 2), { ...options, durable: true })
 }
 
+const discardStage = (tmpFile: string): void => rmSync(tmpFile, { force: true })
+
 type SecureWriteOptions = { shouldPublish?: () => boolean; onPublished?: () => void }
 type StagedSecureFile = { tmpFile: string; dir: string; restricted: boolean }
 
@@ -135,7 +137,7 @@ function stageSecureFile(targetPath: string, contents: string): StagedSecureFile
         : writeModeRestrictedFile(tmpFile, contents)
     return { tmpFile, dir, restricted }
   } catch (error) {
-    rmSync(tmpFile, { force: true })
+    discardStage(tmpFile)
     throw error
   }
 }
@@ -147,7 +149,7 @@ function publishStagedSecureFile(
 ): boolean {
   // Recheck after hardening; the check and rename are separate, non-atomic operations.
   if (options.shouldPublish && !options.shouldPublish()) {
-    rmSync(staged.tmpFile, { force: true })
+    discardStage(staged.tmpFile)
     return false
   }
   // The rename publishes the staged inode, so its DACL or mode is already the published file's.
@@ -177,7 +179,7 @@ export function writeSecureFile(
     }
     restricted = publishStagedSecureFile(staged, targetPath, options)
   } catch (error) {
-    rmSync(staged.tmpFile, { force: true })
+    discardStage(staged.tmpFile)
     throw error
   }
   if (options.durable) {
@@ -199,7 +201,7 @@ export async function writeDurableSecureFile(
     await fsyncPath(staged.tmpFile, process.platform === 'win32' ? 'r+' : 'r')
     restricted = publishStagedSecureFile(staged, targetPath, options)
   } catch (error) {
-    rmSync(staged.tmpFile, { force: true })
+    discardStage(staged.tmpFile)
     throw error
   }
   await bestEffortFsyncDirectory(staged.dir)
