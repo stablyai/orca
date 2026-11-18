@@ -40,6 +40,7 @@ const KEEP_SEEDS = 2
 const AGENT_PANES = 200
 // Copies and helpers to stop if the gate itself is stopped (a release bot's timeout, Ctrl-C).
 const liveCleanups = new Set()
+let launchesInFlight = 0
 let stopping = false
 // One close can take 30 s for the app plus a few seconds per daemon; a stop waits that long, then exits anyway.
 const STOP_BUDGET_MS = 60_000
@@ -188,12 +189,21 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
     throw new Error('gate is stopping')
   }
   const executablePath = createRequire(path.join(buildDir, 'package.json'))('electron')
-  const app = await electron.launch({
-    executablePath,
-    args: launchArgs(buildDir),
-    env: { ...isolatedEnv(runDir, userDataDir), ...extraEnv },
-    timeout: 180_000
-  })
+  // Counted until its close is registered, so a stop signal waits for a copy that is still starting.
+  launchesInFlight += 1
+  let app
+  try {
+    app = await electron.launch({
+      executablePath,
+      args: launchArgs(buildDir),
+      env: { ...isolatedEnv(runDir, userDataDir), ...extraEnv },
+      timeout: 180_000
+    })
+  } catch (error) {
+    launchesInFlight -= 1
+    await stopCopyDaemons(userDataDir)
+    throw error
+  }
   // Captured now: app.process() throws once the app object is closed.
   const child = app.process()
   const stderrTail = []
@@ -224,6 +234,7 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
     liveCleanups.delete(close)
   }
   liveCleanups.add(close)
+  launchesInFlight -= 1
   try {
     const page = await waitForAppWindow(app, { label, userDataDir, outDir, stderrTail })
     return { app, page, close, ownershipText: () => ownershipText }
@@ -522,7 +533,7 @@ async function main() {
 // Copies still mid-launch register only once up, so keep going until none are left or the budget runs out.
 async function stopEverything() {
   const deadline = Date.now() + STOP_BUDGET_MS
-  while (liveCleanups.size > 0 && Date.now() < deadline) {
+  while ((liveCleanups.size > 0 || launchesInFlight > 0) && Date.now() < deadline) {
     await Promise.race([
       Promise.allSettled([...liveCleanups].map((cleanup) => cleanup())),
       new Promise((resolve) => setTimeout(resolve, Math.max(0, deadline - Date.now())))

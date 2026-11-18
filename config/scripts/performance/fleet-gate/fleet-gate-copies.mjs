@@ -24,7 +24,9 @@ export function copyProfile(sourceDir, targetDir) {
 function processInfo(pid) {
   try {
     const [started, ...args] = execFileSync('ps', ['-o', 'lstart=,args=', '-p', String(pid)], {
-      encoding: 'utf8'
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: { ...process.env, LC_ALL: 'C' }
     })
       .trim()
       .split(/(?<=^\S+ \S+ +\S+ \S+ \S+) /)
@@ -34,16 +36,13 @@ function processInfo(pid) {
   }
 }
 
-/** Only a live process that matches its pid record (start time or entry path) is this copy's daemon, not a reused pid. */
+/** A live process is this copy's daemon only if it runs the recorded entry and started when the record says. */
 function isRecordedDaemon(record) {
   const live = processInfo(record.pid)
-  if (!live) {
-    return false
-  }
-  if (typeof record.entryPath === 'string' && live.args.includes(record.entryPath)) {
-    return true
-  }
   return (
+    live !== null &&
+    typeof record.entryPath === 'string' &&
+    live.args.includes(record.entryPath) &&
     typeof record.startedAtMs === 'number' &&
     Math.abs(live.startedAtMs - record.startedAtMs) < 60_000
   )
