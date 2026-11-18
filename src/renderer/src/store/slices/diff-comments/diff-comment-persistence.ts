@@ -59,7 +59,7 @@ const lastMutationNextByQueue = new Map<string, DiffComment[]>()
 // Why: bumped on every re-seed, so an in-flight write can tell whether the floor it captured is still the current one.
 const floorSeedEpochByQueue = new Map<string, number>()
 
-// Why: a failed write may still have landed, so later writes in its burst can't name what the host holds.
+// Why: a failed write may still have landed, so until a write succeeds this copy can't name what the host holds.
 const floorsUncertainAfterFailure = new Set<string>()
 
 /** One change to one copy's notes; the owner alone says which rows it reads, writes and rolls back. */
@@ -108,7 +108,6 @@ export function enqueueDiffCommentPersist(
   ) {
     lastPersistedByQueue.set(floorKey, mutation.previous)
     floorSeedEpochByQueue.set(floorKey, (floorSeedEpochByQueue.get(floorKey) ?? 0) + 1)
-    floorsUncertainAfterFailure.delete(floorKey)
   }
   lastMutationNextByQueue.set(floorKey, mutation.next)
   const run = async (): Promise<void> => {
@@ -117,7 +116,7 @@ export function enqueueDiffCommentPersist(
     // Retain state-side array rather than disk-normalized clone so rollback preserves getDiffComments identity.
     let stateList: DiffComment[] | undefined
     // What this copy last saw on disk; the host merges only the edits since then.
-    // Unknown after a failed write, so this write replaces the list as writes did before bases.
+    // Unknown after a failed write, so the next write replaces the list whole and resyncs the host.
     const base = floorsUncertainAfterFailure.has(floorKey)
       ? undefined
       : (
@@ -161,6 +160,7 @@ export function enqueueDiffCommentPersist(
       floorsUncertainAfterFailure.add(floorKey)
       throw err
     }
+    floorsUncertainAfterFailure.delete(floorKey)
     // Out-of-band replacement during await reseeded floor; never restore the older captured list as floor.
     if (floorSeedEpochByQueue.get(floorKey) === seedEpoch) {
       lastPersistedByQueue.set(floorKey, stateList)
@@ -178,7 +178,6 @@ export function enqueueDiffCommentPersist(
         lastPersistedByQueue.delete(key)
         lastMutationNextByQueue.delete(key)
         floorSeedEpochByQueue.delete(key)
-        floorsUncertainAfterFailure.delete(key)
       }
       floorKeysByQueue.delete(queueKey)
     }

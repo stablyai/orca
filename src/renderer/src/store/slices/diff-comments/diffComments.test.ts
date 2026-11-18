@@ -260,11 +260,21 @@ describe('desktop note writes beside another device', () => {
       : updates.diffComments
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     updateMeta.mockImplementation(async (write: NoteWrite) => {
       saveOnHost(write)
       return {}
+    })
+    // Failed writes in earlier tests leave this copy's next write unbased; one success resyncs it.
+    const store = createTestStore()
+    seed(store, [])
+    await store.getState().addDiffComment(capturedOwner(store, WT), {
+      worktreeId: WT,
+      filePath: 'src/foo.ts',
+      lineNumber: 1,
+      body: 'resync',
+      side: 'modified'
     })
   })
 
@@ -312,6 +322,31 @@ describe('desktop note writes beside another device', () => {
     await adding
     expect(await editing).toBe(true)
     expect(hostNotes.map((comment) => comment.body)).toEqual(['final text'])
+    errSpy.mockRestore()
+  })
+
+  it('does not duplicate a note retried after its first save landed but its reply was lost', async () => {
+    const store = createTestStore()
+    seed(store, [])
+    hostNotes = []
+    updateMeta.mockImplementationOnce(async (write: NoteWrite) => {
+      saveOnHost(write)
+      throw new Error('timed out')
+    })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const owner = capturedOwner(store, WT)
+    const note = {
+      worktreeId: WT,
+      filePath: 'src/foo.ts',
+      lineNumber: 3,
+      body: 'retried note',
+      side: 'modified' as const
+    }
+
+    expect(await store.getState().addDiffComment(owner, note)).toBeNull()
+    expect(await store.getState().addDiffComment(owner, note)).not.toBeNull()
+
+    expect(hostNotes.map((comment) => comment.body)).toEqual(['retried note'])
     errSpy.mockRestore()
   })
 })
