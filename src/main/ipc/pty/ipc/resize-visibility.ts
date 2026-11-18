@@ -27,7 +27,7 @@ import {
 } from '../delivery/debug'
 import { PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS } from '../delivery/constants'
 import { applyCumulativeAck } from '../delivery/accounting'
-import { sendModelRestoreNeededMarker } from '../delivery/payload'
+import { sendModelRestoreNeededMarker, sendPtyHiddenOutputActivity } from '../delivery/payload'
 import { isMainWindowPtyIpcEvent } from './write-input'
 import { acknowledgePaintedColdRestore } from './painted-cold-restore-ack'
 import type { PaintedRestoreAck } from '../../../../shared/terminal/replay/painted-restore-ack'
@@ -262,6 +262,9 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
         session.updateProducerFlowControl(args.id)
         session.pendingOverflowMarkedPtys.delete(args.id)
         const drop = recordHiddenRendererPtyDataDrop(args.id, pending.data.length)
+        if (drop.shouldEmitActivityNotice) {
+          sendPtyHiddenOutputActivity(session, args.id)
+        }
         if (drop.shouldEmitRestoreMarker) {
           sendModelRestoreNeededMarker(
             session,

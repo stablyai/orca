@@ -227,9 +227,11 @@ export function createAgentCompletionProcessMonitor({
       }
     },
     start: () => {
-      state.pollTrackingStarted = true
-      // A newly tracked pane polls fast while its foreground identity settles.
-      state.lastPaneActivityAt = Date.now()
+      // A newly tracked pane polls fast while its foreground identity settles; visibility re-syncs don't count as activity.
+      if (!state.pollTrackingStarted) {
+        state.pollTrackingStarted = true
+        state.lastPaneActivityAt = Date.now()
+      }
       scheduleNextPoll()
     },
     recordActivity: () => {

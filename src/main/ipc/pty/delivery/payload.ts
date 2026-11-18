@@ -59,6 +59,19 @@ export function sendModelRestoreNeededMarker(
   return true
 }
 
+/** Tells the renderer a hidden PTY printed bytes that the delivery gate dropped. */
+export function sendPtyHiddenOutputActivity(session: PtyIpcSession, id: string): void {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
+    return
+  }
+  try {
+    session.mainWindow.webContents.send('pty:hiddenOutputActivity', { id })
+  } catch (error) {
+    // Disposed frames can throw synchronously on this data path.
+    console.error('[pty] renderer hidden-output activity send failed', error)
+  }
+}
+
 export function sendPtyDataToRenderer(
   session: PtyIpcSession,
   id: string,

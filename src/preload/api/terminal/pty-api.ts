@@ -274,6 +274,8 @@ export type PtyApi = {
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
   /** Out-of-band byte-drop signal; restore the model snapshot instead of waiting on pty:data. */
   onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void) => () => void
+  /** A hidden PTY printed output that main dropped (throttled); bytes are not included. */
+  onHiddenOutputActivity: (callback: (event: { id: string }) => void) => () => void
   /** Covers only PTYs whose bytes transit local main. */
   onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void) => () => void
   /** Title-only replay snapshot for (re)attach; attention facts never replay. */
