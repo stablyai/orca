@@ -69,8 +69,11 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   let complete = true
   try {
     if (unchanged) {
-      // The original wrote nothing since the copy, so each chat is as shown here.
-      pass.baselines = missingBaselines(source, db).filter(([id]) => !forced.has(id))
+      // The original wrote nothing since the copy, so each chat is as shown here; once every
+      // chat carries its revision, only chats due a copy have work.
+      if (!kept) {
+        pass.baselines = missingBaselines(source, db).filter(([id]) => !forced.has(id))
+      }
       complete = forced.size === 0 || absorbChats(source, db, pass, false)
     } else {
       complete = absorbChats(source, db, pass, true)
@@ -167,7 +170,7 @@ function absorbChats(
   pass: Pass,
   walk: boolean
 ): boolean {
-  const adoption = readAdoption(source, db)
+  const adoption = readAdoption(source, db, walk ? null : [...pass.forced.keys()])
   runJournalTransaction(db, () => {
     for (const [sessionId, claims] of adoption.claims) {
       insertClaims(db, sessionId, claims)
@@ -200,11 +203,17 @@ function absorbChats(
   return true
 }
 
-function readAdoption(source: Database.Database, db: Database.Database): Adoption {
+/** Claims for `only` when given, so a pass over chats due a copy never replays every chat's. */
+function readAdoption(
+  source: Database.Database,
+  db: Database.Database,
+  only: readonly string[] | null
+): Adoption {
   const claims = new Map<string, Claim[]>()
   for (const claim of source
-    .prepare('SELECT upload_id,session_id,claimed_at FROM agent_session_attachment_claims')
-    .all()) {
+    .prepare(`SELECT upload_id,session_id,claimed_at FROM agent_session_attachment_claims
+      WHERE ?1 IS NULL OR session_id IN (SELECT value FROM json_each(?1))`)
+    .all(only && JSON.stringify(only))) {
     const id = String(claim.session_id)
     const list = claims.get(id) ?? []
     list.push(claim)
