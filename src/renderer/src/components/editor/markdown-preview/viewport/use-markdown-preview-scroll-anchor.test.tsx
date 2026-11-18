@@ -95,6 +95,13 @@ describe('markdown preview scroll anchor', () => {
       312
     ],
     [
+      'duplicate text exists in the matched suffix when lines are deleted above',
+      'X.\n\nA.\n\nB.\n\nB.\n\nT.\n',
+      'A.\n\nB.\n\nB.\n\nT.\n',
+      212,
+      112
+    ],
+    [
       'an identical plain paragraph is inserted above a heading',
       'A.\n\n## Read\n\nT.\n',
       'A.\n\nRead\n\n## Read\n\nT.\n',
@@ -102,11 +109,11 @@ describe('markdown preview scroll anchor', () => {
       212
     ],
     [
-      'a block is formatted inline while an identical unformatted copy is inserted below',
+      'a bold copy is inserted above an unformatted paragraph',
       'A.\n\nRead this.\n\nT.\n',
       'A.\n\nRead **this.**\n\nRead this.\n\nT.\n',
       112,
-      112
+      212
     ],
     [
       // `costarring` and `liquid` share a 32-bit FNV-1a hash.
@@ -148,6 +155,67 @@ describe('markdown preview scroll anchor', () => {
       expect(element.scrollTop).toBe(expectedScrollTop)
     }
   )
+
+  it('keeps an unmoved block when a duplicate is inserted below and follows it when shifted later', () => {
+    const element = createScrollContainer()
+    const scrollCacheKey = nextScrollCacheKey()
+    const initialBlocks = parseMarkdownPreviewDocument('A.\n\nRead **this.**\n\nT.\n').document
+      .blocks
+    const duplicateBelowBlocks = parseMarkdownPreviewDocument(
+      'A changed.\n\nRead **this.**\n\nRead this.\n\nT.\n'
+    ).document.blocks
+    const shiftedBlocks = parseMarkdownPreviewDocument(
+      'X.\n\nA changed.\n\nRead this.\n\nRead **this.**\n\nT.\n'
+    ).document.blocks
+
+    const { rerender } = renderHook(
+      ({ blocks, revision }: { blocks: MarkdownPreviewBlock[]; revision: number }) =>
+        useScrollAnchorHarness({ blocks, scrollCacheKey, revision, element }),
+      {
+        initialProps: { blocks: initialBlocks, revision: 1 }
+      }
+    )
+
+    act(() => {
+      element.scrollTop = 112
+      element.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+    })
+
+    rerender({ blocks: duplicateBelowBlocks, revision: 2 })
+    expect(element.scrollTop).toBe(112)
+
+    rerender({ blocks: shiftedBlocks, revision: 3 })
+    expect(element.scrollTop).toBe(312)
+  })
+
+  it('keeps an unmoved plain block when an identical duplicate is inserted below after an edit above', () => {
+    const element = createScrollContainer()
+    const scrollCacheKey = nextScrollCacheKey()
+    const initialBlocks = parseMarkdownPreviewDocument('A.\n\nB.\n\nT.\n').document.blocks
+    const duplicateBelowBlocks = parseMarkdownPreviewDocument('A changed.\n\nB.\n\nB.\n\nT.\n')
+      .document.blocks
+    const shiftedBlocks = parseMarkdownPreviewDocument('X.\n\nA changed.\n\nB.\n\nB.\n\nT.\n')
+      .document.blocks
+
+    const { rerender } = renderHook(
+      ({ blocks, revision }: { blocks: MarkdownPreviewBlock[]; revision: number }) =>
+        useScrollAnchorHarness({ blocks, scrollCacheKey, revision, element }),
+      {
+        initialProps: { blocks: initialBlocks, revision: 1 }
+      }
+    )
+
+    act(() => {
+      element.scrollTop = 112
+      element.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+    })
+
+    rerender({ blocks: duplicateBelowBlocks, revision: 2 })
+    expect(element.scrollTop).toBe(112)
+
+    rerender({ blocks: shiftedBlocks, revision: 3 })
+    expect(element.scrollTop).toBe(212)
+  })
 
   it('follows the anchored block across unmount and remount after an edit above it', () => {
     const firstElement = createScrollContainer()

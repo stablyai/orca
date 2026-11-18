@@ -44,8 +44,8 @@ function followMarkdownPreviewAnchor(
   const previousIndexByKey = new Map(
     previous.map((block, index) => [markdownPreviewScrollAnchorKey(block), index])
   )
-  const nextSignatureByKey = new Map(
-    next.map((block) => [markdownPreviewScrollAnchorKey(block), block.contentSignature])
+  const nextIndexByKey = new Map(
+    next.map((block, index) => [markdownPreviewScrollAnchorKey(block), index])
   )
   // Inside the edited span a block follows only when its text occurs once on each side.
   const previousSpanCounts = new Map<string, number>()
@@ -68,15 +68,26 @@ function followMarkdownPreviewAnchor(
     const signature = previous[index].contentSignature
     return previousSpanCounts.get(signature) === 1 ? (nextSpanIndexes.get(signature) ?? null) : null
   }
-  // Prefix/suffix matches uniquely resolve moved duplicates; within the edited span, keep same-key matches.
+  // Keep same-key matches unless another prefix/suffix-matched block already claimed that position.
   const follow = (key: string): string => {
     const index = previousIndexByKey.get(key)
     const nextIndex = index === undefined ? null : nextIndexOf(index)
-    const inEdgeMatch = index !== undefined && (index < start || index >= previous.length - end)
+    if (index === undefined || nextIndex === null) {
+      return key
+    }
+    const sameKeyNextIndex = nextIndexByKey.get(key)
+    const sameKeyOwnerIndex =
+      sameKeyNextIndex === undefined
+        ? null
+        : sameKeyNextIndex < start
+          ? sameKeyNextIndex
+          : sameKeyNextIndex >= next.length - end
+            ? sameKeyNextIndex - (next.length - previous.length)
+            : null
     if (
-      index === undefined ||
-      nextIndex === null ||
-      (!inEdgeMatch && nextSignatureByKey.get(key) === previous[index].contentSignature)
+      sameKeyNextIndex !== undefined &&
+      next[sameKeyNextIndex].contentSignature === previous[index].contentSignature &&
+      (sameKeyOwnerIndex === null || sameKeyOwnerIndex === index)
     ) {
       return key
     }

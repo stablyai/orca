@@ -97,21 +97,21 @@ function sourceBounds(node: Nodes): { sourceLine: number | null; sourceEndLine: 
   }
 }
 
-function imageSourceText(node: Nodes): string {
-  const sources: string[] = []
-  const collect = (current: Nodes): void => {
-    if (current.type === 'element' && current.tagName === 'img') {
-      sources.push(String(current.properties.src ?? ''))
-      return
-    }
-    if ('children' in current) {
-      for (const child of current.children) {
-        collect(child)
-      }
-    }
+const SEMANTIC_BLOCK_ATTRIBUTES = ['src', 'href', 'alt', 'checked', 'type'] as const
+
+function serializeBlockContent(node: Nodes): string {
+  if (node.type === 'text') {
+    return `T:${JSON.stringify(node.value)}`
   }
-  collect(node)
-  return sources.join('\n')
+  if (node.type !== 'element') {
+    return `${node.type}:${'value' in node ? JSON.stringify(node.value) : ''}`
+  }
+  const attrs = SEMANTIC_BLOCK_ATTRIBUTES.flatMap((key) => {
+    const value = node.properties[key]
+    return value === undefined ? [] : [`${key}=${JSON.stringify(value)}`]
+  })
+  const header = attrs.length ? `${node.tagName}[${attrs.join(',')}]` : node.tagName
+  return `<${header}>(${node.children.map((child) => serializeBlockContent(child)).join(',')})`
 }
 
 export function parseMarkdownPreviewDocument(content: string): {
@@ -139,14 +139,14 @@ export function parseMarkdownPreviewDocument(content: string): {
     const anchors: string[] = []
     collectAnchors(node, anchors, headings)
     const text = getMarkdownPreviewTreeText(node)
-    const blockKind = node.type === 'element' ? node.tagName : node.type
+    const serialized = serializeBlockContent(node)
     return {
       index,
       anchors,
       sourceColumn: node.position?.start.column,
       estimate: Math.min(1200, Math.max(40, Math.ceil(text.length / 90) * 24 + 32)),
-      // Length stays the visible text. Tag + image src distinguish headings from paragraphs and empty-alt images.
-      contentSignature: `${getDiffContentSignature(`${blockKind}\n${text}\n${imageSourceText(node)}`)}:${text.length}`,
+      // Serialized AST without source/id attrs distinguishes tags and formatting while resisting heading renumbering.
+      contentSignature: `${getDiffContentSignature(serialized)}:${serialized.length}`,
       ...sourceBounds(node)
     }
   })
