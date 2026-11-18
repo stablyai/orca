@@ -302,7 +302,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
+    const enriched = this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
+    // Replay defers children whose rollout path is unresolved; only the poll finds and reads them.
+    if (enriched && record.source === 'codex') {
+      this.requestReplayTranscriptPoll(body, enriched)
+    }
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }

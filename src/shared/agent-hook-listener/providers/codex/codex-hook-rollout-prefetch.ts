@@ -10,6 +10,7 @@ import {
   prefetchRolloutHead
 } from './codex-rollout-prefetch-scope'
 import { codexSubagentIdentityReadDue } from './codex-subagent-roster'
+import { readsIdentity } from './codex-subagent-identity'
 import { normalizedTranscriptPath } from './codex-rollout-paths'
 import { prefetchCodexSubagentTranscript } from './codex-subagent-transcript-reads'
 
@@ -75,7 +76,11 @@ export async function prefetchCodexHookRolloutReads(
     return reads
   }
   const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
-  if (transcriptPath && codexSubagentIdentityReadDue(roster, agentId, transcriptPath)) {
+  if (
+    transcriptPath &&
+    readsIdentity(transcriptPath) &&
+    codexSubagentIdentityReadDue(roster, agentId, transcriptPath)
+  ) {
     await prefetchRolloutHead(reads, transcriptPath, (size) =>
       codexSubagentIdentityReadDue(roster, agentId, transcriptPath, size)
     )

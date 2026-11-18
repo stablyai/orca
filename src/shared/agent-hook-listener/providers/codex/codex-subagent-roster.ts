@@ -9,7 +9,11 @@ import {
 } from '../../../agent-status/contracts/agent-status-field-normalization'
 import type { AgentSubagentSnapshot } from '../../../agent-status/contracts/agent-status-subagent-snapshot'
 
-import { readCodexSubagentIdentity, type CodexSubagentIdentity } from './codex-subagent-identity'
+import {
+  readCodexSubagentIdentity,
+  readsIdentity,
+  type CodexSubagentIdentity
+} from './codex-subagent-identity'
 import { usableAgentChildLabel } from '../../../agent-status/presentation/agent-child-row-name'
 import {
   agentChildWorkLiveness,
@@ -88,6 +92,11 @@ export function identityReadTarget(
     return undefined
   }
   if (child.identityMissKey === transcriptPath) {
+    return undefined
+  }
+  // A path the reader rejects is a settled miss, so no caller stats or retries it.
+  if (!readsIdentity(transcriptPath)) {
+    child.identityMissKey = transcriptPath
     return undefined
   }
   child.identityPendingPath = transcriptPath

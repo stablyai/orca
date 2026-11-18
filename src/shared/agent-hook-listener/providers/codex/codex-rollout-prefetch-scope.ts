@@ -17,6 +17,8 @@ export type PrefetchedRolloutReads = {
   closed?: true
   /** Set when a parent or reviewer read was deferred in this scope, so reviewer evidence may be stale. */
   deferred?: true
+  /** Set when the parent read itself was deferred, so children it would have found are left to the poll. */
+  parentDeferred?: true
   /** Holds the prefetched buffers' share of the read budget; release it once the hook is applied. */
   batch: RolloutReadBatch
   cursors: { filePath: string; offset: number; carry: string; read: JsonlCursorBytes | undefined }[]
@@ -126,6 +128,19 @@ export function markReviewerEvidenceDeferred(): void {
   if (prefetched) {
     prefetched.deferred = true
   }
+}
+
+/** Records that this scope deferred the parent rollout read. */
+export function markParentReadDeferred(): void {
+  if (prefetched) {
+    prefetched.deferred = true
+    prefetched.parentDeferred = true
+  }
+}
+
+/** Whether this scope deferred the parent rollout read; false outside any scope. */
+export function parentReadDeferred(): boolean {
+  return prefetched?.parentDeferred === true
 }
 
 /** Whether this hook's normalization skipped a read of reviewer evidence, which may therefore be stale. */

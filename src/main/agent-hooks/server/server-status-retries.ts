@@ -21,6 +21,7 @@ import {
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
+import { codexReplayLeftTranscriptWork } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
   ASSISTANT_MESSAGE_RETRY_MS,
@@ -50,6 +51,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     CODEX_SUBAGENT_POLL_MS,
     (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
   )
+
+  protected readonly replayTranscriptPolls = new Map<
+    string,
+    { body: unknown; original: EnrichedAgentHookEventPayload }
+  >()
 
   protected applyObservedLocalHook(
     incoming: IncomingAgentHookEvent,
@@ -93,6 +99,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   }
 
   protected clearAllTranscriptPolls(): void {
+    this.replayTranscriptPolls.clear()
     this.transcriptPollScheduler.clearAll()
     this.claudeHelperKills.clearAll()
   }
@@ -115,10 +122,37 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     previous: EnrichedAgentHookEventPayload,
     next: EnrichedAgentHookEventPayload
   ): void {
-    const poll = this.transcriptPollScheduler.peek(previous.paneKey)
-    if (poll?.original === previous && next.paneKey === previous.paneKey) {
-      poll.original = next
+    // Identity settlement replaces rows, including replayed ones still waiting for the server to bind.
+    for (const poll of [
+      this.transcriptPollScheduler.peek(previous.paneKey),
+      this.replayTranscriptPolls.get(previous.paneKey)
+    ]) {
+      if (poll?.original === previous && next.paneKey === previous.paneKey) {
+        poll.original = next
+      }
     }
+  }
+
+  /** Replay drains before the server binds, and a poll that runs then is dropped, so these wait for it to listen. */
+  protected requestReplayTranscriptPoll(
+    body: unknown,
+    original: EnrichedAgentHookEventPayload
+  ): void {
+    if (!codexReplayLeftTranscriptWork(this.state, original.paneKey)) {
+      return
+    }
+    if (this.server) {
+      this.scheduleTranscriptPoll('codex', body, original)
+    } else {
+      this.replayTranscriptPolls.set(original.paneKey, { body, original })
+    }
+  }
+
+  protected scheduleReplayTranscriptPolls(): void {
+    for (const { body, original } of this.replayTranscriptPolls.values()) {
+      this.scheduleTranscriptPoll('codex', body, original)
+    }
+    this.replayTranscriptPolls.clear()
   }
 
   protected scheduleTranscriptPoll(

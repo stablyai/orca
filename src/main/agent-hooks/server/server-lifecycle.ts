@@ -193,6 +193,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           }
           this.activateClaudeHelperObservations()
           this.maybeWriteEndpointFile()
+          this.scheduleReplayTranscriptPolls()
         },
         (error) => console.error('[agent-hooks] server error', error)
       )
@@ -206,6 +207,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   }
 
   private rollbackTransportStart(): void {
+    this.replayTranscriptPolls.clear()
     this.server?.close()
     this.server = null
     this.port = 0

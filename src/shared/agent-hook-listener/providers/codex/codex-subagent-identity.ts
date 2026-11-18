@@ -10,7 +10,8 @@ function text(value: unknown): string | undefined {
 
 export type CodexSubagentIdentity = { description?: string } | 'pending' | 'unreadable' | undefined
 
-function readsIdentity(transcriptPath: string): boolean {
+/** Only an absolute `.jsonl` rollout can carry a child's identity header. */
+export function readsIdentity(transcriptPath: string): boolean {
   return isAbsolute(transcriptPath) && extname(transcriptPath) === '.jsonl'
 }
 
