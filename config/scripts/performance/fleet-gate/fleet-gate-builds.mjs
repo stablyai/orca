@@ -1,0 +1,109 @@
+// OLD and NEW app builds for the fleet gate: refs resolved (fetched from origin if needed), built once per commit in e2e mode.
+import { execFileSync, spawnSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+export const CACHE_ROOT =
+  process.env.ORCA_FLEET_GATE_CACHE ?? path.join(os.homedir(), '.cache', 'orca-fleet-gate')
+const KEEP_BUILDS = 4
+
+export const git = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+const gitOptional = (cwd, args) => {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
+  return result.status === 0 ? result.stdout.trim() : ''
+}
+
+/** A ref that isn't local yet (a just-pushed release tag or branch) is fetched from origin once. */
+export function resolveCommit(repoRoot, ref) {
+  const local = gitOptional(repoRoot, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
+  if (local) {
+    return local
+  }
+  const asTag = spawnSync('git', ['fetch', '--quiet', 'origin', 'tag', ref], { cwd: repoRoot })
+  const fetched =
+    asTag.status === 0
+      ? gitOptional(repoRoot, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
+      : spawnSync('git', ['fetch', '--quiet', 'origin', ref], { cwd: repoRoot }).status === 0
+        ? gitOptional(repoRoot, ['rev-parse', '--verify', '--quiet', 'FETCH_HEAD^{commit}'])
+        : ''
+  if (!fetched) {
+    throw new Error(`${ref} doesn't resolve locally or on origin`)
+  }
+  return fetched
+}
+
+function run(command, args, cwd, logFile) {
+  const fd = fs.openSync(logFile, 'a')
+  const result = spawnSync(command, args, { cwd, stdio: ['ignore', fd, fd], env: process.env })
+  fs.closeSync(fd)
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(' ')} failed in ${cwd} (log ${logFile})`)
+  }
+}
+
+/** One e2e-mode build per commit, cached; a --shared clone, so nothing registers as a worktree of the checkout. */
+export function ensureBuild(repoRoot, sha) {
+  const buildsDir = path.join(CACHE_ROOT, 'builds')
+  const dir = path.join(buildsDir, sha)
+  const marker = path.join(dir, '.fleet-gate-built')
+  if (fs.existsSync(marker)) {
+    fs.utimesSync(marker, new Date(), new Date())
+    return dir
+  }
+  fs.rmSync(dir, { recursive: true, force: true })
+  fs.mkdirSync(buildsDir, { recursive: true })
+  const log = path.join(buildsDir, `${sha}.log`)
+  fs.writeFileSync(log, '')
+  console.log(`[fleet-gate] building ${sha.slice(0, 12)} (log ${log})`)
+  // A PR head or scratch commit may not be local yet; fetch it by id so --old/--new take any pushed commit.
+  if (spawnSync('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: repoRoot }).status !== 0) {
+    run('git', ['fetch', '--quiet', 'origin', sha], repoRoot, log)
+  }
+  run('git', ['clone', '--quiet', '--shared', '--no-checkout', repoRoot, dir], buildsDir, log)
+  // A blobless source repo leaves new blobs unfetched; let the clone fetch them from the same origin on checkout.
+  const filter = gitOptional(repoRoot, ['config', '--get', 'remote.origin.partialclonefilter'])
+  if (filter) {
+    run(
+      'git',
+      ['config', 'remote.origin.url', git(repoRoot, ['remote', 'get-url', 'origin'])],
+      dir,
+      log
+    )
+    run('git', ['config', 'remote.origin.promisor', 'true'], dir, log)
+    run('git', ['config', 'remote.origin.partialclonefilter', filter], dir, log)
+  }
+  run('git', ['checkout', '--quiet', '--detach', sha], dir, log)
+  if (git(dir, ['status', '--porcelain', '--untracked-files=no']) !== '') {
+    throw new Error(`checkout of ${sha.slice(0, 12)} is incomplete in ${dir} (log ${log})`)
+  }
+  run('pnpm', ['install', '--frozen-lockfile', '--prefer-offline'], dir, log)
+  run('pnpm', ['run', 'build:packages'], dir, log)
+  run(
+    process.execPath,
+    ['config/scripts/desktop-build/execution/run-electron-vite-build.mjs', '--mode', 'e2e'],
+    dir,
+    log
+  )
+  run('pnpm', ['run', 'ensure:electron-runtime'], dir, log)
+  fs.writeFileSync(marker, `${new Date().toISOString()}\n`)
+  pruneCache(buildsDir, '.fleet-gate-built', KEEP_BUILDS, new Set([dir]))
+  return dir
+}
+
+export function pruneCache(parentDir, markerName, keepCount, keep) {
+  const entries = fs
+    .readdirSync(parentDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(parentDir, entry.name))
+    .map((dir) => ({
+      dir,
+      mtime: fs.statSync(path.join(dir, markerName), { throwIfNoEntry: false })?.mtimeMs ?? 0
+    }))
+    .sort((a, b) => b.mtime - a.mtime)
+  for (const { dir } of entries.slice(keepCount)) {
+    if (!keep.has(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }
+}

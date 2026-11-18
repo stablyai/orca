@@ -82,6 +82,9 @@ export function compareRuns(runs, scenarios) {
 
 /** Launch bursts are absolute: any NEW chat that doesn't start fails, whatever OLD did (OLD is shown for contrast). */
 export function burstRows(bursts) {
+  if (bursts.length === 0) {
+    return []
+  }
   const byArm = Object.fromEntries(bursts.map((burst) => [burst.arm, burst]))
   const metrics = [
     {
@@ -126,7 +129,8 @@ export function burstRows(bursts) {
   })
 }
 
-export function formatTable({ rows, header, notes }) {
+/** result is PASS, FAIL, or INCOMPLETE when a requested workload or probe didn't run (never a silent PASS). */
+export function formatTable({ rows, header, notes, incomplete = [] }) {
   const lines = [header]
   const widths = [10, 22, 10, 10]
   const pad = (text, width) => String(text).padEnd(width)
@@ -141,14 +145,23 @@ export function formatTable({ rows, header, notes }) {
   for (const note of notes) {
     lines.push(`note: ${note}`)
   }
+  for (const reason of incomplete) {
+    lines.push(`incomplete: ${reason}`)
+  }
   const failures = rows.filter((row) => row.verdict === 'FAIL')
   const missing = rows.filter((row) => row.verdict === 'n/a')
   const result =
     failures.length > 0
-      ? `RESULT: FAIL (${failures.map((row) => `${row.scenario} ${row.metric.label}`).join(', ')})`
-      : missing.length === rows.length
-        ? 'RESULT: FAIL (no measurements)'
-        : 'RESULT: PASS'
-  lines.push(result)
-  return { text: lines.join('\n'), passed: result === 'RESULT: PASS' }
+      ? 'FAIL'
+      : incomplete.length > 0 || missing.length > 0
+        ? 'INCOMPLETE'
+        : 'PASS'
+  const detail =
+    result === 'FAIL'
+      ? ` (${failures.map((row) => `${row.scenario} ${row.metric.label}`).join(', ')})`
+      : result === 'INCOMPLETE'
+        ? ` (${String(incomplete.length + missing.length)} workload, probe or metric gap(s) above)`
+        : ''
+  lines.push(`RESULT: ${result}${detail}`)
+  return { text: lines.join('\n'), result }
 }

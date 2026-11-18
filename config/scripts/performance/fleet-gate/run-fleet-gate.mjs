@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Fleet-scale perf gate: OLD vs NEW on a ~1,900-workspace synthetic profile. Usage: docs/readme/fleet-perf-gate.md.
 import { _electron as electron } from '@stablyai/playwright-test'
-import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
+import { CACHE_ROOT, ensureBuild, git, pruneCache, resolveCommit } from './fleet-gate-builds.mjs'
 import { hotPathChanges } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
@@ -26,15 +27,25 @@ import { SCENARIOS, seedAgentStatuses } from './fleet-gate-scenarios.mjs'
 import {
   buildSyntheticFleetSeed,
   readFleetCensus,
-  readSeedReceipt
+  readSeedReceipt,
+  SEED_SHAPE
 } from './fleet-gate-synthetic-seed.mjs'
 
-const CACHE_ROOT =
-  process.env.ORCA_FLEET_GATE_CACHE ?? path.join(os.homedir(), '.cache', 'orca-fleet-gate')
-const KEEP_BUILDS = 4
 const KEEP_SEEDS = 2
 // Idle agents spread over this many workspaces; the #42104 report had ~500 keyed statuses on ~1,900 workspaces.
 const AGENT_PANES = 200
+// Only Linux gets a private display; elsewhere copies stay hidden and unpainted, so clicks and focus can't be driven.
+const PAINTED = process.platform === 'linux'
+const DEFAULT_SCENARIOS = PAINTED
+  ? [...Object.keys(SCENARIOS), 'burst']
+  : ['idle', 'streaming', 'burst']
+
+// Packaged builds don't expose the store the gate seeds, drives and probes through.
+function packagedAppUnsupported() {
+  throw new Error(
+    'packaged apps are not supported: pass the release tags (--old v1.4.262 --new <candidate>); the gate rebuilds them from source in e2e mode'
+  )
+}
 
 function parseArgs(argv) {
   const options = {
@@ -45,7 +56,7 @@ function parseArgs(argv) {
     settleMs: 120_000,
     windowMs: 30_000,
     idleWindowMs: 60_000,
-    scenarios: [...Object.keys(SCENARIOS), 'burst'],
+    scenarios: DEFAULT_SCENARIOS,
     force: false,
     pathsOnly: false,
     out: null
@@ -71,6 +82,8 @@ function parseArgs(argv) {
       '--out': () => (options.out = path.resolve(value())),
       '--force': () => (options.force = true),
       '--paths-only': () => (options.pathsOnly = true),
+      '--old-app': packagedAppUnsupported,
+      '--new-app': packagedAppUnsupported,
       '--': () => {}
     }
     if (!setters[arg]) {
@@ -84,87 +97,6 @@ function parseArgs(argv) {
     }
   }
   return options
-}
-
-const git = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
-const gitOptional = (cwd, args) => {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
-  return result.status === 0 ? result.stdout.trim() : ''
-}
-
-function run(command, args, cwd, logFile) {
-  const fd = fs.openSync(logFile, 'a')
-  const result = spawnSync(command, args, { cwd, stdio: ['ignore', fd, fd], env: process.env })
-  fs.closeSync(fd)
-  if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(' ')} failed in ${cwd} (log ${logFile})`)
-  }
-}
-
-/** One e2e-mode build per commit, cached; a --shared clone, so nothing registers as a worktree of the checkout. */
-function ensureBuild(repoRoot, sha) {
-  const buildsDir = path.join(CACHE_ROOT, 'builds')
-  const dir = path.join(buildsDir, sha)
-  const marker = path.join(dir, '.fleet-gate-built')
-  if (fs.existsSync(marker)) {
-    fs.utimesSync(marker, new Date(), new Date())
-    return dir
-  }
-  fs.rmSync(dir, { recursive: true, force: true })
-  fs.mkdirSync(buildsDir, { recursive: true })
-  const log = path.join(buildsDir, `${sha}.log`)
-  fs.writeFileSync(log, '')
-  console.log(`[fleet-gate] building ${sha.slice(0, 12)} (log ${log})`)
-  // A PR head or scratch commit may not be local yet; fetch it by id so --old/--new take any pushed commit.
-  if (spawnSync('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: repoRoot }).status !== 0) {
-    run('git', ['fetch', '--quiet', 'origin', sha], repoRoot, log)
-  }
-  run('git', ['clone', '--quiet', '--shared', '--no-checkout', repoRoot, dir], buildsDir, log)
-  // A blobless source repo leaves new blobs unfetched; let the clone fetch them from the same origin on checkout.
-  const filter = gitOptional(repoRoot, ['config', '--get', 'remote.origin.partialclonefilter'])
-  if (filter) {
-    run(
-      'git',
-      ['config', 'remote.origin.url', git(repoRoot, ['remote', 'get-url', 'origin'])],
-      dir,
-      log
-    )
-    run('git', ['config', 'remote.origin.promisor', 'true'], dir, log)
-    run('git', ['config', 'remote.origin.partialclonefilter', filter], dir, log)
-  }
-  run('git', ['checkout', '--quiet', '--detach', sha], dir, log)
-  if (git(dir, ['status', '--porcelain', '--untracked-files=no']) !== '') {
-    throw new Error(`checkout of ${sha.slice(0, 12)} is incomplete in ${dir} (log ${log})`)
-  }
-  run('pnpm', ['install', '--frozen-lockfile', '--prefer-offline'], dir, log)
-  run('pnpm', ['run', 'build:packages'], dir, log)
-  run(
-    process.execPath,
-    ['config/scripts/desktop-build/execution/run-electron-vite-build.mjs', '--mode', 'e2e'],
-    dir,
-    log
-  )
-  run('pnpm', ['run', 'ensure:electron-runtime'], dir, log)
-  fs.writeFileSync(marker, `${new Date().toISOString()}\n`)
-  pruneCache(buildsDir, '.fleet-gate-built', KEEP_BUILDS, new Set([dir]))
-  return dir
-}
-
-function pruneCache(parentDir, markerName, keepCount, keep) {
-  const entries = fs
-    .readdirSync(parentDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(parentDir, entry.name))
-    .map((dir) => ({
-      dir,
-      mtime: fs.statSync(path.join(dir, markerName), { throwIfNoEntry: false })?.mtimeMs ?? 0
-    }))
-    .sort((a, b) => b.mtime - a.mtime)
-  for (const { dir } of entries.slice(keepCount)) {
-    if (!keep.has(dir)) {
-      fs.rmSync(dir, { recursive: true, force: true })
-    }
-  }
 }
 
 // Hidden windows never paint, so clicks and screenshots stall; on Linux the copy gets its own Xvfb, never a real desktop.
@@ -461,7 +393,7 @@ async function ensureSeed({ oldSha, oldBuild, outDir }) {
 async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDir }) {
   const userDataDir = path.join(runDir, 'user-data')
   fs.cpSync(seedDir, userDataDir, { recursive: true, mode: fs.constants.COPYFILE_FICLONE })
-  const result = { arm, sha, windows: {}, census: null, notes: [] }
+  const result = { arm, sha, windows: {}, census: null, notes: [], incomplete: [] }
   const label = `${arm}-${sha.slice(0, 11)}`
   const { app, page, close } = await launchCopy({ buildDir, runDir, userDataDir, label, outDir })
   try {
@@ -471,15 +403,22 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
     }
     const renderer = await installRendererProbe(page)
     if (renderer.breakpoints === 0) {
-      result.notes.push('store notify loop not found: store pubs/wakeups not measured')
+      result.incomplete.push('store notify loop not found: store pubs/wakeups not measured')
     }
     console.log(`[fleet-gate] ${label} up; settling ${options.settleMs / 1000}s`)
     const agents = await seedAgentStatuses({ page, userDataDir, count: AGENT_PANES })
-    if (agents.panes === 0 || agents.failed > 0) {
+    if (agents.panes === 0) {
+      result.incomplete.push(`no idle agent statuses: ${JSON.stringify(agents)}`)
+    } else if (agents.failed > 0) {
       result.notes.push(`agent statuses: ${JSON.stringify(agents)}`)
     }
     await new Promise((resolve) => setTimeout(resolve, options.settleMs))
     result.census = { ...(await readFleetCensus(page)), agentPanes: agents.panes }
+    if (options.minWorkspaces && !(result.census.workspaces >= options.minWorkspaces)) {
+      result.incomplete.push(
+        `fleet loaded ${String(result.census.workspaces)} of ${String(options.minWorkspaces)} workspaces`
+      )
+    }
     await page.screenshot({ path: path.join(outDir, `${label}-${Date.now()}.png`) }).catch(() => {})
     for (const name of options.scenarios) {
       const windowMs = name === 'idle' ? options.idleWindowMs : options.windowMs
@@ -490,6 +429,11 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       const elapsed = Date.now() - started
       const main = await snapshotMainProbe(app)
       const rendererSnapshot = await renderer.snapshot()
+      if (driven.undriven) {
+        result.incomplete.push(`${name}: ${driven.undriven}`)
+      } else if (driven.needsInbound && main.in.n === 0) {
+        result.incomplete.push(`${name}: no input reached the main process`)
+      }
       result.windows[name] = {
         driven,
         elapsedMs: elapsed,
@@ -521,13 +465,10 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const repoRoot = git(process.cwd(), ['rev-parse', '--show-toplevel'])
-  const newSha = git(repoRoot, ['rev-parse', `${options.new}^{commit}`])
-  const oldSha = git(repoRoot, [
-    'rev-parse',
-    options.old
-      ? `${String(options.old)}^{commit}`
-      : git(repoRoot, ['merge-base', 'origin/main', newSha])
-  ])
+  const newSha = resolveCommit(repoRoot, options.new)
+  const oldSha = options.old
+    ? resolveCommit(repoRoot, options.old)
+    : git(repoRoot, ['merge-base', 'origin/main', newSha])
   const hot = hotPathChanges(oldSha, newSha, repoRoot)
   if (hot.length === 0 && !options.force) {
     console.log('skipped: no hot-path changes')
@@ -559,7 +500,11 @@ async function main() {
             sha: shas[arm],
             buildDir: builds[arm],
             seedDir: seed.seedDir,
-            options: { ...options, scenarios: windowScenarios },
+            options: {
+              ...options,
+              scenarios: windowScenarios,
+              minWorkspaces: seed.receipt ? SEED_SHAPE.worktrees + SEED_SHAPE.folders : 0
+            },
             outDir,
             runDir: path.join(runsRoot, `${arm}-${runs.length}`)
           })
@@ -587,6 +532,9 @@ async function main() {
   const census = runs.find((entry) => entry.census)?.census
   const rows = [...compareRuns(runs, windowScenarios), ...burstRows(bursts)]
   const notes = [...new Set(runs.flatMap((entry) => entry.notes))]
+  const incomplete = [
+    ...new Set(runs.flatMap((entry) => entry.incomplete.map((reason) => `${entry.arm} ${reason}`)))
+  ]
   for (const name of windowScenarios) {
     const drivenNotes = [
       ...new Set(runs.map((entry) => entry.windows[name]?.driven?.note).filter(Boolean))
@@ -594,24 +542,24 @@ async function main() {
     notes.push(`${name}: ${drivenNotes.join(' / ')}`)
   }
   const header = [
-    `FLEET GATE  OLD ${oldSha.slice(0, 11)}  NEW ${newSha.slice(0, 11)}  ${windowScenarios.length > 0 ? `${String(options.runs)} runs each (alternating)` : 'launch burst only'}  ${os.hostname()} ${process.platform}`,
+    `FLEET GATE  OLD ${oldSha.slice(0, 11)}  NEW ${newSha.slice(0, 11)}  ${windowScenarios.length > 0 ? `${String(options.runs)} runs each (alternating)` : 'launch burst only'}  ${os.hostname()} ${process.platform} ${virtualDisplay ? 'Xvfb' : 'hidden window, no paint'}`,
     `census (read back after settle): ${census ? `${String(census.workspaces)} workspaces, ${String(census.chatTabs)} chat tabs, ${String(census.terminalTabs)} terminal tabs, ${String(census.agentPanes)} agent panes` : 'n/a'}; seed ${seed.receipt ? `synthetic, built by ${String(seed.receipt.builtBy).slice(0, 11)}` : String(options.seed)}`,
     `hot-path files: ${hot.length}${options.force && hot.length === 0 ? ' (forced)' : ''}`
   ].join('\n')
-  const { text, passed } = formatTable({ rows, header, notes })
+  const { text, result } = formatTable({ rows, header, notes, incomplete })
   const stem = path.join(
     outDir,
     `fleet-gate-${oldSha.slice(0, 11)}-${newSha.slice(0, 11)}-${Date.now()}`
   )
   fs.writeFileSync(
     `${stem}.json`,
-    `${JSON.stringify({ oldSha, newSha, hot, census, runs, bursts, rows }, null, 2)}\n`
+    `${JSON.stringify({ oldSha, newSha, result, hot, census, incomplete, runs, bursts, rows }, null, 2)}\n`
   )
   fs.writeFileSync(`${stem}.txt`, `${text}\n`)
   console.log('=== FLEET GATE TABLE ===')
   console.log(text)
   console.log(`=== END FLEET GATE TABLE === (raw ${stem}.json)`)
-  process.exitCode = passed ? 0 : 1
+  process.exitCode = { PASS: 0, FAIL: 1, INCOMPLETE: 2 }[result]
 }
 
 // Exit explicitly: a launched copy's driver handles otherwise keep the process (and its qa-gate slot) alive.

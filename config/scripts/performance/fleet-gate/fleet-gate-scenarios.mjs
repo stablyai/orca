@@ -6,6 +6,8 @@ const STREAM_PANES = 10
 const STREAM_EVENTS_PER_SECOND = 20
 const TYPING_CHARS_PER_SECOND = 10
 const SWITCH_INTERVAL_MS = 1_000
+// A window whose workload mostly didn't happen measures nothing; above this share missed, the run is incomplete.
+const MAX_MISSED_SHARE = 0.2
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -118,11 +120,11 @@ export async function seedAgentStatuses({ page, userDataDir, count }) {
 async function streamAgentStatus({ page, userDataDir, windowMs }) {
   const endpoint = readHookEndpoint(userDataDir)
   if (!endpoint) {
-    return { note: 'no agent hook endpoint' }
+    return { note: 'no agent hook endpoint', undriven: 'no agent hook endpoint' }
   }
   const panes = (await terminalPanes(page, STREAM_PANES)).map((pane) => ({ ...pane, step: 0 }))
   if (panes.length === 0) {
-    return { note: 'no terminal panes to stream into' }
+    return { note: 'no terminal panes to stream into', undriven: 'no terminal panes' }
   }
   const deadline = Date.now() + windowMs
   let posted = 0
@@ -137,7 +139,11 @@ async function streamAgentStatus({ page, userDataDir, windowMs }) {
     posted += 1
     await sleep(1_000 / STREAM_EVENTS_PER_SECOND)
   }
-  return { note: `${posted} hook events over ${panes.length} terminal panes`, failed }
+  return {
+    note: `${posted} hook events over ${panes.length} terminal panes`,
+    failed,
+    undriven: failed > posted * MAX_MISSED_SHARE ? `${failed} of ${posted} hook posts failed` : null
+  }
 }
 
 // Setup, not measured: show a seeded workspace that has a terminal, so keys take the real PTY round trip.
@@ -175,7 +181,7 @@ async function typeIntoComposer({ page, windowMs }) {
     )
   })
   if (!target) {
-    return { note: 'no visible input' }
+    return { note: 'no visible input', undriven: 'no visible input' }
   }
   await page.locator('[data-fleet-gate-input="1"]').first().focus()
   const deadline = Date.now() + windowMs
@@ -189,7 +195,8 @@ async function typeIntoComposer({ page, windowMs }) {
   for (let index = 0; index < typed; index += 1) {
     await page.keyboard.press('Backspace')
   }
-  return { note: `${typed} keys into ${target}` }
+  // The renderer→main count is the receipt: keys that reach a terminal are written to its PTY.
+  return { note: `${typed} keys into ${target}`, needsInbound: true }
 }
 
 // Same check as the workspace-switch paint benchmark: a full-window fixed layer above z 40 swallows card clicks.
@@ -245,14 +252,16 @@ async function switchWorkspaces({ page, windowMs }) {
     return ids.slice(0, 2)
   })
   if (pair.length < 2) {
-    return { note: 'fewer than two visible workspace cards' }
+    return { note: 'fewer than two visible workspace cards', undriven: 'no two clickable cards' }
   }
-  const deadline = Date.now() + windowMs
+  const started = Date.now()
+  const deadline = started + windowMs
   let switches = 0
   let missed = 0
   let firstError = null
   while (Date.now() < deadline) {
     const id = pair[switches % 2]
+    let landed = false
     // Notices appear after a delay, so clear them before every click, not just the first.
     await dismissOverlays(page)
     try {
@@ -260,8 +269,15 @@ async function switchWorkspaces({ page, windowMs }) {
         .locator(`[data-worktree-id="${id}"] [data-worktree-card-surface]`)
         .first()
         .click({ timeout: 5_000 })
+      landed = await page
+        .waitForFunction((target) => window.__store.getState().activeWorktreeId === target, id, {
+          polling: 100,
+          timeout: 2_000
+        })
+        .then(() => true)
+        .catch(() => false)
+      firstError ??= landed ? null : 'clicked, but the workspace did not become active'
     } catch (error) {
-      missed += 1
       const lines = String(error?.message ?? error).split('\n')
       firstError ??= (
         lines.find((line) =>
@@ -271,12 +287,22 @@ async function switchWorkspaces({ page, windowMs }) {
         .trim()
         .slice(0, 200)
     }
+    if (!landed) {
+      missed += 1
+    }
     switches += 1
-    await sleep(SWITCH_INTERVAL_MS)
+    // One click per tick, so a slow click doesn't shrink the workload unnoticed.
+    await sleep(Math.max(0, started + switches * SWITCH_INTERVAL_MS - Date.now()))
   }
+  const planned = Math.floor(windowMs / SWITCH_INTERVAL_MS)
+  const landedCount = switches - missed
   return {
-    note: `${switches - missed} switches between 2 cards${firstError ? ` (first miss: ${firstError})` : ''}`,
-    missed
+    note: `${landedCount} switches between 2 cards${firstError ? ` (first miss: ${firstError})` : ''}`,
+    missed,
+    undriven:
+      landedCount < planned * (1 - MAX_MISSED_SHARE)
+        ? `${landedCount} of ${planned} planned switches landed`
+        : null
   }
 }
 
