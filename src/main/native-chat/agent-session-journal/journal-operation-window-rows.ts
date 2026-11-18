@@ -17,6 +17,8 @@ const TURN_SHAPE = `AND (kind IN ('message','turn','status') OR turn_scope_kind=
 // Rows share one reply: past this total, the largest have their tool output or patch cut.
 const WINDOW_BYTES = JOURNAL_READER_REPLY_BYTE_LIMIT / 2
 const CUT_ROW_BYTES = 64 * 1024
+// Only these carry a tool output or patch to cut; any other row comes back as stored.
+const CUTTABLE = `kind IN ('tool-call','diff')`
 
 /**
  * The window's rows from `start`, sized in SQL before any is decoded, as the read projects them:
@@ -33,17 +35,22 @@ export function readOperationWindowItems(
     WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}`
   // Plain sizes cost no parse; only a window past the budget sizes rows as projected.
   const sizes = scope.db
-    .prepare(`SELECT item_id, octet_length(payload_json) AS bytes ${rows}`)
+    .prepare(`SELECT item_id, octet_length(payload_json) AS bytes, ${CUTTABLE} AS cuttable ${rows}`)
     .all(...scope.prefix, start)
-    .map((row) => ({ itemId: String(row.item_id), bytes: Number(row.bytes), diff: false }))
+    .map((row) => ({
+      itemId: String(row.item_id),
+      bytes: Number(row.bytes),
+      cuttable: Boolean(row.cuttable),
+      diff: false
+    }))
   let total = sizes.reduce((sum, row) => sum + row.bytes, 0)
-  const large = sizes.filter((row) => row.bytes > CUT_ROW_BYTES)
+  const large = sizes.filter((row) => row.cuttable && row.bytes > CUT_ROW_BYTES)
   if (total > WINDOW_BYTES && large.length > 0) {
     const measured = new Map(
       scope.db
         .prepare(`SELECT item_id, octet_length(${projected}) AS bytes,
-          kind='tool-call' AND json_valid(payload_json)
-            AND json_extract(payload_json,'$.body.name') IS 'Diff' AS diff
+          CASE WHEN kind='tool-call' AND json_valid(payload_json)
+            AND json_extract(payload_json,'$.body.name') IS 'Diff' THEN 1 ELSE 0 END AS diff
           FROM journal_items WHERE session_id=? AND epoch=?
             AND item_id IN (SELECT value FROM json_each(?))`)
         .all(...scope.prefix, JSON.stringify(large.map((row) => row.itemId)))
@@ -57,12 +64,12 @@ export function readOperationWindowItems(
     }
   }
   if (total > WINDOW_BYTES && anchors.withoutToolOutput) {
-    // Small tool rows were counted whole, but come back without their output.
+    // Small tool rows were counted whole, but come back without their output; large ones are measured.
     total =
       Number(
         scope.db
           .prepare(`SELECT SUM(CASE WHEN octet_length(payload_json)<=${CUT_ROW_BYTES}
-          THEN octet_length(${projected}) END) AS bytes ${rows}`)
+          OR NOT ${CUTTABLE} THEN octet_length(${projected}) END) AS bytes ${rows}`)
           .get(...scope.prefix, start)?.bytes ?? 0
       ) + large.reduce((sum, row) => sum + row.bytes, 0)
   }
