@@ -22075,7 +22075,8 @@
         "titleHasUsage": "{{agent}} has usage again",
         "statusCanContinueNowAuto": "{{agent}} can continue now. Orca will continue this chat at {{time}}.",
         "statusCanContinueNow": "{{agent}} can continue now.",
-        "titleCanContinueNow": "{{agent}} can continue now"
+        "titleCanContinueNow": "{{agent}} can continue now",
+        "turnOnAutoContinue": "Continue automatically when limits reset"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
