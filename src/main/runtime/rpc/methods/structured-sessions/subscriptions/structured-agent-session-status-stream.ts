@@ -8,6 +8,7 @@ import { defineStreamingMethod, type RpcContext } from '../../../core'
 import { requireStructuredHost as requireHost } from '../creation/structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
 import { clientReadsStructuredSessionAgent } from '../structured-agent-session-policy'
+import { legacyClosedChatNameRows } from './structured-agent-session-status-legacy-names'
 
 /** Ties a stream to both ends that can close it — the runtime's subscription registry and the
  *  transport abort — so either one runs `onClose` exactly once. */
@@ -82,9 +83,13 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
                     })
                   }
                 : {}),
-              sessions: event.sessions.filter((session) =>
-                clientReadsStructuredSessionAgent(ctx, session.agent)
-              )
+              sessions: [
+                ...event.sessions,
+                // The status snapshot (the naming one carries active ids) restores closed names.
+                ...(event.namingActiveSessionIds
+                  ? []
+                  : legacyClosedChatNameRows(ctx, event.sessions, host.deps.store.listConversations()))
+              ].filter((session) => clientReadsStructuredSessionAgent(ctx, session.agent))
             })
           } else if (
             event.type !== 'status' ||

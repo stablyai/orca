@@ -5,6 +5,7 @@ import {
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
 } from './structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_RECORD_NAMES_CLIENT_CAPABILITY } from './agent-session-record-names-capability'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../requests/agent-session-current-requests-capability'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../background-tasks/agent-session-background-task-child-views-capability'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../lifecycle/operations/agent-session-create-capabilities'
@@ -45,5 +46,7 @@ export const STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES = [
   AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-  AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY
+  AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
+  // Closed chats' names come from conversationNames; the host need not resend their status rows.
+  AGENT_SESSION_RECORD_NAMES_CLIENT_CAPABILITY
 ] as const
