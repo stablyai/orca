@@ -198,6 +198,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     onToggleExpandedTurn: () => setExpanded(!expanded),
     onOpenSubagent: scope.open,
     onScrollMessageToTop: scrollMessageToTop,
+    readerAtEnd: () => true,
     onRevealDiff: () => {},
     actionablePromptIds: session?.hostWork?.actionablePromptIds
   }
