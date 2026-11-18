@@ -9,6 +9,7 @@ import type {
   GitStatusEntry,
   GitUpstreamStatus
 } from '../../../../../../shared/git/status/git-status-types'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 const messages: NativeChatMessage[] = [
   {
@@ -85,6 +86,14 @@ export const hideShown = defineFixture({
 })
 
 const WORKTREE_ID = 'fixture-wt'
+const WORKTREE_PATH = '/Users/alice/orca/workspaces/orca/feature-x'
+const STATUS_HEAD = 'aaa111'
+const fixtureWorktree = makeWorktree({
+  id: WORKTREE_ID,
+  repoId: 'fixture-repo',
+  path: WORKTREE_PATH,
+  head: STATUS_HEAD
+})
 const greetingEntry: GitStatusEntry = {
   path: '/Users/alice/orca/workspaces/orca/feature-x/src/components/greeting.ts',
   status: 'modified',
@@ -99,13 +108,15 @@ const unpushed: GitUpstreamStatus = {
   hasUpstream: true,
   upstreamName: 'origin/feature-x',
   ahead: 2,
-  behind: 0
+  behind: 0,
+  head: STATUS_HEAD
 }
 const pushed: GitUpstreamStatus = {
   hasUpstream: true,
   upstreamName: 'origin/feature-x',
   ahead: 0,
-  behind: 0
+  behind: 0,
+  head: STATUS_HEAD
 }
 
 function CardInWorktree() {
@@ -118,7 +129,9 @@ function CardInWorktree() {
 
 function gitStore(entries: GitStatusEntry[], upstream: GitUpstreamStatus) {
   return {
+    worktreesByRepo: { 'fixture-repo': [fixtureWorktree] },
     gitStatusByWorktree: { [WORKTREE_ID]: entries },
+    gitStatusHeadByWorktree: { [WORKTREE_ID]: STATUS_HEAD },
     remoteStatusesByWorktree: { [WORKTREE_ID]: upstream }
   }
 }
@@ -131,6 +144,11 @@ export const uncommitted = defineFixture({
 export const mixedUncommitted = defineFixture({
   width: 560,
   store: gitStore([statusEntry], unpushed),
+  render: () => <CardInWorktree />
+})
+export const diverged = defineFixture({
+  width: 560,
+  store: gitStore([{ ...greetingEntry, added: 2, removed: 0 }, statusEntry], unpushed),
   render: () => <CardInWorktree />
 })
 export const committedUnpushed = defineFixture({
