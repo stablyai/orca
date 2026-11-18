@@ -18,6 +18,7 @@ export function getZotzAgentLaunchQueue(): ZotzAgentLaunchQueue | null {
 type HoldableSpawnArgs = {
   launchAgent?: unknown
   agentLaunch?: unknown
+  command?: unknown
   telemetry?: { agent_kind?: unknown; launch_source?: unknown }
   spawnIntent?: unknown
   sessionId?: string
@@ -52,6 +53,29 @@ function launchPriority(args: HoldableSpawnArgs, origin: 'ui' | 'runtime'): Zotz
   return source === 'mobile' || source === 'cli' ? 'remote' : 'automation'
 }
 
+// Everything that would start the agent; without them the pane opens as a plain shell.
+const AGENT_LAUNCH_KEYS = [
+  'command',
+  'commandDelivery',
+  'startupCommandDelivery',
+  'launchAgent',
+  'agentLaunch',
+  'launchConfig',
+  'launchToken'
+] as const
+
+/** A canceled launch still spawns its pane (or it would retry), only without the agent. */
+function withoutAgentLaunch(args: HoldableSpawnArgs): void {
+  for (const key of AGENT_LAUNCH_KEYS) {
+    Reflect.deleteProperty(args, key)
+  }
+  if (args.telemetry) {
+    const { agent_kind: _agent, ...telemetry } = args.telemetry
+    void _agent
+    args.telemetry = telemetry
+  }
+}
+
 /**
  * Waits for the memory governor before a new agent process starts (docs/zotz/PLAN.md §8c).
  * Reattaching a live session or restoring after a restart never waits: those are paced upstream.
@@ -64,11 +88,17 @@ export function holdZotzAgentSpawn(
   if (!launchQueue || !agent || args.spawnIntent !== undefined || args.sessionId) {
     return undefined
   }
-  return launchQueue.admit({
-    agent,
-    priority: launchPriority(args, origin),
-    paneKey: resolveEarlyPaneKey(args),
-    label: args.worktreeId ?? agent,
-    signal: args.signal
-  })
+  return launchQueue
+    .admit({
+      agent,
+      priority: launchPriority(args, origin),
+      paneKey: resolveEarlyPaneKey(args),
+      label: args.worktreeId ?? agent,
+      signal: args.signal
+    })
+    .then((admission) => {
+      if (admission === 'canceled') {
+        withoutAgentLaunch(args)
+      }
+    })
 }

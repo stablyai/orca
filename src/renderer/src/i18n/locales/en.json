@@ -25936,7 +25936,35 @@
         "tooltip": "Agent queue and memory"
       },
       "settingLabel": "Agent queue by memory",
-      "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting."
+      "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting.",
+      "canceledNotice": "{{agent}} canceled in the queue: it did not start.",
+      "dismissCanceled": "Dismiss",
+      "canceledMark": "Canceled"
+    },
+    "sidebar": {
+      "home": "Home",
+      "create": "Create",
+      "folders": "Folders",
+      "empty": "Add a project from GitHub or a local folder to start.",
+      "newConversationIn": "New conversation in {{project}}",
+      "settingLabel": "Simple sidebar",
+      "settingDescription": "Projects with a + button and only the conversations you started. Turn it off to see every workspace card, branch and agent.",
+      "archived": "Conversation archived",
+      "undo": "Undo",
+      "rename": "Rename",
+      "duplicate": "Duplicate in a new worktree",
+      "archive": "Archive",
+      "delete": "Delete",
+      "conversationActions": "Conversation actions"
+    },
+    "composer": {
+      "worktreeLabel": "Worktree",
+      "worktreeOff": "The conversation works on this branch in the project folder. Zotz switches the folder to it first.",
+      "branchLabel": "Branch",
+      "worktreeOn": "A new worktree is created from this branch; your project folder stays as it is.",
+      "switchFailed": "The project folder cannot switch to that branch",
+      "useWorktree": "Use a worktree instead",
+      "stayOnBranch": "Stay on {{branch}}"
     },
     "orcaPluginCatalog": {
       "settingLabel": "Download Orca's plugin catalog",

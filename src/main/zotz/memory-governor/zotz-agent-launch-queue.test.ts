@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computeZotzMemoryGovernorDefaults } from '../../../shared/zotz/agent-queue/zotz-memory-governor-defaults'
 import type { ZotzMemoryGovernorState } from './zotz-memory-governor-service'
-import { ZotzAgentLaunchCanceledError, ZotzAgentLaunchQueue } from './zotz-agent-launch-queue'
+import { ZotzAgentLaunchQueue } from './zotz-agent-launch-queue'
 
 const GB = 1024 ** 3
 // Samples and the queue share this clock, so every sample counts as fresh.
@@ -21,7 +21,7 @@ function fakeGovernor() {
     getState: () => state,
     getLedger: () => ({}),
     wake: () => {},
-    sample(availableGb: number, runningAgents: number) {
+    sample(availableGb: number, runningAgents: number, paneKeys: readonly string[] = []) {
       state = {
         totalBytes: 16 * GB,
         availableBytes: availableGb * GB,
@@ -29,7 +29,7 @@ function fakeGovernor() {
         // A 16 GB machine: 2 agents at a time, 2.4 GB always free.
         limits: computeZotzMemoryGovernorDefaults(16 * GB),
         agents: Array.from({ length: runningAgents }, (_, index) => ({
-          paneKey: `running-${index}`,
+          paneKey: paneKeys[index] ?? `running-${index}`,
           agent: 'claude' as const,
           state: 'working' as const,
           worktreeId: null,
@@ -93,9 +93,44 @@ describe('ZotzAgentLaunchQueue', () => {
     const forced = queue.admit({ agent: 'claude', priority: 'remote', paneKey: 'b', label: 'b' })
     queue.cancel('a')
     queue.forceStart('b')
-    await expect(canceled).rejects.toBeInstanceOf(ZotzAgentLaunchCanceledError)
-    await expect(forced).resolves.toBeUndefined()
+    await expect(canceled).resolves.toBe('canceled')
+    await expect(forced).resolves.toBe('admitted')
     expect(queue.list()).toEqual([])
+  })
+
+  it('keeps a canceled pane canceled when it respawns, until the mark is dismissed', async () => {
+    const governor = fakeGovernor()
+    const queue = new ZotzAgentLaunchQueue(governor, now)
+    governor.sample(3, 0)
+    void queue.admit({ agent: 'claude', priority: 'manual', paneKey: 'a', label: 'wt-1' })
+    queue.cancel('a')
+
+    // The pane asks again with the same key: it must not rejoin the backlog.
+    await expect(
+      queue.admit({ agent: 'claude', priority: 'manual', paneKey: 'a', label: 'wt-1' })
+    ).resolves.toBe('canceled')
+    expect(queue.list()).toEqual([])
+    expect(queue.listCanceled().map((entry) => [entry.id, entry.label])).toEqual([['a', 'wt-1']])
+
+    queue.dismissCanceled('a')
+    expect(queue.listCanceled()).toEqual([])
+  })
+
+  it('forgets a launch whose pane closed without marking it canceled', async () => {
+    const governor = fakeGovernor()
+    const queue = new ZotzAgentLaunchQueue(governor, now)
+    governor.sample(3, 0)
+    const closing = new AbortController()
+    const launch = queue.admit({
+      agent: 'claude',
+      priority: 'manual',
+      paneKey: 'a',
+      label: 'wt-1',
+      signal: closing.signal
+    })
+    closing.abort()
+    await expect(launch).resolves.toBe('canceled')
+    expect(queue.listCanceled()).toEqual([])
   })
 
   it('starts everything waiting when the queue is turned off and holds nothing new', async () => {
@@ -104,10 +139,37 @@ describe('ZotzAgentLaunchQueue', () => {
     governor.sample(3, 0)
     const waiting = queue.admit({ agent: 'codex', priority: 'manual', paneKey: 'a', label: 'a' })
     queue.setEnabled(false)
-    await expect(waiting).resolves.toBeUndefined()
+    await expect(waiting).resolves.toBe('admitted')
     await expect(
       queue.admit({ agent: 'codex', priority: 'manual', paneKey: 'b', label: 'b' })
-    ).resolves.toBeUndefined()
+    ).resolves.toBe('admitted')
     expect(queue.list()).toEqual([])
+  })
+
+  it('stops reserving for an admitted agent once a sample measures it', async () => {
+    const governor = fakeGovernor()
+    const queue = new ZotzAgentLaunchQueue(governor, now)
+    const started: string[] = []
+    const launch = (paneKey: string) =>
+      queue.admit({ agent: 'codex', priority: 'manual', paneKey, label: paneKey }).then(() => {
+        started.push(paneKey)
+      })
+
+    // 16 GB: two agents at a time; one already runs, so only the first launch fits.
+    governor.sample(12, 1)
+    const first = launch('first')
+    void launch('second')
+    await first
+    expect(started).toEqual(['first'])
+
+    // The next sample measures "first"; its reservation must not take the last slot twice.
+    governor.sample(11, 2, ['running-0', 'first'])
+    await Promise.resolve()
+    expect(started).toEqual(['first'])
+
+    // "running-0" ends: the slot frees at once, without waiting out the reservation.
+    governor.sample(12, 1, ['first'])
+    await Promise.resolve()
+    expect(started).toEqual(['first', 'second'])
   })
 })

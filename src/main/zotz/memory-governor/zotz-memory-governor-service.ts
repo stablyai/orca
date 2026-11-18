@@ -5,6 +5,7 @@ import {
 } from '../../../shared/zotz/agent-queue/zotz-agent-memory-ledger'
 import type { ZotzMemoryGovernorLimits } from '../../../shared/zotz/agent-queue/zotz-memory-governor-defaults'
 import {
+  strongerZotzMemoryPressure,
   zotzMemoryPressure,
   type ZotzMemoryPressure
 } from '../../../shared/zotz/agent-queue/zotz-memory-pressure'
@@ -29,6 +30,8 @@ export type ZotzMemoryGovernorState = {
 type ZotzMemoryGovernorDeps = {
   sampler: ZotzAgentMemorySampler
   collectHost: () => Promise<HostMemory>
+  /** What the OS reports beyond free memory (macOS: kernel level, swap growth). */
+  readSystemPressure?: () => Promise<ZotzMemoryPressure>
   limits: ZotzMemoryGovernorLimits
   loadLedger: () => Promise<ZotzAgentMemoryLedger>
   saveLedger: (ledger: ZotzAgentMemoryLedger) => Promise<void>
@@ -98,9 +101,10 @@ export class ZotzMemoryGovernorService {
   private async sampleOnce(): Promise<void> {
     this.sampling = true
     try {
-      const [host, sample] = await Promise.all([
+      const [host, sample, systemPressure] = await Promise.all([
         this.deps.collectHost(),
-        this.deps.sampler.sample()
+        this.deps.sampler.sample(),
+        this.deps.readSystemPressure?.() ?? Promise.resolve<ZotzMemoryPressure>('ok')
       ])
       if (sample.finished.length > 0) {
         for (const run of sample.finished) {
@@ -117,11 +121,14 @@ export class ZotzMemoryGovernorService {
       this.state = {
         totalBytes: host.totalMemory,
         availableBytes: host.availableMemory,
-        pressure: zotzMemoryPressure({
-          availableBytes: host.availableMemory,
-          totalBytes: host.totalMemory,
-          minFreeBytes: this.deps.limits.minFreeBytes
-        }),
+        pressure: strongerZotzMemoryPressure(
+          zotzMemoryPressure({
+            availableBytes: host.availableMemory,
+            totalBytes: host.totalMemory,
+            minFreeBytes: this.deps.limits.minFreeBytes
+          }),
+          systemPressure
+        ),
         limits: this.deps.limits,
         agents: sample.agents,
         finished: this.finished,
