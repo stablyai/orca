@@ -11,6 +11,8 @@ export type ZotzConversationRow = {
   title: string
   branch: string | null
   lastActivityAt: number
+  /** Null for loose folders, which have no worktree actions. */
+  worktree: Worktree | null
 }
 
 export type ZotzProjectSection = {
@@ -70,7 +72,8 @@ export function buildZotzProjectSections(input: {
           id: worktree.id,
           title: worktree.displayName || branch || worktree.path,
           branch,
-          lastActivityAt: worktree.lastActivityAt
+          lastActivityAt: worktree.lastActivityAt,
+          worktree
         }
       })
       .sort(byRecentActivity)
@@ -93,7 +96,8 @@ export function buildZotzFolderConversations(input: {
       id: folderWorkspaceKey(folder.id),
       title: folder.name || folder.folderPath,
       branch: null,
-      lastActivityAt: 0
+      lastActivityAt: 0,
+      worktree: null
     }))
 }
 

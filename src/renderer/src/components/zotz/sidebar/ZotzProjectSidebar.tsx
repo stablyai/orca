@@ -24,6 +24,7 @@ import {
   type ZotzConversationStatus
 } from './zotz-project-conversations'
 import { useZotzGitHubRepoIcons } from './use-zotz-github-repo-icons'
+import { ZotzConversationMenu } from './ZotzConversationMenu'
 
 function AddProjectButton(): React.JSX.Element {
   const t = useTranslate()
@@ -63,7 +64,7 @@ function ConversationRow({
       aria-current={active ? 'page' : undefined}
       onClick={() => activateAndRevealWorkspace(row.id)}
       className={cn(
-        'flex w-full min-w-0 items-start gap-2 rounded-md py-1.5 pr-2 pl-8 text-left transition-colors',
+        'flex w-full min-w-0 items-start gap-2 rounded-md py-1.5 pr-8 pl-8 text-left transition-colors',
         active
           ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
           : 'text-worktree-sidebar-foreground/80 hover:bg-worktree-sidebar-foreground/8'
@@ -181,12 +182,13 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
           <section key={repo.id} className="mb-2">
             <ProjectHeader repo={repo} />
             {conversations.map((row) => (
-              <ConversationRow
-                key={row.id}
-                row={row}
-                active={row.id === activeWorktreeId}
-                status={statusByWorkspace.get(row.id) ?? null}
-              />
+              <ZotzConversationMenu key={row.id} worktree={row.worktree}>
+                <ConversationRow
+                  row={row}
+                  active={row.id === activeWorktreeId}
+                  status={statusByWorkspace.get(row.id) ?? null}
+                />
+              </ZotzConversationMenu>
             ))}
           </section>
         ))}

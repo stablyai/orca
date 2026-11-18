@@ -25950,7 +25950,14 @@
       "empty": "Add a project from GitHub or a local folder to start.",
       "newConversationIn": "New conversation in {{project}}",
       "settingLabel": "Simple sidebar",
-      "settingDescription": "Projects with a + button and only the conversations you started. Turn it off to see every workspace card, branch and agent."
+      "settingDescription": "Projects with a + button and only the conversations you started. Turn it off to see every workspace card, branch and agent.",
+      "archived": "Conversation archived",
+      "undo": "Undo",
+      "rename": "Rename",
+      "duplicate": "Duplicate in a new worktree",
+      "archive": "Archive",
+      "delete": "Delete",
+      "conversationActions": "Conversation actions"
     },
     "composer": {
       "worktreeLabel": "Create a worktree",

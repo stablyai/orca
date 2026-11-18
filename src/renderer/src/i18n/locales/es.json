@@ -24324,7 +24324,14 @@
       "empty": "Agrega un proyecto desde GitHub o una carpeta local para empezar.",
       "newConversationIn": "Nueva conversación en {{project}}",
       "settingLabel": "Barra lateral simple",
-      "settingDescription": "Proyectos con un botón + y solo las conversaciones que tú iniciaste. Apágala para ver todas las tarjetas de workspaces, ramas y agentes."
+      "settingDescription": "Proyectos con un botón + y solo las conversaciones que tú iniciaste. Apágala para ver todas las tarjetas de workspaces, ramas y agentes.",
+      "archived": "Conversación archivada",
+      "undo": "Deshacer",
+      "rename": "Renombrar",
+      "duplicate": "Duplicar en un worktree nuevo",
+      "archive": "Archivar",
+      "delete": "Eliminar",
+      "conversationActions": "Acciones de la conversación"
     },
     "composer": {
       "worktreeLabel": "Crear un worktree",
