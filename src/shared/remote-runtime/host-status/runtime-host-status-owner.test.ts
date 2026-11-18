@@ -157,3 +157,17 @@ it('re-verifies a persistent host when its transport returns, without another ex
   expect(owner.read().verification).toBe('verified')
   expect(request).toHaveBeenCalledTimes(2)
 })
+
+it('answers background refreshes of a failing host from its backoff until a forced check', async () => {
+  const { owner, request, publish } = createOwner()
+  request.mockResolvedValue(runtimeHostStatusFailure('runtime_unavailable', 'host down'))
+  await owner.refresh()
+  const publications = publish.mock.calls.length
+  for (let index = 0; index < 5; index += 1) {
+    expect((await owner.refresh()).ok).toBe(false)
+  }
+  expect(request).toHaveBeenCalledOnce()
+  expect(publish).toHaveBeenCalledTimes(publications)
+  await owner.refresh({ force: true })
+  expect(request).toHaveBeenCalledTimes(2)
+})
