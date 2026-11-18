@@ -180,10 +180,13 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
 
   async stopHelperForDevice(
     deviceId: string,
-    _options: { helperPid?: number; includeOrphaned?: boolean } = {}
+    options: { helperPid?: number; includeOrphaned?: boolean; shutdownDevice?: boolean } = {}
   ): Promise<void> {
     // Only live handles establish ownership; scrcpy socket names are shared with other tools.
     this.streams.stop(deviceId)
+    if (options.shutdownDevice) {
+      await this.shutdownDevice(deviceId)
+    }
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {

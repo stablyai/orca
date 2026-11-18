@@ -159,12 +159,17 @@ export class RuntimeEmulatorAttach {
         }
         throw error
       }
-      if (worktreeId) {
-        bridge.registerActiveEmulator(worktreeId, info, { managed: true })
-      }
+      const affected = worktreeId
+        ? bridge.registerActiveEmulator(worktreeId, info, { managed: true })
+        : []
       await lease.release()
       assertCurrent()
       remember()
+      for (const owner of affected ?? []) {
+        if (owner !== worktreeId) {
+          this.notify(owner, info)
+        }
+      }
       if (worktreeId) {
         this.notify(worktreeId, info, params.focus)
       }

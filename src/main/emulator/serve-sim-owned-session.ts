@@ -6,50 +6,17 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { EmulatorError } from './emulator-errors'
+import { SERVE_SIM_OWNED_SERVER } from './serve-sim-owned-server'
 import { getServeSimEnv, type ServeSimExecutable } from './serve-sim-execution'
 import type { EmulatorSessionInfo } from './emulator-types'
-
-// The public middleware lets the OS allocate the listening port without serve-sim's port-killing CLI.
-const SERVER = `
-const { createServer } = require('node:http');
-(async () => {
-  const { simMiddleware } = await import(process.argv[1]);
-  const device = process.argv[2];
-  const token = '/' + process.argv[3];
-  const prefix = token + '/helper/' + device + '/';
-  const middleware = simMiddleware({ basePath: '/', device });
-  const route = req => {
-    try {
-      const url = new URL(req.url, 'http://127.0.0.1');
-      if (req.method === 'GET' && url.pathname === '/api/event-log') {
-        url.searchParams.set('device', device);
-        req.url = url.pathname + url.search;
-        return true;
-      }
-      if (!url.pathname.startsWith(prefix)) return false;
-      req.url = url.pathname.slice(token.length) + url.search;
-      return true;
-    } catch { return false; }
-  };
-  const server = createServer((req, res) => {
-    if (!route(req)) { res.writeHead(404); res.end(); return; }
-    Promise.resolve(middleware(req, res)).catch(() => { res.destroy(); });
-  });
-  server.on('upgrade', (req, socket, head) => {
-    if (!route(req)) { socket.destroy(); return; }
-    middleware.handleUpgrade(req, socket, head);
-  });
-  server.listen(0, '127.0.0.1', () => console.log('ORCA_PORT:' + server.address().port));
-  process.stdin.resume();
-  process.stdin.on('end', () => process.exit(0));
-})().catch(error => { console.error(error); process.exit(1); });
-`
 
 type OwnedSession = {
   info: EmulatorSessionInfo
   child: ChildProcess
   stateRoot: string
   lock: string
+  stopping: boolean
+  stopInProgress: boolean
 }
 
 export class ServeSimOwnedSessions {
@@ -63,6 +30,12 @@ export class ServeSimOwnedSessions {
     ready: (info: EmulatorSessionInfo) => Promise<boolean>
   ): Promise<EmulatorSessionInfo> {
     const current = this.sessions.get(udid)
+    if (current?.stopping) {
+      throw new EmulatorError(
+        'emulator_helper_failed',
+        `Simulator ${udid} ownership requires cleanup before reattach.`
+      )
+    }
     if (current && current.child.exitCode === null && current.child.signalCode === null) {
       if (!(await ready(current.info))) {
         throw new EmulatorError(
@@ -71,6 +44,12 @@ export class ServeSimOwnedSessions {
         )
       }
       return current.info
+    }
+    if (current) {
+      throw new EmulatorError(
+        'emulator_helper_failed',
+        `Simulator ${udid} ownership requires cleanup before reattach.`
+      )
     }
     const pending = this.starting.get(udid)
     if (pending) {
@@ -116,7 +95,7 @@ export class ServeSimOwnedSessions {
       const token = randomUUID()
       child = spawnProcess({
         program: executable.command,
-        args: ['-e', SERVER, middleware, udid, token],
+        args: ['-e', SERVE_SIM_OWNED_SERVER, middleware, udid, token],
         env: { ...getServeSimEnv(executable), TMPDIR: stateRoot },
         stdio: ['pipe', 'pipe', 'pipe']
       })
@@ -179,9 +158,19 @@ export class ServeSimOwnedSessions {
           'Simulator helper stream is not reachable.'
         )
       }
-      const session: OwnedSession = { info, child, stateRoot, lock }
+      const session: OwnedSession = {
+        info,
+        child,
+        stateRoot,
+        lock,
+        stopping: false,
+        stopInProgress: false
+      }
       this.sessions.set(udid, session)
       child.once('exit', () => {
+        if (session.stopping) {
+          return
+        }
         if (this.sessions.get(udid) === session) {
           this.sessions.delete(udid)
         }
@@ -252,10 +241,10 @@ export class ServeSimOwnedSessions {
     return session.stateRoot
   }
 
-  async stop(udid: string, helperPid?: number): Promise<void> {
+  async stop(udid: string, helperPid?: number, shutdown?: () => Promise<void>): Promise<void> {
     const session = this.sessions.get(udid)
     if (!session) {
-      if (helperPid !== undefined) {
+      if (helperPid !== undefined && !shutdown) {
         return
       }
       throw new EmulatorError('emulator_no_active', `No owned simulator helper for ${udid}.`)
@@ -266,7 +255,29 @@ export class ServeSimOwnedSessions {
         `Simulator ${udid} helper changed before it could be stopped.`
       )
     }
-    await this.stopChild(session.child)
+    if (session.stopInProgress) {
+      throw new EmulatorError('emulator_helper_failed', `Simulator ${udid} is already stopping.`)
+    }
+    session.stopping = true
+    session.stopInProgress = true
+    try {
+      await this.stopChild(session.child)
+      if (shutdown) {
+        await shutdown()
+      }
+      rmSync(session.stateRoot, { recursive: true, force: true })
+      rmSync(session.lock, { recursive: true, force: true })
+      if (this.sessions.get(udid) === session) {
+        this.sessions.delete(udid)
+      }
+    } catch (error) {
+      if (session.child.exitCode === null && session.child.signalCode === null) {
+        session.stopping = false
+      }
+      throw error
+    } finally {
+      session.stopInProgress = false
+    }
   }
 
   private async stopChild(child: ChildProcess): Promise<void> {

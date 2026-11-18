@@ -111,6 +111,51 @@ describe('EmulatorBridge helper ownership', () => {
     expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
   })
 
+  it('detaches a dead helper without shutting down a simulator another runtime may own', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const ios = bridge.listBackends().find((backend) => backend.kind === 'ios')!
+    vi.spyOn(ios, 'isSessionReusable').mockResolvedValueOnce(false)
+    const stop = vi.spyOn(ios, 'stopHelperForDevice').mockResolvedValueOnce()
+    await bridge.stopActiveForSwitch('wt-1')
+    expect(stop).toHaveBeenCalledWith(
+      'device-1',
+      expect.objectContaining({ shutdownDevice: false })
+    )
+    expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
+  })
+
+  it('keeps the workspace association when stopping its owned helper fails', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const ios = bridge.listBackends().find((backend) => backend.kind === 'ios')!
+    const stop = vi
+      .spyOn(ios, 'stopHelperForDevice')
+      .mockRejectedValueOnce(new Error('ownership lost'))
+    await expect(bridge.shutdown(undefined, 'wt-1')).rejects.toThrow('ownership lost')
+    expect(bridge.getActiveForWorktree('wt-1')?.deviceUdid).toBe('device-1')
+    stop.mockRestore()
+  })
+
+  it('does not restore a stale association over a newer selection', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const ios = bridge.listBackends().find((backend) => backend.kind === 'ios')!
+    let fail!: (error: Error) => void
+    vi.spyOn(ios, 'stopHelperForDevice').mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          fail = reject
+        })
+    )
+    const stopping = bridge.shutdown(undefined, 'wt-1')
+    await vi.waitFor(() => expect(fail).toBeDefined())
+    bridge.registerActiveEmulator('wt-1', session('device-2'), { managed: true })
+    fail(new Error('ownership lost'))
+    await expect(stopping).rejects.toThrow('ownership lost')
+    expect(bridge.getActiveForWorktree('wt-1')?.deviceUdid).toBe('device-2')
+  })
+
   it('keeps a shared device alive when one registered workspace detaches', async () => {
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
@@ -171,6 +216,41 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       message: expect.stringContaining('active: device-active')
     })
     expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('notifies every shared workspace when a dead helper is replaced', async () => {
+    const bridge = new EmulatorBridge()
+    const old = session('device-1')
+    const replacement = {
+      ...old,
+      helperPid: 4321,
+      streamUrl: 'http://127.0.0.1:3200/new',
+      wsUrl: 'ws://127.0.0.1:3200/new'
+    }
+    bridge.registerActiveEmulator('wt-1', old, { managed: true })
+    bridge.registerActiveEmulator('wt-2', old, { managed: true })
+    const ios = bridge.listBackends().find((backend) => backend.kind === 'ios')!
+    vi.spyOn(ios, 'isSessionReusable').mockResolvedValue(false)
+    vi.spyOn(ios, 'startSession').mockResolvedValue(replacement)
+    const send = vi.fn()
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
+      getAuthoritativeWindow: () => ({ webContents: { send } }) as never,
+      getSettings: () => ({ mobileEmulatorEnabled: true })
+    })
+    await commands.emulatorAttach({ worktree: 'wt-1', device: 'device-1', focus: true })
+    expect(send).toHaveBeenCalledWith('ui:emulatorAutoAttach', {
+      worktreeId: 'wt-2',
+      info: replacement
+    })
+    expect(send).toHaveBeenCalledWith('ui:emulatorAutoAttach', {
+      worktreeId: 'wt-1',
+      info: replacement
+    })
+    expect(send).toHaveBeenCalledWith('emulator:pane-focus', { worktreeId: 'wt-1' })
+    expect(send).not.toHaveBeenCalledWith('emulator:pane-focus', { worktreeId: 'wt-2' })
   })
 
   it('keeps the live workspace device when reopened without a device', async () => {

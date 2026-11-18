@@ -11,6 +11,7 @@ type PendingCleanup = {
   isRegistered: (info: EmulatorSessionInfo) => boolean
   includeOrphaned: boolean
   shutdownDevice: boolean
+  waiters: { resolve: () => void; reject: (error: unknown) => void }[]
 }
 
 export class EmulatorStartLeaseRegistry {
@@ -56,8 +57,16 @@ export class EmulatorStartLeaseRegistry {
     isRegistered: (info: EmulatorSessionInfo) => boolean,
     options: { includeOrphaned?: boolean; shutdownDevice?: boolean } = {}
   ): Promise<void> {
-    this.addPendingCleanup(backend, info, isRegistered, options)
-    await this.drainCleanup(backend)
+    let resolve!: () => void
+    let reject!: (error: unknown) => void
+    const completion = new Promise<void>((ok, fail) => {
+      resolve = ok
+      reject = fail
+    })
+    void completion.catch(() => {})
+    this.addPendingCleanup(backend, info, isRegistered, options, { resolve, reject })
+    await this.drainCleanup(backend).catch(() => {})
+    await completion
   }
 
   private async release(backend: EmulatorBackend): Promise<void> {
@@ -69,7 +78,7 @@ export class EmulatorStartLeaseRegistry {
   }
 
   private async drainCleanup(backend: EmulatorBackend): Promise<void> {
-    await this.cleanupByBackend.get(backend)
+    await this.cleanupByBackend.get(backend)?.catch(() => {})
     if ((this.claimsByBackend.get(backend) ?? 0) > 0) {
       return
     }
@@ -79,18 +88,27 @@ export class EmulatorStartLeaseRegistry {
       return
     }
     const cleanup = Promise.allSettled(
-      [...pending.values()].map(async ({ info, isRegistered, includeOrphaned, shutdownDevice }) => {
-        if (isRegistered(info)) {
-          return
+      [...pending.values()].map(
+        async ({ info, isRegistered, includeOrphaned, shutdownDevice, waiters }) => {
+          try {
+            if (!isRegistered(info)) {
+              await backend.stopHelperForDevice(info.deviceUdid, {
+                helperPid: info.helperPid,
+                includeOrphaned,
+                shutdownDevice
+              })
+            }
+            for (const waiter of waiters) {
+              waiter.resolve()
+            }
+          } catch (error) {
+            for (const waiter of waiters) {
+              waiter.reject(error)
+            }
+            throw error
+          }
         }
-        await backend.stopHelperForDevice(info.deviceUdid, {
-          helperPid: info.helperPid,
-          includeOrphaned
-        })
-        if (shutdownDevice) {
-          await backend.shutdownDevice(info.deviceUdid)
-        }
-      })
+      )
     )
       .then((results) => {
         const failure = results.find((result) => result.status === 'rejected')
@@ -107,7 +125,8 @@ export class EmulatorStartLeaseRegistry {
     backend: EmulatorBackend,
     info: EmulatorSessionInfo,
     isRegistered: (info: EmulatorSessionInfo) => boolean,
-    options: { includeOrphaned?: boolean; shutdownDevice?: boolean }
+    options: { includeOrphaned?: boolean; shutdownDevice?: boolean },
+    waiter?: { resolve: () => void; reject: (error: unknown) => void }
   ): void {
     const pending = this.pendingCleanupByBackend.get(backend) ?? new Map()
     const existing = pending.get(info.deviceUdid)
@@ -115,7 +134,8 @@ export class EmulatorStartLeaseRegistry {
       info,
       isRegistered,
       includeOrphaned: options.includeOrphaned === true || existing?.includeOrphaned === true,
-      shutdownDevice: options.shutdownDevice === true || existing?.shutdownDevice === true
+      shutdownDevice: options.shutdownDevice === true || existing?.shutdownDevice === true,
+      waiters: [...(existing?.waiters ?? []), ...(waiter ? [waiter] : [])]
     })
     this.pendingCleanupByBackend.set(backend, pending)
   }

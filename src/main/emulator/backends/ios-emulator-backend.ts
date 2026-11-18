@@ -1,4 +1,6 @@
 import { platform } from 'node:os'
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { EmulatorError } from '../emulator-errors'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import {
@@ -85,6 +87,13 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   async checkServeSimAvailable(): Promise<void> {
+    const entry = this.serveSimExecutable.baseArgs[0]
+    if (!entry || !existsSync(join(dirname(entry), 'middleware.js'))) {
+      throw new EmulatorError(
+        'emulator_helper_failed',
+        'Cannot locate serve-sim middleware for isolated sessions.'
+      )
+    }
     await this.execServeSim(['--help'], { timeoutMs: 10_000 })
   }
 
@@ -204,9 +213,13 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async stopHelperForDevice(
     deviceId: string,
-    options: { helperPid?: number; includeOrphaned?: boolean } = {}
+    options: { helperPid?: number; includeOrphaned?: boolean; shutdownDevice?: boolean } = {}
   ): Promise<void> {
-    await this.sessions.stop(deviceId, options.helperPid)
+    await this.sessions.stop(
+      deviceId,
+      options.helperPid,
+      options.shutdownDevice ? () => this.shutdownDevice(deviceId) : undefined
+    )
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {

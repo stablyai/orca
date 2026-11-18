@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ServeSimOwnedSessions } from './serve-sim-owned-session'
 import { execServeSimCommand } from './serve-sim-execution'
 
@@ -83,7 +83,38 @@ describe('owned iOS helper sessions', () => {
         async () => true
       )
       await expect(sessions.stop(A, first.helperPid)).rejects.toThrow('helper changed')
-      await sessions.stop(A, replacement.helperPid)
+      const foreign = new ServeSimOwnedSessions()
+      let finishShutdown: (() => void) | undefined
+      const stopping = sessions.stop(
+        A,
+        replacement.helperPid,
+        () =>
+          new Promise<void>((resolve) => {
+            finishShutdown = resolve
+          })
+      )
+      await vi.waitFor(() => expect(finishShutdown).toBeDefined())
+      await expect(
+        foreign.start(
+          A,
+          executable,
+          async () => {},
+          async () => true
+        )
+      ).rejects.toThrow('claimed')
+      finishShutdown!()
+      await stopping
+      const newer = await foreign.start(
+        A,
+        executable,
+        async () => {},
+        async () => true
+      )
+      const shutdown = vi.fn(async () => {})
+      await expect(sessions.stop(A, replacement.helperPid, shutdown)).rejects.toThrow('No owned')
+      expect(shutdown).not.toHaveBeenCalled()
+      expect(foreign.owns(newer)).toBe(true)
+      await foreign.stop(A, newer.helperPid)
     } finally {
       if (first && sessions.owns(first)) {
         await sessions.stop(A, first.helperPid)

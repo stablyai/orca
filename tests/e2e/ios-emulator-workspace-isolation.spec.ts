@@ -72,9 +72,10 @@ async function waitForValue(userData: string, worktree: string, value: string): 
     .poll(
       async () => {
         try {
-          return JSON.stringify(await ax(userData, worktree))
-            .toLowerCase()
-            .includes(value.toLowerCase())
+          return flatten(await ax(userData, worktree)).some(
+            (node) =>
+              node.role === 'search text field' && node.value.toLowerCase() === value.toLowerCase()
+          )
         } catch {
           return false
         }
@@ -225,10 +226,17 @@ test('separate workspace panes keep their selected iOS simulator', async ({
     ])
     expect(listB.sessions.map((session) => session.deviceUdid)).toContain(deviceB)
     const fieldB = await waitForSearch(userData, second)
-    await expect.poll(() => luminance(screenB), { timeout: 45_000 }).toBeGreaterThan(8)
-    await expect.poll(() => luminance(screenB), { timeout: 45_000 }).toBeLessThan(110)
+    await expect
+      .poll(
+        async () => {
+          const value = await luminance(screenB)
+          return value > 8 && value < 110
+        },
+        { timeout: 45_000 }
+      )
+      .toBe(true)
     await screenB.screenshot({ path: testInfo.outputPath('workspace-b-dark.png') })
-    expect(JSON.stringify(await ax(userData, second)).toLowerCase()).not.toContain('wifi')
+    expect(fieldB.value.toLowerCase()).not.toBe('wifi')
     await clickSearch(screenB, fieldB)
     await orcaPage.keyboard.type('display')
     await waitForValue(userData, second, 'display')
@@ -273,8 +281,15 @@ test('separate workspace panes keep their selected iOS simulator', async ({
     await expect.poll(() => luminance(screenA), { timeout: 45_000 }).toBeGreaterThan(150)
     await screenA.screenshot({ path: testInfo.outputPath('workspace-a-after-b-restart.png') })
     await switchToWorktree(orcaPage, second)
-    await expect.poll(() => luminance(screenB), { timeout: 45_000 }).toBeGreaterThan(8)
-    await expect.poll(() => luminance(screenB), { timeout: 45_000 }).toBeLessThan(110)
+    await expect
+      .poll(
+        async () => {
+          const value = await luminance(screenB)
+          return value > 8 && value < 110
+        },
+        { timeout: 45_000 }
+      )
+      .toBe(true)
     await screenB.screenshot({ path: testInfo.outputPath('workspace-b-after-restart.png') })
   } finally {
     await cleanupSimulators(owned)

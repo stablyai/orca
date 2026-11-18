@@ -15,7 +15,7 @@ import { resolvePathServeSimExecutable } from './serve-sim-execution'
 afterEach(() => vi.unstubAllEnvs())
 
 describe.skipIf(process.platform === 'win32')('PATH serve-sim', () => {
-  it('finds the middleware next to the resolved CLI entry', () => {
+  it.each(['symlink', 'pnpm shim'])('finds middleware from a %s', (kind) => {
     const root = mkdtempSync(join(tmpdir(), 'orca-path-serve-sim-'))
     const bin = join(root, 'bin')
     const dist = join(root, 'package', 'dist')
@@ -26,7 +26,13 @@ describe.skipIf(process.platform === 'win32')('PATH serve-sim', () => {
       writeFileSync(entry, '')
       chmodSync(entry, 0o755)
       writeFileSync(join(dist, 'middleware.js'), '')
-      symlinkSync(entry, join(bin, 'serve-sim'))
+      if (kind === 'symlink') {
+        symlinkSync(entry, join(bin, 'serve-sim'))
+      } else {
+        writeFileSync(join(bin, 'serve-sim'), `#!/bin/sh\n# cmd-shim-target=${entry}\n`, {
+          mode: 0o755
+        })
+      }
       vi.stubEnv('PATH', bin)
       expect(resolvePathServeSimExecutable()).toEqual({
         command: process.execPath,

@@ -138,7 +138,12 @@ export function resolvePathServeSimExecutable(): ServeSimExecutable | null {
     return null
   }
   try {
-    const entry = realpathSync(command)
+    const resolved = realpathSync(command)
+    const shim =
+      basename(resolved) === 'serve-sim.js'
+        ? undefined
+        : /^# cmd-shim-target=(.+)$/m.exec(readFileSync(resolved, 'utf8'))?.[1]
+    const entry = shim ? realpathSync(shim) : resolved
     if (basename(entry) !== 'serve-sim.js' || !existsSync(join(dirname(entry), 'middleware.js'))) {
       return null
     }

@@ -1,3 +1,4 @@
+import type { EmulatorBridge } from './emulator-bridge'
 import type {
   EmulatorActiveSession,
   EmulatorBackendKind,
@@ -22,8 +23,17 @@ export class EmulatorSessionRegistry {
     worktreeId: string,
     info: EmulatorSessionInfo,
     options: { managed?: boolean; backend?: EmulatorBackendKind } = {}
-  ): void {
+  ): string[] {
     const key = info.deviceUdid
+    const previous = this.sessions.get(key)
+    const replaced =
+      previous &&
+      (previous.pid !== info.helperPid ||
+        previous.streamUrl !== info.streamUrl ||
+        previous.wsUrl !== info.wsUrl)
+    const affected = replaced
+      ? [...this.activeByWorktree].filter(([, activeKey]) => activeKey === key).map(([id]) => id)
+      : []
     this.sessions.set(key, {
       deviceUdid: info.deviceUdid,
       wsUrl: info.wsUrl,
@@ -37,6 +47,16 @@ export class EmulatorSessionRegistry {
       streamCodec: info.streamCodec ?? 'mjpeg'
     })
     this.activeByWorktree.set(worktreeId, key)
+    return affected
+  }
+
+  restoreIfUnchanged(worktreeId: string, session: EmulatorSessionState): void {
+    if (
+      !this.activeByWorktree.has(worktreeId) &&
+      this.sessions.get(session.deviceUdid) === session
+    ) {
+      this.activeByWorktree.set(worktreeId, session.deviceUdid)
+    }
   }
 
   unregisterWorktree(worktreeId: string): void {
@@ -61,6 +81,11 @@ export class EmulatorSessionRegistry {
 
   getSession(key: string): EmulatorSessionState | undefined {
     return this.sessions.get(key)
+  }
+
+  sessionInfoOrTarget(key: string): EmulatorSessionInfo {
+    const session = this.sessions.get(key)
+    return session ? toSessionInfo(session) : { deviceUdid: key, streamUrl: '', wsUrl: '' }
   }
 
   getIosVideoStreamUrl(key: string): string | null {
@@ -150,4 +175,12 @@ function toSessionInfo(session: EmulatorSessionState): EmulatorSessionInfo {
     streamCodec: session.streamCodec,
     backend: session.backend
   }
+}
+
+export async function shouldShutdownOnSwitch(
+  bridge: EmulatorBridge,
+  worktreeId: string
+): Promise<boolean> {
+  const active = bridge.getActiveForWorktree(worktreeId)
+  return active?.backend !== 'android' && !!(await bridge.getReusableActiveForWorktree(worktreeId))
 }

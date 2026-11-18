@@ -20,8 +20,14 @@ function makeBackend(): {
     streamCodec: 'h264',
     backend: 'android'
   }))
-  const stopHelperForDevice = vi.fn(async () => {})
   const shutdownDevice = vi.fn(async () => {})
+  const stopHelperForDevice = vi.fn(
+    async (_device: string, options?: { shutdownDevice?: boolean }) => {
+      if (options?.shutdownDevice) {
+        await shutdownDevice()
+      }
+    }
+  )
   const backend: EmulatorBackend = {
     kind: 'android',
     streamCodec: 'h264',
@@ -58,7 +64,9 @@ describe('EmulatorStartLeaseRegistry', () => {
     stopHelperForDevice.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
-          finishCleanup = resolve
+          finishCleanup = () => {
+            void shutdownDevice().then(resolve)
+          }
         })
     )
     const registry = new EmulatorStartLeaseRegistry()
@@ -93,6 +101,38 @@ describe('EmulatorStartLeaseRegistry', () => {
 
     expect(stopHelperForDevice).toHaveBeenCalledOnce()
     expect(shutdownDevice).toHaveBeenCalledOnce()
+  })
+
+  it('waits for an in-flight claim before stopping the target', async () => {
+    const { backend, stopHelperForDevice } = makeBackend()
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'Pixel_Tablet', () => false)
+    const cleanup = registry.cleanupWhenIdle(backend, lease.info, () => false, {
+      shutdownDevice: true
+    })
+    await Promise.resolve()
+    expect(stopHelperForDevice).not.toHaveBeenCalled()
+    await lease.release()
+    await cleanup
+    expect(stopHelperForDevice).toHaveBeenCalledWith(
+      'emulator-5554',
+      expect.objectContaining({ shutdownDevice: true })
+    )
+  })
+
+  it('reports a deferred stop failure to the workspace waiting for cleanup', async () => {
+    const { backend, stopHelperForDevice } = makeBackend()
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'Pixel_Tablet', () => false)
+    stopHelperForDevice.mockRejectedValueOnce(new Error('ownership lost'))
+    const cleanup = registry.cleanupWhenIdle(backend, lease.info, () => false, {
+      shutdownDevice: true
+    })
+    const [, failedCleanup] = await Promise.allSettled([lease.release(), cleanup])
+    expect(failedCleanup).toMatchObject({
+      status: 'rejected',
+      reason: expect.objectContaining({ message: 'ownership lost' })
+    })
   })
 
   it('reports a helper stop failure and does not shut down its device', async () => {

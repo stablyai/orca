@@ -31,9 +31,11 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
       ORCA_IOS_PANE_E2E: '1'
-      ORCA_IOS_OWNED_DEVICES_FILE: ${{ runner.temp }}/orca-ios-pane-owned.txt
-      PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/orca-ios-pane-report.json
     steps:
+      - name: Set isolated artifact paths
+        run: |
+          echo "ORCA_IOS_OWNED_DEVICES_FILE=$RUNNER_TEMP/orca-ios-pane-owned.txt" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_JSON_OUTPUT_NAME=$RUNNER_TEMP/orca-ios-pane-report.json" >> "$GITHUB_ENV"
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
@@ -78,16 +80,18 @@ jobs:
           }
           const devices = JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', '-j'], { encoding: 'utf8' }))
           const existing = new Map(Object.values(devices.devices).flat().map((item) => [item.udid, item]))
+          const failures = []
           for (const id of owned) {
             const device = existing.get(id)
             if (!device) continue
-            if (device.state !== 'Shutdown') execFileSync('xcrun', ['simctl', 'shutdown', id])
-            execFileSync('xcrun', ['simctl', 'delete', id])
+            for (const action of device.state === 'Shutdown' ? ['delete'] : ['shutdown', 'delete']) {
+              try { execFileSync('xcrun', ['simctl', action, id]) }
+              catch (error) { failures.push(`${id} ${action}: ${error.message}`) }
+            }
           }
           const remaining = JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', '-j'], { encoding: 'utf8' }))
-          if (Object.values(remaining.devices).flat().some((item) => owned.includes(item.udid))) {
-            throw new Error('A test-owned simulator remains after cleanup')
-          }
+          const survivors = Object.values(remaining.devices).flat().filter((item) => owned.includes(item.udid)).map((item) => item.udid)
+          if (failures.length || survivors.length) throw new Error(`Cleanup failures: ${failures.join('; ')}; remaining: ${survivors.join(', ')}`)
           NODE
       - uses: actions/upload-artifact@v7
         if: always()

@@ -4,7 +4,7 @@ import type { EmulatorActiveSession, EmulatorSessionInfo } from './emulator-type
 import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
-import { EmulatorSessionRegistry } from './emulator-session-registry'
+import { EmulatorSessionRegistry, shouldShutdownOnSwitch } from './emulator-session-registry'
 import {
   EmulatorStartLeaseRegistry,
   type EmulatorStartLease
@@ -59,8 +59,8 @@ export class EmulatorBridge {
     worktreeId: string,
     info: EmulatorSessionInfo,
     options: { managed?: boolean; backend?: EmulatorBackendKind } = {}
-  ): void {
-    this.sessionRegistry.registerActive(worktreeId, info, options)
+  ): string[] {
+    return this.sessionRegistry.registerActive(worktreeId, info, options)
   }
 
   unregisterActiveEmulator(worktreeId: string): void {
@@ -73,8 +73,8 @@ export class EmulatorBridge {
 
   // Keep slow-booting Android devices alive across switches for fast reattachment.
   async stopActiveForSwitch(worktreeId: string): Promise<string | null> {
-    const keepAlive = this.backendForActiveWorktree(worktreeId)?.kind === 'android'
-    return this.stopActiveForWorktreeInternal(worktreeId, { shutdownDevice: !keepAlive })
+    const shutdownDevice = await shouldShutdownOnSwitch(this, worktreeId)
+    return this.stopActiveForWorktreeInternal(worktreeId, { shutdownDevice })
   }
 
   async getReusableActiveForWorktree(
@@ -134,15 +134,20 @@ export class EmulatorBridge {
       return null
     }
     const sessionInfo = this.sessionRegistry.toSessionInfo(session)
-    await this.startLeases.cleanupWhenIdle(
-      backend,
-      sessionInfo,
-      (info) => this.sessionRegistry.hasActiveWorktreeForSession(info.deviceUdid),
-      {
-        includeOrphaned: !options.managedOnly,
-        shutdownDevice: options.shutdownDevice
-      }
-    )
+    try {
+      await this.startLeases.cleanupWhenIdle(
+        backend,
+        sessionInfo,
+        (info) => this.sessionRegistry.hasActiveWorktreeForSession(info.deviceUdid),
+        {
+          includeOrphaned: !options.managedOnly,
+          shutdownDevice: options.shutdownDevice
+        }
+      )
+    } catch (error) {
+      this.sessionRegistry.restoreIfUnchanged(worktreeId, session)
+      throw error
+    }
     if (!this.sessionRegistry.hasActiveWorktreeForSession(key)) {
       this.sessionRegistry.clearSessionAndWorktrees(key)
     }
@@ -251,19 +256,16 @@ export class EmulatorBridge {
     worktreeId: string | undefined,
     shutdown: boolean
   ): Promise<string> {
-    const target = await this.resolveTarget({ device, worktreeId })
-    const backend = target.backend
-    const udid = await backend.resolveDeviceId(target.device)
+    const { backend, device: targetDevice } = await this.resolveTarget({ device, worktreeId })
+    const udid = await backend.resolveDeviceId(targetDevice)
     if (!device && worktreeId) {
       return (await this.stopActiveForWorktree(worktreeId, { shutdownDevice: shutdown })) ?? udid
     }
-    await backend.stopHelperForDevice(udid, {
-      helperPid: this.sessionRegistry.getSession(udid)?.pid,
-      includeOrphaned: true
+    const info = this.sessionRegistry.sessionInfoOrTarget(udid)
+    await this.startLeases.cleanupWhenIdle(backend, info, () => false, {
+      includeOrphaned: true,
+      shutdownDevice: shutdown
     })
-    if (shutdown) {
-      await backend.shutdownDevice(udid)
-    }
     this.sessionRegistry.clearSessionAndWorktrees(udid)
     return udid
   }
@@ -283,9 +285,10 @@ export class EmulatorBridge {
         continue
       }
       promises.push(
-        backend
-          .stopHelperForDevice(session.deviceUdid, { helperPid: session.pid })
-          .then(() => backend.shutdownDevice(session.deviceUdid))
+        this.startLeases
+          .cleanupWhenIdle(backend, this.sessionRegistry.toSessionInfo(session), () => false, {
+            shutdownDevice: true
+          })
           .catch(() => {})
       )
     }
