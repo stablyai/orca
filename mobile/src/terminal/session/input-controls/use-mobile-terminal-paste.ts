@@ -84,6 +84,12 @@ export function useMobileTerminalPaste({
     if (!client || !activeHandle || !canSend) {
       return
     }
+    // Refuse before flushing held IME text, which would land inside the running paste.
+    if (multiSendPasteRef.current) {
+      onError()
+      showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
+      return
+    }
     const targetHandle = activeHandle
     try {
       const text = await clipboard.readText()
