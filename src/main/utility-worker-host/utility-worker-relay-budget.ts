@@ -1,7 +1,10 @@
 /** A reply main can't make room for within this long fails its worker instead of growing main. */
 export const UTILITY_WORKER_RELAY_HOLD_LIMIT_MS = 60_000
 
-type HeldReply = { id: number; bytes: Uint8Array; since: number }
+type Held =
+  | { id: number; since: number; bytes: Uint8Array }
+  /** A worker's error or exit, kept behind its held replies so main sees them in order. */
+  | { id: number; since: number; send: () => void }
 
 /**
  * Holds serialized worker replies in the utility process, outside main's heap, while main has more
@@ -12,7 +15,7 @@ export class UtilityWorkerRelayBudget {
   private outstanding = 0
   private nextSeq = 0
   private readonly charged = new Map<number, number>()
-  private readonly held: HeldReply[] = []
+  private readonly held: Held[] = []
   private timer?: ReturnType<typeof setTimeout>
 
   constructor(
@@ -34,6 +37,15 @@ export class UtilityWorkerRelayBudget {
     this.pump()
   }
 
+  /** Sends at once unless held replies are waiting, then after them; never charged. */
+  after(id: number, send: () => void): void {
+    if (this.held.length === 0) {
+      send()
+      return
+    }
+    this.held.push({ id, since: this.now(), send })
+  }
+
   /** Main consumed a delivered reply; a repeated or unknown ack changes nothing. */
   ack(seq: number): void {
     const bytes = this.charged.get(seq)
@@ -45,10 +57,11 @@ export class UtilityWorkerRelayBudget {
     this.pump()
   }
 
-  /** An exited worker's held replies go with it; delivered ones stay charged until main acks. */
-  drop(id: number): void {
+  /** A failed worker's held replies go with it; delivered ones stay charged until main acks. */
+  private drop(id: number): void {
     for (let index = this.held.length - 1; index >= 0; index--) {
-      if (this.held[index]!.id === id) {
+      const entry = this.held[index]!
+      if (entry.id === id && 'bytes' in entry) {
         this.held.splice(index, 1)
       }
     }
@@ -57,7 +70,13 @@ export class UtilityWorkerRelayBudget {
 
   private pump(): void {
     while (this.held.length > 0) {
-      const { id, bytes } = this.held[0]!
+      const next = this.held[0]!
+      if ('send' in next) {
+        this.held.shift()
+        next.send()
+        continue
+      }
+      const { id, bytes } = next
       if (this.outstanding > 0 && this.outstanding + bytes.byteLength > this.limit) {
         break
       }

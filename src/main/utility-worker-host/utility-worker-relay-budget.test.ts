@@ -41,6 +41,21 @@ describe('UtilityWorkerRelayBudget', () => {
     expect(relayed.map(({ size }) => size)).toEqual([1 * MB, 9 * MB])
   })
 
+  it("keeps a worker's exit behind its held replies so main sees its last reply first", () => {
+    const sent: string[] = []
+    const budget = new UtilityWorkerRelayBudget(
+      (id, bytes) => sent.push(`${id}:${bytes.byteLength}`),
+      () => undefined
+    )
+    budget.setLimit(4 * MB)
+    budget.offer(1, new Uint8Array(4 * MB))
+    budget.offer(2, new Uint8Array(1))
+    budget.after(2, () => sent.push('2:exit'))
+    expect(sent).toEqual([`1:${4 * MB}`])
+    budget.ack(1)
+    expect(sent).toEqual([`1:${4 * MB}`, '2:1', '2:exit'])
+  })
+
   it('fails the worker whose reply waited too long, without sending it over budget', () => {
     vi.useFakeTimers()
     const { budget, relayed, expired } = budgetOf(4 * MB)

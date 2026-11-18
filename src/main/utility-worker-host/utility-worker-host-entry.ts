@@ -95,11 +95,12 @@ port.on('message', ({ data: request }) => {
       })
       workers.set(id, worker)
       worker.on('message', (bytes: Uint8Array) => budget.offer(id, bytes))
-      worker.on('error', (error) => port.postMessage({ type: 'error', id, error: failure(error) }))
+      worker.on('error', (error) =>
+        budget.after(id, () => port.postMessage({ type: 'error', id, error: failure(error) }))
+      )
       worker.once('exit', (code) => {
         workers.delete(id)
-        budget.drop(id)
-        port.postMessage({ type: 'exit', id, code })
+        budget.after(id, () => port.postMessage({ type: 'exit', id, code }))
       })
     } catch (error) {
       port.postMessage({ type: 'error', id, error: failure(error) })
