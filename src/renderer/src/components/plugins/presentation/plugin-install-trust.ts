@@ -83,7 +83,8 @@ export function catalogInstallTrustPrompt(
   // Why only the community catalog unwinds its mirror: a third-party catalog cannot claim another repo.
   const sourceUrl =
     publicCatalog === 'community' ? pluginListingRepositoryUrl(listing) : listing.source.url
-  const mirrored = isSameGitRepository(sourceUrl, COMMUNITY_MIRROR_GIT_URL)
+  const mirrored =
+    publicCatalog === 'community' && isSameGitRepository(sourceUrl, COMMUNITY_MIRROR_GIT_URL)
   const origin = pluginRepositoryOrigin(
     sourceUrl,
     sourceUrl === listing.source.url ? listing.source.path : undefined

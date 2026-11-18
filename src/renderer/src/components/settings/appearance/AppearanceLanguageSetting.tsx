@@ -25,6 +25,7 @@ import { useLanguageReadiness } from '@/i18n/language-readiness'
 import { UI_LANGUAGE_CHOICES, getUiLanguageNativeLabel } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
+import { usePluginInstallCountsStore } from '@/store/plugins/installation/plugin-install-counts'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import {
@@ -53,6 +54,7 @@ function useLanguageSettingOffer(
   catalog: ReturnType<typeof useLanguagePackCatalog>
 } {
   const previous = useAppStore((state) => state.settings?.uiLanguageBeforePlugin)
+  const installCounts = usePluginInstallCountsStore((state) => state.counts)
   const detection = useLanguageReadiness((state) => state.detection)
   const unsupported = detection?.status === 'unsupported'
   // Why on mount: a catalog read before the dropdown opens keeps the menu from growing under the pointer.
@@ -70,7 +72,7 @@ function useLanguageSettingOffer(
     }
   }
   const offer = unsupported
-    ? deviceLanguageOffer(installed, catalog.packs, detection.detectedTag)
+    ? deviceLanguageOffer(installed, catalog.packs, detection.detectedTag, { installCounts })
     : null
   return {
     hint: offer ? { kind: 'offer', offer: offerSummary(offer) } : { kind: 'browse' },

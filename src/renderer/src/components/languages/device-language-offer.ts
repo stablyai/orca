@@ -1,6 +1,8 @@
 import type { PluginLanguagePackRegistration } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
+import { usePluginInstallCountsStore } from '@/store/plugins/installation/plugin-install-counts'
 import {
   languageNames,
+  packInstallCount,
   recommendedLanguagePack,
   type CatalogLanguagePack
 } from './language-pack-options'
@@ -40,9 +42,21 @@ export function offerSummary(offer: DeviceLanguageOffer): LanguageOfferSummary {
 export function deviceLanguageOffer(
   installed: readonly PluginLanguagePackRegistration[],
   catalogPacks: readonly CatalogLanguagePack[],
-  detectedTag: string | null
+  detectedTag: string | null,
+  {
+    installCounts = usePluginInstallCountsStore.getState().counts,
+    allCatalogPacks = catalogPacks
+  }: {
+    installCounts?: Readonly<Record<string, number>>
+    allCatalogPacks?: readonly CatalogLanguagePack[]
+  } = {}
 ): DeviceLanguageOffer | null {
-  const installedMatch = recommendedLanguagePack(installed, detectedTag) ?? null
+  const rankedInstalled = [...installed].sort(
+    (a, b) =>
+      (packInstallCount(b, allCatalogPacks, installCounts) ?? -1) -
+      (packInstallCount(a, allCatalogPacks, installCounts) ?? -1)
+  )
+  const installedMatch = recommendedLanguagePack(rankedInstalled, detectedTag) ?? null
   const catalogMatch = installedMatch
     ? null
     : (recommendedLanguagePack(catalogPacks, detectedTag) ?? null)

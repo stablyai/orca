@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { toast, useSonner } from 'sonner'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
 import { useAppStore } from '@/store'
+import { usePluginInstallCountsStore } from '@/store/plugins/installation/plugin-install-counts'
 import { usePluginLanguagePacks } from '@/store/plugins/localization/plugin-language-packs'
 import {
   isNotificationCardStackOccupied,
@@ -39,6 +40,7 @@ export function LanguagePackDiscoveryHost({
   const surfaceBlocked = useLanguageSuggestionSurfaceBlocked()
   const { toasts } = useSonner()
   const installed = usePluginLanguagePacks()
+  const installCounts = usePluginInstallCountsStore((state) => state.counts)
   const suppressedForOnboarding = useRef(false)
   const activeToast = useRef(false)
   const eligible =
@@ -53,8 +55,8 @@ export function LanguagePackDiscoveryHost({
   const detectedTag = detection?.detectedTag ?? null
   // Why memoized: the offer gates the quiet-period timer, which must not restart every render.
   const recommendation = useMemo(
-    () => deviceLanguageOffer(installed, catalog.packs, detectedTag),
-    [installed, catalog.packs, detectedTag]
+    () => deviceLanguageOffer(installed, catalog.packs, detectedTag, { installCounts }),
+    [installed, catalog.packs, detectedTag, installCounts]
   )
   const action = useLanguageOfferAction()
   // The offer the visible toast shows; null once it is closed.

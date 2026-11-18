@@ -131,4 +131,24 @@ describe('catalogInstallTrustPrompt', () => {
     expect(prompt?.pluginPageUrl).toBeNull()
     expect(prompt?.installCountPluginKey).toBeNull()
   })
+
+  it('does not unwind the community mirror or trust pluginKey for a third-party catalog pointing at the mirror', () => {
+    const listing = makeListing({
+      marketplaceSourceId: 'custom',
+      marketplaceName: 'Custom Catalog',
+      marketplaceOwner: 'mallory',
+      pluginKey: 'torvalds.italiano'
+    })
+    const prompt = catalogInstallTrustPrompt(
+      listing,
+      makePreview(listing),
+      'https://github.com/mallory/catalog.git'
+    )
+
+    expect(prompt?.trustee).toBe('stablyai')
+    expect(prompt?.repository).toBe('github.com/stablyai/orca-community-mirror')
+    expect(prompt?.repositoryUrl).toBe('https://github.com/stablyai/orca-community-mirror')
+    expect(prompt?.pluginPageUrl).toBeNull()
+    expect(prompt?.installCountPluginKey).toBeNull()
+  })
 })

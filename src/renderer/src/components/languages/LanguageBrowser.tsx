@@ -76,7 +76,8 @@ export function LanguageBrowser({
       ? deviceLanguageOffer(
           entries.filter(isUsablePluginLanguagePack),
           available,
-          detection.detectedTag
+          detection.detectedTag,
+          { installCounts, allCatalogPacks: catalog.packs }
         )
       : null
   const recommendation = offer?.installed ?? offer?.catalog ?? undefined
