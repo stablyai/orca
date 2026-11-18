@@ -280,7 +280,6 @@ export function selectPrE2eSpecs(
           'tests/e2e/desktop/electron-fixtures/electron-launch-args.ts',
           'tests/e2e/desktop/electron-fixtures/electron-main-evaluate-retry.ts',
           'tests/e2e/desktop/electron-fixtures/electron-process-shutdown.ts',
-          'tests/e2e/desktop/electron-fixtures/electron-process-shutdown.unit.test.ts',
           'tests/e2e/desktop/electron-fixtures/electron-shutdown-timing.ts',
           'tests/e2e/desktop/electron-fixtures/hidden-renderer-frame-capture.ts',
           'tests/e2e/desktop/electron-fixtures/hold-window-graph-publication.ts',

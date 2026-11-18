@@ -28,7 +28,7 @@
 2 src/main/agent-launch/trust/agent-workspace-trust-spawn.ts
 5 src/main/agent-launch/trust/agent-workspace-trust.ts
 3 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
-12 src/main/agent-launch/trust/execution-host-workspace-trust.ts
+13 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 3 src/main/ai-vault-search/session-search-child-service.ts
 4 src/main/ai-vault-search/session-search-enablement.ts
 2 src/main/ai-vault-search/storage/session-search-schema.ts
@@ -828,7 +828,7 @@
 4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+3 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup)
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
@@ -848,7 +848,8 @@
 2 src/main/native-chat/agent-session-journal/journal-sql-status-context.ts
 1 src/main/native-chat/agent-session-journal/journal-sql-status-items.ts
 1 src/main/native-chat/agent-session-journal/journal-sql-work-read.ts
-3 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts
+5 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
+10 src/main/native-chat/agent-session-journal/journal-text-tail.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 4 src/main/native-chat/agent-session-journal/replay/journal-read-row.ts
 3 src/main/native-chat/agent-session-journal/replay/journal-stored-cursor.ts
@@ -1159,6 +1160,7 @@
 3 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 3 src/main/pty/shell-startup/zsh-wrapper-dir-ownership.ts
 2 src/main/qoder/workspace-trust.ts
+3 src/main/qwen-code/workspace-trust.ts # Qwen fresh-launch trust (#43989): sync read-modify-write like qoder/workspace-trust.ts so concurrent launches and the sync Qwen hook install cannot lose entries
 1 src/main/rate-limits/providers/antigravity/antigravity-usage-fetcher.ts
 1 src/main/rate-limits/providers/claude/claude-active-usage-fetch.ts
 5 src/main/rate-limits/providers/claude/claude-oauth-credentials.ts

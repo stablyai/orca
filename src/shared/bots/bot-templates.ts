@@ -54,8 +54,6 @@ export type BotTemplateSchedule = {
   id: string
   /** When it runs, as the template page says it ("Mondays at 9 AM"). */
   when: string
-  /** The same, short, for a template's row ("Mon 9 AM"). */
-  short: string
   /** What it posts ("New advisories and major versions"). */
   what: string
   rrule: string

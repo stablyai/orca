@@ -1,16 +1,25 @@
-// How every `orca gmail|calendar|contacts|drive|docs|sheets` command calls the host: as the chat it
-// runs from and the account named, and never with a request too large for a paired server.
-import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+// How every `orca gmail|calendar|contacts|drive|docs|sheets` command calls the host: as the bot run its
+// token names (none: the owner), from the chat it runs in, as the account named, and never with a
+// request too large for a paired server.
+import {
+  readInjectedAgentSessionId,
+  readInjectedBotToken
+} from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { PAIRED_REQUEST_PARAMS_MAX_BYTES } from '../../shared/remote-runtime/paired-request-budget'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 
-/** The chat it runs from and the account named; every Google command sends both. */
+/** The bot run's token, the chat it runs from and the account named; every Google command sends them. */
 export function googleCallParams(flags: HandlerContext['flags']) {
+  const botToken = readInjectedBotToken()
   const callerSessionId = readInjectedAgentSessionId()
   const account = getOptionalStringFlag(flags, 'account')
-  return { ...(callerSessionId ? { callerSessionId } : {}), ...(account ? { account } : {}) }
+  return {
+    ...(botToken ? { botToken } : {}),
+    ...(callerSessionId ? { callerSessionId } : {}),
+    ...(account ? { account } : {})
+  }
 }
 
 export async function callGoogle<T>(

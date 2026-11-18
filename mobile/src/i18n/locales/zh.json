@@ -176,11 +176,13 @@
       "invalidUrl": "请输入有效的 URL"
     },
     "paneView": {
-      "dialogTitle": "浏览器对话框",
       "forward": "前进",
       "keyboardPlaceholder": "在网页中输入…",
       "reload": "重新加载",
-      "sendText": "将文本发送到浏览器"
+      "sendText": "将文本发送到浏览器",
+      "dialogTitleWithOrigin": "{{origin}} 显示",
+      "dialogTitleNoOrigin": "此网页显示",
+      "dialogAnswer": "回答"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 点击修饰键"
@@ -199,6 +201,9 @@
     "viewModeSwitch": {
       "mobileView": "显示移动版网站",
       "webView": "显示电脑版网站"
+    },
+    "loadFailure": {
+      "retry": "重试"
     }
   },
   "chat": {

@@ -16,10 +16,7 @@ vi.mock('../../../../bots/MobileConnectorSourceIcon', () => ({
 vi.mock('../../slack-mirror/MobileSlackMirrorPost', () => ({ MobileSlackMirrorPostLine: 'Line' }))
 vi.mock('../MobileNativeChatBotRowNotes', () => ({ MobileNativeChatAutomationResultsCarried: 'N' }))
 
-import {
-  MobileNativeChatConnectorAskerTag,
-  MobileQueuedTypedByLine
-} from './MobileNativeChatUserMessageMarks'
+import { MobileNativeChatConnectorAskerTag } from './MobileNativeChatUserMessageMarks'
 
 function render(element: ReturnType<typeof createElement>): ReactTestRenderer {
   let renderer: ReactTestRenderer | undefined
@@ -36,16 +33,6 @@ const texts = (renderer: ReactTestRenderer) =>
   renderer.root.findAll((node) => isHostText(node.type)).map((node) => node.props.children)
 
 describe('phone marks for a message another person typed', () => {
-  it('reads "From" before the name on a queued card, as on desktop', () => {
-    const line = render(
-      createElement(MobileQueuedTypedByLine, {
-        typist: { name: 'Sam Lee', computer: "Sam's MacBook Pro" },
-        textStyle: {}
-      })
-    )
-    expect(texts(line)).toEqual(['From', 'Sam Lee', '·', "Sam's MacBook Pro"])
-  })
-
   it('never speaks "You" on the nameless Slack tag beside their name', () => {
     const tag = render(
       createElement(MobileNativeChatConnectorAskerTag, {
