@@ -97,7 +97,11 @@ async function readUncachedRemoteUrl(
     return stdout
   } catch (error) {
     if (isStableMissingGitRemoteError(error)) {
-      rememberMissingRemote(key, { error, signature, expiresAt: Date.now() + MISSING_REMOTE_TTL_MS })
+      rememberMissingRemote(key, {
+        error,
+        signature,
+        expiresAt: Date.now() + MISSING_REMOTE_TTL_MS
+      })
     }
     throw error
   }
