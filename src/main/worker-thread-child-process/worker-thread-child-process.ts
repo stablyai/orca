@@ -114,7 +114,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
     this.send({ type: 'stop-owned-group', id: this.id })
   }
 
-  receive(event: WorkerThreadChildEvent): void {
+  receive(event: Exclude<WorkerThreadChildEvent, { type: 'ready' }>): void {
     switch (event.type) {
       case 'group-terminated':
         this.ownedGroupTerminated = true
