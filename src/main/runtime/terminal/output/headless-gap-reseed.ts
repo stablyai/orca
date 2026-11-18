@@ -1,5 +1,9 @@
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
-import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
+import type {
+  GapRecovery,
+  RuntimeHeadlessTerminal
+} from '../records/runtime-terminal-state-records'
+import { newGapRecovery, takeSeedCoveredQueries } from './provider-seed-covered-bytes'
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
@@ -30,7 +34,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       current.gapReseed.frontier = frontier
       return
     }
-    this.startGapReseed(ptyId, frontier, 0, current?.gapReseedLastCaptureAt)
+    this.startGapReseed(ptyId, newGapRecovery(frontier), 0, current?.gapReseedLastCaptureAt)
   }
 
   /** Execution-context correction mid-recovery restarts recovery, keeping the frontier and the restoring screen. */
@@ -40,7 +44,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   ): void {
     const current = this.headlessTerminals.get(ptyId)
     if (current?.gapReseed) {
-      this.startGapReseed(ptyId, current.gapReseed.frontier, 0, current.gapReseedLastCaptureAt)
+      const carried = newGapRecovery(current.gapReseed.frontier, current.gapReseed)
+      this.startGapReseed(ptyId, carried, 0, current.gapReseedLastCaptureAt)
       return
     }
     super.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, retryLateSeed)
@@ -48,17 +53,17 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
 
   private startGapReseed(
     ptyId: string,
-    frontier: number,
+    recovery: GapRecovery,
     attempt: number,
     lastCaptureAt: number | undefined
   ): void {
+    const frontier = recovery.frontier
     const state = this.replaceHeadlessTerminalForProviderSeed(ptyId)
-    state.gapReseed = { frontier, queuedChars: 0, queryCarry: '' }
+    state.gapReseed = recovery
     state.gapReseedLastCaptureAt = lastCaptureAt
     // Why: the hidden renderer missed the dropped bytes too, so it must not seed this model; readers treat the screen as restoring.
     this.headlessHydrationState.set(ptyId, 'pending')
     let seeded = false
-    let seededScreen = ''
     state.writeChain = state.writeChain
       .then(async () => {
         const wait = (state.gapReseedLastCaptureAt ?? 0) + GAP_RESEED_MIN_INTERVAL_MS - Date.now()
@@ -74,6 +79,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
             return
           }
           state.gapReseedLastCaptureAt = Date.now()
+          // From here a live byte may land after the snapshot, so it must queue rather than be assumed covered.
+          recovery.capturing = true
           // Screen only: a storm repeats this, and history readers go to the provider instead.
           // Hold the slot for the whole request, not the readers' shorter wait, so late answers still land.
           const { snapshot } = await this.awaitProviderTerminalBuffer(
@@ -93,7 +100,13 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
             (await this.seedHeadlessFromProviderSnapshot(ptyId, state, snapshot)) &&
             // A gap during an asynchronous seed write leaves the frame behind again.
             snapshot.seq >= (state.gapReseed?.frontier ?? frontier)
-          seededScreen = snapshot.data
+          if (seeded) {
+            // Owed replies, in arrival order, before any queued chunk's own.
+            const owed = takeSeedCoveredQueries(recovery, snapshot.seq)
+            if (owed) {
+              await state.emulator.write(owed, { forwardQueryReplies: true })
+            }
+          }
         } finally {
           this.releaseGapCaptureSlot()
         }
@@ -106,7 +119,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
           return
         }
         if (seeded) {
-          this.finishGapReseed(ptyId, state, seededScreen)
+          this.finishGapReseed(ptyId, state, recovery)
           return
         }
         if (attempt === GAP_RESEED_WARN_AFTER_ATTEMPTS) {
@@ -120,24 +133,26 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
           attempt < 2 ? 0 : Math.min(500 * 2 ** (attempt - 2), GAP_RESEED_BACKOFF_MAX_MS)
         setTimeout(() => {
           if (this.headlessTerminals.get(ptyId) === state && state.gapReseed) {
-            this.startGapReseed(
-              ptyId,
-              state.gapReseed.frontier,
-              attempt + 1,
-              state.gapReseedLastCaptureAt
-            )
+            const carried = newGapRecovery(state.gapReseed.frontier, state.gapReseed)
+            this.startGapReseed(ptyId, carried, attempt + 1, state.gapReseedLastCaptureAt)
           }
         }, backoff).unref?.()
       })
   }
 
-  private finishGapReseed(ptyId: string, state: RuntimeHeadlessTerminal, screen: string): void {
+  private finishGapReseed(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    recovery: GapRecovery
+  ): void {
     state.gapReseed = undefined
     state.historyFromProvider = true
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
-    // Dialogs and notices painted while recovering were never observed; the seeded screen shows them now.
-    this.observeHeadlessChunk(ptyId, state, screen, Date.now())
+    // Only bytes that arrived while recovering, at their arrival time: an old notice still on screen is not news.
+    if (recovery.suppressedTail) {
+      this.observeHeadlessChunk(ptyId, state, recovery.suppressedTail, recovery.suppressedAt)
+    }
   }
 
   private async acquireGapCaptureSlot(): Promise<void> {

@@ -181,7 +181,7 @@ export type RuntimeHeadlessTerminal = {
   /** A provider snapshot seed: queued live bytes at/below `seq` are not rewritten; `escapeTail` precedes the first uncovered byte. */
   providerSeed?: { seq: number; escapeTail: string; queryCarry: string }
   /** While recovering from dropped output: the gap end a provider snapshot must reach before the screen is trusted. */
-  gapReseed?: { frontier: number; queuedChars: number; queryCarry: string }
+  gapReseed?: GapRecovery
   /** When the last dropped-output capture started, carried across attempts to pace them. */
   gapReseedLastCaptureAt?: number
   /** Seeded screen-only after dropped output, so history comes from the provider. */
@@ -233,4 +233,18 @@ export type HeadlessSeedMetadata = {
   preferProviderIfExisting?: boolean
   kittyKeyboardFlags?: number
   terminalOwner?: 'shell'
+}
+
+/** A model recovering from dropped output. Before its capture is sent, live bytes are certain to be in the snapshot,
+ *  so only their queries and a short tail for the notice checks are kept; during the capture they queue, bounded. */
+export type GapRecovery = {
+  frontier: number
+  capturing: boolean
+  queuedChars: number
+  queryCarry: string
+  /** Queries owed by chunks the seed will cover, by the chunk's end seq. */
+  pendingQueries: { seq: number; data: string }[]
+  pendingQueryChars: number
+  suppressedTail: string
+  suppressedAt: number
 }

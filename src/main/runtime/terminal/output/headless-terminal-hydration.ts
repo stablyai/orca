@@ -20,10 +20,8 @@ import {
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
 import {
   admitWhileRecovering,
-  answerQueriesAfterRecovery,
-  answerSeedCoveredQueries,
-  releaseRecoveryQueue,
-  splitAtProviderSeed
+  consumeSeedCoverage,
+  releaseRecoveryQueue
 } from './provider-seed-covered-bytes'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
@@ -283,30 +281,28 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
   ): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const outputObservedAt = Date.now()
-    const admitted = admitWhileRecovering(state, chunkData, outputSequence)
-    if (admitted.queriesOnly) {
-      answerQueriesAfterRecovery(state, admitted.data, forwardQueryReplies)
+    const admitted = admitWhileRecovering(
+      state,
+      chunkData,
+      outputSequence,
+      forwardQueryReplies,
+      outputObservedAt
+    )
+    if (!admitted.queued) {
       return
     }
     const completion = state.writeChain.then(async () => {
       releaseRecoveryQueue(admitted.recovery, chunkData.length)
-      const {
-        covered,
-        uncovered: data,
-        startsAtSeed
-      } = splitAtProviderSeed(state, chunkData, outputSequence, rawChunk)
-      await answerSeedCoveredQueries(state, covered, forwardQueryReplies)
+      const { covered, data } = await consumeSeedCoverage(state, chunkData, outputSequence, {
+        rawChunk,
+        forwardQueryReplies,
+        recoveryAdmitted: admitted.recovery !== undefined
+      })
       if (covered !== '') {
         this.observeHeadlessChunk(ptyId, state, covered, outputObservedAt)
       }
       if (data === null) {
         return
-      }
-      const seedEscapeTail = state.providerSeed?.escapeTail
-      state.providerSeed = undefined
-      // A chunk that does not begin exactly at the seed already carries its own escape start.
-      if (seedEscapeTail && startsAtSeed) {
-        await state.emulator.write(seedEscapeTail)
       }
       // Capture reply ownership at ingestion, then scan inside the chain so live bytes and seeds retain total order.
       state.ownership.scan(data)
