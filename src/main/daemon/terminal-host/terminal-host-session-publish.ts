@@ -2,11 +2,8 @@ import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/termi
 import type { PtyCreationDisposition } from '../../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
 import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
-import { buildStartupCommandSubmission } from '../../../shared/shell/launch/startup-command-submission'
 import {
-  discardStagedStartupCommand,
-  stageStartupCommand,
-  startupStagingFailureNotice,
+  discardStagedStartupCommandAsync,
   type StartupCommandStaging
 } from '../../../shared/shell/launch/startup-command-staging'
 import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'
@@ -19,6 +16,10 @@ import {
 } from './terminal-host-returned-process'
 import { shellPathSupportsPtyStartupBarrier } from '../shell-readiness/shell-ready'
 import { createStartupCommandFallback } from '../pty-subprocess/shell-wrapper-startup-claim'
+import {
+  buildStartupSubmission,
+  type StartupSubmissionInputs
+} from './terminal-host-startup-submission'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import { resolveDaemonSessionScrollbackRows } from '../sessions/daemon-session-scrollback-window'
@@ -118,7 +119,7 @@ export async function spawnAndPublishSession(
   const startupCommandFallback =
     wrapperStartup && wrapperCommand
       ? createStartupCommandFallback(wrapperStartup.claimPath, () => {
-          discardStagedStartupCommand(wrapperStartup.staging)
+          void discardStagedStartupCommandAsync(wrapperStartup.staging)
           return buildSubmission(wrapperCommand)
         })
       : undefined
@@ -247,39 +248,4 @@ export async function spawnAndPublishSession(
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
     attachToken: token
   }
-}
-
-type StartupSubmissionInputs = {
-  staging: { current?: StartupCommandStaging }
-  session: Session
-  shellPath: string | undefined
-  orcaBuiltLine: boolean
-  shellReadySupported: boolean
-  sessionId: string
-  reportReadinessEvent: TerminalHostSessionCreateDependencies['reportReadinessEvent']
-}
-
-function buildStartupSubmission(command: string, inputs: StartupSubmissionInputs): string {
-  const staged = stageStartupCommand({
-    command,
-    shellPath: inputs.shellPath,
-    orcaBuiltLine: inputs.orcaBuiltLine
-  })
-  inputs.staging.current = staged
-  const notice = startupStagingFailureNotice(staged)
-  if (notice) {
-    inputs.session.startupIngress.accept(notice)
-    try {
-      inputs.reportReadinessEvent?.('startup-command-stage-failed', {
-        sessionId: inputs.sessionId,
-        reason: staged.failure
-      })
-    } catch {
-      // Diagnostics must never turn a live PTY into a failed create.
-    }
-  }
-  // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-  return buildStartupCommandSubmission(staged.command, {
-    bracketedPasteSafe: inputs.shellReadySupported
-  })
 }

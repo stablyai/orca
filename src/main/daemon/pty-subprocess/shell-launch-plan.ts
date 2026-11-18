@@ -36,11 +36,7 @@ import {
   POSIX_SHELL_STARTUP_CLAIM_ENV,
   POSIX_SHELL_STARTUP_COMMAND_ENV
 } from '../../pty/shell-startup/posix-shell-startup-command'
-import type { ShellWrapperStartup } from './shell-wrapper-startup-claim'
-import {
-  discardStagedStartupCommand,
-  stageStartupCommand
-} from '../../../shared/shell/launch/startup-command-staging'
+import type { ShellWrapperStartupCandidate } from './shell-wrapper-startup-claim'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import {
@@ -64,8 +60,8 @@ export type PtyShellLaunchPlan = {
   spawnCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
-  /** Set when the zsh wrapper runs the command from its first prompt, so nothing is typed ahead of the user. */
-  shellWrapperStartup: ShellWrapperStartup | null
+  /** Set when the zsh wrapper can run the command from its first prompt, so nothing is typed ahead of the user. */
+  shellWrapperStartupCandidate: ShellWrapperStartupCandidate | null
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   startupAgentRecognition: RecognizedAgentProcess | null
 }
@@ -80,7 +76,7 @@ export function createPtyShellLaunchPlan(
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
-  let shellWrapperStartup: ShellWrapperStartup | null = null
+  let shellWrapperStartupCandidate: ShellWrapperStartupCandidate | null = null
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const requestedCwd = opts.cwd || resolveSafePtyDefaultCwd()
@@ -243,19 +239,11 @@ export function createPtyShellLaunchPlan(
       opts.shellReadySupported === true &&
       zshWrapperCanRunStartupCommand(shellPath, shellLaunch)
     ) {
-      // Long or multiline lines run from a staged script so the prompt stays out of scrollback and history.
-      const staging = stageStartupCommand({
+      shellWrapperStartupCandidate = {
         command: opts.command,
         shellPath,
-        orcaBuiltLine: opts.launchAgent !== undefined
-      })
-      const line = staging.command.replace(/(\r\n|\r|\n)$/, '')
-      if (Buffer.byteLength(line) <= MAX_WRAPPER_STARTUP_COMMAND_BYTES) {
-        env[POSIX_SHELL_STARTUP_COMMAND_ENV] = line
-        env[POSIX_SHELL_STARTUP_CLAIM_ENV] = startupClaimPath
-        shellWrapperStartup = { staging, claimPath: startupClaimPath }
-      } else {
-        discardStagedStartupCommand(staging)
+        orcaBuiltLine: opts.launchAgent !== undefined,
+        claimPath: startupClaimPath
       }
     }
   }
@@ -276,14 +264,11 @@ export function createPtyShellLaunchPlan(
     spawnCwd,
     validationCwd,
     startupCommandDeliveredInShellArgs,
-    shellWrapperStartup,
+    shellWrapperStartupCandidate,
     windowsFallbackAttempts,
     startupAgentRecognition
   }
 }
-
-// Linux caps one env string at 128 KiB; only an unstaged (stage-failed) line can come near it.
-const MAX_WRAPPER_STARTUP_COMMAND_BYTES = 32 * 1024
 
 function zshWrapperCanRunStartupCommand(
   shellPath: string,

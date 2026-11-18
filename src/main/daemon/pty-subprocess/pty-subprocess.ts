@@ -5,10 +5,12 @@ import { normalizePtySize } from '../protocol/daemon-pty-size'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { createDaemonPtyEnvironment } from './spawn-environment'
 import { createPtyShellLaunchPlan, type PtyShellLaunchPlan } from './shell-launch-plan'
-import { discardStagedStartupCommand } from '../../../shared/shell/launch/startup-command-staging'
+import { discardStagedStartupCommandAsync } from '../../../shared/shell/launch/startup-command-staging'
 import {
   createShellWrapperStartupClaim,
-  takeShellWrapperStartupClaim
+  stageShellWrapperStartup,
+  takeShellWrapperStartupClaim,
+  type ShellWrapperStartup
 } from './shell-wrapper-startup-claim'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './native-pty-spawn'
 import {
@@ -75,6 +77,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   const work = new TerminalCreationWork()
   let launch: PtyShellLaunchPlan | undefined
   let startupClaimPath: string | null = null
+  let shellWrapperStartup: ShellWrapperStartup | null = null
   try {
     const size = normalizePtySize(opts.cols, opts.rows)
     const env = createDaemonPtyEnvironment(opts)
@@ -84,7 +87,10 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
         ? await createShellWrapperStartupClaim()
         : null
     launch = createPtyShellLaunchPlan(opts, env, startupClaimPath)
-    if (startupClaimPath && !launch.shellWrapperStartup) {
+    shellWrapperStartup = launch.shellWrapperStartupCandidate
+      ? await stageShellWrapperStartup(launch.shellWrapperStartupCandidate, env)
+      : null
+    if (startupClaimPath && !shellWrapperStartup) {
       void takeShellWrapperStartupClaim(startupClaimPath)
     }
 
@@ -135,7 +141,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       env,
       startupCommandDeliveredInShellArgs:
         spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
-      ...(launch.shellWrapperStartup ? { shellWrapperStartup: launch.shellWrapperStartup } : {}),
+      ...(shellWrapperStartup ? { shellWrapperStartup } : {}),
       reportsChildExitStatus: spawned.reportsChildExitStatus,
       requestedCwd: opts.cwd,
       sessionId: opts.sessionId,
@@ -145,8 +151,8 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     })
   } catch (error) {
     // No shell will source a staged launch script whose spawn failed.
-    if (launch?.shellWrapperStartup) {
-      discardStagedStartupCommand(launch.shellWrapperStartup.staging)
+    if (shellWrapperStartup) {
+      void discardStagedStartupCommandAsync(shellWrapperStartup.staging)
     }
     if (startupClaimPath) {
       void takeShellWrapperStartupClaim(startupClaimPath)
