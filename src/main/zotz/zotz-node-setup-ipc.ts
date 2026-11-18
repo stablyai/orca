@@ -110,9 +110,9 @@ export function registerZotzNodeSetupHandlers(deps: ZotzNodeSetupHandlerDeps): v
       const previousAwakeMode = deps.getAgentAwakeService()?.getStatus().mode
       inFlight = createEnvironment(deps)
         .then((environment) =>
-          runZotzNodeSetup(buildZotzNodeSetupPhases(environment), (steps) => {
+          runZotzNodeSetup(buildZotzNodeSetupPhases(environment), (progress) => {
             if (!sender.isDestroyed()) {
-              sender.send('zotzNode:setupProgress', steps)
+              sender.send('zotzNode:setupProgress', progress)
             }
           })
         )
