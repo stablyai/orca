@@ -58,7 +58,11 @@ export function classifyIndexedWorkerTerminalProcessIncarnation(
   index: WorkerTerminalProcessIndex
 ): 'live' | 'exited' | 'unverifiable' {
   const candidates: PtyProcessInfo[] = []
-  for (let at = processIncarnation.indexOf(':'); at > 0; at = processIncarnation.indexOf(':', at + 1)) {
+  for (
+    let at = processIncarnation.indexOf(':');
+    at > 0;
+    at = processIncarnation.indexOf(':', at + 1)
+  ) {
     candidates.push(...(index.get(processIncarnation.slice(0, at)) ?? []))
   }
   return classifyWorkerTerminalProcessIncarnation(processIncarnation, candidates)

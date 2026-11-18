@@ -1,5 +1,8 @@
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
-import { isMintedPtyIncarnation, type WorkerTerminalProcessIndex } from './worker-terminal-process-liveness'
+import {
+  isMintedPtyIncarnation,
+  type WorkerTerminalProcessIndex
+} from './worker-terminal-process-liveness'
 import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestration/worker/stop/worker-stop-archive'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 

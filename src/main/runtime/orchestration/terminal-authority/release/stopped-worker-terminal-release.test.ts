@@ -67,7 +67,10 @@ describe('sweepStoppedWorkerTerminals', () => {
     const unknown = leftOwnedStoppedWorker(db, 'unknown')
 
     await sweepStoppedWorkerTerminals(
-      fakeRuntime(db, { [`pty-exited:${INCARNATION}`]: 'exited', [`pty-live:${INCARNATION}`]: 'live' }),
+      fakeRuntime(db, {
+        [`pty-exited:${INCARNATION}`]: 'exited',
+        [`pty-live:${INCARNATION}`]: 'live'
+      }),
       () => false
     )
 

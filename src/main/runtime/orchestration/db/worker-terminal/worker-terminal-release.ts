@@ -218,16 +218,39 @@ export function releaseDeadWorkerTerminalInTransaction(
   return database.getWorkerTerminalResource(params.resourceId) ?? resource
 }
 
+/** Terminal (not chat) workers older builds settled without releasing their row; these pin their Run. */
+export function listSettledWorkerTerminalsStillOwned(
+  this: OrchestrationDb,
+  afterRowid: number,
+  limit: number,
+  updatedBefore: string
+): (WorkerTerminalResourceRow & { row_id: number })[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: res.* plus its rowid.
+  return this.db
+    .prepare(
+      `SELECT res.rowid AS row_id, res.* FROM worker_terminal_resources res
+        JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
+        WHERE res.rowid > ? AND w.state IN ('succeeded', 'failed', 'stopped', 'abandoned')
+          AND res.ownership_state = 'owned' AND res.release_state = 'not_requested'
+          AND res.process_incarnation IS NOT NULL AND res.updated_at < ?
+          AND res.terminal_handle NOT LIKE 'structworker\\_%' ESCAPE '\\'
+        ORDER BY res.rowid LIMIT ?`
+    )
+    .all(afterRowid, updatedBefore, limit) as (WorkerTerminalResourceRow & { row_id: number })[]
+}
+
 export type WorkerTerminalReleaseMethods = {
   requestWorkerTerminalRelease: typeof requestWorkerTerminalRelease
   settleDeadWorkerTerminalRelease: typeof settleDeadWorkerTerminalRelease
   settleDeadWorkerTerminalReleases: typeof settleDeadWorkerTerminalReleases
+  listSettledWorkerTerminalsStillOwned: typeof listSettledWorkerTerminalsStillOwned
 }
 
 export function attachWorkerTerminalRelease(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     requestWorkerTerminalRelease,
     settleDeadWorkerTerminalRelease,
-    settleDeadWorkerTerminalReleases
+    settleDeadWorkerTerminalReleases,
+    listSettledWorkerTerminalsStillOwned
   })
 }

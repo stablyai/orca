@@ -49,27 +49,6 @@ export function listWorkerTerminalReleaseBacklog(
     .all(limit ?? -1) as WorkerTerminalResourceRow[]
 }
 
-/** Terminal (not chat) workers older builds settled without releasing their row; these pin their Run. */
-export function listSettledWorkerTerminalsStillOwned(
-  this: OrchestrationDb,
-  afterRowid: number,
-  limit: number,
-  updatedBefore: string
-): (WorkerTerminalResourceRow & { row_id: number })[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: res.* plus its rowid.
-  return this.db
-    .prepare(
-      `SELECT res.rowid AS row_id, res.* FROM worker_terminal_resources res
-        JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
-        WHERE res.rowid > ? AND w.state IN ('succeeded', 'failed', 'stopped', 'abandoned')
-          AND res.ownership_state = 'owned' AND res.release_state = 'not_requested'
-          AND res.process_incarnation IS NOT NULL AND res.updated_at < ?
-          AND res.terminal_handle NOT LIKE 'structworker\\_%' ESCAPE '\\'
-        ORDER BY res.rowid LIMIT ?`
-    )
-    .all(afterRowid, updatedBefore, limit) as (WorkerTerminalResourceRow & { row_id: number })[]
-}
-
 export const WORKER_LIST_CURSOR_EXPIRED_MESSAGE =
   'The worker inventory changed destructively while paging. Restart without --cursor.'
 
@@ -304,7 +283,6 @@ export type WorkerTerminalListingMethods = {
   getWorkerAutoCloseState: typeof getWorkerAutoCloseState
   keepWorkerTerminalOpen: typeof keepWorkerTerminalOpen
   listWorkerTerminalReleaseBacklog: typeof listWorkerTerminalReleaseBacklog
-  listSettledWorkerTerminalsStillOwned: typeof listSettledWorkerTerminalsStillOwned
   listWorkerTerminalResources: typeof listWorkerTerminalResources
   getWorkerTerminalListingSnapshot: typeof getWorkerTerminalListingSnapshot
   getWorkerTerminalOrderingKey: typeof getWorkerTerminalOrderingKey
@@ -320,7 +298,6 @@ export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
     getWorkerAutoCloseState,
     keepWorkerTerminalOpen,
     listWorkerTerminalReleaseBacklog,
-    listSettledWorkerTerminalsStillOwned,
     listWorkerTerminalResources,
     getWorkerTerminalListingSnapshot,
     getWorkerTerminalOrderingKey,
