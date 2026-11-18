@@ -256,10 +256,15 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     let current = ptyId
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const before = selectedAccount()
-      const result = await this.restartAgentPaneInPlace(current, {
-        agent: 'claude',
-        providerSession: session
-      })
+      const restarting = current
+      const result = await this.restartAgentPaneInPlace(
+        restarting,
+        { agent: 'claude', providerSession: session },
+        () => {
+          const pty = this.ptysById.get(restarting)
+          return pty !== undefined && this.claudePaneOf(pty)?.session?.id === session.id
+        }
+      )
       if (!result.ok) {
         console.warn('[runtime] a Claude terminal stayed on its previous account', {
           ptyId: current,
