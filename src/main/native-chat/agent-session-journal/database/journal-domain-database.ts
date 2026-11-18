@@ -9,7 +9,7 @@ import {
   journalPragmaNumber,
   type OpenJournalDatabase
 } from './journal-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import { tryFoldJournalTextTails } from '../journal-text-tail'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
@@ -25,10 +25,6 @@ import {
   captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT
 } from './journal-legacy-source-receipt'
-
-export function journalDomainDatabasePath(stateDirectory: string): string {
-  return join(stateDirectory, 'agent-session-domain.db')
-}
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
 export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {

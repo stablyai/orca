@@ -27,6 +27,8 @@ import {
   writeSessionCookieSnapshot
 } from './browser-session-cookie-snapshot-file'
 
+import { usesMockKeychain } from '../../../startup/chromium-policy/configure-dev-keychain'
+
 const SNAPSHOT_DIRECTORY = 'browser-session-cookies'
 // Chromium commits its own cookie store this often.
 const SAVE_DELAY_MS = 30_000
@@ -60,10 +62,10 @@ export function configureBrowserSessionCookieSnapshots(directory: string): void 
   profileDirectory = directory
 }
 
-function snapshotPath(profileId: string): string {
+function snapshotPath(profileId: string, mockKeychain = usesMockKeychain()): string {
   return join(
     profileDirectory ?? app.getPath('userData'),
-    SNAPSHOT_DIRECTORY,
+    mockKeychain ? `${SNAPSHOT_DIRECTORY}-mock-keychain` : SNAPSHOT_DIRECTORY,
     `${encodeURIComponent(profileId)}.json`
   )
 }
@@ -289,6 +291,20 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
   )
 }
 
+export async function clearBrowserSessionCookieSnapshots(profileId: string): Promise<void> {
+  const paths = [snapshotPath(profileId, false), snapshotPath(profileId, true)]
+  for (const path of paths) {
+    const tracker = trackers.get(path)
+    if (tracker) {
+      cancelPendingSave(tracker)
+      tracker.target.cookies.off('changed', tracker.onChanged)
+      trackers.delete(path)
+      track(path, tracker.target)
+    }
+  }
+  await Promise.all(paths.map(removeSessionCookieSnapshot))
+}
+
 /** For a browser profile being deleted. */
 export function forgetBrowserSessionCookies(profileId: string): void {
   const warn = (error: unknown) =>
@@ -298,14 +314,16 @@ export function forgetBrowserSessionCookies(profileId: string): void {
       error
     )
   try {
-    const filePath = snapshotPath(profileId)
-    const tracker = trackers.get(filePath)
-    if (tracker) {
-      cancelPendingSave(tracker)
-      tracker.target.cookies.off('changed', tracker.onChanged)
-      trackers.delete(filePath)
+    for (const mockKeychain of [false, true]) {
+      const filePath = snapshotPath(profileId, mockKeychain)
+      const tracker = trackers.get(filePath)
+      if (tracker) {
+        cancelPendingSave(tracker)
+        tracker.target.cookies.off('changed', tracker.onChanged)
+        trackers.delete(filePath)
+      }
+      void removeSessionCookieSnapshot(filePath).catch(warn)
     }
-    void removeSessionCookieSnapshot(filePath).catch(warn)
   } catch (error) {
     warn(error)
   }

@@ -6,10 +6,9 @@ import { afterEach, expect, it } from 'vitest'
 import { openJournalDatabase, runJournalTransaction } from './journal-database'
 import {
   initializeJournalDomainDatabase,
-  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import {
   sameJournalLegacySource,
   type JournalLegacySourceReceipt
