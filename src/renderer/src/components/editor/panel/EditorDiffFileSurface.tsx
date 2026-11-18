@@ -57,7 +57,7 @@ export function EditorDiffFileSurface({
   const isEditable = activeFile.diffSource === 'unstaged'
   if (diffContent.kind === 'binary') {
     if (diffContent.tooLarge) {
-      return <DiffTooLargeNotice />
+      return <DiffTooLargeNotice forConnection={diffContent.tooLargeForConnection} />
     }
     if (diffContent.isImage) {
       return (
