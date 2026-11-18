@@ -220,3 +220,13 @@ export function resolveResumeGroupHeader(
 export function allResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
   return candidates.map((candidate) => candidate.sessionId)
 }
+
+/** Its saved approval or question died with the agent; resuming only makes the agent ask again. */
+function waitedOnPerson(candidate: ResumeCandidate): boolean {
+  return candidate.activity?.state === 'blocked' && candidate.activity.prompts.length > 0
+}
+
+/** Chats that were working; chats waiting on the person stay offered until they choose. */
+export function launchResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
+  return allResumeSessionIds(candidates.filter((candidate) => !waitedOnPerson(candidate)))
+}

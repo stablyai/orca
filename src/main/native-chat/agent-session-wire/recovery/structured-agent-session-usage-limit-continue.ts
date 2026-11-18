@@ -77,7 +77,18 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.cold.forget(id)
   }
 
-  /** Drops what the sweep keeps for chats no longer shown. */
+  /** Chats still open: those with a tab, and tabless ones nobody closed (bot and worker chats). */
+  private listOpen(): string[] {
+    const { store } = this.deps.host
+    return [...new Set([...store.listVisibleSessionIds(), ...store.listBackgroundSessionIds()])]
+  }
+
+  private isOpen(id: string): boolean {
+    const { store } = this.deps.host
+    return store.isSessionTabVisible(id) || store.isSessionInBackground(id)
+  }
+
+  /** Drops what the sweep keeps for chats no longer open. */
   private retainShown(visible: readonly string[]): void {
     const shown = new Set(visible)
     for (const id of this.attempts.keys()) {
@@ -134,7 +145,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       record !== null &&
       record.location.executionHostId === this.deps.host.store.hostId &&
       !this.deps.host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
-      this.deps.host.store.isSessionTabVisible(id) &&
+      this.isOpen(id) &&
       !(
         record.usageLimitContinueCancel?.turnItemId === cut.turnItemId &&
         record.usageLimitContinueCancel.resetsAt === cut.resetsAt
@@ -162,7 +173,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     // Off, nothing is sent, but an account switch still moves when Continue applies.
     this.running = true
     try {
-      const visible = this.deps.host.store.listVisibleSessionIds()
+      const visible = this.listOpen()
       this.retainShown(visible)
       // Visibility and workspace sleep can change without a journal or settings commit.
       await this.publishScheduled()

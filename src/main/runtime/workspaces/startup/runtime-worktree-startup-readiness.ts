@@ -9,17 +9,12 @@ import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/agent-launch
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
-import type {
-  WorktreeStartupDraftPaste,
-  WorktreeStartupFollowup
-} from './runtime-worktree-agent-startup'
+import type { WorktreeStartupFollowup } from './runtime-worktree-agent-startup'
 import {
   deliverTerminalAgentLaunchPrompt,
   type TerminalPromptRuntime
 } from '../../rpc/methods/agent-launch/agent-launch-terminal-prompt'
 
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 // Shells enable bracketed paste at their prompt; only markers after the last command handoff (?2004l) belong to the agent.
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
@@ -33,22 +28,6 @@ export type WorktreeStartupReadinessHost = {
   subscribeToData: (ptyId: string, listener: (data: string) => void) => () => void
   readRecentOutput: (ptyId: string) => string | undefined
   write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
-}
-
-export function pasteWorktreeStartupDraftWhenReady(
-  host: WorktreeStartupReadinessHost,
-  handle: string,
-  draft: WorktreeStartupDraftPaste
-): void {
-  void waitForWorktreeStartupDraft(host, handle, draft.agent)
-    .then((ptyId) => {
-      if (!ptyId) {
-        console.warn('[worktree-create] agent did not become ready for draft paste')
-        return
-      }
-      host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`, 'launch')
-    })
-    .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
 }
 
 export type StartupFollowupPromptOptions = {

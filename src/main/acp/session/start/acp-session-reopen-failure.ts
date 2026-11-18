@@ -64,9 +64,24 @@ export async function acpSessionOtherFolder(
 ): Promise<string | null> {
   if (
     !(error instanceof AcpAgentError) ||
-    !input.dialect.sessionInOtherFolder?.(error, sessionId, cwd) ||
-    input.initialized.agentCapabilities?.sessionCapabilities?.list == null
+    !input.dialect.sessionInOtherFolder?.(error, sessionId, cwd)
   ) {
+    return null
+  }
+  const listed = await acpListedSessionFolder(sessionId, input)
+  return listed === cwd ? null : listed
+}
+
+/** The folder the agent lists a session in; null when it cannot list sessions or lists no such one. */
+export async function acpListedSessionFolder(
+  sessionId: string,
+  input: {
+    initialized: InitializeResponse
+    connection: Pick<AcpStructuredConnection, 'listSessions'>
+    assertStarting: () => void
+  }
+): Promise<string | null> {
+  if (input.initialized.agentCapabilities?.sessionCapabilities?.list == null) {
     return null
   }
   let cursor: string | undefined
@@ -77,7 +92,7 @@ export async function acpSessionOtherFolder(
     input.assertStarting()
     const listed = page.sessions.find((session) => session.sessionId === sessionId)
     if (listed) {
-      return listed.cwd === cwd ? null : listed.cwd
+      return listed.cwd
     }
     cursor = page.nextCursor ?? undefined
   } while (cursor)

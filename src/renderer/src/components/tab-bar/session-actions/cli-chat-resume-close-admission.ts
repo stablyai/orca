@@ -7,7 +7,7 @@ import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structur
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
-import { probePtyRunningWork } from '../../terminal/pty-running-work-probe'
+import { probePtyRunningWork } from '../../terminal/tab-lifecycle/pty-running-work-probe'
 import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
 import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {

@@ -8,7 +8,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getCodexAccountDisplayLabel,
   normalizeCodexAccountEmail
-} from '../../../provider-accounts/codex-account-display-label'
+} from '../../../../../../shared/agent-accounts/codex-account-display-label'
 import { isShellProcess } from '../../../../../../shared/agent-status/process/shell-process-detection'
 import {
   isCodexForegroundProcess,

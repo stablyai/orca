@@ -5,13 +5,44 @@ import type {
 
 export type OrcaHookTrustKind = Exclude<keyof PersistedTrustedOrcaHookRepo, 'all'>
 
+const ORCA_HOOK_TRUST_KINDS = [
+  'setup',
+  'archive',
+  'issueCommand',
+  'vmRecipe'
+] as const satisfies readonly OrcaHookTrustKind[]
+
+export function isOrcaHookRepoIdOnSeveralHosts(
+  repos: readonly { id: string }[],
+  repoId: string
+): boolean {
+  return repos.filter((repo) => repo.id === repoId).length > 1
+}
+
 export function canUseRepoWideTrust(
   trust: PersistedTrustedOrcaHooks,
   repos: readonly { id: string }[],
   repoId: string
 ): boolean {
   // Why: with the id on two hosts, trusting one row's script could run the other's unseen.
-  return Boolean(trust[repoId]?.all) && repos.filter((repo) => repo.id === repoId).length < 2
+  return Boolean(trust[repoId]?.all) && !isOrcaHookRepoIdOnSeveralHosts(repos, repoId)
+}
+
+/** Repo-wide trust; on a single host, an approval of any hook kind also trusts the repo. */
+export function isOrcaHookRepoTrusted(
+  trust: PersistedTrustedOrcaHooks,
+  repos: readonly { id: string }[],
+  repoId: string
+): boolean {
+  if (canUseRepoWideTrust(trust, repos, repoId)) {
+    return true
+  }
+  return (
+    !isOrcaHookRepoIdOnSeveralHosts(repos, repoId) &&
+    ORCA_HOOK_TRUST_KINDS.some(
+      (kind) => approvedOrcaHookContentHashes(trust, repoId, kind).length > 0
+    )
+  )
 }
 
 // Bounded, so a long-lived repo can't accumulate every script it ever had; large enough that

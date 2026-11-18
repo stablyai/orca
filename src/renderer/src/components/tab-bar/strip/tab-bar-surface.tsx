@@ -6,12 +6,12 @@ import type { Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ProjectedAgentMenuItems } from '../../agent/launch-menu/AgentMenuItems'
+import { OpenAgentSettingsMenuItem } from '../../agent/launch-menu/OpenAgentSettingsMenuItem'
 import { TabBarAgentPickerEntry } from '../create-entry/TabBarAgentPickerEntry'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
@@ -25,7 +25,12 @@ import type { TabBarItemProjection } from '../model/use-tab-bar-item-projection'
 import type { TabBarItemActions } from '../model/use-tab-bar-item-actions'
 import { renderTabBarItems } from '../model/tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from '../create-menu/tab-bar-static-create-menu'
+import { NewTabMenuContent } from '../menu-fit/NewTabMenuContent'
 import ClientHostedBrowserTabRows from '../browser-tabs/ClientHostedBrowserTabRows'
+import { BotNewChatMenuItems } from '../../bots/BotNewChatMenuItems'
+import type { Bot } from '../../../../../shared/bot-types'
+import type { BotGroup } from '../../../../../shared/bots/bot-group'
+import { BotGroupNewThreadMenuItems } from '../../bots/BotGroupNewThreadMenuItems'
 import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
 
@@ -41,7 +46,9 @@ export function renderTabBarSurface(
     tabStripDragScroll,
     activeClientHostedBrowserRowId,
     itemActions,
-    surfaceRef
+    surfaceRef,
+    bot,
+    botGroup
   }: {
     props: TabBarProps
     runtime: TabBarRuntimeModel
@@ -52,6 +59,10 @@ export function renderTabBarSurface(
     activeClientHostedBrowserRowId: string | null
     itemActions: TabBarItemActions
     surfaceRef: (node: HTMLDivElement | null) => void
+    /** Set in a bot's home, where the menu leads with a new chat with the bot. */
+    bot: Bot | null
+    /** Set in a group's home, where the menu leads with a new thread. */
+    botGroup: BotGroup | null
   },
   t: Translate = translate
 ): React.JSX.Element {
@@ -228,7 +239,7 @@ export function renderTabBarSurface(
             <Plus className="w-3.5 h-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
+        <NewTabMenuContent
           align="start"
           sideOffset={6}
           className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
@@ -246,8 +257,16 @@ export function renderTabBarSurface(
                 terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
+                excludedTabId={
+                  activeClientHostedBrowserRowId === null
+                    ? (orderedItems.find((item) => item.id === itemProjection.activeVisibleTabId)
+                        ?.unifiedTabId ?? null)
+                    : null
+                }
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}
+                // A bot's or group's home offers its agents only through its chats, above.
+                hideAgents={bot !== null || botGroup !== null}
                 onLaunchAgentOption={launchAgentFromNewTabEntry}
                 onOpenDefaultTerminal={() => {
                   queueNewActiveTerminalFocusAfterNewTabMenuClose()
@@ -260,6 +279,13 @@ export function renderTabBarSurface(
                 onDidOpenEntry={() => setNewTabMenuOpen(false)}
               />
               {showStaticCreateMenuItems ? <DropdownMenuSeparator className="my-0 mb-1.5" /> : null}
+            </>
+          ) : null}
+          {bot && !terminalOnly ? <BotNewChatMenuItems bot={bot} model={agentMenu} /> : null}
+          {botGroup && !terminalOnly ? (
+            <>
+              <BotGroupNewThreadMenuItems group={botGroup} />
+              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
             </>
           ) : null}
           {showStaticCreateMenuItems ? (
@@ -280,19 +306,23 @@ export function renderTabBarSurface(
               }
             />
           ) : null}
-          {showStaticCreateMenuItems && showAgentLaunchItems ? (
+          {showStaticCreateMenuItems && showAgentLaunchItems && !botGroup ? (
             <>
               <DropdownMenuSeparator />
-              <ProjectedAgentMenuItems
-                model={agentMenu}
-                pickerInventory={agentPickerInventory}
-                onSelectPickerAgent={selectPickerAgent}
-                hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
-                runLaunch={launchAgentRow}
-              />
+              {bot ? (
+                <OpenAgentSettingsMenuItem variant="create" />
+              ) : (
+                <ProjectedAgentMenuItems
+                  model={agentMenu}
+                  pickerInventory={agentPickerInventory}
+                  onSelectPickerAgent={selectPickerAgent}
+                  hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
+                  runLaunch={launchAgentRow}
+                />
+              )}
             </>
           ) : null}
-        </DropdownMenuContent>
+        </NewTabMenuContent>
       </DropdownMenu>
     </div>
   )

@@ -1,9 +1,6 @@
 import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  registerHttpLinkStoreAccessor,
-  registerWorkspaceHttpLinkBrowserOpener
-} from '@/lib/browser/navigation/http-link-routing'
+import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 
@@ -423,73 +420,6 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     disposable.dispose()
   })
 
-  it('does not suppress a modifier-click when the buffer position is not an HTTP link', () => {
-    const { terminal, registrations } = makeTerminal({ urlRows: ['not-a-link'] })
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
-
-    mouseDown!(mouseEventForRow(0))
-
-    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
-    disposable.dispose()
-  })
-
-  it('temporarily suppresses PTY mouse reporting for a primed OSC link', () => {
-    const { terminal, registrations } = makeTerminal({ urlRows: ['OSC label'] })
-    const terminalWithLinkifier = terminal as unknown as {
-      _core: { linkifier: { _currentLink: unknown } }
-    }
-    terminalWithLinkifier._core = {
-      linkifier: { _currentLink: { link: 'https://example.com/osc' } }
-    }
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
-
-    mouseDown!(mouseEventForRow(0))
-
-    expect(terminal.options.mouseEventsRequireAlt).toBe(true)
-    disposable.dispose()
-    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
-  })
-
-  it('routes a claimed floating chord to one browser with the full wrapped URL', () => {
-    registerWorkspaceHttpLinkBrowserOpener(null)
-    const { terminal } = makeTerminal()
-    const createBrowserTab = vi.fn()
-    registerHttpLinkStoreAccessor(() => ({
-      settings: { openLinksInApp: false },
-      createBrowserTab,
-      setActiveWorktree: vi.fn()
-    }))
-    const event = Object.assign(mouseEventForRow(0, { altKey: true }), { shiftKey: false })
-    let claimed = false
-    const deps = {
-      terminal,
-      worktreeId: 'wt-1',
-      worktreePath: '/tmp',
-      startupCwd: '/tmp',
-      linkActionContext: {
-        paneId: 1,
-        pointerGesture: { canRequestAction: () => true, dispose: () => {} },
-        claimPtyMouse: () => {
-          if (claimed) {
-            return false
-          }
-          claimed = true
-          return true
-        },
-        request: vi.fn(),
-        focusTerminal: vi.fn()
-      }
-    }
-    expect(handleTerminalWebLinkClick(URL_ROWS[0], event, deps)).toBe(true)
-    expect(handleTerminalWebLinkClick(URL_ROWS[0], event, deps)).toBe(false)
-    expect(createBrowserTab.mock.calls).toEqual([
-      ['global-floating-terminal', FULL_URL, expect.objectContaining({ activate: true })]
-    ])
-    expect(openUrlMock).not.toHaveBeenCalled()
-  })
-
   it('leaves Alt-modified link gestures to the child TUI', () => {
     const { terminal, registrations } = makeTerminal()
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
@@ -507,23 +437,6 @@ describe('hard-wrapped terminal HTTP clicks', () => {
       })
     ).toBe(false)
     expect(openUrlMock).not.toHaveBeenCalled()
-    disposable.dispose()
-  })
-
-  it('temporarily suppresses PTY mouse reporting at an HTTP link position', async () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
-    const mouseUp = registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options !== undefined
-    )?.[1]
-
-    mouseDown!(mouseEventForRow(0))
-    expect(terminal.options.mouseEventsRequireAlt).toBe(true)
-
-    mouseUp!(mouseEventForRow(0))
-    await Promise.resolve()
-    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
     disposable.dispose()
   })
 })

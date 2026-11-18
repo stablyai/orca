@@ -122,7 +122,8 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
       connectedPtyEvidence: {
         tabIds: new Set(),
         paneKeys: new Set(),
-        ptyIdByTerminalHandle: new Map()
+        ptyIdByTerminalHandle: new Map(),
+        terminalHandleByPaneKey: new Map()
       },
       hookSnapshots: store.getStatusSnapshot()
     }),

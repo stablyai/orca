@@ -26,6 +26,8 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   spawnOnWorkerThread?: boolean
   /** Native Git only: launch an owned group and retain it after abnormal stop until proof. */
   ownedPosixGroup?: boolean
+  /** Rechecked synchronously at the spawn call, after any async executable resolution. */
+  canStart?: () => boolean
 }
 
 export { execFileCaptureToTermination } from './exec-file-capture-to-termination'
@@ -217,6 +219,11 @@ export function execFileCapture(
           if (settled) {
             return
           }
+          if (options.canStart?.() === false) {
+            reportChildTerminated()
+            finish(createAbortError())
+            return
+          }
           child = spawnedExecFile(command, captureOptions, complete, () =>
             spawnNativeProcess(
               program,
@@ -227,6 +234,11 @@ export function execFileCapture(
             )
           )
         } else {
+          if (options.canStart?.() === false) {
+            reportChildTerminated()
+            finish(createAbortError())
+            return
+          }
           child = useWorker
             ? workerExecFile(command, args, captureOptions, complete)
             : ownedPosixGroup

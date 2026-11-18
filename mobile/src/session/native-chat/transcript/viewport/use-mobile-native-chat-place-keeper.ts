@@ -50,7 +50,11 @@ export function useMobileNativeChatPlaceKeeper<S extends MobileNativeChatScrollN
   setDrawn: Dispatch<SetStateAction<MobileNativeChatDrawn>>
   onEndDistance: (fromEnd: number, byReader: boolean) => void
   onPlaceRestored: (scope: string) => void
-}): { notePlace: (scroller: S) => void; keepPlace: (scroller: S) => void } {
+}): {
+  notePlace: (scroller: S) => void
+  keepPlace: (scroller: S) => void
+  forgetPlace: () => void
+} {
   const { latest, roots, isFollowing, resting, write, setDrawn } = args
   const { onEndDistance, onPlaceRestored } = args
   const place = useRef<MobileNativeChatReadingUnit[] | null>(null)
@@ -133,5 +137,13 @@ export function useMobileNativeChatPlaceKeeper<S extends MobileNativeChatScrollN
     [isFollowing, latest, notePlace, resting, restorePlace, roots, write]
   )
 
-  return { notePlace, keepPlace }
+  const forgetPlace = useCallback(() => {
+    const { scope } = latest.current.rowKeys
+    place.current = null
+    placedScope.current = scope
+    placedLayout.current = latest.current.layoutKey
+    savedPlaces.delete(scope)
+  }, [latest])
+
+  return { notePlace, keepPlace, forgetPlace }
 }

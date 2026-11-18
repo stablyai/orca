@@ -3,7 +3,7 @@ import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '../../../store/index'
 import { markHydratedBrowserPageHandles } from '../../../store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
-import { applyWebSessionTabsSnapshot } from '../../web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsSnapshot } from '../../web-session-tabs-sync/snapshots/snapshot-api'
 import {
   ENV,
   NOW,
