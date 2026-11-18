@@ -1,31 +1,7 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClient } from '../runtime/client'
-import { formatBotTools, runRemoteBotToolSignIn } from './bot-tools'
-
-describe('orca bot tools', () => {
-  it("lists the bot's own tools, saying only what is wrong, then what it inherits", () => {
-    expect(
-      formatBotTools(
-        {
-          agent: 'claude',
-          own: [
-            { name: 'notion', detail: 'https://mcp.notion.com/mcp', remote: true },
-            { name: 'time', detail: 'uvx mcp-server-time', remote: false }
-          ],
-          inherited: [{ name: 'github' }, { name: 'visuals', plugin: true }]
-        },
-        { notion: { kind: 'sign-in' } }
-      )
-    ).toBe(
-      [
-        'notion  https://mcp.notion.com/mcp  (needs sign-in: `orca bot tools connect <name>`)',
-        'time  uvx mcp-server-time',
-        '2 more from your Claude Code: github, visuals'
-      ].join('\n')
-    )
-  })
-})
+import { runRemoteBotToolSignIn } from './bot-tools'
 
 describe('orca bot tools connect, for a paired server’s bot', () => {
   const PAGE = 'https://app.example.com/authorize?client_id=c&state=s-1'

@@ -6,9 +6,13 @@ import {
   botAnswerPayload,
   dropUnreadBotRequests,
   noteBotRequestPost,
+  settleBotRequestFailure,
   settleBotRequestTurn
 } from './bot-request-outcome'
 import { installSenderHost, removeSenderHost } from './bot-request-sender-host.test-fixture'
+import type { AgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
+import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 
 const acting = vi.hoisted((): { requestIds: string[] } => ({ requestIds: [] }))
 vi.mock('./bot-recipient', () => ({
@@ -25,7 +29,7 @@ vi.mock('./bot-recipient', () => ({
 }))
 vi.mock('../../../../../bots/bot-session-tabs', () => ({
   botOfSession: (_bots: unknown, sessionId: string) =>
-    sessionId === 'docs-session' ? { id: 'docs' } : null
+    sessionId === 'docs-session' ? { id: 'docs', agent: 'codex' } : null
 }))
 
 const record: BotRequestRecord = {
@@ -74,14 +78,18 @@ describe('how a bot request ends', () => {
     db.close()
   })
 
-  function request(purpose: 'status' | 'handoff' | 'question' = 'handoff', root = 'root'): string {
+  function request(
+    purpose: 'status' | 'handoff' | 'question' = 'handoff',
+    root = 'root',
+    askers: BotRequestRecord['askers'] = record.askers
+  ): string {
     const admitted = db.admitBotRequest({
       rootKey: `${root}-${purpose}`,
       fromBotId: 'ranger',
       toBotId: 'docs',
       purpose,
       depth: 1,
-      record: JSON.stringify({ ...record, purpose }),
+      record: JSON.stringify({ ...record, purpose, askers }),
       message: {
         from: 'orca_session_id:11111111-1111-4111-8111-111111111111',
         to: 'orca_session_id:22222222-2222-4222-8222-222222222222',
@@ -125,6 +133,39 @@ describe('how a bot request ends', () => {
       "Docs ended its turn without answering your handoff, so do it yourself or tell Nora on Slack that Docs couldn't take it."
     ])
     expect(notified).toEqual(['orca_session_id:11111111-1111-4111-8111-111111111111'])
+  })
+
+  it("says a failed turn failed and why, not that the bot read the owner's handoff", async () => {
+    const id = request('handoff', 'root', [{ kind: 'owner' }])
+    acting.requestIds = [id]
+    // The completion of a failed turn is left to the failure, which knows why.
+    await settleBotRequestTurn(runtime, 'docs-session', { outcome: 'failure' })
+    expect(mailToRanger()).toEqual([])
+    await settleBotRequestFailure(
+      runtime,
+      failedTurn({
+        kind: 'modelUnavailable',
+        account: 'system',
+        detail: { text: 'astra', audience: 'log' }
+      })
+    )
+    expect(mailToRanger().map((mail) => mail.body)).toEqual([
+      "Docs's turn failed: Codex couldn't use astra. Pick another model and send again. It ended without answering your handoff, so do it yourself or tell your owner that Docs couldn't take it."
+    ])
+    expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+  })
+
+  it("says a failed turn Orca continues after the limit resets isn't the sender's to redo", async () => {
+    const id = request('handoff', 'root', [{ kind: 'owner' }])
+    acting.requestIds = [id]
+    const scheduled = { usageLimitContinue: { state: 'scheduled' as const } }
+    runtime.ensureStructuredAgentSessionHost = async () =>
+      installSenderHost(['11111111-1111-4111-8111-111111111111'], scheduled)
+    installSenderHost(['11111111-1111-4111-8111-111111111111'], scheduled)
+    await settleBotRequestFailure(runtime, failedTurn({ kind: 'usageLimitReached' }))
+    expect(mailToRanger().map((mail) => mail.body)).toEqual([
+      "Docs's turn failed: Codex hit its usage limit. Your handoff hasn't been handled yet; Docs continues on its own when the limit resets, so don't redo it."
+    ])
   })
 
   it('passes on one answer to a request, and a late one after Orca said it went unanswered', async () => {
@@ -176,3 +217,47 @@ describe('how a bot request ends', () => {
     expect(() => botAnswerPayload(db, db.getMessageById(id)!)).toThrow('nothing to answer')
   })
 })
+
+/** A turn that failed as a provider fails one: an accepted send, then a turn-scoped status row
+ *  carrying the typed failure, worded as the chat writes it. */
+function failedTurn(failure: AgentSessionFailureFact): StructuredAgentSessionRequestFailure {
+  const turn = 'orca:turn-1'
+  return {
+    sessionId: 'docs-session',
+    agent: 'codex',
+    kind: 'turn',
+    id: turn,
+    outcome: 'failure',
+    read: async () => ({
+      sessionId: 'docs-session',
+      cursor: { epoch: 'e', sequence: 3 },
+      submissions: [],
+      items: [
+        {
+          itemId: turn,
+          revision: 2,
+          sequence: 1,
+          observedAt: 1,
+          body: {
+            kind: 'turn',
+            turnId: 't1',
+            state: 'completed',
+            outcome: 'failure',
+            completedAt: 2
+          }
+        },
+        {
+          itemId: 'orca:terminal-failure',
+          revision: 1,
+          sequence: 2,
+          observedAt: 2,
+          turnScope: { kind: 'turn', turnItemId: turn },
+          body: {
+            kind: 'status',
+            ...agentSessionFailureWords(failure, { surface: 'row', agentName: 'Codex' })
+          }
+        }
+      ]
+    })
+  }
+}

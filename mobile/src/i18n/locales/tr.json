@@ -57,7 +57,8 @@
       "currentWorktree": "mevcut worktree",
       "messages_one": "{{count}} mesaj",
       "messages_other": "{{count}} mesaj",
-      "resumeSession": "Ajan oturumuna devam et"
+      "resumeSession": "Ajan oturumuna devam et",
+      "continueInCli": "CLI'de Devam Et"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Sunucuya ulaşılamadı",
@@ -165,11 +166,13 @@
       "invalidUrl": "Geçerli bir URL girin."
     },
     "paneView": {
-      "dialogTitle": "Tarayıcı İletişim Kutusu",
       "forward": "İleri",
       "keyboardPlaceholder": "Sayfaya yazın…",
       "reload": "Yenile",
-      "sendText": "Tarayıcıya metin gönder"
+      "sendText": "Tarayıcıya metin gönder",
+      "dialogTitleWithOrigin": "{{origin}} diyor ki",
+      "dialogTitleNoOrigin": "Bu sayfa diyor ki",
+      "dialogAnswer": "Yanıt"
     },
     "pointerModifiers": {
       "clickModifier": "Tıklamalarda {{key}} tuşunu kullan"
@@ -182,6 +185,9 @@
     "viewModeSwitch": {
       "mobileView": "Web sitesinin mobil görünümünü göster",
       "webView": "Web sitesinin masaüstü görünümünü göster"
+    },
+    "loadFailure": {
+      "retry": "Yeniden dene"
     }
   },
   "chat": {
@@ -215,7 +221,8 @@
     "contextUsage": {
       "label": "Bağlam: {{used}} / {{window}} token kullanıldı (%{{percent}})",
       "title": "Bağlam",
-      "estimated": "Son yanıta göre tahmin edilmiştir."
+      "estimated": "Son yanıta göre tahmin edilmiştir.",
+      "deferredNote": "İhtiyaç olduğunda yüklenir. Kullanılan toplama dahil değildir."
     },
     "composerAttachments": {
       "attachedImage": "Ekli görsel",
@@ -653,7 +660,7 @@
       "confirm": "Geri dön",
       "unsupported": "Bu sohbette önceki bir mesaja dönülemiyor.",
       "historyNotPaginated": "Bu eski Codex sohbetinde önceki bir mesaja dönülemiyor. Buraya geri dön özelliğini kullanmak için yeni bir sohbet başlatın.",
-      "busy": "Ajan boşta olduğunda ve sohbette sizden yanıt bekleyen bir işlem kalmadığında kullanılabilir.",
+      "busy": "Sohbet boştayken kullanılabilir",
       "staleEpoch": "Sohbet değişti. Son mesajları inceleyip yeniden deneyin.",
       "invalidTarget": "Sohbette bu mesaja dönülemiyor. Hiçbir şey değiştirilmedi.",
       "historyLimit": "Bu sohbet geri dönülemeyecek kadar uzun. Hiçbir şey değiştirilmedi.",

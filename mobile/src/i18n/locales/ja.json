@@ -57,7 +57,8 @@
       "currentWorktree": "現在のワークツリー",
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
-      "resumeSession": "Agent セッションを再開"
+      "resumeSession": "Agent セッションを再開",
+      "continueInCli": "CLIで続行"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",
@@ -165,11 +166,13 @@
       "invalidUrl": "有効な URL を入力してください。"
     },
     "paneView": {
-      "dialogTitle": "ブラウザのダイアログ",
       "forward": "進む",
       "keyboardPlaceholder": "ページに入力…",
       "reload": "リロード",
-      "sendText": "ブラウザにテキストを送信"
+      "sendText": "ブラウザにテキストを送信",
+      "dialogTitleWithOrigin": "{{origin}} の内容",
+      "dialogTitleNoOrigin": "このページの内容",
+      "dialogAnswer": "回答"
     },
     "pointerModifiers": {
       "clickModifier": "クリック時の修飾キー {{key}}"
@@ -182,6 +185,9 @@
     "viewModeSwitch": {
       "mobileView": "ウェブサイトのモバイル表示に切り替え",
       "webView": "ウェブサイトのデスクトップ表示に切り替え"
+    },
+    "loadFailure": {
+      "retry": "再試行"
     }
   },
   "chat": {
@@ -215,7 +221,8 @@
     "contextUsage": {
       "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
       "title": "コンテキスト",
-      "estimated": "最後の応答から推定。"
+      "estimated": "最後の応答から推定。",
+      "deferredNote": "必要時に読み込まれます。使用量には含まれません。"
     },
     "composerAttachments": {
       "attachedImage": "添付画像",
@@ -649,7 +656,7 @@
       "confirm": "巻き戻す",
       "unsupported": "このチャットは以前のメッセージに戻れません。",
       "historyNotPaginated": "この古い Codex チャットは以前のメッセージに戻れません。「ここに巻き戻す」を使用するには、新規チャットを開始してください。",
-      "busy": "Agent がアイドル状態になり、このチャットであなたの対応を待つものがなくなると利用できます。",
+      "busy": "チャットがアイドル状態のときに利用できます",
       "staleEpoch": "会話が変更されました。最新のメッセージを確認して、もう一度お試しください。",
       "invalidTarget": "会話をこのメッセージに戻すことはできません。何も変更されていません。",
       "historyLimit": "この会話は長すぎて巻き戻せません。何も変更されていません。",

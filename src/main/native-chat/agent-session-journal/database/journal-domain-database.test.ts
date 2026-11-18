@@ -21,10 +21,9 @@ import {
   createAgentSessionRecordTablesSql
 } from './journal-database-schema'
 import { openJournalDatabase } from './journal-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import {
   initializeJournalDomainDatabase,
-  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { readMailWithdrawal } from '../writing/mail-withdrawal-receipts'

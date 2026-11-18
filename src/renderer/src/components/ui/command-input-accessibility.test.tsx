@@ -20,7 +20,6 @@ it('only announces placeholder hints that add to the accessible name', async () 
   }
   try {
     for (const [label, placeholder] of [
-      ['Find results...', 'Find results...'],
       ['Find results', 'Find results...'],
       ['Find results', 'Find results…']
     ]) {

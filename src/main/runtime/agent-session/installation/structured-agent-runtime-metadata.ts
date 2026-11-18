@@ -29,7 +29,7 @@ import {
 } from '../model-catalog/structured-agent-model-catalog-discovery'
 import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { claudeManagedPlatform } from '../../../claude/managed-runtime/claude-managed-runtime'
+import { managedAgentCli } from '../../../managed-agent-cli/managed-agent-cli-registry'
 import type {
   StructuredAgentAccountHomeRequest,
   StructuredAgentChatProgram,
@@ -70,8 +70,8 @@ function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
       const options = { pathEnv, ...(homePath ? { homePath } : {}) }
       return { ...resolveStructuredAgentCommand(agent, commandSettings, options), env }
     },
-    // Hosts without the user's own Claude can install Orca's copy.
-    ...(agent === 'claude' ? { installable: () => claudeManagedPlatform() !== null } : {})
+    // Hosts without the user's own install can install Orca's copy.
+    installable: () => managedAgentCli(agent).available()
   }
 }
 

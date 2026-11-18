@@ -15,8 +15,7 @@ import type { JournalWriterEffect, JournalWriterEffectResult } from '../journal-
 import type { CommandReceiptScope } from '../writing/command-receipt-schema'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 import { assertJournalChatReadable } from '../replay/journal-open-failure'
-import { journalDatabasePath } from './journal-host-database'
-import { journalDomainDatabasePath } from './journal-domain-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import type { JournalSqlStoredRecords } from '../journal-sql-database-read'
 
 /** The runtime owns workers, never a writable connection or a retained chat projection. */

@@ -135,6 +135,7 @@ function follow(bot: BotRef, returnUrl: string | null): () => void {
     const until = Date.now() + INSTALL_POLL_FOR_MS
     let timer: ReturnType<typeof setTimeout> | undefined
     let reading = false
+    let again = false
     const check = (): void => {
       // A poll stopped and restarted meanwhile is a new one; this one ends.
       if (polls.get(key) !== started) {
@@ -147,13 +148,20 @@ function follow(bot: BotRef, returnUrl: string | null): () => void {
         returns.stop()
         return
       }
+      // A return during a read may postdate what that read sees, so it reads again once it ends.
       if (reading) {
+        again = true
         return
       }
       clearTimeout(timer)
       reading = true
       void refreshBotSlack(bot, true).then(() => {
         reading = false
+        if (again) {
+          again = false
+          check()
+          return
+        }
         timer = setTimeout(check, returns.delay(INSTALL_POLL_MS))
       })
     }

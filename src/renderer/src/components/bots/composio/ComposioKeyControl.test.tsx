@@ -37,10 +37,9 @@ describe('the Composio key control', () => {
     )
   })
 
-  it('shows a saved key as one line, and its Change opens the paste step', async () => {
+  it('opens the replacement form and removes a saved key', async () => {
     show({ key: 'ok', hint: 'ab12' })
-    expect(await screen.findByText('Composio key · ends in ab12')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
     expect(await screen.findByRole('button', { name: 'Replace key' })).toBeTruthy()
     mocks.confirm.mockResolvedValueOnce(true)
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))

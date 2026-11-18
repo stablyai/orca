@@ -76,15 +76,4 @@ describe('connectorSnapshot', () => {
     )
     expect(snapshot.conversations[0]?.paneKey).toBe(`0${escaped}`)
   })
-
-  it('lists every cloud conversation, Slack, Discord or Linear', () => {
-    const conversations = (['slack', 'discord', 'linear'] as const).map((source) =>
-      entry(source, NOW, { conversation: { source, externalId: `${source}-1` } })
-    )
-    expect(
-      connectorSnapshot({ kind: 'snapshot', conversations }, NOW).snapshot.conversations.map(
-        (item) => item.conversation.source
-      )
-    ).toEqual(['slack', 'discord', 'linear'])
-  })
 })

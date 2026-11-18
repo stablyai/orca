@@ -402,6 +402,7 @@
       "messages_other": "{{count}} messages",
       "currentWorktree": "current worktree",
       "resumeSession": "Resume agent session",
+      "continueInCli": "Continue in CLI",
       "hidePreview": "Hides the recent messages.",
       "showPreview": "Shows the recent messages.",
       "you": "You"
@@ -2003,9 +2004,11 @@
     "paneView": {
       "forward": "Forward",
       "reload": "Reload",
-      "dialogTitle": "Browser Dialog",
       "keyboardPlaceholder": "Type on page…",
-      "sendText": "Send text to browser"
+      "sendText": "Send text to browser",
+      "dialogTitleWithOrigin": "{{origin}} says",
+      "dialogTitleNoOrigin": "This page says",
+      "dialogAnswer": "Answer"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} click modifier"
@@ -2025,6 +2028,9 @@
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
       "timedOut": "Browser stream timed out."
+    },
+    "loadFailure": {
+      "retry": "Retry"
     }
   },
   "files": {
@@ -3096,7 +3102,8 @@
     "contextUsage": {
       "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
       "title": "Context",
-      "estimated": "Estimated from the last response."
+      "estimated": "Estimated from the last response.",
+      "deferredNote": "Loaded on demand. Not counted in the used total."
     },
     "composerAttachments": {
       "file": "File",
@@ -3588,7 +3595,7 @@
       "confirm": "Rewind",
       "unsupported": "This chat can't go back to an earlier message.",
       "historyNotPaginated": "This older Codex chat can't go back to an earlier message. Start a new chat to use Rewind to here.",
-      "busy": "Available once the agent is idle and nothing in this chat is waiting on you.",
+      "busy": "Available when chat is idle",
       "staleEpoch": "The conversation changed. Review the latest messages and try again.",
       "invalidTarget": "The conversation can't go back to this message. Nothing was changed.",
       "historyLimit": "This conversation is too long to go back in. Nothing was changed.",
@@ -5533,6 +5540,9 @@
       "worker": "Worker: {{name}}",
       "actionFor": "{{action}}: {{title}}",
       "open": "Open"
+    },
+    "chat": {
+      "nothingToReport": "Nothing to report"
     }
   },
   "mobileWebShell": {

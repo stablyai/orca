@@ -4,8 +4,13 @@ import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/cra
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { HostedWorker } from './hosted-worker'
 import { UTILITY_WORKER_RELAY_EXPIRED } from './utility-worker-relay-budget'
+import {
+  recordUtilityWorkerHeapPressure,
+  utilityWorkerHeapData
+} from './utility-worker-heap-report'
 import type {
   HostedWorkerThread,
+  UtilityWorkerHeapReport,
   UtilityWorkerHostEvent,
   UtilityWorkerHostRequest,
   UtilityWorkerSpawn
@@ -29,6 +34,7 @@ type Host = {
   readyTimer: ReturnType<typeof setTimeout>
   idleTimer?: ReturnType<typeof setTimeout>
   retired: boolean
+  heap?: UtilityWorkerHeapReport
 }
 
 /** An unheard worker's exit or error means it could not load here, unless main was the holdup. */
@@ -151,6 +157,11 @@ export class UtilityWorkerHost {
       }
       return
     }
+    if (event.type === 'heap') {
+      host.heap = event.report
+      recordUtilityWorkerHeapPressure(this.serviceName, event.report, [...host.workers.values()])
+      return
+    }
     const worker = host.workers.get(event.id)
     if (!worker) {
       // No one will consume it, so its relay charge goes back at once.
@@ -243,7 +254,8 @@ export class UtilityWorkerHost {
       const data: CrashReportBreadcrumbData = {
         serviceName: this.serviceName,
         code,
-        workers: workers.length
+        workers: workers.length,
+        ...utilityWorkerHeapData(host.heap, workers)
       }
       workers.forEach((worker, index) => {
         data[`w${index}_lastReply`] = worker.lastReplyType

@@ -84,7 +84,7 @@ export class HostedWorker extends EventEmitter {
     }
   }
 
-  receive(event: Exclude<UtilityWorkerHostEvent, { type: 'ready' }>): void {
+  receive(event: Exclude<UtilityWorkerHostEvent, { type: 'ready' | 'heap' }>): void {
     this.heard = true
     this.unheardPosts = []
     if (event.type === 'error') {

@@ -57,7 +57,8 @@
       "currentWorktree": "현재 워크트리",
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
-      "resumeSession": "에이전트 세션 재개"
+      "resumeSession": "에이전트 세션 재개",
+      "continueInCli": "CLI에서 계속"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "호스트에 연결할 수 없습니다.",
@@ -165,11 +166,13 @@
       "invalidUrl": "유효한 URL을 입력하세요."
     },
     "paneView": {
-      "dialogTitle": "브라우저 대화상자",
       "forward": "앞으로",
       "keyboardPlaceholder": "페이지에 입력…",
       "reload": "새로고침",
-      "sendText": "브라우저로 텍스트 전송"
+      "sendText": "브라우저로 텍스트 전송",
+      "dialogTitleWithOrigin": "{{origin}} 내용:",
+      "dialogTitleNoOrigin": "이 페이지 내용:",
+      "dialogAnswer": "답변"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 클릭 보조 키"
@@ -182,6 +185,9 @@
     "viewModeSwitch": {
       "mobileView": "웹사이트를 모바일 화면으로 보기",
       "webView": "웹사이트를 데스크톱 화면으로 보기"
+    },
+    "loadFailure": {
+      "retry": "다시 시도"
     }
   },
   "chat": {
@@ -215,7 +221,8 @@
     "contextUsage": {
       "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
       "title": "컨텍스트",
-      "estimated": "마지막 응답 기준 추정치입니다."
+      "estimated": "마지막 응답 기준 추정치입니다.",
+      "deferredNote": "필요할 때 불러옵니다. 사용량에 포함되지 않습니다."
     },
     "composerAttachments": {
       "attachedImage": "첨부된 이미지",
@@ -649,7 +656,7 @@
       "confirm": "되감기",
       "unsupported": "이 채팅은 이전 메시지로 돌아갈 수 없습니다.",
       "historyNotPaginated": "이 오래된 Codex 채팅은 이전 메시지로 돌아갈 수 없습니다. 여기로 되감기를 사용하려면 새 채팅을 시작하세요.",
-      "busy": "에이전트가 유휴 상태이고 이 채팅에서 사용자를 기다리는 항목이 없으면 사용할 수 있습니다.",
+      "busy": "채팅이 유휴 상태일 때 사용할 수 있습니다",
       "staleEpoch": "대화가 변경되었습니다. 최신 메시지를 확인하고 다시 시도하세요.",
       "invalidTarget": "대화가 이 메시지로 돌아갈 수 없습니다. 변경된 내용은 없습니다.",
       "historyLimit": "이 대화는 너무 길어 되돌아갈 수 없습니다. 변경된 내용은 없습니다.",
