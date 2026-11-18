@@ -59,12 +59,7 @@ type SkillContext = {
 // `otherBuild`: the shared folder holds another Orca build's copy, so links to it are already right.
 type SharedTarget = { path: string; realPath: string; current: boolean; otherBuild?: boolean }
 
-const WRITES_SHARED_CURRENT = new Set<BundledSkillOp['kind']>([
-  'keep',
-  'write',
-  'update',
-  'replace'
-])
+const WRITES_SHARED_CURRENT = new Set(['keep', 'write', 'update', 'replace'])
 
 type PlannedTarget = {
   op: BundledSkillOp
@@ -212,10 +207,15 @@ async function planTarget(
             : {})
         }
       : decided
-  // Beside a current copy, a former-name folder Orca doesn't own is the user's own skill, not a blocker.
+  // Released former copies with extras still need attention; only the user's own skills are hidden.
   const leaves =
     op.kind === 'keep'
-      ? former.leaves.filter((stale) => stale.reason !== 'edited' && stale.reason !== 'other')
+      ? former.leaves.filter((stale) =>
+          stale.reason === 'edited'
+            ? stale.observed.kind === 'folder' &&
+              context.source.releasedDigests.includes(stale.observed.skillDigest ?? '')
+            : stale.reason !== 'other'
+        )
       : former.leaves
   const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves }
   const writes = op.kind !== 'keep' && op.kind !== 'leave'

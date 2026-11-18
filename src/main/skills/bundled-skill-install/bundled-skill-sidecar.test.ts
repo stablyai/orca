@@ -156,12 +156,60 @@ describe('a bundled skill folder holding a file Orca does not ship', () => {
 
     expect(await formerReason()).toBe('edited')
 
+    await writeCopy(home.shared, NEW_TEXT)
+    for (const sidecar of [false, true]) {
+      if (sidecar) {
+        await addSidecar(home.shared)
+      }
+      const besideCurrent = await previewBundledSkillInstall(input)
+      expect(besideCurrent.skills[0].ops.map((op) => [op.path, op.kind, op.reason])).toEqual([
+        [home.shared, 'keep', undefined],
+        [formerOf(home), 'leave', 'edited']
+      ])
+      expect(bundledSkillNudgeEntries(besideCurrent).map((entry) => entry.name)).toEqual([NAME])
+      await autoUpdateInstalledBundledSkills({ ...input, names: [NAME] })
+      expect(await readFile(join(formerOf(home), 'SKILL.md'), 'utf8')).toBe(FORMER_TEXT)
+      expect(await readFile(join(formerOf(home), SIDECAR), 'utf8')).toBe(SIDECAR_TEXT)
+      expect(
+        bundledSkillNudgeEntries(await previewBundledSkillInstall(input)).map((entry) => entry.name)
+      ).toEqual([NAME])
+    }
+
     // Bytes this build never shipped that another Orca build recorded read as that build's copy.
     await writeFile(join(formerOf(home), 'SKILL.md'), unknown)
     await mkdir(join(home.home, '.agents', '.orca-skill-digests', FORMER_NAME, digest(unknown)), {
       recursive: true
     })
     expect(await formerReason()).toBe('other-build')
+  })
+
+  it('waits for consent when retiring an agent copy depends on backing up an edited sibling', async () => {
+    for (const sidecar of [false, true]) {
+      const home = await makeSkillHome()
+      await writeCopy(home.shared, NEW_TEXT)
+      if (sidecar) {
+        await addSidecar(home.shared)
+      }
+      const interrupted = join(dirname(home.shared), `.${NAME}.orca-old-interrupted`)
+      const edited = `${NEW_TEXT}my interrupted edit\n`
+      await writeCopy(interrupted, edited)
+      await mkdir(dirname(home.claude), { recursive: true })
+      await linkDirectory(home.shared, home.claude)
+      const former = join(dirname(home.claude), FORMER_NAME)
+      await writeCopy(former, FORMER_TEXT)
+      const input = { ...serviceInput(home, { installedOnly: true }), sources: [RENAMED] }
+
+      const before = await previewBundledSkillInstall(input)
+      expect(before.skills[0].ops[0]).toMatchObject({ kind: 'keep' })
+      await autoUpdateInstalledBundledSkills({ ...input, names: [NAME] })
+
+      expect(await readFile(join(interrupted, 'SKILL.md'), 'utf8')).toBe(edited)
+      expect((await lstat(former)).isDirectory()).toBe(true)
+      expect(await readFile(join(former, 'SKILL.md'), 'utf8')).toBe(FORMER_TEXT)
+      expect(
+        bundledSkillNudgeEntries(await previewBundledSkillInstall(input)).map((entry) => entry.name)
+      ).toEqual([NAME])
+    }
   })
 
   it('links a selected agent to a current shared copy with a sidecar', async () => {
