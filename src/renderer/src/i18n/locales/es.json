@@ -24334,8 +24334,7 @@
       "conversationActions": "Acciones de la conversación"
     },
     "composer": {
-      "worktreeLabel": "Crear un worktree",
-      "worktreeOn": "Una copia aparte en una rama nueva, basada en la rama que elijas abajo. El agente no toca la carpeta del proyecto.",
+      "worktreeLabel": "Worktree",
       "worktreeOff": "La conversación se abre en la carpeta del proyecto, en la rama que tiene ahora."
     }
   }

@@ -25960,8 +25960,7 @@
       "conversationActions": "Conversation actions"
     },
     "composer": {
-      "worktreeLabel": "Create a worktree",
-      "worktreeOn": "A separate copy on a new branch, based on the branch you pick below. The agent never touches your project folder.",
+      "worktreeLabel": "Worktree",
       "worktreeOff": "The conversation opens in the project folder, on the branch it has checked out now."
     }
   }

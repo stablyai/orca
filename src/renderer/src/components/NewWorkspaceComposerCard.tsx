@@ -336,10 +336,13 @@ export default function NewWorkspaceComposerCard(
           connectButtonLabel={connectButtonLabel}
           selectedProjectName={selectedProjectName}
         />
-        {zotzWorktree.switchRow}
-        {zotzWorktree.createWorktree ? (
-          <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
-        ) : null}
+        <NewWorkspaceComposerNameSection
+          {...props}
+          onNamePlainEnter={handleNamePlainEnter}
+          zotzWorktreeSwitch={zotzWorktree.switchControl}
+          zotzWorkInProjectFolder={!zotzWorktree.createWorktree}
+        />
+        {zotzWorktree.hint}
         <NewWorkspaceComposerAgentSection
           {...props}
           createDisabled={props.createDisabled || sparseEditing}

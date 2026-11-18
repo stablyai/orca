@@ -29,7 +29,8 @@ function useProjectCheckoutId(repoId: string): string | null {
  */
 export function useZotzComposerWorktreeSwitch(input: ComposerInputs): {
   createWorktree: boolean
-  switchRow: React.ReactNode
+  switchControl: React.ReactNode
+  hint: React.ReactNode
   onCreate: () => void
   createDisabled: boolean
 } {
@@ -58,37 +59,34 @@ export function useZotzComposerWorktreeSwitch(input: ComposerInputs): {
     })
   }
 
-  const switchRow = available ? (
+  const switchControl = available ? (
     <button
       type="button"
       role="switch"
       aria-checked={createWorktree}
       onClick={() => setCreateWorktree((value) => !value)}
-      className="group flex w-full items-start gap-3 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="group flex shrink-0 items-center gap-1.5 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
-      <SwitchIndicator checked={createWorktree} className="mt-0.5" />
-      <span className="min-w-0 space-y-0.5">
-        <span className="block text-sm text-foreground">
-          {t('zotz.composer.worktreeLabel', 'Create a worktree')}
-        </span>
-        <span className="block text-xs text-muted-foreground">
-          {createWorktree
-            ? t(
-                'zotz.composer.worktreeOn',
-                'A separate copy on a new branch, based on the branch you pick below. The agent never touches your project folder.'
-              )
-            : t(
-                'zotz.composer.worktreeOff',
-                'The conversation opens in the project folder, on the branch it has checked out now.'
-              )}
-        </span>
+      <SwitchIndicator checked={createWorktree} size="compact" />
+      <span className="text-muted-foreground transition-colors group-hover:text-foreground">
+        {t('zotz.composer.worktreeLabel', 'Worktree')}
       </span>
     </button>
   ) : null
+  const hint =
+    available && !createWorktree ? (
+      <p className="text-xs text-muted-foreground">
+        {t(
+          'zotz.composer.worktreeOff',
+          'The conversation opens in the project folder, on the branch it has checked out now.'
+        )}
+      </p>
+    ) : null
 
   return {
     createWorktree: useWorktree,
-    switchRow,
+    switchControl,
+    hint,
     onCreate: useWorktree ? input.onCreate : openInProject,
     createDisabled: useWorktree ? input.createDisabled : false
   }
