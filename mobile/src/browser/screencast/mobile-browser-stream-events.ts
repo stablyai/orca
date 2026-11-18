@@ -6,6 +6,9 @@ import { shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 export type BrowserDialogState = {
   dialogType: string
   message: string
+  defaultPromptText: string
+  /** The asking frame's origin; null on older hosts and pages without one. */
+  origin: string | null
   error?: string
   pending?: number
 }
@@ -15,6 +18,8 @@ export type ScreencastEvent = {
   message?: string
   error?: { message?: string }
   dialogType?: string
+  defaultPromptText?: string
+  origin?: string | null
   tab?: { url?: string; title?: string; canGoBack?: boolean; canGoForward?: boolean }
 }
 
@@ -65,7 +70,9 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
   } else if (event.type === 'dialog') {
     setDialog({
       dialogType: event.dialogType ?? 'alert',
-      message: event.message ?? 'Browser dialog'
+      message: event.message ?? 'Browser dialog',
+      defaultPromptText: event.defaultPromptText ?? '',
+      origin: event.origin ?? null
     })
   } else if (event.type === 'dialogClosed') {
     setDialog(null)

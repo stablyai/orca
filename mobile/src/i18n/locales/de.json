@@ -165,11 +165,13 @@
       "invalidUrl": "Gültige URL eingeben."
     },
     "paneView": {
-      "dialogTitle": "Browser-Dialog",
       "forward": "Vorwärts",
       "keyboardPlaceholder": "Text auf der Seite eingeben…",
       "reload": "Neu laden",
-      "sendText": "Text an den Browser senden"
+      "sendText": "Text an den Browser senden",
+      "dialogTitleWithOrigin": "{{origin}} meldet",
+      "dialogTitleNoOrigin": "Diese Seite meldet",
+      "dialogAnswer": "Antwort"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} als Klick-Modifikator"
@@ -182,6 +184,9 @@
     "viewModeSwitch": {
       "mobileView": "Mobile Ansicht der Website anzeigen",
       "webView": "Desktop-Ansicht der Website anzeigen"
+    },
+    "loadFailure": {
+      "retry": "Erneut versuchen"
     }
   },
   "chat": {

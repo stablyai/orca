@@ -142,10 +142,29 @@ describe('startBrowserScreencast', () => {
       onFrame: vi.fn(),
       onEvent
     })
+    webContents.debugger.emit('message', {}, 'Page.javascriptDialogOpening', {
+      type: 'prompt',
+      message: 'Your name?',
+      defaultPrompt: 'Ada',
+      url: 'https://frame.example.com/embed'
+    })
+    expect(onEvent).toHaveBeenLastCalledWith({
+      type: 'dialog',
+      dialogType: 'prompt',
+      message: 'Your name?',
+      defaultPromptText: 'Ada',
+      origin: 'https://frame.example.com'
+    })
+
     const answer = vi.fn()
     webContents.emit(
       '-run-dialog',
-      { dialogType: 'confirm', messageText: 'Continue?', defaultPromptText: '' },
+      {
+        dialogType: 'prompt',
+        messageText: 'Your name?',
+        defaultPromptText: 'Ada',
+        frame: { origin: 'https://frame.example.com' }
+      },
       answer
     )
 
@@ -154,8 +173,10 @@ describe('startBrowserScreencast', () => {
 
     expect(onEvent).toHaveBeenLastCalledWith({
       type: 'dialog',
-      dialogType: 'confirm',
-      message: 'Continue?'
+      dialogType: 'prompt',
+      message: 'Your name?',
+      defaultPromptText: 'Ada',
+      origin: 'https://frame.example.com'
     })
     // The last viewer leaving dismisses it, so a later session isn't blocked behind it.
     session.stop()

@@ -9,7 +9,8 @@ import type {
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { isLiveFrameCompatibleWithViewport } from './browser-screencast-viewport-fit'
-import type { BrowserJavaScriptDialog } from '../../../../shared/browser/prompts/browser-javascript-dialog'
+import type { BrowserJavaScriptDialogPrompt } from '../../../../shared/browser/prompts/browser-javascript-dialog'
+import { browserPagePromptOrigin } from '../../guest-lifecycle/prompts/browser-page-prompts'
 
 type BrowserScreencastMessageHandlerDeps = {
   dbg: WebContents['debugger']
@@ -24,7 +25,7 @@ type BrowserScreencastMessageHandlerDeps = {
   /** True while guest frames must be dropped pending re-emulation. */
   observeGuestViewSize: (metadata: BrowserScreencastFrameMetadata) => boolean
   /** The page's dialog Orca still holds; a CDP close can be a second frame's turned-away one. */
-  openDialog: () => BrowserJavaScriptDialog | null
+  openDialog: () => BrowserJavaScriptDialogPrompt | null
 }
 
 export function createBrowserScreencastMessageHandler(
@@ -45,10 +46,17 @@ export function createBrowserScreencastMessageHandler(
     if (method === 'Page.javascriptDialogOpening') {
       const payload =
         params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
+      const dialogType = typeof payload.type === 'string' ? payload.type : 'alert'
       options.onEvent?.({
         type: 'dialog',
-        dialogType: typeof payload.type === 'string' ? payload.type : 'alert',
-        message: typeof payload.message === 'string' ? payload.message : 'Browser dialog'
+        dialogType,
+        message: typeof payload.message === 'string' ? payload.message : 'Browser dialog',
+        defaultPromptText:
+          dialogType === 'prompt' && typeof payload.defaultPrompt === 'string'
+            ? payload.defaultPrompt
+            : '',
+        // CDP's url is the asking frame's, so viewers name the same origin the desktop card does.
+        origin: browserPagePromptOrigin(typeof payload.url === 'string' ? payload.url : null)
       })
       return
     }
@@ -56,7 +64,13 @@ export function createBrowserScreencastMessageHandler(
       const open = openDialog()
       options.onEvent?.(
         open
-          ? { type: 'dialog', dialogType: open.type, message: open.message }
+          ? {
+              type: 'dialog',
+              dialogType: open.type,
+              message: open.message,
+              defaultPromptText: open.defaultPromptText,
+              origin: open.origin
+            }
           : { type: 'dialogClosed' }
       )
       return

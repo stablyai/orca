@@ -1,6 +1,7 @@
 import type {
   BrowserJavaScriptDialog,
-  BrowserJavaScriptDialogAnswer
+  BrowserJavaScriptDialogAnswer,
+  BrowserJavaScriptDialogPrompt
 } from '../../../../shared/browser/prompts/browser-javascript-dialog'
 import {
   browserPagePromptOrigin,
@@ -20,14 +21,14 @@ type RunDialogListener = (info: RunDialogInfo, callback: RunDialogCallback) => v
 
 type OpenDialog = {
   guest: Electron.WebContents
-  dialog: BrowserJavaScriptDialog
+  dialog: BrowserJavaScriptDialogPrompt
   callback: RunDialogCallback
 }
 
 const openDialogs = new Map<number, OpenDialog>()
 const openedListeners = new Map<number, Set<(dialog: BrowserJavaScriptDialog) => void>>()
 
-export function getBrowserJavaScriptDialog(guestId: number): BrowserJavaScriptDialog | null {
+export function getBrowserJavaScriptDialog(guestId: number): BrowserJavaScriptDialogPrompt | null {
   return openDialogs.get(guestId)?.dialog ?? null
 }
 
@@ -104,15 +105,12 @@ export function installBrowserJavaScriptDialogs(
       callback(false, '')
       return
     }
-    const dialog: BrowserJavaScriptDialog = {
+    const dialog: BrowserJavaScriptDialogPrompt = {
       type:
         info.dialogType === 'confirm' || info.dialogType === 'prompt' ? info.dialogType : 'alert',
       message: info.messageText,
-      defaultPromptText: info.dialogType === 'prompt' ? info.defaultPromptText : ''
-    }
-    // Name the frame that asked, as Chrome does, so an embedded page can't speak as the site.
-    const details = {
-      ...dialog,
+      defaultPromptText: info.dialogType === 'prompt' ? info.defaultPromptText : '',
+      // Name the frame that asked, as Chrome does, so an embedded page can't speak as the site.
       origin: browserPagePromptOrigin(info.frame?.origin ?? guest.getURL())
     }
     const open: OpenDialog = { guest, dialog, callback }
@@ -122,7 +120,7 @@ export function installBrowserJavaScriptDialogs(
       kind: 'javascript-dialog',
       requester: guest,
       target: resolveTarget(),
-      details: () => details,
+      details: () => dialog,
       waitsForAnswer: true,
       parseAnswer,
       settle: (answer) => {
