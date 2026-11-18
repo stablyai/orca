@@ -1,7 +1,13 @@
 import { AGENT_SESSION_CREATE_CURRENT_FORK_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
-import { loadHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
-import { refreshLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+import {
+  loadHostStructuredAgents,
+  resetHostStructuredAgentsForTests
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
+import {
+  readLocalRuntimeCapabilitiesOrUnknown,
+  setLocalRuntimeCapabilitiesForTests
+} from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useEffect, useRef } from 'react'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { FixtureCodeBackdrop } from '../../../component-fixtures/FixtureCodeBackdrop'
@@ -80,16 +86,9 @@ export const currentSideChat = defineFixture({
       STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
     ]
     const call = window.api.runtime.call
-    const getStatus = window.api.runtime.getStatus
-    window.api.runtime.getStatus = async () => ({
-      runtimeId: 'fixture-runtime',
-      rendererGraphEpoch: 1,
-      graphStatus: 'ready',
-      authoritativeWindowId: null,
-      liveTabCount: 1,
-      liveLeafCount: 1,
-      capabilities
-    })
+    const previousCapabilities = readLocalRuntimeCapabilitiesOrUnknown()
+    resetHostStructuredAgentsForTests()
+    setLocalRuntimeCapabilitiesForTests(capabilities)
     window.api.runtime.call = async (request) =>
       request.method === 'agentSession.agents'
         ? {
@@ -99,17 +98,15 @@ export const currentSideChat = defineFixture({
             result: { agents: [{ agent: 'codex', capabilities: { currentFork: true } }] }
           }
         : call(request)
-    void refreshLocalRuntimeCapabilities()
     void loadHostStructuredAgents('local', capabilities, null)
     return () => {
       window.api.runtime.call = call
-      window.api.runtime.getStatus = getStatus
-      void refreshLocalRuntimeCapabilities()
+      resetHostStructuredAgentsForTests()
+      setLocalRuntimeCapabilitiesForTests(previousCapabilities)
     }
   },
   render: () => <MenuFixture nativeChat={{ sessionId: 'source-session', agent: 'codex' }} />,
   interact: async () => {
-    await refreshLocalRuntimeCapabilities()
     await loadHostStructuredAgents(
       'local',
       [

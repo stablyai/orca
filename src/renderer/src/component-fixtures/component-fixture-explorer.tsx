@@ -51,6 +51,7 @@ function requireRootElement(): HTMLElement {
 const rootElement = requireRootElement()
 let root: ReactDOM.Root | null = null
 let cleanupFixture: (() => void) | undefined
+let fixtureGeneration = 0
 
 function freshRoot(): ReactDOM.Root {
   root?.unmount()
@@ -97,6 +98,7 @@ function FixtureIndex({ entries }: { entries: ComponentFixtureEntry[] }): React.
 }
 
 async function renderFixture(id: string, theme: ComponentFixtureTheme): Promise<void> {
+  const generation = ++fixtureGeneration
   markComponentFixtureState('loading')
   const target = freshRoot()
   // Why replace: each fixture starts from the same seeded store, even in a reused page.
@@ -105,6 +107,9 @@ async function renderFixture(id: string, theme: ComponentFixtureTheme): Promise<
   applyTheme(theme)
   try {
     const entry = await loadComponentFixture(id)
+    if (generation !== fixtureGeneration) {
+      return
+    }
     if (entry.fixture.store) {
       useAppStore.setState(entry.fixture.store)
     }
@@ -116,6 +121,9 @@ async function renderFixture(id: string, theme: ComponentFixtureTheme): Promise<
       </ComponentFixtureFrame>
     )
   } catch (error) {
+    if (generation !== fixtureGeneration) {
+      return
+    }
     const message = error instanceof Error ? error.message : String(error)
     markComponentFixtureState('error', message)
     target.render(<pre className="p-4 text-xs text-destructive">{message}</pre>)
