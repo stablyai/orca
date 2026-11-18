@@ -33,6 +33,7 @@ import {
   journalStoredItemRow,
   readJournalStoredItem
 } from './journal-stored-output-rows'
+import { restoreCutJournalOutput } from './journal-cut-output'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
@@ -73,7 +74,11 @@ export function writeJournalDomainCurrentItem(
   // A stored form handed back is written from its text, so every derived column stays exact.
   const input = {
     ...write,
-    item: hydrateJournalStoredItem(db, [target.sessionId, target.epoch], write.item)
+    item: hydrateJournalStoredItem(
+      db,
+      [target.sessionId, target.epoch],
+      restoreCutJournalOutput(db, [target.sessionId, target.epoch], write.item)
+    )
   }
   const body = normalizeJournalDomainItemBody(
     db,

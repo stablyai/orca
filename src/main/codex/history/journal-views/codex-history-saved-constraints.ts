@@ -8,6 +8,10 @@ import { codexCommandOutput, mcpToolOutput } from '../../structured/items/codex-
 import type { CodexThreadItem } from '../../structured/items/codex-thread-item-identity'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import { historyInvocationFields } from './codex-history-source-facts'
+import {
+  cutJournalOutput,
+  isCutJournalOutputOf
+} from '../../../native-chat/agent-session-journal/journal-cut-output'
 
 /** Saved presentation supplies only the constraints and sparse payload it actually retains. */
 export function constrainSavedHistoryItem(
@@ -170,6 +174,15 @@ export function constrainSavedHistoryItem(
           : item.type === 'mcpToolCall'
             ? mcpToolOutput(item)
             : null
+      const cut = cutJournalOutput(saved)
+      if (
+        cut &&
+        body.state !== 'running' &&
+        output !== null &&
+        !isCutJournalOutputOf(cut, output)
+      ) {
+        return null
+      }
       if (body.output && !body.output.truncated) {
         if (body.state !== 'running' && output !== null && output !== body.output.head) {
           return null

@@ -446,7 +446,7 @@ it('visits every item after a grouped import, placement revisions and command re
 })
 
 it('observes a huge saved tool output cut in history, still equal to the whole output', () => {
-  const { seed, read } = chat()
+  const { db, seed, read } = chat()
   const whole = {
     kind: 'tool-call' as const,
     name: 'Read',
@@ -480,4 +480,17 @@ it('observes a huge saved tool output cut in history, still equal to the whole o
       output: { ...whole.output, digest: 'changed' }
     })
   ).toBe(false)
+
+  // A later revision built from the cut keeps the whole output its row holds.
+  const cut = entry.item!.body
+  if (cut.kind !== 'tool-call') {
+    throw new Error('expected the tool call')
+  }
+  seed(row('tool', 1, { ...cut, durationMs: 2 }, { revision: 2 }))
+  const stored = db
+    .prepare(
+      "SELECT length(json_extract(payload_json,'$.body.output.head')) AS head, json_extract(payload_json,'$.body.output.truncated') AS truncated, json_extract(payload_json,'$.body.durationMs') AS duration, json_extract(payload_json,'$.shortened') AS shortened FROM journal_items"
+    )
+    .get()
+  expect(stored).toEqual({ head: 20 * 1024 * 1024, truncated: 0, duration: 2, shortened: null })
 })
