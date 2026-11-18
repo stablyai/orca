@@ -165,7 +165,20 @@ describe('BotSlackSetupDialog', () => {
     await screen.findByText('Waiting for Slack…')
     expect(openBotHostPageOrSay).toHaveBeenCalledTimes(1)
 
-    // Slack saved and sent Orca's browser back: read now, not at the next 3 s tick.
+    // A read already out (the owner came back to Orca) when Slack saves may predate the save.
+    let answerEarlierRead: () => void = () => {}
+    api.state.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerEarlierRead = () =>
+            resolve({ ok: true, value: { state: 'created', teamId: 'T1', appId: 'A1' } })
+        })
+    )
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    // Slack has saved by the time Orca's browser returns.
     slackState({
       state: 'installed',
       teamId: 'T1',
@@ -173,7 +186,6 @@ describe('BotSlackSetupDialog', () => {
       botUserId: 'UB',
       installerUserId: 'U1'
     })
-    const reads = api.state.mock.calls.length
     act(() =>
       useAppStore.setState({
         browserPagesByWorkspace: {
@@ -195,7 +207,7 @@ describe('BotSlackSetupDialog', () => {
         }
       })
     )
-    await waitFor(() => expect(api.state.mock.calls.length).toBe(reads + 1))
+    await act(async () => answerEarlierRead())
     expect(await screen.findByText('Scout is in Slack')).toBeDefined()
   })
 

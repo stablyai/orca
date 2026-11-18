@@ -102,7 +102,7 @@ export function NeedRow({
   return (
     <div
       role="listitem"
-      className="group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent focus-within:bg-accent"
+      className="group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent"
     >
       <span className="flex h-5 w-4 shrink-0 items-center justify-center">
         <NeedGlyph kind={kind} />

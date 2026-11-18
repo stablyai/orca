@@ -169,11 +169,13 @@
       "invalidUrl": "Saisissez une URL valide."
     },
     "paneView": {
-      "dialogTitle": "Boîte de dialogue du navigateur",
       "forward": "Suivant",
       "keyboardPlaceholder": "Saisir du texte sur la page…",
       "reload": "Recharger",
-      "sendText": "Envoyer le texte au navigateur"
+      "sendText": "Envoyer le texte au navigateur",
+      "dialogTitleWithOrigin": "{{origin}} indique",
+      "dialogTitleNoOrigin": "Cette page indique",
+      "dialogAnswer": "Réponse"
     },
     "pointerModifiers": {
       "clickModifier": "Modificateur de clic {{key}}"
@@ -186,6 +188,9 @@
     "viewModeSwitch": {
       "mobileView": "Afficher la version mobile du site",
       "webView": "Afficher la version pour ordinateur du site"
+    },
+    "loadFailure": {
+      "retry": "Réessayer"
     }
   },
   "chat": {
@@ -219,7 +224,8 @@
     "contextUsage": {
       "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
       "title": "Contexte",
-      "estimated": "Estimation basée sur la dernière réponse."
+      "estimated": "Estimation basée sur la dernière réponse.",
+      "deferredNote": "Chargé à la demande. Non compté dans le total utilisé."
     },
     "composerAttachments": {
       "attachedImage": "Image jointe",

@@ -32,22 +32,19 @@ const bot: Bot = {
 afterEach(() => cleanup())
 
 describe('Memory upkeep settings', () => {
-  it('says its schedule beside the switch in its title row, and turns off from it', () => {
+  it('turns off memory upkeep from its switch', () => {
     const update = vi.fn(async () => null)
     render(<BotTidyUpSection bot={bot} update={update} />)
-    expect(screen.getAllByText('Each night after 3 AM').length).toBeGreaterThan(0)
     const toggle = screen.getByRole('switch', { name: 'Memory upkeep' })
     expect(toggle.getAttribute('aria-checked')).toBe('true')
     fireEvent.click(toggle)
     expect(update).toHaveBeenCalledWith({ tidyUp: { on: false } })
   })
 
-  it('says Off, and what it would do, while off', () => {
+  it('hides the manual tidy action while upkeep is off', () => {
     render(
       <BotTidyUpSection bot={{ ...bot, tidyUp: { on: false } }} update={vi.fn(async () => null)} />
     )
-    expect(screen.getByText('Off')).toBeTruthy()
-    expect(screen.getByText(/Changes memory files only/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Tidy now' })).toBeNull()
   })
 })

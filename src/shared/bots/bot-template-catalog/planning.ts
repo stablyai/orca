@@ -17,7 +17,6 @@ export const BOT_TEMPLATES_PLANNING: readonly BotTemplate[] = [
       {
         id: 'weekly-brief',
         when: 'Fridays at 3 PM',
-        short: 'Fri 3 PM',
         what: 'The brief',
         rrule: '0 15 * * 5',
         prompt:
@@ -47,7 +46,6 @@ export const BOT_TEMPLATES_PLANNING: readonly BotTemplate[] = [
       {
         id: 'weekly-docs',
         when: 'Wednesdays at 10 AM',
-        short: 'Wed 10 AM',
         what: 'Docs to update',
         rrule: '0 10 * * 3',
         prompt:
@@ -97,7 +95,6 @@ export const BOT_TEMPLATES_PLANNING: readonly BotTemplate[] = [
       {
         id: 'monthly-list',
         when: '1st of each month at 9 AM',
-        short: 'Monthly',
         what: 'Cleanup list',
         rrule: '0 9 1 * *',
         prompt:

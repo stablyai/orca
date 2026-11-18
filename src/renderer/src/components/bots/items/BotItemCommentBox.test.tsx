@@ -1,7 +1,14 @@
 // @vitest-environment happy-dom
 
 import { createRef } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderBare,
+  screen,
+  waitFor
+} from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -24,6 +31,10 @@ import {
   changePrompt,
   promptValue
 } from '../../native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { TooltipProvider } from '@/components/ui/tooltip'
+
+// The app root provides tooltips; the mic's needs it here too.
+const render = (ui: React.ReactElement) => renderBare(ui, { wrapper: TooltipProvider })
 
 const BOT: Bot = {
   id: 'bot-a',

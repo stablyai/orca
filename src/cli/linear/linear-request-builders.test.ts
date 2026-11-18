@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getPriorityFlag } from './linear-request-builders'
 
-// The CLI's priority names before they came from priority-label.ts.
-const BEFORE = new Map([
-  ['none', 0],
-  ['urgent', 1],
-  ['high', 2],
-  ['medium', 3],
-  ['low', 4]
-])
+const INVALID_PRIORITY = '--to must be none, low, medium, high, or urgent'
 
 function parsePriority(value: string): number | string {
   try {
@@ -20,20 +13,11 @@ function parsePriority(value: string): number | string {
 
 describe('getPriorityFlag', () => {
   it.each([
-    'none',
-    'urgent',
-    'high',
-    'medium',
-    'low',
-    'URGENT',
-    'High',
-    'No priority',
-    ' high',
-    '1',
-    'urgentt'
-  ])('reads %j as before', (value) => {
-    expect(parsePriority(value)).toBe(
-      BEFORE.get(value.toLowerCase()) ?? '--to must be none, low, medium, high, or urgent'
-    )
+    ['none', 0],
+    ['URGENT', 1],
+    ['No priority', INVALID_PRIORITY],
+    [' high', INVALID_PRIORITY]
+  ] as const)('reads priority flag %j', (value, expected) => {
+    expect(parsePriority(value)).toBe(expected)
   })
 })

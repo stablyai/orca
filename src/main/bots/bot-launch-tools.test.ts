@@ -30,12 +30,29 @@ describe("a bot launch's environment", () => {
   })
 })
 
+describe("a bot's token", () => {
+  it('reaches every bot launch, tools or none: Claude in its env, Codex only in its commands’', async () => {
+    const relay = { grant: async () => ({ origin: 'http://127.0.0.1:4100', token: 't' }) }
+    const claude = await BotLaunchTools.for(
+      relay,
+      { botId: 'b', folder: '/b', agent: 'claude' },
+      []
+    )
+    const codex = await BotLaunchTools.for(relay, { botId: 'b', folder: '/b', agent: 'codex' }, [])
+    expect(withBotLaunchToolsEnv({}, claude)).toEqual({ ORCA_BOT_TOOLS_TOKEN: 't' })
+    expect(claude.commandEnv).toEqual({})
+    expect(withBotLaunchToolsEnv({}, codex)).toEqual({})
+    expect(codex.commandEnv).toEqual({ ORCA_BOT_TOOLS_TOKEN: 't' })
+  })
+})
+
 describe('launch tools', () => {
   it('come only from BotLaunchTools.for, never from a plain object with the same fields', () => {
     // @ts-expect-error A raw server list with its header can't stand in for launch tools.
     const raw: BotLaunchTools = {
       servers: [{ name: 'docs', url: 'https://x.test/mcp', headers: { a: 'secret' } }],
       env: {},
+      commandEnv: {},
       relayed: false
     }
     expect(raw).toBeDefined()

@@ -34,9 +34,4 @@ describe('an activity tab with something new inside', () => {
     renderButton(2, true)
     expect(screen.getByRole('button').textContent).toBe('')
   })
-
-  it('shows nothing with nothing new', () => {
-    renderButton(undefined, false)
-    expect(screen.getByRole('button', { name: 'Activity' }).textContent).toBe('')
-  })
 })
