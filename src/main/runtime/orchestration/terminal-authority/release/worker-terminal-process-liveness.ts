@@ -60,7 +60,7 @@ export function classifyIndexedWorkerTerminalProcessIncarnation(
   const candidates: PtyProcessInfo[] = []
   for (
     let at = processIncarnation.indexOf(':');
-    at > 0;
+    at >= 0;
     at = processIncarnation.indexOf(':', at + 1)
   ) {
     candidates.push(...(index.get(processIncarnation.slice(0, at)) ?? []))
