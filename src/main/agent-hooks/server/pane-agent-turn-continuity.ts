@@ -15,10 +15,7 @@ export function resumedAcceptedTurn(
     (incoming.payload.sessionBoundary === true ||
       (origin === 'osc' && previous.observation?.origin === 'launch')) &&
     (incoming.payload.state === 'done' ||
-      // Only Claude restates startup work over OSC before its SessionStart.
-      (origin === 'osc' &&
-        incoming.payload.state === 'working' &&
-        incoming.payload.agentType === 'claude')) &&
+      (origin === 'osc' && incoming.payload.state === 'working')) &&
     incoming.toolAgentId === undefined &&
     previous.payload.state === 'done' &&
     previous.payload.sessionBoundary !== true &&
