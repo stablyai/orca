@@ -3,7 +3,11 @@ import { displayBrowserUrl } from '../pane-view/browser-url'
 import { shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
 // error leaves page blocked after failed answer; pending token disables buttons for sole in-flight answer.
+let lastDialogOccurrence = 0
+
 export type BrowserDialogState = {
+  /** Identifies one opened dialog, so a typed answer never carries into the next. */
+  occurrence: number
   dialogType: string
   message: string
   defaultPromptText: string
@@ -68,12 +72,19 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
       setBusy(false)
     }
   } else if (event.type === 'dialog') {
-    setDialog({
-      dialogType: event.dialogType ?? 'alert',
-      message: event.message ?? 'Browser dialog',
+    const dialogType = event.dialogType ?? 'alert'
+    const message = event.message ?? 'Browser dialog'
+    setDialog((current) => ({
+      dialogType,
+      message,
       defaultPromptText: event.defaultPromptText ?? '',
-      origin: event.origin ?? null
-    })
+      origin: event.origin ?? null,
+      // The host re-sends the dialog it still holds; only one opened after a close is a new occurrence.
+      occurrence:
+        current?.dialogType === dialogType && current.message === message
+          ? current.occurrence
+          : (lastDialogOccurrence += 1)
+    }))
   } else if (event.type === 'dialogClosed') {
     setDialog(null)
   } else if (event.type === 'error') {

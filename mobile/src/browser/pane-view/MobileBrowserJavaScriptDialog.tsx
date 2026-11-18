@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { FieldTextInput } from '../../components/composer-input/FieldTextInput'
 import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
@@ -11,20 +12,24 @@ type DialogMethod = 'browser.dialogDismiss' | 'browser.dialogAccept'
 /** The page's alert, confirm or prompt, worded as desktop's card; a prompt's answer starts at the page's default. */
 export function MobileBrowserJavaScriptDialog({
   dialog,
+  keyboardLift,
   sendDialogCommand
 }: {
   dialog: BrowserDialogState
+  keyboardLift: number
   sendDialogCommand: (method: DialogMethod, promptText?: string) => Promise<void>
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const [promptText, setPromptText] = useState(dialog.defaultPromptText)
+  // Null until typed: an untouched answer is left to the host, which knows the default even when it doesn't send one.
+  const [typedText, setTypedText] = useState<string | null>(null)
   const isPrompt = dialog.dialogType === 'prompt'
   const pending = dialog.pending !== undefined
   const accept = () =>
-    void sendDialogCommand('browser.dialogAccept', isPrompt ? promptText : undefined)
+    void sendDialogCommand('browser.dialogAccept', isPrompt ? (typedText ?? undefined) : undefined)
   return (
-    <View style={styles.dialogOverlay}>
+    // The page viewport stays put under the keyboard, so center the card in what the keyboard leaves visible.
+    <View style={[styles.dialogOverlay, { paddingBottom: spacing.xl + keyboardLift }]}>
       <View style={styles.dialogCard}>
         <Text style={styles.dialogTitle}>
           {dialog.origin
@@ -37,8 +42,8 @@ export function MobileBrowserJavaScriptDialog({
         {isPrompt ? (
           <FieldTextInput
             style={styles.dialogInput}
-            value={promptText}
-            onChangeText={setPromptText}
+            value={typedText ?? dialog.defaultPromptText}
+            onChangeText={setTypedText}
             accessibilityLabel={t('browser.paneView.dialogAnswer', 'Answer')}
             autoCapitalize="none"
             autoCorrect={false}

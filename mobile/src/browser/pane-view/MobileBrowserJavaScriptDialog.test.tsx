@@ -8,6 +8,7 @@ vi.mock('../../components/composer-input/FieldTextInput', () => ({
   FieldTextInput: 'FieldTextInput'
 }))
 vi.mock('./mobile-browser-pane-styles', () => ({ mobileBrowserPaneStyles: {} }))
+vi.mock('../../theme/mobile-theme', () => ({ spacing: { xl: 24 } }))
 vi.mock('../../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'light' }))
 vi.mock('../../i18n/use-mobile-translation', () => ({
   useMobileTranslation: () => (_key: string, fallback: string) => fallback
@@ -26,11 +27,13 @@ describe('MobileBrowserJavaScriptDialog', () => {
       renderer = create(
         createElement(MobileBrowserJavaScriptDialog, {
           dialog: {
+            occurrence: 1,
             dialogType: 'prompt',
             message: 'What is your name?',
             defaultPromptText: 'Ada',
             origin: 'https://example.com'
           },
+          keyboardLift: 0,
           sendDialogCommand
         })
       )

@@ -270,9 +270,9 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         ) : null}
         {dialog ? (
           <MobileBrowserJavaScriptDialog
-            // A new dialog starts its answer over; the same one keeps what was typed.
-            key={`${dialog.dialogType}\n${dialog.message}\n${dialog.defaultPromptText}`}
+            key={dialog.occurrence}
             dialog={dialog}
+            keyboardLift={keyboardLift}
             sendDialogCommand={sendDialogCommand}
           />
         ) : null}
