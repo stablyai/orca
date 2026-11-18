@@ -3792,6 +3792,7 @@
       "refreshGitHub": "GitHub の作業を更新する",
       "refreshGitLab": "GitLab 作業項目を更新する",
       "refreshJira": "Jira Issue を更新する",
+      "refreshTodoist": "Todoist のタスクを更新",
       "refreshLinear": "Linear を更新",
       "title": "タスク"
     },
@@ -3819,6 +3820,7 @@
       "noGitHubTasks": "GitHub のタスクはありません。",
       "noGitLabTasks": "GitLab のタスクはありません。",
       "noJiraTasks": "Jira のタスクはありません。",
+      "noTodoistTasks": "Todoist のタスクはありません",
       "noLinearTasks": "Linear のタスクはありません。",
       "reportedSubtitle": "報告した未解決の Issue"
     },

@@ -113,7 +113,8 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: state.preflightStatus?.glab?.installed === true,
-          linearConnected: state.linearStatus?.connected === true
+          linearConnected: state.linearStatus?.connected === true,
+          todoistAvailable: true
         },
         state.settings?.defaultTaskSource
       )

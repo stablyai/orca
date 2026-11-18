@@ -4353,6 +4353,7 @@
       "noGitLabTasks": "No GitLab tasks",
       "noLinearTasks": "No Linear tasks",
       "noJiraTasks": "No Jira tasks",
+      "noTodoistTasks": "No Todoist tasks",
       "assignedSubtitle": "Unresolved issues assigned to you",
       "reportedSubtitle": "Unresolved issues you reported",
       "allSubtitle": "Unresolved issues across the selected sites",
@@ -4721,6 +4722,7 @@
       "refreshGitLab": "Refresh GitLab work items",
       "refreshLinear": "Refresh Linear",
       "refreshJira": "Refresh Jira issues",
+      "refreshTodoist": "Refresh Todoist tasks",
       "title": "Tasks",
       "newGitHubIssue": "New GitHub issue",
       "newLinearIssue": "New Linear issue"

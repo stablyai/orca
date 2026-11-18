@@ -3792,6 +3792,7 @@
       "refreshGitHub": "GitHub 작업 새로 고침",
       "refreshGitLab": "GitLab 작업 항목 새로 고침",
       "refreshJira": "Jira 이슈 새로 고침",
+      "refreshTodoist": "Todoist 작업 새로 고침",
       "refreshLinear": "Linear 새로고침",
       "title": "작업"
     },
@@ -3819,6 +3820,7 @@
       "noGitHubTasks": "GitHub 작업 없음",
       "noGitLabTasks": "GitLab 작업 없음",
       "noJiraTasks": "Jira 작업 없음",
+      "noTodoistTasks": "Todoist 작업 없음",
       "noLinearTasks": "Linear 작업 없음",
       "reportedSubtitle": "내가 보고한 미해결 이슈"
     },

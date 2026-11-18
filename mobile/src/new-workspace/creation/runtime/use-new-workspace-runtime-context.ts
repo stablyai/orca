@@ -150,7 +150,8 @@ export function useNewWorkspaceRuntimeContext(
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
       const availableProviders = filterAvailableTaskProviders(visibleProviders, {
         gitlabInstalled: glabInstalled,
-        linearConnected
+        linearConnected,
+        todoistAvailable: false
       }).filter((provider) => visibleProviders.includes(provider))
       publish({ availableProviders })
       const [jiraRes] = await jiraProbe

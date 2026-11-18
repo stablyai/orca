@@ -110,7 +110,8 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     const linearIsConnected = hydration.linearConnected
     const availableProviders = filterAvailableTaskProviders(preferredProviders, {
       gitlabInstalled: hydration.glabInstalled,
-      linearConnected: linearIsConnected
+      linearConnected: linearIsConnected,
+      todoistAvailable: false
     })
     const nextVisibleProviders =
       preferredProviders.includes('linear') && !availableProviders.includes('linear')

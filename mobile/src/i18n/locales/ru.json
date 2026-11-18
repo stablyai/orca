@@ -3988,6 +3988,7 @@
       "refreshGitHub": "Обновить задачи GitHub",
       "refreshGitLab": "Обновить задачи GitLab",
       "refreshJira": "Обновить задачи Jira",
+      "refreshTodoist": "Обновить задачи Todoist",
       "refreshLinear": "Обновить Linear",
       "title": "Задачи"
     },
@@ -4015,6 +4016,7 @@
       "noGitHubTasks": "Нет задач в GitHub",
       "noGitLabTasks": "Нет задач в GitLab",
       "noJiraTasks": "Нет задач в Jira",
+      "noTodoistTasks": "Нет задач Todoist",
       "noLinearTasks": "Нет задач в Linear",
       "reportedSubtitle": "Нерешённые задачи, созданные вами"
     },
