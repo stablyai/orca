@@ -64,6 +64,8 @@ export class SubscriberDeliveryLane {
   private readonly pending: LaneEntry[] = []
   private active: LaneEntry | undefined
   private scheduled = false
+  /** Live text the running delivery holds, whether a live-text entry or sent by ordered work. */
+  private delivering: object | undefined
   private readonly stop = new AbortController()
   readonly stopped = this.stop.signal
 
@@ -115,20 +117,30 @@ export class SubscriberDeliveryLane {
       replaced.release()
     }
     const since = replaced?.since ?? this.runners.now()
+    // A stream holding more than its share ends itself; the shared budget only refuses a newcomer.
+    const delivering = this.delivering ? heldBytesOf(this.delivering) : 0
+    if (heldBytesOf(liveText.items) + delivering > CHAT_LIVE_TEXT_SUBSCRIBER_BYTES) {
+      this.refuse()
+      return
+    }
     if (this.idle) {
       this.add({ kind: 'live-text', since, liveText, release: () => {} })
       return
     }
-    // A stream holding more than its share ends itself; the shared budget only refuses a newcomer.
-    const delivering = this.active?.kind === 'live-text' ? this.active.liveText.items : undefined
-    const held = heldBytesOf(liveText.items) + (delivering ? heldBytesOf(delivering) : 0)
-    const release = held <= CHAT_LIVE_TEXT_SUBSCRIBER_BYTES && claimSharedLiveText(liveText.items)
+    const release = claimSharedLiveText(liveText.items)
     if (!release) {
       // The client resumes from its cursor and reads the text again.
       this.refuse()
       return
     }
     this.add({ kind: 'live-text', since, liveText, release })
+  }
+
+  /** Ordered work (an opening or snapshot) that sends live text itself says what it holds. */
+  sendsLiveText(items: object): void {
+    if (this.active?.kind === 'ordered') {
+      this.delivering = items
+    }
   }
 
   private refuse(): void {
@@ -191,6 +203,7 @@ export class SubscriberDeliveryLane {
         return
       }
       this.active = entry
+      this.delivering = entry.kind === 'live-text' ? entry.liveText.items : undefined
       try {
         if (this.runners.runnable()) {
           await this.run(entry)
@@ -199,6 +212,7 @@ export class SubscriberDeliveryLane {
         this.runners.failed(error)
       } finally {
         this.active = undefined
+        this.delivering = undefined
         if (entry.kind === 'live-text') {
           entry.release()
         }

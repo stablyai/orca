@@ -110,7 +110,7 @@ export class AgentSessionSubscribers {
         sessionId: input.sessionId,
         journal,
         fence: input.fence,
-        items: this.hooks.readLiveText?.(input.sessionId) ?? [],
+        items: this.sentLiveText(subscriber, input.sessionId),
         subscribers: [subscriber],
         hostNow
       })
@@ -155,7 +155,7 @@ export class AgentSessionSubscribers {
   ): void => {
     const hostNow = this.now()
     for (const subscriber of targets) {
-      // Checked per subscriber: an earlier one's delivery can end a later one mid fan-out.
+      // Checked per subscriber, in case ending one ends another mid fan-out.
       if (this.isActive(subscriber)) {
         this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
       }
@@ -204,7 +204,7 @@ export class AgentSessionSubscribers {
           sessionId,
           journal,
           fence,
-          items: this.hooks.readLiveText?.(sessionId) ?? [],
+          items: this.sentLiveText(subscriber, sessionId),
           subscribers: [subscriber],
           hostNow
         })
@@ -245,6 +245,13 @@ export class AgentSessionSubscribers {
     sourceIds?: readonly string[]
   ): void {
     this.forkMarkers.refreshSources(readJournal, sourceIds)
+  }
+
+  /** Live text an opening or snapshot sends itself counts against its subscriber's share. */
+  private sentLiveText(subscriber: Subscriber, sessionId: string) {
+    const items = this.hooks.readLiveText?.(sessionId) ?? []
+    this.lanes.of(subscriber).sendsLiveText(items)
+    return items
   }
 
   private subscribers = (sessionId: string): Subscriber[] => [

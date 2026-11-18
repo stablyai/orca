@@ -150,3 +150,14 @@ it('ends only the stream whose own live text outgrows its share', async () => {
     small.release()
   }
 })
+
+it('ends a stream whose one live text alone outgrows its share', async () => {
+  const pane = await blockedSubscriber()
+  try {
+    // 5M characters at two bytes each, with nothing else in flight.
+    pane.publish(0, 5_000_000)
+    expect(pane.ends).toHaveLength(1)
+  } finally {
+    pane.release()
+  }
+})
