@@ -94,21 +94,18 @@ export async function launchNativeChatTerminalFork(input: {
         )
       )
     }
-    const startup = buildAiVaultCopiedSessionStartupForWorktree(
-      {
-        state,
-        worktreeId,
-        session: {
-          agent: 'claude',
-          sessionId: forked.sessionId,
-          ...(forked.filePath ? { filePath: forked.filePath } : {}),
-          cwd: worktree?.path ?? '',
-          codexHome: null,
-          executionHostId
-        }
-      },
-      'claude'
-    )
+    const startup = buildAiVaultCopiedSessionStartupForWorktree({
+      state,
+      worktreeId,
+      session: {
+        agent: 'claude',
+        sessionId: forked.sessionId,
+        ...(forked.filePath ? { filePath: forked.filePath } : {}),
+        cwd: worktree?.path ?? '',
+        codexHome: null,
+        executionHostId
+      }
+    })
     const tabId = await launchAiVaultSessionAndReveal({ agent: 'claude', worktreeId, ...startup })
     if (tabId && input.draft) {
       leaveDraftInNewTab(tabId, input.draft)
