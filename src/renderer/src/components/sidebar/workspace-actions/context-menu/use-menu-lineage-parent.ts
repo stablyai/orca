@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
@@ -17,6 +16,8 @@ import {
   hasWorktreeParentLink,
   selectMenuScopedMap
 } from './worktree-context-menu-policy'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** The menu's parent facts: its links (a parent on another machine included), the parent to open,
  * and how many parents Set Parent offers. Closed menus read empty maps. */
@@ -38,7 +39,7 @@ export function useMenuLineageParent(args: {
       EMPTY_CROSS_STORE_LINEAGE_BY_STORE_KEY
     )
   )
-  const parentIdentities = useAppStore((s) =>
+  const parentIdentities = useAppStoreWithChannels((s) =>
     menuOpen ? selectSidebarLineageParentIdentities(s) : undefined
   )
   const hasLink = (item: Worktree): boolean =>

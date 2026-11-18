@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
-import { useAppStore } from '@/store/index'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -29,6 +28,8 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal/quick-commands/terminal-quick-command-project-scope'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type TabBarQuickCommandsButtonProps = {
   worktreeId: string
@@ -150,7 +151,7 @@ export function TabBarQuickCommandsButton({
       historyId: entry.key
     })
   }
-  const editorPromptMaxLength = useAppStore((state) =>
+  const editorPromptMaxLength = useAppStoreWithChannels((state) =>
     editor ? getTerminalQuickCommandHostPromptMaxLength(state, editor.hostId) : undefined
   )
   const editorRepos = editor?.hostId.startsWith('runtime:')

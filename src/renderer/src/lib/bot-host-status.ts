@@ -1,5 +1,4 @@
 // What a bot host says of itself: its computer name and the capabilities its Orca has.
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
   parseRoutableExecutionHostId,
@@ -7,6 +6,8 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** A paired server's last verified status; null for this app's own runtime, or before it is known. */
 function pairedStatus(
@@ -44,7 +45,7 @@ export function botHostHas(
 
 /** Whether the host's status is known: always for this app's runtime, once verified for a server. */
 export function useBotHostVerified(hostId: ExecutionHostId): boolean {
-  return useAppStore(
+  return useAppStoreWithChannels(
     (state) =>
       parseRoutableExecutionHostId(hostId)?.kind === 'local' || pairedStatus(hostId, state) !== null
   )
@@ -52,5 +53,5 @@ export function useBotHostVerified(hostId: ExecutionHostId): boolean {
 
 /** `botHostHas`, kept current as the server's status changes. */
 export function useBotHostHas(hostId: ExecutionHostId, capability: string): boolean {
-  return useAppStore((state) => botHostHas(hostId, capability, state))
+  return useAppStoreWithChannels((state) => botHostHas(hostId, capability, state))
 }

@@ -15,7 +15,6 @@ import {
   resolveChatProgramContext
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
-import { useAppStore } from '@/store/index'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import {
   AgentOpensAsControl,
@@ -31,6 +30,8 @@ import { managedRuntimeInstallPending } from '../../managed-runtime/managed-runt
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { getChatLaunchEntriesByKey } from './chat-launch-search'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const WORKSPACE = { kind: 'floating' } as const
 
@@ -48,7 +49,7 @@ export function ChatAgentLaunchSettings({
     void useAppStore.getState().ensureNativeDetectedAgents()
   }, [])
   const detected = useAppStore(readNativeDetectedAgents)
-  const chatOnlyKey = useAppStore((state) => {
+  const chatOnlyKey = useAppStoreWithChannels((state) => {
     const context = resolveChatProgramContext(state, WORKSPACE)
     return chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
       .filter(

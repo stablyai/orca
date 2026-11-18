@@ -4,9 +4,13 @@ import {
   type RuntimePairingRepairRoute
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { resolveHostDisplay } from '../../../../../../shared/execution-host/host-display-resolution'
-import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { translate } from '@/i18n/i18n'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
@@ -19,7 +23,6 @@ import {
   getRuntimeServerConnectionState,
   type RuntimeHostDetails
 } from '../catalog/runtime-environment-host-details'
-import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type RuntimeServerRowState = {
   effectiveDetails: RuntimeHostDetails | undefined
@@ -39,14 +42,14 @@ export type RuntimeServerRowState = {
   title: string
 }
 
+const selectEntry = (entry: RuntimeEnvironmentStatus | undefined) => entry
+
 export function useRuntimeServerRowState(
   environment: PublicKnownRuntimeEnvironment,
   details: RuntimeHostDetails | undefined
 ): RuntimeServerRowState {
   const t = useTranslate()
-  const runtimeStatusEntry = useAppStoreWithChannels((state) =>
-    state.runtimeStatusByEnvironmentId.get(environment.id)
-  )
+  const runtimeStatusEntry = useRuntimeHostStatusSelector(environment.id, selectEntry)
   // Share the host verdict across Settings surfaces: an unverifiable probe can leave transport connected, so raw entry.status would offer Connect while repository setup still reports reachability.
   const entryReachable =
     runtimeStatusEntry !== undefined &&

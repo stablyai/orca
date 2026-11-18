@@ -15,9 +15,10 @@ import {
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { relearnHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
-import { useAppStore } from '@/store'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import type { AgentSurface } from './use-onboarding-flow-types'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type AgentSurfaceArgs = {
   settings: GlobalSettings | null
@@ -56,7 +57,7 @@ export function useChatAgentDetection() {
     chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   )
   // Custom commands and downloaded runtimes can run Chat without a CLI on PATH.
-  const chatReady = useAppStore((state) => {
+  const chatReady = useAppStoreWithChannels((state) => {
     const context = resolveChatProgramContext(state, CHAT_HOST)
     return chatAgents
       .filter((agent) => readChatProgram(state, agent, context, nativeDetected) === 'available')

@@ -7,14 +7,13 @@ import { getFolderWorkspaceChildWorktrees } from '../../../../shared/folder-work
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
-import { useAppStore } from '@/store'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** The bot home's worker workspaces, as its sidebar lists them. */
 export function useBotWorkerWorkspaces(
   home: FolderWorkspace
 ): ReturnType<typeof getFolderWorkspaceChildWorktrees> {
-  const childrenByParent = useAppStore(selectSidebarChildrenByParentIdentity)
+  const childrenByParent = useAppStoreWithChannels(selectSidebarChildrenByParentIdentity)
   return useMemo(
     () => getFolderWorkspaceChildWorktrees(getFolderWorkspaceHostIdentity(home), childrenByParent),
     [home, childrenByParent]

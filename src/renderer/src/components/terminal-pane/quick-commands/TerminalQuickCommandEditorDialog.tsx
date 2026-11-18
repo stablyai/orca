@@ -1,4 +1,3 @@
-import { useAppStore } from '../../../store/index'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import {
   getRepoExecutionHostId,
@@ -6,6 +5,8 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { TerminalQuickCommandDialog } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
+import { useAppStore } from '../../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function TerminalQuickCommandEditorDialog({
   command,
@@ -19,7 +20,7 @@ export function TerminalQuickCommandEditorDialog({
   onSave: (command: TerminalQuickCommand) => Promise<boolean>
 }): React.JSX.Element {
   const repos = useAppStore((store) => store.repos)
-  const agentPromptMaxLength = useAppStore((store) =>
+  const agentPromptMaxLength = useAppStoreWithChannels((store) =>
     getTerminalQuickCommandHostPromptMaxLength(store, hostId)
   )
   const hostRepos = hostId.startsWith('runtime:')

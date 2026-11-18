@@ -95,7 +95,7 @@ export function useVisibleSidebarWorktrees(args: {
     [hideWorkspacesFromOtherDevices]
   )
   const pairedDeviceIdsByEnvironment = useAppStoreWithChannels(selectPairedDevices)
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const lineageParentIdentities = useAppStoreWithChannels(selectSidebarLineageParentIdentities)
 
   const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) =>

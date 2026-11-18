@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { useAppStore } from '../../../../store/index'
 import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
@@ -41,6 +40,8 @@ import {
   getTerminalPaneSplitMountLeaseTabIds,
   subscribeTerminalPaneSplitMountLeases
 } from '../../layout/split/terminal-pane-split-request-routing'
+import { useAppStore } from '../../../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type TerminalOverlayTabAssignment = {
   groupId: string
@@ -96,7 +97,7 @@ export function useTerminalTabColdParking(args: {
     getTerminalPaneSplitMountLeaseTabIds,
     getTerminalPaneSplitMountLeaseTabIds
   )
-  const pairedRuntimeParkingEnvironmentIds = useAppStore(
+  const pairedRuntimeParkingEnvironmentIds = useAppStoreWithChannels(
     selectPairedRuntimeParkingEnvironmentIdsFromState
   )
   // Subscribe to worktree-scoped presence; the app-global map rerenders this worktree for unrelated writes.
