@@ -58,7 +58,9 @@ export async function scanFileRegionsBackwardAsync<T>(
   limits: { chunkBytes: number; maxScanBytes: number },
   visit: (region: Buffer, regionPosition: number) => T | undefined,
   /** Checked before each read; a superseded scan stops instead of reading on. */
-  keepReading: () => boolean = () => true
+  keepReading: () => boolean = () => true,
+  /** A scan that couldn't open or read the file, as opposed to one that found nothing. */
+  onError?: () => void
 ): Promise<T | undefined> {
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
@@ -99,6 +101,7 @@ export async function scanFileRegionsBackwardAsync<T>(
     }
     return undefined
   } catch {
+    onError?.()
     return undefined
   } finally {
     await handle?.close().catch(() => {})

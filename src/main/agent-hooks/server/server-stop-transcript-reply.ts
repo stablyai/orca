@@ -120,7 +120,11 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
         () => current() !== undefined,
         size !== undefined && previous !== undefined && size > previous
           ? Math.min(TRANSCRIPT_MAX_SCAN_BYTES, size - previous + TRANSCRIPT_CHUNK_BYTES)
-          : TRANSCRIPT_MAX_SCAN_BYTES
+          : TRANSCRIPT_MAX_SCAN_BYTES,
+        // A failed read saw nothing; the next retry reads in full even at the same size.
+        () => {
+          claim.scannedSize = undefined
+        }
       )
     }
     void scan().then((text) => {
