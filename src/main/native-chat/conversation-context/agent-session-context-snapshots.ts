@@ -17,11 +17,11 @@ export function agentSessionContextSnapshotRoot(stateDirectory: string): string 
   return getOwnedTempStagingRoot(tmpdir(), `orca-handoff-${profile}`)
 }
 
-/** One snapshot per chat, replaced on each hand-off; the OS owns temp retention. */
+/** One snapshot per chat, replaced on each hand-off; the OS owns temp retention. Parts stream to disk in order. */
 export async function writeAgentSessionContextSnapshot(
   stateDirectory: string,
   sessionId: string,
-  text: string
+  text: string | AsyncIterable<string>
 ): Promise<string> {
   const root = agentSessionContextSnapshotRoot(stateDirectory)
   const name = createHash('sha256').update(sessionId).digest('hex')

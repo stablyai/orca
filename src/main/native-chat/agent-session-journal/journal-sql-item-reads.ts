@@ -25,12 +25,14 @@ import {
   type JournalThreadGoalSource
 } from './projection/journal-thread-goal-source'
 import type {
+  JournalContinuationChunkRead,
   JournalContinuationContext,
   JournalMessageOptions,
   JournalNamedTurn
 } from './journal-reads'
 import {
   journalDomainContextHead,
+  readJournalDomainContinuationChunk,
   readJournalDomainContinuationContext
 } from './journal-sql-continuation-context'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -60,6 +62,7 @@ export type JournalSqlItemRead =
   | { kind: 'named-turn'; turnId: string }
   | { kind: 'message-options'; clientMessageId: string }
   | { kind: 'continuation-context' }
+  | { kind: 'continuation-chunk'; read: JournalContinuationChunkRead }
   | JournalSqlLifecycleRead
 
 export type JournalSqlItemReadResult =
@@ -75,6 +78,7 @@ export type JournalSqlItemReadResult =
   | { kind: 'named-turn'; turn: JournalNamedTurn }
   | { kind: 'message-options'; options: JournalMessageOptions }
   | { kind: 'continuation-context'; context: JournalContinuationContext }
+  | { kind: 'continuation-chunk'; text: string | null }
   | JournalSqlLifecycleReadResult
 
 export type JournalDomainItemRead = Exclude<JournalSqlItemRead, JournalSqlLifecycleRead>
@@ -142,6 +146,8 @@ export function readJournalDomainItems(
         kind: 'continuation-context',
         context: readJournalDomainContinuationContext(db, target)
       }
+    case 'continuation-chunk':
+      return readJournalDomainContinuationChunk(db, target, operation.read)
     case 'message-options': {
       const body = visibleItem(
         db,
