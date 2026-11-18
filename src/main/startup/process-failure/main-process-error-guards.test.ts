@@ -1,4 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createWriteStream, openSync, type WriteStream } from 'node:fs'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Console } from 'node:console'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
   recordDurableCrashBreadcrumbMock: vi.fn()
@@ -10,36 +15,56 @@ vi.mock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
 
 import { installStdioWriteErrorSink } from './main-process-error-guards'
 
-const originalStdoutListeners = process.stdout.listeners('error')
-const originalStderrListeners = process.stderr.listeners('error')
-
-function restoreErrorListeners(stream: NodeJS.WriteStream, original: unknown[]): void {
-  for (const listener of stream.listeners('error')) {
-    if (!original.includes(listener)) {
-      stream.removeListener('error', listener as (...args: unknown[]) => void)
-    }
-  }
-}
-
 describe('installStdioWriteErrorSink', () => {
-  afterEach(() => {
-    restoreErrorListeners(process.stdout, originalStdoutListeners)
-    restoreErrorListeners(process.stderr, originalStderrListeners)
+  let root: string
+  let file: string
+
+  function closed(stream: WriteStream): Promise<void> {
+    return new Promise((resolve) => stream.once('close', () => resolve()))
+  }
+
+  function deadLogStream(): WriteStream {
+    // Writes to a read-only descriptor fail like a full or dead log target.
+    return createWriteStream(file, { fd: openSync(file, 'r') })
+  }
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-stdio-sink-'))
+    file = join(root, 'log')
+    await writeFile(file, '')
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
     recordDurableCrashBreadcrumbMock.mockReset()
   })
 
-  it('absorbs failed stdout writes that libuv cannot name and records the errno', () => {
-    installStdioWriteErrorSink()
-    const quotaExceeded = Object.assign(new Error('UNKNOWN: unknown error, write'), {
-      code: 'UNKNOWN',
-      errno: -122,
-      syscall: 'write'
-    })
+  it('absorbs real console write failures on a dead stdout and stops writing to it', async () => {
+    const stdout = deadLogStream()
+    installStdioWriteErrorSink([['stdout', stdout]])
+    const logger = new Console({ stdout, stderr: stdout, ignoreErrors: false })
 
-    expect(() => {
-      process.stdout.emit('error', quotaExceeded)
-      process.stdout.emit('error', quotaExceeded)
-    }).not.toThrow()
+    logger.info('[runtime-rpc] client connected', { deviceId: 'a' })
+    await closed(stdout)
+    logger.info('[runtime-rpc] client connected', { deviceId: 'b' })
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(stdout.destroyed).toBe(true)
+    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith(
+      'main_stdio_write_failed',
+      expect.objectContaining({ stream: 'stdout', errorCode: expect.stringMatching(/^E/) })
+    )
+  })
+
+  it('records the raw errno when libuv cannot name the failure', () => {
+    const stdout = deadLogStream()
+    installStdioWriteErrorSink([['stdout', stdout]])
+
+    stdout.emit(
+      'error',
+      Object.assign(new Error('UNKNOWN: unknown error, write'), { code: 'UNKNOWN', errno: -122 })
+    )
+
     expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith('main_stdio_write_failed', {
       stream: 'stdout',
       errorCode: 'UNKNOWN',
@@ -47,17 +72,16 @@ describe('installStdioWriteErrorSink', () => {
     })
   })
 
-  it('absorbs a failed stderr write even when recording the breadcrumb fails', () => {
-    installStdioWriteErrorSink()
+  it('stays silent when recording the breadcrumb also fails', async () => {
+    const stderr = deadLogStream()
+    installStdioWriteErrorSink([['stderr', stderr]])
     recordDurableCrashBreadcrumbMock.mockImplementation(() => {
       throw new Error('ENOSPC: no space left on device, write')
     })
 
-    expect(() =>
-      process.stderr.emit(
-        'error',
-        Object.assign(new Error('EIO: i/o error, write'), { code: 'EIO' })
-      )
-    ).not.toThrow()
+    stderr.write('diagnostic line\n')
+    await closed(stderr)
+
+    expect(stderr.destroyed).toBe(true)
   })
 })
