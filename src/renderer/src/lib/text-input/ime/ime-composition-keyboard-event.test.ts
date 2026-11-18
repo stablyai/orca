@@ -19,6 +19,12 @@ const PINYIN_RAW_LETTERS_ENTER: Step[] = [
   keydown('Process', 229, true),
   { type: 'compositionend' }
 ]
+// Chromium on macOS reports a candidate-confirming Enter as key Enter with keyCode 229.
+const MACOS_CANDIDATE_CONFIRM_ENTER: Step[] = [
+  { type: 'compositionstart' },
+  keydown('Enter', 229, true),
+  { type: 'compositionend' }
+]
 const VIETNAMESE_TELEX_ENTER: Step[] = [
   { type: 'compositionstart' },
   keydown('Process', 229, true),
@@ -53,6 +59,10 @@ function submittedEnters(steps: Step[]): number {
 describe('useImeEnterGestureOwnership', () => {
   it('keeps the Enter that confirms a Pinyin composition from submitting', () => {
     expect(submittedEnters(PINYIN_RAW_LETTERS_ENTER)).toBe(0)
+  })
+
+  it('keeps a macOS candidate-confirming Enter from submitting', () => {
+    expect(submittedEnters(MACOS_CANDIDATE_CONFIRM_ENTER)).toBe(0)
   })
 
   it('submits on the one Enter that commits Vietnamese Telex', () => {
