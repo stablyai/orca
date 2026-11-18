@@ -110,9 +110,9 @@ export function buildAiVaultResumeShellCommand(args: {
     clearNames?.length && !clearsOnAgent
       ? `${clearEnvCommand(clearNames, dialect)}${commandSeparator(dialect)}`
       : ''
-  if (platform === 'win32' && shell === 'cmd') {
-    // Interactive cmd splits nested-wrapper doubled quotes; queued lines need direct cmd syntax.
-    return `${clearPrefix}${cwd ? `cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}` : resumeCommand}`
+  if (platform === 'win32' && (!shell || shell === 'cmd')) {
+    const inner = `${clearPrefix}${cwd ? `cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}` : resumeCommand}`
+    return `cmd /d /s /c "${inner}"`
   }
   if (!cwd) {
     return `${clearPrefix}${resumeCommand}`
@@ -120,7 +120,7 @@ export function buildAiVaultResumeShellCommand(args: {
 
   if (platform === 'win32') {
     const inner = `${clearPrefix}cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}`
-    return `cmd /d /s /c ${quoteCmdDoubleQuoted(inner)}`
+    return `cmd /d /s /c "${inner}"`
   }
 
   return `cd ${quoteResumeArg(cwd, platform, shell)} && ${resumeCommand}`
@@ -157,13 +157,29 @@ function buildResumeShellCommandForShell(args: {
     segments.push(clearEnvCommand(clearEnvNames, shell))
   }
   if (cwd) {
-    segments.push(`Set-Location -LiteralPath ${quoteStartupArg(cwd, shell)}`)
+    segments.push(`Set-Location -LiteralPath ${quoteStartupArg(cwd, shell)} -ErrorAction Stop`)
   }
   if (codexHome) {
     segments.push(`$env:${homeVariable}=${quoteStartupArg(codexHome, shell)}`)
   }
   segments.push(args.resumeCommand)
-  return segments.join(separator)
+  const variables = [...new Set([...(clearEnvNames ?? []), ...(codexHome ? [homeVariable] : [])])]
+  if (!variables.length) {
+    return segments.join(separator)
+  }
+  const save = variables
+    .map(
+      (name) =>
+        `$orcaResumePreviousEnv[${quoteStartupArg(name, shell)}]=[Environment]::GetEnvironmentVariable(${quoteStartupArg(name, shell)}, 'Process')`
+    )
+    .join(separator)
+  const restore = variables
+    .map(
+      (name) =>
+        `if ($null -eq $orcaResumePreviousEnv[${quoteStartupArg(name, shell)}]) { Remove-Item -LiteralPath 'Env:${name}' -ErrorAction SilentlyContinue } else { [Environment]::SetEnvironmentVariable(${quoteStartupArg(name, shell)}, $orcaResumePreviousEnv[${quoteStartupArg(name, shell)}], 'Process') }`
+    )
+    .join(separator)
+  return `& { $orcaResumePreviousEnv=@{}; ${save}; try { ${segments.join(separator)} } finally { ${restore} } }`
 }
 
 // Real-home resumes have no CODEX_HOME prefix: every spawning surface must delete inherited account/daemon homes instead of overlaying sparse env.

@@ -14,7 +14,7 @@ export async function copyProfileHistory(
   if (parseWslUncPath(sourceHome) || parseWslUncPath(destinationHome)) {
     throw new Error('WSL history import is not supported yet. Import credentials only.')
   }
-  const source = await realpath(resolve(sourceHome.trim()))
+  const source = await realpath(resolve(sourceHome))
   const destination = await realpath(destinationHome)
   const offset = relative(source, destination)
   if (!offset || (!offset.startsWith(`..${sep}`) && offset !== '..' && !isAbsolute(offset))) {

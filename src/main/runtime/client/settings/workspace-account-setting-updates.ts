@@ -17,31 +17,47 @@ export function workspaceAccountSettingUpdates(
   updates: {
     claudeWorkspaceAccount?: WorkspaceAccountAssignment
     codexWorkspaceAccount?: WorkspaceAccountAssignment
+    claudeWorkspaceAccounts?: Record<string, string>
+    codexWorkspaceAccounts?: Record<string, string>
   }
 ): Partial<GlobalSettings> {
   const result: Partial<GlobalSettings> = {}
   const claude = updates.claudeWorkspaceAccount
   const codex = updates.codexWorkspaceAccount
-  if (claude) {
-    result.claudeWorkspaceAccounts = assignWorkspaceAccount(
-      settings.claudeWorkspaceAccounts,
-      settings.claudeManagedAccounts,
-      claude,
-      'Claude'
-    )
-    if (claude.accountId) {
+  for (const provider of ['claude', 'codex'] as const) {
+    const assignment = provider === 'claude' ? claude : codex
+    const bulk = updates[`${provider}WorkspaceAccounts`]
+    if (assignment && bulk !== undefined) {
+      throw new Error(`Choose either a ${provider} workspace assignment or a complete binding map.`)
+    }
+    let bindings = settings[`${provider}WorkspaceAccounts`]
+    if (bulk !== undefined) {
+      bindings = {}
+      for (const [workspaceId, accountId] of Object.entries(bulk)) {
+        bindings = assignWorkspaceAccount(
+          bindings,
+          settings[`${provider}ManagedAccounts`],
+          { workspaceId, accountId },
+          provider
+        )
+      }
+    } else if (assignment) {
+      bindings = assignWorkspaceAccount(
+        bindings,
+        settings[`${provider}ManagedAccounts`],
+        assignment,
+        provider
+      )
+    } else {
+      continue
+    }
+    result[`${provider}WorkspaceAccounts`] = bindings
+    if (provider === 'claude') {
+      const assigned = new Set(Object.values(bindings ?? {}))
       result.claudeManagedAccounts = (settings.claudeManagedAccounts ?? []).map((account) =>
-        account.id === claude.accountId ? { ...account, privateHistory: true } : account
+        assigned.has(account.id) ? { ...account, privateHistory: true } : account
       )
     }
-  }
-  if (codex) {
-    result.codexWorkspaceAccounts = assignWorkspaceAccount(
-      settings.codexWorkspaceAccounts,
-      settings.codexManagedAccounts,
-      codex,
-      'Codex'
-    )
   }
   return result
 }

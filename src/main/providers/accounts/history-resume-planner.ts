@@ -1,88 +1,60 @@
+import type { HistoryResumePlannerDeps, Pending, Provider } from './history-resume-plan-types'
+export type { HistoryResumePlannerDeps } from './history-resume-plan-types'
+import { previewHistoryResume } from './history-resume-preview'
+import { prepareHistoryConversation } from './history-continuation-preparation'
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type {
-  HistoryContinuation,
-  HistoryResumeAccount,
-  HistoryResumePlan
-} from '../../../shared/ai-vault/resume/history-resume-accounts'
+import type { HistoryContinuation } from '../../../shared/ai-vault/resume/history-resume-accounts'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import {
   verifiedWorkspaceConversation,
   assertWorkspaceConversationScope
 } from './workspace-conversation-source'
-import type { HistoryContinuationLedger } from './history-continuation-ledger'
-import { forkHistoryConversation } from './history-conversation-fork'
-import { healPendingCodexAccountThreads } from '../../codex/history/index/codex-account-session-index-heal'
-import { parseCodexRolloutThreadId } from '../../codex/history/rollouts/codex-rollout-thread-id'
-
-type Provider = 'codex' | 'claude'
-type Source = Awaited<ReturnType<typeof verifiedWorkspaceConversation>>
-type Pending = {
-  args: AiVaultPrepareSessionResumeArgs
-  source: Source
-  sessionId: string
-  rootSessionId: string
-  lastAccountId?: string | null
-  plan: HistoryResumePlan
-  expires: number
-}
-export type HistoryResumePlannerDeps = {
-  ledger: HistoryContinuationLedger
-  roots(provider: Provider): Promise<readonly string[]>
-  workspacePath(id: string): string | undefined
-  accounts(
-    provider: Provider,
-    workspaceId: string
-  ): { accounts: HistoryResumeAccount[]; workspaceAccountId?: string | null }
-  prepareAccount(provider: Provider, accountId: string | null): Promise<string>
-  fork?: typeof forkHistoryConversation
-  heal?: typeof healPendingCodexAccountThreads
-}
 
 export class HistoryResumePlanner {
   private readonly plans = new Map<string, Pending>()
-  private readonly receipts = new Map<string, { entries: HistoryContinuation[]; expires: number }>()
+  private readonly receipts = new Map<
+    string,
+    { entries: HistoryContinuation[]; expires: number; workspaceId?: string }
+  >()
   constructor(private readonly deps: HistoryResumePlannerDeps) {}
-  async accountForSession(
-    provider: Provider,
-    sessionId: string
-  ): Promise<{ accountId: string | null; home: string } | null> {
+
+  async accountForReceipt(token: string, provider: Provider, workspaceId?: string) {
     this.prune()
-    const pending = [...this.receipts.values()]
-      .flatMap((receipt) => receipt.entries)
-      .findLast(
-        (entry) =>
-          entry.provider === provider &&
-          entry.sessionId === sessionId &&
-          entry.accountId !== undefined
-      )
+    const receipt = this.receipts.get(token)
+    const retained = receipt ? undefined : await this.deps.ledger.launchReceipts.get(token)
     const entry =
-      pending ??
-      (await this.deps.ledger.list()).find(
-        (row) => row.provider === provider && row.sessionId === sessionId
+      retained?.entry ??
+      receipt?.entries.findLast((entry) => entry.provider === provider && entry.openedAt > 0)
+    if (
+      (retained?.workspaceId ?? receipt?.workspaceId) !== workspaceId ||
+      !entry ||
+      entry.provider !== provider ||
+      entry.accountId === undefined
+    ) {
+      throw new Error(
+        'The History account choice expired or belongs to another workspace. Resume again from History.'
       )
-    if (!entry || entry.accountId === undefined) {
-      return null
     }
     if (
       !this.deps
-        .accounts(provider, '')
+        .accounts(provider, workspaceId ?? '')
         .accounts.some((account) => account.id === entry.accountId && account.available)
     ) {
       throw new Error(
-        'The conversation account is unavailable. Sign in or choose another account in History.'
+        'The chosen History account is unavailable. Sign in or choose another account.'
       )
     }
-    return {
-      accountId: entry.accountId,
-      home: await this.deps.prepareAccount(provider, entry.accountId)
+    const home = await realpath(await this.deps.prepareAccount(provider, entry.accountId))
+    if (normalizeRuntimePathForComparison(home) !== normalizeRuntimePathForComparison(entry.home)) {
+      throw new Error('The chosen History account home changed. Resume again from History.')
     }
+    return { accountId: entry.accountId, home }
   }
-
   async prepare(args: AiVaultPrepareSessionResumeArgs): Promise<AiVaultPrepareSessionResumeResult> {
     this.prune()
     if (args.historyCatalog) {
@@ -133,147 +105,94 @@ export class HistoryResumePlanner {
     ) {
       throw new Error('The account changed while choosing. Try Resume again.')
     }
-    this.plans.delete(args.planToken)
-    const source = await verifiedWorkspaceConversation({
-      provider: args.agent,
-      filePath: pending.source.filePath,
-      sessionId: pending.sessionId,
-      roots: await this.deps.roots(args.agent)
-    })
-    const targetHome = await realpath(await this.deps.prepareAccount(args.agent, selectedId))
-    const different =
-      (pending.lastAccountId !== undefined && pending.lastAccountId !== selectedId) ||
-      normalizeRuntimePathForComparison(source.sourceHome) !==
-        normalizeRuntimePathForComparison(targetHome)
-    let copy = { sessionId: pending.sessionId, filePath: source.filePath }
-    if (different) {
-      const workspace = this.deps.workspacePath(args.workspaceId)
-      if (!workspace) {
-        throw new Error('The session workspace is unavailable.')
-      }
-      await assertWorkspaceConversationScope(source.cwd, workspace)
-      copy = await (this.deps.fork ?? forkHistoryConversation)({
+    if (pending.preparing) {
+      throw new Error('This resume choice is already being prepared.')
+    }
+    pending.preparing = true
+    try {
+      const source = await verifiedWorkspaceConversation({
         provider: args.agent,
-        ...source,
+        filePath: pending.source.filePath,
         sessionId: pending.sessionId,
-        targetHome,
-        historyRoots: await this.deps.roots(args.agent)
+        roots: await this.deps.roots(args.agent)
       })
-      if (args.agent === 'codex') {
-        const rollout = parseCodexRolloutThreadId(copy.filePath)
-        if (!rollout) {
-          throw new Error('The continuation has no valid rollout identity.')
+      const targetHome = await realpath(await this.deps.prepareAccount(args.agent, selectedId))
+      const different =
+        (pending.lastAccountId !== undefined && pending.lastAccountId !== selectedId) ||
+        normalizeRuntimePathForComparison(source.sourceHome) !==
+          normalizeRuntimePathForComparison(targetHome)
+      let copy = { sessionId: pending.sessionId, filePath: source.filePath }
+      if (different) {
+        const workspace = this.deps.workspacePath(args.workspaceId)
+        if (!workspace) {
+          throw new Error('The session workspace is unavailable.')
         }
-        const result = await (this.deps.heal ?? healPendingCodexAccountThreads)(
-          targetHome,
-          new Map([[copy.sessionId, rollout.rolloutStamp]]),
-          { retryFailed: true }
+        await assertWorkspaceConversationScope(source.cwd, workspace)
+        copy = await prepareHistoryConversation(
+          this.deps,
+          pending,
+          source,
+          args.agent,
+          selectedId,
+          targetHome
         )
-        if (
-          result.failedThreads ||
-          result.missingThreads ||
-          !['completed', 'up-to-date'].includes(result.outcome)
-        ) {
-          throw new Error(
-            'The continuation could not be indexed. The original session was preserved.'
-          )
-        }
       }
-    }
-    const receipt = randomUUID()
-    const openedAt = Date.now()
-    const parent: HistoryContinuation = {
-      provider: args.agent,
-      sessionId: pending.sessionId,
-      filePath: source.filePath,
-      home: source.sourceHome,
-      rootSessionId: pending.rootSessionId,
-      accountId: pending.lastAccountId,
-      openedAt: 0
-    }
-    const entry: HistoryContinuation = {
-      provider: args.agent,
-      ...copy,
-      home: different ? targetHome : source.sourceHome,
-      rootSessionId: pending.rootSessionId,
-      ...(different ? { parentSessionId: pending.sessionId } : {}),
-      accountId: selectedId,
-      openedAt
-    }
-    this.receipts.set(receipt, {
-      entries: different ? [parent, entry] : [entry],
-      expires: openedAt + 1_800_000
-    })
-    if (different) {
-      await this.deps.ledger.record(parent)
-      await this.deps.ledger.record({ ...entry, accountId: undefined, openedAt: 0 })
-    }
-    return {
-      useRealCodexHome: false,
-      workspaceAccountPrepared: true,
-      substituteSessionId: copy.sessionId,
-      substituteTranscriptPath: copy.filePath,
-      resumeReceipt: receipt,
-      ...(args.agent === 'codex'
-        ? { substituteCodexHome: different ? targetHome : source.sourceHome }
-        : { substituteClaudeConfigDir: different ? targetHome : source.sourceHome })
+
+      const receipt = randomUUID()
+      const openedAt = Date.now()
+      const parent: HistoryContinuation = {
+        provider: args.agent,
+        sessionId: pending.sessionId,
+        filePath: source.filePath,
+        home: source.sourceHome,
+        rootSessionId: pending.rootSessionId,
+        rootTranscriptKey: pending.rootTranscriptKey,
+        accountId: pending.lastAccountId,
+        openedAt: 0
+      }
+      const entry: HistoryContinuation = {
+        provider: args.agent,
+        ...copy,
+        home: different ? targetHome : source.sourceHome,
+        rootSessionId: pending.rootSessionId,
+        rootTranscriptKey: pending.rootTranscriptKey,
+        ...(different ? { parentSessionId: pending.sessionId } : {}),
+        accountId: selectedId,
+        openedAt
+      }
+      const stagedReceipt = {
+        workspaceId: args.workspaceId,
+        entries: different ? [parent, entry] : [entry],
+        expires: openedAt + 1_800_000
+      }
+      if (different) {
+        await this.deps.ledger.record(parent)
+        await this.deps.ledger.record({ ...entry, accountId: undefined, openedAt: 0 })
+      }
+      await this.deps.ledger.launchReceipts.save(receipt, args.workspaceId, entry)
+      this.plans.delete(args.planToken)
+      this.receipts.set(receipt, stagedReceipt)
+      return {
+        useRealCodexHome: false,
+        workspaceAccountPrepared: true,
+        substituteSessionId: copy.sessionId,
+        substituteTranscriptPath: copy.filePath,
+        resumeReceipt: receipt,
+        ...(args.agent === 'codex'
+          ? { substituteCodexHome: different ? targetHome : source.sourceHome }
+          : { substituteClaudeConfigDir: different ? targetHome : source.sourceHome })
+      }
+    } finally {
+      pending.preparing = false
     }
   }
 
   private async preview(
     args: AiVaultPrepareSessionResumeArgs
   ): Promise<AiVaultPrepareSessionResumeResult> {
-    if (
-      (args.agent !== 'codex' && args.agent !== 'claude') ||
-      !args.sessionId ||
-      !args.workspaceId
-    ) {
-      throw new Error('Invalid resume request.')
-    }
-    const entries = await this.deps.ledger.list()
-    const recorded = entries.find(
-      (entry) => entry.provider === args.agent && entry.sessionId === args.sessionId
-    )
-    const rootSessionId = recorded?.rootSessionId ?? args.sessionId
-    const last = args.exactVersion
-      ? recorded
-      : entries
-          .filter(
-            (entry) =>
-              entry.provider === args.agent &&
-              entry.rootSessionId === rootSessionId &&
-              entry.openedAt > 0
-          )
-          .sort((a, b) => b.openedAt - a.openedAt)[0]
-    const sessionId = last?.sessionId ?? args.sessionId
-    const source = await verifiedWorkspaceConversation({
-      provider: args.agent,
-      filePath: last?.filePath ?? args.filePath,
-      sessionId,
-      roots: await this.deps.roots(args.agent)
-    })
-    const { accounts, workspaceAccountId } = this.deps.accounts(args.agent, args.workspaceId)
-    const lastAccountId = last?.accountId
-    const plan: HistoryResumePlan = {
-      token: randomUUID(),
-      accounts,
-      lastAccountId,
-      workspaceAccountId,
-      needsChoice:
-        lastAccountId === undefined ||
-        (workspaceAccountId !== undefined && workspaceAccountId !== lastAccountId) ||
-        !accounts.some((account) => account.id === lastAccountId && account.available)
-    }
-    this.plans.set(plan.token, {
-      args,
-      source,
-      sessionId,
-      rootSessionId,
-      lastAccountId,
-      plan,
-      expires: Date.now() + 300_000
-    })
-    return { useRealCodexHome: false, resumePlan: plan }
+    const pending = await previewHistoryResume(this.deps, args)
+    this.plans.set(pending.plan.token, pending)
+    return { useRealCodexHome: false, resumePlan: pending.plan }
   }
 
   private prune(): void {

@@ -151,7 +151,7 @@ export function SessionInlineDetails({
               type="button"
               variant={showResumeInWorktree ? 'secondary' : 'default'}
               size="xs"
-              disabled={resumeActions.newTab.disabled}
+              disabled={pending || resumeActions.newTab.disabled}
               draggable={false}
               onClick={(event) => {
                 event.stopPropagation()

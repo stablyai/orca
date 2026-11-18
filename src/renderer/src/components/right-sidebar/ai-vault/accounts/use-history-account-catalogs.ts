@@ -44,6 +44,9 @@ export function useHistoryAccountCatalogs(
   useEffect(() => {
     let current = true
     const hosts: string[] = JSON.parse(hostKey)
+    setCatalogs((previous) =>
+      Object.fromEntries(Object.entries(previous).filter(([host]) => hosts.includes(host)))
+    )
     void Promise.all(
       hosts.map(async (host) => {
         const parsedHost = parseRoutableExecutionHostId(host)
@@ -74,23 +77,28 @@ export function useHistoryAccountCatalogs(
               sessionId: 'catalog',
               codexHome: null,
               historyCatalog: true
-            })
-            continuations = ledger.continuationCatalog
+            }).catch(() => null)
+            continuations = ledger?.continuationCatalog
           }
-          return { host, catalog: { ...accounts, settings: result.settings, continuations } }
+          if (current) {
+            setCatalogs((previous) => ({
+              ...previous,
+              [host]: { ...accounts, settings: result.settings, continuations }
+            }))
+          }
+          return null
         } catch {
+          if (current) {
+            setCatalogs((previous) => {
+              const next = { ...previous }
+              delete next[host]
+              return next
+            })
+          }
           return null
         }
       })
-    ).then((results) => {
-      if (current) {
-        setCatalogs(
-          Object.fromEntries(
-            results.flatMap((result) => (result ? [[result.host, result.catalog]] : []))
-          )
-        )
-      }
-    })
+    )
     return () => {
       current = false
     }

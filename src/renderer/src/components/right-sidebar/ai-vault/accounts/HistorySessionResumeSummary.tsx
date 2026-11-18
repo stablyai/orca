@@ -28,18 +28,23 @@ export function HistorySessionResumeSummary({
   return (
     <div className="space-y-1 border-b border-sidebar-border px-3 py-2">
       <p className="text-xs font-medium">
-        {account.lastAccountLabel
+        {account.lastAccountId !== undefined
           ? t('historyResume.lastUsedAccount', 'Last used: {{account}}', {
-              account: account.lastAccountLabel
+              account:
+                account.lastAccountId === null
+                  ? t('accounts.claude.systemDefault', 'System default')
+                  : account.lastAccountLabel
             })
           : t('historyResume.lastUnknown', 'Last used account not recorded')}
       </p>
-      <p className="text-xs text-muted-foreground">
-        {t(
-          'historyResume.choiceHint',
-          'If the workspace uses another account, Orca will ask before continuing.'
-        )}
-      </p>
+      {account.supported && (
+        <p className="text-xs text-muted-foreground">
+          {t(
+            'historyResume.choiceHint',
+            'If the workspace uses another account, Orca will ask before continuing.'
+          )}
+        </p>
+      )}
     </div>
   )
 }

@@ -55,7 +55,7 @@ export function HistoryResumeAccountDialog({
       <DialogContent>
         <div className="scrollbar-sleek grid max-h-[calc(100dvh-5rem)] gap-4 overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle id="history-resume-account-question">
               {t('historyResume.chooseTitle', 'Which account should continue this conversation?')}
             </DialogTitle>
             <DialogDescription>
@@ -77,7 +77,11 @@ export function HistoryResumeAccountDialog({
                     )}
             </DialogDescription>
           </DialogHeader>
-          <RadioGroup value={selected} onValueChange={setSelected}>
+          <RadioGroup
+            aria-labelledby="history-resume-account-question"
+            value={selected}
+            onValueChange={setSelected}
+          >
             {plan.accounts.map((account) => {
               const value = account.id ?? 'system'
               return (
@@ -89,12 +93,16 @@ export function HistoryResumeAccountDialog({
                     value={value}
                     id={`resume-account-${value}`}
                     disabled={!account.available}
+                    aria-describedby={`resume-account-status-${value}`}
                   />
                   <div className="min-w-0">
                     <Label className="break-all" htmlFor={`resume-account-${value}`}>
                       {account.label}
                     </Label>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p
+                      id={`resume-account-status-${value}`}
+                      className="mt-1 text-xs text-muted-foreground"
+                    >
                       {!account.available
                         ? t(
                             'historyResume.unavailable',

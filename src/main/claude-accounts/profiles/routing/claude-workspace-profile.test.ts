@@ -91,8 +91,8 @@ it('refuses fallback to a valid system login when the pinned account is signed o
   ).toBe('work@example.test')
 })
 
-it('rejects an account assigned to another runtime instead of using its host path', async () => {
+it('leaves another runtime to its own account lane instead of using the host binding', async () => {
   await expect(
     profiles.resolve('folder:client', { runtime: 'wsl', wslDistro: 'Ubuntu' }, true)
-  ).rejects.toThrow('another host or WSL distro')
+  ).resolves.toBeNull()
 })

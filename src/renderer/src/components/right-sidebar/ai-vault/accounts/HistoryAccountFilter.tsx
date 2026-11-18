@@ -43,6 +43,7 @@ export function HistoryAccountFilter({
                 key={`${host}-${provider}-system`}
                 value={JSON.stringify([host, provider, null])}
               >
+                {Object.keys(catalogs).length > 1 ? `${host} · ` : ''}
                 {agentLabel(provider)} · {t('accounts.claude.systemDefault', 'System default')}
               </SelectItem>,
               ...catalog[provider].accounts.map((account) => (
@@ -50,6 +51,7 @@ export function HistoryAccountFilter({
                   key={`${host}-${provider}-${account.id}`}
                   value={JSON.stringify([host, provider, account.id])}
                 >
+                  {Object.keys(catalogs).length > 1 ? `${host} · ` : ''}
                   {agentLabel(provider)} · {account.displayName ?? account.email}
                 </SelectItem>
               ))

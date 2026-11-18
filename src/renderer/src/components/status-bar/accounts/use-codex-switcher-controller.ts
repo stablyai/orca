@@ -97,8 +97,10 @@ export function useCodexSwitcherController(
     codex.usageMetadata?.contextAccountId ?? codex.usageMetadata?.readingAccount?.accountId
   const displaysDefaultAccount =
     !displayedAccountId ||
-    getCodexStatusActiveId(accountState, toCodexStatusRuntimeTarget(codexTarget)) ===
-      displayedAccountId
+    getCodexStatusActiveId(
+      accountState,
+      normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
+    ) === displayedAccountId
 
   useEffect(() => {
     mountedRef.current = true

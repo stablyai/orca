@@ -46,6 +46,7 @@ export class ClaudeAccountService {
     return this.selection.list()
   }
   importHome(sourceHome: string, importHistory = false): Promise<ClaudeRateLimitAccountsState> {
+    this.supersedePendingLogin()
     return this.serializeMutation(() => this.registration.importHome(sourceHome, importHistory))
   }
 

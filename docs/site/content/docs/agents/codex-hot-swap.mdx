@@ -16,7 +16,7 @@ Accounts are optional: without any, Orca uses your normal Codex login (**System 
 
 In the provider's account settings, use the home-import control and select the account's home directory, not an individual credential file. Orca copies the login into a new managed account home and activates the imported account on that host. The source directory stays unchanged.
 
-Enable **Import session history** if you also want its existing conversations copied. Imported history remains private to that account. Native host history import supports Codex and Claude; WSL imports currently support credentials only. Linked/shared history directories are rejected rather than followed during import.
+Enable **Import session history** if you also want its existing conversations copied. Imported history remains private to that account. Native host history import supports Codex and Claude. Claude home import is available only on the host. Credential-only WSL Codex imports are available through the CLI. Links inside history entries being copied are rejected rather than followed.
 
 For Codex, the CLI equivalent is `orca account add --agent codex --home PATH`; add `--import-history` to include history. Source configuration and SQLite databases are not copied; Codex rebuilds its session index from imported transcripts.
 
@@ -30,11 +30,11 @@ When opening a saved conversation, History instead prefers the account Orca last
 
 ## Swap accounts
 
-Click the Codex chip in the status bar to open the account switcher, or pick an account in Settings. New sessions without a workspace binding use that account, and unpinned Codex chats move to it before their next message (a reply already running finishes first). Terminal sessions already running keep their original account until restarted.
+Click the Codex chip in the status bar to open the account switcher, or pick an account in Settings. New sessions without a workspace binding use that account, and new chats use that selection. Existing chats retain the account associated with their conversation. Terminal sessions already running keep their original account until restarted.
 
 ## Running accounts side by side
 
-Because each added account has its own isolated home, two Codex terminal sessions can run under different accounts at the same time: start one, switch accounts, start the next. Each terminal session keeps the account it launched with. Workspace-bound or History-resumed chats keep their selected account; other chats follow the host selection. Usage still counts against each account's own plan; Orca does not pool quota across accounts.
+In a workspace without an account binding, two Codex terminal sessions can run under different accounts: start one, switch the host account, then start the next. For a bound workspace, change its account before opening the second terminal. Each terminal session keeps the account it launched with. Workspace-bound or History-resumed chats keep their selected account; existing chats keep their conversation account. Usage still counts against each account's own plan; Orca does not pool quota across accounts.
 
 ## System default
 
@@ -47,7 +47,7 @@ For managed Codex accounts, Orca mirrors settings from your real `~/.codex/confi
 ## Rules & gotchas
 
 - Swapping does not re-authenticate; Orca launches new sessions in the selected account's home.
-- Existing Codex terminal processes keep their current account until restart. Unpinned chats follow the host account before their next message; workspace and History account choices take precedence.
+- Existing Codex terminal processes keep their current account until restart. Existing chats retain their conversation account; workspace and History account choices apply when opening a conversation.
 - Usage readouts follow the workspace account when one is assigned, otherwise the host selection. A running terminal can still retain an earlier launch account.
 - The restart chip preserves the active account at the time of restart.
 - Accounts belong to the machine that runs the agent. On a [Remote Orca Server](/docs/remote-servers), add them on that server.

@@ -12,6 +12,9 @@ export function workspaceAccountUsage(
     return state[provider]
   }
   const primary = state[provider]
+  if (primary?.usageMetadata?.unverifiableOwner) {
+    return { ...primary, session: null, weekly: null, fableWeekly: null, extraUsage: null }
+  }
   const cached = (
     provider === 'codex' ? state.inactiveCodexAccounts : state.inactiveClaudeAccounts
   ).find((entry) => entry.accountId === accountId)

@@ -210,6 +210,7 @@ export function buildAiVaultLocalResumeStartup(
       platform,
       commandOverride: args.commandOverride,
       codexHome,
+      accountHome,
       // Fallbacks also handle non-resumable agents; quote for the live Windows shell like startup plans.
       shell: liveShell,
       clearEnvNames

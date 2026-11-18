@@ -1,9 +1,11 @@
+import { HistoryLaunchReceipts } from './history-launch-receipts'
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { z } from 'zod'
 import { writeFileDurable, durableWriteTempPath } from '../../filesystem/durable-file-write'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import type { HistoryContinuation } from '../../../shared/ai-vault/resume/history-resume-accounts'
+import { historyTranscriptKey } from '../../../shared/ai-vault/resume/history-transcript-identity'
 
 const schema = z.array(
   z.object({
@@ -12,6 +14,9 @@ const schema = z.array(
     filePath: z.string(),
     home: z.string(),
     rootSessionId: z.string(),
+    rootTranscriptKey: z.string().optional(),
+    preparedAccountId: z.string().nullable().optional(),
+    parentTranscriptKey: z.string().optional(),
     parentSessionId: z.string().optional(),
     accountId: z.string().nullable().optional(),
     openedAt: z.number()
@@ -20,7 +25,10 @@ const schema = z.array(
 
 export class HistoryContinuationLedger {
   private queue: Promise<unknown> = Promise.resolve()
-  constructor(private readonly path: string) {}
+  readonly launchReceipts: HistoryLaunchReceipts
+  constructor(private readonly path: string) {
+    this.launchReceipts = new HistoryLaunchReceipts(`${path}.launch-pins.json`)
+  }
 
   async list(): Promise<HistoryContinuation[]> {
     await this.queue
@@ -43,15 +51,23 @@ export class HistoryContinuationLedger {
       const rows = await this.read()
       if (
         entry.openedAt === 0 &&
-        rows.some((row) => row.provider === entry.provider && row.sessionId === entry.sessionId)
+        rows.some(
+          (row) =>
+            historyTranscriptKey(row.provider, row.filePath) ===
+            historyTranscriptKey(entry.provider, entry.filePath)
+        )
       ) {
         return
       }
       const previous = rows.find(
-        (row) => row.provider === entry.provider && row.sessionId === entry.sessionId
+        (row) =>
+          historyTranscriptKey(row.provider, row.filePath) ===
+          historyTranscriptKey(entry.provider, entry.filePath)
       )
       const retained = rows.filter(
-        (row) => row.provider !== entry.provider || row.sessionId !== entry.sessionId
+        (row) =>
+          historyTranscriptKey(row.provider, row.filePath) !==
+          historyTranscriptKey(entry.provider, entry.filePath)
       )
       await mkdir(dirname(this.path), { recursive: true })
       await writeFileDurable(

@@ -1,8 +1,12 @@
-import { HistoryAccountContext, historyAccountInfo } from '../accounts/history-account-context'
+import {
+  useHistoryAccountFilter,
+  useHistoryAccountSessions,
+  historyConversationCountLabel
+} from '../accounts/history-account-filter-options'
+import { HistoryAccountContext } from '../accounts/history-account-context'
 import { useHistoryAccountCatalogs } from '../accounts/use-history-account-catalogs'
 import { HistoryAccountFilter } from '../accounts/HistoryAccountFilter'
-import { groupHistoryContinuations } from '../accounts/history-continuation-groups'
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
@@ -25,8 +29,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import {
   aiVaultResultCountLabel,
-  AiVaultSessionListBar,
-  aiVaultSessionCountLabel
+  AiVaultSessionListBar
 } from '../session-list/AiVaultSessionListBar'
 import { aiVaultBrowseSortMenu, aiVaultSearchSortMenu } from '../scope/ai-vault-sort-options'
 import { AiVaultShowMoreSessionsRow } from '../session-list/AiVaultShowMoreSessionsRow'
@@ -182,23 +185,8 @@ export default function AiVaultPanel({
     history
   )
   const accountCatalogs = useHistoryAccountCatalogs(resolverSessions, scanResult?.scannedAt)
-  const [accountFilter, setAccountFilter] = useState<string>('all')
-  const accountSessions = useMemo(
-    () =>
-      accountFilter === 'all'
-        ? groupHistoryContinuations(sessions, accountCatalogs)
-        : groupHistoryContinuations(sessions, accountCatalogs, (session) => {
-            const sourceId = historyAccountInfo(
-              session,
-              accountCatalogs[session.executionHostId]
-            )?.sourceId
-            return (
-              sourceId !== undefined &&
-              JSON.stringify([session.executionHostId, session.agent, sourceId]) === accountFilter
-            )
-          }),
-    [sessions, accountFilter, accountCatalogs]
-  )
+  const [accountFilter, setAccountFilter] = useHistoryAccountFilter(accountCatalogs)
+  const accountSessions = useHistoryAccountSessions(sessions, accountCatalogs, accountFilter)
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
     scopeOnly: scope !== 'all',
@@ -347,7 +335,12 @@ export default function AiVaultPanel({
               )
             : sessions.length > 0 && (
                 <AiVaultSessionListBar
-                  label={aiVaultSessionCountLabel(filteredSessions.length, sessions.length, t)}
+                  label={historyConversationCountLabel(
+                    sessions,
+                    accountCatalogs,
+                    filteredSessions.length,
+                    t
+                  )}
                   value={sort}
                   menu={aiVaultBrowseSortMenu(t)}
                   onChange={setSort}

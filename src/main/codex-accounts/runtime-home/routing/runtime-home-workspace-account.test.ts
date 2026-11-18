@@ -54,8 +54,9 @@ it('launches workspace accounts in separate homes while other workspaces inherit
     codexWorkspaceAccounts: { 'folder:client': 'account-b', 'project::C:/work/client': 'account-b' }
   })
   const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
+  const store = createStore(settings)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements the store methods exercised by runtime-home routing.
-  const service = new CodexRuntimeHomeService(createStore(settings) as never)
+  const service = new CodexRuntimeHomeService(store as never)
 
   expect(
     service.prepareForCodexLaunch(undefined, undefined, { workspaceId: 'folder:client' })
@@ -71,11 +72,13 @@ it('launches workspace accounts in separate homes while other workspaces inherit
   ).toBe(homeA)
   expect(readFileSync(join(homeA, 'auth.json'), 'utf8')).toBe(authA)
   expect(readFileSync(join(homeB, 'auth.json'), 'utf8')).toBe(authB)
-  expect(settings.activeCodexManagedAccountId).toBe('account-a')
+  expect(store.getSettings().activeCodexManagedAccountId).toBe('account-a')
 
-  settings.codexManagedAccounts = settings.codexManagedAccounts.filter(
-    (account) => account.id !== 'account-b'
-  )
+  store.updateSettings({
+    codexManagedAccounts: store
+      .getSettings()
+      .codexManagedAccounts.filter((account) => account.id !== 'account-b')
+  })
   expect(() =>
     service.prepareForCodexLaunch(undefined, undefined, { workspaceId: 'folder:client' })
   ).toThrow('The Codex account assigned to this workspace was removed.')

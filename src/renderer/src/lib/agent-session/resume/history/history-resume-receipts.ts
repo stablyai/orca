@@ -8,6 +8,7 @@ import type { AppState } from '@/store/types'
 
 export async function waitForHistoryTerminalOpen(tabId: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
+    let appeared = false
     const finish = (error?: Error) => {
       unsubscribe()
       clearTimeout(timeout)
@@ -19,8 +20,13 @@ export async function waitForHistoryTerminalOpen(tabId: string): Promise<void> {
     }
     const inspect = (state: AppState) => {
       if (!state.terminalLayoutsByTabId[tabId]) {
-        finish(new DOMException('Resume cancelled', 'AbortError'))
-      } else if (state.ptyIdsByTabId[tabId]?.length) {
+        if (appeared) {
+          finish(new DOMException('Resume cancelled', 'AbortError'))
+        }
+        return
+      }
+      appeared = true
+      if (state.ptyIdsByTabId[tabId]?.length) {
         finish()
       } else {
         const failure = Object.entries(state.terminalPaneStartsByPaneKey).find(
@@ -49,15 +55,30 @@ export async function commitHistorySessionResume(
   if (!session.resumeReceipt) {
     return
   }
-  await window.api.aiVault.prepareSessionResume({
-    agent: session.agent,
-    sessionId: session.sessionId,
-    filePath: session.filePath,
-    codexHome: session.codexHome,
-    executionHostId: session.executionHostId,
-    commitToken: session.resumeReceipt
-  })
-  window.dispatchEvent(new Event('orca-history-continuations-changed'))
+  try {
+    await window.api.aiVault.prepareSessionResume({
+      agent: session.agent,
+      sessionId: session.sessionId,
+      filePath: session.filePath,
+      codexHome: session.codexHome,
+      executionHostId: session.executionHostId,
+      commitToken: session.resumeReceipt
+    })
+    window.dispatchEvent(new Event('orca-history-continuations-changed'))
+  } catch (error) {
+    toast.error(
+      'The terminal opened, but History could not record its account. Retry saving History.',
+      {
+        action: {
+          label: 'Retry',
+          onClick: () => {
+            void commitHistorySessionResume(session)
+          }
+        },
+        description: error instanceof Error ? error.message : String(error)
+      }
+    )
+  }
 }
 
 export async function commitHistoryDropResume(
@@ -69,9 +90,12 @@ export async function commitHistoryDropResume(
     return
   }
   try {
-    if (tabId) {
-      await waitForHistoryTerminalOpen(tabId)
+    if (!tabId) {
+      throw new Error(
+        'The resumed terminal could not be verified. History has not recorded an account change.'
+      )
     }
+    await waitForHistoryTerminalOpen(tabId)
     await commitHistorySessionResume({
       agent: payload.agent,
       sessionId: result.substituteSessionId ?? payload.sessionId,

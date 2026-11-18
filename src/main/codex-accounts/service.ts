@@ -212,6 +212,7 @@ export class CodexAccountService {
     sourceHome: string,
     target?: CodexAccountImportOptions
   ): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
     return this.serializeMutation(() => this.registration.addFromHome(sourceHome, target))
   }
 

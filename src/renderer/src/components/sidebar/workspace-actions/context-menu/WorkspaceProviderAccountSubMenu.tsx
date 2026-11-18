@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { UserRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { notifyWorkspaceAccountSettingsChanged } from '@/runtime/provider-accounts/observations/workspace-account-settings-changes'
@@ -59,6 +59,9 @@ export function WorkspaceProviderAccountSubMenu({
   const [saving, setSaving] = useState(false)
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   const targetKind = target?.kind
+  const ownerKey = `${targetKind ?? 'none'}:${environmentId ?? ''}:${worktree.id}:${provider}`
+  const ownerRef = useRef(ownerKey)
+  ownerRef.current = ownerKey
   const key = workspaceAccountKey(worktree.id)
 
   useEffect(() => {
@@ -135,6 +138,9 @@ export function WorkspaceProviderAccountSubMenu({
           accountId: value === 'inherit' ? null : value
         }
       })
+      if (ownerRef.current !== ownerKey) {
+        return
+      }
       setSelection((previous) =>
         previous ? { ...previous, bindings: result.settings[bindingKey] ?? {} } : previous
       )
@@ -195,12 +201,14 @@ export function WorkspaceProviderAccountSubMenu({
       provider={name}
       accounts={accounts}
       selectedId={selectedId}
-      loading={!selection}
+      loading={!selection && Boolean(target) && !wslHost}
       saving={saving || disabled || !target}
       error={
         wslHost
           ? t('workspace.codexAccount.wslHost', 'This WSL host uses the desktop account selection.')
-          : error
+          : !target
+            ? 'Account selection is unavailable on direct SSH hosts.'
+            : error
       }
       onSelect={(value) => void save(value)}
     />

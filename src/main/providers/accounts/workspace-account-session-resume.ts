@@ -9,13 +9,20 @@ import type { HistoryResumePlanner } from './history-resume-planner'
 export class WorkspaceAccountSessionResume {
   constructor(private readonly planner: HistoryResumePlanner) {}
 
-  accountForSession(provider: 'codex' | 'claude', sessionId: string) {
-    return this.planner.accountForSession(provider, sessionId)
+  accountForReceipt(token: string, provider: 'codex' | 'claude', workspaceId?: string) {
+    return this.planner.accountForReceipt(token, provider, workspaceId)
   }
 
   async prepare(
     args: AiVaultPrepareSessionResumeArgs
   ): Promise<AiVaultPrepareSessionResumeResult | null> {
+    if (
+      !args.commitToken &&
+      !args.historyCatalog &&
+      (!args.workspaceId || args.fork || (args.agent !== 'codex' && args.agent !== 'claude'))
+    ) {
+      return null
+    }
     if (args.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
       throw new Error('Continue this session on the host that owns it.')
     }
@@ -39,18 +46,17 @@ export function installWorkspaceAccountSessionResume(service: WorkspaceAccountSe
 export function prepareWorkspaceAccountSessionResume(args: AiVaultPrepareSessionResumeArgs) {
   return installed?.prepare(args) ?? Promise.resolve(null)
 }
-export function historyContinuationAccount(provider: 'codex' | 'claude', sessionId: string) {
-  return installed?.accountForSession(provider, sessionId) ?? Promise.resolve(null)
-}
-export async function historyContinuationAccountHome(provider: string, sessionId: string) {
-  if (provider !== 'codex' && provider !== 'claude') {
+export async function historyLaunchAccount(
+  env: NodeJS.ProcessEnv | undefined,
+  provider: 'codex' | 'claude',
+  workspaceId?: string
+) {
+  const token = env?.ORCA_HISTORY_RESUME_RECEIPT
+  if (!token) {
     return null
   }
-  const account = await historyContinuationAccount(provider, sessionId)
-  return account
-    ? {
-        variable: provider === 'codex' ? ('CODEX_HOME' as const) : ('CLAUDE_CONFIG_DIR' as const),
-        path: account.home
-      }
-    : null
+  if (!installed) {
+    throw new Error('History account preparation is unavailable on this host.')
+  }
+  return installed.accountForReceipt(token, provider, workspaceId)
 }

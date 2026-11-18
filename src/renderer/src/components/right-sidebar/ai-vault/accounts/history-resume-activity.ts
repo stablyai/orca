@@ -5,9 +5,14 @@ export const useHistoryResumeActivity = create<{ entries: Record<string, Activit
   entries: {}
 }))
 export function historyResumeActivityKey(
-  session: Pick<AiVaultSession, 'executionHostId' | 'agent' | 'sessionId'>
+  session: Pick<AiVaultSession, 'executionHostId' | 'agent' | 'sessionId' | 'filePath'>
 ): string {
-  return JSON.stringify([session.executionHostId, session.agent, session.sessionId])
+  return JSON.stringify([
+    session.executionHostId,
+    session.agent,
+    session.sessionId,
+    session.filePath
+  ])
 }
 export function setHistoryResumeActivity(key: string, value?: Activity) {
   useHistoryResumeActivity.setState((state) => {

@@ -24,7 +24,10 @@ import { getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
 import type { CodexHomeLaunchOptions } from '../runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
-  private workspaceAccount(workspaceId?: string): CodexManagedAccount | null {
+  private workspaceAccount(
+    workspaceId?: string,
+    target?: CodexAccountSelectionTarget
+  ): CodexManagedAccount | null {
     const settings = this.store.getSettings()
     const id = codexWorkspaceAccountId(settings.codexWorkspaceAccounts, workspaceId)
     if (!id) {
@@ -35,6 +38,9 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       throw new Error(
         'The Codex account assigned to this workspace was removed. Choose another account.'
       )
+    }
+    if ((account.managedHomeRuntime === 'wsl') !== (target?.runtime === 'wsl')) {
+      return null
     }
     return account
   }
@@ -81,7 +87,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     launchEnv?: NodeJS.ProcessEnv,
     options?: CodexHomeLaunchOptions
   ): string | null {
-    const workspaceAccount = this.workspaceAccount(options?.workspaceId)
+    const workspaceAccount = this.workspaceAccount(options?.workspaceId, target)
     if (workspaceAccount) {
       const home = this.workspaceAccountHome(workspaceAccount, target)
       if (target?.runtime === 'wsl') {
@@ -179,7 +185,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     launchEnv?: NodeJS.ProcessEnv,
     options?: CodexHomeLaunchOptions
   ): Promise<string | null> {
-    const workspaceAccount = this.workspaceAccount(options?.workspaceId)
+    const workspaceAccount = this.workspaceAccount(options?.workspaceId, target)
     if (workspaceAccount) {
       const home = this.workspaceAccountHome(workspaceAccount, target)
       if (target?.runtime === 'wsl') {
@@ -187,9 +193,13 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
         if (await blockedWslDistroForExec(wslTarget.wslDistro)) {
           return home
         }
+        await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
         await this.prepareWslAccountHistory(wslTarget, home)
       } else {
         await this.prepareAccountHistory(home)
+      }
+      if (this.workspaceAccount(options?.workspaceId, target)?.id !== workspaceAccount.id) {
+        throw new Error('The workspace Codex account changed during preparation. Launch again.')
       }
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }

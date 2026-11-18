@@ -47,6 +47,9 @@ export function isProviderConfigured(
   provider: ProviderRateLimits | null | undefined
 ): provider is ProviderRateLimits {
   // Older main processes may omit newer provider keys during HMR.
+  if (provider?.usageMetadata?.contextAccountId && !provider.usageMetadata.unverifiableOwner) {
+    return true
+  }
   if (provider == null || provider.status === 'unavailable') {
     return false
   }

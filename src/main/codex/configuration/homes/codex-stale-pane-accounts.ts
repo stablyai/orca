@@ -21,11 +21,13 @@ export function listStaleCodexPanes(args: {
   const records = listRecordedCodexPaneAccounts(args.ptyIds)
   for (const ptyId of args.ptyIds) {
     const record = records.get(ptyId)
-    if (!record) {
+    if (!record || record.pinnedByResume) {
       continue
     }
     const activeAccountId =
-      codexWorkspaceAccountId(args.settings.codexWorkspaceAccounts, record.workspaceId) ??
+      (record.pinnedByWorkspace
+        ? codexWorkspaceAccountId(args.settings.codexWorkspaceAccounts, record.workspaceId)
+        : undefined) ??
       getSelectedCodexAccountIdForTarget(args.settings, parseSelectionLaneKey(record.selectionKey))
     if (record.accountId !== activeAccountId) {
       stalePanes.push({ ptyId, launchAccountId: record.accountId, activeAccountId })

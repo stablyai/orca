@@ -36,6 +36,7 @@ export function resolveCodexPaneLaunchAccount(args: {
   }
   return {
     selectionKey: getCodexSelectionLaneKey(args.target),
+    ...(args.pinnedByResume ? { pinnedByResume: true } : {}),
     accountId,
     homeRoute: resolveCodexPaneHomeRoute(args)
   }

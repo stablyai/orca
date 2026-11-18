@@ -76,5 +76,6 @@ export function allocatePtyLifecycleSequence(): number {
 
 export type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget,
-  workspaceId?: string
+  workspaceId?: string,
+  launchEnv?: NodeJS.ProcessEnv
 ) => Promise<ClaudeRuntimeAuthPreparation>

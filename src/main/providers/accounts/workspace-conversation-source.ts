@@ -23,6 +23,7 @@ export async function verifiedWorkspaceConversation(args: {
   let sourceHome: string | null = null
   let historyRoot: string | null = null
   let sourcePath = filePath
+  const candidates: { home: string; root: string; path: string; logical: boolean }[] = []
   for (const root of args.roots) {
     const physicalRoot = await realpath(root).catch(() => null)
     if (!physicalRoot) {
@@ -40,10 +41,29 @@ export async function verifiedWorkspaceConversation(args: {
     ) {
       continue
     }
-    sourceHome = home
-    historyRoot = logicalRoot
-    sourcePath = logicalPath
-    break
+    const requested = relative(resolve(root), resolve(args.filePath))
+    const logical =
+      requested !== '' &&
+      requested !== '..' &&
+      !requested.startsWith(`..${sep}`) &&
+      !isAbsolute(requested)
+    candidates.push({ home, root: logicalRoot, path: logicalPath, logical })
+  }
+  const logical = candidates.filter((candidate) => candidate.logical)
+  const eligible = logical.length ? logical : candidates
+  const homes = new Set(
+    eligible.map((candidate) => normalizeRuntimePathForComparison(candidate.home))
+  )
+  if (homes.size > 1) {
+    throw new Error(
+      'This shared transcript belongs to several account homes. Choose its source home in History.'
+    )
+  }
+  const selected = eligible[0]
+  if (selected) {
+    sourceHome = selected.home
+    historyRoot = selected.root
+    sourcePath = selected.path
   }
   if (!sourceHome || !historyRoot) {
     throw new Error(

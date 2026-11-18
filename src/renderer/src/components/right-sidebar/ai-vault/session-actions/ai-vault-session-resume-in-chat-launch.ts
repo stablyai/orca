@@ -62,6 +62,7 @@ export async function resumeAiVaultSessionInNewChat(
   const activityKey = historyResumeActivityKey(session)
   const activity = useHistoryResumeActivity.getState().entries[activityKey]
   if (activity && activity.phase !== 'error') {
+    replacing?.onSettled(null)
     return
   }
   setHistoryResumeActivity(activityKey, { phase: 'preparing' })

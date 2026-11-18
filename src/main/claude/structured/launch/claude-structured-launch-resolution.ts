@@ -272,7 +272,8 @@ export function claudeStructuredLaunchPart(
       env,
       accountHome.path,
       record.location.workspaceId,
-      providerSessionId
+      fork?.sourceSessionId ?? head?.nativeId,
+      record
     )
     const launchHome = accountRecipe.home
     // Read the config of the account directory the spawn pins, as session acquisition does.

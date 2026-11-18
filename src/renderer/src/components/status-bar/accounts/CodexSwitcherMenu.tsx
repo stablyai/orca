@@ -73,7 +73,7 @@ export function CodexSwitcherMenu({
   const rows = (selectedGroup?.targets ?? []).map((target) => {
     const usageKey =
       target.id ??
-      (!hasActiveRuntimeEnvironment && target.runtimeTarget.runtime === 'host'
+      (target.runtimeTarget.runtime === 'host'
         ? codexSystemDefaultUsageKey(accountState.systemDefault)
         : null)
     const inactiveUsage = usageKey
@@ -130,7 +130,9 @@ export function CodexSwitcherMenu({
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
     if (active) {
-      return defaultCodex ? (
+      return defaultCodex &&
+        (defaultCodex.usageMetadata?.readingAccount?.accountId ?? null) ===
+          (selectedGroup?.targets.find((target) => target.active)?.id ?? null) ? (
         <AccountUsageGauge limits={defaultCodex} isFetching={defaultCodex.status === 'fetching'} />
       ) : null
     }

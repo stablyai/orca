@@ -197,8 +197,8 @@ async function workspaceResumeRequest(
     settings: {
       historyResumeAccountsSupported?: boolean
     }
-  }>(target, 'settings.get', undefined)
-  return snapshot.settings.historyResumeAccountsSupported === true
+  }>(target, 'settings.get', undefined).catch(() => null)
+  return snapshot?.settings.historyResumeAccountsSupported === true
     ? {
         ...args,
         workspaceId,

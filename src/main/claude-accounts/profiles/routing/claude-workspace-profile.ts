@@ -50,7 +50,7 @@ export class ClaudeWorkspaceProfiles {
       (account.managedAuthRuntime === 'wsl') !== isWsl ||
       (isWsl && account.wslDistro?.toLowerCase() !== target.wslDistro?.toLowerCase())
     ) {
-      throw new Error('The workspace Claude account belongs to another host or WSL distro.')
+      return null
     }
     const folder = prepare
       ? await this.prepareFolder(id, target)

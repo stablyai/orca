@@ -1,28 +1,27 @@
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { acquiredAgentSessionAccount } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-router'
 import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { resolveStructuredClaudeAccountHomePath } from '../../../runtime/agent-session/environment/structured-agent-account-home'
 import { getClaudeWorkspaceProfiles } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
-import { historyContinuationAccount } from '../../../providers/accounts/workspace-account-session-resume'
 
-/** The account a launch runs under is the current selection; the receipt records what it used. */
+/** Existing conversations keep their acquired account; fresh chats resolve the workspace selection. */
 export async function prepareClaudeLaunchAccount(
   router: ClaudeProfileRouter | undefined,
   env: Record<string, string>,
   recordHome: string,
   workspaceId?: string,
-  providerSessionId?: string
+  providerSessionId?: string,
+  record?: AgentSessionRecord
 ): Promise<ClaudeAccountRecipe> {
-  const pinned = providerSessionId
-    ? await historyContinuationAccount('claude', providerSessionId)
-    : null
-  if (pinned) {
-    env.CLAUDE_CONFIG_DIR = pinned.home
+  if (providerSessionId) {
+    const acquired = record ? acquiredAgentSessionAccount(record)?.recipe : undefined
+    recordHome = acquired?.home ?? recordHome
+    env.CLAUDE_CONFIG_DIR = recordHome
     env.ORCA_CLAUDE_PROFILE_POINTER = ''
-    env.ORCA_CLAUDE_INJECTED_CONFIG_DIR = pinned.home
-    return pinned.accountId === null
-      ? { route: 'system', home: pinned.home, configDir: pinned.home }
-      : { route: 'managed', accountId: pinned.accountId, home: pinned.home }
+    env.ORCA_CLAUDE_INJECTED_CONFIG_DIR = recordHome
+    return acquired ?? { route: 'system', home: recordHome, configDir: recordHome }
   }
   const workspace = await getClaudeWorkspaceProfiles()?.resolve(
     workspaceId,

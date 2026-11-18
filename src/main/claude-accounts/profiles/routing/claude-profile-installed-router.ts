@@ -53,6 +53,9 @@ export function withClaudeProfileTerminalEnv<Env extends Record<string, string> 
   env: Env,
   target: ClaudeAccountSelectionTarget
 ): Env | Record<string, string> {
+  if (env?.CLAUDE_CONFIG_DIR && env.ORCA_CLAUDE_PROFILE_POINTER === '') {
+    return env
+  }
   const profileEnv = installed?.terminalEnv(target)
   return profileEnv ? { ...env, ...profileEnv } : env
 }

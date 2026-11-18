@@ -29,7 +29,7 @@ it('assigns a Claude account atomically and keeps its history private after clea
   )
   expect(
     assigned.claudeManagedAccounts?.find((entry) => entry.id === 'personal')?.privateHistory
-  ).toBeUndefined()
+  ).toBe(true)
   const cleared = {
     ...settings,
     ...assigned,

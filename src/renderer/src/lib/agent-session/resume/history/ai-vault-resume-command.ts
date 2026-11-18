@@ -41,7 +41,7 @@ export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWork
 export function buildAiVaultResumeStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup {
-  const startup = {
+  let startup = {
     ...buildAiVaultResumeForWorktree(args, false),
     ...(args.session.resumeReceipt
       ? {
@@ -55,6 +55,12 @@ export function buildAiVaultResumeStartupForWorktree(
           }
         }
       : {})
+  }
+  if (args.session.resumeReceipt) {
+    startup = {
+      ...startup,
+      env: { ...startup.env, ORCA_HISTORY_RESUME_RECEIPT: args.session.resumeReceipt }
+    }
   }
   const home = args.session.accountHome
   if (
@@ -91,6 +97,7 @@ export function buildAiVaultDropRepinStartup(args: {
   substituteCodexHome?: string
   substituteClaudeConfigDir?: string
   substituteTranscriptPath?: string
+  resumeReceipt?: string
   worktreeId: string
 }): AiVaultResumeStartup | null {
   if (args.payload.sessionCwd === undefined || !args.payload.sessionFilePath) {
@@ -101,6 +108,7 @@ export function buildAiVaultDropRepinStartup(args: {
     worktreeId: args.worktreeId,
     session: {
       agent: args.payload.agent,
+      resumeReceipt: args.resumeReceipt,
       sessionId: args.payload.sessionId,
       cwd: args.payload.sessionCwd,
       codexHome: args.substituteCodexHome ?? args.payload.codexHome ?? null,

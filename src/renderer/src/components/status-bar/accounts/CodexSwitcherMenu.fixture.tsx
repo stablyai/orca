@@ -188,8 +188,13 @@ function switcherFixture(
       }
   function CodexSwitcherFixture() {
     const local = useAppStore((state) => state.rateLimits)
-    const usage = remote ? ownerUsage : { ...ownerUsage, rateLimits: local }
-    const shownCodex = workspaceCodexUsage(usage.rateLimits, workspaceAccountId) ?? codex
+    const raw = remote ? ownerUsage : { ...ownerUsage, rateLimits: local }
+    const shownCodex = workspaceCodexUsage(raw.rateLimits, workspaceAccountId) ?? codex
+    const usage = {
+      ...raw,
+      accountRateLimits: raw.rateLimits,
+      rateLimits: { ...raw.rateLimits, codex: shownCodex }
+    }
     return (
       <div className="flex h-[760px] items-end bg-background p-3">
         {asSubmenu ? (
@@ -317,7 +322,11 @@ export const inactiveSystemDefault = (() => {
           ...(fixture.store?.rateLimits?.inactiveCodexAccounts ?? []),
           {
             accountId: codexSystemDefaultUsageKey(identity)!,
-            rateLimits: { ...usageFor({ ...BASE_ACCOUNTS[0], weekly: 17 }), session: null },
+            rateLimits: {
+              ...usageFor({ ...BASE_ACCOUNTS[0], weekly: 17 }),
+              session: null,
+              usageMetadata: undefined
+            },
             updatedAt: NOW,
             isFetching: false
           }

@@ -3,6 +3,7 @@ import type { UsageReadingAccount } from '../../../../shared/agent-usage/rate-li
 
 export type CodexRateLimitFetchOptions = {
   codexHomePath?: string | null
+  authSnapshot?: string
   /** The saved account that owns `codexHomePath`; named on a successful reading. */
   readingAccount?: UsageReadingAccount
   networkProxySettings?: NetworkProxySettings

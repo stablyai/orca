@@ -23,8 +23,9 @@ export async function importClaudeHome(
       'Import Claude profiles on their native host. Use the WSL sign-in flow for a WSL account.'
     )
   }
-  const source = await realpath(resolve(sourceHome.trim()))
-  const statePath = claudeStateFile(source)
+  const source = await realpath(resolve(sourceHome))
+  const systemHome = await realpath(join(homedir(), '.claude')).catch(() => null)
+  const statePath = claudeStateFile(source === systemHome ? undefined : source)
   const login = await readClaudeFolderLoginAsync(statePath)
   const state = readClaudeProfileObject(statePath)
   if (!login || state.kind !== 'present') {
@@ -32,8 +33,7 @@ export async function importClaudeHome(
   }
   let credentials: string | null = null
   if (process.platform === 'darwin') {
-    credentials = await readActiveClaudeKeychainCredentialsStrict(resolve(sourceHome.trim()))
-    const systemHome = await realpath(join(homedir(), '.claude')).catch(() => null)
+    credentials = await readActiveClaudeKeychainCredentialsStrict(resolve(sourceHome))
     if (!credentials && source === systemHome) {
       credentials = await readActiveClaudeKeychainCredentialsStrict()
     }

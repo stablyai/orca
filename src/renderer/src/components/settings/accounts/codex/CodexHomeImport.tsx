@@ -21,6 +21,7 @@ export function CodexHomeImportForm(props: Props & { onImported: () => void }) {
   return (
     <AccountHomeImportForm
       {...props}
+      disabled={props.disabled || props.runtime.runtime === 'wsl'}
       provider="Codex"
       importAccount={(path, history) => importAccount(props.runtime, path, history)}
     />
@@ -31,6 +32,7 @@ export function CodexHomeImport(props: Props) {
   return (
     <AccountHomeImport
       {...props}
+      disabled={props.disabled || props.runtime.runtime === 'wsl'}
       provider="Codex"
       importAccount={(path, history) => importAccount(props.runtime, path, history)}
     />

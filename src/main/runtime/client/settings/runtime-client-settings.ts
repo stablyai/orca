@@ -168,7 +168,9 @@ export class RuntimeClientSettingsController {
         ...otherUpdates,
         ...workspaceAccountSettingUpdates(beforeSettings, {
           claudeWorkspaceAccount,
-          codexWorkspaceAccount
+          codexWorkspaceAccount,
+          codexWorkspaceAccounts: updates.codexWorkspaceAccounts,
+          claudeWorkspaceAccounts: updates.claudeWorkspaceAccounts
         }),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined

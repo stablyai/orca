@@ -213,6 +213,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         ...(reportingAccount ? { readingAccount: reportingAccount } : {})
       }
     }
+    if (inactiveAccount) {
+      this.inactiveClaudeLiveUsage.set(inactiveAccount.accountId, live)
+    }
     if (!inactiveAccount) {
       this.liveClaudeUsage = live
       this.rememberUsageReadingAccount(

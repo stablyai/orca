@@ -1,4 +1,5 @@
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import { historyResumeActivityKey, useHistoryResumeActivity } from './history-resume-activity'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useHistoryAccountContext } from './history-account-context'
@@ -13,6 +14,7 @@ export function HistorySessionContinuations({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const { catalogs } = useHistoryAccountContext()
+  const entries = useHistoryResumeActivity((state) => state.entries)
   if (!session.continuationVersions || session.continuationVersions.length < 2) {
     return null
   }
@@ -34,18 +36,27 @@ export function HistorySessionContinuations({
               : (account?.displayName ??
                 account?.email ??
                 t('historyResume.lastUnknown', 'Last used account not recorded'))
+          const activity =
+            entries[
+              historyResumeActivityKey({
+                ...session,
+                sessionId: version.sessionId,
+                filePath: version.filePath
+              })
+            ]
           return (
             <Button
-              key={version.sessionId}
+              key={version.filePath}
               variant="ghost"
               size="xs"
               className="w-full justify-start"
-              disabled={!onResume}
+              disabled={!onResume || Boolean(activity && activity.phase !== 'error')}
               onClick={() =>
                 onResume?.({
                   ...session,
                   sessionId: version.sessionId,
                   filePath: version.filePath,
+                  resumeCommand: '',
                   codexHome: version.provider === 'codex' ? version.home : null,
                   accountHome: {
                     variable: version.provider === 'codex' ? 'CODEX_HOME' : 'CLAUDE_CONFIG_DIR',

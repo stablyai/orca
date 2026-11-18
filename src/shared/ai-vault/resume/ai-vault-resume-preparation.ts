@@ -124,6 +124,13 @@ export function aiVaultTerminalResumeResult(
 ): AiVaultPrepareSessionResumeResult {
   if (
     typeof result?.useRealCodexHome !== 'boolean' ||
+    (result.workspaceAccountPrepared === true &&
+      [
+        result.substituteSessionId,
+        result.substituteTranscriptPath,
+        result.resumeReceipt,
+        args.agent === 'codex' ? result.substituteCodexHome : result.substituteClaudeConfigDir
+      ].some((value) => typeof value !== 'string' || !value.trim())) ||
     (result.workspaceAccountPrepared !== undefined &&
       typeof result.workspaceAccountPrepared !== 'boolean') ||
     [

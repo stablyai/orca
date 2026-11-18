@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as DistroCatalog from '../../wsl/discovery/distro-catalog'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { verifiedWorkspaceConversation } from './workspace-conversation-source'
@@ -23,7 +23,7 @@ vi.mock('../../wsl/discovery/distro-catalog', async (original) => ({
 const sessionId = '00000000-0000-4000-8000-000000000002'
 let root: string
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-history-resume-'))
+  root = await realpath(await mkdtemp(join(tmpdir(), 'orca-history-resume-')))
   vi.stubEnv('CODEX_HOME', join(root, 'default-home'))
 })
 afterEach(async () => {

@@ -1,7 +1,6 @@
 import { codexBotToolsThreadConfig } from '../../../bots/bot-tools-codex'
 import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
 import { pathEnvRelativeTo } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
-import { historyContinuationAccount } from '../../../providers/accounts/workspace-account-session-resume'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
@@ -153,9 +152,8 @@ export function codexStructuredLaunchPart(
     const model = record.options?.model
     const visuals = await basis.visuals()
     const launchDirectory = await basis.launchDirectory()
-    const pinned = resumeThreadId ? await historyContinuationAccount('codex', resumeThreadId) : null
-    const selectedHome = pinned
-      ? { variable: 'CODEX_HOME' as const, path: pinned.home }
+    const selectedHome = resumeThreadId
+      ? record.accountHome
       : await deps.prepareLaunchAccountHome?.(record, launchDirectory)
     const accountHome = selectedHome
       ? requireLegacyAgentSessionAccountHome(selectedHome)

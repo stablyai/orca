@@ -54,6 +54,6 @@ it('retains the owning host trust state when showing cached workspace usage', ()
     ]
   })
   const result = workspaceCodexUsage(state, 'work')
-  expect(result?.session?.usedPercent).toBe(27)
+  expect(result?.session).toBeNull()
   expect(result?.usageMetadata?.unverifiableOwner).toBe(true)
 })

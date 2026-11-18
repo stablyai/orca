@@ -1,3 +1,4 @@
+import { getZoneOverlayStyle } from './ai-vault-drop-overlay-geometry'
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
@@ -31,26 +32,6 @@ type PaneDropTarget = {
   groupId: string
   zone: TabDropZone
   overlayStyle: CSSProperties
-}
-
-function getZoneOverlayStyle(rect: DOMRect, layerRect: DOMRect, zone: TabDropZone): CSSProperties {
-  const left = rect.left - layerRect.left
-  const top = rect.top - layerRect.top
-  const width = rect.width
-  const height = rect.height
-
-  switch (zone) {
-    case 'up':
-      return { left, top, width, height: height / 2 }
-    case 'down':
-      return { left, top: top + height / 2, width, height: height / 2 }
-    case 'left':
-      return { left, top, width: width / 2, height }
-    case 'right':
-      return { left: left + width / 2, top, width: width / 2, height }
-    case 'center':
-      return { left, top, width, height }
-  }
 }
 
 function containsPoint(rect: DOMRect, x: number, y: number): boolean {
@@ -222,7 +203,11 @@ export default function AiVaultSessionDropLayer({
           )
         )
       }
-      if (!payload.sessionFilePath || !payload.sessionExecutionHostId) {
+      if (
+        !payload.sessionFilePath ||
+        !payload.sessionExecutionHostId ||
+        (payload.agent === 'claude' && payload.sessionCwd === undefined)
+      ) {
         toast.error(
           translate(
             'auto.components.tab.group.AiVaultSessionDropLayer.oldPayload',
@@ -255,6 +240,7 @@ export default function AiVaultSessionDropLayer({
                   substituteCodexHome: result.substituteCodexHome,
                   substituteClaudeConfigDir: result.substituteClaudeConfigDir,
                   substituteTranscriptPath: result.substituteTranscriptPath,
+                  resumeReceipt: result.resumeReceipt,
                   worktreeId
                 })
               : payload
@@ -304,7 +290,7 @@ export default function AiVaultSessionDropLayer({
                 )
                 return
               }
-              void commitHistoryDropResume(payload, result)
+              void commitHistoryDropResume(payload, result, outcome.tabId)
               showQueuedToast()
             })
             return

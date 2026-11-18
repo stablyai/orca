@@ -1,4 +1,5 @@
 import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
+import { historyTranscriptKey } from '../../../../../../shared/ai-vault/resume/history-transcript-identity'
 import { createContext, useContext } from 'react'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import { isLegacyAgentSessionAccountHome } from '../../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
@@ -71,20 +72,21 @@ export function historyAccountInfo(
         normalizeRuntimePathForComparison(catalog.claude.systemDefaultHome)) ||
     (provider === 'codex' && session.codexHome === null) ||
     parts.includes(provider === 'codex' ? '.codex' : '.claude')
-  const sourceId = claudeSource?.id ?? managedId ?? (system ? null : undefined)
+  const sourceId =
+    session.accountHome === null
+      ? null
+      : (claudeSource?.id ?? managedId ?? (system ? null : undefined))
   const source = roster.accounts.find((account) => account.id === sourceId)
   const recorded = catalog.continuations?.find(
-    (entry) => entry.provider === provider && entry.sessionId === session.sessionId
+    (entry) =>
+      historyTranscriptKey(entry.provider, entry.filePath) ===
+      historyTranscriptKey(provider, session.filePath)
   )
   const lastAccountId = recorded?.accountId
   const last = roster.accounts.find((entry) => entry.id === lastAccountId)
-  const defaultEmail =
-    provider === 'codex' ? catalog.codex.systemDefault?.email : catalog.claude.systemDefaultEmail
   const lastAccountLabel =
     lastAccountId === null
-      ? defaultEmail
-        ? `System default · ${defaultEmail}`
-        : 'System default'
+      ? 'System default'
       : last
         ? last.displayName
           ? `${last.displayName} · ${last.email}`

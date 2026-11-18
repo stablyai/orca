@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, realpath, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HistoryResumePlanner } from './history-resume-planner'
@@ -14,8 +14,9 @@ let args: AiVaultPrepareSessionResumeArgs
 let workspaceAccountId: string | undefined
 let workAvailable = true
 let original: string
+let failIndex = false
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-resume-plan-'))
+  root = await realpath(await mkdtemp(join(tmpdir(), 'orca-resume-plan-')))
   const home = join(root, 'system')
   const target = join(root, 'work')
   const workspace = join(root, 'workspace')
@@ -28,6 +29,7 @@ beforeEach(async () => {
   ledger = new HistoryContinuationLedger(join(root, 'ledger.json'))
   workspaceAccountId = undefined
   workAvailable = true
+  failIndex = false
   planner = new HistoryResumePlanner({
     ledger,
     roots: async () => [join(home, 'sessions'), join(target, 'sessions')],
@@ -44,7 +46,7 @@ beforeEach(async () => {
       outcome: 'completed',
       healedThreads: 1,
       missingThreads: 0,
-      failedThreads: 0
+      failedThreads: failIndex ? 1 : 0
     })
   })
   args = {
@@ -138,4 +140,58 @@ it('refuses unavailable accounts and prevents replaying a prepared choice', asyn
   await expect(
     planner.prepare({ ...args, planToken: preview.resumePlan!.token, resumeAccountId: null })
   ).rejects.toThrow('expired')
+})
+
+it('keeps duplicate imported IDs in separate transcript lineages', async () => {
+  const imported = join(
+    root,
+    'work',
+    'sessions',
+    '2026',
+    '11',
+    '17',
+    `rollout-2026-11-17T10-00-00-${sessionId}.jsonl`
+  )
+  await mkdir(join(root, 'work', 'sessions', '2026', '11', '17'), { recursive: true })
+  await writeFile(imported, original)
+  const first = await open(null)
+  await planner.prepare({ ...args, commitToken: first.resumeReceipt })
+  const preview = await planner.prepare({ ...args, filePath: imported, preview: true })
+  const selected = await planner.prepare({
+    ...args,
+    filePath: imported,
+    planToken: preview.resumePlan!.token,
+    resumeAccountId: 'work'
+  })
+  await planner.prepare({ ...args, commitToken: selected.resumeReceipt })
+  expect((await planner.prepare({ ...args, preview: true })).resumePlan?.lastAccountId).toBeNull()
+  expect(
+    (await planner.prepare({ ...args, filePath: imported, preview: true })).resumePlan
+      ?.lastAccountId
+  ).toBe('work')
+  expect(await ledger.list()).toHaveLength(2)
+})
+
+it('repairs an unindexed continuation on retry instead of publishing another copy', async () => {
+  failIndex = true
+  await expect(open('work')).rejects.toThrow('could not be indexed')
+  const pending = (await ledger.list()).find((entry) => entry.preparedAccountId === 'work')!
+  expect(await readFile(pending.filePath, 'utf8')).toContain('Keep my original conversation')
+  failIndex = false
+  const recovered = await open('work')
+  expect(recovered.substituteSessionId).toBe(pending.sessionId)
+  expect(recovered.substituteTranscriptPath).toBe(pending.filePath)
+  expect(await readFile(args.filePath, 'utf8')).toBe(original)
+})
+
+it('keeps a validated resume choice after commit even when the workspace account changes', async () => {
+  const opened = await open(null)
+  await planner.prepare({ ...args, commitToken: opened.resumeReceipt })
+  workspaceAccountId = 'work'
+  expect(await planner.accountForReceipt(opened.resumeReceipt!, 'codex', args.workspaceId)).toEqual(
+    { accountId: null, home: join(root, 'system') }
+  )
+  await expect(
+    planner.accountForReceipt(opened.resumeReceipt!, 'codex', 'folder:another')
+  ).rejects.toThrow('another workspace')
 })

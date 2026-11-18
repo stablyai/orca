@@ -1,3 +1,4 @@
+import { claudeAccountRequiresPrivateHistory } from '../setup/claude-profile-history-policy'
 import { lstat, readFile } from 'node:fs/promises'
 import { ClaudeProfileSetupQueue } from '../setup/claude-profile-setup-queue'
 import { posix } from 'node:path'
@@ -142,7 +143,11 @@ export class ClaudeWslProfileRouter {
   /** Wait for initial setup; later refreshes run in the background. */
   async prepareLaunch(distro: string): Promise<ClaudeRuntimeAuthPreparation> {
     const { home, profile } = await this.resolve(distro)
-    if (profile && !(await hasMarker(distro, profile))) {
+    if (
+      profile &&
+      (claudeAccountRequiresPrivateHistory(this.args.getSettings(), profile.accountId) ||
+        !(await hasMarker(distro, profile)))
+    ) {
       await this.setUp(distro, home, profile.accountId).catch((error: unknown) => {
         console.warn('[claude-profile] WSL account setup failed:', error)
         throw claudeProfileSetupFailed()
@@ -200,10 +205,11 @@ export class ClaudeWslProfileRouter {
 
   /** Wait for setup so it cannot recreate the folder; guest rm preserves linked history. */
   async removeAccount(distro: string, accountId: string): Promise<void> {
-    await this.setups.pending(accountId)?.catch(() => {})
-    const { home } = await this.resolve(distro)
-    const folder = posix.dirname(wslClaudeProfile(home, distro, accountId).profile.home)
-    await runGuest(distro, { script: 'rm -rf -- "$1"', args: [folder], loginPath: 'none' })
+    await this.setups.remove(accountId, async () => {
+      const { home } = await this.resolve(distro)
+      const folder = posix.dirname(wslClaudeProfile(home, distro, accountId).profile.home)
+      await runGuest(distro, { script: 'rm -rf -- "$1"', args: [folder], loginPath: 'none' })
+    })
   }
 
   /** Falling back would run the wrong account. */
@@ -238,12 +244,9 @@ export class ClaudeWslProfileRouter {
   }
 
   /** Reuse in-flight setup per account. */
+
   private setUp(distro: string, home: string, accountId: string): Promise<void> {
-    const settings = this.args.getSettings()
-    const privateHistory =
-      settings.claudeManagedAccounts.some(
-        (account) => account.id === accountId && account.privateHistory
-      ) || Object.values(settings.claudeWorkspaceAccounts ?? {}).includes(accountId)
+    const privateHistory = claudeAccountRequiresPrivateHistory(this.args.getSettings(), accountId)
     const setup = this.args.runSetup ?? runWslSetup
     return this.setups.run(accountId, privateHistory, () =>
       privateHistory ? setup(distro, home, accountId, true) : setup(distro, home, accountId)

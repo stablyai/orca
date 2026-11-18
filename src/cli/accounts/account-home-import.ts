@@ -1,4 +1,6 @@
 import { resolve } from 'node:path'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
+import { isWindowsAbsolutePathLike } from '../../shared/file-access/cross-platform-path'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { printResult } from '../output/command-result-output'
@@ -7,7 +9,6 @@ import type {
   CodexRateLimitAccountsState
 } from '../../shared/agent-accounts/managed-account-types'
 import { assertAccountImportSupported } from './account-import-capability'
-import { getWslAccountTarget } from './account-wsl-location'
 import { formatAccountsBlock } from './account-list-format'
 
 export async function importAccountHome(ctx: HandlerContext, agent: string): Promise<boolean> {
@@ -25,7 +26,21 @@ export async function importAccountHome(ctx: HandlerContext, agent: string): Pro
       '--home requires a directory path and --agent claude or codex.'
     )
   }
-  const target = getWslAccountTarget(ctx.cwd)
+  const source =
+    isWindowsAbsolutePathLike(sourceHome) || sourceHome.startsWith('/')
+      ? sourceHome
+      : resolve(ctx.cwd, sourceHome)
+  const wsl = parseWslUncPath(source)
+  const target = wsl ? { runtime: 'wsl' as const, wslDistro: wsl.distro } : null
+  const historyFlag = ctx.flags.get('import-history')
+  if (
+    historyFlag !== undefined &&
+    historyFlag !== true &&
+    historyFlag !== 'true' &&
+    historyFlag !== 'false'
+  ) {
+    throw new RuntimeClientError('invalid_argument', '--import-history accepts only true or false.')
+  }
   if (agent === 'claude' && target?.runtime === 'wsl') {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -36,10 +51,11 @@ export async function importAccountHome(ctx: HandlerContext, agent: string): Pro
   const result = await ctx.client.call<ClaudeRateLimitAccountsState | CodexRateLimitAccountsState>(
     agent === 'claude' ? 'accounts.addClaudeFromHome' : 'accounts.addCodexFromHome',
     {
-      sourceHome: resolve(ctx.cwd, sourceHome.trim()),
-      importHistory: ctx.flags.get('import-history') === true,
+      sourceHome: source,
+      importHistory: historyFlag === true || historyFlag === 'true',
       ...(agent === 'codex' ? target : {})
-    }
+    },
+    { timeoutMs: 30 * 60_000 }
   )
   printResult(result, ctx.json, (state) =>
     formatAccountsBlock(agent === 'claude' ? 'Claude' : 'Codex', state)

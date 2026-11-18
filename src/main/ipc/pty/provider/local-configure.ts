@@ -1,3 +1,5 @@
+import { prepareWorkspaceShellAccount } from '../host-env/workspace-shell-account-preparation'
+import { historyLaunchAccount } from '../../../providers/accounts/workspace-account-session-resume'
 import { getClaudeWorkspaceProfiles } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
@@ -58,11 +60,23 @@ export function configureLocalPtyProvider(args: {
       ctx?.isWsl === true
         ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
         : { runtime: 'host' }
-    const workspaceClaude = await getClaudeWorkspaceProfiles()?.resolve(
-      ctx?.worktreeId,
-      codexSelectionTarget,
-      true
-    )
+    const pinnedClaude =
+      ctx?.launchAgent === 'claude'
+        ? await historyLaunchAccount(baseEnv, 'claude', ctx.worktreeId)
+        : null
+    const workspaceClaude =
+      !pinnedClaude && (!ctx?.launchAgent || ctx.launchAgent === 'claude')
+        ? await prepareWorkspaceShellAccount('claude', baseEnv, !ctx?.launchAgent, async () =>
+            getClaudeWorkspaceProfiles()?.resolve(ctx?.worktreeId, codexSelectionTarget, true)
+          )
+        : null
+    if (pinnedClaude) {
+      Object.assign(baseEnv, {
+        CLAUDE_CONFIG_DIR: pinnedClaude.home,
+        ORCA_CLAUDE_PROFILE_POINTER: '',
+        ORCA_CLAUDE_INJECTED_CONFIG_DIR: pinnedClaude.home
+      })
+    }
     if (workspaceClaude) {
       Object.assign(baseEnv, workspaceClaude.envPatch)
     }
@@ -70,10 +84,13 @@ export function configureLocalPtyProvider(args: {
       codexSelectionTarget,
       ctx?.codexHomePathOverride
         ? ctx.codexHomePathOverride.value
-        : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
-            workspaceId: ctx?.worktreeId,
-            launchesCodex: ctx?.launchAgent === 'codex'
-          })) ?? null)
+        : ((await prepareWorkspaceShellAccount('codex', baseEnv, !ctx?.launchAgent, async () =>
+            getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+              workspaceId:
+                !ctx?.launchAgent || ctx.launchAgent === 'codex' ? ctx?.worktreeId : undefined,
+              launchesCodex: ctx?.launchAgent === 'codex'
+            })
+          )) ?? null)
     )
     const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
     const ptySettings = getSettings?.()

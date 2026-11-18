@@ -36,8 +36,8 @@ it('groups explicit lineage across accounts while preserving unrelated titles an
   }
   const grouped = groupHistoryContinuations(
     [
-      { ...session, agent: 'codex', sessionId: 'original' },
-      { ...session, agent: 'codex', sessionId: 'continued' },
+      { ...session, agent: 'codex', sessionId: 'original', filePath: '/personal/original.jsonl' },
+      { ...session, agent: 'codex', sessionId: 'continued', filePath: '/work/continued.jsonl' },
       { ...session, agent: 'codex', sessionId: 'unrelated' },
       { ...session, agent: 'codex', sessionId: 'original', executionHostId: 'ssh:other' }
     ],
@@ -53,7 +53,7 @@ it('groups explicit lineage across accounts while preserving unrelated titles an
     'original'
   ])
   const personal = groupHistoryContinuations(
-    [{ ...session, agent: 'codex', sessionId: 'original' }],
+    [{ ...session, agent: 'codex', sessionId: 'original', filePath: '/personal/original.jsonl' }],
     catalogs,
     (entry) => entry.codexHome === '/personal'
   )

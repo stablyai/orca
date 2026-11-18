@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { historyLaunchAccount } from '../providers/accounts/workspace-account-session-resume'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { toWindowsWslPath } from '../../shared/file-access/wsl-paths'
 import { resolveLocalAccountRuntimeTarget } from '../../shared/agent-accounts/local-account-runtime'
@@ -53,19 +54,35 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  prepareForClaudeLaunch(
+  async prepareForClaudeLaunch(
     target?: ClaudeAccountSelectionTarget,
-    workspaceId?: string
+    workspaceId?: string,
+    launchEnv?: NodeJS.ProcessEnv
   ): Promise<ClaudeRuntimeAuthPreparation> {
+    const pinned = await historyLaunchAccount(launchEnv, 'claude', workspaceId)
+    if (pinned) {
+      if (target?.runtime === 'wsl') {
+        throw new Error('Continue this History session on its native host.')
+      }
+      return {
+        configDir: pinned.home,
+        envPatch: {
+          CLAUDE_CONFIG_DIR: pinned.home,
+          ORCA_CLAUDE_PROFILE_POINTER: '',
+          ORCA_CLAUDE_INJECTED_CONFIG_DIR: pinned.home
+        },
+        provenance: pinned.accountId ? `profile:${pinned.accountId}` : 'system'
+      }
+    }
     if (this.workspaceProfiles.has(workspaceId)) {
-      return this.workspaceProfiles
-        .resolve(workspaceId, this.resolveTarget(target), true)
-        .then((preparation) => {
-          if (!preparation) {
-            throw new Error('The workspace Claude account changed during launch. Try again.')
-          }
-          return preparation
-        })
+      const preparation = await this.workspaceProfiles.resolve(
+        workspaceId,
+        this.resolveTarget(target),
+        true
+      )
+      if (preparation) {
+        return preparation
+      }
     }
     const wsl = this.wslRouteFor(target)
     return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
@@ -122,11 +139,12 @@ export class ClaudeRuntimeAuthService {
 
   async prepareAccountFolder(
     accountId: string,
-    target: ClaudeAccountSelectionTarget
+    target: ClaudeAccountSelectionTarget,
+    privateHistory = false
   ): Promise<ClaudeAccountFolder> {
     const wsl = this.wslRouteFor(target)
     if (!wsl) {
-      const home = await this.router.prepareAccount(accountId)
+      const home = await this.router.prepareAccount(accountId, privateHistory)
       return { configDir: home, readPath: home }
     }
     const home = await wsl.router.prepareAccount(wsl.distro, accountId)

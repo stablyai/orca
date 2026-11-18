@@ -42,6 +42,9 @@ export function registerCodexAccountHandlers(
   })
   ipcMain.handle('codexAccounts:importHome', (_event, input: unknown) => {
     const { sourceHome, ...target } = AddCodexFromHomeParams.parse(input)
+    if (target.runtime === 'wsl') {
+      throw new Error('Import Codex homes on their native host. Use WSL sign-in for WSL accounts.')
+    }
     return codexAccounts.addAccountFromHome(sourceHome, target)
   })
   ipcMain.handle('codexAccounts:list', () => codexAccounts.listAccounts())

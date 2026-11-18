@@ -45,7 +45,13 @@ export class ClaudeAccountRegistration {
     sourceHome: string,
     importHistory: boolean
   ): Promise<ClaudeRateLimitAccountsState> {
-    const signIn = await this.begin({ runtime: 'host' })
+    const accountId = randomUUID()
+    const folder = await this.deps.runtimeAuth.prepareAccountFolder(
+      accountId,
+      { runtime: 'host' },
+      true
+    )
+    const signIn = { accountId, configDir: folder.configDir, runtime: 'host' as const }
     try {
       await prepareAccountHomeInWorker({
         kind: 'claude-import',

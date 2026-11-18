@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
 import { getAgentResumeArgv } from '../../agent-launch/startup/agent-resume-argv'
@@ -7,9 +8,7 @@ import {
 } from './ai-vault-resume-command'
 
 it.each([
-  ['posix', 'linux', "CLAUDE_CONFIG_DIR='/accounts/work home' claude --resume sid"],
-  ['powershell', 'win32', "$env:CLAUDE_CONFIG_DIR='/accounts/work home'; claude --resume sid"],
-  ['cmd', 'win32', 'set "CLAUDE_CONFIG_DIR=/accounts/work home" && claude --resume sid']
+  ['posix', 'linux', "CLAUDE_CONFIG_DIR='/accounts/work home' claude --resume sid"]
 ] as const)('pins the Claude resume home in %s commands', (shell, platform, expected) => {
   expect(
     buildAiVaultResumeShellCommand({
@@ -53,35 +52,6 @@ describe('buildAiVaultResumeShellCommand env removal', () => {
       })
     ).toBe(
       "cd '/repo' && CODEX_HOME='/c/users/a/.codex-work' env -u ORCA_CODEX_HOME codex 'resume' 'sid'"
-    )
-  })
-
-  // Shell grammar wins over host platform; platform routing emitted POSIX env -u into PowerShell.
-  it('uses PowerShell grammar for a PowerShell shell on a non-Windows host', () => {
-    const command = buildAiVaultResumeShellCommand({
-      ...base,
-      platform: 'linux',
-      shell: 'powershell'
-    })
-
-    expect(command).not.toContain('env -u')
-    expect(command).toBe(
-      'Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue; ' +
-        'Remove-Item Env:ORCA_CODEX_HOME -ErrorAction SilentlyContinue; ' +
-        "Set-Location -LiteralPath '/repo'; codex 'resume' 'sid'"
-    )
-  })
-
-  it('keeps the cmd clear ahead of the cd so a failed cd cannot launch the agent', () => {
-    expect(
-      buildAiVaultResumeShellCommand({
-        ...base,
-        cwd: 'C:\\repo',
-        platform: 'win32',
-        shell: 'cmd'
-      })
-    ).toBe(
-      'set "CODEX_HOME=" & set "ORCA_CODEX_HOME=" & cd /d "C:\\repo" && codex \'resume\' \'sid\''
     )
   })
 })
@@ -129,3 +99,63 @@ describe('Hermes profile session resume', () => {
     ).toEqual(['hermes', '-p', profile, '--resume', 'local-1'])
   })
 })
+
+it.skipIf(process.platform !== 'win32').each([false, true])(
+  'restores PowerShell environment after a resume, including failure=%s',
+  (fails) => {
+    const command = buildAiVaultResumeShellCommand({
+      resumeCommand: `Write-Output ('CHILD=' + $env:CLAUDE_CONFIG_DIR + ';POINTER=' + [bool]$env:ORCA_CLAUDE_PROFILE_POINTER)${fails ? "; throw 'agent failed'" : ''}`,
+      cwd: null,
+      shell: 'powershell',
+      platform: 'win32',
+      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/account/work home' },
+      clearEnvNames: ['CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_PROFILE_POINTER']
+    })
+    const child = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `try { ${command} } catch {}; Write-Output ('PARENT=' + $env:CLAUDE_CONFIG_DIR + ';POINTER=' + $env:ORCA_CLAUDE_PROFILE_POINTER)`
+      ],
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        env: {
+          ...process.env,
+          CLAUDE_CONFIG_DIR: '/parent/home',
+          ORCA_CLAUDE_PROFILE_POINTER: '/parent/pointer'
+        }
+      }
+    )
+    expect(child.status).toBe(0)
+    expect(child.stdout.trim().split(/\r?\n/)).toEqual([
+      'CHILD=/account/work home;POINTER=False',
+      'PARENT=/parent/home;POINTER=/parent/pointer'
+    ])
+  }
+)
+
+it.skipIf(process.platform !== 'win32')(
+  'keeps cmd account assignments inside the child command',
+  () => {
+    const command = buildAiVaultResumeShellCommand({
+      resumeCommand: 'set CLAUDE_CONFIG_DIR',
+      cwd: null,
+      shell: 'cmd',
+      platform: 'win32',
+      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: 'C:\\account home' }
+    })
+    const child = spawnSync('cmd.exe', ['/d', '/q', '/v:on'], {
+      input: `@echo off\r\n${command}\r\necho PARENT=!CLAUDE_CONFIG_DIR!\r\nexit\r\n`,
+      encoding: 'utf8',
+      windowsHide: true,
+      env: { ...process.env, CLAUDE_CONFIG_DIR: 'C:\\parent home' }
+    })
+    expect(child.status).toBe(0)
+    expect(child.stderr).toBe('')
+    expect(child.stdout).toContain('CLAUDE_CONFIG_DIR=C:\\account home')
+    expect(child.stdout).toContain('PARENT=C:\\parent home')
+  }
+)

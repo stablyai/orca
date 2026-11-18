@@ -1,4 +1,3 @@
-import { codexWorkspaceAccountId } from '../../../../../../shared/agent-accounts/codex/codex-workspace-account'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getManagedAccountInlineLabel } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { useAppStore } from '@/store/index'
@@ -86,10 +85,8 @@ async function scanCodexPanes(
     isLaneInScope: (laneKey: string) => boolean
   }
 ): Promise<CodexPaneScanResult[]> {
-  const bindings = args.workspaceAccounts ?? state.settings?.codexWorkspaceAccounts
   const panes = Object.values(state.tabsByWorktree)
     .flat()
-    .filter((tab) => !codexWorkspaceAccountId(bindings, tab.worktreeId))
     .flatMap((tab) =>
       (state.ptyIdsByTabId[tab.id] ?? [])
         .filter((ptyId) => args.ptyIdFilter === null || args.ptyIdFilter.has(ptyId))
@@ -197,6 +194,7 @@ export async function markLiveCodexSessionsForRestart(args: {
     }
   }
 
+  const resolveRecordedLabel = await createCodexAccountLabelResolver()
   useAppStore.getState().markCodexRestartNotices(
     scans.flatMap((scan) => {
       if (!scan.eligible) {
@@ -210,8 +208,8 @@ export async function markLiveCodexSessionsForRestart(args: {
         return [
           {
             ptyId: scan.ptyId,
-            previousAccountLabel: args.previousAccountLabel,
-            nextAccountLabel: args.nextAccountLabel,
+            previousAccountLabel: resolveRecordedLabel(stalePane.launchAccountId),
+            nextAccountLabel: resolveRecordedLabel(stalePane.activeAccountId),
             previousAccountId: stalePane.launchAccountId,
             nextAccountId: stalePane.activeAccountId
           }

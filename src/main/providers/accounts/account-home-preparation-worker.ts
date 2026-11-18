@@ -31,10 +31,13 @@ export async function prepareAccountHomeInWorker(job: AccountHomePreparationJob)
   await new Promise<void>((resolve, reject) => {
     let result: { ok: true } | { ok: false; error: string } | undefined
     let failure: Error | undefined
-    const timer = setTimeout(() => {
-      failure = new Error('Account home preparation timed out. Try again.')
-      void worker.terminate().catch(reject)
-    }, 120_000)
+    const timer =
+      job.kind === 'claude-import' && job.importHistory
+        ? undefined
+        : setTimeout(() => {
+            failure = new Error('Account home preparation timed out. Try again.')
+            void worker.terminate().catch(reject)
+          }, 120_000)
     worker.once('message', (message) => {
       result = message
     })

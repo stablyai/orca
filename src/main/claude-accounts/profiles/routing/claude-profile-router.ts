@@ -1,4 +1,8 @@
-import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
+import { claudeAccountRequiresPrivateHistory } from '../setup/claude-profile-history-policy'
+import {
+  claudeAccountUsagePreparation,
+  claudeSystemDefaultRunsAnotherAccount
+} from './claude-account-usage-preparation'
 import { ClaudeProfileSetupQueue } from '../setup/claude-profile-setup-queue'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
@@ -189,7 +193,8 @@ export class ClaudeProfileRouter {
     await prepareClaudeProfileForLaunch(
       profile,
       (value) => this.setUp(value),
-      this.args.refreshWaitMs
+      this.args.refreshWaitMs,
+      claudeAccountRequiresPrivateHistory(this.args.getSettings(), profile.accountId)
     )
     return this.preparation()
   }
@@ -198,9 +203,9 @@ export class ClaudeProfileRouter {
     return this.describe(accountId).home
   }
 
-  async prepareAccount(accountId: string): Promise<string> {
+  async prepareAccount(accountId: string, privateHistory = false): Promise<string> {
     const profile = this.describe(accountId)
-    const report = await this.setUp(profile).catch(() => null)
+    const report = await this.setUp(profile, privateHistory)
     if (report?.outcome !== 'prepared') {
       throw new Error(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
     }
@@ -209,8 +214,9 @@ export class ClaudeProfileRouter {
 
   /** Wait for setup before deleting so it cannot recreate the folder. */
   async removeAccount(accountId: string): Promise<void> {
-    await this.setups.pending(accountId)?.catch(() => {})
-    await removeClaudeAccountFolder(this.args.dataRoot, accountId)
+    await this.setups.remove(accountId, () =>
+      removeClaudeAccountFolder(this.args.dataRoot, accountId)
+    )
   }
 
   /** A legacy snapshot records copy-based account switching. */
@@ -229,13 +235,14 @@ export class ClaudeProfileRouter {
     })
   }
 
-  /** Reuse in-flight setup per account. */
-  private setUp(profile: ClaudeProfileDescriptor): Promise<ClaudeProfileSetupReport> {
-    const settings = this.args.getSettings()
-    const privateHistory =
-      settings.claudeManagedAccounts.some(
-        (account) => account.id === profile.accountId && account.privateHistory
-      ) || Object.values(settings.claudeWorkspaceAccounts ?? {}).includes(profile.accountId)
+  private setUp(
+    profile: ClaudeProfileDescriptor,
+    privateHistory = false
+  ): Promise<ClaudeProfileSetupReport> {
+    privateHistory ||= claudeAccountRequiresPrivateHistory(
+      this.args.getSettings(),
+      profile.accountId
+    )
     return this.setups.run(profile.accountId, privateHistory, () =>
       this.runSetup(profile, privateHistory)
     )
@@ -322,15 +329,7 @@ export class ClaudeProfileRouter {
 
   /** Compare pre-routing terminals against the selection; null means no account is selected. */
   systemDefaultRunsAnotherAccount(): boolean | null {
-    const profile = this.selectedProfile()
-    if (!profile) {
-      return null
-    }
-    const selected =
-      this.accountLogin(profile.accountId) ??
-      findClaudeAccount(this.args.getSettings(), profile.accountId)
-    const systemDefault = this.systemDefaultLogin(5_000)
-    return !selected || !systemDefault || !isSameClaudeLogin(selected, systemDefault)
+    return claudeSystemDefaultRunsAnotherAccount(this)
   }
 
   routesToAccount(): boolean {

@@ -30,6 +30,7 @@ export function AccountHomeImportForm<T>({
   const t = useTranslate()
   const inputId = useId()
   const [sourceHome, setSourceHome] = useState('')
+  const [pickedPath, setPickedPath] = useState(false)
   const [importHistory, setImportHistory] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -44,6 +45,7 @@ export function AccountHomeImportForm<T>({
       })
       if (path) {
         setSourceHome(path)
+        setPickedPath(true)
       }
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
@@ -55,7 +57,7 @@ export function AccountHomeImportForm<T>({
     if (unavailable) {
       return
     }
-    const path = sourceHome.trim().replace(/^"(.*)"$/, '$1')
+    const path = pickedPath ? sourceHome : sourceHome.trim().replace(/^"(.*)"$/, '$1')
     if (!isWindowsAbsolutePathLike(path) && !path.startsWith('/')) {
       setError(t('accounts.homeImport.absolutePath', 'Enter a full directory path.'))
       return
@@ -113,6 +115,7 @@ export function AccountHomeImportForm<T>({
             value={sourceHome}
             onChange={(event) => {
               setSourceHome(event.target.value)
+              setPickedPath(false)
               setError(null)
             }}
             disabled={unavailable}

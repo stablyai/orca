@@ -74,8 +74,8 @@ export function createOrcadAccountServices(args: {
     getRuntimeHome: () => codexRuntimeHome,
     getSettings: () => store.getSettings()
   })
-  const prepareClaudeAuth: PrepareClaudeAuth = (target, workspaceId) =>
-    services.claudeRuntimeAuth.prepareForClaudeLaunch(target, workspaceId)
+  const prepareClaudeAuth: PrepareClaudeAuth = (target, workspaceId, launchEnv) =>
+    services.claudeRuntimeAuth.prepareForClaudeLaunch(target, workspaceId, launchEnv)
   const resumeLaunch = createCodexSessionResumeLaunchPreparation({
     getRuntimeHome: () => codexRuntimeHome,
     getSettings: () => store.getSettings()

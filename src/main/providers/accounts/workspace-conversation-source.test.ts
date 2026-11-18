@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -13,7 +13,7 @@ let workspace: string
 let sourceHome: string
 let targetHome: string
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-workspace-continuation-'))
+  root = await realpath(await mkdtemp(join(tmpdir(), 'orca-workspace-continuation-')))
   workspace = join(root, 'workspace')
   sourceHome = join(root, 'source')
   targetHome = join(root, 'target')

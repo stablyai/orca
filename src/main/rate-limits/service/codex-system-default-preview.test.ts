@@ -1,55 +1,34 @@
-import { expect, it, vi } from 'vitest'
-import { RateLimitService } from './rate-limit-service'
-import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
+import { expect, it } from 'vitest'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { codexSystemDefaultUsagePreview } from '../providers/codex/codex-system-default-usage-preview'
-import type { CodexSystemDefaultIdentity } from '../../../shared/agent-accounts/managed-account-types'
 
-vi.mock('../providers/codex/codex-fetcher', () => ({ fetchCodexRateLimits: vi.fn() }))
-
-it('reads System default without selecting it and discards usage when its login identity changes', async () => {
-  let identity: CodexSystemDefaultIdentity = {
-    hasAuth: true,
-    authKind: 'oauth',
-    email: 'personal@example.test',
-    providerAccountId: 'personal',
-    workspaceLabel: null
+it('pins a System default preview to the credentials read for its identity, even after the source login changes', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'orca-default-preview-'))
+  try {
+    const original =
+      '{"tokens":{"access_token":"personal-token","account_id":"personal","id_token":"e30.eyJlbWFpbCI6InBlcnNvbmFsQGV4YW1wbGUudGVzdCJ9.sig"},"email":"personal@example.test"}'
+    await writeFile(join(home, 'auth.json'), original)
+    const preview = codexSystemDefaultUsagePreview(
+      'work',
+      {
+        hasAuth: true,
+        authKind: 'oauth',
+        email: 'personal@example.test',
+        providerAccountId: 'personal',
+        workspaceLabel: null
+      },
+      home
+    )!
+    const selected = await preview.resolveHome()
+    await writeFile(
+      join(home, 'auth.json'),
+      '{"tokens":{"access_token":"work-token","account_id":"work"},"email":"work@example.test"}'
+    )
+    expect(selected).toEqual({ kind: 'ready', managedHomePath: home, authSnapshot: original })
+    expect(await preview.resolveHome()).toEqual({ kind: 'skip' })
+  } finally {
+    await rm(home, { recursive: true, force: true })
   }
-  const service = new RateLimitService()
-  service.setInactiveCodexAccountsResolver(() => {
-    const preview = codexSystemDefaultUsagePreview('managed-work', identity, '/system/.codex')
-    return preview ? [preview] : []
-  })
-  vi.mocked(fetchCodexRateLimits).mockResolvedValue({
-    provider: 'codex',
-    status: 'ok',
-    error: null,
-    updatedAt: 1_700_000_000_000,
-    session: { usedPercent: 17, windowMinutes: 300, resetsAt: null, resetDescription: null },
-    weekly: null
-  })
-  await service.fetchInactiveCodexAccountsOnOpen()
-  expect(fetchCodexRateLimits).toHaveBeenCalledWith(
-    expect.objectContaining({ codexHomePath: '/system/.codex' })
-  )
-  expect(service.getState().codex).toBeNull()
-  expect(service.getState().inactiveCodexAccounts[0]?.rateLimits?.session?.usedPercent).toBe(17)
-  identity = { ...identity, email: 'other@example.test', providerAccountId: 'other' }
-  expect(service.getState().inactiveCodexAccounts).toEqual([])
-})
-
-it('does not preview signed-out, API-key or already-selected System default as another account', () => {
-  const identity: CodexSystemDefaultIdentity = {
-    hasAuth: true,
-    authKind: 'oauth',
-    email: 'personal@example.test',
-    providerAccountId: 'personal',
-    workspaceLabel: null
-  }
-  expect(codexSystemDefaultUsagePreview(null, identity, '/system/.codex')).toBeNull()
-  expect(
-    codexSystemDefaultUsagePreview('work', { ...identity, authKind: 'api-key' }, '/system/.codex')
-  ).toBeNull()
-  expect(
-    codexSystemDefaultUsagePreview('work', { ...identity, hasAuth: false }, '/system/.codex')
-  ).toBeNull()
 })

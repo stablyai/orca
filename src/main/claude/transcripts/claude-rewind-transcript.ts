@@ -45,7 +45,7 @@ export async function materializeClaudeConversationTranscript(input: {
     destinationDirectory,
     temporaryPath
   }
-  const worker = await spawnClaudeConversationWorker(workerData)
+  const worker = await spawnClaudeConversationWorker(workerData, signal)
   let abort: () => void = () => undefined
   try {
     return await new Promise<ConversationCopy | null>((resolve, reject) => {
@@ -129,7 +129,7 @@ export async function materializeClaudeRewindTranscript(
       }
 }
 
-export async function spawnClaudeConversationWorker(workerData: unknown) {
+export async function spawnClaudeConversationWorker(workerData: unknown, signal?: AbortSignal) {
   const compiled = resolveWorkerThreadEntryPath(
     currentWorkerEntryLayout(__dirname),
     'claude-conversation-fork-worker-entry.js'
@@ -152,5 +152,6 @@ export async function spawnClaudeConversationWorker(workerData: unknown) {
   const entry = installed
     ? installed
     : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)
+  signal?.throwIfAborted()
   return spawnWorkerThread(entry, { name: 'orca-claude-rewind-transcript', workerData })
 }

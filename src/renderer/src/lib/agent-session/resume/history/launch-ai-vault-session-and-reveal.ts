@@ -16,6 +16,7 @@ export async function launchAiVaultSessionAndReveal(
   describeFailure: (message: string) => string = (message) => message
 ): Promise<string | null> {
   const launch = launchAiVaultSessionInNewTab(args)
+  let openedTabId = launch.tabId
   if (launch.tabId === null) {
     const outcome = await launch.runtimeLaunch
     if (outcome.status === 'failed') {
@@ -27,18 +28,22 @@ export async function launchAiVaultSessionAndReveal(
             { value0: agentLabel(args.agent) }
           )
       )
-      return null
+      throw new Error(outcome.message)
     }
+    openedTabId = outcome.tabId ?? null
   }
   if (useAppStore.getState().activeWorktreeId !== args.worktreeId) {
     activateAiVaultResumeWorkspace(args.worktreeId)
   }
   notifyAiVaultSessionQueued(args.agent)
   if (args.historyResume) {
-    if (launch.tabId !== null) {
-      await waitForHistoryTerminalOpen(launch.tabId)
+    if (!openedTabId) {
+      throw new Error(
+        'The resumed terminal could not be verified. Its History account has not been changed.'
+      )
     }
+    await waitForHistoryTerminalOpen(openedTabId)
     await commitHistorySessionResume(args.historyResume)
   }
-  return launch.tabId
+  return openedTabId
 }

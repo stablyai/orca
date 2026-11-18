@@ -225,11 +225,16 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
         />
       ) : (
         <VaultSessionRow
-          onResumeVersion={(version) =>
-            onResume(
-              version,
-              visibleResumeActions.worktree.worktreeId ?? resumeState?.worktreeId ?? ''
-            )
+          onResumeVersion={
+            searchResumeAllowed
+              ? (version) =>
+                  onPickSession
+                    ? onPickSession(version)
+                    : onResume(
+                        version,
+                        visibleResumeActions.worktree.worktreeId ?? resumeState?.worktreeId ?? ''
+                      )
+              : undefined
           }
           session={row.session}
           searchHit={searchHit}
@@ -292,10 +297,6 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
               : undefined
           }
           onResumeInWorktree={() => {
-            if (canJumpToOriginalPane) {
-              onJumpToOriginalPane(row.session)
-              return
-            }
             if (searchResumeAllowed && resumeActions?.worktree.worktreeId) {
               onResume(row.session, resumeActions.worktree.worktreeId)
             }

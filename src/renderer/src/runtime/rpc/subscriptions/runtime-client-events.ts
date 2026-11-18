@@ -63,6 +63,7 @@ function handleRuntimeClientEventResponse(
     return
   }
   if (isRuntimeSubscriptionReplayResponse(response)) {
+    notifyWorkspaceAccountSettingsChanged({ kind: 'environment', environmentId })
     onReplayedAfterReconnect?.()
   }
   const message = response.result as RuntimeClientEventStreamMessage
@@ -86,7 +87,9 @@ function handleRuntimeClientEventResponse(
   }
   // The host's own PR auto-refresh setting governs this client's timers for that host's workspaces.
   if (message.type === 'settingsChanged') {
-    notifyWorkspaceAccountSettingsChanged({ kind: 'environment', environmentId }, message.keys)
+    if (Array.isArray(message.keys)) {
+      notifyWorkspaceAccountSettingsChanged({ kind: 'environment', environmentId }, message.keys)
+    }
     if (Array.isArray(message.keys) && message.keys.includes('prAutoRefresh')) {
       void readHostPRAutoRefreshCadence(environmentId)
     }
