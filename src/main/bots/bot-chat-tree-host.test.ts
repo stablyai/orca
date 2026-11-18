@@ -447,30 +447,27 @@ describe('bot chats tree: empty side chats', () => {
     return { ...record, providerHandleChain: [] }
   }
 
-  function emptyChatsHost(openTabs: readonly string[]): BotChatTreeHost {
+  it('lists and reuses an empty side chat while its tab is open', async () => {
     const store = storeOf([
       chatRecord('chat-said'),
       emptyRecord('chat-open'),
       emptyRecord('chat-closed')
     ])
-    return {
+    let open = true
+    const host: BotChatTreeHost = {
       ...treeHost(store, openDb()),
-      chatTabs: async () => openTabs.map((sessionId) => ({ sessionId, title: 'Claude Chat' }))
+      chatTabs: async () => (open ? [{ sessionId: 'chat-open', title: 'Claude Chat' }] : [])
     }
-  }
+    const sideChatIds = async () => {
+      const tree = await readBotChatTree(host, { botId: bot.id })
+      return tree.chats.flatMap((chat) => (chat.origin === 'side' ? [chat.chatId] : [])).toSorted()
+    }
 
-  it('lists an empty chat only while its tab is open', async () => {
-    const tree = await readBotChatTree(emptyChatsHost(['chat-open']), { botId: bot.id })
+    expect(await sideChatIds()).toEqual(['chat-open', 'chat-said'])
+    expect(await openEmptyBotChat(host, { ...bot, agent: 'claude' })).toBe('chat-open')
 
-    expect(
-      tree.chats.flatMap((chat) => (chat.origin === 'side' ? [chat.chatId] : [])).toSorted()
-    ).toEqual(['chat-open', 'chat-said'])
-  })
-
-  it('opens the empty chat whose tab is open again instead of a new one', async () => {
-    expect(await openEmptyBotChat(emptyChatsHost(['chat-open']), { ...bot, agent: 'claude' })).toBe(
-      'chat-open'
-    )
-    expect(await openEmptyBotChat(emptyChatsHost([]), { ...bot, agent: 'claude' })).toBeNull()
+    open = false
+    expect(await sideChatIds()).toEqual(['chat-said'])
+    expect(await openEmptyBotChat(host, { ...bot, agent: 'claude' })).toBeNull()
   })
 })
