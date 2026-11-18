@@ -29,7 +29,7 @@ import {
   getRequiredStringFlagAllowingEmpty,
   rejectValuelessFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/connection/types'
+import { RuntimeClientError, type RuntimeCallOptions } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { withCliAgentLaunchRecovery } from './agent-launch-recovery'
@@ -125,7 +125,8 @@ export async function callAgentLaunch(
   launch: CliAgentLaunch,
   request: { target: CliAgentLaunchTarget; presentation?: 'focused' | 'background' },
   capabilities: readonly string[],
-  rawArgs?: readonly string[]
+  rawArgs?: readonly string[],
+  options?: RuntimeCallOptions
 ): Promise<RuntimeRpcSuccess<AgentLaunchResult & { operationId?: string }>> {
   const replaySupported = capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY)
   if (launch.operationId && !replaySupported) {
@@ -168,8 +169,11 @@ export async function callAgentLaunch(
     ...(operationId ? { operationId } : {}),
     launchSource: 'cli'
   }
+  const method = operationId ? 'agent.launchReplay' : 'agent.launch'
   const result = await withCliAgentLaunchRecovery(
-    client.call<AgentLaunchResult>(operationId ? 'agent.launchReplay' : 'agent.launch', params),
+    options
+      ? client.call<AgentLaunchResult>(method, params, options)
+      : client.call<AgentLaunchResult>(method, params),
     { operationId, replayed: launch.operationId !== undefined, rawArgs, params }
   )
   return { ...result, result: { ...result.result, ...(operationId ? { operationId } : {}) } }

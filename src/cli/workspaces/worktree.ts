@@ -53,6 +53,7 @@ import {
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 import { getWorktreeReadFlags } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
+import { callWorktreeCreate } from './worktree-create-request-timeout'
 import {
   getOptionalSetupDecision,
   withSetupDecisionRecovery
@@ -194,7 +195,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     const result = await withSetupDecisionRecovery(
-      callNamingParentEnvironment<RuntimeWorktreeCreateResult>(client, 'worktree.create', create)
+      callWorktreeCreate<RuntimeWorktreeCreateResult>(client, create, flags)
     )
     const created = {
       ...result,
