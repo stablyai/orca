@@ -189,7 +189,7 @@ export class ArtifactPublisher {
     record: { slug: string; editToken: string }
   ): Promise<ArtifactListItem> {
     return this.runForSlug(record.slug, auth, async () => {
-      auth.assertCurrent()
+      auth.assertCanSend()
       const item = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
         method: 'PUT',
         editToken: record.editToken,

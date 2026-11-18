@@ -126,7 +126,7 @@ export class ArtifactCloudService {
           throw new Error('This file has not been shared from the active Orca profile.')
         }
         return this.publisher.runForSlug(record.slug, auth, async () => {
-          auth.assertCurrent()
+          auth.assertCanSend()
           const response = await artifactRequest<ArtifactListItem>(
             apiUrl,
             token,
@@ -169,7 +169,7 @@ export class ArtifactCloudService {
           throw new Error('This file has not been shared from the active Orca profile.')
         }
         return this.publisher.runForSlug(record.slug, auth, async () => {
-          auth.assertCurrent()
+          auth.assertCanSend()
           await deleteArtifactRequest(apiUrl, token, `/${record.slug}`, auth, record.editToken)
           await removeArtifactShareRecords(
             auth.profileId,
@@ -186,7 +186,7 @@ export class ArtifactCloudService {
   delete(id: string, options: ArtifactCloudOptions): Promise<ArtifactCloudOperation<void>> {
     return this.withAuth(options, (token, apiUrl, auth) =>
       this.publisher.runForSlug(id, auth, async () => {
-        auth.assertCurrent()
+        auth.assertCanSend()
         await deleteArtifactRequest(apiUrl, token, `/${encodeURIComponent(id)}`, auth)
         await removeArtifactShareRecords(
           auth.profileId,
