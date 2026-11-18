@@ -149,7 +149,8 @@ async function readUncachedRemoteUrl(
             previous !== undefined &&
             previous.signature === signature &&
             previous.expiresAt > Date.now() &&
-            previous.recordedSeq < startedSeq,
+            // A miss that overlapped the confirming one must not undo it.
+            (previous.confirmed || previous.recordedSeq < startedSeq),
           recordedSeq: ++missingRemoteSeq
         })
       }
