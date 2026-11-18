@@ -47,8 +47,6 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       this.disposeHeadlessTerminal(ptyId)
       return
     }
-    // Kept until the PTY exits: replacing the model must not erase a reader's evidence.
-    this.ptyGapCounts.set(ptyId, (this.ptyGapCounts.get(ptyId) ?? 0) + 1)
     if (!this.providerSequenceAnchorRevisions.has(ptyId)) {
       // No stamp places a provider snapshot in this stream: start over from the kept output, as before
       // recovery existed. The stream's first stamp starts recovery.
@@ -56,6 +54,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       this.disposeHeadlessTerminal(ptyId)
       return
     }
+    this.countGap(ptyId)
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const gapEnd = this.getPtyOutputSequence(ptyId)
     state.writeChain = state.writeChain
@@ -80,6 +79,11 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     this.startGapRecovery(ptyId, state)
   }
 
+  /** Kept until the PTY exits: replacing the model must not erase a reader's evidence. */
+  private countGap(ptyId: string): void {
+    this.ptyGapCounts.set(ptyId, (this.ptyGapCounts.get(ptyId) ?? 0) + 1)
+  }
+
   protected override onProviderSequenceAnchored(ptyId: string): void {
     if (
       this.gapRecoveryAwaitingStamp.delete(ptyId) &&
@@ -87,6 +91,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     ) {
       const state = this.getOrCreateHeadlessTerminal(ptyId)
       if (!state.gapReseed) {
+        this.countGap(ptyId)
         this.startGapRecovery(ptyId, state)
       }
     }

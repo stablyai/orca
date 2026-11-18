@@ -280,6 +280,8 @@ describe('the hidden renderer after dropped output', () => {
         source: 'headless' as const
       })
     })
+    // Recovery and its renderer fence apply to a stamped stream; an unstamped one behaves as before.
+    anchorStream(runtime, 'pty-r')
     const replyOld = () => pending.shift()?.({ data: 'OLD', ...grid })
     return { runtime, replyOld }
   }
