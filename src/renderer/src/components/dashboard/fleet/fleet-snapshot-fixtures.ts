@@ -6,10 +6,27 @@ import type {
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 
 export const FLEET_MOCK_NOW = Date.UTC(2026, 10, 18, 15, 0, 0)
 
 const MINUTE = 60_000
+
+type MockRepo = 'orca' | 'orca-docs' | 'web-app' | 'notes'
+
+type MockRepoInfo = { repoId: string; icon: RepoIcon | null; workspaceKind?: 'folder' }
+
+const REPOS: Record<MockRepo, MockRepoInfo> = {
+  orca: { repoId: 'repo-orca', icon: { type: 'emoji', emoji: '🐋' } },
+  'orca-docs': { repoId: 'repo-orca-docs', icon: null },
+  'web-app': { repoId: 'repo-web-app', icon: { type: 'lucide', name: 'Globe' } },
+  notes: { repoId: 'folder-workspace:notes', icon: null, workspaceKind: 'folder' }
+}
+
+type MockHost = { executionHostId: ExecutionHostId; hostLabel: string }
+
+const BUILD_BOX: MockHost = { executionHostId: 'ssh:target-7f3a', hostLabel: 'build-box' }
+const LINUX_RUNNER: MockHost = { executionHostId: 'ssh:target-91c2', hostLabel: 'linux-ci-runner' }
 
 type MockAgent = {
   id: number
@@ -18,7 +35,7 @@ type MockAgent = {
   bucket: DashboardBucket
   dotState: DashboardCardDotState
   unseen?: boolean
-  repo: 'acme-billing' | 'orca' | 'acme-web'
+  repo: MockRepo
   worktree: string
   title: string
   message: string
@@ -26,7 +43,7 @@ type MockAgent = {
   startedMinutesAgo: number
   finishedMinutesAgo?: number
   changedMinutesAgo: number
-  host?: { executionHostId: ExecutionHostId; hostLabel: string }
+  host?: MockHost
 }
 
 const AGENTS: readonly MockAgent[] = [
@@ -35,11 +52,10 @@ const AGENTS: readonly MockAgent[] = [
     agentType: 'claude',
     bucket: 'working',
     dotState: 'working',
-    repo: 'acme-billing',
-    worktree: 'billing-v2',
-    title: 'Ship billing v2 migration',
-    message:
-      'Two of four workers reported back. Holding the schema merge until the webhook refactor lands.',
+    repo: 'orca',
+    worktree: 'fleet-projects',
+    title: 'Group the fleet view by project',
+    message: 'Two of four workers reported back. Holding the layout pass until the audit lands.',
     startedMinutesAgo: 95,
     changedMinutesAgo: 3
   },
@@ -50,10 +66,10 @@ const AGENTS: readonly MockAgent[] = [
     bucket: 'done',
     dotState: 'done',
     unseen: true,
-    repo: 'acme-billing',
-    worktree: 'billing-v2-invoices',
-    title: 'Migrate invoices table to the v2 schema',
-    message: 'Migration and backfill are in place; 2,184 rows match the v1 totals.',
+    repo: 'orca',
+    worktree: 'fleet-projects-model',
+    title: 'Model projects from the dashboard snapshot',
+    message: 'Projects are keyed by host and repo; six model tests pass.',
     startedMinutesAgo: 88,
     finishedMinutesAgo: 41,
     changedMinutesAgo: 41
@@ -65,12 +81,11 @@ const AGENTS: readonly MockAgent[] = [
     bucket: 'attention',
     dotState: 'waiting',
     unseen: true,
-    repo: 'acme-billing',
-    worktree: 'billing-v2-webhooks',
-    title: 'Refactor payment webhook handlers',
-    message:
-      'Handlers verify signatures before parsing. The replay test needs a staging migration.',
-    askSummary: 'Run pnpm db:migrate against staging?',
+    repo: 'orca',
+    worktree: 'fleet-projects-fixtures',
+    title: 'Rework the fleet fixtures',
+    message: 'The mock covers SSH hosts and cross-project workers. Folder workspaces are next.',
+    askSummary: 'Add a folder workspace to the mock?',
     startedMinutesAgo: 86,
     changedMinutesAgo: 6
   },
@@ -80,10 +95,10 @@ const AGENTS: readonly MockAgent[] = [
     agentType: 'claude',
     bucket: 'working',
     dotState: 'working',
-    repo: 'acme-billing',
-    worktree: 'billing-v2-audit',
-    title: 'Audit every caller of the v1 billing API',
-    message: 'Dispatched two scanners; merging their findings into one call-site list.',
+    repo: 'orca',
+    worktree: 'fleet-projects-audit',
+    title: 'Audit the location line on every node',
+    message: 'Dispatched two checkers; merging their findings into one list.',
     startedMinutesAgo: 84,
     changedMinutesAgo: 10
   },
@@ -94,10 +109,10 @@ const AGENTS: readonly MockAgent[] = [
     bucket: 'done',
     dotState: 'done',
     unseen: true,
-    repo: 'acme-billing',
-    worktree: 'billing-v2-audit-web',
-    title: 'Scan the web client for v1 endpoints',
-    message: 'Found 23 call sites in 9 files and attached the list to the task.',
+    repo: 'orca',
+    worktree: 'fleet-audit-tree',
+    title: 'Check the tree layout at wide widths',
+    message: 'Every tree node shows its worktree; no truncation above 1,000px.',
     startedMinutesAgo: 80,
     finishedMinutesAgo: 52,
     changedMinutesAgo: 52
@@ -108,12 +123,13 @@ const AGENTS: readonly MockAgent[] = [
     agentType: 'opencode',
     bucket: 'working',
     dotState: 'working',
-    repo: 'acme-billing',
-    worktree: 'billing-v2-audit-mobile',
-    title: 'Scan the mobile client for v1 endpoints',
-    message: 'Scanning React Native screens under app/billing; 61 of 140 files done.',
+    repo: 'orca',
+    worktree: 'fleet-audit-linux',
+    title: 'Check the outline layout on Linux',
+    message: 'Running the fixture shots on the Linux runner; 3 of 5 done.',
     startedMinutesAgo: 79,
-    changedMinutesAgo: 79
+    changedMinutesAgo: 7,
+    host: LINUX_RUNNER
   },
   {
     id: 7,
@@ -121,12 +137,12 @@ const AGENTS: readonly MockAgent[] = [
     agentType: 'codex',
     bucket: 'working',
     dotState: 'working',
-    repo: 'acme-billing',
-    worktree: 'billing-v2-docs',
+    repo: 'orca-docs',
+    worktree: 'fleet-view-docs',
     title:
-      'Update the public billing API reference, the SDK migration guide and the changelog so every v1 endpoint links to its v2 replacement',
+      'Update the dashboard guide, the keyboard reference and the changelog so every fleet screenshot shows the new project grouping',
     message:
-      'Rewrote the reference pages for invoices, subscriptions and refunds. Now cross-checking each code sample against the generated v2 OpenAPI schema, because three samples still pass amounts as floats instead of integer cents, which the v2 API rejects with a 422.',
+      'Rewrote the fleet section of the dashboard guide. Now retaking each screenshot against the new project headers, because three of them still show the flat team list that the project grouping replaced.',
     startedMinutesAgo: 70,
     changedMinutesAgo: 22
   },
@@ -135,13 +151,13 @@ const AGENTS: readonly MockAgent[] = [
     agentType: 'codex',
     bucket: 'working',
     dotState: 'working',
-    repo: 'orca',
-    worktree: 'stabilize-e2e',
-    title: 'Stabilize the flaky e2e suite',
-    message: 'Quarantine is merged. Waiting on the Linux bisect and the resize test rewrite.',
+    repo: 'web-app',
+    worktree: 'checkout-v2',
+    title: 'Move checkout to the v2 payments API',
+    message: 'The form and webhooks are merged. Waiting on the e2e rewrite.',
     startedMinutesAgo: 190,
-    finishedMinutesAgo: 130,
-    changedMinutesAgo: 12
+    changedMinutesAgo: 12,
+    host: BUILD_BOX
   },
   {
     id: 9,
@@ -149,13 +165,13 @@ const AGENTS: readonly MockAgent[] = [
     agentType: 'claude',
     bucket: 'working',
     dotState: 'working',
-    repo: 'orca',
-    worktree: 'e2e-linux-bisect',
-    title: 'Bisect timeouts on the Linux runner',
-    message: 'Narrowed the regression to 14 commits; running the suite at the midpoint.',
+    repo: 'web-app',
+    worktree: 'checkout-v2-form',
+    title: 'Replace the card form with the hosted fields',
+    message: 'Hosted fields render in all three themes; wiring the error states now.',
     startedMinutesAgo: 150,
     changedMinutesAgo: 4,
-    host: { executionHostId: 'ssh:linux-ci-runner', hostLabel: 'linux-ci-runner' }
+    host: BUILD_BOX
   },
   {
     id: 10,
@@ -164,13 +180,14 @@ const AGENTS: readonly MockAgent[] = [
     bucket: 'done',
     dotState: 'done',
     unseen: true,
-    repo: 'orca',
-    worktree: 'e2e-quarantine',
-    title: 'Quarantine the six flakiest specs',
-    message: 'Moved six specs behind the @flaky tag and opened a tracking issue for each.',
+    repo: 'web-app',
+    worktree: 'checkout-v2-webhooks',
+    title: 'Point the order webhooks at v2',
+    message: 'Webhooks verify the v2 signature header; replay test passes.',
     startedMinutesAgo: 182,
     finishedMinutesAgo: 120,
-    changedMinutesAgo: 120
+    changedMinutesAgo: 120,
+    host: BUILD_BOX
   },
   {
     id: 11,
@@ -178,43 +195,16 @@ const AGENTS: readonly MockAgent[] = [
     agentType: 'amp',
     bucket: 'working',
     dotState: 'working',
-    repo: 'orca',
-    worktree: 'e2e-resize-clock',
-    title: 'Rewrite the terminal resize test with a fake clock',
-    message:
-      'Replaced three sleeps with a controllable clock; rerunning 200 iterations to confirm.',
+    repo: 'web-app',
+    worktree: 'checkout-v2-e2e',
+    title: 'Rewrite the checkout e2e tests',
+    message: 'Replaced three sleeps with a controllable clock; rerunning 200 iterations.',
     startedMinutesAgo: 185,
-    changedMinutesAgo: 185
+    changedMinutesAgo: 185,
+    host: BUILD_BOX
   },
   {
     id: 12,
-    agentType: 'claude',
-    bucket: 'idle',
-    dotState: 'done',
-    repo: 'acme-web',
-    worktree: 'settings-layout',
-    title: 'Explore a two-column settings layout',
-    message: 'Sketched two layouts in the settings route; both keep the existing form controls.',
-    startedMinutesAgo: 230,
-    finishedMinutesAgo: 205,
-    changedMinutesAgo: 205
-  },
-  {
-    id: 13,
-    agentType: 'codex',
-    bucket: 'done',
-    dotState: 'done',
-    unseen: true,
-    repo: 'acme-web',
-    worktree: 'readme-typos',
-    title: 'Fix typos in the README',
-    message: 'Fixed four typos and one broken link in the README.',
-    startedMinutesAgo: 34,
-    finishedMinutesAgo: 27,
-    changedMinutesAgo: 27
-  },
-  {
-    id: 14,
     agentType: 'cursor',
     bucket: 'working',
     dotState: 'working',
@@ -224,6 +214,45 @@ const AGENTS: readonly MockAgent[] = [
     message: 'Heap snapshots show retained transcript pages; testing an LRU cap of 50 pages.',
     startedMinutesAgo: 48,
     changedMinutesAgo: 9
+  },
+  {
+    id: 13,
+    agentType: 'codex',
+    bucket: 'done',
+    dotState: 'done',
+    unseen: true,
+    repo: 'orca',
+    worktree: 'readme-typos',
+    title: 'Fix typos in the README',
+    message: 'Fixed four typos and one broken link in the README.',
+    startedMinutesAgo: 34,
+    finishedMinutesAgo: 27,
+    changedMinutesAgo: 27
+  },
+  {
+    id: 14,
+    agentType: 'claude',
+    bucket: 'working',
+    dotState: 'working',
+    repo: 'notes',
+    worktree: 'q4-planning',
+    title: 'Draft the Q4 planning doc',
+    message: 'Pulled goals from last quarter; drafting the staffing section.',
+    startedMinutesAgo: 25,
+    changedMinutesAgo: 2
+  },
+  {
+    id: 15,
+    agentType: 'claude',
+    bucket: 'idle',
+    dotState: 'done',
+    repo: 'notes',
+    worktree: 'weekly-notes',
+    title: "Summarize this week's meeting notes",
+    message: 'Summarized five meetings into one page with action items.',
+    startedMinutesAgo: 230,
+    finishedMinutesAgo: 205,
+    changedMinutesAgo: 205
   }
 ]
 
@@ -237,6 +266,7 @@ function paneKeyOf(id: number): string {
 
 function toCard(agent: MockAgent, now: number): DashboardCard {
   const ago = (minutes: number): number => now - minutes * MINUTE
+  const repo = REPOS[agent.repo]
   return {
     paneKey: paneKeyOf(agent.id),
     ptyId: `pty-${agent.id}`,
@@ -247,7 +277,7 @@ function toCard(agent: MockAgent, now: number): DashboardCard {
     conversationName: agent.title,
     lastAgentMessage: agent.message,
     askSummary: agent.askSummary,
-    repoId: `repo-${agent.repo}`,
+    repoId: repo.repoId,
     worktreeId: `wt-${agent.worktree}`,
     tabId: `tab-${agent.id}`,
     leafId: leafIdOf(agent.id),
@@ -257,7 +287,7 @@ function toCard(agent: MockAgent, now: number): DashboardCard {
     hostKind: agent.host ? 'ssh' : 'local',
     executionHostId: agent.host?.executionHostId ?? 'local',
     hostLabel: agent.host?.hostLabel,
-    workspaceKind: 'worktree',
+    workspaceKind: repo.workspaceKind ?? 'worktree',
     startedAt: ago(agent.startedMinutesAgo),
     finishedAt: agent.finishedMinutesAgo === undefined ? null : ago(agent.finishedMinutesAgo),
     stateChangedAt: ago(agent.changedMinutesAgo),
@@ -266,14 +296,15 @@ function toCard(agent: MockAgent, now: number): DashboardCard {
 }
 
 export function buildFleetMockSnapshot(now: number): DashboardSnapshot {
-  const repos = [...new Set(AGENTS.map((agent) => agent.repo))]
+  const repos = Object.entries(REPOS)
   return {
     generatedAt: now,
     cards: AGENTS.map((agent) => toCard(agent, now)),
     showIdle: true,
     filterOptions: {
-      projects: repos.map((repo) => ({ id: `repo-${repo}`, label: repo })),
+      projects: repos.map(([name, repo]) => ({ id: repo.repoId, label: name })),
       workspaceStatuses: []
-    }
+    },
+    repoIconsByRepoId: Object.fromEntries(repos.map(([, repo]) => [repo.repoId, repo.icon]))
   }
 }

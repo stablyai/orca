@@ -13,10 +13,15 @@ const NARROW = 520
 const ENGLISH = { settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' as const } }
 const { cards, repoIconsByRepoId } = buildFleetMockSnapshot(FLEET_MOCK_NOW)
 
-function fleetFixture(width: number, fixtureCards: readonly DashboardCard[]) {
+function fleetFixture(
+  width: number,
+  fixtureCards: readonly DashboardCard[],
+  interact?: (frame: HTMLElement) => void
+) {
   return defineFixture({
     store: ENGLISH,
     width,
+    interact,
     render: () => (
       <AgentFleetView
         cards={fixtureCards}
@@ -31,6 +36,15 @@ function fleetFixture(width: number, fixtureCards: readonly DashboardCard[]) {
 
 export const networkWide = fleetFixture(WIDE, cards)
 export const networkNarrow = fleetFixture(NARROW, cards)
+export const projectCollapsed = fleetFixture(WIDE, cards, (frame) => {
+  const webAppHeader = [
+    ...frame.querySelectorAll<HTMLButtonElement>('button[data-slot="collapsible-trigger"]')
+  ].find((button) => button.textContent?.startsWith('web-app'))
+  if (!webAppHeader) {
+    throw new Error('web-app project header not found')
+  }
+  webAppHeader.click()
+})
 
 const [coordinator, ...others] = cards
 export const wideTeam = fleetFixture(WIDE, [
