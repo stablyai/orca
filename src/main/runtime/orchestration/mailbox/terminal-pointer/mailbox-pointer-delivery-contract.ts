@@ -1,3 +1,9 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type {
+  MailboxForeground,
+  MailboxForegroundInspection
+} from '../../../terminal/wait/launched-agent-foreground'
+import type { MailboxDeliveryDecision } from '../notifications/mailbox-delivery-recheck'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { OrchestrationMailboxDeliveryTarget } from '../routing/mailbox-delivery-target'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
@@ -19,17 +25,49 @@ export type OrchestrationMailboxPointerMessage = {
 }
 
 export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
-  mailboxOwner: OrchestrationMailboxOwner
-  deliveryTarget: OrchestrationMailboxDeliveryTarget
+  mailboxOwner: Pick<OrchestrationMailboxOwner, 'resolve'>
+  deliveryTarget: Pick<
+    OrchestrationMailboxDeliveryTarget,
+    'resolveTerminal' | 'deferForAbsenceProbe'
+  >
   getDb: () => OrchestrationDb | null
   getTerminal: (ptyId: string) => OrchestrationMailboxTerminal | null
   /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */
-  isAgentSettledForDelivery: (ptyId: string) => boolean
+  isAgentSettledForDelivery: (
+    ptyId: string,
+    foreground?: MailboxForeground,
+    stagedText?: string,
+    agent?: TuiAgent
+  ) => boolean
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
-  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
+  resolveSubmitTarget: (
+    ptyId: string,
+    foreground?: MailboxForeground,
+    stagedText?: string,
+    agent?: TuiAgent
+  ) => OrchestrationMailboxPointerSubmitTarget | null
+  readComposerText?: (ptyId: string, agent?: TuiAgent) => string | null
+  readForeground: (
+    ptyId: string,
+    agent?: TuiAgent
+  ) => Promise<MailboxForeground | MailboxForegroundInspection>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  isForegroundCandidate?: (terminal: OrchestrationMailboxTerminal) => boolean
+  needsForegroundEvaluation?: (ptyId: string) => boolean
+  onDeliveryDecision: (ptyId: string, decision?: MailboxDeliveryDecision) => void
+  redriveTerminal: (ptyId: string) => void
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+}
+
+export type PointerDeliveryOptions = {
+  mailboxHandle: string
+  reservedTypes?: ReadonlySet<string>
+  skipAbsenceProbe?: boolean
+  foreground?: MailboxForeground
+  agent?: TuiAgent
+  foregroundFollowup?: boolean
+  foregroundProbeIncarnation?: string
 }

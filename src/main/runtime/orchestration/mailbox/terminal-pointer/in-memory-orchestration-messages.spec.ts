@@ -177,29 +177,33 @@ export class InMemoryOrchestrationMessages {
     this.clearMailboxPointerEnter(released)
   }
 
-  releasePendingMailboxPointerForPty(ptyId: string): void {
-    const reservedIds = new Set(
-      this.messages
-        .filter(
-          (message) => message.pointer_enter_pending === 1 && message.pointer_pty_id === ptyId
-        )
-        .map((message) => message.id)
+  getPendingMailboxPointerMessagesForPty(ptyId: string): MessageRow[] {
+    return this.messages.filter(
+      (message) =>
+        message.read === 0 &&
+        (message.pointer_enter_pending ?? 0) > 0 &&
+        message.pointer_pty_id === ptyId &&
+        message.delivery_contract === 'current_delivery'
     )
-    const pendingIds = new Set(
+  }
+
+  releasePendingMailboxPointerForPty(ptyId: string): void {
+    const ids = new Set(
       this.messages
         .filter(
-          (message) => (message.pointer_enter_pending ?? 0) > 0 && message.pointer_pty_id === ptyId
+          (message) =>
+            (message.pointer_enter_pending ?? 0) > 0 &&
+            message.pointer_pty_id === ptyId &&
+            (message.read === 1 || message.pointer_enter_pending === 1)
         )
         .map((message) => message.id)
     )
     for (const message of this.messages) {
-      if (reservedIds.has(message.id) && message.read === 0) {
+      if (ids.has(message.id) && message.read === 0) {
         message.delivered_at = null
-      } else if (pendingIds.has(message.id) && message.read === 0) {
-        message.delivered_at ??= '1970-01-01 00:00:00'
       }
     }
-    this.clearMailboxPointerEnter(pendingIds)
+    this.clearMailboxPointerEnter(ids)
   }
 
   setActiveCoordinatorRun(run: { coordinator_handle: string } | null): void {

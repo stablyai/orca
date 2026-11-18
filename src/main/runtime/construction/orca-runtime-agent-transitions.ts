@@ -1,5 +1,5 @@
 import type { PairedDeviceAccountLookup } from '../rpc/server/pairing/device-entry'
-import { worktreesUnderHomes } from '../../bots/bot-handed-workspaces'
+import { botOfWorkspace } from '../../bots/bot-handed-workspaces'
 import { forgetPairedReads } from '../../bots/bot-paired-handed-agents'
 import type { SlackMirror } from '../../external-conversations/slack-mirror'
 import type { AdmittedMessage } from '../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
@@ -18,10 +18,7 @@ import type { ExternalConversationSeam } from '../../external-conversations/exte
 import { installExternalConversations } from '../../external-conversations/external-conversations-install'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import {
-  folderWorkspaceKey,
-  parseWorkspaceKey
-} from '../../../shared/workspace/identity/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
@@ -141,24 +138,12 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     this.externalConversations.threadSeen(sessionId)
   }
 
-  /** The bot whose home a worktree is, or whose home it sits under (its agents work for that bot). */
   private botOfWorkspace(worktreeId: string): string | null {
-    const homes = new Map<string, string>(
-      this.bots.list().map((bot) => [folderWorkspaceKey(bot.folderWorkspaceId), bot.id])
+    return botOfWorkspace(
+      this.bots.list(),
+      this.store?.getAllWorkspaceLineage?.() ?? {},
+      worktreeId
     )
-    const home = homes.get(worktreeId)
-    if (home) {
-      return home
-    }
-    const handed = worktreesUnderHomes(this.store?.getAllWorkspaceLineage?.() ?? {}, [
-      ...homes.keys()
-    ])
-    for (const [homeKey, ids] of handed) {
-      if (ids.has(worktreeId)) {
-        return homes.get(homeKey) ?? null
-      }
-    }
-    return null
   }
 
   onChatMessageAdmitted(message: AdmittedMessage): void {
@@ -295,6 +280,12 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     this.crewChanges.notify(new Set(['status', 'names']))
     const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
+    const detachMail = subscribe?.((row) => {
+      const pty = this.getPtyRecordForPaneKey(row.paneKey)
+      if (pty) {
+        this.orchestrationMailboxPointerDelivery.observeTerminal(pty.ptyId, row.payload.state)
+      }
+    })
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
@@ -302,6 +293,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       detachCrew()
       detachRows()
       this.crewChanges.notify(new Set(['status', 'names']))
+      detachMail?.()
       detachTitles()
       detachTransitions()
     }

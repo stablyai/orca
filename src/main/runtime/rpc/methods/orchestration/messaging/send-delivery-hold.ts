@@ -43,7 +43,8 @@ async function readDeliveryHoldWarning(
     readChatAdmit: readStructuredMailAdmitFacts,
     readTerminalHold: (mailbox) => runtime.readTerminalMailHold(mailbox)
   })
-  return hold
+  return hold &&
+    (!recipient.startsWith('run:') || hold.kind === 'not-foreground' || hold.kind === 'not-live')
     ? {
         code: 'recipient_delivery_held',
         recipient,
