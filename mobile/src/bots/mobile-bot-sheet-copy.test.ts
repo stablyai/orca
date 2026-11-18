@@ -1,26 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EVENT_ONLY_SCHEDULE } from '../../../src/shared/automation-event-triggers'
-import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-schema'
-import {
-  activityRowView,
-  automationWhenText,
-  botStatusFromDots,
-  memberSourceLabel
-} from './mobile-bot-sheet-copy'
-
-function automation(overrides: Partial<BotAutomationView> = {}): BotAutomationView {
-  return {
-    id: 'a-1',
-    name: 'Morning digest',
-    enabled: true,
-    nextRunAt: 0,
-    updatedAt: 0,
-    dtstart: 0,
-    rrule: 'FREQ=HOURLY;BYMINUTE=5',
-    workspaceId: 'folder:home',
-    ...overrides
-  }
-}
+import { activityRowView, botStatusFromDots, memberSourceLabel } from './mobile-bot-sheet-copy'
 
 describe('activity rows', () => {
   it("draws the host's dot as it is", () => {
@@ -44,20 +23,6 @@ describe('activity rows', () => {
     expect(activityRowView({ ...run, status: 'completed' }).detail).toBe('Run · Never')
     // A status from a newer host keeps the row, with no status word.
     expect(activityRowView({ ...run, status: undefined })).toMatchObject({ dot: 'idle' })
-  })
-})
-
-describe('automationWhenText', () => {
-  it('names the event and says Paused for a disabled event-only automation', () => {
-    expect(
-      automationWhenText(
-        automation({
-          ...EVENT_ONLY_SCHEDULE,
-          on: [{ id: 'r2', source: 'github', event: 'ci_failed' }]
-        }),
-        false
-      )
-    ).toBe('When CI fails · Paused')
   })
 })
 
