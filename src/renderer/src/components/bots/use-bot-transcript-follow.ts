@@ -105,6 +105,7 @@ export function useBotTranscriptFollow({
     jumpToLatest: scroll.scrollToBottom,
     forwardedGesture: reader.forwardedGesture,
     transcriptRef,
-    scrollMessageToTop: scroll.scrollMessageToTop
+    scrollMessageToTop: scroll.scrollMessageToTop,
+    readerAtEnd: scroll.readerAtEnd
   }
 }

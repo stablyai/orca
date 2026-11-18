@@ -61,6 +61,7 @@ it("opens a member's subagent in the room turn and Esc returns to the turn", () 
         onStop={() => {}}
         onReply={() => {}}
         scrollMessageToTop={() => {}}
+        readerAtEnd={() => true}
       />
     </TooltipProvider>
   )

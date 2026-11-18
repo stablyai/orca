@@ -40,6 +40,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   onStop,
   onReply,
   scrollMessageToTop,
+  readerAtEnd,
   files,
   roomLinks,
   roomRows,
@@ -60,6 +61,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   onStop: (botId: string) => void
   onReply: (botId: string) => void
   scrollMessageToTop: (element: HTMLElement) => void
+  readerAtEnd: () => boolean
 }): React.JSX.Element {
   const t = useTranslate()
   useUiLanguageRevision()
@@ -198,6 +200,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     onToggleExpandedTurn: () => setExpanded(!expanded),
     onOpenSubagent: scope.open,
     onScrollMessageToTop: scrollMessageToTop,
+    readerAtEnd,
     onRevealDiff: () => {},
     actionablePromptIds: session?.hostWork?.actionablePromptIds
   }

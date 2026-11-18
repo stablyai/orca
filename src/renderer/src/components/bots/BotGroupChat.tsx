@@ -367,6 +367,7 @@ export function BotGroupChat({
                         onStop={stop}
                         onReply={reply}
                         scrollMessageToTop={follow.scrollMessageToTop}
+                        readerAtEnd={follow.readerAtEnd}
                       />
                     ))}
                   </div>

@@ -84,6 +84,7 @@ function Room() {
           onStop={() => {}}
           onReply={() => {}}
           scrollMessageToTop={() => {}}
+          readerAtEnd={() => true}
         />
       </NativeChatTranscriptColumn>
     </div>
