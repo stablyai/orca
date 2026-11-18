@@ -1,6 +1,14 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 
+export const PeerMailMessageType = z.enum([
+  'status',
+  'handoff',
+  'question',
+  'dispatch',
+  'merge_ready'
+])
+
 /** Agent mail one Orca carries to an agent on a paired Orca, inside a conversation the sender's Orca opened. */
 export const PeerMailDeliverParams = z.object({
   conversationId: requiredString('Missing conversation ID'),
@@ -9,7 +17,7 @@ export const PeerMailDeliverParams = z.object({
   senderLabel: requiredString('Missing sender label'),
   subject: requiredString('Missing --subject'),
   body: OptionalString,
-  type: z.enum(['status', 'handoff']).optional(),
+  type: PeerMailMessageType.optional(),
   priority: z.enum(['normal', 'high', 'urgent']).optional(),
   threadId: OptionalString
 })

@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
-  ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY
+  ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -154,12 +155,17 @@ describe('agent mail between paired Orca servers', () => {
       on: 'devB',
       to: 'term_b',
       subject: 'Check the build',
+      type: 'question',
       body: 'Is main green?'
     })
     expect(sent).toMatchObject({ ok: true, result: { server: 'devB', message: { to: 'term_b' } } })
 
     const [onB] = mailFor(b, 'term_b')
-    expect(onB).toMatchObject({ from_handle: "term_a on Jinwoo's Mac", subject: 'Check the build' })
+    expect(onB).toMatchObject({
+      from_handle: "term_a on Jinwoo's Mac",
+      subject: 'Check the build',
+      type: 'question'
+    })
 
     const replied = await mutation(b, 'orchestration.reply', {
       id: onB!.id,
@@ -273,6 +279,45 @@ describe('agent mail between paired Orca servers', () => {
     })
     expect(b.db.getInbox(10)).toEqual([])
   })
+
+  it.each(['dispatch', 'merge_ready'])('carries ordinary %s mail unchanged', async (type) => {
+    const sent = await mutation(a, 'orchestration.send', {
+      from: 'term_a', on: 'devB', to: 'term_b', subject: 'Next step', type
+    })
+    expect(sent).toMatchObject({ ok: true })
+    expect(mailFor(b, 'term_b')).toMatchObject([{ subject: 'Next step', type }])
+  })
+
+  it('refuses new types on an old enum peer while keeping its status mail working', async () => {
+    bCapabilities = (capabilities) => capabilities.filter(
+      (capability) => capability !== ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
+    )
+    const sent = await mutation(a, 'orchestration.send', {
+      from: 'term_a', on: 'devB', to: 'term_b', subject: 'Question', type: 'question'
+    })
+    expect(sent).toMatchObject({
+      ok: false,
+      error: { code: 'server_mail_type_unsupported', data: { effectsApplied: false } }
+    })
+    expect(b.db.getInbox(10)).toEqual([])
+    expect(await mutation(a, 'orchestration.send', {
+      from: 'term_a', on: 'devB', to: 'term_b', subject: 'Status', type: 'status'
+    })).toMatchObject({ ok: true })
+    expect(mailFor(b, 'term_b')).toMatchObject([{ subject: 'Status', type: 'status' }])
+  })
+
+  it.each(['worker_done', 'heartbeat', 'escalation', 'decision_gate'])(
+    'keeps %s on its Dispatch authority path', async (type) => {
+      const sent = await mutation(a, 'orchestration.send', {
+        from: 'term_a', on: 'devB', to: 'term_b', subject: 'Report', type
+      })
+      expect(sent).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument', data: { effectsApplied: false } }
+      })
+      expect(b.db.getInbox(10)).toEqual([])
+    }
+  )
 
   it('acknowledges a retried delivery after its recipient is gone, storing it once', async () => {
     const deliver = {

@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto'
-import { ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import {
+  ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
+} from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { PeerMailMessageType } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { PeerMailConversationRow } from '../../db/federation/peer-mail-store'
@@ -42,7 +46,8 @@ export function peerMailMessageId(
 /** Refuses before any effect when the server's Orca cannot receive mail or queue its replies. */
 export async function requirePeerMailServer(
   runtime: PeerMailRuntime,
-  selector: string
+  selector: string,
+  type?: z.infer<typeof PeerMailMessageType>
 ): Promise<OrchestrationWorkerServer> {
   const server = await runtime.resolveOrchestrationWorkerServer(selector)
   const status = RuntimeStatusCapabilities.safeParse(
@@ -65,6 +70,18 @@ export async function requirePeerMailServer(
       { ...NOTHING_SENT, server: server.name }
     )
   }
+  if (
+    type &&
+    type !== 'status' &&
+    type !== 'handoff' &&
+    !status.data.capabilities.includes(ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY)
+  ) {
+    throw new OrchestrationError(
+      'server_mail_type_unsupported',
+      `Server ${server.name} runs an older Orca that cannot receive --type ${type} agent mail. Update Orca on ${server.name}, then send again. Nothing was sent.`,
+      { ...NOTHING_SENT, server: server.name }
+    )
+  }
   return server
 }
 
@@ -84,7 +101,7 @@ export async function deliverPeerMail(
     senderLabel: string
     subject: string
     body?: string
-    type?: 'status' | 'handoff'
+    type?: z.infer<typeof PeerMailMessageType>
     priority?: 'normal' | 'high' | 'urgent'
     threadId?: string
   }
