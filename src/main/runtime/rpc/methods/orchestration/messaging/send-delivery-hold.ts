@@ -60,17 +60,16 @@ async function readDeliveryHoldWarning(
 }
 
 /** A stored send's receipt with the hold line added, when the delivery gate would hold it. A message
- *  a waiting `check --wait` took is read by that call, so no hold applies to it; `waiterTakesType` is
- *  the type a waiter was found for before storing, or null. */
+ *  a waiting `check --wait` took is read by that call, so no hold applies to it. */
 export async function withDeliveryHoldWarning<T>(
   sent: T,
   runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliCommand'>,
   db: OrchestrationDb,
   recipient: string,
-  waiterTakesType: string | null
+  takenByWaiter: boolean
 ): Promise<T | (T & { warnings: unknown[] })> {
   const held =
-    waiterTakesType !== null && storedMessageType(sent) === waiterTakesType
+    takenByWaiter || isLifecycleRejection(sent)
       ? null
       : await sendDeliveryHoldWarning(runtime, db, recipient)
   if (!held || typeof sent !== 'object' || sent === null) {
@@ -80,16 +79,18 @@ export async function withDeliveryHoldWarning<T>(
   return { ...sent, warnings: [...prior, held] }
 }
 
-// A refused escalation is stored as a status rejection, which a waiter filtered to the asked type won't take.
-function storedMessageType(sent: unknown): unknown {
-  return typeof sent === 'object' &&
+// A refused lifecycle message is stored as a status rejection the receipt already reports; it is not
+// the sender's mail waiting to be read, so no hold advice applies.
+function isLifecycleRejection(sent: unknown): boolean {
+  return (
+    typeof sent === 'object' &&
     sent !== null &&
-    'message' in sent &&
-    typeof sent.message === 'object' &&
-    sent.message !== null &&
-    'type' in sent.message
-    ? sent.message.type
-    : undefined
+    'lifecycle' in sent &&
+    typeof sent.lifecycle === 'object' &&
+    sent.lifecycle !== null &&
+    'action' in sent.lifecycle &&
+    sent.lifecycle.action === 'rejected'
+  )
 }
 
 /** A paired server's worker: this Orca sees only that the relay took the mail. */
