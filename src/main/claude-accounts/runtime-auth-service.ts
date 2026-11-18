@@ -6,9 +6,11 @@ import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
 import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
+import { ClaudeWorkspaceProfiles } from './profiles/routing/claude-workspace-profile'
 import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
 import {
   installClaudeObservedConfigDirs,
+  installClaudeWorkspaceProfiles,
   installClaudeProfileRouter,
   installClaudeWslProfileRouter
 } from './profiles/routing/claude-profile-installed-router'
@@ -24,6 +26,7 @@ export class ClaudeRuntimeAuthService {
   private readonly wslRouter?: ClaudeWslProfileRouter
   private readonly dataRoot = getAppEnvironment().getPath('userData')
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  readonly workspaceProfiles: ClaudeWorkspaceProfiles
 
   constructor(
     private readonly store: Pick<Store, 'getSettings'>,
@@ -32,6 +35,12 @@ export class ClaudeRuntimeAuthService {
     const args = { getSettings: () => store.getSettings(), dataRoot: this.dataRoot }
     this.router = new ClaudeProfileRouter(args)
     installClaudeProfileRouter(this.router)
+    this.workspaceProfiles = new ClaudeWorkspaceProfiles(
+      () => store.getSettings(),
+      this.router,
+      (id, target) => this.prepareAccountFolder(id, target)
+    )
+    installClaudeWorkspaceProfiles(this.workspaceProfiles)
     installClaudeObservedConfigDirs(
       new ClaudeObservedConfigDirs(join(this.dataRoot, 'claude-observed-config-dirs.json'), () =>
         store.getSettings()
@@ -44,9 +53,21 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  prepareForClaudeLaunch(
-    target?: ClaudeAccountSelectionTarget
+  async prepareForClaudeLaunch(
+    target?: ClaudeAccountSelectionTarget,
+    workspaceId?: string,
+    _launchEnv?: NodeJS.ProcessEnv
   ): Promise<ClaudeRuntimeAuthPreparation> {
+    if (this.workspaceProfiles.has(workspaceId)) {
+      const preparation = await this.workspaceProfiles.resolve(
+        workspaceId,
+        this.resolveTarget(target),
+        true
+      )
+      if (preparation) {
+        return preparation
+      }
+    }
     const wsl = this.wslRouteFor(target)
     return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
   }
@@ -102,11 +123,12 @@ export class ClaudeRuntimeAuthService {
 
   async prepareAccountFolder(
     accountId: string,
-    target: ClaudeAccountSelectionTarget
+    target: ClaudeAccountSelectionTarget,
+    privateHistory = false
   ): Promise<ClaudeAccountFolder> {
     const wsl = this.wslRouteFor(target)
     if (!wsl) {
-      const home = await this.router.prepareAccount(accountId)
+      const home = await this.router.prepareAccount(accountId, privateHistory)
       return { configDir: home, readPath: home }
     }
     const home = await wsl.router.prepareAccount(wsl.distro, accountId)

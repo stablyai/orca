@@ -1,3 +1,4 @@
+import { getClaudeAccountLabel } from '@/lib/provider-accounts/claude-account-label'
 import { useClaudeSwitcherState } from './use-claude-switcher-state'
 import type { ClaudeSwitcherMenuProps } from './ClaudeSwitcherMenu'
 import { useProviderAccountList } from './use-provider-account-list'
@@ -60,6 +61,8 @@ export function ClaudeSwitcherForOwner({
   owner
 }: ClaudeSwitcherMenuProps & { owner: AccountOwner }): React.JSX.Element | null {
   const t = useTranslate()
+  const hostClaude = useAppStore((state) => state.rateLimits.claude)
+  const workspaceAccountId = claude?.usageMetadata?.contextAccountId
   const [open, setOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
   const [signingInId, setSigningInId] = useState<string | null>(null)
@@ -266,7 +269,13 @@ export function ClaudeSwitcherForOwner({
     'Updates when Claude runs'
   )
   // Why: `claude` and the rows come from the same owner snapshot, so its active row is the reading's account.
-  const liveActiveUsage = chatAction ? null : claude
+  const liveActiveUsage = chatAction
+    ? null
+    : workspaceAccountId
+      ? ownerUsage
+        ? (ownerUsage.accountRateLimits ?? ownerUsage.rateLimits).claude
+        : hostClaude
+      : claude
   const panelShowsActiveAccount = ownerUsage !== undefined || !hasActiveRuntimeEnvironment
   const rowUsage = (
     target: (typeof rows)[number]['target'],
@@ -358,10 +367,12 @@ export function ClaudeSwitcherForOwner({
       )}
       variant="account"
       accountLabel={
-        panelShowsActiveAccount
-          ? (selectedGroup?.targets.find((target) => target.active)?.label ??
-            t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
-          : undefined
+        workspaceAccountId
+          ? getClaudeAccountLabel(accountState, workspaceAccountId)
+          : panelShowsActiveAccount
+            ? (selectedGroup?.targets.find((target) => target.active)?.label ??
+              t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+            : undefined
       }
       topContent={
         // Why: runtime selection refreshes this desktop's own usage, so a remote owner has none here.
@@ -378,9 +389,13 @@ export function ClaudeSwitcherForOwner({
       onOpenChange={handleOpenChange}
     >
       <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+        heading={
+          workspaceAccountId
+            ? t('usage.codex.hostDefaultAccount', 'Host default account')
+            : t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')
+        }
         targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={panelShowsActiveAccount}
+        panelShowsActiveAccount={panelShowsActiveAccount && !workspaceAccountId}
         onOpenSettings={() => {
           openSettingsTarget({
             pane: 'accounts',

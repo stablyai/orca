@@ -100,7 +100,12 @@ export function buildCodexStatusSwitchGroups(
           id: null,
           label: systemDefaultLabel,
           name: systemDefaultLabel,
-          detail: null,
+          detail:
+            target.runtime === 'host'
+              ? [state.systemDefault?.email, state.systemDefault?.workspaceLabel]
+                  .filter(Boolean)
+                  .join('\n') || null
+              : null,
           active: activeId === null,
           runtimeTarget: target
         },
@@ -215,5 +220,6 @@ export function resolveCodexStatusAccountState(
   if (ownerEnvironmentId) {
     return runtimeState
   }
-  return getCodexStatusAccountsFromSettings(settings) ?? runtimeState
+  const local = getCodexStatusAccountsFromSettings(settings)
+  return local ? { ...local, systemDefault: runtimeState.systemDefault } : runtimeState
 }

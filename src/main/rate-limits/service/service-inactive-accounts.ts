@@ -46,6 +46,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           continue
         }
         try {
+          const startedAt = Date.now()
           const fresh = await fetchInactiveClaudeAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
@@ -64,7 +65,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             continue
           }
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
-          this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
+          if (
+            !(cached?.usageMetadata?.source === 'live-session' && cached.updatedAt >= startedAt)
+          ) {
+            this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
+          }
         } catch {
           // Isolate each account's Keychain/network failure so siblings continue.
           if (
@@ -120,6 +125,18 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           this.pushToRenderer()
           continue
         }
+        const active = this.state.codex
+        const readingAccount = active?.usageMetadata?.readingAccount
+        if (
+          readingAccount?.accountId === account.id &&
+          active &&
+          readingAccount.runtime === account.readingAccount?.runtime &&
+          readingAccount.wslDistro === account.readingAccount?.wslDistro &&
+          Date.now() - active.updatedAt < INACTIVE_FETCH_DEBOUNCE_MS
+        ) {
+          this.inactiveCodexCache.set(account.id, active)
+          continue
+        }
         if (staggerNextProbe) {
           await delayUnlessAborted(INACTIVE_CODEX_PROBE_STAGGER_MS, signal)
           if (
@@ -146,6 +163,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           // Read the managed home directly; do not materialize credentials in the shared runtime.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: home.managedHomePath,
+            authSnapshot: home.authSnapshot,
             readingAccount: account.readingAccount,
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal

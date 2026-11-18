@@ -103,7 +103,7 @@ export async function prepareRuntimePtySpawn(
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget, args.worktreeId, args.env)
       : null
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
@@ -127,7 +127,9 @@ export async function prepareRuntimePtySpawn(
       ...(args.placement ? { placement: args.placement } : {})
     }
   }
-  ctx.env = ctx.claudeAuth ? { ...args.env, ...ctx.claudeAuth.envPatch } : args.env
+  ctx.env = ctx.claudeAuth
+    ? { ...args.env, ...ctx.claudeAuth.envPatch, ORCA_CLAUDE_LAUNCH_ERROR: '' }
+    : args.env
   ctx.requestedAgentTeamsPath = ctx.env?.ORCA_AGENT_TEAMS_TEAM_ID
     ? ctx.env[resolvePathEnvKey(ctx.env, process.platform)]
     : undefined
@@ -150,6 +152,7 @@ export async function prepareRuntimePtySpawn(
     resumeProviderSession: args.resumeProviderSession,
     env: ctx.env,
     cwd: ctx.cwd,
+    worktreeId: args.worktreeId,
     shellOverride: ctx.daemonShellOverride,
     expectedWslDistro: ctx.expectedWslDistro,
     codexSelectionTarget: ctx.codexSelectionTarget,

@@ -2,8 +2,9 @@
 export function getPosixClaudeShellFunction(): string {
   return `__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
 # Why typeset -f: a user's own claude function wins; command -v prints its bare name, which -x tests against the cwd.
-if ! typeset -f claude >/dev/null 2>&1 && [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
+if ! typeset -f claude >/dev/null 2>&1 && [[ ( -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" || -n "\${ORCA_CLAUDE_LAUNCH_ERROR:-}" ) && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
   function claude {
+    if [ -n "\${ORCA_CLAUDE_LAUNCH_ERROR:-}" ]; then printf '%s\\n' "\${ORCA_CLAUDE_LAUNCH_ERROR}" >&2; return 1; fi
     local __orca_claude_home __orca_claude_pointer="\${ORCA_CLAUDE_PROFILE_POINTER:-}"
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="\${HOME:-}/\${__orca_claude_pointer#??}" ;; esac
@@ -34,8 +35,12 @@ unset __orca_claude_binary
 export function getFishClaudeShellFunction(): string {
   return `
 set -l __orca_claude_type (type -t claude 2>/dev/null)
-if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
+if begin; test -n "$ORCA_CLAUDE_PROFILE_POINTER"; or test -n "$ORCA_CLAUDE_LAUNCH_ERROR"; end; and test "$__orca_claude_type" = file
   function claude
+    if test -n "$ORCA_CLAUDE_LAUNCH_ERROR"
+      printf '%s\\n' "$ORCA_CLAUDE_LAUNCH_ERROR" >&2
+      return 1
+    end
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     set -l pointer (string replace -r '^~/' "$HOME/" -- "$ORCA_CLAUDE_PROFILE_POINTER")
     set -l profile (cat "$pointer" 2>/dev/null)
@@ -66,15 +71,16 @@ set -e __orca_claude_type
 
 export function getPowerShellClaudeShellFunction(): string {
   return `$orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($env:ORCA_CLAUDE_PROFILE_POINTER -and $orcaClaudeCommand -and
+if (($env:ORCA_CLAUDE_PROFILE_POINTER -or $env:ORCA_CLAUDE_LAUNCH_ERROR) -and $orcaClaudeCommand -and
     $orcaClaudeCommand.CommandType -in @("Application", "ExternalScript")) {
 function Global:claude {
+    if ($env:ORCA_CLAUDE_LAUNCH_ERROR) { Write-Error $env:ORCA_CLAUDE_LAUNCH_ERROR -ErrorAction Continue; $global:LASTEXITCODE = 1; return }
     $names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR')
     $saved = @{}
     foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
     try {
         $orcaClaudeHome = ''
-        if ($env:ORCA_CLAUDE_PROFILE_POINTER -and (Test-Path -LiteralPath $env:ORCA_CLAUDE_PROFILE_POINTER -PathType Leaf)) {
+        if (($env:ORCA_CLAUDE_PROFILE_POINTER -or $env:ORCA_CLAUDE_LAUNCH_ERROR) -and (Test-Path -LiteralPath $env:ORCA_CLAUDE_PROFILE_POINTER -PathType Leaf)) {
             $orcaClaudeHome = [IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER).TrimEnd()
         }
         # Why the separator swap: Windows names one folder with either separator.

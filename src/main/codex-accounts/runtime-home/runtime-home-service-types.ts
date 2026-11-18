@@ -2,6 +2,7 @@ import type { CodexManagedAccount } from '../../../shared/agent-accounts/managed
 import type { UsageReadingAccount } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type CodexHomeLaunchOptions = {
+  workspaceId?: string
   unavailableManagedHomePath?: string
   deferConfigSync?: (syncConfig: () => boolean) => void
 }

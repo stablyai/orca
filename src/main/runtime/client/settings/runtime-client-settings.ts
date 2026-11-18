@@ -1,3 +1,5 @@
+import { projectSourceControlLaunchRecipes } from './runtime-source-control-launch-recipes'
+import { workspaceAccountSettingUpdates } from './workspace-account-setting-updates'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -10,10 +12,7 @@ import {
   type TerminalQuickCommandMutation
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
-import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
@@ -39,7 +38,6 @@ import { agentLaunchSettingsRollbackUpdates } from '../../terminal/launch/agent-
 import type {
   RuntimeClientSettings,
   RuntimeClientSettingsUpdate,
-  RuntimeClientSourceControlAi,
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
@@ -82,6 +80,8 @@ export class RuntimeClientSettingsController {
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
       // Always present, so a client can tell this host accepts the setting (older hosts omit it).
       codexShareHistoryAcrossAccounts: settings.codexShareHistoryAcrossAccounts !== false,
+      codexWorkspaceAccounts: settings.codexWorkspaceAccounts ?? {},
+      claudeWorkspaceAccounts: settings.claudeWorkspaceAccounts ?? {},
       claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,
       // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
@@ -154,11 +154,23 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
-    const { agentDefaultArgs, agentDefaultEnv, ...otherUpdates } = updates
+    const {
+      agentDefaultArgs,
+      agentDefaultEnv,
+      codexWorkspaceAccount,
+      claudeWorkspaceAccount,
+      ...otherUpdates
+    } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
         ...otherUpdates,
+        ...workspaceAccountSettingUpdates(beforeSettings, {
+          claudeWorkspaceAccount,
+          codexWorkspaceAccount,
+          codexWorkspaceAccounts: updates.codexWorkspaceAccounts,
+          claudeWorkspaceAccounts: updates.claudeWorkspaceAccounts
+        }),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(
@@ -303,22 +315,5 @@ export class RuntimeClientSettingsController {
     })
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation
-  }
-}
-
-function projectSourceControlLaunchRecipes(
-  settings: Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>>
-): RuntimeClientSourceControlAi {
-  const { actions } = normalizeSourceControlAiSettings(
-    settings.sourceControlAi,
-    settings.commitMessageAi
-  )
-  return {
-    actions: Object.fromEntries(
-      SOURCE_CONTROL_LAUNCH_ACTION_IDS.flatMap((actionId) => {
-        const recipe = actions?.[actionId]
-        return recipe ? [[actionId, recipe]] : []
-      })
-    )
   }
 }
