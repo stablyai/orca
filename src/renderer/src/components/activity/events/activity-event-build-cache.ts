@@ -138,6 +138,11 @@ export function resolvePaneBuild(
     return { events: cached.events, live: cached.live, rowEntry }
   }
 
+  ;(
+    (globalThis as unknown as { __orcaActivity?: { rebuilt: number } }).__orcaActivity ?? {
+      rebuilt: 0
+    }
+  ).rebuilt += 1
   // The live turn is itself an event, so a live change always rebuilds the pane's events.
   const events = buildPaneActivityEvents({
     entry: rowEntry,
