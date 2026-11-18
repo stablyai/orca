@@ -31,6 +31,9 @@ export type SessionSearchRetirementArgs = {
   /** Complete successful container enumerations; see session-search-synthetic-sources.ts. */
   enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>>
   listings: SessionSearchDirectoryReader
+  /** Roots whose sessions are all `<store>#<id>` references: a plain file under one is a retired format
+   *  (Hermes' old session_*.json snapshots), retired even while it stays on disk. */
+  referenceOnlyRoots?: readonly string[]
   /** Bound directory work rather than rows so one unreadable directory cannot starve later rows. */
   directoryLimit?: number
   signal?: AbortSignal
@@ -66,6 +69,11 @@ export async function retireDeletedSessionSearchSources(
   for (const [index, path] of paths.entries()) {
     // Synthetic paths name entries inside containers, not filesystem objects.
     const synthetic = splitSyntheticSessionSource(path)
+    if (!synthetic && args.referenceOnlyRoots?.some((root) => isUnderScanRoot(path, root))) {
+      store.removeFile(path)
+      retirement.retired.push(path)
+      continue
+    }
     const filePath = synthetic?.container ?? path
     // After the budget, finish cached directories so row ordering cannot monopolize the next pass.
     if (signal?.aborted || (asked.size >= directoryLimit && !asked.has(dirname(filePath)))) {

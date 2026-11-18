@@ -25,7 +25,7 @@ import type { CliConversationRowAgent } from '../../../../../../shared/agent-ses
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { structuredLaunchConversationOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 
@@ -110,7 +110,6 @@ export function resumeAiVaultSessionHere(args: {
       confirmLabel: translate('components.native-chat.resumeCommand.replace', 'Replace'),
       confirmVariant: 'destructive',
       initialFocus: 'confirm',
-      compact: true,
       ignoresOpeningGesture: true,
       signal
     })

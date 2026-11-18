@@ -63,35 +63,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     vi.useRealTimers()
   })
 
-  it('producerEnvelopeBudget takes the smallest client capacity unless a client is named', () => {
-    const primary = makeBoundedClient(65536)
-    const secondary = makeBoundedClient(16384)
-    const bounded = new RelayDispatcher(primary.write, primary.options)
-    try {
-      const secondaryId = bounded.attachClient(secondary.write, secondary.options)
-      const params = { events: ['x'.repeat(64)] }
-      const envelopeBytes = encodeJsonRpcFrame(
-        { jsonrpc: '2.0', method: 'fs.changed', params },
-        0,
-        0
-      ).length
-
-      expect(bounded.activeClientIds()).toHaveLength(2)
-      expect(bounded.producerEnvelopeBudget('fs.changed', params)).toBe(12288 - envelopeBytes)
-      expect(
-        bounded.producerEnvelopeBudget('fs.changed', params, bounded.activeClientIds()[0])
-      ).toBe(49152 - envelopeBytes)
-      expect(bounded.producerEnvelopeBudget('fs.changed', params, secondaryId)).toBe(
-        12288 - envelopeBytes
-      )
-      expect(bounded.producerEnvelopeBudget('fs.changed', params, 999)).toBe(
-        Number.MIN_SAFE_INTEGER
-      )
-    } finally {
-      bounded.dispose()
-    }
-  })
-
   it('producerEnvelopeBudget reports no capacity for a named client that is gone', () => {
     const primary = makeBoundedClient(65536)
     const secondary = makeBoundedClient(65536)

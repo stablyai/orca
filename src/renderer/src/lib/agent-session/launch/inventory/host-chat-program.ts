@@ -4,10 +4,10 @@ import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY
-} from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+} from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentSessionChatProgram } from '../../../../../../shared/agent-session/agent-session-agent-availability'
+import type { AgentSessionChatProgram } from '../../../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import { chatProviderAgents } from '../../../../runtime/native-chat/agent-catalogs/chat-provider-agents'
 import {
   resolveAgentLaunchRoute,

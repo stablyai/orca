@@ -127,7 +127,12 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   upload: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
     const filesStr = getRequiredStringFlag(flags, 'files')
-    const files = filesStr.split(',').map((f) => f.trim())
+    const files = filesStr
+      .split(',')
+      .map((f) => f.trim())
+      .filter(Boolean)
+      // A paired runtime's pages read workspace-relative or server paths, so those pass as typed.
+      .map((f) => (client.isRemote ? f : resolveRepoPathArgument(f, cwd, false)))
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserUploadResult>('browser.upload', {
       element,

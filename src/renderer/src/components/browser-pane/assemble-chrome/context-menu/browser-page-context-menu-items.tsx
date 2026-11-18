@@ -1,7 +1,7 @@
 import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import { Fragment, type MutableRefObject } from 'react'
 import { useAppStore } from '@/store/index'
-import { isMac } from '@/app-shell/app-window-chrome'
+import { isMac } from '@/app-shell/chrome/app-window-chrome'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openLinkInNewBrowserTab } from '@/lib/browser/palette/open-client-hosted-link-beside-page'

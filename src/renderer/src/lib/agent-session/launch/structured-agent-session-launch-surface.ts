@@ -11,7 +11,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useAppStore } from '@/store/index'
 import { resolveUnifiedTabCreatePlacement } from '@/store/slices/tabs/tabs-create-placement'

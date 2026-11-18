@@ -95,6 +95,7 @@ export function taskWorkspaceSenderMountAdapters(
           persist({
             client,
             trust: {},
+            repos: [{ id: REPO }],
             repoId: REPO,
             contentHash: 'hash-1',
             alwaysTrust: args.always === true

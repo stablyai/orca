@@ -4,7 +4,7 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/sessi
 import { regenerateStructuredAgentSessionName } from '@/runtime/native-chat/naming/structured-agent-session-name-regeneration'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import { STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { nativeChatNamingErrorText } from './native-chat-naming-failure-copy'
 import { recomputeOn } from '@/lib/recompute-on'
 

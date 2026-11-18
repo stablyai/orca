@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
-  AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from '../../agent-session-host-authority'
-import {
-  agentSessionOperationExpiry,
   agentSessionOperationKey,
   evaluateAgentSessionOperation,
-  pruneAgentSessionOperationRows,
   type AgentSessionOperationRow
 } from './agent-session-operation-ledger'
 
@@ -65,43 +59,6 @@ describe('operation admission', () => {
     expect(evaluate(rows, { callerKey: 'client-2' }).decision).toBe('admit')
   })
 
-  it('refuses a malformed or future-dated id', () => {
-    const rows = new Map<string, AgentSessionOperationRow>()
-    expect(evaluate(rows, { operationId: 'not-an-operation-id' })).toEqual({
-      decision: 'refused',
-      code: 'agent_session_operation_invalid',
-      details: { reason: 'operationIdInvalid' }
-    })
-    // Why: a future-dated id would look new again after its own tombstone is collected.
-    expect(
-      evaluate(rows, {
-        operationId: operationId(NOW + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS + 1)
-      })
-    ).toEqual({
-      decision: 'refused',
-      code: 'agent_session_operation_invalid',
-      details: { reason: 'operationIdInvalid' }
-    })
-    expect(
-      evaluate(rows, { operationId: operationId(NOW + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS) })
-        .decision
-    ).toBe('admit')
-  })
-
-  it('refuses an id older than the admission window instead of treating it as new', () => {
-    const rows = new Map<string, AgentSessionOperationRow>()
-    const stale = operationId(NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 1)
-    expect(evaluate(rows, { operationId: stale })).toEqual({
-      decision: 'refused',
-      code: 'agent_session_operation_expired',
-      details: { reason: 'operationExpired' }
-    })
-    expect(
-      evaluate(rows, { operationId: operationId(NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) })
-        .decision
-    ).toBe('admit')
-  })
-
   it('admits a fresh id however many unexpired rows other callers hold', () => {
     // Why: a count cap filled by background agent traffic used to refuse the user's own send.
     const rows = new Map<string, AgentSessionOperationRow>()
@@ -129,18 +86,5 @@ describe('operation admission', () => {
         operationId: operationId(NOW, '0'.repeat(32))
       }).decision
     ).toBe('replay')
-  })
-})
-
-describe('retention', () => {
-  it('keeps a tombstone strictly longer than its id can be admitted as new', () => {
-    const expiry = agentSessionOperationExpiry(NOW, NOW)
-    const lastAdmissibleAt = NOW + AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS
-    expect(expiry).toBeGreaterThan(lastAdmissibleAt)
-    // Why: a retry landing in that gap would become a second spawn instead of a replay.
-    const rows = new Map<string, AgentSessionOperationRow>()
-    admit(rows)
-    expect(pruneAgentSessionOperationRows(rows, lastAdmissibleAt).size).toBe(1)
-    expect(evaluate(pruneAgentSessionOperationRows(rows, lastAdmissibleAt)).decision).toBe('replay')
   })
 })

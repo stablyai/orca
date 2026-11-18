@@ -152,12 +152,12 @@ function MobileFilePreviewDocument({ route }: Props) {
       draftContentRef.current !== savedContentRef.current
     if (!client || connState !== 'connected') {
       if (preserveDirtyDraft) {
-        setSaveError(translate('files.filePreviewScreen.waiting', 'Waiting for desktop...'))
+        setSaveError(translate('common.waitingForHost', 'Waiting for host…'))
         return
       }
       setPreview({
         status: 'waiting',
-        message: translate('files.filePreviewScreen.waiting', 'Waiting for desktop...'),
+        message: translate('common.waitingForHost', 'Waiting for host…'),
         reconnect: true
       })
       return

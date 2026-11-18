@@ -13,7 +13,6 @@ import { WslTranscriptFsError } from '../../native-chat/transcript-filesystem/ws
 import { recordSessionScanIssue, scanIssueTextFromError } from '../parsing/session-scan-issues'
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import { isSelectedSessionFile } from '../session-scanner-selection'
-import { observeSessionFile, type SessionFileObservation } from '../session-file-observation'
 import type {
   FileWithMtime,
   SessionFileDiscovery,
@@ -27,6 +26,12 @@ import {
   openAiVaultScanSource
 } from '../scan-lifecycle/ai-vault-scan-progress'
 import { isMissingTranscriptPathError } from './session-path-absence'
+import type { SessionDiscoveryStatCache } from './session-discovery-stat-cache'
+import {
+  directoryMtime,
+  observeSessionFile,
+  type SessionFileObservation
+} from './session-file-observation'
 
 const NATIVE_DISCOVERY_CONCURRENCY = 4
 const NATIVE_DISCOVERY_BATCH_SIZE = 16
@@ -56,6 +61,7 @@ export async function discoverFiles(args: {
   keepScopeFiles?: boolean
   selectedSessionId?: string
   executionHostId?: string
+  statCache?: SessionDiscoveryStatCache
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const files = new SessionNewestFiles(args.limit)
@@ -156,7 +162,7 @@ export async function discoverFiles(args: {
           if (args.signal?.aborted) {
             break
           }
-          files.push(await observeSessionFile(path, args.contentDependencyPath, args.signal))
+          files.push(await observe(path))
         }
         return files
       })
@@ -164,10 +170,31 @@ export async function discoverFiles(args: {
     return observations.flat()
   }
 
+  // Sidecars can change without their transcript, so agents with one always restat.
+  const statCache = args.contentDependencyPath ? undefined : args.statCache
+
+  async function observe(path: string): Promise<SessionFileObservation> {
+    const reused = statCache?.reusable(path)
+    if (reused) {
+      return reused
+    }
+    const observation = await observeSessionFile(path, args.contentDependencyPath, args.signal)
+    statCache?.observed(path, 'file' in observation ? observation : null)
+    return observation
+  }
+
   async function readDirectory(path: string): Promise<Dirent[]> {
     const entries = native
       ? await withNativeDiscoverySlot(() => wslGatedReaddir(path, 'scan', args.signal))
       : await wslGatedReaddir(path, 'scan', args.signal)
+    if (statCache?.wantsDirectoryMtime(path, entries)) {
+      const mtimeMs = native
+        ? await withNativeDiscoverySlot(() => directoryMtime(path, args.signal))
+        : await directoryMtime(path, args.signal)
+      statCache.observeDirectory(path, mtimeMs)
+    } else {
+      statCache?.observeDirectory(path, null)
+    }
     // Report a source only after its root directory can be listed.
     if (path === args.rootDir) {
       source.close = openAiVaultScanSource(args.signal, args.agent)
@@ -189,10 +216,7 @@ export async function discoverFiles(args: {
           signal: args.signal,
           readDirectory
         },
-        native
-          ? queueNativeFile
-          : async (path) =>
-              consume([await observeSessionFile(path, args.contentDependencyPath, args.signal)])
+        native ? queueNativeFile : async (path) => consume([await observe(path)])
       )
     } finally {
       // One read batch overlaps directory traversal; commit in traversal order.

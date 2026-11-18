@@ -37,6 +37,7 @@ export function opencodeDiscoveries(
           issues,
           scopePaths: options.scopePaths,
           selectedSessionId: options.selectedSessionId,
+          statCache: options.statCache,
           signal: options.signal
         })
       ),

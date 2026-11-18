@@ -23,7 +23,7 @@ import {
   updateTabStripDockAvailability,
   type ActiveTabDockSide
 } from './tab-strip-slot-geometry'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTabDragActive } from '../../tab-group/drag/tab-drag-context'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75

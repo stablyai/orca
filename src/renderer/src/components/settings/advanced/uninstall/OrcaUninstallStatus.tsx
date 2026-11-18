@@ -1,9 +1,7 @@
 import type React from 'react'
-import { Check, CircleAlert, CircleMinus, Copy, Loader2 } from 'lucide-react'
+import { Check, CircleAlert, CircleMinus, Loader2 } from 'lucide-react'
 import type { OrcaUninstallEntryState } from '../../../../../../shared/uninstall/orca-uninstall-types'
-import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { useTranslate } from '@/i18n/use-translate'
-import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { isOrcaUninstallProblem } from './orca-uninstall-plan-state'
 
@@ -90,19 +88,4 @@ export function OrcaUninstallStatusIcon({
     )
   }
   return <span className="size-3.5" />
-}
-
-export function OrcaUninstallCopyCommandButton({
-  command
-}: {
-  command: string
-}): React.JSX.Element {
-  const t = useTranslate()
-  const { copyText, status } = useClipboardTextCopyFeedback(command)
-  return (
-    <Button variant="outline" size="xs" onClick={() => void copyText()}>
-      {status === 'copied' ? <Check /> : <Copy />}
-      {t('settings.uninstall.copyCommand', 'Copy command')}
-    </Button>
-  )
 }

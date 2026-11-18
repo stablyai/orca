@@ -5,7 +5,7 @@ import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent
 import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
 import { writeClaudeStopReadings, type ClaudeStopCheck } from '../../claude-stop-readings'
 import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
-import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 
 export function journalClaudePluginInputFailure({
   event,

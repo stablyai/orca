@@ -54,6 +54,7 @@ export function antigravityDiscoveries(
       keepScopeFiles: scopeWalksAgentFiles('antigravity', options.scopePaths),
       selectedSessionId: options.selectedSessionId,
       executionHostId: options.executionHostId,
+      statCache: options.statCache,
       signal: options.signal
     })
       .then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { mobileChatShownName } from '../session/fork/mobile-fork-marked-name'
 import { useQueryClient } from '@tanstack/react-query'
 import { mobileStructuredSessionStatusFeed } from '../session/native-chat/agent-session/mobile-structured-session-status-feed'
-import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/agent-session-conversation-names'
+import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/conversation-naming/agent-session-conversation-names'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'

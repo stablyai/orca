@@ -1,7 +1,7 @@
 import {
   captureBrowserInitializationDelivery,
   recordBrowserInitializationReceipt
-} from '../browser-initialization-presentation'
+} from '../tab-projection/browser-initialization-presentation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { nextReceivedSessionTabsFrame } from '../state'
 
