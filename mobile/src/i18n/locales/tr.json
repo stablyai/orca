@@ -1135,6 +1135,9 @@
       "composer": {
         "planMode": "Plan",
         "exitPlanMode": "Plan modundan çık"
+      },
+      "goal": {
+        "sentAsGoal": "Hedef olarak gönderildi"
       }
     }
   },
@@ -2643,7 +2646,7 @@
       "disconnected": "Yapıştırılamadı (bağlantı kesildi)",
       "imageTooLarge": "Görsel yapıştırılamayacak kadar büyük",
       "pasteFailed": "Yapıştırılamadı",
-      "pasteTooLarge": "Yapıştırılacak içerik çok büyük (en fazla 256 KiB)",
+      "pasteTooLarge": "Yapıştırılan içerik çok büyük.",
       "terminalChanged": "Yapıştırma iptal edildi (terminal değişti)"
     },
     "worktreeLabel": {
@@ -2773,6 +2776,9 @@
     "structuredOpen": {
       "worktreeDeleted": "Çalışma ağacı silindi.",
       "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "Bu mesaj bulunamadı."
     }
   },
   "settings": {
@@ -4341,6 +4347,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Bilgisayar eşleyin",
+      "pairRequired": "Bu bağlantıyı açmak için bu telefonu bir bilgisayarla eşleyin.",
+      "pairAction": "Bilgisayar eşleyin",
+      "openFailed": "Bu bağlantı açılamadı",
+      "ambiguous": "Bu bot {{names}} üzerinde. İstediğiniz bilgisayarda Orca’yı açıp sohbete gidin.",
+      "computer": "bilgisayarınız",
+      "updateNeeded": "Bu bağlantıyı açmak için {{names}} üzerinde Orca’yı güncelleyin.",
+      "unreachable": "{{names}} ile bağlantı kurulamadı. Birinde Orca’nın çalıştığından emin olun ve yeniden deneyin.",
+      "missing": "Eşlenmiş bilgisayarlarınızda bu bot yok.",
+      "offline": "{{name}} çevrimdışı. Yeniden bağlandığında bağlantıyı tekrar açın.",
+      "chatOpenFailed": "{{name}} bu sohbeti açamadı. Bağlantıyı yeniden deneyin.",
+      "unreachableSingle": "{{name}} ile bağlantı kurulamadı. Orada Orca’nın çalıştığından emin olun ve yeniden deneyin.",
+      "workspaceDeleted": "Bu sohbetin çalışma alanı {{name}} üzerinde silindi."
     }
   }
 }

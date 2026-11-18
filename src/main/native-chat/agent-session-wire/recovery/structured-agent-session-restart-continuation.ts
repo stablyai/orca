@@ -50,6 +50,7 @@ export type StructuredAgentSessionContinuationHost = {
   send: (input: {
     envelope: AgentSessionMutationEnvelope
     body: AgentJournalMessageItem
+    continuation?: true
     beforeRun?: () => void | Promise<void>
   }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
   awaitSendSettlement: (
@@ -76,6 +77,7 @@ export function continuationDeps(
     send: (input) =>
       host.send({
         ...input,
+        continuation: true,
         beforeRun: async () => {
           if (!(await stillWanted())) {
             throw new RestartContinuationSupersededError()

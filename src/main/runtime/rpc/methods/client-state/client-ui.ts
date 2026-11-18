@@ -12,6 +12,7 @@ import {
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import { isWorkspaceHostScope } from '../../../../../shared/orcad-migration/orcad-migration-client-state-value-validation'
 import { defineMethod, type RpcContext } from '../../core'
+import { keepSessionPicksOnBot } from '../../../../bots/bot-session-option-picks'
 import { isHostOwnPhone } from '../../callers/host-own-phone'
 import {
   NativeChatSessionOptionsMutation,
@@ -147,8 +148,10 @@ export const CLIENT_UI_METHODS = [
     name: 'settings.mutateNativeChatSessionOptions',
     permission: 'settings-write',
     params: NativeChatSessionOptionsMutation,
-    handler: (params, { runtime }) => {
-      runtime.updateClientNativeChatSessionOptions(params)
+    handler: async (params, { runtime }) => {
+      if (!(await keepSessionPicksOnBot(runtime.bots, params))) {
+        runtime.updateClientNativeChatSessionOptions(params)
+      }
       return { ok: true as const }
     }
   }),

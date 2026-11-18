@@ -1,6 +1,5 @@
 import {
   closeSync,
-  constants,
   fstatSync,
   openSync,
   readSync,
@@ -8,51 +7,37 @@ import {
   statSync,
   type Stats
 } from 'node:fs'
-
-const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
-const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
-const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
-
-export type JsonlCursor = {
-  filePath?: string
-  offset: number
-  carry: string
-}
-
-export type JsonRecord = Record<string, unknown>
-
-export function record(value: unknown): JsonRecord | undefined {
-  return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
-}
+import {
+  applyJsonlCursorBytes,
+  boundTranscriptDirectory,
+  firstRecordError,
+  FIRST_RECORD_OPEN_FLAGS,
+  parseJsonlFirstRecord,
+  planJsonlRead,
+  TRANSCRIPT_LINE_MAX_BYTES,
+  type JsonlCursor,
+  type JsonlCursorBytes,
+  type JsonlFirstRecord,
+  type JsonRecord
+} from './codex-rollout-jsonl-format'
+import { prefetchedFirstRecord, takePrefetchedCursorRead } from './codex-rollout-prefetch-scope'
 
 /** 'pending' while the file or its first line is unwritten; 'unreadable' on other I/O failures; undefined once the line is final. */
-export function readJsonlFirstRecord(
-  filePath: string
-): JsonRecord | 'pending' | 'unreadable' | undefined {
+export function readJsonlFirstRecord(filePath: string): JsonlFirstRecord {
+  const prefetchedHead = prefetchedFirstRecord(filePath)
+  if (prefetchedHead) {
+    return prefetchedHead.record
+  }
   let fd: number | undefined
   try {
-    // Nonblocking open prevents a FIFO from stalling hook handling before the descriptor check.
-    fd = openSync(
-      filePath,
-      constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
-    )
+    fd = openSync(filePath, FIRST_RECORD_OPEN_FLAGS)
     if (!fstatSync(fd).isFile()) {
       return undefined
     }
     const buffer = Buffer.allocUnsafe(TRANSCRIPT_LINE_MAX_BYTES)
-    const bytesRead = readSync(fd, buffer, 0, buffer.length, 0)
-    const newline = buffer.subarray(0, bytesRead).indexOf(0x0a)
-    if (newline === -1) {
-      return bytesRead < buffer.length ? 'pending' : undefined
-    }
-    return record(JSON.parse(buffer.toString('utf8', 0, newline)))
+    return parseJsonlFirstRecord(buffer, readSync(fd, buffer, 0, buffer.length, 0))
   } catch (error) {
-    if (error instanceof SyntaxError) {
-      return undefined
-    }
-    return error instanceof Error && 'code' in error && error.code === 'ENOENT'
-      ? 'pending'
-      : 'unreadable'
+    return firstRecordError(error)
   } finally {
     if (fd !== undefined) {
       closeSync(fd)
@@ -65,77 +50,47 @@ export function readJsonlCursor(
   cursor: JsonlCursor,
   lineFilter?: (line: string) => boolean
 ): JsonRecord[] | undefined {
-  if (!cursor.filePath) {
-    return undefined
-  }
-  let stats: Stats
-  try {
-    stats = statSync(cursor.filePath)
-  } catch {
-    return undefined
-  }
-  if (!stats.isFile()) {
-    return undefined
-  }
-  if (stats.size < cursor.offset) {
-    cursor.offset = 0
-    cursor.carry = ''
-  }
-  if (stats.size === cursor.offset) {
-    return []
-  }
-  const bytesToRead = Math.min(stats.size - cursor.offset, TRANSCRIPT_READ_MAX_BYTES)
-  const start = stats.size - cursor.offset > bytesToRead ? stats.size - bytesToRead : cursor.offset
-  const buffer = Buffer.allocUnsafe(bytesToRead)
-  let bytesRead = 0
-  let fd: number | undefined
-  try {
-    fd = openSync(cursor.filePath, 'r')
-    bytesRead = readSync(fd, buffer, 0, bytesToRead, start)
-  } catch {
-    return undefined
-  } finally {
-    if (fd !== undefined) {
-      closeSync(fd)
-    }
-  }
-  const skippedPrefix = start !== cursor.offset
-  const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`
-  const lines = content.split('\n')
-  cursor.offset = start + bytesRead
-  cursor.carry = lines.pop() ?? ''
-  if (skippedPrefix) {
-    lines.shift()
-  }
-  const records: JsonRecord[] = []
-  for (const line of lines) {
-    if (
-      (lineFilter && !lineFilter(line)) ||
-      Buffer.byteLength(line, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES
-    ) {
-      continue
-    }
+  let read: JsonlCursorBytes | undefined
+  const prefetchedRead = cursor.filePath ? takePrefetchedCursorRead(cursor) : undefined
+  if (prefetchedRead) {
+    read = prefetchedRead.read
+  } else if (cursor.filePath) {
+    let stats: Stats | undefined
     try {
-      const parsed = record(JSON.parse(line) as unknown)
-      if (parsed) {
-        records.push(parsed)
-      }
+      stats = statSync(cursor.filePath)
     } catch {
-      // A malformed rollout line must not block later lifecycle events.
+      stats = undefined
+    }
+    if (stats?.isFile()) {
+      const plan = planJsonlRead({ ...cursor, filePath: cursor.filePath }, stats.size)
+      read = plan
+      if (plan.length > 0) {
+        const buffer = Buffer.allocUnsafe(plan.length)
+        let fd: number | undefined
+        try {
+          fd = openSync(plan.filePath, 'r')
+          read = {
+            ...plan,
+            bytes: buffer.subarray(0, readSync(fd, buffer, 0, plan.length, plan.start))
+          }
+        } catch {
+          read = { ...plan, failed: true }
+        } finally {
+          if (fd !== undefined) {
+            closeSync(fd)
+          }
+        }
+      }
     }
   }
-  return records
+  const records = applyJsonlCursorBytes(cursor, read, lineFilter)
+  return records === 'stale' ? [] : records
 }
 
 export function readTranscriptDirectory(directory: string): string[] {
-  let entries: string[]
   try {
-    entries = readdirSync(directory)
+    return boundTranscriptDirectory(readdirSync(directory))
   } catch {
     return []
   }
-  if (entries.length > TRANSCRIPT_DIRECTORY_MAX_ENTRIES) {
-    entries = entries.slice(-TRANSCRIPT_DIRECTORY_MAX_ENTRIES)
-  }
-  return entries
 }

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
@@ -16,6 +16,8 @@ import { createNativeChatFileLinkHooks } from '../../../../../../shared/native-c
 
 const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled } =
   createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })
+// A caller that owns the transcript's existence, rather than sitting under it, rechecks through this.
+export { useRecheckNativeChatFileLinksWhenSettled }
 
 type FileLinkHostEpoch = {
   /** The SSH connection generation while connected; null while it is not. */
@@ -76,13 +78,10 @@ export function useRecheckNativeChatFileLinksWhenTurnEnds(isWorking: boolean): v
 }
 
 /** One per chat view: paths in its transcript are checked on the workspace's host. */
-export function NativeChatFileLinkExistenceProvider({
-  tabId,
-  children
-}: {
+
+export function useNativeChatTabFileLinkExistence(
   tabId: string
-  children: ReactNode
-}): React.JSX.Element {
+): NativeChatFileLinkExistence | null {
   const context = useNativeChatFileLinkContext(tabId)
   const worktreeId = context?.worktreeId
   const worktreePath = context?.worktreePath
@@ -104,11 +103,7 @@ export function NativeChatFileLinkExistenceProvider({
     [connectionId, runtimeEnvironmentId, worktreeId, worktreePath]
   )
   useRecheckWhenHostReturns(existence, useFileLinkHostEpoch(connectionId, runtimeEnvironmentId))
-  return (
-    <NativeChatFileLinkExistenceContext.Provider value={existence}>
-      {children}
-    </NativeChatFileLinkExistenceContext.Provider>
-  )
+  return existence
 }
 
 /** Undefined when this chat cannot open files, so nothing is underlined. */
