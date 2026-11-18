@@ -93,12 +93,12 @@ export function NewWorkspaceComposerAgentSection({
       <div className="!mb-2">
         <Button
           type="button"
-          variant="ghost"
+          variant="disclosure"
           size="sm"
           onClick={onToggleAdvanced}
           disabled={advancedLocked}
           aria-expanded={advancedOpen}
-          className="-ml-2 text-xs focus-visible:ring-inset"
+          className="-ml-2"
         >
           {t('auto.components.NewWorkspaceComposerCard.f0470c7383', 'Advanced')}
           <ChevronDown

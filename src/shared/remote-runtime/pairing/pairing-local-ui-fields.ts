@@ -21,6 +21,10 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsHideWorkspacesFromOtherDevices',
   'agentsHideAutomationGeneratedWorkspaces',
   'agentsHideCliCreatedWorkspaces',
+  // Bots run on this computer; old hosts reject the unknown key.
+  'hideBotCreatedWorkspaces',
+  'botSidebarView',
+  'botChatFolds',
   'agentsShowChildAgents',
   'agentsCompactMode',
   'agentsShowSearch',

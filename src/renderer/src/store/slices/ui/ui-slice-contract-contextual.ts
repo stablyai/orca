@@ -53,6 +53,7 @@ export type UISliceContextual = {
     | 'worktree-visibility'
     | 'setup-guide'
     | 'feature-wall'
+    | 'bot-templates'
     | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'

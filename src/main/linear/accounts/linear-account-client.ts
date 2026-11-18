@@ -20,7 +20,8 @@ import {
 import {
   clearToken,
   clearTokenFile,
-  loadToken,
+  loadCredential,
+  type LinearCredential,
   replaceLegacyWorkspace,
   saveWorkspaceToken,
   getWorkspaceTokenProtection
@@ -36,21 +37,16 @@ import type {
 export type LinearClientForWorkspace = {
   workspace: LinearWorkspace
   client: LinearClient
-  apiKey: string
+  credential: LinearCredential
 }
 
 export const LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS = 60 * 60
 
 // User-initiated Linear actions may decrypt credentials and trigger keychain prompts.
 export function getClient(workspaceId?: string | null): LinearClient | null {
-  const token = loadToken({
-    force: true,
-    workspaceId: resolveWorkspaceId(workspaceId) ?? undefined
-  })
-  if (!token) {
-    return null
-  }
-  return createLinearClient({ apiKey: token })
+  const resolved = resolveWorkspaceId(workspaceId)
+  const credential = resolved ? loadCredential(resolved) : null
+  return credential ? createLinearClient(credential) : null
 }
 
 export function getClients(
@@ -65,9 +61,9 @@ export function getClients(
 
   const clients: LinearClientForWorkspace[] = []
   for (const workspace of selectedWorkspaces) {
-    let token: string | null
+    let credential: LinearCredential | null
     try {
-      token = loadToken({ force: true, workspaceId: workspace.id })
+      credential = loadCredential(workspace.id)
     } catch (error) {
       // All-workspace reads skip recorded decrypt failures; explicit selections rethrow for immediate recovery.
       if (isAllSelection && error instanceof CredentialDecryptionError) {
@@ -75,13 +71,13 @@ export function getClients(
       }
       throw error
     }
-    if (!token) {
+    if (!credential) {
       continue
     }
     clients.push({
       workspace,
-      client: createLinearClient({ apiKey: token, ...(signal ? { signal } : {}) }),
-      apiKey: token
+      client: createLinearClient({ ...credential, ...(signal ? { signal } : {}) }),
+      credential
     })
   }
   return clients
@@ -92,7 +88,7 @@ export function getPublicFileUrlClient(
   signal?: AbortSignal
 ): LinearClient {
   return createLinearClient({
-    apiKey: entry.apiKey,
+    ...entry.credential,
     ...(signal ? { signal } : {}),
     headers: {
       'public-file-urls-expire-in': String(LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
@@ -199,26 +195,28 @@ export async function testConnection(
   if (!resolvedWorkspaceId) {
     return taskProviderFailure('linear.noApiKey', 'No API key stored.')
   }
-  let token: string | null
+  let credential: LinearCredential | null
   try {
-    token = loadToken({ force: true, workspaceId: resolvedWorkspaceId })
+    credential = loadCredential(resolvedWorkspaceId)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Test failed'
     return { ok: false, error: message }
   }
-  if (!token) {
+  if (!credential) {
     return taskProviderFailure('linear.noApiKey', 'No API key stored.')
   }
 
   try {
-    const client = createLinearClient({ apiKey: token })
+    const client = createLinearClient(credential)
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
-    if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
-      replaceLegacyWorkspace(workspace, token)
+    if (!('apiKey' in credential)) {
+      upsertWorkspace(workspace, { select: true })
+    } else if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
+      replaceLegacyWorkspace(workspace, credential.apiKey)
     } else {
-      saveWorkspaceToken(workspace.id, token)
+      saveWorkspaceToken(workspace.id, credential.apiKey)
       upsertWorkspace(workspace, { select: true })
     }
     return { ok: true, viewer: workspace, workspace }

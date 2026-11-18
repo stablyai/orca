@@ -5,6 +5,11 @@ import { i18n } from '@/i18n/i18n'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/class-names'
 
+// Side by side, the outer edge of the primary button's 3px focus ring sits on the bottom of the
+// visual's centered 22rem card; the column is the frame less its 1px borders.
+export const FEATURE_TIP_BUTTONS_ON_CARD_EDGE =
+  'md:pb-[calc((min(27rem,100vh-2rem)-2px-22rem)/2+3px)]'
+
 /** Shared two-column tip layout: copy and actions on the left, a feature visual on the right. */
 export function FeatureTipDialogFrame({
   open,

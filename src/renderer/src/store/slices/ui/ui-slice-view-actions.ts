@@ -92,6 +92,8 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeSkills,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'skills')
       })),
+    botTemplateSelected: null,
+    selectBotTemplate: (templateId) => set({ botTemplateSelected: templateId }),
     openSkillShare: (shareId) => {
       get().recordViewVisit('skills')
       set((state) => ({

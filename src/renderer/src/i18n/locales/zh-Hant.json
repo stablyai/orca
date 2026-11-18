@@ -97,6 +97,16 @@
       "confirm": "調整篩選條件並顯示",
       "cancel": "保留篩選條件"
     },
+    "revealCurrent": {
+      "label": "顯示目前項目",
+      "noWorkspace": "沒有開啟任何項目",
+      "fullPageView": "此頁面在側邊欄中沒有對應的列",
+      "archived": "封存的工作區不會列在側邊欄中",
+      "botsOff": "機器人已關閉，因此不會列出此機器人",
+      "botHidden": "此機器人已暫停，並被機器人選項隱藏",
+      "renameBotPage": "機器人或群組的頁面不是工作樹。若要重新命名，請使用其列選單中的「重新命名」。",
+      "renameUnlisted": "此工作區目前未列在側邊欄中，因此無法在那裡重新命名。"
+    },
     "startupWorktreeRefresh": {
       "loading": "正在尋找工作區…"
     },
@@ -1013,6 +1023,13 @@
       "include": "包含的 glob（每行一個）",
       "includeHelp": "比對相對於工作區根目錄的路徑。沒有相符的 glob 時不會格式化。* 和 ** 會略過以點開頭的名稱；請明確列出，例如 .github/**/*.yml。若要使用此指令，請在一般 > 編輯器中啟用「儲存時格式化」。",
       "710343e374": "格式化工具指令"
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "每晚凌晨 3 點之後，或這台電腦喚醒後",
+        "everyWeekLine": "每週一次，凌晨 3 點之後，或這台電腦喚醒後",
+        "everyDescriptionAwake": "如果這台電腦當時處於睡眠狀態，會在喚醒後執行。只在有新聊天的夜晚之後執行。每次整理都會像一次簡短聊天一樣使用你的 {{agent}} 方案。"
+      }
     }
   },
   "menu": {
@@ -1935,7 +1952,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "尚未設定專案位置"
+        "locationNotSet": "尚未設定專案位置",
+        "hostLocalGitProject": "此專案沒有相符的 Git 遠端儲存庫",
+        "hostLocalFolderProject": "資料夾專案無法連結到其他主機"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "請更新伺服器以查看其 SSH 主機上的連接埠。",
@@ -5464,8 +5483,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "關閉",
           "64c71cf7b9": "Orca 尚未在這台電腦上安裝任何技能。",
-          "0900db719a": "— 已斷開連線",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "本機",
           "3677ae58e7": "Orca 透過連結安裝的技能。可重新安裝、還原至較早版本，或移除技能。",
           "44d118a8f7": "由 Orca 安裝",
@@ -5499,8 +5516,6 @@
           "a4dfd33095": "一個工作區",
           "c779621aa0": "全域技能",
           "63cc9e31fe": "目的地",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— 已斷開連線",
           "0785d0a503": "— 需要更新",
           "8562dd1e6e": "本機",
           "b8a0b706ad": "機器"
@@ -6085,10 +6100,8 @@
           "removeDescriptionSsh": "此操作僅將 {{name}} 從 Orca 中移除。檔案仍保留在 {{host}} 上 — 重新新增該 SSH 主機即可恢復。",
           "removeDescriptionLocal": "此操作僅將 {{name}} 從 Orca 中移除。檔案仍保留在您的磁碟上。",
           "removeDescriptionVmRecipe": "這會從 Orca 中移除 {{name}}。其 VM 配方決定是否永久刪除環境及其檔案。",
+          "linkedWorkspaceWarning_other": "此專案中的 {{count}} 個工作區也會從 Orca 中移除。",
           "openTerminalWarning_other": "此專案中開啟的 {{count}} 個終端機將會關閉。"
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "顯示目前的工作區"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "從側邊欄隱藏",
@@ -8637,7 +8650,7 @@
           "112f3b934f": "原始碼控制 AI"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "在此撤銷存取權，無法阻止擁有此電腦 SSH 存取權限的人再次配對。若要阻止其存取，請移除其 SSH 存取權限。",
+          "sshAccessCaveat": "撤銷連結也會撤銷在它開啟的終端機中建立的連結。任何能在這台電腦上使用終端機的人（透過 SSH 或連結）仍可再次配對。",
           "6f6d5188ed": "撤銷 {{value0}}",
           "434e4a6af6": "目前連結",
           "df142657a5": "尚未使用",
@@ -22329,6 +22342,7 @@
     "controlledByHost": "由 {{host}} 控制"
   },
   "nativeChat": {
+    "linkedMessageMissing": "找不到該訊息。",
     "math": {
       "scrollDisplayEquation": "捲動獨立公式"
     }
@@ -23321,6 +23335,45 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 發行版 {{distro}} 已停止，因此 Orca 沒有啟動此終端機。請啟動該發行版後重試。",
     "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
+  },
+  "bots": {
+    "activity": {
+      "title": "活動"
+    },
+    "connectors": {
+      "tab": "連接器"
+    },
+    "files": {
+      "tab": "檔案"
+    },
+    "upcoming": {
+      "tidyNightAfter": "每晚 {{from}} 之後，或這台電腦喚醒後",
+      "tidyWeekAfter": "每週一次，{{from}} 之後，或這台電腦喚醒後",
+      "lookDueNow": "現在到期 · {{every}}"
+    },
+    "palette": {
+      "placeholder": "搜尋機器人、聊天、終端機、工作區、任務、設定和操作...",
+      "description": "搜尋機器人、聊天、終端機、工作區、任務、設定和操作",
+      "scopedPlaceholder": "搜尋機器人...",
+      "scopedLabel": "搜尋機器人",
+      "scopeHint": "輸入 @ 只顯示機器人",
+      "chip": "機器人",
+      "chipLabel": "機器人，顯示全部",
+      "searchEverything": "在全部內容中搜尋「{{text}}」",
+      "searchBotsFor": "在機器人中搜尋「{{text}}」",
+      "noMatch": "沒有符合「{{text}}」的機器人",
+      "noBotsYet": "還沒有機器人",
+      "filtersPaused": "篩選僅適用於工作區，不適用於機器人",
+      "showEverything": "顯示全部",
+      "footerBots": "機器人",
+      "matchesPurpose": "與用途相符。",
+      "scopedStatus_other": "僅顯示機器人。找到 {{count}} 個結果。",
+      "sidebarSearchLabel": "搜尋機器人、工作區和瀏覽器分頁",
+      "section": "機器人"
+    },
+    "templates": {
+      "browse": "瀏覽範本"
+    }
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",

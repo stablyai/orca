@@ -561,6 +561,13 @@
     "groupHooks": {
       "invalidSetup": "El archivo existe, pero Orca no encontró un script de configuración válido.",
       "supportedKeys": "Define solo las claves admitidas: `scripts` y `setup`."
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "Cada noche después de las 3 a. m., o en cuanto este ordenador esté activo",
+        "everyWeekLine": "Una vez por semana después de las 3 a. m., o en cuanto este ordenador esté activo",
+        "everyDescriptionAwake": "Si este ordenador está en reposo a esa hora, se ejecuta en cuanto esté activo. Solo después de noches con chats nuevos. Cada limpieza usa tu plan de {{agent}}, como un chat corto."
+      }
     }
   },
   "menu": {
@@ -1496,6 +1503,10 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Issue vinculado",
         "listeningPort": "Puerto en escucha"
+      },
+      "projectHostSetupOptions": {
+        "hostLocalGitProject": "Este proyecto no tiene remoto de Git coincidente",
+        "hostLocalFolderProject": "Los proyectos de carpeta no pueden vincularse a otros hosts"
       }
     },
     "hooks": {
@@ -5201,8 +5212,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Cerrar",
           "64c71cf7b9": "Orca aún no ha instalado ninguna habilidad en esta máquina.",
-          "0900db719a": "— desconectado",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "esta computadora",
           "3677ae58e7": "Habilidades que Orca instaló desde un enlace. Reinstálelas, vuelva a una versión anterior o elimínelas.",
           "44d118a8f7": "Instaladas por Orca",
@@ -5237,8 +5246,6 @@
           "a4dfd33095": "Un espacio de trabajo",
           "c779621aa0": "Habilidades globales",
           "63cc9e31fe": "Destino",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— desconectado",
           "0785d0a503": "— actualización requerida",
           "8562dd1e6e": "esta computadora",
           "b8a0b706ad": "Máquina"
@@ -5783,12 +5790,12 @@
           "removeDescriptionSsh": "Esto solo elimina {{name}} de Orca. Sus archivos permanecen en {{host}}; vuelve a añadir ese host SSH para recuperarlo.",
           "removeDescriptionLocal": "Esto solo elimina {{name}} de Orca. Sigue estando en tu disco.",
           "removeDescriptionVmRecipe": "Esto elimina {{name}} de Orca. Su receta de VM determina si el entorno y sus archivos se eliminan permanentemente.",
+          "linkedWorkspaceWarning_one": "También se eliminará de Orca {{count}} espacio de trabajo de este proyecto.",
+          "linkedWorkspaceWarning_other": "También se eliminarán de Orca {{count}} espacios de trabajo de este proyecto.",
+          "linkedWorkspaceWarning_many": "También se eliminarán de Orca {{count}} espacios de trabajo de este proyecto.",
           "openTerminalWarning_one": "Se cerrará {{count}} terminal abierto en este proyecto.",
           "openTerminalWarning_other": "Se cerrarán {{count}} terminales abiertos en este proyecto.",
           "openTerminalWarning_many": "Se cerrarán {{count}} terminales abiertos en este proyecto."
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "Mostrar espacio de trabajo activo"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "Ocultar de la barra lateral",
@@ -8367,7 +8374,7 @@
           "112f3b934f": "Source Control AI"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "Revocar el acceso aquí no impide que alguien con acceso SSH a este equipo vuelva a emparejarse. Para bloquearlo, retira su acceso SSH.",
+          "sshAccessCaveat": "Revocar un enlace también revoca los enlaces creados en los terminales que abrió. Cualquiera con un terminal en este equipo, por SSH o a través de un enlace, puede volver a emparejarse.",
           "6f6d5188ed": "Revocar {{value0}}",
           "434e4a6af6": "Enlace actual",
           "df142657a5": "Aún no se ha usado",
@@ -21638,6 +21645,16 @@
       "confirm": "Ajustar filtros y mostrar",
       "cancel": "Mantener filtros"
     },
+    "revealCurrent": {
+      "label": "Mostrar actual",
+      "noWorkspace": "No hay nada abierto",
+      "fullPageView": "Esta página no tiene fila en la barra lateral",
+      "archived": "Los espacios de trabajo archivados no aparecen en la barra lateral",
+      "botsOff": "Los bots están desactivados, así que este bot no aparece",
+      "botHidden": "Este bot está en pausa y oculto por las opciones de bots",
+      "renameBotPage": "La página de un bot o grupo no es un worktree. Para renombrarlo, usa Renombrar en el menú de su fila.",
+      "renameUnlisted": "Este espacio de trabajo no aparece ahora en la barra lateral, así que no se puede renombrar allí."
+    },
     "wslMoved": {
       "movedToHost": "Movido al host de {{distro}}",
       "sectionTitle": "Movidos a hosts de WSL ({{count}})",
@@ -23348,6 +23365,7 @@
     }
   },
   "nativeChat": {
+    "linkedMessageMissing": "No se pudo encontrar ese mensaje.",
     "math": {
       "scrollDisplayEquation": "Desplazar ecuación en bloque"
     }
@@ -24212,6 +24230,50 @@
     "branchName": "Nombre de la rama",
     "invalidBranchName": "Este nombre de rama no es válido. Elige otro nombre.",
     "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo."
+  },
+  "bots": {
+    "deepLink": {
+      "missing": "Esa conversación no está abierta en este equipo."
+    },
+    "activity": {
+      "title": "Actividad"
+    },
+    "connectors": {
+      "tab": "Conectores"
+    },
+    "files": {
+      "tab": "Archivos"
+    },
+    "upcoming": {
+      "tidyNightAfter": "Cada noche a partir de las {{from}}, o en cuanto este ordenador esté activo",
+      "tidyWeekAfter": "Una vez por semana a partir de las {{from}}, o en cuanto este ordenador esté activo",
+      "lookDueNow": "Pendiente ahora · {{every}}"
+    },
+    "palette": {
+      "placeholder": "Busca bots, chats, terminales, espacios de trabajo, tareas, ajustes y acciones...",
+      "description": "Busca bots, chats, terminales, espacios de trabajo, tareas, ajustes y acciones",
+      "scopedPlaceholder": "Buscar bots...",
+      "scopedLabel": "Buscar bots",
+      "scopeHint": "Escribe @ para ver solo bots",
+      "chip": "Bots",
+      "chipLabel": "Bots, mostrar todo",
+      "searchEverything": "Buscar en todo «{{text}}»",
+      "searchBotsFor": "Buscar bots con «{{text}}»",
+      "noMatch": "Ningún bot coincide con «{{text}}»",
+      "noBotsYet": "Aún no hay bots",
+      "filtersPaused": "Los filtros se aplican a espacios de trabajo, no a bots",
+      "showEverything": "Mostrar todo",
+      "footerBots": "Bots",
+      "matchesPurpose": "Coincide con su propósito.",
+      "scopedStatus_one": "Mostrando solo bots. {{count}} resultado encontrado.",
+      "scopedStatus_other": "Mostrando solo bots. {{count}} resultados encontrados.",
+      "scopedStatus_many": "Mostrando solo bots. {{count}} resultados encontrados.",
+      "sidebarSearchLabel": "Buscar bots, espacios de trabajo y pestañas del navegador",
+      "section": "Bots"
+    },
+    "templates": {
+      "browse": "Explorar plantillas"
+    }
   },
   "speechModelUpdate": {
     "update": "Actualizar",
