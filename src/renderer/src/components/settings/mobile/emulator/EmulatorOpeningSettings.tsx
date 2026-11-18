@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { getEmulatorOpeningMode } from '../../../../../../shared/emulator/emulator-opening-preferences'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { MOBILE_EMULATOR_SETTING_ANCHORS } from './mobile-emulator-search'

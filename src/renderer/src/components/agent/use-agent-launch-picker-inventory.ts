@@ -16,7 +16,7 @@ import {
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
 import {
   selectWorktreesByRepo,
@@ -24,7 +24,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
+import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -36,7 +36,7 @@ import {
   agentPickerModelCatalogReads,
   readAgentPickerLaunchSupport
 } from './agent-launch-picker-host-reads'
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import {
   currentAgentPickerAcquisition,

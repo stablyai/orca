@@ -10,10 +10,11 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/file-acces
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { hasCustomCodexHomeOverrideForLaunch } from '../../../codex/configuration/homes/codex-real-home-path'
-import { markCodexSessionBackfillMarkerPending } from '../../../codex/history/backfill/codex-session-backfill-marker'
-import { getCodexSessionBackfillDate } from '../../../codex/history/backfill/codex-session-backfill-scan-dates'
+import {
+  markCodexSessionBackfillMarkerNeedsFullScan,
+  markCodexSessionBackfillMarkerPending
+} from '../../../codex/history/backfill/codex-session-backfill-marker'
 import { resolveCodexSessionBackfillPaths } from '../../../codex/history/backfill/codex-session-backfill'
-import type { CodexSessionBackfillDate } from '../../../codex/history/backfill/codex-session-backfill-types'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../managed-homes/host-codex-managed-home-ownership'
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
 import { blockedWslDistroForExec } from '../../../wsl/discovery/wsl-background-exec-gate'
@@ -184,7 +185,8 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   }
 
   prepareHostSystemDefaultSessionMigrationPass(
-    scanDates: readonly CodexSessionBackfillDate[] = []
+    fullScanRequired = false,
+    newFullScanRequest = false
   ): boolean {
     if (this.isHostHistorySourceInWsl()) {
       return false
@@ -200,13 +202,16 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = true
       this.pendingHostSystemDefaultSessionMigrationTarget = target
     }
-    // Persist rollout dates so force-quit recovery scans a bounded window.
+    this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= fullScanRequired
+    if (this.pendingHostSystemDefaultSessionMigrationNeedsFullScan) {
+      markCodexSessionBackfillMarkerNeedsFullScan(paths.markerPath, newFullScanRequest)
+    }
+    // Persist launch debt so force-quit recovery resumes the bounded walk.
     const markerOwesFullScan = markCodexSessionBackfillMarkerPending(
       paths.markerPath,
-      paths.systemSessionsRoot,
-      scanDates.length > 0 ? scanDates : [getCodexSessionBackfillDate()]
+      paths.systemSessionsRoot
     )
-    // Carry the marker's full-scan requirement across restarts after pending-window overflow.
+    // Carry durable full-scan demand across restarts.
     this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= markerOwesFullScan
     return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }

@@ -10,7 +10,7 @@ import type {
 import type { WorkspaceHookOwner } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { Button } from '@/components/ui/button'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { resolveHookCommandSourcePolicy } from '../../../../../../shared/workspace-setup/hooks/hook-command-source-policy'
 import { useAppStore } from '@/store/index'

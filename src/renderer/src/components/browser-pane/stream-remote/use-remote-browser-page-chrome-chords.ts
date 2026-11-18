@@ -1,5 +1,5 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'

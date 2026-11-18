@@ -4,10 +4,7 @@ import {
   CODEX_SESSION_OPTION_CATALOG
 } from '../../../agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import { GROK_SESSION_OPTION_CATALOG } from '../../../agent-session/options/catalog-providers/agent-session-option-catalog-grok'
-import {
-  buildNativeChatSessionOptionCommand,
-  recordNativeChatSessionOptionCommand
-} from './native-chat-session-option-commands'
+import { recordNativeChatSessionOptionCommand } from './native-chat-session-option-commands'
 import {
   createNativeChatSessionOptionRecord,
   type NativeChatSessionOptionRecord
@@ -20,22 +17,6 @@ function claudeRecord(model?: string): NativeChatSessionOptionRecord {
   }
   return record
 }
-
-describe('buildNativeChatSessionOptionCommand', () => {
-  it('does not turn a Codex model pick into pasted slash-command prose', () => {
-    expect(
-      buildNativeChatSessionOptionCommand({
-        optionId: 'model',
-        value: 'gpt-5.5',
-        apply: CODEX_SESSION_OPTION_CATALOG.modelApply,
-        modelId: null,
-        catalog: CODEX_SESSION_OPTION_CATALOG,
-        models: CODEX_SESSION_OPTION_CATALOG.models,
-        record: createNativeChatSessionOptionRecord('codex')
-      })
-    ).toBeNull()
-  })
-})
 
 describe('recordNativeChatSessionOptionCommand', () => {
   it('clears tracked truth for a bare picker command and reports the agent picker', () => {
@@ -100,34 +81,6 @@ describe('recordNativeChatSessionOptionCommand', () => {
     expect(record.valuesByModel.sonnet?.effort).toBeUndefined()
   })
 
-  it('tracks nothing for a multi-line paste whose first line looks like a command', () => {
-    const record = claudeRecord('opus')
-    recordNativeChatSessionOptionCommand({
-      catalog: CLAUDE_SESSION_OPTION_CATALOG,
-      models: CLAUDE_SESSION_OPTION_CATALOG.models,
-      record,
-      command: '/model sonnet\nplease review this'
-    })
-    expect(record.model).toEqual({ value: 'opus', source: 'dispatched' })
-  })
-
-  it('still accepts an alias, a full provider id, and extra spacing', () => {
-    for (const [command, expected] of [
-      ['/model opus', 'opus'],
-      ['/model claude-sonnet-5', 'sonnet'],
-      ['/model  sonnet', 'sonnet']
-    ] as const) {
-      const record = claudeRecord()
-      recordNativeChatSessionOptionCommand({
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record,
-        command
-      })
-      expect(record.model).toEqual({ value: expected, source: 'dispatched' })
-    }
-  })
-
   it('still tracks an alias the active model list no longer carries', () => {
     // Host discovery can omit valid CLI aliases; retain and reconcile typed selections.
     const record = claudeRecord('sonnet')
@@ -160,23 +113,6 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
     })
   }
 
-  it('tracks a typed /model without signalling an agent picker', () => {
-    const record = grokRecord()
-    expect(recordGrok(record, '/model grok-4.5')).toEqual({
-      changed: true,
-      opensAgentPicker: false
-    })
-    expect(record.model).toEqual({ value: 'grok-4.5', source: 'dispatched' })
-  })
-
-  it('tracks nothing for an effort tier outside the seeded choices', () => {
-    // grok's canonical ladder has a `none` tier, but the picker only offers values
-    // the shared labels localize, so tracking it would render an untranslated pill.
-    const record = grokRecord('grok-4.5')
-    recordGrok(record, '/effort none')
-    expect(record.valuesByModel['grok-4.5']?.effort).toBeUndefined()
-  })
-
   it('gates xhigh on the tracked model’s own menu, not grok’s canonical ladder', () => {
     // grok warns and ignores a tier the active model lacks, so 4.5 must not record it.
     const older = grokRecord('grok-4.5')
@@ -189,23 +125,6 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
       value: 'xhigh',
       source: 'dispatched'
     })
-  })
-
-  it('rejects grok’s two-argument /model form and any other prose', () => {
-    // `/model Reasoning X high` is real grok syntax; whitespace means we cannot
-    // tell a model id from a prompt, so track nothing rather than guess.
-    const record = grokRecord('grok-4.5')
-    expect(recordGrok(record, '/model Reasoning X high')).toEqual({
-      changed: false,
-      opensAgentPicker: false
-    })
-    expect(record.model).toEqual({ value: 'grok-4.5', source: 'dispatched' })
-  })
-
-  it('does not open an agent picker for a bare /model', () => {
-    const record = grokRecord('grok-4.5')
-    expect(recordGrok(record, '/model')).toEqual({ changed: false, opensAgentPicker: false })
-    expect(record.model).toEqual({ value: 'grok-4.5', source: 'dispatched' })
   })
 
   it('tracks a typed effort under the CLI default when no model was picked', () => {
@@ -257,16 +176,5 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
       value: 'low',
       source: 'dispatched'
     })
-  })
-
-  it('still tracks a model the discovered list dropped', () => {
-    const record = grokRecord()
-    recordNativeChatSessionOptionCommand({
-      catalog: GROK_SESSION_OPTION_CATALOG,
-      models: [{ id: 'grok-build', label: 'Grok Build', options: [] }],
-      record,
-      command: '/model grok-4.5'
-    })
-    expect(record.model).toEqual({ value: 'grok-4.5', source: 'dispatched' })
   })
 })

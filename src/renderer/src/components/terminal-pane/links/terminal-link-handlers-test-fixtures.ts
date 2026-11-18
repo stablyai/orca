@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 export type TerminalLinkStoreSettings = {

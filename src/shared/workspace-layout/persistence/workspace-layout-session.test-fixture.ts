@@ -1,7 +1,7 @@
 // Window-shaped session partitions for Loader/Serializer round trips: terminal row, tab-bar entry, pane layout and order fields agree.
 
-import { getDefaultWorkspaceSession } from '../../constants'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../execution-host'
+import { getDefaultWorkspaceSession } from '../../orca-profiles/constants'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../execution-host/execution-host'
 import type { Tab, TabGroup } from '../tab-groups/tab-types'
 import type {
   TerminalLayoutSnapshot,

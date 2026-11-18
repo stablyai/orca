@@ -2,7 +2,7 @@ import {
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
   AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY
-} from '../../../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
+} from '../../../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
@@ -24,21 +24,21 @@ import {
   AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
-} from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
-import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-attention-capabilities'
+} from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/view/agent-session-attention-capabilities'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY,
   AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY
-} from '../../../../../src/shared/agent-session/agent-session-create-capabilities'
+} from '../../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import {
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
-} from '../../../../../src/shared/agent-session/agent-session-permission-modes-capability'
+} from '../../../../../src/shared/agent-session/options/permissions/agent-session-permission-modes-capability'
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../../src/shared/skills/capabilities/skill-install-capability'
-import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
+import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/lifecycle/stopping/agent-session-continue-interrupted-capability'
 
 export type StructuredAgentSessionHostSupport = {
   commandsOnRequest?: boolean

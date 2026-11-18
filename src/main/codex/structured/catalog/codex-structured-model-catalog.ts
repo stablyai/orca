@@ -1,7 +1,5 @@
-import type {
-  AgentSessionModelOption,
-  AgentSessionOptionChoice
-} from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionChoice } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { effectiveServiceTier } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-tier'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'

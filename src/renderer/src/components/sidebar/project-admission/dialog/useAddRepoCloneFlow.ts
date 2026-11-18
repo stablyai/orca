@@ -12,7 +12,7 @@ import {
   resolveAddRepoRuntimeTarget,
   worktreeRefreshOptions
 } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   useCloneFolderOverride,
   type CloneFolderOverride

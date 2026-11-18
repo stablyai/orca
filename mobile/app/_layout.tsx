@@ -29,6 +29,7 @@ import { startPushTokenSync } from '../src/notifications/push-registration'
 import { ensureDesktopNotificationChannel } from '../src/notifications/foreground-delivery/desktop-notification-channel'
 import { loadHostCatalog } from '../src/host-catalog/host-store'
 import { usePairingLinks } from '../src/navigation/use-pairing-links'
+import { readWorkspaceRouteExecutionHost } from '../src/navigation/route-param-reader'
 import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
 import { recoverMobileRelayPairing } from '../src/pairing/mobile-relay-pairing-recovery'
 import { appUpdateChecker, isRetiredGithubAndroidApp } from '../src/app-update/app-update-runtime'
@@ -69,11 +70,16 @@ export default function RootLayout() {
   const colorScheme = useMobileColorScheme()
   useFollowDeviceUiLocale()
   const pathname = usePathname()
-  const { hostId, worktreeId, executionHost } = useGlobalSearchParams<{
+  const {
+    hostId,
+    worktreeId,
+    executionHost: routeExecutionHost
+  } = useGlobalSearchParams<{
     hostId?: string
     worktreeId?: string
     executionHost?: string
   }>()
+  const executionHost = readWorkspaceRouteExecutionHost(routeExecutionHost)
   useEffect(() => {
     setNotificationViewingWorkspace(
       notificationViewingOfRoute(pathname, { hostId, worktreeId, executionHost })

@@ -1,11 +1,12 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { VoiceSettings } from '../../../shared/speech/speech-types'
 
 export type RuntimeStore = {
   getRepos: Store['getRepos']
   getSshTargets?: Store['getSshTargets']
   getRepo: Store['getRepo']
+  getRepoForHost?: Store['getRepoForHost']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
   addRetiredWorktreeName?: Store['addRetiredWorktreeName']
@@ -108,6 +109,7 @@ export type RuntimeStore = {
   deleteAutomation?: Store['deleteAutomation']
   getSparsePresets?: Store['getSparsePresets']
   saveSparsePreset?: Store['saveSparsePreset']
+  removeSparsePreset?: Store['removeSparsePreset']
   getMobileClientTabSelections?: Store['getMobileClientTabSelections']
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
   getSettings(): {
@@ -123,6 +125,8 @@ export type RuntimeStore = {
     agentWorkspaceTrustEnabled?: GlobalSettings['agentWorkspaceTrustEnabled']
     codexManagedAccounts?: GlobalSettings['codexManagedAccounts']
     codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
+    codexSessionSourceHome?: GlobalSettings['codexSessionSourceHome']
+    deleteChatHistoryWithWorkspace?: GlobalSettings['deleteChatHistoryWithWorkspace']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
     orchestrationCoordinatorApprovalsEnabled?: GlobalSettings['orchestrationCoordinatorApprovalsEnabled']
@@ -207,6 +211,7 @@ export type RuntimeStore = {
     nativeChatAutoContinueAfterUsageLimit?: GlobalSettings['nativeChatAutoContinueAfterUsageLimit']
     nativeChatIdleStopMinutes?: GlobalSettings['nativeChatIdleStopMinutes']
     nativeChatInlineVisuals?: GlobalSettings['nativeChatInlineVisuals']
+    nativeChatPromptSuggestions?: GlobalSettings['nativeChatPromptSuggestions']
     nativeChatInheritShellEnvironment?: GlobalSettings['nativeChatInheritShellEnvironment']
     nativeChatShellEnvironmentVariables?: GlobalSettings['nativeChatShellEnvironmentVariables']
     aiVaultSearch?: GlobalSettings['aiVaultSearch']

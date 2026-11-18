@@ -33,8 +33,8 @@ import {
   requestedExecutionHostScope,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import { createSenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
+} from '../../../shared/execution-host/execution-host'
+import { createSenderScopedRequestCancellations } from '../renderer-requests/sender-scoped-request-cancellation'
 import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
 import {
   scanRuntimeAiVaultSessions,

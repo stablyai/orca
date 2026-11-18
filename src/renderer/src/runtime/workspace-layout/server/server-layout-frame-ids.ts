@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TabContentType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {

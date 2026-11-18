@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import {
   parseChatUiLaunchTipAudience,
   type ChatUiLaunchTipAudience
-} from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
-import { carriedChatUiLaunchSettings } from '../../../../shared/native-chat/native-chat-providers'
+} from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
+import { carriedChatUiLaunchSettings } from '../../../../shared/native-chat/settings/native-chat-providers'
 import { savedChatUiWithTerminalDefaultView } from '../../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from '../store-runtime-state'

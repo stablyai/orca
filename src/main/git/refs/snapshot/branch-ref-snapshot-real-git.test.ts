@@ -155,6 +155,46 @@ it('keeps ordinary branches available to a client without qualified-ref support'
   ).toEqual({ refs: [], truncated: true })
 })
 
+it('gives qualified-ref clients that predate ref labels the short names older hosts sent', async () => {
+  const { root } = await fixture()
+  const repo: Repo = {
+    id: 'snapshot-test',
+    path: root,
+    displayName: 'fixture',
+    badgeColor: '',
+    addedAt: 0
+  }
+  const queries = new RuntimeRepositoryRefQueries({ resolveRepo: async () => repo })
+  const dispatcher = repoDispatcher({
+    getRuntimeId: () => 'snapshot-test',
+    searchRepoRefs: (repo, query, limit, form, namespace) =>
+      queries.search(repo, query, limit ?? 25, form, namespace)
+  })
+  const search = async (query: string, clientCapabilities: string[]) =>
+    z
+      .object({ result: z.object({ refs: z.array(z.string()) }) })
+      .parse(
+        await dispatcher.dispatch(
+          makeRequest('repo.searchRefs', { repo: 'snapshot-test', query, limit: 20 }),
+          { clientCapabilities }
+        )
+      )
+      .result.refs.sort()
+  const qualifiedOnly = ['repo.search-qualified-refs.v1']
+  expect(await search('ma', qualifiedOnly)).toEqual([
+    'main',
+    'refs/heads/origin/main',
+    'refs/remotes/origin/main'
+  ])
+  expect(await search('collision', qualifiedOnly)).toEqual(['refs/heads/collision'])
+  expect(await search('topic', qualifiedOnly)).toEqual(['team/fork/release/topic'])
+  expect(await search('ma', [...qualifiedOnly, 'repo.search-canonical-refs.v1'])).toEqual([
+    'refs/heads/main',
+    'refs/heads/origin/main',
+    'refs/remotes/origin/main'
+  ])
+})
+
 it('fences prior results even when our mutating command fails', async () => {
   const { root } = await fixture()
   expect(await searchBaseRefDetails(root, 'external', 20)).toEqual([])

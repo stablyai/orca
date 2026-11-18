@@ -3,14 +3,14 @@ import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runt
 import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './workspace-facts/orca-runtime-detected-checkouts-live-content'
 import type { OrcaRuntimeWithAgentTransitions } from '../construction/orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
-import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/constants'
+import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/workspace-view/sleeping-workspace-visibility'
 import {
   getConnectionExecutionHostId,
   isLocalExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/feed/sidebar-temporal-snapshot'
 import type { WorkspaceRowsProducer } from './workspace-rows/workspace-rows-producer'
 import {

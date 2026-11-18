@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronUp, Goal, Pause, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { NativeChatComposerTabStrip } from '../../composer/controls/NativeChatComposerTabStrip'
@@ -10,8 +10,8 @@ import type { AgentJournalThreadGoal } from '../../../../../../shared/agent-sess
 import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalOfferedStatusChange
-} from '../../../../../../shared/agent-session/agent-session-thread-goal'
-import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
+} from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal'
+import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import { formatAgentSessionThreadGoalElapsed } from '../../../../../../shared/agent-session/view/agent-session-thread-goal-presentation'
 import { nativeChatThreadGoalStatusLabel } from './native-chat-thread-goal-presentation'
 

@@ -6,7 +6,7 @@ import type React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
-import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentStateDot, type AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 
 import { useRepoById } from '@/store/repos/use-repository-catalog'

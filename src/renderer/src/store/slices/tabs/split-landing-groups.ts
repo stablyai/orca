@@ -1,7 +1,7 @@
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../../types'
 import type { TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 
 type SplitLandingMarks = Pick<AppState, 'groupsByWorktree' | 'splitLandingGroupIds'>
 type SplitLandingState = SplitLandingMarks & Pick<AppState, 'activeGroupIdByWorktree'>

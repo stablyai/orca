@@ -8,7 +8,7 @@ import {
   type WorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
