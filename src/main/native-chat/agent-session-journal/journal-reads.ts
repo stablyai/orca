@@ -64,7 +64,7 @@ export type JournalContinuationContext = {
   continued: readonly JournalContinuedPayload[]
 }
 
-export type JournalContinuationSpill = Omit<JournalContinuedPayload, 'index' | 'bytes'> & {
+export type JournalContinuationSpill = Omit<JournalContinuedPayload, 'index' | 'bytes' | 'file'> & {
   /** A new private file the reader writes the whole stored UTF-8 text to. */
   path: string
 }

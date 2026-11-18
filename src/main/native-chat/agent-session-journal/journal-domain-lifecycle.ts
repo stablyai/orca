@@ -1,4 +1,5 @@
 import { applyJournalDomainLifecycleDispatches } from './journal-domain-lifecycle-dispatch'
+import { sameJournalItemBody } from './journal-output-files'
 import { isDeepStrictEqual } from 'node:util'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -146,7 +147,7 @@ export function applyJournalDomainLifecycle(
         (mutation.kind === 'tombstone'
           ? tombstone
           : previous &&
-            isDeepStrictEqual(previous.item.body, mutation.body) &&
+            sameJournalItemBody(previous.item.body, mutation.body) &&
             (!Object.hasOwn(mutation, 'echoOf') ||
               db
                 .prepare(

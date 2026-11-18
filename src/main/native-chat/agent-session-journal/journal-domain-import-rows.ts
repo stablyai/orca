@@ -11,6 +11,7 @@ import type { JournalDomainImportHeader, JournalDomainImportPage } from './journ
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { recordJournalLegacyChatRevision } from './database/journal-legacy-source'
 import { hydrateJournalStoredItem, journalStoredItemRow } from './journal-stored-output-rows'
+import { moveJournalItemOutputToFile } from './journal-output-files'
 
 export type JournalDomainImportState =
   | { state: 'converting'; epoch: null }
@@ -247,8 +248,9 @@ export function insertJournalDomainItemRows(
     queueFailureWitnessedThrough,
     queueFailureReportTurnItemId
   } of rows) {
-    const item = hydrateJournalStoredItem(db, prefix, given)
-    const displayed = shown && hydrateJournalStoredItem(db, prefix, shown)
+    const item = moveJournalItemOutputToFile(db, hydrateJournalStoredItem(db, prefix, given))
+    const displayed =
+      shown && moveJournalItemOutputToFile(db, hydrateJournalStoredItem(db, prefix, shown))
     const encoded =
       (item === given && displayed === shown ? prepared : undefined) ??
       prepareJournalDomainItemRow(item, displayed)

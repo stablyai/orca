@@ -19,6 +19,7 @@ import {
 } from './journal-domain-maintenance'
 import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
 import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
+import { sweepJournalOutputFiles, type JournalOutputFileSweepResult } from './journal-output-files'
 import {
   discardJournalDomainImportPage,
   type JournalDomainImportDiscard
@@ -60,6 +61,7 @@ export type JournalSqlMaintenance =
   | { kind: 'import-finish'; header: JournalDomainImportHeader }
   | JournalDomainMaintenance
   | { kind: 'event-tail-prune'; now: number }
+  | { kind: 'output-file-sweep'; now: number }
   // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
   | { kind: 'connector-replies-fill'; fills: readonly JournalConnectorReplyFill[]; now: number }
   | { kind: 'connector-replies-sent'; keys: readonly JournalConnectorReplyKey[]; now: number }
@@ -71,6 +73,7 @@ export type JournalSqlMaintenanceResult =
   | JournalForkStageResult
   | JournalSqlProjectionState
   | JournalSqlEventTailResult
+  | JournalOutputFileSweepResult
   | JournalDomainMaintenanceResult
   | JournalDomainImportDiscard
   | ReturnType<typeof discardForgottenJournalChatPage>
@@ -131,5 +134,7 @@ export function applyJournalSqlMaintenance(
       return pruneJournalSqlEventTail(db, operation.now)
     case 'stored-output-compaction':
       return compactJournalStoredOutputPage(db)
+    case 'output-file-sweep':
+      return sweepJournalOutputFiles(db, operation.now)
   }
 }

@@ -15,6 +15,8 @@ import {
   writeAgentSessionContextSnapshot
 } from '../../conversation-context/agent-session-context-snapshots'
 import type { JournalContinuedPayload } from '../../agent-session-journal/journal-reads'
+import { journalOutputFilePath } from '../../agent-session-journal/journal-output-files'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   ContinuedTranscriptMarkers,
   continuedFileText
@@ -56,9 +58,14 @@ export function continuationContextReader(
     }
     // A large tool output or patch arrives as an excerpt; its whole text streams into the file.
     const markers = new ContinuedTranscriptMarkers()
+    const files = await Promise.all(
+      context.continued.map((part) =>
+        continuedFile(deps.journalDatabase.stateDirectory, part, context.items[part.index])
+      )
+    )
     const items = [...context.items]
     context.continued.forEach((part, index) => {
-      items[part.index] = markers.mark(items[part.index], index)
+      items[part.index] = markers.mark(items[part.index], index, files[index] !== null)
     })
     const messages = projectStructuredAgentSessionMessages(
       items,
@@ -80,6 +87,10 @@ export function continuationContextReader(
     const spillRoot = agentSessionContextSnapshotRoot(deps.journalDatabase.stateDirectory)
     // One extraction per text, written by the reader to a private file main then streams.
     const spill = async (part: JournalContinuedPayload, trimEnd: boolean) => {
+      const file = files[context.continued.indexOf(part)]
+      if (file) {
+        return continuedFileText(file, trimEnd)
+      }
       // Checked and swept once per export, before its first spill.
       prepared ??= ensureOwnedTempStagingRoot(spillRoot).then(async (owned) => {
         if (!owned) {
@@ -146,4 +157,32 @@ async function removeStaleSpills(root: string): Promise<void> {
       await rm(path, { force: true })
     }
   }
+}
+
+/**
+ * The side file a row promises its whole text in. One missing or of the wrong size fails the
+ * export: a promised whole text never quietly becomes its head.
+ */
+async function continuedFile(
+  stateDirectory: string,
+  part: JournalContinuedPayload,
+  item: AgentJournalRenderItem
+): Promise<string | null> {
+  const { body } = item
+  const payload =
+    body.kind === 'diff' ? body.patch : body.kind === 'tool-call' ? body.output : undefined
+  if (!part.file || !payload) {
+    return null
+  }
+  const path = journalOutputFilePath(stateDirectory, part.file)
+  const size = await stat(path).then(
+    (info) => info.size,
+    () => -1
+  )
+  if (size !== payload.byteLength) {
+    throw new Error(
+      `chat output ${part.itemId} is missing its saved file (${size < 0 ? 'not found' : `${size} of ${payload.byteLength} bytes`})`
+    )
+  }
+  return path
 }
