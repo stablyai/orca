@@ -162,9 +162,9 @@ export function MobileWebShellScreen({
     readWorkspaceKey
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; staged files belong to this page session.
+  const { serve: serveDeviceVerb, sheet: forkSheet } = useShellDeviceVerbs(hostId, readySessionId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
-  const deviceVerbs = useShellDeviceVerbs(hostId, readySessionId)
   // Read the shell's storage for this host.
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
@@ -175,7 +175,7 @@ export function MobileWebShellScreen({
           ? serveImageAction(params)
           : verb === BRIDGE_STORE_VERB
             ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
-            : deviceVerbs.serve(verb, params)
+            : serveDeviceVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {
@@ -431,7 +431,7 @@ export function MobileWebShellScreen({
         <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
       )}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
-      {deviceVerbs.sheet}
+      {forkSheet}
     </View>
   )
 }
