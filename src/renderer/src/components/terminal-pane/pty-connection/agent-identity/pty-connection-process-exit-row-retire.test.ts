@@ -197,7 +197,10 @@ async function seedHookRow(
       )
     ).isClaudeAgent
   )
-  realStore.getState().setAgentStatus(paneKey, { state, prompt: 'ship it', agentType })
+  realStore.getState().setAgentStatus(paneKey, { state, prompt: 'ship it', agentType }, undefined, {
+    updatedAt: 1_800_000_000_000,
+    stateStartedAt: 1_800_000_000_000
+  })
   const row = realStore.getState().agentStatusByPaneKey.get(paneKey)!
   mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
     [paneKey, row]
@@ -213,6 +216,7 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
   beforeEach(async () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
+    vi.setSystemTime(1_800_000_000_000)
     coordinatorOptionsByPaneKey.clear()
     transportFactoryQueue = []
     storeSubscribers = []
@@ -271,7 +275,11 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
     // No `paneRemoved`: the pane outlived the agent, so main keeps the resume identity.
     expect(mockStoreState.dropAgentStatus.mock.calls).toEqual([[paneKey]])
-    expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
+    expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey, true, {
+      paneKey,
+      receivedAt: 1_800_000_000_000,
+      stateStartedAt: 1_800_000_000_000
+    })
     expect(mockStoreState.agentStatusByPaneKey.get(paneKey)!).toBeUndefined()
   })
 
@@ -283,7 +291,7 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
 
     confirmExit('claude')
     // The relaunched Claude's first hook lands while the host is still answering.
-    vi.setSystemTime(Date.now() + 1_000)
+    vi.setSystemTime(1_800_000_001_000)
     mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
       [
         paneKey,
@@ -291,8 +299,8 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
           ...exitedRow,
           state: 'working',
           prompt: 'next session',
-          updatedAt: Date.now(),
-          stateStartedAt: Date.now(),
+          updatedAt: 1_800_000_001_000,
+          stateStartedAt: 1_800_000_001_000,
           acceptedStatusSeq: (exitedRow.acceptedStatusSeq ?? 0) + 1
         }
       ]
@@ -315,7 +323,15 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
 
     expect(mockStoreState.dropAgentStatus.mock.calls).toEqual([[left.paneKey]])
     expect(vi.mocked(window.api.agentStatus.reconcileEndedProcess).mock.calls).toEqual([
-      [left.paneKey]
+      [
+        left.paneKey,
+        true,
+        {
+          paneKey: left.paneKey,
+          receivedAt: 1_800_000_000_000,
+          stateStartedAt: 1_800_000_000_000
+        }
+      ]
     ])
     expect(mockStoreState.agentStatusByPaneKey.get(right.paneKey)!).toBeDefined()
   })

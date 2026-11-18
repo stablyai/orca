@@ -89,6 +89,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSession?: AgentProviderSessionMetadata
   /** Resume identity update only; the status-shaped fields are transport placeholders. */
   providerSessionOnly?: boolean
+  /** Confirmed agent exit, distinct from a completed turn or a retained live resume identity. */
+  agentProcessEnded?: true
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
   /** See AgentStatusEntry.programStatus. Live-only; older peers ignore it. */

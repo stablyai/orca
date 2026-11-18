@@ -38,7 +38,11 @@ export type AgentStatusApi = {
   dropPersisted: (identity: AgentStatusCacheIdentity) => void
   dropPersistedBatch?: (identities: readonly AgentStatusCacheIdentity[]) => void
   /** Proven process exit also clears per-pane caches that a user dismissal retains. */
-  reconcileEndedProcess: (paneKey: string) => void
+  reconcileEndedProcess: (
+    paneKey: string,
+    processExitConfirmed?: boolean,
+    identity?: AgentStatusCacheIdentity
+  ) => void
   /** Drop every cached hook status under one terminal tab prefix. Fire-and-forget. */
   dropByTabPrefix: (tabId: string) => void
   /** Permanently retire one pane's hook authority while siblings stay live. */

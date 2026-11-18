@@ -11,7 +11,10 @@ import type {
 } from '../../../shared/agent-status/contracts/agent-status-observation'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type {
+  AgentStatusCacheIdentity,
+  AgentStatusClearIpcPayload
+} from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/orca-profiles/persisted-state-types'
 import type { SpoolRecord } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
 
@@ -179,7 +182,12 @@ export abstract class AgentHookServerStateContract {
 
   abstract reconcileEndedProcessForPaneKeys(
     paneKeys: Iterable<string>,
-    options?: { preserveResumeIdentity?: boolean; endedPresence?: AgentProcessPresence }
+    options?: {
+      preserveResumeIdentity?: boolean
+      endedPresence?: AgentProcessPresence
+      processExitConfirmed?: boolean
+      expectedStatus?: AgentStatusCacheIdentity
+    }
   ): number
 
   protected abstract clearPaneState(

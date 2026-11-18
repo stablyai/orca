@@ -51,6 +51,7 @@ export type PtySpawnOperationState = Pick<
     attachOnlyView?: unknown
     launchToken?: unknown
     resumeOrigin?: unknown
+    spawnIntent?: unknown
   }
   replacedPaneOwner?: ReplacedPaneOwner | null
   paneSpawnOperation?: PaneSpawnOperation

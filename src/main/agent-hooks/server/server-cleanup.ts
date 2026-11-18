@@ -16,10 +16,13 @@ import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
+import { matchesAgentStatusCacheIdentity } from './server-status-identity'
 import { recordAgentExit } from './agent-exit-evidence'
 
 export type EndedProcessReconciliationOptions = {
   endedPresence?: AgentProcessPresence
+  processExitConfirmed?: boolean
+  expectedStatus?: AgentStatusCacheIdentity
   /** Keep resume identity when the pane survives the agent. */
   preserveResumeIdentity?: boolean
 }
@@ -29,11 +32,8 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
   protected toRetainedProviderSessionRow(
     entry: EnrichedAgentHookEventPayload | null | undefined
   ): EnrichedAgentHookEventPayload | null {
-    if (
-      !entry?.providerSession ||
-      !entry.payload.agentType ||
-      entry.payload.agentType === 'unknown'
-    ) {
+    const agentType = entry?.payload.agentType
+    if (!entry?.providerSession || !agentType || agentType === 'unknown') {
       return null
     }
     const { launchToken: _launchToken, paneSleep: _paneSleep, ...resumeIdentity } = entry
@@ -75,12 +75,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         | EnrichedAgentHookEventPayload
         | undefined
       const canonical = existing ?? this.getTmuxSelectedStatus(resolvedPaneKey)
-      // The turn clock pins identity; renderer updatedAt is at least receivedAt, so protect only newer rows.
-      if (
-        !canonical ||
-        canonical.stateStartedAt !== identity.stateStartedAt ||
-        canonical.receivedAt > identity.receivedAt
-      ) {
+      if (!matchesAgentStatusCacheIdentity(canonical, { ...identity, paneKey: resolvedPaneKey })) {
         continue
       }
       const deleted = this.deleteStatusEntry(resolvedPaneKey, { preserveAuthority: true })
@@ -120,7 +115,19 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
     let cleared = 0
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-      if (this.preservesStoppingDone(resolvedPaneKey)) {
+      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      const canonical = previous ?? this.getTmuxSelectedStatus(resolvedPaneKey)
+      if (
+        this.preservesStoppingDone(resolvedPaneKey) ||
+        (options?.expectedStatus &&
+          canonical &&
+          !matchesAgentStatusCacheIdentity(canonical, {
+            ...options.expectedStatus,
+            paneKey: this.resolvePaneKeyAlias(options.expectedStatus.paneKey)
+          }))
+      ) {
         untouched.push(resolvedPaneKey)
         continue
       }
@@ -139,20 +146,13 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         untouched.push(resolvedPaneKey)
         continue
       }
-      const resumeRow = options?.preserveResumeIdentity
-        ? this.toRetainedProviderSessionRow(
-            this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-              | EnrichedAgentHookEventPayload
-              | undefined
-          )
+      const retained = options?.preserveResumeIdentity
+        ? this.toRetainedProviderSessionRow(previous)
         : null
-      const retained =
-        resumeRow && options?.endedPresence
-          ? { ...resumeRow, agentPresence: options.endedPresence }
-          : resumeRow
-      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-        | EnrichedAgentHookEventPayload
-        | undefined
+      if (retained && (options?.endedPresence || options?.processExitConfirmed === true)) {
+        const presence = options?.endedPresence ?? retained.agentPresence
+        retained.agentPresence = { ...presence, agent: retained.payload.agentType!, ended: true }
+      }
       clearPane(resolvedPaneKey)
       if (retained) {
         admitLegacyAgentStatus(
