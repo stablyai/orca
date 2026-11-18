@@ -96,7 +96,11 @@ it('stops automatically continuing once five continues in a row end in another u
 function sweepOver(
   open: { tabs: string[]; background: string[] },
   sent: string[],
-  { enabled = true, loaded = true, unreadable = [] as string[] } = {}
+  {
+    enabled = true,
+    loaded = true,
+    unreadable = []
+  }: { enabled?: boolean; loaded?: boolean; unreadable?: readonly string[] } = {}
 ): StructuredAgentSessionUsageLimitContinue {
   const now = HOST_TEST_NOW
   const ids = [...open.tabs, ...open.background]
