@@ -19,6 +19,7 @@ import { useMobileTerminalCreateRouteOwner } from './use-mobile-terminal-create-
 import { launchMobileSessionQuickCommand } from '../../quick-commands/mobile-session-quick-command-launch'
 import type { TerminalQuickCommand } from '../../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import {
+  chatForkRequestSource,
   requestMobileSessionTerminalCreate,
   type MobileSessionTerminalCreateOptions
 } from './mobile-session-terminal-create-request'
@@ -159,14 +160,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         clientMutationId,
         agent,
         options,
-        ...(sourceFork
-          ? {
-              sourceChatFork: {
-                sessionId: sourceFork.sessionId,
-                ...(sourceFork.throughEntryId ? { throughEntryId: sourceFork.throughEntryId } : {})
-              }
-            }
-          : {})
+        ...(sourceFork ? { sourceChatFork: chatForkRequestSource(sourceFork) } : {})
       })
       if (!isCurrent()) {
         return sourceOutcome('accepted')

@@ -12,6 +12,17 @@ export type MobileSessionTerminalCreateOptions = MobileQuickCommandLaunch['optio
   terminalView?: boolean
 }
 
+/** The fork source the host reads: the session, and the transcript cut only when one was picked. */
+export function chatForkRequestSource(fork: { sessionId: string; throughEntryId?: string }): {
+  sessionId: string
+  throughEntryId?: string
+} {
+  return {
+    sessionId: fork.sessionId,
+    ...(fork.throughEntryId ? { throughEntryId: fork.throughEntryId } : {})
+  }
+}
+
 export function requestMobileSessionTerminalCreate(args: {
   client: RpcClient
   worktreeId: string
