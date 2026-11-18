@@ -10,7 +10,12 @@ let updatesEnabledSetting = true
 
 /** Updates come from the fork's own releases (docs/zotz/UPDATES-SPEC.md); on unless turned off. */
 export function isZotzUpdaterEnabled(): boolean {
-  return updatesEnabledSetting && process.env[ZOTZ_DISABLE_UPDATER_ENV] !== '1'
+  // E2E drivers install an old build; a real release installing over it pulls files from under the test.
+  return (
+    updatesEnabledSetting &&
+    process.env[ZOTZ_DISABLE_UPDATER_ENV] !== '1' &&
+    !process.env.ORCA_E2E_USER_DATA_DIR
+  )
 }
 
 /** Read once when the updater starts; flipping the setting takes effect on the next launch. */
