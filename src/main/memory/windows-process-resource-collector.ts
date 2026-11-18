@@ -45,7 +45,9 @@ export async function enumerateWindowsProcessResources(
   // Back off blocked CIM queries while allowing recovery from transient failures.
   processBackend = 'typeperf'
   retryCimAtMs = performance.now() + CIM_RETRY_AFTER_MS
-  previousCpuSample = null
+  if (trackCpu) {
+    previousCpuSample = null
+  }
   return enumerateWindowsWithTypeperf()
 }
 
