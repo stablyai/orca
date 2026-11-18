@@ -578,3 +578,9 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - Pendiente: el switch "sin worktree" al crear (conversación directa en la carpeta del proyecto), marcar como "propias" las conversaciones abiertas desde Zotz para ocultar agentes externos dentro del mismo worktree, y "Conectar a mi servidor" en modo personal.
 - `server-hook-session-binding.test.ts` y `journal-writer-operation-expiry.test.ts` ya fallaban en `main` antes de esta rama.
 - Misma rama: cada conversación muestra el `AgentStateDot` de upstream (trabajando, pregunta, error, terminado, sin leer); los proyectos sin ícono toman el avatar de GitHub del dueño. Fase 8: el gobernador mide los chats nativos (pid del dueño en el lease de la sesión) y la cola también los retiene antes de arrancar (`zotz-structured-agent-start-hold.ts`, enganchado en `runStart`).
+
+### 2026-11-18 — Fase 8: prueba de estrés en Zotz Dev (Mac, 32 GB)
+
+- **Tope de agentes:** 6 Claude seguidos → 4 en marcha en ~10 s y el resto en cola (`concurrency`); al cerrar uno, el siguiente arranca solo. Antes del arreglo, la reserva de 90 s contaba doble y dejaba un lugar vacío ese tiempo.
+- **Memoria en macOS:** `memory_pressure` cuenta como libre lo que macOS puede mandar a swap; con 16 GB ocupados Zotz seguía viendo 9–12 GB libres. Ahora la presión también sale de `kern.memorystatus_vm_pressure_level` y del swap escrito en 2 min (≥ 1 GiB). Con 12 GB ocupados: presión `elevated`, un Claude nuevo esperó con motivo `pressure` y arrancó solo ~80 s después de liberar la RAM.
+- **Pendiente:** cancelar desde la API/tablero una tarea cuya pestaña sigue abierta la vuelve a encolar (el pane reintenta el spawn). Cancelar debería cerrar o marcar el pane. Repetir la prueba de memoria en la MSI (Windows mide distinto).
