@@ -4,6 +4,7 @@ import { createAppStoreNotificationRouter } from './app-store-notification-route
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these listeners read only `n`.
 const stateOf = (n: number) => ({ n }) as unknown as AppState
+const nOf = (state: AppState): unknown => Reflect.get(state, 'n')
 
 function setup(skip: boolean) {
   let dispatch: ((state: AppState, previous: AppState) => void) | null = null
@@ -55,15 +56,14 @@ it('wakes every listener when skipping is off', () => {
 
 it('hands later listeners the state a nested write produced', () => {
   const { router, write } = setup(false)
-  const seen: number[][] = []
+  const seen: unknown[][] = []
   router.subscribe((state) => {
-    const n = (state as unknown as { n: number }).n
-    if (n === 1) {
+    if (nOf(state) === 1) {
       write(2)
     }
   })
   router.subscribe((state, previous) => {
-    seen.push([(state as unknown as { n: number }).n, (previous as unknown as { n: number }).n])
+    seen.push([nOf(state), nOf(previous)])
   })
   write(1)
   expect(seen).toEqual([
