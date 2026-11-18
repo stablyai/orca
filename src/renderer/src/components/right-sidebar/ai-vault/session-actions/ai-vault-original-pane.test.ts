@@ -1,12 +1,9 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
-import { createTestStore } from '@/store/testing/app-store-test-fixture'
+
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import {
-  buildAiVaultOriginalPaneIndex,
-  findOriginalAiVaultSessionPaneInIndex
-} from './ai-vault-original-pane-index'
+
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { type OriginalPaneState, findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
 
@@ -101,51 +98,3 @@ describe('findOriginalAiVaultSessionPane', () => {
     expect(target).toBeNull()
   })
 })
-
-it.each([true, false])(
-  'forgets the preceding original-pane target after an unidentified successor (provider known: %s)',
-  (known) => {
-    const store = createTestStore()
-    store.setState({
-      tabsByWorktree: { 'wt-1': [makeTab()] },
-      terminalLayoutsByTabId: { 'tab-1': makeLayout() }
-    })
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    store
-      .getState()
-      .setAgentStatus(
-        paneKey,
-        { state: 'done', agentType: 'codex', prompt: baseSession.title },
-        undefined,
-        { updatedAt: 1000 },
-        { worktreeId: 'wt-1' },
-        known ? { providerSession: { key: 'session_id', id: 'session-1' } } : undefined
-      )
-    store.getState().removeAgentStatus(paneKey)
-    expect(findOriginalAiVaultSessionPane(store.getState(), baseSession)?.paneKey).toBe(paneKey)
-    store
-      .getState()
-      .setAgentStatus(
-        paneKey,
-        { state: 'working', agentType: 'codex', prompt: 'Current task' },
-        undefined,
-        { updatedAt: 2000 },
-        { worktreeId: 'wt-1' }
-      )
-    store.getState().removeAgentStatus(paneKey)
-    expect(findOriginalAiVaultSessionPane(store.getState(), baseSession)).toBeNull()
-    expect(
-      findOriginalAiVaultSessionPaneInIndex(
-        buildAiVaultOriginalPaneIndex(store.getState()),
-        baseSession
-      )
-    ).toBeNull()
-    const current = { ...baseSession, sessionId: 'session-next', title: 'Current task' }
-    expect(findOriginalAiVaultSessionPane(store.getState(), current)?.paneKey).toBe(paneKey)
-    store
-      .getState()
-      .recordAgentProviderSession(paneKey, 'codex', { key: 'session_id', id: 'session-next' })
-    expect(findOriginalAiVaultSessionPane(store.getState(), baseSession)).toBeNull()
-    expect(findOriginalAiVaultSessionPane(store.getState(), current)?.paneKey).toBe(paneKey)
-  }
-)

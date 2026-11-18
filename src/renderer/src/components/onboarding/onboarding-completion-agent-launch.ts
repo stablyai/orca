@@ -6,7 +6,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
 import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
-import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
+import { captureAgentTabLaunchContext } from '@/lib/agent-session/launch/pane/agent-tab-launch-context'
 import { activateAndRevealWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 

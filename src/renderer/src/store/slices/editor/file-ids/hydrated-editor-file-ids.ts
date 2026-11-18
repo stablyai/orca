@@ -5,7 +5,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspac
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import { buildOwnedEditorFileId, runtimeOwnerKey } from './editor-file-ids'
-import { recordDraft, tabBucketDraft } from '../../../keyed-record-transitions'
+import { recordDraft, tabBucketDraft } from '../../../record-transitions/keyed-record-transitions'
 
 export function shouldHydrateWithOwnedEditorFileId(
   worktreeId: string,

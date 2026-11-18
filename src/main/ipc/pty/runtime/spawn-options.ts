@@ -12,7 +12,7 @@ import {
   assemblePtySpawnEnvDeletions,
   assemblePtySpawnLaunchOptions,
   seedPtySpawnSize
-} from '../spawn-options-assembly'
+} from '../spawn/spawn-options-assembly'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 

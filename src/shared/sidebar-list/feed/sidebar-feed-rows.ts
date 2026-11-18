@@ -150,6 +150,7 @@ export function planSidebarFeedRows(
   const rankByIdentity = new Map(rankedIdentities.map((identity, rank) => [identity, rank]))
   const factsOf = (worktree: Worktree) => byIdentity.get(getWorktreeHostIdentity(worktree))?.facts
   const pairedDeviceIdsByEnvironment = feedPairedDeviceIdsByEnvironment(domains)
+  const hiddenProjects = indexHiddenProjects(repos, defaultHostId)
 
   const visibleWorktrees = selectVisibleSidebarWorktrees({
     rows: allWorktrees,
@@ -158,7 +159,7 @@ export function planSidebarFeedRows(
     filters: view.filters,
     facts: {
       isArchived: (worktree) => worktree.isArchived,
-      ...hiddenProjectRowFacts(indexHiddenProjects(repos, defaultHostId)),
+      ...hiddenProjectRowFacts(hiddenProjects),
       isFolderWorkspace: () => false,
       repoId: (worktree) => worktree.repoId,
       hostId: (worktree) => feedWorktreeHostId(index, worktree, defaultHostId),
@@ -217,7 +218,7 @@ export function planSidebarFeedRows(
     worktreesByRepo,
     visibleWorktrees,
     filterRepoIds: view.filters.filterRepoIds,
-    hiddenProjects: indexHiddenProjects(repos, defaultHostId)
+    hiddenProjects
   })
   const plan = planSidebarRows({
     groupBy,
@@ -245,7 +246,8 @@ export function planSidebarFeedRows(
     hostLabelById: new Map(hostOptions.map((host) => [host.id, host.label])),
     defaultHostId,
     pinnedDisplayPolicy: view.pinnedDisplayPolicy,
-    filterRepoIds: view.filters.filterRepoIds
+    filterRepoIds: view.filters.filterRepoIds,
+    hiddenProjects
   })
   return {
     visibleWorktrees,

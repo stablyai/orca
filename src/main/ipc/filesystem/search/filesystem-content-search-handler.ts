@@ -7,10 +7,10 @@ import {
 import { resolveBundledRipgrepWslRouting } from '../../../ripgrep/bundled-ripgrep-wsl-routing'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { resolveDesktopAuthorizedPath } from '../access/local-file-access-resolution'
-import { createSenderScopedRequestCancellations } from '../../sender-scoped-request-cancellation'
+import { createSenderScopedRequestCancellations } from '../../renderer-requests/sender-scoped-request-cancellation'
 import { stopBundledRipgrep } from '../../../ripgrep/bundled-ripgrep-stop'
 import { runBundledRipgrepTextSearch } from '../../../ripgrep/bundled-ripgrep-text-search'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 
 export function registerFilesystemContentSearchHandler(context: FilesystemHandlerContext): void {

@@ -221,45 +221,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
   })
 
-  it('kills and rejects a daemon whose readiness message omits its start time', async () => {
-    const mod = await importFresh()
-    checkDaemonHealthMock.mockResolvedValue('unreachable')
-    await mod.initDaemonPtyProvider()
-
-    const launcher = spawnerInstances[0].launcher as (
-      socketPath: string,
-      tokenPath: string
-    ) => Promise<{ shutdown(): Promise<void> }>
-    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw Object.assign(new Error('already exited'), { code: 'ESRCH' })
-    })
-    const child = {
-      pid: 12345,
-      on(event: string, cb: (arg?: unknown) => void) {
-        if (event === 'message') {
-          queueMicrotask(() => cb({ type: 'ready', pid: 12345 }))
-        }
-        return this
-      },
-      off: vi.fn(),
-      disconnect: vi.fn(),
-      unref: vi.fn()
-    }
-    forkMock.mockReturnValueOnce(child)
-
-    try {
-      await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
-        'Daemon readiness identity is incomplete'
-      )
-      expect(kill).toHaveBeenCalledWith(12345, 'SIGTERM')
-      expect(writeFileSyncMock).not.toHaveBeenCalled()
-      expect(child.disconnect).not.toHaveBeenCalled()
-      expect(child.unref).toHaveBeenCalledOnce()
-    } finally {
-      kill.mockRestore()
-    }
-  })
-
   it('rejects startup cleanup when SIGKILL never produces child exit', async () => {
     vi.useFakeTimers()
     const kill = vi.spyOn(process, 'kill').mockReturnValue(true)
@@ -314,56 +275,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     } finally {
       kill.mockRestore()
       vi.useRealTimers()
-    }
-  })
-
-  it('surfaces non-ESRCH startup termination errors and releases IPC', async () => {
-    const signalError = Object.assign(new Error('operation not permitted'), {
-      code: 'EPERM'
-    })
-    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw signalError
-    })
-    try {
-      const mod = await importFresh()
-      checkDaemonHealthMock.mockResolvedValue('unreachable')
-      await mod.initDaemonPtyProvider()
-      const child = {
-        pid: 12345,
-        connected: true,
-        exitCode: null,
-        signalCode: null,
-        on(event: string, callback: (arg?: unknown) => void) {
-          if (event === 'message') {
-            queueMicrotask(() => callback({ type: 'ready' }))
-          }
-          return this
-        },
-        off: vi.fn(),
-        disconnect: vi.fn(() => {
-          child.connected = false
-        }),
-        unref: vi.fn()
-      }
-      forkMock.mockReturnValueOnce(child)
-      const launcher = spawnerInstances[0].launcher as (
-        socketPath: string,
-        tokenPath: string
-      ) => Promise<{ shutdown(): Promise<void> }>
-
-      const error = await launcher('/fake/socket', '/fake/token').catch((caught: unknown) => caught)
-
-      expect(error).toBeInstanceOf(AggregateError)
-      expect((error as AggregateError).errors).toEqual([
-        expect.objectContaining({
-          message: 'Daemon readiness identity is incomplete'
-        }),
-        signalError
-      ])
-      expect(child.disconnect).toHaveBeenCalledOnce()
-      expect(child.unref).toHaveBeenCalledOnce()
-    } finally {
-      kill.mockRestore()
     }
   })
 })

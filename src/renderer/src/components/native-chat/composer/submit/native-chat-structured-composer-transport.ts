@@ -10,7 +10,10 @@ import type {
   SessionOptionDescriptor
 } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from '../../session/options/controls/native-chat-option-picker-request'
-import type { AgentSessionSlashCommand } from '../../../../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionPromptSuggestion,
+  AgentSessionSlashCommand
+} from '../../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentContextUsage } from '../../../../../../shared/agent-session/conversation-context/structured-agent-session-context-usage'
 import type { NativeChatComposerErrorDetail } from '../controls/native-chat-composer-error-detail'
 import type { NativeChatSideChat } from '../../messages/actions/use-native-chat-side-chat'
@@ -49,6 +52,8 @@ export type NativeChatStructuredComposerTransport = {
   acceptsImages?: boolean
   /** The session's context usage; null until the journal can state it. */
   contextUsage?: StructuredAgentContextUsage | null
+  /** The agent's guess at the next prompt, absent while a queued message will be sent next. */
+  promptSuggestion?: AgentSessionPromptSuggestion | null
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }

@@ -97,6 +97,7 @@ export type MockPaneBuffer = {
   baseY: number
   cursorY: number
   cursorX: number
+  getLine: (row: number) => { translateToString: (trimRight?: boolean) => string } | undefined
 }
 
 export type MockPaneTerminal = {
@@ -156,7 +157,9 @@ export function createPane(paneId: number): MockPane {
     viewportY: 0,
     baseY: 0,
     cursorY: 0,
-    cursorX: 0
+    cursorX: 0,
+    getLine: (_row: number): { translateToString: (trimRight?: boolean) => string } | undefined =>
+      undefined
   }
   const terminal = {
     cols: 120,

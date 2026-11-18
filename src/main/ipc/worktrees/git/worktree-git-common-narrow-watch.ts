@@ -8,7 +8,7 @@ import type {
   WorktreeBaseSubscription,
   WorktreePollerWindowVisibility
 } from '../creation/worktree-base-directory-poller'
-import { createSingleFlight } from '../../single-flight-promise'
+import { createSingleFlight } from './single-flight-promise'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import { createNativeUpgradePoll } from './worktree-git-common-native-upgrade-poll'
