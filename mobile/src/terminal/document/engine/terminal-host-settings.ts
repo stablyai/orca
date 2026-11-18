@@ -29,7 +29,8 @@ export function applyTerminalHostSettings(
       return
     }
   }
-  for (const term of [scope.term, scope.committedTerm, scope.provisionalTerm]) {
+  // The guarded live terminal and an empty pre-ready one; an outgoing terminal mid-swap keeps its rows.
+  for (const term of [scope.term, scope.provisionalTerm]) {
     if (term) {
       term.options.scrollback = scrollbackRows
     }
