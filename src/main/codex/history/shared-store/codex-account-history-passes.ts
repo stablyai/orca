@@ -15,6 +15,8 @@ import {
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
 
 import { CodexHistoryPassRequests } from './codex-history-pass-queue'
+import { WRITER_LOCKS } from './codex-thread-writer-locks'
+import { isLinkedDirectory } from '../../../filesystem/merged-directory-link'
 
 const BUSY_RETRY_MS = 5 * 60_000
 // Retries start outside any pass's trace, so each is its own trace instead of nesting forever.
@@ -37,7 +39,7 @@ export class CodexAccountHistoryPasses {
 
   private readonly requests = new CodexHistoryPassRequests()
   private readonly settledThisRun = new Map<string, boolean>()
-  // Homes sharing can't reach (another volume, a user's own link): retried next app start.
+  // Homes whose lock folder can't link (another volume, a user's own link): retried next app start.
   private readonly privateThisRun = new Set<string>()
   private readonly busyRetries = new Map<string, ReturnType<typeof setTimeout>>()
   private activePasses = 0
@@ -140,7 +142,12 @@ export class CodexAccountHistoryPasses {
       if (result === 'busy') {
         this.retryWhenIdle(key, accountHome)
       }
-      if (result === 'private') {
+      // Only a lock folder that couldn't link starts the helper again each pass; a history folder
+      // that failed (an antivirus handle, say) is cheap to retry.
+      if (
+        result === 'private' &&
+        !(await isLinkedDirectory(join(accountHome, WRITER_LOCKS), join(storeHome, WRITER_LOCKS)))
+      ) {
         this.privateThisRun.add(key)
       }
       return result
