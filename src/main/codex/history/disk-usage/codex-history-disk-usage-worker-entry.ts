@@ -200,7 +200,7 @@ if (port) {
         }
       }
       const usage = measureCodexHistoryDiskUsage(
-        [...request.homes, ...accountHomes],
+        [...new Set([...request.homes, ...accountHomes])],
         request.budget
       )
       response = {

@@ -55,7 +55,8 @@ function uniqueHostHomes(candidates: readonly string[]): string[] {
 
 /**
  * The host Codex homes besides Orca's account homes, plus those account folders unchecked, so a
- * caller can verify their ownership (sync reads) where blocking is fine.
+ * caller can verify their ownership (sync reads) where blocking is fine. Leaves out the extra homes
+ * session discovery adds: they are these same homes, found through a sync ownership check.
  */
 export async function listHostCodexRolloutHomeSources(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
@@ -65,8 +66,7 @@ export async function listHostCodexRolloutHomeSources(
       dirname(codexHomeSessionsDir()),
       getSystemCodexHomePath(),
       resolveHostCodexSessionSourceHome(settings),
-      resolveOrcaManagedCodexHomePath(),
-      ...configuredAdditionalCodexHomePaths()
+      resolveOrcaManagedCodexHomePath()
     ]),
     accounts: [
       ...(await listAccountHomeCandidates(join(getOrcaUserDataPath(), 'codex-accounts'))),
@@ -85,5 +85,9 @@ export async function listHostCodexRolloutHomes(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
 ): Promise<string[]> {
   const { homes, accounts } = await listHostCodexRolloutHomeSources(settings)
-  return uniqueHostHomes([...homes, ...ownedCodexAccountHomes(accounts, getSystemCodexHomePath())])
+  return uniqueHostHomes([
+    ...homes,
+    ...ownedCodexAccountHomes(accounts, getSystemCodexHomePath()),
+    ...configuredAdditionalCodexHomePaths()
+  ])
 }
