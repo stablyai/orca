@@ -105,7 +105,9 @@ export function mountSourceDialog(
                 row.id === id
                   ? {
                       ...row,
-                      sourceControlAi: normalizeRepoSourceControlAiOverrides(patch.sourceControlAi)
+                      sourceControlAi: normalizeRepoSourceControlAiOverrides(
+                        (typeof patch === 'function' ? patch(row) : patch).sourceControlAi
+                      )
                     }
                   : row
               )

@@ -40,7 +40,7 @@ export function useWorktreeVisibilityHostActions(
   requestedHostId: ExecutionHostId | undefined
 ) {
   const refreshTargetRepo = useCallback(
-    (repoId: string, options?: { requireAuthoritative?: boolean }) =>
+    (repoId: string, options?: { requireAuthoritative?: boolean; forceFresh?: boolean }) =>
       fetchWorktrees(repoId, {
         ...options,
         ...(requestedHostId ? { executionHostId: requestedHostId } : {})

@@ -67,7 +67,11 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     setIsAdding(true)
     setError(null)
     try {
+      let selectedPath = folderPath
       const repo = await addRepoPath(folderPath, 'git', {
+        onResolvedSelectedPath: (resolved) => {
+          selectedPath = resolved
+        },
         runtimeEnvironmentId
       })
 
@@ -90,7 +94,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       await finishProjectAddWithDefaultCheckout({
         repoId: repo.id,
         source: runtimeEnvironmentId ? 'runtime_server_path' : 'local_folder_picker',
-        selectedPath: folderPath,
+        selectedPath,
         executionHostId: ownerOptions.executionHostId,
         closeModal
       })

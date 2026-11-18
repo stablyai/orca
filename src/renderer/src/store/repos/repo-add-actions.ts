@@ -44,6 +44,7 @@ export function createRepoAddActions(
             : defaultCreationHost(get().settings)
         const displayName = options?.displayName?.trim() || undefined
         let repo: Repo
+        let selectedPath: string | undefined
         try {
           if (target.kind === 'local') {
             const result = await window.api.repos.add({
@@ -55,21 +56,21 @@ export function createRepoAddActions(
               throw new Error(result.error)
             }
             repo = result.repo
+            selectedPath = result.selectedPath
           } else {
             const environmentId = target.environmentId
             // Queued behind any replayed removal, so a re-add of the same project is never undone.
             repo = await runExclusiveForRuntimeEnvironment(environmentId, async () => {
-              const added = (
-                await callRuntimeRpc<{ repo: Repo }>(
-                  target,
-                  'repo.add',
-                  { path, kind, ...(displayName ? { displayName } : {}) },
-                  // Adding a repo is the user's act: it may wake an idle-stopped WSL host (#46567).
-                  { timeoutMs: 15_000, wake: true }
-                )
-              ).repo
-              clearPendingRuntimeRepoRemoval(environmentId, added.id)
-              return added
+              const result = await callRuntimeRpc<{ repo: Repo; selectedPath?: string }>(
+                target,
+                'repo.add',
+                { path, kind, ...(displayName ? { displayName } : {}) },
+                // Adding a repo is the user's act: it may wake an idle-stopped WSL host (#46567).
+                { timeoutMs: 15_000, wake: true }
+              )
+              selectedPath = result.selectedPath
+              clearPendingRuntimeRepoRemoval(environmentId, result.repo.id)
+              return result.repo
             })
           }
         } catch (err) {
@@ -107,6 +108,7 @@ export function createRepoAddActions(
           })
           return null
         }
+        options?.onResolvedSelectedPath?.(selectedPath ?? path)
         repo = adoptFromEndpoint(target, { kind: 'repo', row: repo })
         const repoIdentity = getRepoHostIdentity(repo)
         const alreadyAdded = get().repos.some((r) => getRepoHostIdentity(r) === repoIdentity)

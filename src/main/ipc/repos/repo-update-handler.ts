@@ -24,6 +24,8 @@ import {
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
 import { normalizeDictationTerms } from '../../../shared/speech/dictation/dictation-dictionary'
+import { invalidateDetectedWorktreeScanCache } from '../worktrees/listing/detected-worktree-scan-cache'
+import { bumpWorktreeScanGeneration } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -283,6 +285,10 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
         updated = write({})
       }
       if (updated) {
+        if ('importedExternalWorktreePaths' in updates && !isFolderRepo(updated)) {
+          invalidateDetectedWorktreeScanCache(updated.id)
+          bumpWorktreeScanGeneration(updated.path)
+        }
         if ('worktreeBasePath' in updates) {
           void prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import type { RepoUpdate } from '@/store/repos/repo-state'
 import {
   Dialog,
   DialogContent,
@@ -187,10 +188,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
   )
 
   const commitSourceUpdate = useCallback(
-    async (
-      updates: Parameters<typeof updateTargetRepo>[1],
-      isAccepted: (latestRepo: Repo) => boolean
-    ): Promise<boolean> => {
+    async (updates: RepoUpdate, isAccepted: (latestRepo: Repo) => boolean): Promise<boolean> => {
       if (!repoId) {
         return false
       }

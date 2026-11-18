@@ -15,7 +15,7 @@ import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { confirmNonGitFolderAdd } from './non-git-folder-confirmation'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { CompleteGitRepoAdd } from '../completion/use-complete-git-repo-add'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
 import {
   addLocalPathsForGeneration,
@@ -61,11 +61,7 @@ export function useAddRepoLocalFolderFlow({
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
   showNestedRepoReview: (args: ShowNestedRepoReviewArgs) => void
-  onGitRepoReady: (
-    repoId: string,
-    source: AddRepoExistingWorkspaceSource,
-    executionHostId?: ExecutionHostId
-  ) => Promise<void>
+  onGitRepoReady: CompleteGitRepoAdd
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
   /** True when it held this single local path to offer running its WSL distro as a host. */
@@ -177,7 +173,11 @@ export function useAddRepoLocalFolderFlow({
           return { status: 'paused', projectAdded: folder.then((repo) => (repo ? { repo } : null)) }
         }
         setAddProjectBusyLabel(addRepoBusyLabels.openingProject())
+        let selectedPath = path
         const repo = await addRepoPath(path, undefined, {
+          onResolvedSelectedPath: (resolved) => {
+            selectedPath = resolved
+          },
           runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null
         })
         if (gen !== localAddGenRef.current) {
@@ -194,14 +194,14 @@ export function useAddRepoLocalFolderFlow({
             return { status: 'cancelled' }
           }
           if (mode === 'batch') {
-            return { status: 'completed', repo }
+            return { status: 'completed', repo, selectedPath }
           }
-          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId)
+          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId, { selectedPath })
         } else {
           // Folder projects activate their synthetic root through the add flow instead of Git checkout completion.
           closeModal()
         }
-        return { status: 'completed', repo }
+        return { status: 'completed', repo, selectedPath }
       } finally {
         if (gen === localAddGenRef.current) {
           clearNestedScanState()

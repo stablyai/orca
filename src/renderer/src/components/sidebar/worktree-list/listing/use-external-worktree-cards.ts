@@ -122,7 +122,6 @@ export function useSidebarExternalWorktreeCards(args: {
 
   const handleKeepImportedWorktreesHidden = useCallback(
     async (projectId: string) => {
-      const repo = repos.find((candidate) => candidate.id === projectId)
       let detected = detectedWorktreesByRepo[projectId]
       // Why: baseline seeding needs authoritative hidden paths, so don't dismiss on a stale snapshot.
       if (detected?.authoritative !== true) {
@@ -147,11 +146,10 @@ export function useSidebarExternalWorktreeCards(args: {
         projectId,
         updateRepo,
         setCardState: setImportedWorktreeCardState,
-        hiddenWorktreePaths: getHiddenImportedWorktrees(detected).map((worktree) => worktree.path),
-        existingBaselinePaths: repo?.externalWorktreeInboxBaselinePaths
+        hiddenWorktreePaths: getHiddenImportedWorktrees(detected).map((worktree) => worktree.path)
       })
     },
-    [detectedWorktreesByRepo, fetchWorktrees, repos, setImportedWorktreeCardState, updateRepo]
+    [detectedWorktreesByRepo, fetchWorktrees, setImportedWorktreeCardState, updateRepo]
   )
 
   const setNewExternalWorktreeInboxState = useCallback(

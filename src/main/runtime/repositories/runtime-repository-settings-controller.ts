@@ -7,6 +7,7 @@ import type { SetupAgentStartupPolicy } from '../../../shared/workspace-setup/or
 import { buildSetupAgentStartupHookSettings } from '../../../shared/workspace-setup/repo-hook-settings-defaults'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
+import { bumpWorktreeScanGeneration } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -172,8 +173,9 @@ export class RuntimeRepositorySettingsController {
       invalidateAuthorizedRootsCache()
     }
     this.deps.invalidateResolvedWorktrees()
-    if ('worktreeBasePath' in updates) {
+    if ('worktreeBasePath' in updates || 'importedExternalWorktreePaths' in updates) {
       this.deps.invalidateWorktreeScan(repo.id)
+      bumpWorktreeScanGeneration(updated.path)
     }
     this.deps.notifyReposChanged()
     if (WORKTREE_VISIBILITY_INPUTS.some((key) => key in updates)) {

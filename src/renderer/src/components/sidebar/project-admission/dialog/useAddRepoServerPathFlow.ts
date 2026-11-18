@@ -6,16 +6,13 @@ import {
   createNestedRepoTelemetryAttemptId,
   type NestedRepoTelemetryRuntimeKind
 } from '../../../../../../shared/telemetry/nested-repo-telemetry'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { CompleteGitRepoAdd } from '../completion/use-complete-git-repo-add'
 import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import {
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   wslHostWindowsDriveRefusalForLinuxPath,
   type WslHostWindowsDriveRefusal
@@ -72,11 +69,7 @@ export function useAddRepoServerPathFlow({
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
   showNestedRepoReview: ShowNestedRepoReview
-  onGitRepoReady: (
-    repoId: string,
-    source: AddRepoExistingWorkspaceSource,
-    executionHostId?: ExecutionHostId
-  ) => Promise<void>
+  onGitRepoReady: CompleteGitRepoAdd
   setAddProjectBusyLabel: (label: string | null) => void
   /** Shown inline by the dialog, whether this client or the host refused. */
   onWindowsDriveRefusal: (refusal: WslHostWindowsDriveRefusal) => void
@@ -188,7 +181,11 @@ export function useAddRepoServerPathFlow({
         setAddProjectBusyLabel(
           kind === 'git' ? addRepoBusyLabels.openingProject() : addRepoBusyLabels.openingFolder()
         )
+        let selectedPath = path
         const options = {
+          onResolvedSelectedPath: (resolved: string) => {
+            selectedPath = resolved
+          },
           runtimeEnvironmentId: activeRuntimeEnvironmentId,
           onWindowsDriveRefusal
         }
@@ -206,7 +203,9 @@ export function useAddRepoServerPathFlow({
           if (gen !== serverAddGenRef.current) {
             return
           }
-          await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId)
+          await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId, {
+            selectedPath
+          })
         } else if (repo) {
           closeModal()
         }

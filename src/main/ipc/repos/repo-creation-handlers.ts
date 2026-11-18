@@ -1,6 +1,8 @@
+import { invalidateDetectedWorktreeScanCache } from '../worktrees/listing/detected-worktree-scan-cache'
+import { bumpWorktreeScanGeneration } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { type BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { access, mkdir, readdir, rm } from 'node:fs/promises'
+import { access, mkdir, readdir, realpath, rm } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -54,7 +56,7 @@ export function registerRepoCreationHandlers(
     async (
       _event,
       args: { path: string; kind?: 'git' | 'folder'; displayName?: string }
-    ): Promise<{ repo: Repo } | { error: string }> => {
+    ): Promise<{ repo: Repo; selectedPath?: string } | { error: string }> => {
       const result = await addLocalRepoFromPath(store, args.path, args.kind, args.displayName)
       if ('error' in result) {
         return result
@@ -66,7 +68,11 @@ export function registerRepoCreationHandlers(
       notifyReposChanged(mainWindow)
       enqueueMetadata([result.repo])
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
-      return { repo: result.repo }
+      if (result.repo.kind !== 'folder') {
+        invalidateDetectedWorktreeScanCache(result.repo.id)
+        bumpWorktreeScanGeneration(result.repo.path)
+      }
+      return { repo: result.repo, selectedPath: await realpath(args.path).catch(() => undefined) }
     }
   )
 

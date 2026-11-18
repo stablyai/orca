@@ -129,12 +129,17 @@ export function createRepoUpdateActions(
       const ownerTarget = getProjectSetupRuntimeTarget(ownerHostId)
       const updateChainKey = getRepoHostIdentityForParts(projectId, ownerHostId)
       const applyRepoUpdate = async () => {
-        // Why at dispatch: an earlier queued update (an account change) may legitimately replace the owner.
-        const sourceOwner = get().githubSourceCollections?.capture(
-          get().repos.find((r) => repoMatchesHostIdentity(r, projectId, ownerHostId)) ?? ownerRepo
+        const latestOwner = get().repos.find((r) =>
+          repoMatchesHostIdentity(r, projectId, ownerHostId)
         )
+        if (!latestOwner) {
+          return false
+        }
+        const sourceOwner = get().githubSourceCollections?.capture(latestOwner)
         try {
-          const sanitizedUpdates = sanitizeRepoUpdate(updates)
+          const sanitizedUpdates = sanitizeRepoUpdate(
+            typeof updates === 'function' ? updates(latestOwner) : updates
+          )
           const target = ownerTarget
           const updatedRepo =
             target.kind === 'local'

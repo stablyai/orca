@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { RepoSlice } from '@/store/repos/repo-state'
 import { mergeExternalWorktreeInboxPaths } from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
 import { translate } from '@/i18n/i18n'
 
@@ -12,19 +12,8 @@ type ImportedWorktreeCardActionDeps = {
   projectId: string
   forceVisible?: boolean
   setCardState: (projectId: string, state: ImportedWorktreeCardActionState | null) => void
-  updateRepo: (
-    projectId: string,
-    updates: Partial<
-      Pick<
-        Repo,
-        | 'externalWorktreeVisibility'
-        | 'externalWorktreeVisibilityPromptDismissedAt'
-        | 'externalWorktreeInboxBaselinePaths'
-      >
-    >
-  ) => Promise<boolean>
+  updateRepo: RepoSlice['updateRepo']
   hiddenWorktreePaths?: readonly string[]
-  existingBaselinePaths?: readonly string[]
   fetchWorktrees: (
     projectId: string,
     options?: { requireAuthoritative?: boolean }
@@ -81,17 +70,18 @@ export async function keepImportedWorktreesHiddenCard(
   args: Omit<ImportedWorktreeCardActionDeps, 'fetchWorktrees'>
 ): Promise<void> {
   args.setCardState(args.projectId, { pending: true, error: null })
-  const updated = await args.updateRepo(args.projectId, {
-    externalWorktreeVisibilityPromptDismissedAt: Date.now(),
+  const updated = await args.updateRepo(args.projectId, (latestRepo) => ({
+    externalWorktreeVisibilityPromptDismissedAt:
+      latestRepo.externalWorktreeVisibilityPromptDismissedAt ?? Date.now(),
     ...(args.hiddenWorktreePaths && args.hiddenWorktreePaths.length > 0
       ? {
           externalWorktreeInboxBaselinePaths: mergeExternalWorktreeInboxPaths(
-            args.existingBaselinePaths,
+            latestRepo.externalWorktreeInboxBaselinePaths,
             args.hiddenWorktreePaths
           )
         }
       : {})
-  })
+  }))
   if (!updated) {
     args.setCardState(args.projectId, {
       pending: false,

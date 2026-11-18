@@ -1,3 +1,4 @@
+import { bumpWorktreeScanGeneration } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
@@ -132,6 +133,7 @@ export class RuntimeRepositoryRegistrationController {
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     this.invalidate(repo.id)
+    bumpWorktreeScanGeneration(repo.path)
     return store.getRepo(repo.id) ?? repo
   }
 
@@ -148,8 +150,11 @@ export class RuntimeRepositoryRegistrationController {
         store.updateRepo(existing, { executionHostId }) ??
         ({ ...existing, executionHostId } as Repo)
       this.invalidate(existing.id)
+      bumpWorktreeScanGeneration(adopted.path)
       return adopted
     }
+    this.invalidate(existing.id)
+    bumpWorktreeScanGeneration(existing.path)
     return existing
   }
 
