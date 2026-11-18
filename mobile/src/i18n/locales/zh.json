@@ -19,6 +19,10 @@
       "useReset": "使用重置额度",
       "pairingInvalidMessage": "请将此手机与桌面重新配对，以查看其账户",
       "weeklyWindow": "7天"
+    },
+    "claude": {
+      "usageSignInLabel": "重新登录",
+      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认"
     }
   },
   "agentHistory": {
@@ -5021,6 +5025,142 @@
       },
       "taskPageJiraLoadState": {
         "jqlFailed": "Jira 无法执行此 JQL 查询。请检查语法后重试"
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "{{server}} 无用量数据",
+            "remoteOwnerNotConfigured": "未在 {{server}} 上配置",
+            "claudeUnknownOnHost": "无法从 {{server}} 获取 Claude 用量，可能未在那里登录，或使用的是 API 密钥计费",
+            "remoteOwnerSignInSavedHere": "其登录信息仅保存在此电脑上",
+            "f8b8dbed85": "用量不可用",
+            "e2c6a4f917": "运行 Grok 以刷新",
+            "f90b3d7a16": "运行 Kimi 以刷新",
+            "0d8d7cfe15": "等待 Claude 会话",
+            "claude": {
+              "waiting": {
+                "label": "运行 Claude 时更新",
+                "message": "Claude 用量将在下次运行 Claude 时更新"
+              }
+            },
+            "1804cd8c3f": "正在刷新登录",
+            "bf2e739f18": "登录不可用",
+            "f8f0f9d8cc": "网络问题",
+            "minimax": {
+              "expired": {
+                "label": "登录已过期",
+                "apiKey": "MiniMax API 密钥已过期，请在设置中更换",
+                "cookie": "MiniMax 会话 Cookie 已过期，请在设置中更换"
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "登录已过期",
+                "message": "请在运行 Orca 的电脑上的终端中运行 cursor-agent login，然后重新刷新用量"
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "无订阅"
+              }
+            },
+            "7ad719c4bf": "受限",
+            "e740f92596": "刷新失败",
+            "2c35eca8d4": "无法获取使用情况",
+            "d1b7f509ac": "在运行 Orca 的电脑上的终端中运行 grok，并等待其启动，如有提示，请完成登录，然后重试用量检查，您无需发送聊天消息",
+            "a37e8c15d4": "在运行 Orca 的电脑上的终端中运行 kimi，等待其启动，然后重试用量检查",
+            "3d3c9c0c1f": "实时 Claude 终端轮换凭据后，Claude 用量会刷新",
+            "42fdd4da1d": "正在刷新 Claude 登录，代理会话可能仍处于登录状态",
+            "c06c1d215d": "由于网络请求失败，无法刷新 Claude 用量",
+            "cabdc2a9e0": "无法读取 Claude 登录凭据",
+            "a7517cccb6": "Claude 用量目前不可用",
+            "8418ec448d": "{{value0}} 用量无法刷新，代理会话可能仍处于登录状态"
+          }
+        }
+      }
+    },
+    "lib": {
+      "rateLimits": {
+        "errors": {
+          "sessionCookieNotConfigured": "未配置会话 Cookie",
+          "opencodeNoAuthCookie": "未找到认证 Cookie — 请从 opencode.ai DevTools 粘贴完整 Cookie 请求头",
+          "opencodeNoWorkspaceId": "未找到工作区 ID — 请在设置中填写工作区 ID 覆盖",
+          "opencodeNoWorkspaceIdShort": "未找到工作区 ID",
+          "workspacesFetchFailed": "工作区列表获取失败 ({{status}})",
+          "usagePageFetchFailed": "用量页面获取失败 ({{status}})",
+          "couldNotParseUsagePage": "无法从页面解析用量数据",
+          "couldNotParseUsageAnyWorkspace": "无法从任何可用工作区解析用量数据",
+          "minimaxCookieNotConfigured": "未配置 MiniMax 会话 Cookie",
+          "minimaxSessionExpired": "MiniMax 会话已过期，请在设置中更换 MiniMax Cookie",
+          "minimaxAuthCookieMissing": "未找到 MiniMax 认证 Cookie — 请粘贴包含 _token 的 Cookie 请求头",
+          "minimaxModelUsageMissing": "未找到所选模型的 MiniMax 用量数据",
+          "minimaxCookieDecryptFailed": "无法解密 MiniMax 会话 Cookie",
+          "kimiNotSignedIn": "未登录 Kimi Code",
+          "kimiCredentialsInvalid": "Kimi 凭据文件无效",
+          "kimiCredentialsMissingToken": "Kimi 凭据文件缺少访问令牌",
+          "kimiQuotaWindowsMissing": "Kimi 用量响应未包含配额窗口",
+          "wslKimiHomeUnavailable": "WSL Kimi 主目录不可用({{distro}})",
+          "kimiSessionExpired": "Kimi 会话已过期 — 请在 {{where}} 运行 kimi，然后重试用量",
+          "kimiUsageUnauthorizedHttp": "Kimi 用量请求未授权 (HTTP {{status}})",
+          "kimiUsageFailedHttp": "Kimi 用量请求失败 (HTTP {{status}})",
+          "grokNotSignedIn": "未登录 Grok — 请运行 grok login",
+          "grokAuthInvalid": "Grok 认证文件无效",
+          "grokAuthUnreadable": "无法读取 Grok 认证文件",
+          "grokSignInExpired": "Grok 登录已过期 — 请在运行 Orca 的电脑上运行 grok，如有提示请完成登录，无需发送聊天消息",
+          "grokBillingConfigMissing": "Grok 账单响应未包含配置",
+          "grokBillingUsageMissing": "Grok 账单响应未包含额度用量",
+          "grokUsageUnauthorizedHttp": "Grok 用量请求未授权 (HTTP {{status}})",
+          "grokUsageFailedHttp": "Grok 用量请求失败 (HTTP {{status}})",
+          "geminiOauthDisabled": "设置中已禁用 Gemini CLI OAuth",
+          "geminiCredentialsNotFound": "未找到 Gemini CLI 凭据",
+          "geminiProjectIdNotFound": "未找到 Gemini 项目 ID",
+          "tokenRefreshFailed": "Token 刷新失败",
+          "codexNotSignedIn": "Codex 未登录",
+          "codexHomeUnavailable": "Codex 主目录不可用",
+          "wslCodexHomeUnavailable": "WSL Codex 主目录不可用({{distro}})",
+          "codexRebuildingIndex": "Codex 正在重建会话索引，恢复完成后将刷新用量",
+          "chatgptAuthRequired": "需要 ChatGPT 认证才能读取速率限制",
+          "claudeRateLimited": "Claude 用量当前已达速率限制",
+          "claudeUsageUnavailable": "Claude 用量当前不可用",
+          "claudeOauthTokenUnavailable": "Claude OAuth 访问令牌不可用",
+          "claudeKeychainUnavailable": "无法读取 Claude Keychain 凭据",
+          "claudePlanUsageUnavailable": "此 Claude CLI 会话无法获取套餐用量",
+          "waitingForClaudeSession": "正在等待 Claude 会话",
+          "wslClaudeConfigUnavailable": "WSL Claude 配置不可用({{distro}})",
+          "noCredentials": "无凭据",
+          "fetchAborted": "速率限制获取已中止",
+          "failedToLoadUsage": "无法加载用量数据",
+          "ptyUsageTimeout": "PTY 超时 — /usage 面板未渲染",
+          "cliExitedBeforeUsage": "CLI 在 /usage 渲染前退出",
+          "cliExitedBeforeStatus": "CLI 在状态可用前退出",
+          "quotaFetchFailed": "配额获取失败 ({{status}})",
+          "geminiProjectIdLoadFailed": "加载 Gemini 项目 ID 失败 (HTTP {{status}})",
+          "geminiProjectIdMissingInResponse": "API 响应中未找到 Gemini 项目 ID",
+          "minimaxUsageFetchFailed": "MiniMax 用量获取失败 ({{status}})",
+          "minimaxReturnedError": "MiniMax 返回错误",
+          "minimaxInvalidUsageResponse": "MiniMax 用量响应无效",
+          "minimaxUnknownUsageError": "未知 MiniMax 用量错误",
+          "kimiCredentialsUnreadable": "无法读取 Kimi 凭据",
+          "kimiUsageRequestFailed": "Kimi 用量请求失败",
+          "grokUsageRequestFailed": "Grok 用量请求失败",
+          "rpcTimeout": "RPC 超时",
+          "rpcFailed": "RPC 失败",
+          "signInWithChatgpt": "请使用 ChatGPT 登录",
+          "codexCliNotFound": "未找到 Codex CLI",
+          "codexCliCannotRun": "已找到 Codex CLI 但无法运行 — Node.js 可能不在 PATH 中",
+          "rpcProcessExited": "RPC 进程意外退出",
+          "ptyTimeout": "PTY 超时",
+          "failedToParseCliOutput": "解析 CLI 输出失败",
+          "codexSignInCheckTimeout": "检查 Codex 登录状态超时",
+          "codexSignInStatusUnavailable": "Codex 登录状态不可用",
+          "codexResetFailedHttp": "Codex 重置失败：HTTP {{status}}",
+          "codexResetUnknownOutcome": "未知 Codex 重置结果",
+          "codexResetIdempotencyRequired": "需要 Codex 重置幂等键",
+          "noSubscriptionApiKeyBilling": "无订阅套餐 — API key 计费",
+          "claudeWaitingCredentialRotate": "Claude 用量刷新正在等待实时 Claude 终端轮换凭据",
+          "unknown": "未知错误",
+          "opencodeInvalidWorkspaceId": "工作区 ID 格式无效"
+        }
       }
     }
   },

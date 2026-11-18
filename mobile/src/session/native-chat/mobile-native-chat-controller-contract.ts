@@ -10,6 +10,7 @@ import type {
 } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { MobileChatPermission } from './input/prompts/mobile-native-chat-permission'
+import type { MobileNativeChatCollapsedPrompt } from './input/prompts/MobileNativeChatPromptStrip'
 import type { MobileChatQuestion } from './input/prompts/mobile-native-chat-question'
 import type {
   NativeChatLiveTurnIndicator,
@@ -93,7 +94,7 @@ export type MobileNativeChatController = {
   // Collapse writes nothing to the terminal and frees Send.
   collapseNativeChatAsk: () => void
   collapseNativeChatPrompt?: () => void
-  nativeChatCollapsedPrompt: { title: string; expand: () => void } | null
+  nativeChatCollapsedPrompt: MobileNativeChatCollapsedPrompt | null
   handleNativeChatCancelPrompt?: (prompt?: {
     itemId: string
     expectedRevision: number

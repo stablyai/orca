@@ -18,6 +18,10 @@
       "title": "계정",
       "useReset": "재설정권 사용",
       "weeklyWindow": "7일"
+    },
+    "claude": {
+      "usageSignInLabel": "다시 로그인",
+      "usageSignInMessage": "선택한 Claude 계정에 다시 로그인해야 합니다. 설정 > AI 제공자 계정을 열거나 시스템 기본값을 선택하세요."
     }
   },
   "agentHistory": {
@@ -4280,6 +4284,58 @@
       },
       "taskPageJiraLoadState": {
         "jqlFailed": "Jira에서 이 JQL 쿼리를 실행할 수 없습니다. 구문을 확인하고 다시 시도하세요."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "{{server}}에서 사용량 없음",
+            "remoteOwnerNotConfigured": "{{server}}에 구성되지 않음",
+            "claudeUnknownOnHost": "{{server}}에서 Claude 사용량을 가져올 수 없습니다. 그곳에서 로그인하지 않았거나 API 키 결제를 사용 중일 수 있습니다.",
+            "remoteOwnerSignInSavedHere": "로그인 정보는 이 컴퓨터에만 저장되어 있습니다.",
+            "f8b8dbed85": "사용량 사용할 수 없음",
+            "e2c6a4f917": "Grok을 실행하여 새로 고침",
+            "f90b3d7a16": "새로고침하려면 Kimi를 실행하세요.",
+            "0d8d7cfe15": "Claude 세션 대기 중",
+            "claude": {
+              "waiting": {
+                "label": "Claude 실행 시 업데이트됨",
+                "message": "Claude 사용량은 다음에 Claude를 실행할 때 업데이트됩니다."
+              }
+            },
+            "1804cd8c3f": "로그인 새로 고치는 중",
+            "bf2e739f18": "로그인 사용할 수 없음",
+            "f8f0f9d8cc": "네트워크 문제",
+            "minimax": {
+              "expired": {
+                "label": "로그인이 만료되었습니다",
+                "apiKey": "MiniMax API 키가 만료되었습니다. 설정에서 교체하세요.",
+                "cookie": "MiniMax 세션 쿠키가 만료되었습니다. 설정에서 교체하세요."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "로그인 만료",
+                "message": "Orca가 실행 중인 컴퓨터의 터미널에서 cursor-agent login을 실행한 뒤 사용량을 다시 시도하세요."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "구독 없음"
+              }
+            },
+            "7ad719c4bf": "제한됨",
+            "e740f92596": "새로 고침 실패",
+            "2c35eca8d4": "사용량을 가져올 수 없습니다.",
+            "d1b7f509ac": "Orca를 실행하는 컴퓨터의 터미널에서 grok을 실행하고 시작될 때까지 기다리세요. 메시지가 표시되면 로그인을 완료한 후 사용량 조회를 다시 시도하세요. 채팅 메시지를 보낼 필요는 없습니다.",
+            "a37e8c15d4": "Orca를 실행하는 컴퓨터의 터미널에서 kimi를 실행하고 시작될 때까지 기다린 후 사용량 조회를 다시 시도하세요.",
+            "3d3c9c0c1f": "실시간 Claude 터미널이 자격 증명을 교체한 후 Claude 사용량이 새로 고쳐집니다.",
+            "42fdd4da1d": "Claude 로그인을 새로 고치는 중입니다. 에이전트 세션은 여전히 로그인되어 있을 수 있습니다.",
+            "c06c1d215d": "네트워크 요청 실패로 Claude 사용량을 새로 고칠 수 없습니다.",
+            "cabdc2a9e0": "Claude 로그인 자격 증명을 읽을 수 없습니다.",
+            "a7517cccb6": "현재 Claude 사용량을 사용할 수 없습니다.",
+            "8418ec448d": "{{value0}} 사용량을 새로 고칠 수 없습니다. Agent 세션은 여전히 로그인되어 있을 수 있습니다."
+          }
+        }
       }
     }
   }

@@ -1181,7 +1181,7 @@
 1 src/main/runtime/files/staged-file-saves.ts
 2 src/main/runtime/files/watch/file-watches.ts
 16 src/main/runtime/host-instance-identity.ts
-7 src/main/runtime/hosts/platform-probe/host-descriptor.ts
+3 src/main/runtime/hosts/platform-probe/host-descriptor.ts
 3 src/main/runtime/hosts/runtime-status.ts
 1 src/main/runtime/integrations/git/runtime-git-command-target.ts
 3 src/main/runtime/integrations/git/runtime-git-generation-commands.ts
@@ -1238,13 +1238,11 @@
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
 22 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stop.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-terminal-recovery.ts
-1 src/main/runtime/orchestration/federation/cross-machine-child-parent.ts # remote new-child placement from 70f6dc15aba already merged; unblocks main, async follow-up owed
 2 src/main/runtime/orchestration/federation/peer-mail/peer-mail-relay.ts
 1 src/main/runtime/orchestration/federation/remote-owned/remote-owed-actions.ts
 1 src/main/runtime/orchestration/federation/remote-owned/remote-owned-calls.ts
 2 src/main/runtime/orchestration/federation/remote-owned/remote-owned-route.ts
-6 src/main/runtime/orchestration/federation/remote-owned/remote-owned-start.ts # remote new-child placement from 70f6dc15aba already merged; unblocks main, async follow-up owed
-1 src/main/runtime/orchestration/legacy-remote-home/federated-worker-child-parent.ts
+5 src/main/runtime/orchestration/federation/remote-owned/remote-owned-start.ts
 15 src/main/runtime/orchestration/legacy-remote-home/federated-worker-start-reconcile.ts
 1 src/main/runtime/orchestration/legacy-remote-home/legacy-remote-home-db-methods.ts
 5 src/main/runtime/orchestration/legacy-remote/federated-dispatch-observation-fence.ts
@@ -1276,7 +1274,7 @@
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-mail-reconciliation.ts
 1 src/main/runtime/rpc/methods/orchestration/runs/runs.ts
 1 src/main/runtime/rpc/methods/terminal/session-terminal-scrollback.ts
-2 src/main/runtime/rpc/methods/workspaces/worktree.ts
+1 src/main/runtime/rpc/methods/workspaces/worktree.ts
 5 src/main/runtime/rpc/server/network-source-policy-store.ts
 11 src/main/runtime/rpc/server/pairing/device-registry-disk-merge.ts
 2 src/main/runtime/rpc/server/pairing/device-registry-file-read.ts

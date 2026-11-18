@@ -603,7 +603,8 @@
     },
     "diffTooLarge": {
       "title": "File too large to diff",
-      "detail": "One version of this file is over 10 MB, so Orca doesn’t load it for a text diff."
+      "detail": "One version of this file is over 10 MB, so Orca doesn’t load it for a text diff.",
+      "connectionDetail": "This diff is too large to open over a remote connection."
     },
     "pdfExport": {
       "errors": {
@@ -12818,7 +12819,8 @@
           "updating": "Updating servers…",
           "serverCountOne": "1 paired server",
           "fdd271abf0": "Remote Orca servers",
-          "e4e5937469": "Check for server updates"
+          "e4e5937469": "Check for server updates",
+          "newerCount": "{{value0}} newer than this app"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Version unavailable",
@@ -13926,7 +13928,8 @@
           "settingUpInBackground": "Setting up Orca on {{name}} in the background. It appears in the list when it’s ready.",
           "setUpOnSshHost": "Set up Orca on an SSH host",
           "setUp": "Set up",
-          "overYourSsh": "Over your SSH connection"
+          "overYourSsh": "Over your SSH connection",
+          "newerThanApp": "Newer than this app (v{{version}})"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",
@@ -22668,9 +22671,6 @@
           "history": "history",
           "runs": "runs",
           "envFile": ".env",
-          "chat": "chat",
-          "transcripts": "transcripts",
-          "diskSpace": "disk space",
           "manual": "manual",
           "automaticDescription": "Whether automatic cleanup is on, when it runs next, and running the rules now.",
           "runRulesNow": "run rules now",
@@ -22721,13 +22721,7 @@
           "label": "Pin and keep"
         },
         "chatHistory": {
-          "title": "Chat history",
-          "updateFailed": "Couldn't update the setting on {{host}}.",
-          "unsupported": "Update Orca on {{host}} to use this setting there.",
-          "confirmTitle": "Delete chat history from deleted workspaces?",
-          "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
-          "deleteWithWorkspace": "Delete chat history with the workspace",
-          "deleteWithWorkspaceDescription": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+          "title": "Chat history"
         },
         "manual": {
           "title": "Manual cleanup",
@@ -22783,6 +22777,24 @@
         "confirmCheckHomeFolder": "No other machine sharing this home folder is running Orca",
         "details": "Details",
         "clearing": "Clearing…"
+      },
+      "agents": {
+        "deleteHistoryWithWorkspace": {
+          "updateFailed": "Couldn't update the setting on {{host}}.",
+          "recommended": "Recommended",
+          "unsupported": "Update Orca on {{host}} to use this setting there.",
+          "confirmTitle": "Delete agent history from deleted workspaces?",
+          "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
+          "cancel": "Cancel",
+          "turnOn": "Turn on",
+          "title": "Delete agent history when a workspace is deleted",
+          "description": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered.",
+          "chat": "chat",
+          "transcripts": "transcripts",
+          "diskSpace": "disk space",
+          "cleanup": "cleanup",
+          "chatHistory": "delete chat history"
+        }
       }
     },
     "agentChildRow": {

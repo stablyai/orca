@@ -18,6 +18,10 @@
       "title": "Konten",
       "useReset": "Jetzt zurücksetzen",
       "weeklyWindow": "7 Tage"
+    },
+    "claude": {
+      "usageSignInLabel": "Erneut anmelden",
+      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen."
     }
   },
   "agentHistory": {
@@ -4284,6 +4288,58 @@
       },
       "taskPageJiraLoadState": {
         "jqlFailed": "Jira konnte diese JQL-Abfrage nicht ausführen. Syntax prüfen und erneut versuchen."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "Keine Nutzungsdaten von {{server}}",
+            "remoteOwnerNotConfigured": "Auf {{server}} nicht konfiguriert",
+            "claudeUnknownOnHost": "Die Claude-Nutzung ist von {{server}} nicht verfügbar. Claude ist dort möglicherweise nicht angemeldet oder verwendet die Abrechnung per API-Schlüssel.",
+            "remoteOwnerSignInSavedHere": "Die Anmeldung ist nur auf diesem Computer gespeichert.",
+            "f8b8dbed85": "Nutzung nicht verfügbar",
+            "e2c6a4f917": "Grok zum Aktualisieren ausführen",
+            "f90b3d7a16": "Kimi zum Aktualisieren ausführen",
+            "0d8d7cfe15": "Warten auf Claude-Sitzung",
+            "claude": {
+              "waiting": {
+                "label": "Wird aktualisiert, wenn Claude läuft",
+                "message": "Die Claude-Nutzung wird beim nächsten Start von Claude aktualisiert."
+              }
+            },
+            "1804cd8c3f": "Anmeldung wird aktualisiert",
+            "bf2e739f18": "Anmeldung nicht verfügbar",
+            "f8f0f9d8cc": "Netzwerkproblem",
+            "minimax": {
+              "expired": {
+                "label": "Anmeldung abgelaufen",
+                "apiKey": "Der MiniMax-API-Schlüssel ist abgelaufen. In den Einstellungen ersetzen.",
+                "cookie": "Das MiniMax-Sitzungscookie ist abgelaufen. In den Einstellungen ersetzen."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Anmeldung abgelaufen",
+                "message": "cursor-agent login in einem Terminal auf dem Computer ausführen, auf dem Orca läuft, und anschließend den Abruf der Nutzung erneut versuchen."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "Kein Abonnement"
+              }
+            },
+            "7ad719c4bf": "Begrenzt",
+            "e740f92596": "Aktualisierung fehlgeschlagen",
+            "2c35eca8d4": "Nutzung konnte nicht abgerufen werden",
+            "d1b7f509ac": "grok in einem Terminal auf dem Computer ausführen, auf dem Orca läuft, und den Start abwarten. Falls erforderlich, die Anmeldung abschließen und anschließend den Abruf der Nutzung erneut versuchen. Es muss keine Chatnachricht gesendet werden.",
+            "a37e8c15d4": "kimi in einem Terminal auf dem Computer ausführen, auf dem Orca läuft, und den Start abwarten. Anschließend den Abruf der Nutzung erneut versuchen.",
+            "3d3c9c0c1f": "Die Claude-Nutzung wird aktualisiert, nachdem das aktive Claude-Terminal seine Zugangsdaten erneuert hat.",
+            "42fdd4da1d": "Die Claude-Anmeldung wird aktualisiert. Agentensitzungen sind möglicherweise weiterhin angemeldet.",
+            "c06c1d215d": "Die Claude-Nutzung konnte nicht aktualisiert werden, da die Netzwerkanfrage fehlgeschlagen ist.",
+            "cabdc2a9e0": "Die Zugangsdaten für die Claude-Anmeldung konnten nicht gelesen werden.",
+            "a7517cccb6": "Die Claude-Nutzung ist derzeit nicht verfügbar.",
+            "8418ec448d": "Die Nutzung von {{value0}} konnte nicht aktualisiert werden. Agentensitzungen sind möglicherweise weiterhin angemeldet."
+          }
+        }
       }
     }
   }
