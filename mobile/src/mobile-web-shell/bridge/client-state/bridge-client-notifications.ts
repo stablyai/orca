@@ -17,6 +17,7 @@ import { captureBridgeError } from '../protocol/bridge-error-capture'
 import { BRIDGE_LIVENESS_PROBE_NOTIFY } from '../native-capabilities/bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from '../page-lifecycle/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from '../page-lifecycle/bridge-page-location'
+import { BRIDGE_SWAP_SAFE_NOTIFY } from '../page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../page-lifecycle/bridge-page-painted'
 import {
   BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
@@ -48,6 +49,7 @@ export type BridgeClientNotifications = {
   notifyPagePainted: () => void
   notifyBackClaim: (claimed: boolean) => void
   notifyPageLocation: (href: string) => void
+  notifySwapSafe: (safe: boolean, round: number) => void
   notifyTerminalKeyRailClaim: (
     claimed: boolean,
     inputOwner?: string,
@@ -143,6 +145,15 @@ export function createBridgeClientNotifications(
     },
     notifyPageLocation: (href) => {
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_LOCATION, href })
+    },
+    notifySwapSafe: (safe, round) => {
+      post({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: BRIDGE_SWAP_SAFE_NOTIFY,
+        safe,
+        round
+      })
     },
     // Only to a shell that granted the rail: any other refuses the name, and has no rail to draw.
     notifyTerminalKeyRailClaim: (claimed, inputOwner, toolbar) => {

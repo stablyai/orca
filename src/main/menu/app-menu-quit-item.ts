@@ -21,23 +21,22 @@ export function createAppMenuQuitItem(
   macAppName?: string,
   holdShortcut?: { isEnabled: () => boolean; quit: () => void }
 ): AppMenuQuitItem {
-  const exitLabel = macAppName === undefined ? translateMain('menu.exit', 'Exit') : undefined
+  const label =
+    macAppName === undefined
+      ? translateMain('menu.exit', 'Exit')
+      : translateMain('menu.quitApp', `Quit ${macAppName}`, { appName: macAppName })
   if (
     process.platform === 'darwin' &&
     holdShortcut?.isEnabled() &&
     hasFocusedDesktopHoldQuitSurface()
   ) {
-    return {
-      label: `${translateMain('menu.quitApp', `Quit ${macAppName}`, { appName: macAppName })}\t⌘Q`,
-      click: () => holdShortcut.quit()
-    }
+    return { label: `${label}\t⌘Q`, click: () => holdShortcut.quit() }
   }
   if (!onQuit) {
-    return { role: 'quit', ...(exitLabel ? { label: exitLabel } : {}) }
+    return { role: 'quit', label }
   }
   return {
-    label:
-      exitLabel ?? translateMain('menu.quitApp', `Quit ${macAppName}`, { appName: macAppName }),
+    label,
     // Match Electron quit accelerators, including no accelerator on Windows.
     ...(process.platform === 'win32' ? {} : { accelerator: 'CmdOrCtrl+Q' }),
     click: () => onQuit()

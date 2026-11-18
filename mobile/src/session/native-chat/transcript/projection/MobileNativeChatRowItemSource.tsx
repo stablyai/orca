@@ -10,6 +10,7 @@ import {
 } from './mobile-native-chat-item-read'
 import { MobileNativeChatMessage } from '../messages/MobileNativeChatMessage'
 import { MobileNativeChatItemNoteJoinContext } from '../messages/MobileNativeChatBotItemNoteRow'
+import { MobileNativeChatAutomationTurnContext } from '../message-content/MobileNativeChatAnswerProse'
 import type { BotItemNoteJoin } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import {
   resolveMobileNativeChatRowProps,
@@ -33,6 +34,7 @@ export type MobileNativeChatRowContentProps = ComponentProps<typeof MobileNative
   turnDiff?: NativeChatTurnDiff
   /** The sides where this item-note row touches another. */
   itemNoteJoin?: BotItemNoteJoin
+  inAutomationTurn?: true
   source: Recovery | null
 }
 
@@ -48,6 +50,7 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   scope: _scope,
   turnDiff,
   itemNoteJoin,
+  inAutomationTurn,
   ...props
 }: MobileNativeChatRowContentProps) {
   const value = useMemo(() => {
@@ -68,7 +71,9 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   return (
     <MobileNativeChatItemSourceContext.Provider value={value}>
       <MobileNativeChatItemNoteJoinContext.Provider value={itemNoteJoin}>
-        <MobileNativeChatMessage {...props} />
+        <MobileNativeChatAutomationTurnContext.Provider value={inAutomationTurn === true}>
+          <MobileNativeChatMessage {...props} />
+        </MobileNativeChatAutomationTurnContext.Provider>
       </MobileNativeChatItemNoteJoinContext.Provider>
       {turnDiff ? <TurnDiffOutcome diff={turnDiff} fontScale={props.fontScale ?? 1} /> : null}
     </MobileNativeChatItemSourceContext.Provider>

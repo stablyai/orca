@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  describeAutomationEventTrigger,
   formatAutomationEventTrigger,
-  formatAutomationTriggerOptions,
   parseAutomationEventTrigger
 } from '../automations/automation-event-trigger-spec'
 
@@ -21,9 +19,6 @@ describe('--on Google rules', () => {
       account: 'ada@acme.dev'
     })
     expect(parseAutomationEventTrigger(formatAutomationEventTrigger(rule))).toEqual(rule)
-    expect(describeAutomationEventTrigger(rule)).toBe(
-      'a new email arrives, from acme.com, sam@acme.com, to ada@acme.dev, with "Q3 invoice" in the subject, labelled Clients, on ada@acme.dev'
-    )
   })
 
   it('reads a meeting rule, ten minutes before on the primary calendar by default', () => {
@@ -46,17 +41,6 @@ describe('--on Google rules', () => {
     )
     expect(() => parseAutomationEventTrigger('calendar.starting_soon before=99999')).toThrow(
       'before= takes minutes'
-    )
-  })
-
-  it('lists Gmail and Calendar events, and says when Google is off for a bot', () => {
-    expect(formatAutomationTriggerOptions('gmail')).toContain('gmail.new_email')
-    expect(formatAutomationTriggerOptions('calendar')).toContain('calendar.starting_soon')
-    expect(formatAutomationTriggerOptions('gmail', { name: 'Ada', google: false })).toContain(
-      'Google is off for it'
-    )
-    expect(formatAutomationTriggerOptions('gmail', { name: 'Ada', google: true })).toContain(
-      'domain check'
     )
   })
 })

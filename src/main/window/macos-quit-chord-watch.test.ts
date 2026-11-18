@@ -3,7 +3,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ path: '/helper', spawn: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ spawnProcess: mocks.spawn }))
-vi.mock('../ipc/macos-keyboard-layout-snapshot', () => ({
+vi.mock('../ipc/keyboard/macos-keyboard-layout-snapshot', () => ({
   resolveMacKeyboardHelperPath: () => mocks.path
 }))
 import { watchMacQuitChord } from './macos-quit-chord-watch'

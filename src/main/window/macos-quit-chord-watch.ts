@@ -1,5 +1,5 @@
 import { spawnProcess } from '@orca/process-host'
-import { resolveMacKeyboardHelperPath } from '../ipc/macos-keyboard-layout-snapshot'
+import { resolveMacKeyboardHelperPath } from '../ipc/keyboard/macos-keyboard-layout-snapshot'
 import type { HoldQuitWatchEvent } from './hold-quit-gesture'
 
 export function watchMacQuitChord(

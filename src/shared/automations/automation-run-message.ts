@@ -36,6 +36,8 @@ export type AutomationRunMessage = {
   scheduledFor?: number
   /** A wait's run: how the wait ended, matching its Wait over card. */
   wait?: WaitEnding
+  /** A wait its chat's thread made: the run's answer goes to that thread (chat.toConversation). */
+  toConversation?: true
   event?: AutomationRunMessageEvent
   /** UTF-16 length of the saved prompt at the head of the sent text. */
   instructionsLength: number
@@ -103,6 +105,7 @@ const AutomationRunMessageSchema = z.object({
   trigger: z.enum(['scheduled', 'event', 'manual']),
   scheduledFor: finite.optional(),
   wait: WaitEndingSchema.optional(),
+  toConversation: z.literal(true).optional(),
   event: EventSchema.optional(),
   instructionsLength: z.number().int().nonnegative()
 })
