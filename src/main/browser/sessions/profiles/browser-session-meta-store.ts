@@ -130,8 +130,8 @@ export function persistBrowserSessionMeta(
   defaultPartition: string,
   updates: Partial<BrowserSessionMeta>
 ): void {
-  enabledExtensionIdsByPath.delete(resolveMetadataPath())
   try {
+    enabledExtensionIdsByPath.delete(resolveMetadataPath())
     const existing = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
     const tmpPath = `${resolveMetadataPath()}.tmp`
     mkdirSync(dirname(resolveMetadataPath()), { recursive: true })
