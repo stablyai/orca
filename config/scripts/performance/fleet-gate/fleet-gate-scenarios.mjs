@@ -107,14 +107,19 @@ export async function pinClassicWorktreeCards(page) {
   return page.evaluate(async () => {
     const state = window.__store.getState()
     state.markWorktreeCardsIntroNoticeSeen?.()
-    state.setWorktreeCardsIntroChoice?.('classic')
+    // null is what the intro's own dismiss sets; 'classic' would keep the note open as a preview.
+    state.setWorktreeCardsIntroChoice?.(null)
     if (state.settings?.experimentalNewWorktreeCardStyle) {
       await state.updateSettings({ experimentalNewWorktreeCardStyle: false })
     }
+    await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 100)))
     const after = window.__store.getState()
+    if (document.querySelector('[data-worktree-cards-intro]')) {
+      return 'intro still open'
+    }
     return after.worktreeCardsIntroChoice === 'new' ||
       after.settings?.experimentalNewWorktreeCardStyle === true
-      ? 'new'
+      ? 'new cards'
       : 'classic'
   })
 }

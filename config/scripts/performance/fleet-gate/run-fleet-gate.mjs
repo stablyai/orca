@@ -362,11 +362,16 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       result.incomplete.push('store notify loop not found: store pubs/wakeups not measured')
     }
     console.log(`[fleet-gate] ${label} up; settling ${options.settleMs / 1000}s`)
-    if ((await pinClassicWorktreeCards(page)) !== 'classic') {
-      result.incomplete.push(
-        'could not keep classic worktree cards: switch would click a different card'
-      )
+    // Pinned again after settling: UI state may still have been loading the first time.
+    const pinCards = async () => {
+      const cards = await pinClassicWorktreeCards(page)
+      if (cards !== 'classic') {
+        result.incomplete.push(
+          `worktree cards not pinned to classic (${cards}): OLD and NEW would differ`
+        )
+      }
     }
+    await pinCards()
     const agents = await seedAgentStatuses({ page, userDataDir, count: AGENT_PANES })
     if (agents.panes === 0) {
       result.incomplete.push(`no idle agent statuses: ${JSON.stringify(agents)}`)
@@ -374,6 +379,7 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       result.notes.push(`agent statuses: ${JSON.stringify(agents)}`)
     }
     await new Promise((resolve) => setTimeout(resolve, options.settleMs))
+    await pinCards()
     result.census = { ...(await readFleetCensus(page)), agentPanes: agents.panes }
     if (options.minWorkspaces && !(result.census.workspaces >= options.minWorkspaces)) {
       result.incomplete.push(
