@@ -28,7 +28,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { insertToggle } from './rich-markdown-slash-command-primitives'
-import { countWords } from './rich-markdown-word-count'
+import { countWords, wordCountText } from './rich-markdown-word-count'
 
 type RichMarkdownToolbarProps = {
   editor: Editor | null
@@ -97,10 +97,12 @@ function RichMarkdownWordCount({ editor }: { editor: Editor }): React.JSX.Elemen
   const count = useEditorState({
     editor,
     selector: ({ editor: currentEditor }) => {
-      const { empty, from, to } = currentEditor.state.selection
-      const text = empty
-        ? currentEditor.state.doc.textContent
-        : currentEditor.state.doc.textBetween(from, to, ' ')
+      const { doc, selection } = currentEditor.state
+      const text = wordCountText(
+        doc,
+        selection.empty ? 0 : selection.from,
+        selection.empty ? doc.content.size : selection.to
+      )
       return countWords(text, intlLocale)
     }
   })
