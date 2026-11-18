@@ -14,6 +14,7 @@ import { CustomKeyModal } from '../terminal/shortcuts/settings/CustomKeyModal'
 import { MobileDictationSetupSheet } from '../dictation/setup/MobileDictationSetupSheet'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './tabs/MobileBrowserTabActionSheet'
+import { MobileFileTabActionSheet } from './MobileFileTabActionSheet'
 import { getMobileTerminalActionSheetActions } from '../terminal/session/tab-actions/mobile-terminal-action-sheet-actions'
 import { isTerminalPhoneDisplayMode } from '../terminal/session/pane-layout/terminal-phone-display-mode'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -256,31 +257,19 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         ]}
         onClose={() => setMarkdownActionTarget(null)}
       />
-      <ActionSheetModal
-        visible={fileActionTarget != null}
-        title={fileActionTarget?.title || t('session.sheets.file', 'File')}
-        actions={[
-          {
-            id: 'refresh',
-            label: t('common.refresh', 'Refresh'),
-            icon: RefreshCw,
-            onPress: () => {
-              const target = fileActionTarget
-              setFileActionTarget(null)
-              if (target) {
-                void readFileTab(target)
-              }
-            }
-          },
-          ...closeWithBulkActions(fileActionTarget, () => setFileActionTarget(null))
-        ]}
+      <MobileFileTabActionSheet
+        target={fileActionTarget}
         onClose={() => setFileActionTarget(null)}
+        onRefresh={(target) => void readFileTab(target)}
+        onToast={showToast}
+        closeWithBulkActions={closeWithBulkActions}
       />
       <MobileBrowserTabActionSheet
         target={browserActionTarget}
         onClose={() => setBrowserActionTarget(null)}
         onNavigate={handleBrowserNavigationCommand}
         onCloseTab={handleCloseSessionTab}
+        onToast={showToast}
         bulkCloseActions={bulkCloseActions}
       />
       <MobileAgentSessionTabActionSheet
