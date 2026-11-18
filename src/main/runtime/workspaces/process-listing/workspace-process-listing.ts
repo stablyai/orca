@@ -23,11 +23,11 @@ import { attachRuntimeWorktreeAgentRowWaits } from './runtime-worktree-agent-row
 import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../../workspaces/catalog/repo-git-remote-identity-enrichment'
-import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/structured-agent-session-runtime'
+import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/installation/structured-agent-session-runtime'
 import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
-} from '../../agent-session/structured-agent-session-mobile-attention'
+} from '../../agent-session/lifecycle/structured-agent-session-mobile-attention'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
@@ -40,15 +40,14 @@ import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-
 import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
 import { structuredChatNamingDeps } from '../../agent-session/naming/structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { chatWorkerTurnStopReporter } from '../../orchestration/workers/turn-stops/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../catalog/worktree-listing-host-scope'
 import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
-import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { structuredAgentSettingGates } from '../../agent-session/launch/structured-agent-setting-gates'
 import { claudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
@@ -58,9 +57,9 @@ import {
 } from '../catalog/runtime-visible-catalog'
 import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authority/release/worker-auto-release-activity'
-import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
-import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
-import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
+import { nativeChatIdleStopMs } from '../../../../shared/native-chat/settings/native-chat-idle-stop'
+import { prWatchWorkspaceSources } from '../../agent-session/lifecycle/pr-watch-workspace-sources'
+import { startPRWatchRuntime } from '../../agent-session/lifecycle/pr-watch-runtime'
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
@@ -272,9 +271,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },
-      resolveAgentFullAccess: (agent) =>
-        isTuiAgent(agent) &&
-        preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),
+      ...structuredAgentSettingGates(() => this.requireStore().getSettings()),
       launchAccountHome: (record, purpose) =>
         this.resolveStructuredAgentLaunchAccountHome(record, purpose),
       prepareLaunchAccountHome: (record, launchDirectory) =>

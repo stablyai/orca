@@ -10,6 +10,7 @@ import type {
 import { providerTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import { providerSpawnedProcessIdentity } from '../../provider-process/provider-spawned-process-identity'
 import { acpPrivateTempConnect } from '../launch/acp-private-temp'
+import { acpClientInfo } from '../launch/acp-client-info'
 import * as childState from './children/acp-structured-child'
 import type { AcpSessionEvent } from '../protocol/acp-session-events'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
@@ -18,8 +19,9 @@ import { AcpStructuredLane } from '../journal/acp-structured-lane'
 import { acpLaneChildWorkDelivery } from '../journal/acp-lane-child-work-delivery'
 import { NO_ACP_CHILD_STOPS } from '../turns/acp-structured-child-stop'
 import { prepareAcpStructuredLaunch } from '../launch/acp-structured-launch-preparation'
+import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
-import { acpLaunchPermissionModes } from '../launch/acp-launch-permission-modes'
+import { acpAnswersRequests, acpLaunchPermission } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
@@ -75,7 +77,7 @@ export async function acquireAcpStructuredSession(input: {
     history: AcpLoadHistory | null
   } = { lane: null, reattaching: false, history: null }
   const options = new AcpStructuredOptions(spec.dialect)
-  const permissionModes = acpLaunchPermissionModes(spec, launch.fullAccess)
+  const launchPermission = acpLaunchPermission(spec, launch.fullAccess, acquire.permissionMode)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
     () => childState.isAcpReadySession(session) && session.turns?.acceptsRequests === true
@@ -97,11 +99,10 @@ export async function acquireAcpStructuredSession(input: {
       command: launch.command,
       args: launch.args,
       cwd: launch.cwd,
-      env: launch.env,
-      envToDelete: launch.envToDelete
+      ...acpProcessEnvironment(launch)
     },
     {
-      clientInfo: { name: 'orca', version: '1' },
+      clientInfo: acpClientInfo(spec, launch.version ?? null),
       // Only a chat can show a URL request's card, so other connections never advertise it.
       clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
@@ -113,7 +114,7 @@ export async function acquireAcpStructuredSession(input: {
         }
         // Do not auto-approve questions or permissions enforced by the agent's own mode.
         const claimed = spec.dialect.request?.('session/request_permission', request)
-        if (launch.fullAccess && !spec.permissionModeConfig && !claimed) {
+        if (session.permission === 'full-access' && acpAnswersRequests(spec) && !claimed) {
           const allow = request.options.find((option) => option.kind === 'allow_once')
           if (allow) {
             return { outcome: { outcome: 'selected', optionId: allow.optionId } }
@@ -188,7 +189,7 @@ export async function acquireAcpStructuredSession(input: {
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.observedCurrent(permissionModes),
+          reportedOptions: options.observedCurrent(launchPermission.permissionModes),
           catalogListing: { models: options.read().models }
         })
       }
@@ -261,7 +262,7 @@ export async function acquireAcpStructuredSession(input: {
     acquisitionGeneration: generation,
     spec,
     cwd: launch.cwd,
-    permissionModes,
+    ...launchPermission,
     connection,
     lane: null,
     turns: null,

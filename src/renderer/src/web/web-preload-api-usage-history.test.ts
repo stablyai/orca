@@ -4,7 +4,7 @@ import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runt
 import {
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
-} from './web-preload-api-test-harness'
+} from './testing/web-preload-api-test-harness'
 
 const fixture = vi.hoisted(() => {
   const state: { calls: { method: string; params: unknown }[]; supported: boolean } = {
@@ -13,7 +13,7 @@ const fixture = vi.hoisted(() => {
   }
   return state
 })
-vi.mock('./web-runtime-client', () => ({
+vi.mock('./runtime/client/web-runtime-client', () => ({
   WebRuntimeClient: class {
     call(method: string, params: unknown): Promise<RuntimeRpcResponse<unknown>> {
       fixture.calls.push({ method, params })

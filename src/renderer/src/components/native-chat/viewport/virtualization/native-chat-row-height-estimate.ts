@@ -2,7 +2,7 @@ import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/
 // Keep estimates arithmetic over cached metrics; per-measurement block scans would traverse the whole transcript.
 
 import { NATIVE_CHAT_TURN_DIFF_FILE_LIMIT } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
-import { agentMessageIsCompact } from '../../../../../../shared/agent-session/agent-message-presentation'
+import { agentMessageIsCompact } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { withoutSentImagePromptMarkers } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'

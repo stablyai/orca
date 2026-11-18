@@ -3,7 +3,7 @@
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { isNativeLocalLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation } from '../../../../shared/execution-host/execution-host'
 import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
@@ -12,7 +12,7 @@ import {
   type NativeChatVisualsLaunch,
   type PrepareNativeChatVisuals
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
-import { resolveAgentSessionLaunchDirectory } from '../agent-session-launch-directory'
+import { resolveAgentSessionLaunchDirectory } from './agent-session-launch-directory'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { StructuredAgentAdapterContext } from '../installation/structured-agent-runtime-registration-types'
 import {

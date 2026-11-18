@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from '../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionLease } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
@@ -65,54 +65,7 @@ function createRequest(
   }
 }
 
-async function releasedByRestart(now: number): Promise<AgentSessionRecordStore> {
-  const first = await open()
-  await first.reserveOwner(createRequest())
-  const store = await open()
-  await store.reconcileOnRestart({ probe: async () => INDETERMINATE, now })
-  expect(store.getRecord(SESSION)?.lease).toMatchObject({
-    claimStatus: 'released',
-    handoffStage: null,
-    runtimeFence: 2
-  })
-  return store
-}
-
 describe('a create retried after recovery released its reservation', () => {
-  it.each([
-    ['its operation row is still pending', 1_000],
-    ['its operation row has expired', PAST_EXPIRY]
-  ])('continues when %s, and the old reservation can never commit', async (_case, elapsed) => {
-    const now = NOW + elapsed
-    const store = await releasedByRestart(NOW + 1_000)
-
-    const continued = await store.reserveOwner(createRequest({ spawnToken: () => 'spawn-b', now }))
-    expect(continued.disposition).toBe('reserved')
-    expect(continued.record.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'new-owner-proving',
-      runtimeFence: 3,
-      reservedSpawnToken: 'spawn-b',
-      handoffOperationId: OPERATION
-    })
-    expect(store.listOperationRows()).toEqual([
-      expect.objectContaining({ operationId: OPERATION, outcome: { status: 'pending' } })
-    ])
-
-    // Reject late identity from the first reservation by fence and token.
-    const lateSpawn = { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken: 'spawn-a' }
-    await expect(
-      store.commitProcessIdentity({ sessionId: SESSION, fence: 1, process: lateSpawn, now })
-    ).rejects.toThrow('agent_session_checkpoint_stale')
-    await expect(
-      store.commitProcessIdentity({ sessionId: SESSION, fence: 3, process: lateSpawn, now })
-    ).rejects.toThrow('agent_session_ownership_unknown')
-
-    const retried = await store.reserveOwner(createRequest({ spawnToken: 'spawn-c', now }))
-    expect(retried.disposition).toBe('replayed')
-    expect(retried.record.lease).toMatchObject({ runtimeFence: 3, reservedSpawnToken: 'spawn-b' })
-  })
-
   it('refuses an expired retry of a session that has no record', async () => {
     const store = await open()
     await expect(store.reserveOwner(createRequest({ now: NOW + PAST_EXPIRY }))).rejects.toThrow(

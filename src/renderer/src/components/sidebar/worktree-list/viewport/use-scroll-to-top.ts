@@ -1,7 +1,7 @@
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
-} from '@/hooks/requestVirtualizedScrollAnchorRecord'
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createHardScrollUpDetectorState,

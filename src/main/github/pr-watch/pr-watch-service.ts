@@ -4,7 +4,7 @@ import { sweepGonePRChats } from './pr-watch-chat-retirement'
 // each new final result on a head becomes one line in every chat that owned the PR when it landed.
 
 import type * as reads from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
+import { pullRequestKey } from '../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import type { JournalWriterCommit } from '../../native-chat/agent-session-journal/journal-writer-changes'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { resolveGitHubApiRepositoryCandidates } from '../repositories/github-api-repository'

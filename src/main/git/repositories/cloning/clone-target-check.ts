@@ -1,6 +1,6 @@
 import { basename, join } from 'node:path'
 import { lstat, readdir } from 'node:fs/promises'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type {
   CloneTargetArgs,
   CloneTargetCheck

@@ -5,7 +5,7 @@ import type {
 import type { BranchSwitchTarget } from '../../../../../../shared/git/branch-switch-target'
 import { isBranchNameValid } from '../../../../../../shared/git/branch-switch-target'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export const LOCAL_BRANCH_WINDOW = 50
 export const BRANCH_PICKER_ROW_LIMIT = 100

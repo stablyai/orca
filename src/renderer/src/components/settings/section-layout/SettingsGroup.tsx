@@ -15,6 +15,8 @@ type SettingsGroupProps = {
   title?: React.ReactNode
   description?: React.ReactNode
   action?: React.ReactNode
+  /** Lets a narrow header put the action under the title and description instead of beside them. */
+  wrapAction?: boolean
   children?: React.ReactNode
   className?: string
   bodyClassName?: string
@@ -31,6 +33,7 @@ export function SettingsGroup({
   title,
   description,
   action,
+  wrapAction,
   children,
   className,
   bodyClassName,
@@ -68,6 +71,7 @@ export function SettingsGroup({
           title={title}
           description={description}
           action={action}
+          wrapAction={wrapAction}
           onClick={onHeaderClick}
         />
       ) : null}
@@ -81,14 +85,22 @@ export function SettingsGroupHeader({
   title,
   description,
   action,
+  wrapAction = false,
   className,
   onClick
-}: Pick<SettingsGroupProps, 'title' | 'description' | 'action' | 'className'> & {
+}: Pick<SettingsGroupProps, 'title' | 'description' | 'action' | 'wrapAction' | 'className'> & {
   onClick?: (event: React.MouseEvent<HTMLDivElement>) => void
 }): React.JSX.Element {
   return (
-    <div className={cn('flex items-end justify-between gap-3 px-1', className)} onClick={onClick}>
-      <div className="min-w-0 space-y-1">
+    <div
+      className={cn(
+        'flex items-end justify-between gap-3 px-1',
+        wrapAction && 'flex-wrap gap-y-2',
+        className
+      )}
+      onClick={onClick}
+    >
+      <div className={cn('min-w-0 space-y-1', wrapAction && 'min-w-[min(15rem,100%)] flex-1')}>
         <h3 data-settings-group-heading="" className="text-base font-semibold leading-tight">
           {title}
         </h3>

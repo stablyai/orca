@@ -1,3 +1,4 @@
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { collectLocalSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import type {
   RuntimeConstructionBindings as Bindings,
@@ -226,7 +227,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       {
         artifacts: () => this.artifacts.hasService(),
         skills: () => this.skillCommands.hasSkillCloudService()
-      }
+      },
+      () => this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
     )
     this.automation = new RuntimeAutomationController(store, {
       showRepo: (selector) => this.showRepo(selector),

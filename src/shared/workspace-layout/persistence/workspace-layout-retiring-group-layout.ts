@@ -1,4 +1,4 @@
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../tab-groups/tab-types'
 
 type GroupOccurrence = {
   node: TabGroupLayoutNode

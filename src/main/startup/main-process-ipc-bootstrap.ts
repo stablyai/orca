@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './pty-startup/legacy-worker-renderer-recovery'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'

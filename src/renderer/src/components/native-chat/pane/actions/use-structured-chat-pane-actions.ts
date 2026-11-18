@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import { useTabGroupTabCloseCommands } from '../../../tab-group/useTabGroupTabCloseCommands'
+import { useTabGroupTabCloseCommands } from '../../../tab-group/workspace-model/useTabGroupTabCloseCommands'
 import { runNativeChatSplitTarget } from '../routing/native-chat-layout-actions'
-import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 const EMPTY_TABS: Tab[] = []
 const EMPTY_GROUPS: TabGroup[] = []

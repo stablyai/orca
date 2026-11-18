@@ -20,7 +20,10 @@ import { ignoreInheritedWslHostsGateState } from '../../shared/remote-runtime/ws
 import type { createUsageService } from './usage-service'
 import type { UsageWorktreeCatalog } from '../usage/usage-store-host'
 import { parseUsageAccountRoots } from '../usage/usage-account-attribution'
+import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
 
+// A fatal V8 trap must crash, never spin on a JS fault-signal listener.
+installFatalSignalListenerGuard()
 dropE2eSpawnLogOutsideE2e()
 clearWindowsStdHandleInheritance()
 installWindowsIsolatedSpawner()

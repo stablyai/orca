@@ -35,18 +35,19 @@ export function DocPreviewOverflowMenu({
       <DropdownMenuTrigger asChild>
         <Button
           ref={overflow.triggerRef}
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
+          size="icon-xs"
+          variant="muted-field-icon"
           aria-label={t(
             'auto.components.editor.HtmlDocPreview.previewMenuControl',
             'Preview options'
           )}
         >
-          <MoreHorizontal className="size-4" />
+          <MoreHorizontal className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onCloseAutoFocus={overflow.onMenuCloseAutoFocus}>
+        {overflow.annotateToolItems}
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onReload}>
           <RefreshCw className="size-3.5" />
           {t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}

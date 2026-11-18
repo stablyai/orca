@@ -1,6 +1,6 @@
 import { settleDesktopActivation } from './runtime-launch-activation'
 import { app, type BrowserWindow } from 'electron'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../runtime/terminal/adoption/unshown-live-terminal-placement'
 import {
   getCanonicalUserDataPath,
@@ -40,7 +40,7 @@ import {
 import { registerCliForHeadlessServe } from '../serve-launch/serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../../cli/appimage/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../../pty/history/terminal-history-deletion'
-import { triggerStartupNotificationRegistration } from '../../ipc/startup-notification-registration'
+import { triggerStartupNotificationRegistration } from '../../ipc/notifications/startup-notification-registration'
 import { startDesktopPushService } from '../cloud-startup/main-process-push-startup'
 import {
   connectDesktopConnectorCloud,

@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import type { UsageHistoryRow } from '../../../../shared/usage-history-types'
 import { UsageHistoryBreakdowns, UsageHistoryDailyChart } from './UsageHistoryDetails'
 import { usageHistoryAccountKey } from './usage-history-model'

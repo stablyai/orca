@@ -4,7 +4,7 @@ import type { NativeChatImageRefBlock } from '../../../../../../shared/native-ch
 import {
   nativeChatImageLabel as sharedNativeChatImageLabel,
   type NativeChatImageLabelCopy
-} from '../../../../../../shared/native-chat/native-chat-image-label'
+} from '../../../../../../shared/native-chat/attachments/native-chat-image-label'
 
 export function nativeChatImageLabelCopy(t: Translate = translate): NativeChatImageLabelCopy {
   return {

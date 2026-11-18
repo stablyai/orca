@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import {
   alive,
@@ -8,6 +11,9 @@ import {
 } from '../../codex/structured/session-lifecycle/supervised-probe-owner.test-fixture'
 
 // Delay beyond stdin grace like a slow opencode serve startup; stdin EOF must not stop it.
+
+const launch = vi.hoisted(() => vi.fn())
+vi.mock('../../provider-process/provider-process-spawn', () => ({ spawnProviderProcess: launch }))
 
 const OWNER = String.raw`
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
@@ -27,6 +33,35 @@ afterEach(() => {
 })
 
 describe.runIf(process.platform !== 'win32')('supervised OpenCode launch-context probe', () => {
+  it('cancels an aborted preflight before its pending CLI has a public PID', async () => {
+    const child = Object.assign(new EventEmitter(), {
+      pid: undefined,
+      ready: new Promise<void>(() => {}),
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exitCode: null,
+      signalCode: null,
+      groupVerdict: 'unverifiable',
+      kill: vi.fn(() => {
+        child.groupVerdict = 'exited'
+        child.emit('exit', null, null)
+        child.emit('close', null, null)
+        return false
+      })
+    })
+    launch.mockReturnValueOnce(child)
+    await expect(
+      probeOpenCodeLaunchModelContext({
+        executable: 'opencode',
+        cwd: process.cwd(),
+        env: process.env,
+        signal: AbortSignal.abort()
+      })
+    ).resolves.toBeNull()
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+  })
+
   it('stops the server group when its owner is SIGKILLed mid-probe', async () => {
     rig = createSupervisedProbeRig()
     const executable = rig.writeStandIn('opencode')

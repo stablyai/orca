@@ -11,8 +11,8 @@ import {
   sidebarFactsRuntime
 } from './sidebar-inputs/orca-runtime-sidebar-temporal'
 import { OrcaRuntimeWithAgentTransitions } from './construction/orca-runtime-agent-transitions'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
 import type {
   AgentLaunchTabPublished,
@@ -41,7 +41,7 @@ import {
   referenceConnectionHosts
 } from './workspaces/references/runtime-reference-agents'
 import type { RuntimeReferenceFindParams } from '../../shared/workspace-attachments/runtime-reference-contracts'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../shared/execution-host/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { rekeyMovedPaneOwners } from './terminal/identity/moved-pane-owner-rekey'
 import * as Layout from './terminal/layout/runtime-layout-apply'
