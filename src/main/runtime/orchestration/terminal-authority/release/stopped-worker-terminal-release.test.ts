@@ -56,7 +56,7 @@ function fakeRuntime(
     ensureStructuredAgentSessionHost: async () => undefined,
     inspectTerminalProcessIncarnationLiveness: async (incarnation: string) =>
       verdicts[incarnation] ?? 'unverifiable'
-  } as WorkerTerminalReleaseRuntime
+  } as unknown as WorkerTerminalReleaseRuntime
 }
 
 describe('sweepStoppedWorkerTerminals', () => {
