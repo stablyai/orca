@@ -7,6 +7,7 @@ import {
   worktreeCopyPushTarget
 } from '@/lib/workspace/ownership/worktree-git-copy'
 import { refreshGitStatusForWorktree } from '@/components/right-sidebar/source-control/sync/git-status-refresh'
+import { getRelativePathInsideRoot } from '@/lib/path'
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type {
   GitStatusEntry,
@@ -26,7 +27,8 @@ export type NativeChatTurnDiffGitState = {
 export function nativeChatTurnDiffGitState(
   diff: NativeChatTurnDiff,
   entries: readonly GitStatusEntry[] | undefined,
-  upstream: GitUpstreamStatus | undefined
+  upstream: GitUpstreamStatus | undefined,
+  worktreePath: string | undefined
 ): NativeChatTurnDiffGitState | null {
   if (entries === undefined) {
     return null
@@ -40,7 +42,9 @@ export function nativeChatTurnDiffGitState(
   }
   const uncommittedPaths = new Set<string>()
   for (const file of diff.files) {
-    if (dirty.has(file.path)) {
+    // Status paths are repo-relative; edit paths are whatever the tool call carried (often absolute).
+    const relative = getRelativePathInsideRoot(file.path, worktreePath ?? null)
+    if (dirty.has(file.path) || (relative !== null && dirty.has(relative))) {
       uncommittedPaths.add(file.path)
     }
   }
@@ -95,13 +99,16 @@ export function useNativeChatTurnDiffGitState(
   const upstream = useAppStore((s) =>
     worktreeId ? s.remoteStatusesByWorktree[worktreeId] : undefined
   )
+  const worktreePath = useAppStore((s) =>
+    worktreeId ? selectKnownWorktreeById(s, worktreeId)?.path : undefined
+  )
   useEffect(() => {
     if (worktreeId) {
       ensureTurnDiffGitStatus(worktreeId)
     }
   }, [worktreeId, diff])
   return useMemo(
-    () => nativeChatTurnDiffGitState(diff, entries, upstream),
-    [diff, entries, upstream]
+    () => nativeChatTurnDiffGitState(diff, entries, upstream, worktreePath),
+    [diff, entries, upstream, worktreePath]
   )
 }

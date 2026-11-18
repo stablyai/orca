@@ -2,8 +2,13 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
 import { NativeChatMessageList } from '../../NativeChatMessageList'
 import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
+import { NativeChatOwnerWorktreeContext } from '../../pane/ownership/native-chat-owner-worktree-context'
 import { nativeChatTurnDiffs } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import type {
+  GitStatusEntry,
+  GitUpstreamStatus
+} from '../../../../../../shared/git/status/git-status-types'
 
 const messages: NativeChatMessage[] = [
   {
@@ -77,6 +82,66 @@ export const hideShown = defineFixture({
     frame.ownerDocument.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
     frame.querySelector<HTMLButtonElement>('button[aria-label="Hide"]')?.focus()
   }
+})
+
+const WORKTREE_ID = 'fixture-wt'
+const greetingEntry: GitStatusEntry = {
+  path: '/Users/alice/orca/workspaces/orca/feature-x/src/components/greeting.ts',
+  status: 'modified',
+  area: 'unstaged'
+}
+const statusEntry: GitStatusEntry = {
+  path: 'src/components/status.ts',
+  status: 'modified',
+  area: 'unstaged'
+}
+const unpushed: GitUpstreamStatus = {
+  hasUpstream: true,
+  upstreamName: 'origin/feature-x',
+  ahead: 2,
+  behind: 0
+}
+const pushed: GitUpstreamStatus = {
+  hasUpstream: true,
+  upstreamName: 'origin/feature-x',
+  ahead: 0,
+  behind: 0
+}
+
+function CardInWorktree() {
+  return (
+    <NativeChatOwnerWorktreeContext.Provider value={WORKTREE_ID}>
+      <NativeChatTurnDiffRollup diff={diff} />
+    </NativeChatOwnerWorktreeContext.Provider>
+  )
+}
+
+function gitStore(entries: GitStatusEntry[], upstream: GitUpstreamStatus) {
+  return {
+    gitStatusByWorktree: { [WORKTREE_ID]: entries },
+    remoteStatusesByWorktree: { [WORKTREE_ID]: upstream }
+  }
+}
+
+export const uncommitted = defineFixture({
+  width: 560,
+  store: gitStore([greetingEntry, statusEntry], unpushed),
+  render: () => <CardInWorktree />
+})
+export const mixedUncommitted = defineFixture({
+  width: 560,
+  store: gitStore([statusEntry], unpushed),
+  render: () => <CardInWorktree />
+})
+export const committedUnpushed = defineFixture({
+  width: 560,
+  store: gitStore([], unpushed),
+  render: () => <CardInWorktree />
+})
+export const committedPushed = defineFixture({
+  width: 560,
+  store: gitStore([], pushed),
+  render: () => <CardInWorktree />
 })
 
 const session: NativeChatLiveSession = {
