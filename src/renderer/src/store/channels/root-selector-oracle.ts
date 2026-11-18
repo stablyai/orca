@@ -2,28 +2,33 @@ import { useCallback, useEffect, useState } from 'react'
 
 type Entry = { read: () => unknown; last: unknown }
 
-const entries = new Set<Entry>()
+// Keyed by a per-hook token so the hook never mutates its own state.
+const records = new WeakMap<object, Entry>()
+const mounted = new Set<object>()
 
 /** Development only: records what each mounted root selector last returned to React. */
 export function useRecordedRootSelection<U>(read: () => U): () => U {
-  const [entry] = useState<Entry>(() => ({ read, last: undefined }))
+  const [token] = useState(() => ({}))
   useEffect(() => {
-    entries.add(entry)
+    mounted.add(token)
     return () => {
-      entries.delete(entry)
+      mounted.delete(token)
     }
-  }, [entry])
+  }, [token])
   return useCallback(() => {
     const value = read()
-    entry.read = read
-    entry.last = value
+    records.set(token, { read, last: value })
     return value
-  }, [read, entry])
+  }, [read, token])
 }
 
 /** After a channel-only write skipped root selectors: any whose result moved read a channel field. */
 export function checkSkippedRootSelectors(): void {
-  for (const entry of Array.from(entries)) {
+  for (const token of Array.from(mounted)) {
+    const entry = records.get(token)
+    if (!entry) {
+      continue
+    }
     let value: unknown
     try {
       value = entry.read()
