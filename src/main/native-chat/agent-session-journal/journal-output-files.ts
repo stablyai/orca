@@ -27,7 +27,8 @@ export const JOURNAL_OUTPUT_FILE_WRITES = false
 const DIRECTORY = 'agent-session-outputs'
 // A capture or fork that read a reference before its row went keeps the file through this window.
 const UNREFERENCED_GRACE_MS = 24 * 60 * 60 * 1000
-const WRITE_SLICE_BYTES = 1024 * 1024
+const WRITE_SLICE_CHARS = 1024 * 1024
+const STAGING = 'staging'
 const OUTPUT_FILE_ROWS = `instr(payload_json,'"outputFile":"')>0`
 const OUTPUT_FILE = `(CASE WHEN json_valid(payload_json) THEN coalesce(
   json_extract(payload_json,'$.body.output.outputFile'),
@@ -92,13 +93,12 @@ export function moveJournalItemOutputToFile<T extends AgentJournalRenderItem>(
   ) {
     return item
   }
-  const bytes = Buffer.from(payload.head, 'utf8')
-  if (bytes.length <= JOURNAL_ITEM_DETAIL_MAX_BYTES) {
+  if (Buffer.byteLength(payload.head, 'utf8') <= JOURNAL_ITEM_DETAIL_MAX_BYTES) {
     return item
   }
-  const digest = createHash('sha256').update(bytes).digest('hex')
+  let digest: string
   try {
-    saveJournalOutputFile(journalOutputFilePath(root, digest), bytes)
+    digest = saveJournalOutputFile(root, payload.head)
   } catch (error) {
     console.warn('[agent-session-journal] kept a large output inline; its file failed', error)
     return item
@@ -131,83 +131,139 @@ function boundedHead(text: string): string {
   }
 }
 
-/** Immutable by name: an existing file of the right size is this content; else write, sync, rename. */
-function saveJournalOutputFile(path: string, bytes: Buffer): void {
+/**
+ * Encodes and hashes the text a slice at a time into a staging file, then names it by its sha256:
+ * an existing file of that name is this content. Sync, rename, then sync the folder, so the row
+ * that commits after it never names a file a power loss could take back.
+ */
+function saveJournalOutputFile(root: string, text: string): string {
+  const staging = join(root, DIRECTORY, STAGING)
+  mkdirSync(staging, { recursive: true, mode: 0o700 })
+  const temporary = join(staging, `${randomUUID()}.part`)
   try {
-    if (statSync(path).size === bytes.length) {
-      return
-    }
-  } catch {
-    // Missing: write it below.
-  }
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-  const temporary = `${path}.${randomUUID()}.part`
-  try {
+    const hash = createHash('sha256')
+    let bytes = 0
     const fd = openSync(temporary, 'wx', 0o600)
     try {
-      for (let offset = 0; offset < bytes.length;) {
-        offset += writeSync(fd, bytes, offset, Math.min(WRITE_SLICE_BYTES, bytes.length - offset))
+      for (let start = 0; start < text.length;) {
+        let end = Math.min(text.length, start + WRITE_SLICE_CHARS)
+        // Never split a surrogate pair across slices.
+        if (end < text.length && (text.charCodeAt(end - 1) & 0xfc00) === 0xd800) {
+          end -= 1
+        }
+        const slice = Buffer.from(text.slice(start, end), 'utf8')
+        hash.update(slice)
+        for (let offset = 0; offset < slice.length;) {
+          offset += writeSync(fd, slice, offset, slice.length - offset)
+        }
+        bytes += slice.length
+        start = end
       }
       fsyncSync(fd)
     } finally {
       closeSync(fd)
     }
-    renameFileWithWindowsRetry(temporary, path)
+    const digest = hash.digest('hex')
+    const path = journalOutputFilePath(root, digest)
+    if (fileSize(path) !== bytes) {
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+      renameFileWithWindowsRetry(temporary, path)
+      syncDirectory(dirname(path))
+    }
+    return digest
   } finally {
     rmSync(temporary, { force: true })
   }
 }
 
+function fileSize(path: string): number {
+  try {
+    return statSync(path).size
+  } catch {
+    return -1
+  }
+}
+
+/** Makes a rename durable on POSIX; Windows has no directory handle to sync. */
+function syncDirectory(path: string): void {
+  if (process.platform === 'win32') {
+    return
+  }
+  const fd = openSync(path, 'r')
+  try {
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}
+
 export type JournalOutputFileSweepResult = {
   kind: 'output-file-sweep'
+  more: boolean
   files: number
   bytes: number
   removed: number
   freedBytes: number
 }
 
-/** Removes files no row has referenced for the grace window; referenced ones are never touched. */
+// One unit per call: each of the 256 digest shards, then the staging folder.
+const SWEEP_UNITS = 257
+const sweepCursors = new WeakMap<Database.Database, number>()
+
+/**
+ * One bounded unit of the sweep: removes files no row has referenced for the grace window, and
+ * staging files a crash left; a referenced file is never touched.
+ */
 export function sweepJournalOutputFiles(
   db: Database.Database,
   now: number
 ): JournalOutputFileSweepResult {
-  const result: JournalOutputFileSweepResult = {
-    kind: 'output-file-sweep',
+  const unit = sweepCursors.get(db) ?? 0
+  const more = unit + 1 < SWEEP_UNITS
+  sweepCursors.set(db, more ? unit + 1 : 0)
+  const result = {
+    kind: 'output-file-sweep' as const,
+    more,
     files: 0,
     bytes: 0,
     removed: 0,
     freedBytes: 0
   }
   const root = roots.get(db)?.root
-  const files = root ? listJournalOutputFiles(join(root, DIRECTORY)) : []
-  if (!root || files.length === 0) {
-    db.prepare('DELETE FROM journal_output_file_unreferenced').run()
+  if (!root) {
     return result
   }
-  const referenced = new Set(
-    db
-      .prepare(
-        `SELECT DISTINCT ${OUTPUT_FILE} AS digest FROM journal_items WHERE ${OUTPUT_FILE_ROWS}`
-      )
-      .all()
-      .map((row) => String(row.digest))
+  if (unit === SWEEP_UNITS - 1) {
+    for (const entry of listFiles(join(root, DIRECTORY, STAGING))) {
+      // A live write renames within its own transaction; an old one was left by a crash.
+      if (entry.modifiedAt <= now - UNREFERENCED_GRACE_MS) {
+        rmSync(entry.path, { force: true })
+      }
+    }
+    return result
+  }
+  const shard = unit.toString(16).padStart(2, '0')
+  const files = listFiles(join(root, DIRECTORY, shard)).filter((entry) =>
+    /^[0-9a-f]{64}\.txt$/.test(entry.name)
+  )
+  const referenced = db.prepare(
+    `SELECT 1 FROM journal_items WHERE ${OUTPUT_FILE_ROWS} AND ${OUTPUT_FILE}=? LIMIT 1`
   )
   const mark = db.prepare(
     'INSERT OR IGNORE INTO journal_output_file_unreferenced(digest,since) VALUES(?,?)'
   )
   const since = db.prepare('SELECT since FROM journal_output_file_unreferenced WHERE digest=?')
   const clear = db.prepare('DELETE FROM journal_output_file_unreferenced WHERE digest=?')
-  for (const { digest, path, size, staged, modifiedAt } of files) {
-    if (staged) {
-      // A crash between write and rename; a live write renames within its own transaction.
-      if (modifiedAt <= now - UNREFERENCED_GRACE_MS) {
-        rmSync(path, { force: true })
-      }
-      continue
-    }
+  db.prepare(`DELETE FROM journal_output_file_unreferenced WHERE substr(digest,1,2)=?
+    AND digest NOT IN (SELECT value FROM json_each(?))`).run(
+    shard,
+    JSON.stringify(files.map((entry) => entry.name.slice(0, 64)))
+  )
+  for (const { name, path, size } of files) {
+    const digest = name.slice(0, 64)
     result.files++
     result.bytes += size
-    if (referenced.has(digest)) {
+    if (referenced.get(digest)) {
       clear.run(digest)
       continue
     }
@@ -226,56 +282,30 @@ export function sweepJournalOutputFiles(
   }
   if (result.removed > 0) {
     console.info(
-      `[agent-session-journal] removed ${result.removed} unreferenced output files (${result.freedBytes} bytes); ${result.files - result.removed} kept`
+      `[agent-session-journal] removed ${result.removed} unreferenced output files (${result.freedBytes} bytes) in shard ${shard}`
     )
   }
   return result
 }
 
-type JournalOutputFileEntry = {
-  digest: string
-  path: string
-  size: number
-  staged: boolean
-  modifiedAt: number
-}
-
-function listJournalOutputFiles(directory: string): JournalOutputFileEntry[] {
-  const files: JournalOutputFileEntry[] = []
-  let shards: string[]
+function listFiles(
+  directory: string
+): { name: string; path: string; size: number; modifiedAt: number }[] {
+  let names: string[]
   try {
-    shards = readdirSync(directory)
+    names = readdirSync(directory)
   } catch {
-    return files
+    return []
   }
-  for (const shard of shards) {
-    let names: string[]
+  return names.flatMap((name) => {
+    const path = join(directory, name)
     try {
-      names = readdirSync(join(directory, shard))
+      const stat = statSync(path)
+      return stat.isFile() ? [{ name, path, size: stat.size, modifiedAt: stat.mtimeMs }] : []
     } catch {
-      continue
+      return []
     }
-    for (const name of names) {
-      const match = /^([0-9a-f]{64})\.txt(\.[0-9a-f-]+\.part)?$/.exec(name)
-      if (!match) {
-        continue
-      }
-      const path = join(directory, shard, name)
-      try {
-        const stat = statSync(path)
-        files.push({
-          digest: match[1],
-          path,
-          size: stat.size,
-          staged: match[2] !== undefined,
-          modifiedAt: stat.mtimeMs
-        })
-      } catch {
-        // Removed meanwhile.
-      }
-    }
-  }
-  return files
+  })
 }
 
 /** A saved body whose output moved to its file still equals the whole output it was cut from. */

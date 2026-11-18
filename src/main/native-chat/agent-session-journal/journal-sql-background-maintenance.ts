@@ -140,7 +140,7 @@ export class JournalSqlBackgroundMaintenance {
         if (state.completedAt === null || now - state.completedAt >= COMPACTION_INTERVAL) {
           await this.pages({ kind: 'event-tail-prune', now })
           if (!this.stopped.signal.aborted) {
-            await this.writer.maintain({ kind: 'output-file-sweep', now })
+            await this.pages({ kind: 'output-file-sweep', now })
             await this.writer.maintain({ kind: 'compaction-complete', now: Date.now() })
           }
         }

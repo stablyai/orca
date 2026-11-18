@@ -44,6 +44,7 @@ export type JournalPagedMaintenanceKind =
   | 'page-reclaim'
   | 'chat-discard'
   | 'stored-output-compaction'
+  | 'output-file-sweep'
 
 export type JournalSqlMaintenance =
   | { kind: 'records-install' }

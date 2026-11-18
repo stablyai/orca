@@ -16,6 +16,20 @@ import {
   sweepJournalOutputFiles
 } from './journal-output-files'
 
+/** One whole sweep: every unit until the sweep says it is done. */
+function sweepAll(db: Database.Database, now: number) {
+  let removed = 0
+  let freedBytes = 0
+  for (;;) {
+    const unit = sweepJournalOutputFiles(db, now)
+    removed += unit.removed
+    freedBytes += unit.freedBytes
+    if (!unit.more) {
+      return { removed, freedBytes }
+    }
+  }
+}
+
 const target = { sessionId: 'chat', epoch: 'epoch' }
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -89,16 +103,16 @@ it('stores a completed output over the detail size as a head beside its whole-te
   ).toBe(payload.outputFile)
 
   const day = 24 * 60 * 60 * 1000
-  sweepJournalOutputFiles(db, 0)
-  sweepJournalOutputFiles(db, 2 * day)
+  sweepAll(db, 0)
+  sweepAll(db, 2 * day)
   expect(existsSync(path)).toBe(true)
 
   db.prepare('DELETE FROM journal_items').run()
-  sweepJournalOutputFiles(db, 3 * day)
+  sweepAll(db, 3 * day)
   expect(existsSync(path)).toBe(true)
-  sweepJournalOutputFiles(db, 4 * day - 1)
+  sweepAll(db, 4 * day - 1)
   expect(existsSync(path)).toBe(true)
-  expect(sweepJournalOutputFiles(db, 4 * day)).toMatchObject({
+  expect(sweepAll(db, 4 * day)).toMatchObject({
     removed: 1,
     freedBytes: 10_800_000
   })

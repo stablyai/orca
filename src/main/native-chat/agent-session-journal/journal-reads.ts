@@ -53,6 +53,8 @@ export type JournalContinuedPayload = {
   field: JournalContinuedField
   /** Stored UTF-8 length of the whole text. */
   bytes: number
+  /** The whole text's side file, named by its sha256, when the row holds only its head. */
+  file?: string
 }
 
 export type JournalContinuedField = 'output' | 'patch'
