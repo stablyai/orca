@@ -25,7 +25,7 @@ export async function resolveCrossMachineChildParent(
   const callerId = await resolveDispatchCallerWorktreeId(runtime, from, callerSession)
   const resolved = await runtime.resolveCallerParentForAnotherStore(
     { envParentWorkspace: `id:${callerId}` },
-    readCallerStoreInstallationId(runtime.getRuntimeId(), getCanonicalUserDataPath())
+    await readCallerStoreInstallationId(runtime.getRuntimeId(), getCanonicalUserDataPath())
   )
   if ('reason' in resolved) {
     throw new OrchestrationError(
