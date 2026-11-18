@@ -12,7 +12,7 @@ import type { TreeNode } from './file-explorer-types'
 import {
   buildFolderStatusMap,
   buildStatusMap
-} from '../../../../lib/source-control/paths/git-path-decoration'
+} from '../../../../../../shared/git/status/git-path-decoration'
 import { useFileDeletion } from '../mutations/useFileDeletion'
 import { useFileExplorerDragDrop } from '../mutations/useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from '../mutations/useFileExplorerHandlers'

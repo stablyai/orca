@@ -2110,7 +2110,8 @@
       "searched": "Searched {{loaded}} of {{total}} in {{folder}}.",
       "searching": "Searching {{folder}}… {{loaded}} of {{total}}",
       "searchAll": "Search all",
-      "searchAllIn": "Search all of {{folder}}"
+      "searchAllIn": "Search all of {{folder}}",
+      "ignored": "Ignored by .gitignore"
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
