@@ -1,3 +1,4 @@
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 import { readJournalStoredItem } from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -98,14 +99,14 @@ export function readJournalDomainItems(
   const prefix = [target.sessionId, target.epoch] as const
   switch (operation.kind) {
     case 'canonical-item-ids': {
-      const canonical = canonicalItemId(db, prefix)
+      const canonical = journalCanonicalItemId(db, prefix)
       return {
         kind: 'canonical-item-ids',
         items: operation.itemIds.map((itemId) => ({ itemId, canonicalItemId: canonical(itemId) }))
       }
     }
     case 'history-items': {
-      const canonical = canonicalItemId(db, prefix)
+      const canonical = journalCanonicalItemId(db, prefix)
       const removed = db.prepare(`SELECT
         EXISTS(SELECT 1 FROM journal_item_tombstones WHERE session_id=?1 AND epoch=?2 AND item_id=?3)
         OR EXISTS(SELECT 1 FROM journal_items WHERE session_id=?1 AND epoch=?2 AND item_id=?3 AND hidden=1)
@@ -230,10 +231,11 @@ export function readJournalDomainItems(
 
 type Prefix = readonly [string, string]
 
-function canonicalItemId(db: Database.Database, prefix: Prefix): (key: string) => string {
+/** An item's journal id: a provider echo's (a Claude turn's opener) reads as the row it aliases. */
+export function journalCanonicalItemId(db: Database.Database, prefix: Prefix) {
   const alias = db.prepare(`SELECT item_id FROM journal_item_aliases
     WHERE session_id=? AND epoch=? AND provider_item_id=?`)
-  return (key) => {
+  return (key: string): string => {
     const row = alias.get(...prefix, key)
     return row ? String(row.item_id) : key
   }
@@ -245,10 +247,10 @@ function visibleItem(
   itemId: string
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT payload_json FROM journal_items
+    .prepare(`SELECT ${boundedStoredJsonSql('payload_json', 'payload_json')} FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(...prefix, itemId)
-  return row ? readJournalStoredItem(db, prefix, row.payload_json) : null
+  return row ? readJournalStoredItem(db, prefix, boundedStoredJson(row, 'payload_json')) : null
 }
 
 /** The input order's newest turn: latest position, then the greatest item ID among ties. */

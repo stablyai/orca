@@ -74,6 +74,8 @@ export function useMonacoGitBlame(params: {
     let loading = true
     let disposed = false
     let headKey: string | null = null
+    // Blame owed while inactive; the pane loads it once it becomes active.
+    let loadOwed = false
 
     const lineBlameAtCursor = (): LineBlame | null => {
       const loaded = loadedRef.current
@@ -99,6 +101,11 @@ export function useMonacoGitBlame(params: {
       const commit = loaded.blame.commits[commitIndexForHeadLine(loaded.blame.ranges, headLine)]
       return commit ? { kind: 'commit', commit } : null
     }
+
+    // The status bar shows blame only for the front editor tab; a terminal or browser in front keeps
+    // the remembered file id.
+    const isFrontFile = (state: { activeTabType: string; activeFileId: string | null }): boolean =>
+      state.activeTabType === 'editor' && state.activeFileId === fileId
 
     // The focused pane is active; the active file also takes over from another file or a closed
     // tab, but never from a live split pane of itself.
@@ -184,6 +191,13 @@ export function useMonacoGitBlame(params: {
         mapping = null
         update()
       }
+      // Only the focused or front editor runs git: hidden worktrees and other splits stay mounted.
+      // `headKey` is set above so a deferred editor still sees HEAD move.
+      if (!ed.hasTextFocus() && !(isFrontFile(state) && isActivePane())) {
+        loadOwed = true
+        return
+      }
+      loadOwed = false
       const known = loadedRef.current
       const sameFile =
         known !== null &&
@@ -240,10 +254,18 @@ export function useMonacoGitBlame(params: {
       // Commits made in a terminal or in a child repo surface when the user returns to the editor.
       ed.onDidFocusEditorText(() => {
         update()
-        load('focus')
+        load(loadOwed ? 'status' : 'focus')
       })
     ]
     const unsubscribeHead = useAppStore.subscribe((state, previous) => {
+      if (isFrontFile(state) && !isFrontFile(previous)) {
+        if (loadOwed) {
+          load('status')
+          return
+        }
+        // Back to an already-loaded split: show its blame without waiting for a cursor move.
+        update()
+      }
       const before = headKey ? previous.gitStatusHeadByWorktree[headKey] : undefined
       const after = headKey ? state.gitStatusHeadByWorktree[headKey] : undefined
       if (before === after) {

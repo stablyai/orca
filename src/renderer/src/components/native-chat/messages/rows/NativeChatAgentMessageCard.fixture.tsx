@@ -192,3 +192,51 @@ export const expanded = defineFixture({
     }
   }
 })
+// Mail from a paired computer: a bot there by its carried avatar, and a terminal agent, each with its host pill.
+export const fromAnotherComputer = defineFixture({
+  width: 440,
+  render: () => (
+    <div className="space-y-4 p-4">
+      {[
+        { name: 'Bot builder', bot: true as const, botAvatar: 'mascot:A1', agent: 'claude' },
+        { name: 'Release check', agent: 'codex' }
+      ].map((sender) => {
+        const from: AgentMessageSource = {
+          kind: 'agent',
+          senders: [
+            {
+              party: {
+                address: `${sender.name} on Alice's Mac`,
+                terminalHandle: null,
+                orcaSessionId: null
+              },
+              host: "Alice's Mac",
+              ...sender
+            }
+          ],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'term_recipient',
+            dispatchId: null,
+            messages: []
+          }
+        }
+        return (
+          <NativeChatAgentMessageCard
+            key={sender.name}
+            message={{
+              id: sender.name,
+              role: 'user',
+              source: 'transcript',
+              blocks: [{ type: 'text', text: 'Where is the install guide?' }],
+              timestamp: 1_800_000_000_000,
+              from
+            }}
+            from={from}
+            onRefolded={() => {}}
+          />
+        )
+      })}
+    </div>
+  )
+})

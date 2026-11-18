@@ -44,7 +44,8 @@ export type StructuredSessionOpenFailure = {
 export type StructuredSessionOpenTab = { id: string; sessionId: string; agent?: string }
 export type StructuredSessionOpenResult =
   | { kind: 'opened'; target: StructuredSessionOpenTarget; tab: StructuredSessionOpenTab }
-  | { kind: 'terminal'; handle: string }
+  /** `environmentId`: another paired server's terminal, as the answering host names that server. */
+  | { kind: 'terminal'; handle: string; environmentId?: string }
   | { kind: 'failed'; failure: StructuredSessionOpenFailure }
   | { kind: 'superseded' }
 
@@ -128,7 +129,8 @@ export async function resolveStructuredSessionOpenSource(
     }
   }
   if (found.location.kind === 'terminal') {
-    return { kind: 'terminal', handle: found.location.handle }
+    const { handle, environmentId } = found.location
+    return { kind: 'terminal', handle, ...(environmentId ? { environmentId } : {}) }
   }
   if (found.location.kind !== 'chat') {
     return { kind: 'failed', failure: { reason: 'unsupported', beforeEffects: true } }

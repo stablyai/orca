@@ -1,3 +1,4 @@
+import { getGitCurrentBranchName } from '../../../shared/git/refs/git-current-branch'
 import type { FirstWorkBranchRenameEvent } from './first-work-branch-rename-event'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -177,9 +178,9 @@ async function runAutoRename(
   }
   const exec: GitExec = (args) => gitExecFileAsync(args, { cwd: worktreePath })
 
-  const currentBranch = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
-  if (!currentBranch || currentBranch === 'HEAD') {
-    return defer('interrupted', `no checked-out branch (${currentBranch || 'empty'})`)
+  const currentBranch = await getGitCurrentBranchName(exec)
+  if (!currentBranch) {
+    return defer('interrupted', 'no checked-out branch')
   }
   if (!deps.canRenameOrcaCreatedBranch(worktreeId)) {
     return stop('name-chosen', 'worktree is not eligible for auto-rename', true)
