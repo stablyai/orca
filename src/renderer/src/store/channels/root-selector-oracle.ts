@@ -1,39 +1,33 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 
 type Entry = { read: () => unknown; last: unknown }
 
-// Keyed by a per-hook token so the hook never mutates its own state.
-const records = new WeakMap<object, Entry>()
-const mounted = new Set<object>()
+// Committed root selectors only, keyed by a per-hook token so the hook never mutates its own state.
+const committed = new Map<object, Entry>()
+// One check per interval: a selector that read a channel field stays wrong until its next root write.
+const CHECK_INTERVAL_MS = 1000
+let checkQueued = false
 
-/** Development only: records what each mounted root selector last returned to React. */
-export function useRecordedRootSelection<U>(read: () => U): () => U {
+/** Development only: records, at commit, what each mounted root selector showed. */
+export function useRecordedRootSelection(read: () => unknown): void {
   const [token] = useState(() => ({}))
-  useEffect(() => {
-    mounted.add(token)
+  // Commit time, not render: a render React discards must not replace what is on screen.
+  useLayoutEffect(() => {
+    committed.set(token, { read, last: read() })
     return () => {
-      mounted.delete(token)
+      committed.delete(token)
     }
-  }, [token])
-  return useCallback(() => {
-    const value = read()
-    records.set(token, { read, last: value })
-    return value
-  }, [read, token])
+  })
 }
 
-/** After a channel-only write skipped root selectors: any whose result moved read a channel field. */
-export function checkSkippedRootSelectors(): void {
-  for (const token of Array.from(mounted)) {
-    const entry = records.get(token)
-    if (!entry) {
-      continue
-    }
+function checkCommittedRootSelectors(): void {
+  checkQueued = false
+  committed.forEach((entry) => {
     let value: unknown
     try {
       value = entry.read()
     } catch {
-      continue
+      return
     }
     if (!Object.is(value, entry.last)) {
       entry.last = value
@@ -42,5 +36,13 @@ export function checkSkippedRootSelectors(): void {
         entry.read
       )
     }
+  })
+}
+
+/** After a channel-only write skipped root selectors: any whose result moved read a channel field. */
+export function checkSkippedRootSelectors(): void {
+  if (!checkQueued) {
+    checkQueued = true
+    setTimeout(checkCommittedRootSelectors, CHECK_INTERVAL_MS)
   }
 }
