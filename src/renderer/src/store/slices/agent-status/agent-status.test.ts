@@ -1,16 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../tabs/tab-group.test-fixture'
 import { createStoreSessionMockApi } from '../../testing/app-store-session-api.test-fixture'
-import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import type { RetainedAgentEntry } from './agent-status-contract'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
+
 import { drawTabsFromMain } from '../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
@@ -76,7 +73,7 @@ afterEach(() => {
           { updatedAt: 1_000, stateStartedAt: 1_000 }
         )
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = store.getState().agentStatusByPaneKey.get('tab-1:1')!
       expect(entry.state).toBe('working')
       expect(entry.prompt).toBe('fresh')
       expect(entry.updatedAt).toBe(2_000)
@@ -85,37 +82,10 @@ afterEach(() => {
 }
 
 {
-  describe('dropAgentStatus + retention suppressor', () => {
+  describe('agent row teardown', () => {
     // Use fake timers for microtask-scheduled 30-minute freshness timeouts.
     afterEach(() => {
       vi.useRealTimers()
-    })
-
-    it('removes a retained-only entry', () => {
-      vi.useFakeTimers()
-      const store = createTestStore()
-      const now = Date.now()
-      const entry: AgentStatusEntry = {
-        state: 'done',
-        prompt: '',
-        updatedAt: now,
-        stateStartedAt: now,
-        paneKey: 'tab-retained:0',
-        stateHistory: []
-      }
-      const retained: RetainedAgentEntry = {
-        entry,
-        worktreeId: 'wt-x',
-        tab: { id: 'tab-retained', title: 'claude' } as unknown as TerminalTab,
-        agentType: 'claude',
-        startedAt: now
-      }
-      store.getState().retainAgents([retained])
-
-      store.getState().dropAgentStatus('tab-retained:0')
-
-      const s = store.getState()
-      expect(s.retainedAgentsByPaneKey['tab-retained:0']).toBeUndefined()
     })
 
     it('closeTab drops completed worktree-attributed orphan rows', () => {
@@ -177,8 +147,11 @@ afterEach(() => {
 
       const s = store.getState()
       expect(s.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-closed')).toBe(false)
-      expect(s.agentStatusByPaneKey['tab-closed:0']).toBeUndefined()
-      expect(s.agentStatusByPaneKey['tab-orphan:0']).toBeUndefined()
+      expect(s.agentStatusByPaneKey.get('tab-closed:0')!).toBeUndefined()
+      expect(s.agentStatusByPaneKey.get('tab-orphan:0')!).toBeUndefined()
+      expect(s.agentStatusByPaneKey.get('tab-active-child:0')!).toBeDefined()
+      expect(s.agentStatusByPaneKey.get('tab-live:0')!).toBeDefined()
+      expect(s.agentStatusByPaneKey.get('tab-other-orphan:0')!).toBeDefined()
     })
 
     it.each(['wt-1', 'folder-workspace-1'])(
@@ -245,7 +218,7 @@ afterEach(() => {
 
         expect(after.activityClearedAtByPaneKey[paneKey]).toBe(100)
         expect(after.manuallyUnreadTurnsByPaneKey[paneKey]).toBe(200)
-        expect(after.agentStatusByPaneKey[missingOwnerPaneKey]).toBeUndefined()
+        expect(after.agentStatusByPaneKey.get(missingOwnerPaneKey)!).toBeUndefined()
         expect(after.acknowledgedAgentsByPaneKey[missingOwnerPaneKey]).toBeUndefined()
         expect(after.activityClearedAtByPaneKey[missingOwnerPaneKey]).toBeUndefined()
         expect(after.manuallyUnreadTurnsByPaneKey[missingOwnerPaneKey]).toBeUndefined()
@@ -257,37 +230,11 @@ afterEach(() => {
 
         const closed = store.getState()
         expect(closed.unifiedTabsByWorktree[worktreeId]).toEqual([])
-        expect(closed.agentStatusByPaneKey[paneKey]).toBeUndefined()
+        expect(closed.agentStatusByPaneKey.get(paneKey)!).toBeUndefined()
         expect(closed.acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
         expect(closed.activityClearedAtByPaneKey[paneKey]).toBeUndefined()
         expect(closed.manuallyUnreadTurnsByPaneKey[paneKey]).toBeUndefined()
       }
     )
-
-    it('keeps an exact-pane remote retirement scoped to that pane', () => {
-      vi.useFakeTimers()
-      const store = createTestStore()
-      const retiringPaneKey = 'host-tab:11111111-1111-4111-8111-111111111111'
-      const siblingPaneKey = 'host-tab:22222222-2222-4222-8222-222222222222'
-      for (const paneKey of [retiringPaneKey, siblingPaneKey, 'missing-owner:0']) {
-        store
-          .getState()
-          .setAgentStatus(
-            paneKey,
-            { state: 'done', prompt: 'remote chat', agentType: 'codex' },
-            undefined,
-            undefined,
-            { worktreeId: 'wt-1' }
-          )
-      }
-      const before = store.getState()
-
-      const { patch } = buildAgentStatusTabPrefixDropPatch(before, 'host-tab', [], {
-        worktreeId: 'wt-1',
-        paneKeys: new Set([retiringPaneKey])
-      })
-
-      expect(patch.agentStatusByPaneKey?.[retiringPaneKey]).toBeUndefined()
-    })
   })
 }

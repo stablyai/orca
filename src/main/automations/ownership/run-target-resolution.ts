@@ -1,5 +1,5 @@
 import { findAutomationRepo } from '../../../shared/automations/ownership/automation-repo-target'
-import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
+import { findProjectHostSetup } from '../../../shared/project/host-setup/project-host-setup-target'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import { getAutomationLegacyRepoId } from '../../../shared/automations/history/automation-run-identity'
@@ -8,9 +8,12 @@ import {
   type AutomationCapturedHostIssue
 } from '../../../shared/automations/ownership/automation-list-scope'
 import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../../shared/automations/ownership/automation-owner-conflict'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import type { ProjectHostSetup } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import type { ProjectHostSetup } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import {
   buildWorkspaceRunContext,

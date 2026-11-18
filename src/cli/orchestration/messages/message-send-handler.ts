@@ -9,7 +9,7 @@ import {
 } from '../workers/worker-start-agent-view'
 import { withResolvedNextCommands } from '../recovery/orchestration-mutation-recovery'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { requireWorkerDoneSettlement } from '../workers/orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'

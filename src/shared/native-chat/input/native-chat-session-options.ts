@@ -5,6 +5,8 @@ export type SessionOptionValue = string | boolean
 export type SessionOptionSelectChoice = {
   value: string
   label: string
+  /** Text for a compact segment; `label` stays its accessible name. */
+  shortLabel?: string
   description?: string
   /** Folded under More models; a matching search still lists it. */
   legacy?: true
@@ -47,6 +49,8 @@ export type SessionOptionDescriptor = {
   transport: NativeChatLiveOptionTransport
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
+  /** Active value when a saved selection intentionally waits for a later input. */
+  activeValue?: string
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }

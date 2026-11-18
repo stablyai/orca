@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { setAppEnvironment } from '../../../shared/app-environment'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../../host/electron-app-environment'
 import { ensureWindowsAppDataPath } from '../windows-startup/windows-app-data-path'
 
@@ -10,9 +10,22 @@ export const AGENT_HOOKS_UNINSTALL_FLAG = '--orca-uninstall-remove-agent-hooks'
 // Uninstall must finish even if an agent's config never answers.
 const UNINSTALL_HOOK_REMOVAL_TIMEOUT_MS = 30_000
 
+type UninstallRemovalStatus = Pick<AgentHookInstallStatus, 'state' | 'detail'> & { agent: string }
+
+// OpenCode and Pi load Orca's plugin files, outside the hook registry.
+function pluginRemovalStatuses(
+  removals: readonly { agent: string; error: string | null }[]
+): UninstallRemovalStatus[] {
+  return removals.map((removal) => ({
+    agent: removal.agent,
+    state: removal.error ? 'error' : 'not_installed',
+    detail: removal.error
+  }))
+}
+
 /** Exit code 0 only when every agent's managed hooks were removed or never there. */
 export async function removeAgentHooksForUninstall(
-  removeHooks: () => Promise<readonly AgentHookInstallStatus[]>
+  removeHooks: () => Promise<readonly UninstallRemovalStatus[]>
 ): Promise<number> {
   try {
     const statuses = await removeHooks()
@@ -54,9 +67,14 @@ export function runAgentHooksUninstallPreflight(argv: readonly string[] = proces
   }
   // Loaded only here, so ordinary startup never pays for every agent's hook module.
   void removeAgentHooksForUninstall(async () => {
-    const { removeManagedAgentHooks } =
-      await import('../../agent-hooks/installation/managed-agent-hook-controls')
-    return removeManagedAgentHooks()
+    const [{ removeManagedAgentHooks }, { removePluginHookFiles }] = await Promise.all([
+      import('../../agent-hooks/installation/managed-agent-hook-controls'),
+      import('../../agent-hooks/installation/opencode-pi-plugin-hook-files')
+    ])
+    return [
+      ...(await removeManagedAgentHooks()),
+      ...pluginRemovalStatuses(await removePluginHookFiles())
+    ]
   }).then((code) => {
     clearTimeout(timeout)
     app.exit(code)

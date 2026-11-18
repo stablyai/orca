@@ -23,18 +23,21 @@ type ComposerAsyncStateInput = Pick<
 >
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
+import type {
+  OrcaHooks,
+  SetupAgentStartupPolicy
+} from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { IssueCommandReadResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace/creation/workspace-create-error-format'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
-import { getRepoSetupAgentStartupPolicy } from './setup-policy-decisions'
+import { getRepoSetupAgentStartupPolicy } from './workspace-setup/setup-policy-decisions'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import type {
   SmartGitHubPrStartPointSelection,
   SmartSourceSelection
-} from './source-selection-decisions'
+} from './linked-work-items/source-selection-decisions'
 
 export function useComposerAsyncState(input: ComposerAsyncStateInput) {
   const {

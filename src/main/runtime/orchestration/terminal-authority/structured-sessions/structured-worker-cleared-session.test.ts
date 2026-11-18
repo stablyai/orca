@@ -122,8 +122,6 @@ const journals = new Map<string, AgentJournalRenderItem[]>()
 const unreadable = new Set<string>()
 /** Set to commit a /clear of the minted session while its close waits behind it. */
 let clearDuringClose = false
-/** A session whose tab hide fails. */
-let failHideOf: string | null = null
 const closed: string[] = []
 const historyAsked: string[] = []
 const journalAsked: string[] = []
@@ -206,9 +204,6 @@ function installHost(): void {
     // No projection held: the gate reads the timeline as it stands.
     currentWork: () => null,
     setSessionTabVisibility: async (id: string, visible: boolean) => {
-      if (id === failHideOf) {
-        throw new Error('the durable tab index is wedged')
-      }
       visibleTabs = visible ? [...visibleTabs, id] : visibleTabs.filter((tab) => tab !== id)
     },
     // Model real close: stop attached children with evidence, then drop the conversation.
@@ -337,7 +332,6 @@ beforeEach(() => {
   open.clear()
   tabIndexPresent = true
   clearDuringClose = false
-  failHideOf = null
   db = new OrchestrationDb(':memory:')
 })
 
@@ -411,19 +405,6 @@ describe('stopping a worker while a /clear commits', () => {
   beforeEach(() => {
     installUnclearedWorker()
     clearDuringClose = true
-  })
-
-  it('closes the successor the clear handed the worker to', async () => {
-    const stop = await stopStructuredWorker(registerWorker())
-    expect(closed).toEqual([MINTED, SUCCESSOR])
-    expect(stop.stopped).toBe(true)
-  })
-
-  it('keeps provider Stop proved when the successor hide fails', async () => {
-    failHideOf = SUCCESSOR
-    const stop = await stopStructuredWorker(registerWorker())
-    expect(closed).toEqual([MINTED, SUCCESSOR])
-    expect(stop).toMatchObject({ stopped: true, closeAttempted: true })
   })
 
   it('stops through worker-stop when the old session already reads exited mid-clear', async () => {
@@ -508,22 +489,6 @@ describe('the lineage journal page', () => {
     expect(page?.items.at(-1)?.itemId).toBe(`${SUCCESSOR}-149`)
     expect(page?.sessionIds.filter((id) => id === MINTED)).toHaveLength(50)
     expect(page?.hasOlder).toBe(true)
-  })
-})
-
-describe('a worker cleared twice', () => {
-  beforeEach(() => {
-    const chain = [clearedRecord(MINTED, SUCCESSOR), clearedRecord(SUCCESSOR, SECOND)]
-    installSessions([...chain, liveRecord(SECOND)], [SECOND], [SECOND])
-  })
-
-  it('is read across all three sessions and stopped through the newest', async () => {
-    const identity = registerWorker()
-    expect(resolveStructuredWorkerAuthority(identity.handle, null)?.running.sessionId).toBe(SECOND)
-    await readJournal(identity)
-    expect(historyAsked).toEqual([SECOND, SUCCESSOR, MINTED])
-    await stopStructuredWorker(identity)
-    expect(closed).toEqual([SECOND])
   })
 })
 

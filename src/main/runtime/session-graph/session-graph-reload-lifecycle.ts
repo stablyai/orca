@@ -1,11 +1,19 @@
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as TransitionGraphReloadToTerminalStateMethods } from './session-graph-authority'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
-import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/session-title-publisher'
+import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/publication/session-title-publisher'
 import type { RuntimeRendererReloadFence } from './renderer-reload-fence'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { rendererStatusReplica } from './renderer-status-replica'
 
 export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithSessionTitleAuthority {
+  /** Phone frames held for an unseeded renderer's snapshot are owed once it loses authority. */
+  protected releaseUnseededPhoneFrames(): void {
+    for (const worktreeId of rendererStatusReplica(this).unseededWorktrees()) {
+      this.scheduleMobileSessionTabsChanged(worktreeId)
+    }
+  }
+
   protected abstract assertStableReadyGraph(
     ...args: Parameters<TransitionGraphReloadToTerminalStateMethods['assertStableReadyGraph']>
   ): ReturnType<TransitionGraphReloadToTerminalStateMethods['assertStableReadyGraph']>
@@ -217,7 +225,9 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.clearPtyIncarnationHandles()
     // Keep pre-allocated CLI handles for reconnect adoption.
     this.terminalWaiters.rejectAll('terminal_handle_stale')
+    this.releaseUnseededPhoneFrames()
     this.republishSessionTitleAuthorityChanges(titleAuthority, this.republishBrowserSessionTabs())
+    this.releaseAgentSenderHistoryIfUnobserved()
   }
 
   // Renderer browser rows are listed only while their window exists; a version bump lets every client apply the drop.

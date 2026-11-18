@@ -32,7 +32,16 @@ export function requestMobileSessionTerminalCreate(args: {
       : {}),
     ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
     ...(agent ? { agent } : {}),
-    ...(sourceChatFork ? { sourceChatFork } : {}),
+    ...(sourceChatFork
+      ? {
+          sourceChatFork: {
+            sessionId: sourceChatFork.sessionId,
+            ...(sourceChatFork.throughEntryId
+              ? { throughEntryId: sourceChatFork.throughEntryId }
+              : {})
+          }
+        }
+      : {}),
     activate: false,
     select: true,
     navigation: 'caller' as const

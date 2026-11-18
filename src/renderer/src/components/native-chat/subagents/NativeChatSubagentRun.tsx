@@ -3,25 +3,25 @@ import { Bot, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader,
   subagentStateLabel
-} from '../../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
-import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
+import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import {
   subagentEntryDetail,
   subagentEntryRunsOn,
   subagentMessageText,
   subagentRoleLabel
-} from '../../../../../shared/native-chat/transcript/native-chat-subagent-entry-detail'
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-entry-detail'
 import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
 } from '../../../../../shared/native-chat/native-chat-types'
-import { formatNativeChatDuration } from '../../../../../shared/native-chat/transcript/native-chat-turn-status'
+import { formatNativeChatDuration } from '../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
 import {
   sayNativeChatSubagentGroupTranslated as say,

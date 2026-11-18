@@ -18,8 +18,9 @@ import { sendTabChangeToLayoutOwner } from '../../terminals/tabs/presentation/ta
 import { recordTabOrderInLayoutOwner } from './tab-order-layout-owner'
 import { withPreviewEnded } from './tab-preview-flag'
 import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview-tab-promotion'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
+// oxfmt-ignore
+import { replaceRecordEntries, replaceTabBuckets } from '../../record-transitions/keyed-record-transitions'
 
 function oppositeViewMode(mode: 'terminal' | 'chat'): 'terminal' | 'chat' {
   return mode === 'chat' ? 'terminal' : 'chat'

@@ -9,8 +9,8 @@ import type {
 } from './structured-agent-session-at-rest-commands'
 import { atRestCommandContextReady } from './at-rest-command-context'
 import { stat } from 'node:fs/promises'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   type AtRestCommandStamp,
   type AtRestCommandStamped,

@@ -19,7 +19,6 @@ import {
   journalQueueRowContent,
   type JournalQueueRow
 } from '../queued-messages/journal-queue-events'
-import './journal-row-encoding'
 // Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
 // New kinds need reader-first rollout or a version bump because older builds may delete them.
 // Unknown body kinds remain readable; malformed annotations are dropped, malformed content fails load.

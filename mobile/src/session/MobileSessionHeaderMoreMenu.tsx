@@ -1,6 +1,7 @@
 import type { RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
+  ALargeSmall,
   Bot,
   Columns2,
   Folder,
@@ -11,7 +12,7 @@ import {
   SquareChevronRight
 } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
-import type { ActionSheetAction } from '../components/ActionSheetModal'
+import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -40,6 +41,9 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     canSplitTerminals,
     terminalSplitActive,
     setShowTerminalLayout,
+    setTextSizeSheet,
+    showNativeChat,
+    activeSessionTab,
     connState,
     createTabBusy,
     handleOpenNewTab,
@@ -113,8 +117,13 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       onPress: handleOpenQuickCommands
     }
   ]
-  const view: ActionSheetAction[] =
-    canSplitTerminals || terminalSplitActive
+  const textSizeSheet = showNativeChat
+    ? 'chat'
+    : activeSessionTab?.type === 'terminal'
+      ? 'terminal'
+      : null
+  const view: ActionSheetAction[] = [
+    ...(canSplitTerminals || terminalSplitActive
       ? [
           {
             id: 'terminalLayout',
@@ -124,7 +133,19 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setShowTerminalLayout(true)
           }
         ]
-      : []
+      : []),
+    ...(textSizeSheet
+      ? [
+          {
+            id: 'textSize',
+            label: t('session.header.textSize', 'Text size'),
+            icon: ALargeSmall,
+            closeBeforePress: true,
+            onPress: () => setTextSizeSheet(textSizeSheet)
+          }
+        ]
+      : [])
+  ]
   const tabs: ActionSheetAction[] = [
     ...(worktreeFork ? [{ ...worktreeFork, icon: GitBranchPlus }] : []),
     ...(subagentFork ? [{ ...subagentFork, icon: Bot }] : []),

@@ -14,9 +14,9 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { useTranslate } from '@/i18n/use-translate'
-import { slugifyForWorkspaceName } from '../../../../../../shared/workspace-name'
+import { slugifyForWorkspaceName } from '../../../../../../shared/workspace/naming/workspace-name'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatForkRowAction, NativeChatWorktreeForkDialog } from './use-native-chat-fork'
 import {
   nativeChatWorktreeForkPlan,

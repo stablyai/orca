@@ -1,11 +1,12 @@
 import { ipcMain } from 'electron'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/metadata/display-name-provenance'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { notifyWorktreesChanged } from '../../worktree-remote'
-import { parseWorktreeId } from '../../worktree-logic'
+import { notifyWorktreesChanged } from '../worktree-remote'
+import { parseWorktreeId } from '../paths/worktree-logic'
 import {
   writeWorktreeSortOrder,
   type WorktreeSortOrderRequest
@@ -15,7 +16,7 @@ import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import { isRemovedFolderWorkspaceInstance } from '../../../workspaces/catalog/folder-workspace-meta-presence'
 import { resolveWorktreeMetaOwner } from '../../../persistence/host-qualified-worktree-meta'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
   isWslMoveSourceHost,
@@ -33,7 +34,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       args: {
         worktreeId: string
         executionHostId?: string
-        updates: Partial<WorktreeMeta>
+        updates: Partial<WorktreeMeta> & DiffCommentBaseMutation
       }
     ) => {
       const executionHostId =

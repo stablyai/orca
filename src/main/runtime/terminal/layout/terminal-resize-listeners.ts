@@ -4,7 +4,7 @@ import { observeStructuredWorker } from '../../orchestration/terminal-authority/
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
-import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 import {
   type TerminalExitCause,
@@ -18,7 +18,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
 import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
@@ -26,7 +26,10 @@ import {
   reportWorkerTurnStop,
   type WorkerTurnStop
 } from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {

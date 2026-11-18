@@ -124,6 +124,26 @@ describe('orchestration RPC methods', () => {
       ).rejects.toMatchObject({ code: 'invalid_argument' })
     })
 
+    it('hints the dispatch: prefix only for a bare id of an existing Dispatch', async () => {
+      setup()
+      const task = db.createTask({ spec: 'bare dispatch id' })
+      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const send = (to: string) =>
+        call('orchestration.send', { from: 'term_coord', to, subject: 'hi' })
+      const hint = 'Did you mean --to dispatch:'
+
+      await expect(send(dispatch.id)).rejects.toMatchObject({
+        code: 'terminal_not_found',
+        message: expect.stringContaining(`${hint}${dispatch.id}?`)
+      })
+      for (const to of ['term_invented', 'ctx_000000000000']) {
+        await expect(send(to)).rejects.toMatchObject({
+          code: 'terminal_not_found',
+          message: expect.not.stringContaining(hint)
+        })
+      }
+    })
+
     it('stores the runtime-observed sender pane key on the message row', async () => {
       setup()
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_runtime:leaf_runtime')

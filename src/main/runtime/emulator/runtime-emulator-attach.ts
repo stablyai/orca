@@ -1,6 +1,6 @@
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { EmulatorError } from '../../emulator/emulator-errors'
-import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
 import { resolveDefaultAttachDevice } from '../../emulator/emulator-default-attach-device'
 import {
   rememberEmulatorDevice,
@@ -11,7 +11,7 @@ import type { EmulatorSessionInfo } from '../../emulator/emulator-types'
 import {
   getEmulatorOpeningMode,
   type EmulatorSelectionRequired
-} from '../../../shared/emulator-opening-preferences'
+} from '../../../shared/emulator/emulator-opening-preferences'
 
 export type RuntimeEmulatorAttachParams = {
   device?: string

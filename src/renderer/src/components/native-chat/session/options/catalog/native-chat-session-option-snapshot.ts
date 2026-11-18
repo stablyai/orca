@@ -9,9 +9,9 @@ import type {
 import {
   buildNativeChatSessionOptionSnapshot as buildSharedSnapshot,
   type NativeChatSessionOptionMode
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-snapshot'
 
-import type { NativeChatSessionOptionRecord } from '../../../../../../../shared/native-chat/input/native-chat-session-option-state'
+import type { NativeChatSessionOptionRecord } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-state'
 import { translate } from '@/i18n/i18n'
 
 export function buildNativeChatSessionOptionSnapshot(args: {

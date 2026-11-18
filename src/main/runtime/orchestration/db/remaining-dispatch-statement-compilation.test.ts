@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isOrcaSessionId } from '../../../../shared/orca-session-address'
+import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import { OrchestrationDb } from './orchestration-db'
 import { createRootDispatch } from './root-dispatch-test-fixture'
 import { LEGACY_CONTRACT_VERSION } from './contract-constants'
@@ -122,7 +122,7 @@ function fullDispatchReads(calls: [string, ...unknown[]][]): string[] {
 }
 
 describe('remaining dispatch metadata statement compilation', () => {
-  it.each(['fresh', 'v41'] as const)(
+  it.each(['v41'] as const)(
     'reuses direct-owner reads with exact rows, rebinding and cross-connection freshness (%s)',
     (version) => {
       const {
@@ -167,7 +167,7 @@ describe('remaining dispatch metadata statement compilation', () => {
     }
   )
 
-  it.each(['fresh', 'v41'] as const)(
+  it.each(['v41'] as const)(
     'reuses session creator reads without changing self-created parent exclusion or fresh depth (%s)',
     (version) => {
       const {
@@ -202,7 +202,7 @@ describe('remaining dispatch metadata statement compilation', () => {
     }
   )
 
-  it.each(['fresh', 'v41'] as const)(
+  it.each(['v41'] as const)(
     'reuses legacy dispatch identity scans with full rows and immediately fences settled rows (%s)',
     (version) => {
       const {

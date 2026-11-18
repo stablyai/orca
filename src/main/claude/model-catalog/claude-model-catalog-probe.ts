@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { agentModelCatalogInputStamp } from '../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import { withOrcaClaudeChatEntrypoint } from '../../../shared/agent-launch/startup/claude-chat-entrypoint'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
@@ -9,9 +9,9 @@ import {
 import {
   buildClaudeModelListArgs,
   CLAUDE_MODEL_LIST_STDIN
-} from '../../../shared/claude-model-list-probe'
+} from '../../../shared/agent-session/options/model-catalog/claude-model-list-probe'
 import { requireLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { runClaudeBackgroundAttempts } from '../../../shared/claude-background-run-isolation'
+import { runClaudeBackgroundAttempts } from '../../../shared/text-generation/launch/claude-background-run-isolation'
 import { listedModels, record } from '../structured/launch/claude-structured-model-catalog'
 import { readClaudeCatalogObservation } from './claude-model-catalog-observation'
 import { readClaudeControlResponses } from '../sdk-transport/claude-control-responses'
@@ -21,7 +21,7 @@ import { claudeConfigDirEnvPatch } from '../structured/launch/claude-config-dir-
 import {
   envWithPathRelativeTo,
   catalogListingDirectory
-} from '../../../shared/node-cli-command-resolution'
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   resolveClaudeStructuredInvocation,

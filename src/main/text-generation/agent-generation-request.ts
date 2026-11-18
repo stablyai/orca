@@ -1,6 +1,10 @@
+import {
+  generationArgumentText,
+  type GenerationArgument
+} from '../../shared/source-control/ai/generation/generation-argument'
 import { conversationNameTaskPrompt } from '../../shared/source-control/ai/generation/conversation-name-generation'
-import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
-import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
+import { textGenerationFailureCodeFields } from '../../shared/text-generation/text-generation-failure-copy'
+import { runClaudeGenerationAttempts } from '../../shared/text-generation/launch/claude-background-run-isolation'
 import { stripPrefilledReasoningPreamble } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
 import { isCustomAgentId } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -9,7 +13,7 @@ import {
   type CommitMessagePlan
 } from '../../shared/source-control/ai/generation/commit-message-plan'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
-import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
+import { openCodeVariantRetryPlan } from '../../shared/text-generation/launch/opencode-generation-command'
 import { copilotUnavailableModelRetryPlan } from './failures/copilot-unavailable-model-retry'
 import { runLocalPlanForAgent } from './execution/source-control-local-generation'
 import { runOpenCodeTextTask } from '../opencode/text-tasks/opencode-text-task'
@@ -52,17 +56,25 @@ export async function runGenerationRequest(input: {
   if (!planned.ok) {
     return { success: false, error: planned.error, ...textGenerationFailureCodeFields(planned) }
   }
-  const plan = planned.plan
-  const execute = (plan: CommitMessagePlan): Promise<InternalTextGenerationResult> =>
+  const localPlan = (result: Extract<typeof planned, { ok: true }>) =>
+    input.target.kind === 'local' ? { ...result.plan, args: result.localArgs } : result.plan
+  const plainPlan = (plan: CommitMessagePlan<GenerationArgument>): CommitMessagePlan => ({
+    ...plan,
+    args: plan.args.map(generationArgumentText)
+  })
+  const plan = localPlan(planned)
+  const execute = (
+    plan: CommitMessagePlan<GenerationArgument>
+  ): Promise<InternalTextGenerationResult> =>
     input.target.kind === 'remote'
       ? runRemoteSourceControlPlan({
-          plan,
+          plan: plainPlan(plan),
           target: input.target,
           operation: input.operation
         })
       : plan.openCodeTask
         ? runOpenCodeTextTask({
-            plan,
+            plan: plainPlan(plan),
             target: input.target,
             operation: input.operation,
             spawnAgent: input.spawnAgent,
@@ -93,7 +105,7 @@ export async function runGenerationRequest(input: {
       }
       const retry = planCommitMessageGeneration(params, prompt, attempt)
       return retry.ok
-        ? execute(retry.plan)
+        ? execute(localPlan(retry))
         : Promise.resolve({
             success: false,
             error: retry.error,

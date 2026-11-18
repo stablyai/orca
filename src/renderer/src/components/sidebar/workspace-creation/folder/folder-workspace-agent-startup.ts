@@ -12,7 +12,7 @@ import {
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'

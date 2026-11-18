@@ -23,7 +23,7 @@ import type {
 import { clampLinearSearchLimit } from '../../shared/linear/agent-access'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -67,11 +67,13 @@ import { LINEAR_COMMENT_WRITE_HANDLERS } from './linear-comment-write'
 import { runLinearListIssues } from './linear-list-issues'
 import { linearRelationWriteHandler } from './linear-relation-write'
 import { runLinearSaveIssue } from './linear-save-issue'
+import { runLinearConnect } from './linear-connect'
 
 const ISSUE_CONTEXT_TIMEOUT_MS = 120_000
 const LINEAR_WRITE_TIMEOUT_MS = 75_000
 
 export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
+  'linear connect': runLinearConnect,
   'linear save-issue': runLinearSaveIssue,
   'linear list-issues': runLinearListIssues,
   'linear relation add': linearRelationWriteHandler('add'),
@@ -130,10 +132,9 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
     printResult(response, json, formatLinearTeamLabels)
   },
   'linear project list': async ({ flags, client, json }) => {
-    const limit = clampLinearSearchLimit(getOptionalPositiveIntegerFlag(flags, 'limit'))
     const request: LinearProjectListRequest = {
       query: getOptionalStringFlag(flags, 'query'),
-      limit,
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     }
     const response = await client.call<LinearProjectListResult>('linear.agentProjectList', request)

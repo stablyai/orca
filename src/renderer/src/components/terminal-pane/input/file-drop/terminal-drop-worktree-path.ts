@@ -4,10 +4,10 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { DROP_STAGING_RELATIVE_DIR } from '../../../../../../shared/drop-staging-ignore'
+} from '../../../../../../shared/execution-host/execution-host'
+import { DROP_STAGING_RELATIVE_DIR } from '../../../../../../shared/file-import/drop-staging-ignore'
 import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
-import { isTerminalDropWindowsPathLike } from '../../../../../../shared/image-path-paste'
+import { isTerminalDropWindowsPathLike } from '../../../../../../shared/terminal/input/image-path-paste'
 
 export function resolveTerminalDropWorktreePath(
   worktreeId: string,

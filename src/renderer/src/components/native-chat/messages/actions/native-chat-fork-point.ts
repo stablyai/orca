@@ -1,14 +1,14 @@
 import {
   agentSessionContextFloorSequence,
   latestAgentSessionContextClearSequence
-} from '../../../../../../shared/agent-session/agent-session-context-clear'
+} from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   nativeChatForkInventory,
   nativeChatLatestForkItemId,
   type NativeChatForkSupport
-} from '../../../../../../shared/native-chat/native-chat-fork-offer'
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-fork-offer'
 
 /** The newest response still in context that a fork copies through; with `beforeItemId`, the newest
  *  one before that item, as when forking from one of your own messages. */

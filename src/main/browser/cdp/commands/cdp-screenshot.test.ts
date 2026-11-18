@@ -34,7 +34,10 @@ describe('an SSH host’s capture', () => {
 
   it('refuses a capture whose frame was drawn after the page moved to a desktop file', async () => {
     const webContents = createMockWebContents()
-    webContents.debugger.sendCommand.mockImplementation(async () => {
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method !== 'Page.captureScreenshot') {
+        return {}
+      }
       url = 'file:///Users/me/private.txt'
       return { data: 'private-pixels' }
     })
@@ -47,12 +50,15 @@ describe('an SSH host’s capture', () => {
   it('stops at the next probe once the page moved to a desktop file, never falling back', async () => {
     // Fake timers do not carry the host command context into probes.
     const webContents = createMockWebContents()
-    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    webContents.debugger.sendCommand.mockImplementation((method: string) =>
+      method === 'Page.captureScreenshot' ? new Promise(() => {}) : Promise.resolve({})
+    )
     const capture = asHost(() => captureScreenshot(webContents.guest, { format: 'png' }, noHold))
+    await vi.waitFor(() => expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(3))
     url = 'file:///Users/me/private.txt'
 
     await expect(capture).rejects.toThrow(REFUSED)
-    expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(1)
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(3)
     expect(webContents.capturePage).not.toHaveBeenCalled()
   })
 })

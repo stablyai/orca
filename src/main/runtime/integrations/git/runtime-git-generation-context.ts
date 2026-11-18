@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import type { getPullRequestDraftContext } from '../../../text-generation/pull-request-context/pull-request-context'
 import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'

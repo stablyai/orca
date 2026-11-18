@@ -1,7 +1,8 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
@@ -12,7 +13,7 @@ import {
 } from './claude-session-account-move'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { ClaudeManagedAccount } from '../../../../../../shared/managed-account-types'
+import type { ClaudeManagedAccount } from '../../../../../../shared/agent-accounts/managed-account-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
 import type * as localPreflightContext from '@/runtime/hosts/preflight/local-preflight-context'
 import type * as paneSelectionLane from '../codex-pane-selection-lane'
@@ -66,13 +67,14 @@ type SeededPane = {
   sessionId?: string | null
   /** Folder Claude writes this session's transcript under; null leaves it unreported. */
   configDir?: string | null
+  launchAgent?: TerminalTab['launchAgent']
 }
 
 const tabId = (n: number): string => `tab-${n}`
 const leafId = (n: number): string => `0195f2ce-1111-4000-8000-00000000000${n}`
 const ptyId = (n: number): string => `pty-${n}`
 
-function makeTab(n: number): TerminalTab {
+function makeTab({ n, launchAgent }: SeededPane): TerminalTab {
   return {
     id: tabId(n),
     ptyId: ptyId(n),
@@ -81,7 +83,8 @@ function makeTab(n: number): TerminalTab {
     customTitle: null,
     color: null,
     sortOrder: n,
-    createdAt: n
+    createdAt: n,
+    ...(launchAgent ? { launchAgent } : {})
   }
 }
 
@@ -118,7 +121,7 @@ function seedPanes(panes: SeededPane[]): void {
       ...getDefaultSettings('/home/dev'),
       claudeManagedAccounts: [account('acct-a', FOLDER_A), account('acct-b', FOLDER_B)]
     },
-    tabsByWorktree: { wt1: panes.map((pane) => makeTab(pane.n)) },
+    tabsByWorktree: { wt1: panes.map(makeTab) },
     ptyIdsByTabId: Object.fromEntries(panes.map((pane) => [tabId(pane.n), [ptyId(pane.n)]])),
     terminalLayoutsByTabId: Object.fromEntries(
       panes.map((pane) => [
@@ -131,7 +134,7 @@ function seedPanes(panes: SeededPane[]): void {
         }
       ])
     ),
-    agentStatusByPaneKey: statuses,
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(statuses)),
     paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
@@ -186,8 +189,10 @@ describe('findMovableClaudeSessions', () => {
     const found = await scan()
 
     expect(found.onAccount).toEqual([])
+    // Pane 2's record names no transcript, so its account is unknown: listed, not skipped.
     expect(found.cantMove).toEqual([
-      expect.objectContaining({ ptyId: ptyId(1), reason: 'shared-session' })
+      expect.objectContaining({ ptyId: ptyId(1), reason: 'shared-session' }),
+      expect.objectContaining({ ptyId: ptyId(2), reason: 'unknown-account' })
     ])
   })
 
@@ -205,6 +210,119 @@ describe('findMovableClaudeSessions', () => {
     vi.mocked(confirmRuntimeTerminalForegroundProcess).mockImplementation(async (id) => program(id))
 
     expect(await movable()).toEqual([])
+  })
+
+  it('finds an Agent Teams pane, whose packaged `orca claude-teams` wrapper leads the foreground', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', launchAgent: 'claude-agent-teams' },
+      { n: 2, agentType: 'claude', launchAgent: 'claude-agent-teams' }
+    ])
+    useAppStore.setState({
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey(tabId(1), leafId(1))]: {
+          agent: 'claude-agent-teams',
+          agentEvidence: 'process-read',
+          shellForeground: false
+        },
+        [makePaneKey(tabId(2), leafId(2))]: {
+          agent: 'claude-agent-teams',
+          agentEvidence: 'launch-record',
+          shellForeground: false
+        }
+      }
+    })
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'Orca',
+      hasChildProcesses: true
+    })
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('Orca')
+
+    // Pane 2 is a Claude pane now running another `orca` command, such as `orca status`.
+    expect(await movable()).toEqual([ptyId(1)])
+  })
+
+  it('reports a running Claude with no status row instead of skipping it', async () => {
+    seedPanes([{ n: 1, launchAgent: 'claude' }, { n: 2 }, { n: 3 }])
+    useAppStore.setState({
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey(tabId(2), leafId(2))]: { agent: 'claude', shellForeground: false }
+      }
+    })
+    const onStranded = vi.fn()
+
+    const found = await findClaudeSwitchSessions({
+      owner: LOCAL,
+      target: HOST,
+      fromAccountId: 'acct-a',
+      toAccountId: 'acct-b',
+      onStranded
+    })
+
+    expect(found.onAccount).toEqual([])
+    expect(found.cantMove.map(({ ptyId, reason }) => [ptyId, reason])).toEqual([
+      [ptyId(1), 'no-session'],
+      [ptyId(2), 'no-session']
+    ])
+    expect(onStranded).toHaveBeenCalledWith([
+      expect.objectContaining({ ptyId: ptyId(1) }),
+      expect.objectContaining({ ptyId: ptyId(2) })
+    ])
+  })
+
+  it('reports a WSL Claude with a live row but no session to resume', async () => {
+    seedPanes([{ n: 1, agentType: 'claude', sessionId: null }])
+    laneByPtyId[ptyId(1)] = 'wsl:Ubuntu'
+    const found = await scan('acct-a', { runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(found.cantMove).toEqual([
+      {
+        ptyId: 'pty-1',
+        worktreeId: 'wt1',
+        tabId: 'tab-1',
+        leafId: '0195f2ce-1111-4000-8000-000000000001',
+        reason: 'no-session'
+      }
+    ])
+  })
+
+  it('does not restart a WSL pane from an old saved conversation alone', async () => {
+    seedPanes([{ n: 1 }])
+    const paneKey = makePaneKey(tabId(1), leafId(1))
+    laneByPtyId[ptyId(1)] = 'wsl:Ubuntu'
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          worktreeId: 'wt1',
+          agent: 'claude',
+          providerSession: {
+            key: 'session_id',
+            id: SESSION_ID,
+            transcriptPath: `${FOLDER_A}/projects/-repo/${SESSION_ID}.jsonl`
+          },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+    const onUnchecked = vi.fn()
+    const found = await findClaudeSwitchSessions({
+      owner: LOCAL,
+      target: { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      fromAccountId: 'acct-a',
+      toAccountId: 'acct-b',
+      onUnchecked
+    })
+    expect(found).toEqual({ onAccount: [], elsewhere: [], cantMove: [] })
+    expect(onUnchecked).toHaveBeenCalledWith([
+      {
+        ptyId: 'pty-1',
+        worktreeId: 'wt1',
+        tabId: 'tab-1',
+        leafId: '0195f2ce-1111-4000-8000-000000000001'
+      }
+    ])
   })
 
   // WSL stores UNC and guest config paths, hooks report guest transcripts, and Windows sees only wsl.exe in the pane tree.

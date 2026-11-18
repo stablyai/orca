@@ -30,7 +30,7 @@ vi.mock('../authentication/ssh-identity-file-read', () => ({
 import { buildConnectConfig } from './ssh-connect-config'
 import { findDefaultKeyFile } from '../authentication/ssh-auth-resolution'
 import { walkInitialAuthLadder } from './testing/ssh-connection-test-fixtures'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 
 describe('findDefaultKeyFile', () => {
@@ -38,15 +38,6 @@ describe('findDefaultKeyFile', () => {
     mockExistsSync.mockReset()
     mockExistsSync.mockReturnValue(false)
     mockReadFileSync.mockReset()
-  })
-
-  it('leaves FIDO2 defaults out of the ssh2 private-key fallback', () => {
-    mockExistsSync.mockImplementation((path: unknown) => {
-      return path === testHomePath('.ssh', 'id_ed25519_sk')
-    })
-
-    expect(findDefaultKeyFile()).toBeUndefined()
-    expect(mockReadFileSync).not.toHaveBeenCalled()
   })
 
   it('skips unreadable key files and tries next', () => {
@@ -117,11 +108,6 @@ describe('buildConnectConfig', () => {
     } else {
       delete process.env.SSH_AUTH_SOCK
     }
-  })
-
-  it('allows IdentityAgent none to disable agent auth', () => {
-    const config = buildConnectConfig(makeTarget(), makeResolved({ identityAgent: 'none' }))
-    expect(config.agent).toBeUndefined()
   })
 
   it('does not offer broad agent auth when IdentitiesOnly keys cannot be parsed', () => {

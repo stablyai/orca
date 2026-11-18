@@ -4,7 +4,7 @@ import {
   pluginManifestSchema,
   type PluginManifest
 } from '../../../shared/plugins/manifest/plugin-manifest'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { installCatalogReleaseWithApproval } from './plugin-update-approval'
 
 const KEY = 'samples.demo'

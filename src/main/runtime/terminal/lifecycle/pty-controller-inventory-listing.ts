@@ -4,12 +4,12 @@ import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import {
   type ExecutionHostId,
   getConnectionExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
   PTY_CONTROLLER_LIST_TIMEOUT_MS
 } from './pty-controller-inventory-budget'
-import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 function pruneOldestMapEntry<K, V>(map: Map<K, V>, maxEntries: number): void {
   if (map.size <= maxEntries) {

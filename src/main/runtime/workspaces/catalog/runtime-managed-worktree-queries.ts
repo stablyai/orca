@@ -3,7 +3,7 @@ import type { RuntimeManagedWorktreeQueryDependencies } from './runtime-managed-
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { buildRuntimeWorktreeVisibilityMatchers } from './runtime-worktree-visibility'
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import {
   runtimeHiddenHostIds,
@@ -14,26 +14,26 @@ import {
   getLocalWorktreeCatalogVersion,
   localWorktreeCatalogVersionAt
 } from '../../../workspaces/catalog/local-worktree-scan-generation'
-import type { Repo } from '../../../../shared/repo-types'
-import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-worktree-contracts'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { RuntimeWorktreeListResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   applyMetadataFallbackVisibility,
   buildKnownOrcaWorkspaceLayouts,
   toDetectedWorktree
 } from '../../../../shared/worktree/visibility/ownership'
-import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/external-worktree-visibility'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/worktree/visibility/external-worktree-visibility'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from '../../../../shared/worktree/visibility/visibility-sources'
-import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import {
   canPruneAuthoritativeLocalMetadata,

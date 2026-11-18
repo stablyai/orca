@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
-import { codexPrimaryCommandTaskId } from '../../../../shared/structured-session-foreground-commands'
+import { codexPrimaryCommandTaskId } from '../../../../shared/agent-session/view/structured-session-foreground-commands'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { terminateCodexBackgroundTerminals } from './codex-background-terminals'
 import {

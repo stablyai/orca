@@ -1,12 +1,12 @@
 import type React from 'react'
 import { Loader2, Store, Zap } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { PluginThemeRegistration } from '../../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import {
   editorThemeSlotUpdate,
   MATCH_TERMINAL_APP_THEME,
   pluginAppThemeSlotUpdate
-} from '../../../../../../shared/plugin-theme-settings'
+} from '../../../../../../shared/plugins/appearance/plugin-theme-settings'
 import { Button } from '../../../ui/button'
 import {
   SettingsSearchableSelect,

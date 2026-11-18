@@ -1,60 +1,24 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { describe, expect, it } from 'vitest'
+import '../../../../shared/workspace-layout/layout-owner-switch'
+import '../../../../shared/workspace-layout/stable-pane-id'
 
+import '../../../agent-launch/agent-launch-pane-attachment'
 import {
-  resetAgentLaunchPanesForTests,
-  trackRunningAgentLaunchPane
-} from '../../../agent-launch/agent-launch-pane-attachment'
-import {
-  CANARY_INCARNATION_ID,
-  CANARY_LEAF_ID,
-  CANARY_PTY_ID,
-  CANARY_TAB_ID,
-  INCARNATION_ID,
   LEAF_ID,
   PTY_ID,
+  REPO_ID,
   SIBLING_INCARNATION_ID,
-  SIBLING_LEAF_ID,
   TAB_ID,
-  WORKTREE_ID
+  WORKTREE_ID,
+  WORKTREE_PATH
 } from '../../__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
 import {
   createHarness,
   createStaleTabCloseHarness
 } from '../../__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
-import { expectDesktopDropsPane } from '../../__fixtures__/main-layout-close-fixture'
-import type { CloseContinuityHarness } from '../../__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
+import '../../__fixtures__/main-layout-close-fixture'
 
 /** Last-pane close retires the tab: legacy renderer acknowledges, main-owned layout persists before stopping. */
-async function closeLastPane(
-  harness: CloseContinuityHarness,
-  handle: string
-): Promise<Awaited<ReturnType<CloseContinuityHarness['runtime']['closeTerminal']>>> {
-  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const closing = harness.runtime.closeTerminal(handle)
-    await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalled())
-    expect(harness.stopAndWait).not.toHaveBeenCalled()
-    expect(harness.kill).not.toHaveBeenCalled()
-    harness.retirePersistedTab()
-    harness.acknowledged.resolve()
-    return closing
-  }
-  let tabsAtStop: unknown = 'not stopped'
-  harness.setStopAndWaitAction(() => {
-    tabsAtStop = harness.getSession().tabsByWorktree[WORKTREE_ID]
-  })
-  const close = await harness.runtime.closeTerminal(handle)
-  expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-  expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
-  if (harness.stopAndWait.mock.calls.length > 0) {
-    expect(tabsAtStop).toEqual([])
-    expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
-      harness.stopAndWait.mock.invocationCallOrder[0]!
-    )
-  }
-  return close
-}
 
 describe('terminal close and handle incarnation continuity', () => {
   it('does not let a colliding PTY id close a different persisted incarnation', async () => {
@@ -71,129 +35,8 @@ describe('terminal close and handle incarnation continuity', () => {
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
   })
 
-  it('does not acknowledge final-pane close before durable tab retirement', async () => {
-    const harness = createHarness()
-    const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      await expect(closeLastPane(harness, handle)).resolves.toMatchObject({
-        handle,
-        tabId: TAB_ID,
-        ptyKilled: false
-      })
-      expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
-        harness.kill.mock.invocationCallOrder[0]!
-      )
-    } else {
-      let settled = false
-      const closing = harness.runtime.closeTerminal(handle).finally(() => {
-        settled = true
-      })
-
-      await vi.waitFor(() =>
-        expect(harness.closeTerminalTab).toHaveBeenCalledWith(TAB_ID, {
-          localPtyTeardownOwnedExternally: true
-        })
-      )
-      expect(settled).toBe(false)
-      expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
-
-      harness.retirePersistedTab()
-      harness.acknowledged.resolve()
-      await expect(closing).resolves.toMatchObject({ handle, tabId: TAB_ID, ptyKilled: false })
-    }
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
-    expect(harness.closeTerminal).not.toHaveBeenCalled()
-    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
-  })
-
-  it('fences final-pane exit ordering until exact retirement commits', async () => {
-    const harness = createHarness({
-      includeCanary: true,
-      publishMobileSurface: true,
-      registerPtyBacked: true
-    })
-    harness.syncFixtureTabWithoutLeaf()
-    const closeMobileSessionTab = vi.spyOn(harness.runtime, 'closeMobileSessionTab')
-    const order: string[] = []
-    harness.setCloseTerminalTabAction(() => {
-      order.push('session-retirement')
-      harness.retirePersistedTab()
-      harness.syncCanaryGraph()
-      order.push('committed-graph-removal')
-    })
-    harness.setVerifiedStopResult(true)
-    harness.setStopAndWaitAction((stoppingPtyId) => {
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        if (!harness.getSession().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)) {
-          order.push('session-retirement')
-        }
-        if (harness.runtime['paneOfPty']({ ptyId: stoppingPtyId }).tabId === null) {
-          order.push('committed-graph-removal')
-        }
-      }
-      order.push('pty-stop')
-      harness.removeVictimFromInventory()
-      harness.syncCanaryGraph()
-      order.push('idempotent-graph-removal')
-      harness.runtime.onPtyExit(stoppingPtyId, 0, INCARNATION_ID)
-      order.push('idempotent-session-retirement')
-    })
-    const terminals = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
-    const victim = terminals.find((terminal) => terminal.ptyId === PTY_ID)!
-    const canary = terminals.find((terminal) => terminal.ptyId === CANARY_PTY_ID)!
-
-    await expect(harness.runtime.closeTerminal(victim.handle)).resolves.toMatchObject({
-      handle: victim.handle,
-      tabId: TAB_ID,
-      ptyKilled: true
-    })
-
-    expect(order).toEqual([
-      'session-retirement',
-      'committed-graph-removal',
-      'pty-stop',
-      'idempotent-graph-removal',
-      'idempotent-session-retirement'
-    ])
-    expect(harness.stopAndWait).toHaveBeenCalledTimes(1)
-    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
-    })
-    expect(harness.kill).not.toHaveBeenCalled()
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      expect(closeMobileSessionTab).not.toHaveBeenCalled()
-      expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-    } else {
-      expect(closeMobileSessionTab).toHaveBeenCalledTimes(1)
-      expect(closeMobileSessionTab).toHaveBeenCalledWith(`id:${WORKTREE_ID}`, TAB_ID, {
-        localPtyTeardownOwnedExternally: true
-      })
-      expect(harness.closeTerminalTab).toHaveBeenCalledTimes(1)
-    }
-    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([
-      expect.objectContaining({ id: CANARY_TAB_ID, ptyId: CANARY_PTY_ID })
-    ])
-    expect(harness.getSession().terminalLayoutsByTabId).toEqual({
-      [CANARY_TAB_ID]: expect.objectContaining({
-        ptyIdsByLeafId: { [CANARY_LEAF_ID]: CANARY_PTY_ID }
-      })
-    })
-    expect(harness.getSession().terminalPtyIncarnationsByPaneKey).toEqual({
-      [makePaneKey(CANARY_TAB_ID, CANARY_LEAF_ID)]: CANARY_INCARNATION_ID
-    })
-    const survivors = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
-    expect(survivors).toHaveLength(1)
-    const [survivor] = survivors
-    expect(survivor).toMatchObject({ ptyId: CANARY_PTY_ID })
-    await expect(harness.runtime.readTerminal(survivor.handle)).resolves.toMatchObject({
-      handle: survivor.handle,
-      status: 'running'
-    })
-    expect(canary.ptyId).toBe(survivor.ptyId)
-  })
-
   it('keeps a handle through an intermediate empty reload graph', async () => {
-    const harness = createHarness()
+    const harness = await createHarness()
     const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u280b Working on task\x07output\n', 100)
     const waiting = harness.runtime.waitForTerminal(before.handle, {
@@ -202,8 +45,8 @@ describe('terminal close and handle incarnation continuity', () => {
     })
 
     harness.runtime.markRendererReloading(1)
-    harness.syncEmptyGraph()
-    harness.syncFixtureGraph()
+    await harness.syncEmptyGraph()
+    await harness.syncFixtureGraph()
     harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u2733 Task complete\x07done\n', 200)
 
     const [after] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
@@ -220,13 +63,13 @@ describe('terminal close and handle incarnation continuity', () => {
   })
 
   it('stales the old handle when the same PTY id names a new incarnation', async () => {
-    const harness = createHarness()
+    const harness = await createHarness()
     const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
 
     harness.runtime.markRendererReloading(1)
     harness.replaceIncarnation('33333333-3333-4333-8333-333333333333')
     harness.replacePersistedIncarnation('33333333-3333-4333-8333-333333333333')
-    harness.syncFixtureGraph()
+    await harness.syncFixtureGraph()
 
     const [after] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     expect(after.handle).not.toBe(before.handle)
@@ -237,36 +80,53 @@ describe('terminal close and handle incarnation continuity', () => {
   })
 })
 
-function launchIn(leafId: string) {
-  return trackRunningAgentLaunchPane({
-    worktreeId: WORKTREE_ID,
-    paneKey: makePaneKey(TAB_ID, leafId)
-  })
-}
+describe('explicit terminal close when the window does not confirm the tab close', () => {
+  it('still stops the PTY when the window times out, so it is not left running orphaned', async () => {
+    const harness = await createHarness()
+    harness.rejectTerminalTabClose(new Error('terminal_tab_close_timeout'))
+    const [terminal] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
 
-describe("a pane close main starts (a phone's, the CLI's)", () => {
-  afterEach(() => {
-    resetAgentLaunchPanesForTests()
-  })
-
-  it('stops a launch still running in that pane, and only that one', async () => {
-    const harness = createHarness({ publishMobileSurface: true })
-    harness.syncSplitFixtureGraph()
-    const closed = launchIn(LEAF_ID)
-    const sibling = launchIn(SIBLING_LEAF_ID)
-    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
-      (candidate) => candidate.ptyId === PTY_ID
+    await expect(harness.runtime.closeTerminal(terminal.handle)).rejects.toThrow(
+      'terminal_tab_close_timeout'
     )
-    if (!terminal) {
-      throw new Error('fixture pane has no terminal handle')
-    }
+
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, expect.anything())
+  })
+
+  it('does not fall back to killing a successor that took the PTY id during the stop', async () => {
+    const harness = await createHarness({ registerPtyBacked: true })
+    harness.setCloseTerminalTabAction(() => {})
+    harness.setStopAndWaitAction(() => {
+      harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+        tabId: TAB_ID,
+        leafId: LEAF_ID,
+        incarnationId: SIBLING_INCARNATION_ID
+      })
+    })
+    const [terminal] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
 
     await harness.runtime.closeTerminal(terminal.handle)
 
-    expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
-    expect(closed.closedByUser()).toBe(true)
-    expect(sibling.closedByUser()).toBe(false)
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, expect.anything())
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+
+  it('still stops the workspace terminals when closing them all times out on the window', async () => {
+    const harness = await createHarness()
+    harness.rejectTerminalTabClose(new Error('terminal_tab_close_timeout'))
+    // The harness has no git worktree catalog; close-all only needs the workspace identity.
+    const worktree = { id: WORKTREE_ID, path: WORKTREE_PATH, repoId: REPO_ID }
+    Object.defineProperty(harness.runtime, 'resolveWorkspaceSelector', {
+      value: async () => worktree
+    })
+
+    await expect(harness.runtime.closeTerminalsForWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
+      'terminal_tab_close_timeout'
+    )
+
+    const stoppedPtyIds = [...harness.stopAndWait.mock.calls, ...harness.kill.mock.calls].map(
+      ([ptyId]) => ptyId
+    )
+    expect(stoppedPtyIds).toContain(PTY_ID)
   })
 })
-
-/** CLI/headless path: PTY-backed tab without a paired-viewer surface. */

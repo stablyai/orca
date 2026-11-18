@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { getMacUpdateRunningInstances } from './macos-update-running-instances'
 import { setMacInstallPreflightInProgress } from './updater-mac-install'
-import { macCoordinationRoot } from '../../../shared/serve-bundle-coordination'
+import { macCoordinationRoot } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import {
   recoverMacBrowserSidecars,
@@ -36,15 +36,18 @@ export abstract class UpdaterMacInstallPreflight extends UpdaterPackageRecovery 
       recordUpdaterLifecycle('macos_running_instances_check_failed')
       return false
     }
-    // Registered serve supervisors can park their servers; other blockers remain refused.
+    // The desktop parks even with no blockers so its commit also holds helpers started later.
+    // A supervised serve is itself its supervisor's child, which a blocker-free park would stop.
     const park =
-      blockers.length > 0
+      blockers.length > 0 || this.updateInstallMode === 'interactive'
         ? await parkServeSupervisorsForInstall(process.execPath, blockers, {
             macUserDataRoot: macCoordinationRoot(homedir()),
             listBlockers: () => getMacUpdateRunningInstances()
           })
         : null
-    if (park && park.kind === 'refused') {
+    // Registered serve supervisors can park their servers; other blockers remain refused.
+    // Only a bundle that cannot be resolved refuses with no pids, and then nothing can block it.
+    if (park?.kind === 'refused' && park.pids.length > 0) {
       const instances = await describeMacUpdateBlockers(process.execPath, park.pids)
       this.resetQuitForUpdateState()
       this.sendToMainWindow('updater:quitAndInstallAborted')

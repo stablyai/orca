@@ -1,7 +1,7 @@
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../agent-launch/catalog/tui-agent-config'
 import { isAgentSessionHandleProvider } from '../../../agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from '../../../native-chat/input/native-chat-session-option-defaults'
+import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from '../../../native-chat/input/session-options/native-chat-session-option-defaults'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog

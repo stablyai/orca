@@ -21,7 +21,7 @@ import { OverlayActivityOwner } from '@/components/ui/use-overlay-focus-scope'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/row-display/git-identity-display'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { SourceControlPanel } from '../source-control/panel/panel'
 import {
   SourceControlScopeProvider,
@@ -30,7 +30,7 @@ import {
 import { SourceControlHeaderOverflowMenu } from '../source-control/panel/header-overflow-menu'
 import { SourceControlHeaderActionsSlot } from '../source-control/panel/header-actions-slot'
 import { useWorktreeGitStatusObservation } from '../source-control/sync/use-worktree-git-status-observation'
-import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
+import { useSourceControlWatchConsumer } from '@/components/editor/external-changes/watching/source-control-watch-consumers'
 import { useSectionOnScreen } from '../source-control/panel/section-viewport-presence'
 import { sourceControlFileWatchRuntimeEnvironmentId } from '../source-control/sync/worktree-git-owner-target'
 import { FolderWorkspaceEmptyState } from './folder-workspace-empty-state'

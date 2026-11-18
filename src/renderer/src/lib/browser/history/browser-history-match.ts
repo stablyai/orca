@@ -1,8 +1,8 @@
-import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
+import type { BrowserHistoryEntry } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   LOOPBACK_LOCALHOST_HOSTS,
   normalizeLocalhostHostname
-} from '../../../../../shared/localhost-worktree-labels'
+} from '../../../../../shared/workspace/ports/localhost-worktree-labels'
 import { formatBrowserPaletteUrl } from '../palette/browser-palette-search'
 
 /** Compared before frecency, so "the site you meant" always beats "appears somewhere". */

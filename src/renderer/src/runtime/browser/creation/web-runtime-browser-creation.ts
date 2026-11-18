@@ -1,6 +1,6 @@
 import { translate } from '../../../i18n/i18n'
 import { useAppStore } from '../../../store/index'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
@@ -35,7 +35,7 @@ import {
   wasStagedBrowserTabHandedToFrames
 } from '@/runtime/browser/creation/staged-browser-frame-handover'
 import type { BrowserPageCreationPlacement } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { BrowserTabCreateResult } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 
 export async function createWebRuntimeSessionBrowserTab(

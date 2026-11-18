@@ -13,7 +13,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { resolveOrchestrationTerminalHandle } from '../identity/terminal-identity'
 import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
@@ -71,12 +71,11 @@ function approvalAnswerHandler(decision: 'allow' | 'deny'): CommandHandler {
       fields: (value) => ({
         approvalId: value.approvalId,
         [decision === 'allow' ? 'allowed' : 'denied']: value.option,
-        reason:
-          decision === 'allow'
-            ? reason
-            : value.reasonMessageId
-              ? `sent to the worker as message ${value.reasonMessageId}`
-              : undefined
+        reason: value.reasonMessageId
+          ? `sent to the worker as message ${value.reasonMessageId}`
+          : decision === 'allow'
+            ? 'not sent to the worker'
+            : undefined
       })
     })
   }

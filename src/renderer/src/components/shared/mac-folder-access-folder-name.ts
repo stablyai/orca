@@ -1,4 +1,4 @@
-import type { DaemonPtyCwdClass } from '../../../../shared/daemon-adoption-telemetry'
+import type { DaemonPtyCwdClass } from '../../../../shared/telemetry/daemon-adoption-telemetry'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

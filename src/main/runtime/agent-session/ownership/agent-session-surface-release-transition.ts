@@ -10,7 +10,7 @@ import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycl
 import { assertFence, withLease } from './agent-session-lease-transitions'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 
-export type AgentSessionRecordTransitionStore = Pick<AgentSessionRecordStore, 'transitionHandoff'>
+export type AgentSessionRecordTransitionStore = Pick<AgentSessionRecordStore, 'updateRecord'>
 
 /** Only this host's owned lease is releasable; handoffs and free leases use other transitions. */
 export function isSurfaceReleasableAgentSessionRecord(record: AgentSessionRecord): boolean {
@@ -66,7 +66,5 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     exitReason?: string
   }
 ): Promise<AgentSessionRecord> {
-  return store.transitionHandoff(args.sessionId, (record) =>
-    releaseAgentSessionOwnerAfterSurfaceClose({ ...args, record })
-  )
+  return store.updateRecord(args.sessionId, { kind: 'release-surface', args })
 }

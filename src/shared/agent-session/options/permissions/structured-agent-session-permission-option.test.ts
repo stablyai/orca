@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionOptionsResult } from '../protocol/agent-session-options-result'
-import '../../../native-chat/input/native-chat-session-option-snapshot'
+import '../../../native-chat/input/session-options/native-chat-session-option-snapshot'
 import {
   canSetStructuredAgentSessionOption,
   structuredAgentSessionOptionSnapshot

@@ -20,7 +20,7 @@ import {
   renderAgentComboboxItem
 } from './agent-combobox-items'
 import { useTranslate } from '@/i18n/use-translate'
-import { rowLabel } from '@/components/tab-bar/tab-agent-row-presentation'
+import { rowLabel } from '@/components/agent/launch-menu/agent-menu-row-presentation'
 import {
   SurfaceAgentItems,
   surfaceCommandValues,

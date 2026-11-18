@@ -19,6 +19,9 @@ import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
+import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
+import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
+import { WslMoveFolderWorkspaceMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
 import {
   WorktreeCopySubMenu,
@@ -43,6 +46,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     deletingSubtree,
     developerMenuRevealed,
     effectiveSelectedWorktrees,
+    folderWorkspaceId,
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
     handleCloseTerminals,
@@ -172,6 +176,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 : t('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
             </DropdownMenuItem>
           )}
+          {!isMultiContext && (
+            <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
+          )}
           <WorktreeContextMenuDeleteItems model={model} />
           <DropdownMenuSeparator />
           {!isMultiContext && (
@@ -207,6 +214,10 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />
               <WorktreeProjectGroupSubMenu model={model} />
+              {folderWorkspaceId ? (
+                <WslMoveFolderWorkspaceMenuItem folderWorkspaceId={folderWorkspaceId} />
+              ) : null}
+              <WslMovedWorkspaceUseHereMenuItem worktree={worktree} />
             </>
           )}
           {isMultiContext && hasAnyContextLineage ? (

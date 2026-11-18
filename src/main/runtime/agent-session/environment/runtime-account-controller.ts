@@ -1,5 +1,5 @@
 import type { ClaudeAccountService } from '../../../claude-accounts/service'
-import { hasAppEnvironment } from '../../../../shared/app-environment'
+import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 import type {
   ClaudeAccountSignIn,
@@ -8,21 +8,21 @@ import type {
   CodexRateLimitAccountsState,
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../../../shared/managed-account-types'
+} from '../../../../shared/agent-accounts/managed-account-types'
 import type { CodexAccountService } from '../../../codex-accounts/service'
 import type { CodexResetCreditRejectedBeforeProviderReason } from '../../../codex-accounts/account-management/codex-account-service-types'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
 import type {
   HostAccountSignInChannel,
   HostAccountSignInProvider,
   HostAccountSignInStatus
-} from '../../../../shared/host-account-sign-in-types'
+} from '../../../../shared/agent-accounts/host-account-sign-in-types'
 import type {
   CodexRateLimitResetOutcome,
   RateLimitState
-} from '../../../../shared/rate-limit-types'
-import type { CodexResetCreditExpectedScope } from '../../../../shared/codex-reset-credit-scope'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexResetCreditExpectedScope } from '../../../../shared/agent-accounts/codex/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   getClaudeSelectionTargetForAccount,
@@ -35,6 +35,8 @@ import {
 } from '../../../../shared/agent-launch/startup/host-account-launch-env'
 import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
+import { subscribeRuntimeAccountChanges } from './runtime-account-change-subscription'
+import type { ManagedAccountNameProvider } from '../../../../shared/agent-accounts/managed-account-display-names'
 import type { RuntimeNotifier } from '../../client/events/runtime-notifier-contract'
 
 export type RuntimeAccountServices = {
@@ -280,19 +282,25 @@ export class RuntimeAccountController {
     return this.requireServices().claudeAccounts.cancelSignIn(signIn)
   }
 
-  /** Adds a host account whose login a client on another device finishes. */
+  /** Adds, or re-authenticates `accountId`, a host account whose login a client on another device finishes. */
   async runHostSignIn(
     provider: HostAccountSignInProvider,
-    channel: HostAccountSignInChannel
+    channel: HostAccountSignInChannel,
+    accountId?: string
   ): Promise<Pick<HostAccountSignInStatus, 'claude' | 'codex'>> {
     const { claudeAccounts, codexAccounts } = this.requireServices()
     return provider === 'claude'
-      ? { claude: await claudeAccounts.addAccountWithPastedCode(channel) }
-      : { codex: await codexAccounts.addAccountWithDeviceCode(channel) }
+      ? { claude: await claudeAccounts.signInWithPastedCode(channel, accountId) }
+      : { codex: await codexAccounts.signInWithDeviceCode(channel, accountId) }
   }
 
   removeCodex(accountId: string): Promise<CodexRateLimitAccountsState> {
     return this.requireServices().codexAccounts.removeAccount(accountId)
+  }
+
+  renameAccount(provider: ManagedAccountNameProvider, id: string, name: string | null) {
+    const { claudeAccounts, codexAccounts } = this.requireServices()
+    return (provider === 'claude' ? claudeAccounts : codexAccounts).renameAccount(id, name)
   }
 
   addCodexFromHome(
@@ -303,22 +311,14 @@ export class RuntimeAccountController {
   }
 
   onChanged(listener: (snapshot: AccountsSnapshot) => void): () => void {
-    const services = this.requireServices()
-    const unsubscribeData = hasAppEnvironment()
-      ? getManagedDataAccountService().onChanged(() => listener(this.getStreamSnapshot()))
-      : () => {}
-    const unsubscribeUsage = services.rateLimits.onStateChange((rateLimits) => {
-      listener({
-        ...this.streamDataAccountsSnapshot(),
-        claude: services.claudeAccounts.listAccounts(),
-        codex: services.codexAccounts.listAccounts(),
-        rateLimits
-      })
-    })
-    return () => {
-      unsubscribeData()
-      unsubscribeUsage()
-    }
+    return subscribeRuntimeAccountChanges(
+      this.requireServices(),
+      {
+        stream: () => this.getStreamSnapshot(),
+        dataAccounts: () => this.streamDataAccountsSnapshot()
+      },
+      listener
+    )
   }
 
   private requireServices(): RuntimeAccountServices {

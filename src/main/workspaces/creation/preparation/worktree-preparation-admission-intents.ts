@@ -1,5 +1,5 @@
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { preparationEntryKey, preparationPathKey } from './worktree-create-preparation-claim'
 import type { DeferredPreparation } from './worktree-create-preparation-claim-registry'
 import type { PreparationEntry } from './worktree-create-preparation-pool'

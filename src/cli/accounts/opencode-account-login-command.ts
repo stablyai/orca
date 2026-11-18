@@ -6,8 +6,11 @@ import {
 } from '@orca/process-host/process-tree-termination'
 import { inFlightWindowsTreeKill } from '@orca/process-host/windows-tree-kill'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
-import { resolveCliCommand, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
-import { RuntimeClientError } from '../runtime/types'
+import {
+  resolveCliCommand,
+  withCliRuntimeOnPath
+} from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   type InteractiveLoginSession,
   LOGIN_PROCESS_POSIX_GRACE_MS,

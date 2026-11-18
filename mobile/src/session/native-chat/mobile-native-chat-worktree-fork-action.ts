@@ -1,6 +1,6 @@
 import { AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY } from '../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
-import { AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
-import type { ActionSheetAction } from '../../components/ActionSheetModal'
+import { AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 import { requestMobileWorktreeFork } from './mobile-native-chat-worktree-fork-requests'
 import {

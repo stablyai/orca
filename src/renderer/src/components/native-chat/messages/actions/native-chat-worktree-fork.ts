@@ -10,12 +10,12 @@ import {
 } from '@/lib/workspace/creation/fork-worktree'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NativeChatForkRowAction } from './use-native-chat-fork'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { agentReferenceNote } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { resolveStructuredSessionOrcaSessionId } from '@/runtime/native-chat/orchestration/structured-session-orca-session-id'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 
 /** How the fork runs: a worktree you drive, or a background subagent that reports back to this chat. */
 export type NativeChatWorktreeForkMode = 'worktree' | 'subagent'

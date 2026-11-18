@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
-} from '../../../../shared/feature-wall-setup-steps'
+} from '../../../../shared/feature-education/explore/feature-wall-setup-steps'
 import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
 
 export function useSetupGuideBrowserMilestoneProgress(

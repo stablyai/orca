@@ -1,4 +1,4 @@
-import { structuredLaunchRequestedOptions } from '../../../native-chat/input/native-chat-session-option-defaults'
+import { structuredLaunchRequestedOptions } from '../../../native-chat/input/session-options/native-chat-session-option-defaults'
 import {
   commitStructuredAgentSessionOptionValues,
   type StructuredAgentSessionOptionState
