@@ -1,9 +1,9 @@
 import { buildLegacyAgentCreateTerminalParams } from './web-runtime-legacy-agent-create-params'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from './agent-launch/agent-session-keyboard-capability'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../../shared/runtime-session-contracts'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { agentProviderSessionForHostEnsure } from './agent-launch/agent-session-ensure-provider-session'
 import { translate } from '../../../i18n/i18n'
 import { agentResumeHostAuthorityCapability } from './agent-launch/agent-resume-host-authority-capability'
@@ -13,9 +13,9 @@ import {
 } from './agent-launch/agent-session-create-operation'
 import { runRemoteAgentSessionLaunch } from './agent-launch/remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
-import { resolveWebRuntimeSessionEnvironmentId } from '../../web-runtime-session-workspace-routing'
-import { recordWebSessionFocusIntent } from '../../web-session-focus-intent'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
+import { resolveWebRuntimeSessionEnvironmentId } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-routing'
+import { recordWebSessionFocusIntent } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   forgetWebSessionTerminalPlacement,
   recordWebSessionTerminalPlacement,
@@ -26,8 +26,8 @@ import {
   captureWebSessionIntentOwner,
   isWebRuntimeSessionActive,
   matchesWebSessionIntentOwner
-} from '../../web-runtime-session-environment'
-import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-runtime-session-snapshot'
+} from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
+import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import type {
   CreatedAgentTerminalIdentity,
   CreatedWebRuntimeSessionTerminal,
@@ -38,7 +38,7 @@ import {
   restoreActiveWorkspaceSelection,
   selectWebRuntimeSessionWorktree,
   type WebRuntimeSessionWorkspaceSelectionRollback
-} from '../../web-runtime-session-workspace-selection'
+} from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-selection'
 import {
   createdTerminalLeafId,
   readCreatedAgentTerminalIdentity

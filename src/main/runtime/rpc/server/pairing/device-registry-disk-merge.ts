@@ -1,5 +1,8 @@
 import { readFileSync, statSync } from 'node:fs'
-import { writeDurableSecureJsonFile, writeSecureJsonFile } from '../../../../../shared/secure-file'
+import {
+  writeDurableSecureJsonFile,
+  writeSecureJsonFile
+} from '../../../../../shared/secure-storage/secure-file'
 import type { DeviceEntry } from './device-entry'
 import { isMissingFileError, quarantineCorruptRegistry } from './device-registry-corruption'
 import { readDeviceRegistryFile, type DeviceRegistryFileRead } from './device-registry-file-read'

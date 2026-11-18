@@ -1,11 +1,12 @@
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
-import { getSharedManagedScriptPath, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   POSIX_HOOK_JSON_STDIN
-} from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import {
   buildWindowsGrokHookScript,
   GROK_HOME_ENVELOPE_MAX_LENGTH
@@ -20,10 +21,9 @@ export function getGrokManagedScriptPath(): string {
 }
 
 export function getGrokManagedCommand(scriptPath: string): string {
-  // POSIX can gate before spawning because Orca injects ORCA_PANE_KEY only into panes it owns.
   return process.platform === 'win32'
     ? wrapWindowsBatchHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath, {}, { requiredEnvVar: 'ORCA_PANE_KEY' })
+    : wrapPosixHookCommand(scriptPath)
 }
 
 export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): string {

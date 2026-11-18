@@ -5,6 +5,7 @@ import type {
   HostedReviewProvider
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { isStackedReviewFailureReason } from '../../../../../../shared/source-control/hosted-review/stacked-hosted-review-failure-copy'
 import { stackedFailureMessage } from './stacked-review-create-failure-copy'
 import { authRequiredDetail } from './hosted-review-sign-in-copy'
@@ -28,10 +29,11 @@ function createFailureCopy(
   provider: SupportedHostedReviewCopyProvider,
   copy: LocalizedHostedReviewCopy,
   base: string | undefined,
-  head?: string
+  head?: string,
+  t: Translate = translate
 ): CreateFailureCopy | undefined {
   if (isStackedReviewFailureReason(reason)) {
-    const text = stackedFailureMessage(reason, base, head)
+    const text = stackedFailureMessage(reason, base, head, t)
     return text === undefined ? undefined : { kind: 'message', text }
   }
   const vars = {
@@ -43,10 +45,10 @@ function createFailureCopy(
   const message = (text: string): CreateFailureCopy => ({ kind: 'message', text })
   switch (reason) {
     case 'auth_required':
-      return detail(authRequiredDetail(provider, copy))
+      return detail(authRequiredDetail(provider, copy, t))
     case 'dirty':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.dirty',
           'commit or discard local changes before creating a {{reviewLabel}}.',
           vars
@@ -54,7 +56,7 @@ function createFailureCopy(
       )
     case 'detached_head':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.detachedHead',
           'switch to a branch before creating a {{reviewLabel}}.',
           vars
@@ -62,7 +64,7 @@ function createFailureCopy(
       )
     case 'default_branch':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.defaultBranch',
           'choose a feature branch before creating a {{reviewLabel}}.',
           vars
@@ -70,7 +72,7 @@ function createFailureCopy(
       )
     case 'no_upstream':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.noUpstream',
           'publish this branch before creating a {{reviewLabel}}.',
           vars
@@ -78,7 +80,7 @@ function createFailureCopy(
       )
     case 'needs_push':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.needsPush',
           'push this branch before creating a {{reviewLabel}}.',
           vars
@@ -86,7 +88,7 @@ function createFailureCopy(
       )
     case 'needs_sync':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.needsSync',
           'sync this branch before creating a {{reviewLabel}}.',
           vars
@@ -94,7 +96,7 @@ function createFailureCopy(
       )
     case 'fork_head_unsupported':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.refreshStatus',
           'refresh source control status and try again.'
         )
@@ -102,19 +104,19 @@ function createFailureCopy(
     case 'base_not_on_remote':
       return detail(
         base
-          ? translate(
+          ? t(
               'sourceControl.createReviewFailure.namedBaseNotOnRemote',
               'the base branch "{{base}}" hasn\'t been pushed to the remote. Choose a pushed base or push it first.',
               { base }
             )
-          : translate(
+          : t(
               'sourceControl.createReviewFailure.baseNotOnRemote',
               "the base branch hasn't been pushed to the remote. Choose a pushed base or push it first."
             )
       )
     case 'branch_changed':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.branchChanged',
           'switch back to the selected branch before creating a {{reviewLabel}}.',
           vars
@@ -122,14 +124,14 @@ function createFailureCopy(
       )
     case 'branch_status_unverified':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.branchStatusUnverified',
           'could not verify branch status. Refresh source control and try again.'
         )
       )
     case 'review_lookup_unavailable':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.reviewLookupUnavailable',
           'Orca could not confirm whether this branch already has a {{reviewLabel}}. Retry once the {{providerName}} lookup succeeds.',
           vars
@@ -137,7 +139,7 @@ function createFailureCopy(
       )
     case 'same_base_branch':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.sameBaseBranch',
           'choose a different base branch before creating a {{reviewLabel}}.',
           vars
@@ -145,14 +147,14 @@ function createFailureCopy(
       )
     case 'base_head_title_required':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.baseHeadTitleRequired',
           'base branch, head branch, and title are required.'
         )
       )
     case 'rejected':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.rejected',
           '{{providerName}} rejected the {{reviewLabel}}. Check the base branch and branch state, then try again.',
           vars
@@ -160,7 +162,7 @@ function createFailureCopy(
       )
     case 'repository_not_found':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.repositoryNotFound',
           '{{providerName}} could not find the repository. Check that the credential has write access to it.',
           vars
@@ -168,7 +170,7 @@ function createFailureCopy(
       )
     case 'create_failed':
       return detail(
-        translate(
+        t(
           'sourceControl.createReviewFailure.createFailed',
           '{{providerName}} could not create the {{reviewLabel}}. Try again in a moment.',
           vars
@@ -176,7 +178,7 @@ function createFailureCopy(
       )
     case 'unsupported_provider':
       return message(
-        translate(
+        t(
           'sourceControl.createReviewFailure.unsupportedProvider',
           'Creating a {{reviewLabel}} requires a remote hosted on {{providerName}}.',
           vars
@@ -184,14 +186,14 @@ function createFailureCopy(
       )
     case 'provider_not_supported':
       return message(
-        translate(
+        t(
           'sourceControl.createReviewFailure.providerNotSupported',
           'Creating reviews for this provider is not supported yet.'
         )
       )
     case 'existing_review':
       return message(
-        translate(
+        t(
           'sourceControl.createReviewFailure.existingReview',
           'A {{reviewLabel}} already exists for this branch.',
           vars
@@ -199,7 +201,7 @@ function createFailureCopy(
       )
     case 'creation_unconfirmed':
       return message(
-        translate(
+        t(
           'sourceControl.createReviewFailure.creationUnconfirmed',
           '{{shortLabel}} creation may have completed. Refreshing branch review state...',
           vars
@@ -212,11 +214,12 @@ function failureCopyFor(
   reason: CreateHostedReviewFailureReason,
   provider: HostedReviewProvider,
   base?: string,
-  head?: string
+  head?: string,
+  t?: Translate
 ): { copy: CreateFailureCopy; shortLabel: string } | null {
   const supported = resolveSupportedHostedReviewCopyProvider(provider)
-  const labels = localizedHostedReviewCopy(supported)
-  const copy = createFailureCopy(reason, supported, labels, base, head)
+  const labels = localizedHostedReviewCopy(supported, t)
+  const copy = createFailureCopy(reason, supported, labels, base, head, t)
   return copy ? { copy, shortLabel: labels.shortLabel } : null
 }
 
@@ -225,16 +228,17 @@ export function hostedReviewCreateFailureMessage(
   reason: CreateHostedReviewFailureReason,
   provider: HostedReviewProvider,
   base?: string,
-  head?: string
+  head?: string,
+  t: Translate = translate
 ): string | null {
-  const resolved = failureCopyFor(reason, provider, base, head)
+  const resolved = failureCopyFor(reason, provider, base, head, t)
   if (!resolved) {
     return null
   }
   if (resolved.copy.kind === 'message') {
     return resolved.copy.text
   }
-  return translate(
+  return t(
     'sourceControl.createReviewFailure.withDetail',
     'Create {{shortLabel}} failed: {{detail}}',
     { shortLabel: resolved.shortLabel, detail: resolved.copy.text }

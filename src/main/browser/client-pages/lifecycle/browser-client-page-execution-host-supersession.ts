@@ -1,4 +1,4 @@
-import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
 import type { BrowserClientRetainedPage } from './browser-client-page-retained-state'
 
 type SupersedingRoute = Pick<BrowserClientPageNetworkRoute, 'key' | 'executionHostIdentity'>
@@ -15,14 +15,17 @@ export async function retireSupersededExecutionHostPages(
   for (const page of retained) {
     if (
       page.route.executionHostIdentity !== route.executionHostIdentity ||
-      page.route.key === route.key
+      page.route.key === route.key ||
+      page.cleanup?.nativeNetworkRetired?.()
     ) {
       continue
     }
     try {
       await retirePage(page.inventory.browserPageId, page.generation)
     } catch (error) {
-      failures.push(error)
+      if (!page.cleanup?.nativeNetworkRetired?.()) {
+        failures.push(error)
+      }
     }
   }
   if (failures.length > 0) {

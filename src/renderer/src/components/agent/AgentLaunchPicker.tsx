@@ -1,41 +1,59 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
-import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
+import { sameAgentLaunchPickerModel } from './launch-menu/new-tab-agent-menu-model'
 import {
   memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ComponentProps,
   type ReactNode
 } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { ChevronDown, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import AgentSettingsDialog, { restoreAgentSettingsInvoker } from './AgentSettingsDialog'
-import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
-import { AgentSettingsMenuItem } from './AgentSettingsMenuItem'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
-import { rowLabel } from '../tab-bar/tab-agent-row-presentation'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
+import { useTranslate } from '@/i18n/use-translate'
+import { rowLabel } from './launch-menu/agent-menu-row-presentation'
+import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import { useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import { AgentLaunchPickerDropdown } from './AgentLaunchPickerDropdown'
+import { AgentLaunchDefaultsFields } from './AgentLaunchDefaultsFields'
+import type { AgentPickerChoice } from './agent-picker-search-rows'
+import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
+import {
+  agentLaunchSetupSummary,
+  rememberPickedAgentModel,
+  usePickedAgentModel
+} from './agent-launch-setup-state'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
+import {
+  agentLaunchPickerPlacement,
+  type AgentLaunchPickerPlacement
+} from './agent-launch-picker-placement'
 import {
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 
-/** Forms own selection and dispatch; rows and setup remain the same as the new-tab menu. */
+const AGENT_LAUNCH_PICKER_SIDE_OFFSET = 4
+const AGENT_LAUNCH_PICKER_COLLISION_PADDING = 8
+
+const portalOrInline = (node: ReactNode, container: HTMLElement | null | undefined) =>
+  container ? createPortal(node, container) : container === undefined ? node : null
+
+/** A form's agent field. Forms own selection; the dropdown shares its setup card with the new-tab menu. */
 export const AgentLaunchPicker = memo(
   function AgentLaunchPicker({
     model,
@@ -48,17 +66,18 @@ export const AgentLaunchPicker = memo(
     agent,
     disabled,
     setupDisabled,
-    matchTriggerWidth,
     portalContainer,
     emptyLabel,
     cli,
-    children,
+    choices,
+    onSelectBlankTerminal,
     onTriggerEnter,
     onOpenChange,
     onCatalogOpen,
-    onOpenAgentSettings,
     defaultAgent,
     onSetDefault,
+    launchDefaults,
+    launchDefaultsContainer,
     onPick
   }: {
     model: NewTabAgentMenuModel
@@ -70,21 +89,26 @@ export const AgentLaunchPicker = memo(
     draftForEntry?: (entry: AgentPickerEntry) => AgentPickerDraft
     agent: AgentPickerEntry['agent'] | null
     disabled?: boolean
+    /** Agents only: no models, effort or Open as. */
     setupDisabled?: boolean
-    matchTriggerWidth?: boolean
     portalContainer?: HTMLElement | null
     emptyLabel?: string
-    /** True when this launch is the terminal and a chat exists, so the closed field says "(CLI)". */
+    /** True when this launch is the terminal, so the closed field says "(CLI)". */
     cli?: boolean
-    children?: ReactNode
+    /** Non-agent choices, shown as full-width rows under the agents and listed by search. */
+    choices?: readonly AgentPickerChoice[]
+    onSelectBlankTerminal?: () => void
     onTriggerEnter?: () => void
     onOpenChange?: (open: boolean) => void
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
     onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
-    onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
-    /** The saved default; with onSetDefault, right-clicking an agent row offers "Set as default". */
+    /** The saved default; with onSetDefault, right-clicking an agent offers "Set as default". */
     defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
-    onSetDefault?: (agent: AgentPickerEntry['agent']) => void
+    onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
+    /** Settings forms: the picked agent's Permissions and Arguments, as fields under the picker. */
+    launchDefaults?: boolean
+    /** Renders those fields here instead, e.g. full width under a narrow picker column. */
+    launchDefaultsContainer?: HTMLElement | null
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -92,9 +116,9 @@ export const AgentLaunchPicker = memo(
       surface?: AgentPickerDraft['surface']
     ) => void
   }) {
-    useUiLanguageRevision()
+    const t = useTranslate()
+    const languageRevision = useUiLanguageRevision()
     const ownDraftScope = useAgentPickerDraftScope()
-    const [settingsOpen, setSettingsOpen] = useState(false)
     const trigger = useRef<HTMLButtonElement>(null)
     const searchInput = useRef<HTMLInputElement>(null)
     const popupFocusReady = useRef(false)
@@ -107,30 +131,31 @@ export const AgentLaunchPicker = memo(
     const [open, setOpenState] = useState(false)
     // Why: typing on the closed trigger opens the menu with that key already in the search field.
     const [initialQuery, setInitialQuery] = useState('')
+    const [placement, setPlacement] = useState<AgentLaunchPickerPlacement>()
     const setOpen = useCallback(
       (next: boolean) => {
         if (!next) {
           popupFocusReady.current = false
           setInitialQuery('')
+        } else if (trigger.current) {
+          setPlacement(
+            agentLaunchPickerPlacement(
+              trigger.current.getBoundingClientRect(),
+              window.innerHeight,
+              AGENT_LAUNCH_PICKER_SIDE_OFFSET + AGENT_LAUNCH_PICKER_COLLISION_PADDING
+            )
+          )
         }
         setOpenState(next)
         onOpenChange?.(next)
       },
       [onOpenChange]
     )
-    const openAgentSettings = useCallback(() => {
-      setOpen(false)
-      if (onOpenAgentSettings) {
-        onOpenAgentSettings(trigger.current!)
-      } else {
-        setSettingsOpen(true)
-      }
-    }, [onOpenAgentSettings, setOpen])
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
     const observedEntries = useAgentLaunchPickerInventory(
       worktreeId,
       model,
-      open && !setupDisabled && !suppliedEntries,
+      (open || Boolean(launchDefaults)) && !setupDisabled && !suppliedEntries,
       selected ?? agent ?? undefined
     )
     const entries = suppliedEntries ?? observedEntries
@@ -145,13 +170,13 @@ export const AgentLaunchPicker = memo(
       [ownsCatalog, onCatalogOpen]
     )
     const runLaunch = useCallback<ComponentProps<typeof AgentLaunchPickerMenu>['runLaunch']>(
-      (row, draft, entry, surface) =>
+      (row, draft, entry) =>
         onPick(
           row.agent,
           draft,
           entry,
           // Re-selecting an agent preserves the form's surface; a new chat row chooses Chat.
-          surface ?? (!draft && row.agent !== agent && row.kind === 'chat' ? 'chat' : undefined)
+          !draft && row.agent !== agent && row.kind === 'chat' ? 'chat' : undefined
         ),
       [onPick, agent]
     )
@@ -161,23 +186,72 @@ export const AgentLaunchPicker = memo(
         onCatalogOpen?.(catalogAgent)
       }
     }, [catalogAgent, onCatalogOpen])
+    const pick = useCallback<typeof onPick>(
+      (picked, next, from, surface) => {
+        if (next && from) {
+          rememberPickedAgentModel(from, next)
+        }
+        onPick(picked, next, from, surface)
+      },
+      [onPick]
+    )
     const entry = entries.find((entry) => entry.agent === agent)
-    const draft = entry ? (value ?? draftForEntry?.(entry)) : undefined
-    const choices = entry
-      ? agentPickerPanelArguments(entry, draft ?? agentPickerDraft(entry)).choices
+    const draft = entry
+      ? ((value?.agent === entry.agent ? value : undefined) ??
+        draftForEntry?.(entry) ??
+        agentPickerDraft(entry))
       : undefined
-    const modelLabel =
-      (entry
-        ? getAgentSessionOptionLaunchCatalog(entry.agent)?.models.find(
-            (model) => model.id === choices?.model
-          )?.label
-        : undefined) ?? choices?.model
-    const summary = [modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
+    // Why keyed on the draft's content and UI language: forms re-derive an equal draft on every
+    // render, the summary rebuilds the agent's model catalog, and its labels are translated.
+    const summaryKey =
+      entry && draft && !setupDisabled && triggerLabel === undefined
+        ? JSON.stringify([languageRevision, draft])
+        : null
+    const pickedModel = usePickedAgentModel(entry, draft?.choices.model)
+    const summary = useMemo(() => {
+      if (!entry || !summaryKey) {
+        return ''
+      }
+      const [, parsed]: [unknown, AgentPickerDraft] = JSON.parse(summaryKey)
+      return agentLaunchSetupSummary(entry, parsed, pickedModel).join(' · ')
+    }, [entry, summaryKey, pickedModel])
+    // Only a dropdown with Open as names how the agent runs, as Open as does.
+    const surface =
+      entry && !setupDisabled && !entry.textGeneration
+        ? cli
+          ? 'terminal'
+          : (draft?.surface ?? entry.defaultSurface)
+        : cli
+          ? 'terminal'
+          : undefined
     const agentLabel = agent
-      ? cli
-        ? rowLabel({ kind: 'cli', agent })
-        : getAgentLabel(agent)
-      : (emptyLabel ?? translate('agentPicker.select', 'Select agent'))
+      ? surface === 'terminal'
+        ? rowLabel({ kind: 'cli', agent }, t)
+        : surface === 'chat'
+          ? `${entry?.label ?? getAgentLabel(agent)} ${t('agentPicker.chatTag', '(Chat)')}`
+          : (entry?.label ?? getAgentLabel(agent))
+      : (emptyLabel ?? t('agentPicker.select', 'Select agent'))
+    const close = useCallback(() => setOpen(false), [setOpen])
+    const tabbed = model.state === 'settled' && !setupDisabled
+    const blankTerminal: AgentPickerChoice | null = onSelectBlankTerminal
+      ? {
+          id: 'blank',
+          label: t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal'),
+          icon: <Terminal className="size-4" />,
+          matches: agentPickerBlankTerminalMatches,
+          isDefault: defaultAgent === 'blank',
+          onSetDefault: onSetDefault ? () => onSetDefault('blank') : undefined,
+          onSelect: onSelectBlankTerminal
+        }
+      : null
+    // A search result or rail tile does not close the menu as a menu item does.
+    const closing = (choice: AgentPickerChoice): AgentPickerChoice => ({
+      ...choice,
+      onSelect: () => {
+        choice.onSelect()
+        setOpen(false)
+      }
+    })
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -186,7 +260,7 @@ export const AgentLaunchPicker = memo(
               ref={trigger}
               type="button"
               data-agent-launch-picker-trigger="true"
-              aria-label={translate('agentPicker.select', 'Select agent')}
+              aria-label={t('agentPicker.select', 'Select agent')}
               variant="outline"
               className="w-full min-w-0"
               disabled={disabled || model.state !== 'settled'}
@@ -214,7 +288,7 @@ export const AgentLaunchPicker = memo(
                 }
               }}
             >
-              {agent ? <AgentIcon agent={agent} size={14} /> : null}
+              {agent ? <AgentVariantIcon agent={agent} size={14} /> : null}
               <span className="min-w-0 flex-1 truncate text-left">
                 {triggerLabel ?? agentLabel}
                 {!triggerLabel && agent && summary ? (
@@ -227,6 +301,18 @@ export const AgentLaunchPicker = memo(
           <DropdownMenuContent
             portalContainer={portalContainer}
             align="start"
+            sideOffset={AGENT_LAUNCH_PICKER_SIDE_OFFSET}
+            collisionPadding={tabbed ? AGENT_LAUNCH_PICKER_COLLISION_PADDING : undefined}
+            side={tabbed ? placement?.side : undefined}
+            // Why: capped to the chosen side's room, so Radix never flips on the content's height.
+            style={
+              tabbed && placement
+                ? {
+                    maxHeight: `min(${placement.maxHeight}px, var(--radix-dropdown-menu-content-available-height, ${placement.maxHeight}px))`
+                  }
+                : undefined
+            }
+            variant={tabbed ? 'picker' : 'default'}
             onOpenAutoFocus={(event) => {
               popupFocusReady.current = true
               if (searchInput.current) {
@@ -235,24 +321,44 @@ export const AgentLaunchPicker = memo(
               }
             }}
             className={
-              matchTriggerWidth
-                ? 'w-(--radix-dropdown-menu-trigger-width) min-w-(--radix-dropdown-menu-trigger-width)'
+              tabbed
+                ? // Why 26rem: Codex's widest effort row plus Fast measures 404px; narrow windows cap it.
+                  'w-(--radix-dropdown-menu-trigger-width) max-w-(--radix-dropdown-menu-content-available-width) min-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))] flex flex-col overflow-hidden'
                 : 'min-w-64'
             }
           >
-            {children}
-            {model.state === 'settled' ? (
+            {tabbed ? (
+              <AgentLaunchPickerDropdown
+                entries={entries}
+                agent={agent}
+                value={value}
+                draftForEntry={draftForEntry}
+                draftScope={draftScope ?? ownDraftScope}
+                disabled={disabled}
+                initialQuery={initialQuery}
+                searchInputRef={setSearchInput}
+                defaultAgent={defaultAgent}
+                onSetDefault={onSetDefault}
+                onPaneChange={selectAgent}
+                onPick={pick}
+                onClose={close}
+                choices={choices?.map(closing)}
+                blankTerminal={blankTerminal ? closing(blankTerminal) : undefined}
+              />
+            ) : model.state === 'settled' ? (
               <AgentLaunchPickerMenu
                 draftScope={draftScope ?? ownDraftScope}
                 model={model}
                 entries={entries}
                 initialQuery={initialQuery}
                 searchInputRef={setSearchInput}
+                choices={choices}
+                onSelectBlankTerminal={onSelectBlankTerminal}
                 value={value}
                 draftForEntry={draftForEntry}
                 mode="select"
                 disabled={disabled}
-                setupDisabled={setupDisabled}
+                setupDisabled
                 onSelectAgent={selectAgent}
                 defaultAgent={defaultAgent}
                 onSetDefault={onSetDefault}
@@ -260,19 +366,22 @@ export const AgentLaunchPicker = memo(
               />
             ) : (
               <DropdownMenuItem disabled>
-                {translate('agentPicker.select', 'Select agent')}
+                {t('agentPicker.select', 'Select agent')}
               </DropdownMenuItem>
             )}
-            <AgentSettingsMenuItem onSelect={openAgentSettings} />
           </DropdownMenuContent>
         </DropdownMenu>
-        {settingsOpen && !onOpenAgentSettings ? (
-          <AgentSettingsDialog
-            open={settingsOpen}
-            onOpenChange={setSettingsOpen}
-            onCloseAutoFocus={(event) => restoreAgentSettingsInvoker(event, trigger.current)}
-          />
-        ) : null}
+        {launchDefaults && entry && draft && !setupDisabled && !entry.textGeneration
+          ? portalOrInline(
+              <AgentLaunchDefaultsFields
+                entry={entry}
+                draft={draft}
+                disabled={disabled}
+                onCommit={(next, surface) => onPick(entry.agent, next, entry, surface)}
+              />,
+              launchDefaultsContainer
+            )
+          : null}
       </div>
     )
   },

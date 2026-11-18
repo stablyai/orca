@@ -1,12 +1,15 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getAiVaultResumeWorkspaceExecutionHostId as getWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus as getWorkspaceTargetStatus,
   type AiVaultResumeTargetStatus
 } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import type { AppState } from '@/store/types'
-import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type AiVaultResumeWorkspaceState = Pick<
   AppState,

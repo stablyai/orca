@@ -1,5 +1,5 @@
-import type { WorktreeSetupLaunch } from '../../../../../../shared/worktree/launch-types'
-import { buildSetupRunnerCommand } from '../../../setup-runner'
+import type { WorktreeSetupLaunch } from '../../../../../../shared/worktree/creation/launch-types'
+import { buildSetupRunnerCommand } from '../../creation/setup/setup-runner'
 import { translate } from '@/i18n/i18n'
 import type {
   InitialTerminalOptions,
@@ -32,6 +32,7 @@ export function queueSetupAndIssueCommands(
     const setupTab = store.createTab(worktreeId, undefined, undefined, {
       recordInteraction: false,
       ...(opts?.activateCreatedTabs === false ? { activate: false } : {}),
+      ...(setup.cwd ? { startupCwd: setup.cwd } : {}),
       pendingStartup: setupCommand
     })
     // createTab auto-activates; restore primary focus while Setup runs in background.

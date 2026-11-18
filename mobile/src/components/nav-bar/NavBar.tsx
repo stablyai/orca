@@ -9,11 +9,12 @@ import {
   type ViewStyle
 } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useWorkingSweep } from '../use-working-motion'
+import { useWorkingSweep } from '../motion/use-working-motion'
+import { NAV_BAR_BUTTON_SIZE } from './NavBarButton'
 
 export const NAV_BAR_HEIGHT = 52
 
@@ -88,8 +89,8 @@ export function NavBar({
   )
 }
 
-// Sits on the bar's bottom edge so the title, subtitle and accessory never move.
-function NavBarRefreshLine() {
+// Sits on its parent's bottom edge so the title, subtitle and accessory never move.
+export function NavBarRefreshLine() {
   const reducedMotion = useReducedMotionEnabled()
   const sweep = useWorkingSweep(reducedMotion === false)
   // Draw nothing until the preference is known, so a reveal never swaps shapes.
@@ -202,10 +203,12 @@ const styles = themedStyleSheet(() => ({
     width: '100%',
     opacity: 0.45
   },
-  // Equal sides keep the title centred whatever the buttons on either side.
+  // Equal sides keep the title centred whatever the buttons on either side; the floor fits two
+  // buttons, so a long title truncates instead of covering them.
   side: {
     flex: 1,
     flexBasis: 0,
+    minWidth: NAV_BAR_BUTTON_SIZE * 2 + spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm

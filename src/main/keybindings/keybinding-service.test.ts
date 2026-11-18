@@ -2,11 +2,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  findKeybindingConflicts,
-  getEffectiveKeybindingsForAction,
-  keybindingMatchesAction
-} from '../../shared/keybindings'
+import { findKeybindingConflicts } from '../../shared/keybindings/formatting'
+import { getEffectiveKeybindingsForAction } from '../../shared/keybindings/effective'
+import { keybindingMatchesAction } from '../../shared/keybindings/matching'
 import { getUserKeybindingsPath } from './keybinding-file'
 import { KeybindingService } from './keybinding-service'
 
@@ -64,23 +62,6 @@ describe('KeybindingService profile defaults', () => {
         'worktree.palette': ['Mod+K']
       }
     )
-  })
-
-  it('keeps a reset performed in a fresh profile authoritative for older profiles', () => {
-    open().setActionBindings('worktree.palette', null)
-    expect(open(true).getOverrides()).toEqual({
-      'worktree.palette': ['Mod+K'],
-      'terminal.clear': []
-    })
-  })
-
-  it('preserves explicit clear assignments when search is reset', () => {
-    const older = open(true)
-    older.setActionBindings('terminal.clear', ['Mod+Alt+K'])
-    expect(older.setActionBindings('worktree.palette', null).overrides).toEqual({
-      'worktree.palette': ['Mod+K'],
-      'terminal.clear': ['Mod+Alt+K']
-    })
   })
 
   it('rejects a reset that conflicts with an explicit clear shortcut without changing it', () => {
@@ -205,7 +186,7 @@ describe('KeybindingService profile defaults', () => {
   })
 
   it.each(['linux', 'win32'] as const)(
-    'keeps tab defaults local and search unchanged on %s',
+    'preserves legacy search and tab defaults on %s',
     (platform) => {
       const older = new KeybindingService({
         homePath: home,
@@ -217,7 +198,9 @@ describe('KeybindingService profile defaults', () => {
         'tab.nextSameType': ['Mod+Shift+BracketRight'],
         'tab.previousSameType': ['Mod+Shift+BracketLeft'],
         'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
-        'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
+        'tab.previousAllTypes': ['Mod+Alt+BracketLeft'],
+        'worktree.palette': ['Mod+Shift+J'],
+        'terminal.clear': ['Mod+K']
       })
       older.setActionBindings('tab.nextAllTypes', [])
       const reset = older.setActionBindings('tab.nextSameType', null)
@@ -228,6 +211,31 @@ describe('KeybindingService profile defaults', () => {
         'tab.nextSameType': ['Mod+Alt+BracketRight'],
         'tab.nextAllTypes': []
       })
+    }
+  )
+
+  it.each(['linux', 'win32'] as const)(
+    'uses Ctrl+K for new profiles and preserves old shortcuts until reset on %s',
+    (platform) => {
+      const fresh = new KeybindingService({ homePath: home, platform })
+      const older = new KeybindingService({ homePath: home, platform, legacySearchDefaults: true })
+      const ctrlK = { key: 'k', code: 'KeyK', meta: false, control: true, alt: false, shift: false }
+      expect(
+        keybindingMatchesAction('worktree.palette', ctrlK, platform, fresh.getOverrides())
+      ).toBe(true)
+      expect(keybindingMatchesAction('terminal.clear', ctrlK, platform, older.getOverrides())).toBe(
+        true
+      )
+      expect(
+        getEffectiveKeybindingsForAction('worktree.palette', platform, older.getOverrides())
+      ).toEqual(['Mod+Shift+J'])
+      const reset = older.setActionBindings('worktree.palette', null)
+      expect(keybindingMatchesAction('worktree.palette', ctrlK, platform, reset.overrides)).toBe(
+        true
+      )
+      expect(keybindingMatchesAction('terminal.clear', ctrlK, platform, reset.overrides)).toBe(
+        false
+      )
     }
   )
 

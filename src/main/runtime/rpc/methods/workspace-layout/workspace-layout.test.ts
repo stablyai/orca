@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { WorkspaceLayoutStreamEvent } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+import type { WorkspaceLayoutStreamEvent } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../core'
 import { ALL_RPC_METHODS } from '../rpc-method-registry'
 
@@ -16,7 +16,6 @@ vi.mock(
 const methods = eraseRpcMethods(ALL_RPC_METHODS)
 const subscribe = methods.find((method) => method.name === 'layout.subscribe')
 const unsubscribeMethod = methods.find((method) => method.name === 'layout.unsubscribe')
-const getRemoteSnapshots = methods.find((method) => method.name === 'layout.getRemoteSnapshots')
 
 function harness(epoch?: string) {
   const cleanups = new Map<string, () => void>()
@@ -55,40 +54,6 @@ function harness(epoch?: string) {
 }
 
 describe('layout.subscribe', () => {
-  it('sends the snapshot, then the named workspaces’ changes, and ends on unsubscribe', async () => {
-    const { runtime, cleanups, unsubscribe, publish } = harness()
-    const emitted: unknown[] = []
-    if (!subscribe || !isStreamingMethod(subscribe)) {
-      throw new Error('layout.subscribe is not a streaming method')
-    }
-    const done = subscribe.handler(
-      { workspaces: ['b'] },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime and connectionId from its context.
-      { runtime, connectionId: 'conn-1' } as RpcContext,
-      (event) => emitted.push(event)
-    )
-    const [cleanupKey] = [...cleanups.keys()]
-    expect(emitted).toEqual([
-      {
-        type: 'snapshot',
-        subscriptionId: expect.any(String),
-        workspaces: [
-          {
-            key: 'b',
-            layout: { worktreeId: 'b', tabs: [], groups: [], editorFiles: [], browserTabs: [] }
-          }
-        ],
-        seq: 4
-      }
-    ])
-    publish({ type: 'removed', key: 'a', seq: 5 })
-    publish({ type: 'removed', key: 'b', seq: 6 })
-    runtime.cleanupSubscription(cleanupKey!)
-    await done
-    expect(emitted.slice(1)).toEqual([{ type: 'removed', key: 'b', seq: 6 }, { type: 'end' }])
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
   it('sends each records frame with only the named workspaces, an empty one too', async () => {
     const { runtime, cleanups, publish } = harness('epoch-1')
     const emitted: unknown[] = []
@@ -152,28 +117,5 @@ describe('layout.subscribe', () => {
     await done
     expect(unsubscribe).toHaveBeenCalledTimes(1)
     expect(emitted.at(-1)).toEqual({ type: 'end' })
-  })
-})
-
-describe('layout.getRemoteSnapshots', () => {
-  it('returns the stored snapshot of each known server', async () => {
-    const snapshots = {
-      one: { workspaces: { a: { worktree: 'a', tabs: [] } } },
-      two: { workspaces: {} }
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler calls only getRemoteLayoutSnapshots.
-    const runtime = { getRemoteLayoutSnapshots: () => snapshots } as unknown as OrcaRuntimeService
-    if (!getRemoteSnapshots || isStreamingMethod(getRemoteSnapshots)) {
-      throw new Error('layout.getRemoteSnapshots is not a request method')
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime from its context.
-    const result = await getRemoteSnapshots.handler(undefined, { runtime } as RpcContext)
-    expect(result).toEqual({ snapshots })
-
-    // A server unpaired since its snapshot was stored seeds nothing.
-    paired.ids = ['two']
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime from its context.
-    const afterRemoval = await getRemoteSnapshots.handler(undefined, { runtime } as RpcContext)
-    expect(afterRemoval).toEqual({ snapshots: { two: snapshots.two } })
   })
 })

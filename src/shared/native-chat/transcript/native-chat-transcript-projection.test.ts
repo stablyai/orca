@@ -1,4 +1,3 @@
-import '../native-chat-reasoning-order.spec'
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -77,6 +76,37 @@ describe("a subagent's rows are not the conversation's", () => {
     row('child-verdict', say('The PR is CLEAN.'), child),
     row('answer', say('The review found nothing.'))
   ]
+
+  it('places background work inside its owner even when the owner output is windowed out', () => {
+    const shell = row(
+      'shell',
+      [
+        {
+          type: 'background-task',
+          taskId: 'shell-child',
+          kind: 'command',
+          label: 'sleep',
+          state: 'working',
+          startedAt: 1
+        }
+      ],
+      { agentId: 'shell-child', parentAgentId: 'agent-parent', producerKind: 'background' }
+    )
+    for (const ownerRows of [
+      [],
+      [row('owner', say('working'), { agentId: 'agent-parent', producerKind: 'agent' })]
+    ]) {
+      const projected = projectNativeChatTranscript([...ownerRows, shell])
+      expect(projected.conversation).toEqual([])
+      expect([...projected.subagentRows.keys()]).toEqual(['agent-parent'])
+      expect(
+        projected.subagentRows
+          .get('agent-parent')
+          ?.flatMap(({ message }) => message.blocks)
+          .some((block) => block.type === 'background-task' && block.taskId === 'shell-child')
+      ).toBe(true)
+    }
+  })
 
   it("keeps the session's own rows as the conversation, and none of the subagent's", () => {
     const { conversation, subagentRows } = projectNativeChatTranscript(transcript)

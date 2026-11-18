@@ -1,5 +1,5 @@
 import type React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 
@@ -14,23 +14,24 @@ export function CustomAgentCommandField({
   onChange: (value: string) => void
   description?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-2">
       <div className="space-y-0.5">
         <Label htmlFor={id}>
-          {translate('auto.components.settings.CommitMessageAiPane.47e45cbd5a', 'Custom command')}
+          {t('auto.components.settings.CommitMessageAiPane.47e45cbd5a', 'Custom command')}
         </Label>
         <p className="text-xs text-muted-foreground">
           {description ?? (
             <>
-              {translate(
+              {t(
                 'auto.components.settings.CommitMessageAiPane.4f722a5f53',
                 'Used by commit-message, pull-request, and branch-name recipes that select Custom command. Use'
               )}{' '}
               <code className="font-mono">
-                {translate('auto.components.settings.CommitMessageAiPane.b8b6fd55b4', '{prompt}')}
+                {t('auto.components.settings.CommitMessageAiPane.b8b6fd55b4', '{prompt}')}
               </code>{' '}
-              {translate(
+              {t(
                 'auto.components.settings.CommitMessageAiPane.3f1b26cc91',
                 'to pass the command input as an argument; otherwise Orca pipes it on stdin.'
               )}
@@ -45,7 +46,7 @@ export function CustomAgentCommandField({
         autoCapitalize="off"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.settings.CommitMessageAiPane.15b60d54b2',
           'e.g. ollama run llama3.1 {prompt}'
         )}

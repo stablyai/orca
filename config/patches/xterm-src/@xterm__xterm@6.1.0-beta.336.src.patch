@@ -1309,7 +1309,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
    }
  }
 diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
-index 6ae089a4387de14488f39f5dab7024cffdcd9d10..7f0378f9bf37b5b5ff78d78556304f3dc417a499 100644
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2522b89ae 100644
 --- a/src/browser/renderer/dom/DomRendererRowFactory.ts
 +++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
 @@ -15,7 +15,7 @@ import { JoinedCellData } from '../../services/CharacterJoinerService';
@@ -1349,6 +1349,44 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..7f0378f9bf37b5b5ff78d78556304f3d
        // Apply any decoration foreground/background overrides, this must happen after inverse has
        // been applied
        let bgOverride: IColor | undefined;
+@@ -411,7 +425,7 @@ export class DomRendererRowFactory {
+           break;
+         case Attributes.CM_RGB:
+           resolvedBg = channels.toColor(bg >> 16, bg >> 8 & 0xFF, bg & 0xFF);
+-          this._addStyle(charElement, `background-color:#${(bg >>> 0).toString(16).padStart(6, '0')}`);
++          charElement.style.backgroundColor = `#${(bg >>> 0).toString(16).padStart(6, '0')}`;
+           break;
+         case Attributes.CM_DEFAULT:
+         default:
+@@ -448,7 +462,7 @@ export class DomRendererRowFactory {
+             (fg      ) & 0xFF
+           );
+           if (!this._applyMinimumContrast(charElement, resolvedBg, color, cell, bgOverride, fgOverride)) {
+-            this._addStyle(charElement, `color:#${fg.toString(16).padStart(6, '0')}`);
++            charElement.style.color = `#${fg.toString(16).padStart(6, '0')}`;
+           }
+           break;
+         case Attributes.CM_DEFAULT:
+@@ -513,7 +527,7 @@ export class DomRendererRowFactory {
+     }
+ 
+     if (adjustedColor) {
+-      this._addStyle(element, `color:${adjustedColor.css}`);
++      element.style.color = adjustedColor.css;
+       return true;
+     }
+ 
+@@ -527,10 +541,6 @@ export class DomRendererRowFactory {
+     return this._themeService.colors.contrastCache;
+   }
+ 
+-  private _addStyle(element: HTMLElement, style: string): void {
+-    element.setAttribute('style', `${element.getAttribute('style') || ''}${style};`);
+-  }
+-
+   private _isCellInSelection(x: number, y: number): boolean {
+     const start = this._selectionStart;
+     const end = this._selectionEnd;
 diff --git a/src/browser/renderer/dom/WidthCache.ts b/src/browser/renderer/dom/WidthCache.ts
 index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e35373864b822a4 100644
 --- a/src/browser/renderer/dom/WidthCache.ts

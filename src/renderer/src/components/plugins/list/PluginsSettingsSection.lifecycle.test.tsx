@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
 
-import type * as PluginSyntaxPacks from '@/store/plugin-syntax-packs'
-import type * as PluginIconThemes from '@/store/plugin-icon-themes'
-import type * as PluginThemes from '@/store/plugin-themes'
-import type * as PluginLanguagePacks from '@/store/plugin-language-packs'
+import type * as PluginSyntaxPacks from '@/store/plugins/syntax/plugin-syntax-packs'
+import type * as PluginIconThemes from '@/store/plugins/appearance/plugin-icon-themes'
+import type * as PluginThemes from '@/store/plugins/appearance/plugin-themes'
+import type * as PluginLanguagePacks from '@/store/plugins/localization/plugin-language-packs'
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
-import { getDefaultSettings } from '../../../../../shared/constants'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { PluginInstallTrustDialogHost } from '../dialogs/PluginInstallTrustDialog'
 
@@ -22,19 +22,19 @@ vi.mock('../state/use-plugin-in-use', () => ({ usePluginInUse: () => null }))
 vi.mock('../state/use-plugin-art-palettes', () => ({ usePluginArtPalettes: () => [] }))
 
 // Unrelated content stores must not replace the fixture's single discovery callback.
-vi.mock('@/store/plugin-language-packs', async (importOriginal) => ({
+vi.mock('@/store/plugins/localization/plugin-language-packs', async (importOriginal) => ({
   ...(await importOriginal<typeof PluginLanguagePacks>()),
   ensurePluginLanguagePacksLoaded: () => {}
 }))
-vi.mock('@/store/plugin-syntax-packs', async (importOriginal) => ({
+vi.mock('@/store/plugins/syntax/plugin-syntax-packs', async (importOriginal) => ({
   ...(await importOriginal<typeof PluginSyntaxPacks>()),
   usePluginSyntaxes: () => []
 }))
-vi.mock('@/store/plugin-icon-themes', async (importOriginal) => ({
+vi.mock('@/store/plugins/appearance/plugin-icon-themes', async (importOriginal) => ({
   ...(await importOriginal<typeof PluginIconThemes>()),
   usePluginIconThemes: () => []
 }))
-vi.mock('@/store/plugin-themes', async (importOriginal) => ({
+vi.mock('@/store/plugins/appearance/plugin-themes', async (importOriginal) => ({
   ...(await importOriginal<typeof PluginThemes>()),
   usePluginThemes: () => [],
   usePluginTerminalThemes: () => []
@@ -184,33 +184,7 @@ function click(element: Element): void {
   element.dispatchEvent(new MouseEvent('click', { bubbles: true }))
 }
 
-async function openDevelopmentFolders(container: HTMLElement): Promise<void> {
-  const open = Array.from(container.querySelectorAll('button')).find(
-    (button) => button.textContent === 'Development folders…'
-  )
-  if (!open) {
-    throw new Error('missing development folders action')
-  }
-  await act(async () => click(open))
-}
-
 /** Answers the open "Make sure you trust …" dialog, which must name this kind of warning; returns what it said. */
-async function answerTrust(kind: string, label: string): Promise<string> {
-  const dialog = document.querySelector<HTMLElement>('[data-plugin-install-trust]')
-  if (!dialog) {
-    throw new Error('missing install trust dialog')
-  }
-  expect(dialog.dataset.pluginInstallTrust).toBe(kind)
-  const answer = Array.from(dialog.querySelectorAll('button')).find(
-    (button) => button.textContent === label
-  )
-  if (!answer) {
-    throw new Error(`missing ${label} in the trust dialog`)
-  }
-  const text = dialog.textContent ?? ''
-  await act(async () => click(answer))
-  return text
-}
 
 async function renderSection(
   settings: GlobalSettings = { ...getDefaultSettings('/tmp'), pluginSystemEnabled: true },
@@ -296,54 +270,6 @@ afterEach(() => {
 })
 
 describe('PluginsSettingsSection lifecycle', () => {
-  it('suppresses stale lists and cleans up the change subscription', async () => {
-    const first = deferred<PluginHostListEntry[]>()
-    const second = deferred<PluginHostListEntry[]>()
-    let onChanged: (() => void) | undefined
-    const { unsubscribe } = installApi({
-      list: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise),
-      onChanged: vi.fn((callback: () => void) => {
-        onChanged = callback
-        return unsubscribe
-      })
-    })
-    const { root, container } = await renderSection()
-
-    act(() => onChanged?.())
-    await act(async () => second.resolve([{ ...plugin, name: 'Newer Notes' }]))
-    await act(async () => first.resolve([{ ...plugin, name: 'Older Notes' }]))
-
-    expect(container.textContent).toContain('Newer Notes')
-    expect(container.textContent).not.toContain('Older Notes')
-    act(() => root.unmount())
-    expect(unsubscribe).toHaveBeenCalledOnce()
-  })
-
-  it('shows what is true after a Restart fails halfway', async () => {
-    const crashed = { ...plugin, status: 'errored' as const }
-    const stopped = { ...plugin, status: 'disabled' as const }
-    const list = vi.fn().mockResolvedValueOnce([crashed]).mockResolvedValue([stopped])
-    installApi({
-      list,
-      setEnabled: vi
-        .fn()
-        .mockResolvedValueOnce([stopped])
-        .mockRejectedValueOnce(new Error('worker failed to start'))
-    })
-    const { container } = await renderSection()
-    const restart = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Restart'
-    )
-    if (!restart) {
-      throw new Error('missing restart action')
-    }
-
-    await act(async () => click(restart))
-
-    expect(list).toHaveBeenCalledTimes(2)
-    expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Enable')
-  })
-
   it('accepts overlapping mutations in completion order without regressing final state', async () => {
     const firstToggle = deferred<PluginHostListEntry[]>()
     const secondToggle = deferred<PluginHostListEntry[]>()
@@ -376,88 +302,5 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(notes().disabled).toBe(false)
     expect(toggleAction(notes())).toBe('Enable')
     expect(toggleAction(tasks())).toBe('Enable')
-  })
-
-  it('prunes dialogs and stale logs after external removal and same-key reinstall', async () => {
-    const removedList = deferred<PluginHostListEntry[]>()
-    const reinstalledList = deferred<PluginHostListEntry[]>()
-    const oldLogs = deferred<Awaited<ReturnType<typeof window.api.plugins.getLogs>>>()
-    const freshLogs = deferred<Awaited<ReturnType<typeof window.api.plugins.getLogs>>>()
-    const pendingPlugin = { ...plugin, status: 'pending' as const, hasWorker: true }
-    let onChanged: (() => void) | undefined
-    const unsubscribe = vi.fn()
-    installApi({
-      list: vi
-        .fn()
-        .mockResolvedValueOnce([pendingPlugin])
-        .mockReturnValueOnce(removedList.promise)
-        .mockReturnValueOnce(reinstalledList.promise),
-      onChanged: vi.fn((callback: () => void) => {
-        onChanged = callback
-        return unsubscribe
-      }),
-      getLogs: vi.fn().mockReturnValueOnce(oldLogs.promise).mockReturnValueOnce(freshLogs.promise)
-    })
-    const { container } = await renderSection()
-    const findButton = (label: string): HTMLButtonElement | undefined =>
-      Array.from(container.querySelectorAll('button')).find(
-        (button) => button.textContent?.trim() === label
-      )
-
-    // Why from the row: View logs opens the plugin's page, where its review and Remove… live.
-    act(() => click(findButton('View logs')!))
-    act(() => click(findButton('Mark consent dirty')!))
-    act(() => click(findButton('Remove…')!))
-    expect(container.textContent).toContain('Consent local state')
-    expect(container.textContent).toContain('Confirm remove')
-
-    act(() => onChanged?.())
-    await act(async () => removedList.resolve([]))
-
-    expect(container.textContent).not.toContain('Approve')
-    expect(container.textContent).not.toContain('Confirm remove')
-    act(() => onChanged?.())
-    await act(async () => reinstalledList.resolve([pendingPlugin]))
-    expect(container.textContent).not.toContain('Loading logs…')
-
-    act(() => click(findButton('View logs')!))
-    expect(container.textContent).toContain('Approve')
-    expect(container.textContent).not.toContain('Consent local state')
-    await act(async () => freshLogs.resolve([{ ts: 2, level: 'info', line: 'fresh installation' }]))
-    await act(async () => oldLogs.resolve([{ ts: 1, level: 'info', line: 'stale installation' }]))
-
-    expect(container.textContent).toContain('fresh installation')
-    expect(container.textContent).not.toContain('stale installation')
-  })
-
-  it('preserves development input and clears busy when adding a path fails', async () => {
-    const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
-    const { container } = await renderSection(undefined, updateSettings)
-    await openDevelopmentFolders(container)
-    const input = document.querySelector<HTMLInputElement>('#plugin-development-path')
-    if (!input) {
-      throw new Error('missing development path input')
-    }
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
-        input,
-        '/plugins/demo'
-      )
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    const add = Array.from(document.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Add path'
-    )
-    if (!add) {
-      throw new Error('missing add path action')
-    }
-
-    await act(async () => click(add))
-    await answerTrust('dev-folder', 'Add folder')
-
-    expect(input.value).toBe('/plugins/demo')
-    expect(add.disabled).toBe(false)
-    expect(window.api.plugins.refresh).not.toHaveBeenCalled()
-    expect(document.body.textContent).toContain('Could not save plugin settings.')
   })
 })

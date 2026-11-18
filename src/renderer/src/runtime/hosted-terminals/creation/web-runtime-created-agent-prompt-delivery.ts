@@ -1,3 +1,4 @@
+import { webTerminalPlacementParentTabId } from '../placement/web-session-terminal-placement'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   deliverLaunchPromptToAgentTab,
@@ -11,6 +12,9 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
   created: CreatedWebRuntimeSessionTerminal,
   args: {
     agent: TuiAgent
+    rendererTabId?: string
+    beforePaste?: () => boolean
+    launchPty?: Promise<string | null>
     promptAfterReady?: string
     submitPrompt?: boolean
     forcePromptPaste?: boolean
@@ -20,21 +24,28 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
   if (created.outcome.status === 'failed') {
     return false
   }
+  const tabId =
+    args.rendererTabId ??
+    (created.hostTabId
+      ? toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(created.hostTabId))
+      : undefined)
   if (args.promptAfterReady !== undefined) {
-    if (!created.hostTabId) {
+    if (!tabId) {
       return false
     }
     return await deliverLaunchPromptToAgentTab({
-      tabId: toWebTerminalSurfaceTabId(created.hostTabId),
+      tabId,
       content: args.promptAfterReady,
       agent: args.agent,
       submit: args.submitPrompt === true,
-      forcePaste: args.forcePromptPaste === true
+      forcePaste: args.forcePromptPaste === true,
+      beforePaste: args.beforePaste,
+      launchPty: args.launchPty
     }).catch(() => false)
   }
-  if (args.launchDraft !== undefined && created.hostTabId) {
+  if (args.launchDraft !== undefined && tabId) {
     seedNativeChatLaunchDraftForAgentTab({
-      tabId: toWebTerminalSurfaceTabId(created.hostTabId),
+      tabId,
       agent: args.agent,
       text: args.launchDraft
     })

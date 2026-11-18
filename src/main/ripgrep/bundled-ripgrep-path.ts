@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
-import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   BUNDLED_RIPGREP_PACKAGE_BIN_DIR,
@@ -9,7 +9,7 @@ import {
   bundledRipgrepBinaryName,
   toBundledRipgrepPlatform,
   type BundledRipgrepPlatform
-} from '../../shared/bundled-ripgrep'
+} from '../../shared/ripgrep/bundled-ripgrep'
 
 /** Only unpackaged dev/test hosts may fall back to this; see bundledRipgrepCommand. */
 const PATH_RIPGREP_COMMAND = 'rg'

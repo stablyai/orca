@@ -9,23 +9,26 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+} from '../../../../../../shared/execution-host/execution-host'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
-} from '../../../../../../shared/floating-workspace-worktree'
+} from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
-import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
+import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
+import { withoutErasedRequiredWorktreeFields } from '../metadata/worktree-meta-update-application'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   type WorkspaceRecordState,
-  resolveQualifiedIndexedFolderWorkspace,
+  selectWorkspaceByHostTarget
+} from '../../../workspaces/selection/workspace-host-target'
+import { resolveQualifiedIndexedFolderWorkspace } from '../../../folder-workspaces/folder-workspace-record-index'
+import {
   selectFolderWorkspaces,
-  selectWorkspaceByHostTarget,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 // Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
@@ -33,7 +36,7 @@ import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-work
 let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null = null
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
-import { branchName } from '@/lib/git-utils'
+import { branchName } from '@/lib/source-control/branches/branch-name'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 
 export function applyDetectedWorktreeUpdates(
@@ -119,7 +122,7 @@ export function findKnownWorktreeById(
         state,
         hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
       )
-    : findWorktreeById(selectWorktreesByRepo(state), worktreeId)
+    : findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId)
   if (visible) {
     return visible
   }

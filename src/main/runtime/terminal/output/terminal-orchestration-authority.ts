@@ -9,19 +9,18 @@ import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
-import { RecentPtyOutputBuffer } from '../../recent-pty-output-buffer'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
+import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
-import { resolveRuntimeAgentDetectionHost } from '../../runtime-agent-detection-host'
+import { resolveRuntimeAgentDetectionHost } from '../../workspaces/catalog/runtime-agent-detection-host'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/workers/launch/orchestration-cli-command'
 import {
-  readOrchestrationFleetAgentStatusSnapshot,
   readAgentOrchestrationProjectionRecords,
   readCapturedOrchestrationFleetAgentStatusSnapshot
-} from '../../orchestration-fleet-agent-status-snapshot'
+} from '../../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { matchesProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
 import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
@@ -106,10 +105,8 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   protected collectAgentStatusPaneKeysForPty(ptyId: string): Set<string> {
     const paneKeys = this.collectPaneKeysForPty(ptyId)
     const terminalHandles = new Set(this.getExistingTerminalHandlesForPtyId(ptyId))
-    // The provider-session snapshot is the unfiltered store view, so certified exit can also
-    // retire a dismissed row's identity-only remnant after its pane binding moved.
-    for (const row of this.getAgentProviderSessionSnapshotFn?.() ?? []) {
-      if (row.terminalHandle && terminalHandles.has(row.terminalHandle)) {
+    for (const handle of terminalHandles) {
+      for (const row of this.getAgentProviderSessionRowsForPaneFn?.('', handle) ?? []) {
         paneKeys.add(row.paneKey)
       }
     }
@@ -183,7 +180,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
+    const pty = this.retireHeldLaunch(ptyId)
     if (!pty) {
       return
     }
@@ -204,7 +201,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
     }
     if (changed) {
-      this.refreshAgentSenderAssociations()
+      void this.refreshAgentSenderAssociations().catch(console.warn)
     }
   }
 
@@ -265,19 +262,19 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   getOrchestrationFleetAgentStatusSnapshot(context?: TerminalIdentityReadContext) {
-    if (!context) {
-      return readOrchestrationFleetAgentStatusSnapshot(this)
-    }
-    const dependencies = this.agentOrchestrationDependencies({
-      paneOf: (pty) => context.paneOf(pty),
-      issueLeafHandle: (leaf) => this.issueHandle(leaf, context),
-      issuePtyHandle: (pty) => this.issuePtyHandle(pty, context),
-      getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle, context),
-      getHandleForPaneKey: (pane) => this.getTerminalHandleForPaneKey(pane, context),
-      getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle, context),
-      getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle, context),
-      getSessionRecords: () => readAgentOrchestrationProjectionRecords(context)
-    })
+    // One facts view per fleet read; per-pane raw lookups refreshed the facts source each pane.
+    const dependencies = context
+      ? this.agentOrchestrationDependencies({
+          paneOf: (pty) => context.paneOf(pty),
+          issueLeafHandle: (leaf) => this.issueHandle(leaf, context),
+          issuePtyHandle: (pty) => this.issuePtyHandle(pty, context),
+          getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle, context),
+          getHandleForPaneKey: (pane) => this.getTerminalHandleForPaneKey(pane, context),
+          getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle, context),
+          getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle, context),
+          getSessionRecords: () => readAgentOrchestrationProjectionRecords(context)
+        })
+      : this.agentOrchestrationDependencies()
     return readCapturedOrchestrationFleetAgentStatusSnapshot(
       {
         getAgentStatusSnapshotFn: this.getAgentStatusSnapshotFn,

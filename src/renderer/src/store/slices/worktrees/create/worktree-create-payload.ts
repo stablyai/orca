@@ -1,17 +1,20 @@
-import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
+import type { WorktreeStartupLaunch } from '../../../../../../shared/worktree/creation/launch-types'
+import type { agentPickerLaunchInputs } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
+import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-preferences'
+import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult
 } from '../../../../../../shared/worktree/create-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
 } from '../../../../../../shared/worktree/lineage-types'
-import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
@@ -25,7 +28,13 @@ export type CreateWorktreeCallOptions = {
   startupDraft?: string
   /** A terminal agent the owning host may plan from its own settings; `startup` stays the fallback. */
   hostAgentLaunch?: HostAgentLaunch
+  creationAgentLaunch?: HostAgentLaunch & {
+    inputs?: ReturnType<typeof agentPickerLaunchInputs>
+    draft?: string
+  }
+  legacyStartup?: () => WorktreeStartupLaunch | undefined
   setupOnly?: boolean
+  hookTrustContext?: 'vm'
   /** Hash of the confirmed setup content; see CreateWorktreeArgs. */
   approvedSetupHash?: string
   approvedSetupHashes?: string[]
@@ -148,7 +157,8 @@ export function buildLocalWorktreeCreateArgs(
 export function buildRuntimeWorktreeCreateParams(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
-  hostAgentLaunch?: HostAgentLaunch
+  hostAgentLaunch?: HostAgentLaunch,
+  creationAgentLaunch?: CreateWorktreeCallOptions['creationAgentLaunch']
 ): Record<string, unknown> {
   const { startup, options } = request
   return {
@@ -165,19 +175,44 @@ export function buildRuntimeWorktreeCreateParams(
       ? { creationId: request.creationId }
       : {}),
     ...(options?.startupDraft ? { startupDraft: options.startupDraft } : {}),
-    ...(hostAgentLaunch
-      ? buildHostAgentLaunchParams(hostAgentLaunch)
-      : startup
-        ? {
-            startupCommand: startup.command,
-            ...(startup.env ? { startupEnv: startup.env } : {}),
-            ...(startup.launchConfig ? { startupLaunchConfig: startup.launchConfig } : {}),
-            ...(startup.startupCommandDelivery
-              ? { startupCommandDelivery: startup.startupCommandDelivery }
-              : {}),
-            activate: true
-          }
-        : {})
+    ...(creationAgentLaunch
+      ? {
+          ...(creationAgentLaunch.draft
+            ? {
+                startupDraft: creationAgentLaunch.draft
+              }
+            : buildHostAgentLaunchParams(creationAgentLaunch)),
+          ...(creationAgentLaunch.inputs?.agentArgs !== undefined
+            ? { startupAgentArgs: creationAgentLaunch.inputs.agentArgs }
+            : {}),
+          ...(creationAgentLaunch.inputs?.sessionOptions
+            ? { startupSessionOptions: creationAgentLaunch.inputs.sessionOptions }
+            : {}),
+          ...(toAgentLaunchPreferences(
+            creationAgentLaunch.inputs?.sessionOptions,
+            creationAgentLaunch.agent
+          )
+            ? {
+                startupLaunchPreferences: toAgentLaunchPreferences(
+                  creationAgentLaunch.inputs?.sessionOptions,
+                  creationAgentLaunch.agent
+                )
+              }
+            : {})
+        }
+      : hostAgentLaunch
+        ? buildHostAgentLaunchParams(hostAgentLaunch)
+        : startup
+          ? {
+              startupCommand: startup.command,
+              ...(startup.env ? { startupEnv: startup.env } : {}),
+              ...(startup.launchConfig ? { startupLaunchConfig: startup.launchConfig } : {}),
+              ...(startup.startupCommandDelivery
+                ? { startupCommandDelivery: startup.startupCommandDelivery }
+                : {}),
+              activate: true
+            }
+          : {})
   }
 }
 

@@ -1,12 +1,12 @@
 import { protocol } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
+import { MEDIA_PREVIEW_SCHEME } from '../../shared/file-preview/media-preview-scheme'
 import {
   filePreviewForPath,
   isDocumentPreview,
   streamsPreviewByRange,
   type FilePreview
-} from '../../shared/file-preview-kind'
+} from '../../shared/file-preview/file-preview-kind'
 import {
   assertLocalPreviewRasterHeader,
   assertPreviewableRasterHeader,
@@ -18,11 +18,11 @@ import {
   prefixFitsDocumentPreview
 } from './preview-document-signature'
 import { openLocalPreviewGrantFile } from './local-preview-grant-file'
-import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
-import { remoteFilePath } from '../../shared/remote-file-locator'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
+import { remoteFilePath } from '../../shared/file-access/remote-file-locator'
 import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
-import { openLocalRegularFile } from '../ipc/filesystem/local-regular-file-read'
-import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
+import { openLocalRegularFile } from '../filesystem/local-file-io/local-regular-file-read'
+import { abortWhenRendererGone } from '../ipc/renderer-requests/renderer-lifetime-abort'
 import { createMediaRangeResponse } from './media-range-response'
 import {
   REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE,
@@ -33,7 +33,7 @@ import {
   statRemotePreviewFile,
   type RemotePreviewFileSnapshot
 } from './remote-file-preview-reader'
-import { readRegisteredPairingRevision } from '../ipc/runtime-environments/runtime-environment-registry-root'
+import { readRegisteredPairingRevision } from '../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import {
   grants,
   mintPreviewUrl,
@@ -112,15 +112,17 @@ export async function grantRemoteFilePreview(
   }
   // Why: proving the file and range reads here makes a missing file or an old host fail in the tab, not as a silent player error.
   // An unpinned grant would follow a re-pair to another host; pin the pairing it was minted on.
-  const pinned: RemoteFilePreviewAddress = {
-    ...address,
-    expectedEnvironmentPairingRevision:
-      address.expectedEnvironmentPairingRevision ??
-      readRegisteredPairingRevision(address.environmentId)
-  }
   const lifetime = abortWhenRendererGone(event.sender)
+  let pinned: RemoteFilePreviewAddress
   let snapshot: RemotePreviewFileSnapshot
   try {
+    pinned = {
+      ...address,
+      expectedEnvironmentPairingRevision:
+        address.expectedEnvironmentPairingRevision ??
+        (await readRegisteredPairingRevision(address.environmentId))
+    }
+    lifetime.signal.throwIfAborted()
     snapshot = await statRemotePreviewFile(pinned, lifetime.signal)
     if (snapshot.size > 0) {
       await assertRemoteChunkReadsSupported(pinned, lifetime.signal)

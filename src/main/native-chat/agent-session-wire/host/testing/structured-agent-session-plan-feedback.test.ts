@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionStatusEvent } from '../../../../../shared/agent-session/agent-session-wire'
@@ -17,13 +17,13 @@ import {
   envelope,
   hostTestState,
   replaceHostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 it.each(['selected-plan', 'absent'] as const)(
   'carries %s plan answers through native fresh sends and a host restart',
@@ -49,9 +49,20 @@ it.each(['selected-plan', 'absent'] as const)(
     const cli = fakeClaude({
       initSessionId: THREAD,
       initPermissionMode: 'acceptEdits',
-      replayUuids: ['feedback-1', 'feedback-2', 'feedback-3']
+      replayUuid: null
     })
-    let native = adapterFor(cli, { providerSessionId: THREAD })
+    const makeNative = () =>
+      adapterFor(
+        cli,
+        { providerSessionId: THREAD },
+        [],
+        [],
+        undefined,
+        undefined,
+        undefined,
+        (settlement) => host.settleLateDispatch(settlement)
+      )
+    let native = makeNative()
     const startNative = async () =>
       native.acquire({
         identity: identityFor(SESSION),
@@ -123,6 +134,14 @@ it.each(['selected-plan', 'absent'] as const)(
       ).toMatchObject({ ok: true })
       await vi.waitFor(() => expect(dispatch.mock.calls.length).toBe(before + 1))
       await dispatch.mock.results[before]!.value
+      claudeFrame(connection, { ...connection.sent.at(-1)!, parent_tool_use_id: null })
+      const id = dispatch.mock.calls[before]![0].clientMessageId
+      await vi.waitFor(async () =>
+        expect(
+          (await host.collaboratorsForTests().sessions.get(SESSION)!.journal.reads.submission(id))
+            ?.dispatchState
+        ).toBe('accepted')
+      )
       await host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)
       claudeFrame(connection, {
         session_id: THREAD,
@@ -174,7 +193,7 @@ it.each(['selected-plan', 'absent'] as const)(
         )
       ).toMatchObject({ ok: true })
       subscribe()
-      native = adapterFor(cli, { providerSessionId: THREAD })
+      native = makeNative()
       await startNative()
       connection = cli.connections.at(-1)!
       await send('More planning feedback after restart')

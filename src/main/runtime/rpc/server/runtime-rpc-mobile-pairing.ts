@@ -5,11 +5,11 @@ import {
 } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../../network-exposure-guidance'
-import { createOwnerPairingOffer } from '../../pairing-offer-requests'
+import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './pairing/network/network-exposure-guidance'
+import { createOwnerPairingOffer } from './pairing/pairing-offer-requests'
 import type { PairingOffersRpcContext } from '../core'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
   pairingUnavailable,

@@ -1,12 +1,12 @@
-import { BINARY_PROBE_BYTES } from '../../../../../shared/binary-buffer'
+import { BINARY_PROBE_BYTES } from '../../../../../shared/file-preview/binary-buffer'
 import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
-} from '../../../../../shared/file-preview-kind'
+} from '../../../../../shared/file-preview/file-preview-kind'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../../../shared/runtime-file-contracts'
+} from '../../../../../shared/file-content/runtime-file-read'
 import {
   rangeReadTarget,
   readRemoteRuntimeFileChunk,
@@ -18,9 +18,12 @@ import {
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-range-read'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-content/file-range-read'
 import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
-import { remoteFilePath, remoteFileRequest } from '../../../../../shared/remote-file-locator'
+import {
+  remoteFilePath,
+  remoteFileRequest
+} from '../../../../../shared/file-access/remote-file-locator'
 import {
   isRenewableGrantError,
   renewTerminalArtifactGrant
@@ -32,6 +35,10 @@ const PAGED_READ_CHUNK_BYTES = 384 * 1024
 export const PAGED_REMOTE_FILE_MAX_BYTES = 50 * 1024 * 1024
 export const REMOTE_FILE_CHANGED_DURING_READ_MESSAGE =
   'File changed on disk while it was loading. Reload the file to see the latest version.'
+export const REMOTE_PATH_IS_DIRECTORY_MESSAGE = 'Remote path is a directory'
+// Why: an older server has no files.stat/readChunk, so a truncated files.read cannot be completed.
+export const REMOTE_FILE_PAGED_READ_UNSUPPORTED_MESSAGE =
+  'Remote file is larger than the 512 KB this Orca server can send. Update the server to open it.'
 
 export type PagedRemoteFileRead =
   | { kind: 'ok'; bytes: Uint8Array<ArrayBuffer> }
@@ -83,7 +90,7 @@ export async function readFileInChunks(
     return { kind: 'unsupported' }
   }
   if (before.isDirectory) {
-    throw new Error('Remote path is a directory')
+    throw new Error(REMOTE_PATH_IS_DIRECTORY_MESSAGE)
   }
   if (before.size > maxBytes) {
     return { kind: 'too_large', size: before.size }

@@ -1,10 +1,12 @@
 import {
-  LEGACY_MAC_SEARCH_BINDINGS,
-  LEGACY_TAB_SWITCH_BINDINGS,
-  type KeybindingActionId,
-  type KeybindingFileSnapshot,
-  type KeybindingOverrides
-} from '../../shared/keybindings'
+  getLegacySearchBindings,
+  LEGACY_TAB_SWITCH_BINDINGS
+} from '../../shared/keybindings/definitions'
+import type {
+  KeybindingActionId,
+  KeybindingFileSnapshot,
+  KeybindingOverrides
+} from '../../shared/keybindings/types'
 import {
   ensureKeybindingFile,
   getUserKeybindingsPath,
@@ -33,9 +35,7 @@ export class KeybindingService {
     this.platform = options.platform ?? process.platform
     this.defaultOverrides = {
       ...(options.legacyTabSwitchDefaults ? LEGACY_TAB_SWITCH_BINDINGS : {}),
-      ...(options.legacySearchDefaults && this.platform === 'darwin'
-        ? LEGACY_MAC_SEARCH_BINDINGS
-        : {})
+      ...(options.legacySearchDefaults ? getLegacySearchBindings(this.platform) : {})
     }
     const legacyOverrides = options.getLegacyOverrides?.()
     try {

@@ -1,11 +1,14 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { getSecretStore } from '../../shared/secret-store'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
-import type { AntigravityAccountSummary } from '../../shared/antigravity-account-types'
-import type { ProviderRateLimits, RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
+import type { AntigravityAccountSummary } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
+import type {
+  ProviderRateLimits,
+  RateLimitRuntimeTarget
+} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
-import { readPrivateWindowsFile } from '../../shared/secure-path-windows-acl'
+import { readPrivateWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
 
 export type StoredAntigravityUsage = {
   target: RateLimitRuntimeTarget

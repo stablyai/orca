@@ -1,4 +1,4 @@
-import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   agentMessageSender,
   type SenderSnapshotResolver

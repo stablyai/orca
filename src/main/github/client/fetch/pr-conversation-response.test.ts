@@ -55,7 +55,8 @@ describe.each(['GraphQL', 'REST'] as const)('%s review summaries', (source) => {
                 html_url: comment.url
               }))
             ),
-            true
+            true,
+            null
           )
 
     expect(reviews?.map((review) => review.body)).toEqual(visibleBodies)

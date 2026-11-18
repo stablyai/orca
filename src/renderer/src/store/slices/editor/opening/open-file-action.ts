@@ -1,16 +1,20 @@
 import { editorPlacementIntent } from '../tabs/editor-placement-intent'
+import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
+import { editorTabContentTypeForMode } from '../tabs/editor-tab-content-type'
+import { isLiveLinkOpenGroup as isLiveEditorOpenGroup } from '../../../../lib/links/placement/link-open-intent'
+import { EDITOR_FOCUS_REQUEST_TTL_MS } from '../types/pending-editor-reveal'
+import { takeNextEditorFocusRequestToken } from '../focus/editor-focus-reveal'
+import { applyOpenFileToState } from './open-file-apply'
+import type { OpenFileApplyScratch } from './open-file-apply'
+import {
+  afterPendingTab,
+  pendingTabGroupId
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
 import type { OpenFileOptions } from '../types/editor-files-slice'
 import type { EditorOpenLinkIntent, EditorOpenResult } from '../types/editor-open-link-intent'
-import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
-import { editorTabContentTypeForMode } from '../tabs/editor-tab-content-type'
-import { isLiveLinkOpenGroup as isLiveEditorOpenGroup } from '../../../../lib/link-open-intent'
-import { EDITOR_FOCUS_REQUEST_TTL_MS } from '../types/pending-editor-reveal'
-import { takeNextEditorFocusRequestToken } from '../focus/editor-focus-reveal'
-import { applyOpenFileToState, type OpenFileApplyScratch } from './open-file-apply'
-import { afterPendingTab, pendingTabGroupId } from '@/runtime/layout-owner-pending-tabs'
 
 export function createOpenFileAction(
   set: EditorSet,

@@ -1,4 +1,4 @@
-import { selectKnownWorktreeById } from '@/store/selectors'
+import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 import type { AppState } from '@/store/types'
 
 export function selectOnboardingWorkspaceId(state: AppState): string | null {

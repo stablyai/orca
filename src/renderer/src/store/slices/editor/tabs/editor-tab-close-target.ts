@@ -1,6 +1,6 @@
 import type { OpenFile } from '../types/open-file'
 import type { AppState } from '../../../types'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { editorBufferIdOfView, editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
 import { needsSavePromptOnClose } from '../buffers/editor-buffer-close-rule'
 import {
@@ -9,7 +9,7 @@ import {
   openFileIndex
 } from './workspace-editor-files'
 import { isEditorTabContentType } from './editor-tab-content-type'
-import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import { hasPendingEntityTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
 export function editorCloseTarget(state: AppState, id: string) {
   const candidate = editorPlacementIndex(state.unifiedTabsByWorktree).tabById.get(id)

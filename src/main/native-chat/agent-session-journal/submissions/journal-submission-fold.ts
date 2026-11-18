@@ -1,10 +1,11 @@
+import { orchestrationMailNotice } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { journalRenderItem } from '../projection/journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from '../projection/journal-item-fold'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -12,13 +13,36 @@ import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { journalDispatchRowApplies } from '../projection/journal-dispatch-settlement'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../projection/journal-dispatch-doubt-reasons'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import {
+  journalInputSourceBody,
+  journalInputSourceSequence
+} from '../input-order/journal-input-source'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'submission' }>
 ): void {
+  state.submissions.set(row.clientMessageId, journalSubmissionFromRow(row))
+  const itemId = agentJournalSubmissionKey(row.clientMessageId)
+  // Delayed handovers belong to no turn until dispatch names one.
+  const turnScope = row.handoverRecorded
+    ? AGENT_JOURNAL_THREAD_SCOPE
+    : statedOrDerivedTurnScope(state, row)
+  upsertJournalItem(
+    state,
+    itemId,
+    0,
+    journalRenderItem(itemId, 0, row.body, row, turnScope),
+    // User messages retain admission provenance, not provider execution ownership.
+    { fence: row.fence }
+  )
+}
+
+export function journalSubmissionFromRow(
+  row: Extract<JournalRow, { kind: 'submission' }>
+): AgentJournalSubmission {
   const options = readAgentSessionExecutionOptions(row.options)
-  state.submissions.set(row.clientMessageId, {
+  return {
     clientMessageId: row.clientMessageId,
     fence: row.fence,
     payloadFingerprint: row.payloadFingerprint,
@@ -36,20 +60,7 @@ export function applyJournalSubmission(
     // Preserve source presence: unknown/unreadable kinds must not become legacy user sends.
     ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {}),
     ...(options ? { options } : {})
-  })
-  const itemId = agentJournalSubmissionKey(row.clientMessageId)
-  // Delayed handovers belong to no turn until dispatch names one.
-  const turnScope = row.handoverRecorded
-    ? AGENT_JOURNAL_THREAD_SCOPE
-    : statedOrDerivedTurnScope(state, row)
-  upsertJournalItem(
-    state,
-    itemId,
-    0,
-    journalRenderItem(itemId, 0, row.body, row, turnScope),
-    // User messages retain admission provenance, not provider execution ownership.
-    { fence: row.fence }
-  )
+  }
 }
 
 /** Place at handover, after intervening work; scope legacy rows from the handover position. */
@@ -160,16 +171,20 @@ export function acceptSubmissionFromProviderItem(
   })
 }
 
-/** Any provider-accepted turn may lift queue pauses. */
+/** Acceptance lifts the pauses allowed by the input's saved provenance. */
 export function noteTurnAccepted(
   state: JournalReducerState,
-  submission: Pick<AgentJournalSubmission, 'acceptedSequence'>
+  submission: Pick<
+    AgentJournalSubmission,
+    'acceptedSequence' | 'queuedMessageId' | 'source' | 'origin'
+  >
 ): void {
   if (submission.acceptedSequence !== undefined) {
     state.latestAcceptedTurnSequence = Math.max(
       state.latestAcceptedTurnSequence,
       submission.acceptedSequence
     )
+    getJournalInputOrder(state)?.notePersonAcceptance(submission)
   }
 }
 
@@ -181,4 +196,47 @@ function storedSourceKind(stored: unknown): string {
     typeof stored.kind === 'string'
     ? stored.kind
     : ''
+}
+
+/** A row keeps who requested it even when explicit Send supplies a client-origin attempt. */
+export function journalSubmissionIsPersonal(
+  state: { queue: Pick<JournalReducerState['queue'], 'cards'> },
+  submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>
+): boolean {
+  if (submission.queuedMessageId !== undefined) {
+    const card = state.queue.cards.get(submission.queuedMessageId)
+    return Boolean(
+      card &&
+      card.unattended !== true &&
+      !card.body.from &&
+      !orchestrationMailNotice(card.body.from)
+    )
+  }
+  return (
+    submission.source?.kind === 'user' ||
+    (submission.source === undefined && submission.origin === 'client')
+  )
+}
+
+/** Old importers could remove a completed card while retaining its original personal request. */
+export function journalLegacySubmissionIsPersonal(
+  state: Pick<JournalReducerState, 'queue' | 'inputs' | 'epoch'>,
+  submission: AgentJournalSubmission
+): boolean {
+  if (!submission.queuedMessageId || state.queue.cards.has(submission.queuedMessageId)) {
+    return journalSubmissionIsPersonal(state, submission)
+  }
+  const admission = state.inputs.sources.get(submission.clientMessageId)
+  const request = admission?.kind === 'submission' ? admission : admission?.submission
+  const body = journalInputSourceBody(admission)
+  return Boolean(
+    admission?.epoch === state.epoch &&
+    request?.queuedMessageId === submission.queuedMessageId &&
+    request?.origin === 'client' &&
+    request.source === undefined &&
+    request.payloadFingerprint === submission.payloadFingerprint &&
+    journalInputSourceSequence(admission) === submission.acceptedSequence &&
+    body &&
+    !body.from
+  )
 }

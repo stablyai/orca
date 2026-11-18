@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../../ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const MAX_FULL_TARGET_LABELS = 10
 const COLLAPSED_TARGET_LABELS = 8
@@ -41,6 +41,7 @@ export function SshDestructiveActionDialog({
   onOpenChange,
   onConfirm
 }: SshDestructiveActionDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const labels = targetLabels ?? []
   const shownLabels =
     labels.length > MAX_FULL_TARGET_LABELS ? labels.slice(0, COLLAPSED_TARGET_LABELS) : labels
@@ -76,7 +77,7 @@ export function SshDestructiveActionDialog({
             ))}
             {hiddenLabelCount > 0 ? (
               <li className="py-0.5">
-                {translate(
+                {t(
                   'auto.components.settings.SshDestructiveActionDialog.moreTargets',
                   '+{{count}} more',
                   { count: hiddenLabelCount }
@@ -95,7 +96,7 @@ export function SshDestructiveActionDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
-            {translate('auto.components.settings.SshDestructiveActionDialog.895b216267', 'Cancel')}
+            {t('auto.components.settings.SshDestructiveActionDialog.895b216267', 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={isBusy} className="gap-1.5">
             {isBusy ? <Loader2 className="size-3 animate-spin" /> : null}

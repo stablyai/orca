@@ -1,58 +1,56 @@
-import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import {
-  recordMobileNativeChatSkillPick,
-  useMobileNativeChatDraft
-} from './mobile-native-chat-draft-store'
-import { useMobileNativeChatComposerDictation } from './use-mobile-native-chat-composer-dictation'
+import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
+import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
+import { useMobileNativeChatComposerDictation } from './dictation/use-mobile-native-chat-composer-dictation'
 import {
   focusMobileNativeChatTextDestination,
   pruneMobileNativeChatDraftSkills
-} from './mobile-native-chat-draft-inputs'
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
-import { MobileNativeChatComposerAllocation } from './MobileNativeChatComposerAllocation'
+} from './drafts/mobile-native-chat-draft-inputs'
+import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
+import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComposerAllocation'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Keyboard, type TextInput, View } from 'react-native'
+import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'
 import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { MobileNativeChatComposerSuggestions } from './MobileNativeChatComposerMenu'
-import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
-import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
-import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
-import { MobileNativeChatComposerAttachButton } from './MobileNativeChatComposerAttachButton'
+import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
+import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
+import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
+import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
+import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
 import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatSessionOptionPickersProps
-} from '../input/MobileNativeChatSessionOptionPickers'
-import { useMobileNativeChatPickerPresentation } from '../input/use-mobile-native-chat-picker-presentation'
-import type { MobileNativeChatSteerHead } from './use-mobile-native-chat-composer-tray'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+} from '../input/session-options/MobileNativeChatSessionOptionPickers'
+import { useMobileNativeChatPickerPresentation } from '../input/session-options/use-mobile-native-chat-picker-presentation'
+import type { MobileNativeChatSteerHead } from './menus/use-mobile-native-chat-composer-tray'
+import type { PendingNativeChatImage } from './attachments/mobile-native-chat-image-attachment'
 import {
   mobileNativeChatComposerPasteHandler,
   type MobilePastedImages
-} from './mobile-native-chat-composer-paste'
-import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
-import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
+} from './attachments/mobile-native-chat-composer-paste'
+import { useMobileNativeChatComposerMenu } from './menus/use-mobile-native-chat-composer-menu'
+import { mobileNativeChatComposerStyles as styles } from './field/mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
-import { MobileNativeChatComposerSendSlot } from './MobileNativeChatComposerSendSlot'
-import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
-import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
-import { MobileNativeChatComposerMic } from './MobileNativeChatComposerMic'
-import type { MobileNativeChatMicProps } from './MobileNativeChatComposerMic'
-import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
-import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
-import { MobileNativeChatComposerPlanChip } from './MobileNativeChatComposerPlanChip'
+import { MobileNativeChatComposerSendSlot } from './delivery/MobileNativeChatComposerSendSlot'
+import { MobileNativeChatEditActions } from './field/MobileNativeChatEditActions'
+import { useMobileNativeChatContextRing } from './commands/MobileNativeChatContextUsageRing'
+import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
+import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
+import type { MobileNativeChatMicProps } from './dictation/MobileNativeChatComposerMic'
+import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
+import type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
+import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
+import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
+import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
+import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
 
-export type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
-
-type Props = MobileNativeChatMicProps & {
+export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
   // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
   insertDictation?: (insert: (draft: string) => string) => boolean | void
   draftScopeKey?: string | null
@@ -63,7 +61,7 @@ type Props = MobileNativeChatMicProps & {
     interactionModeSupported?: boolean
   }
   onPickSkill?: (skill: { name: string; path: string }) => void
-  inputRef?: React.RefObject<TextInput | null>
+  inputRef?: React.RefObject<TextInputInstance | null>
   // Terminal-backed chats keep curated commands and image-only attachment actions.
   structured?: MobileNativeChatStructuredComposer | null
   value: string
@@ -89,6 +87,8 @@ type Props = MobileNativeChatMicProps & {
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
   disabled?: boolean
+  /** The desktop is out: typing and Send (which queues) still work; attaching and dictation can't. */
+  offline?: boolean
   /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
   sendDisabled?: boolean
   placeholder?: string
@@ -102,7 +102,10 @@ type Props = MobileNativeChatMicProps & {
 }
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
-export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
+export type MobileNativeChatSendProps = Pick<
+  MobileNativeChatComposerProps,
+  'onSend' | 'sendFollowUp'
+>
 
 export function MobileNativeChatComposer({
   inputRef,
@@ -133,6 +136,7 @@ export function MobileNativeChatComposer({
   onMicPressIn,
   onMicPressOut,
   disabled = false,
+  offline = false,
   sendDisabled = false,
   placeholder,
   filePaths = NO_FILE_PATHS,
@@ -142,19 +146,21 @@ export function MobileNativeChatComposer({
   stop = null,
   sendFollowUp = null,
   steerHead
-}: Props): React.JSX.Element {
+}: MobileNativeChatComposerProps): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const fallbackInputRef = useRef<TextInput>(null)
+  const fallbackInputRef = useRef<TextInputInstance>(null)
   const fieldRef = inputRef ?? fallbackInputRef
-  const groupRef = useRef<View>(null)
+  const groupRef = useRef<HostInstance>(null)
+  // This composer's ✕, which its own held mic may be released over.
+  const cancelRef = useRef<HostInstance>(null)
   const [focused, setFocused] = useState(false)
   const [picker, setPicker] = useMobileNativeChatPickerPresentation(
     sessionOptions?.controller.optionPickerRequest
   )
   const files = structured?.files ?? NO_FILES
   const onWebPaste = mobileNativeChatComposerPasteHandler({
-    disabled: disabled || editSession?.locked === true,
+    disabled: disabled || offline || editSession?.locked === true,
     onPasteImages,
     onAttachPastedText: structured?.onAttachPastedText
   })
@@ -284,7 +290,9 @@ export function MobileNativeChatComposer({
         nestedScrollEnabled={editSession ? true : undefined}
       />
       <View style={styles.composerInset} testID="native-chat-composer-inset">
+        {editSession ? null : <MobileNativeChatMcpTray panel={structured?.mcpPanel} />}
         {goal.strip}
+        {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
         <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
           <MobileNativeChatComposerAttachments
             images={attachments}
@@ -338,13 +346,15 @@ export function MobileNativeChatComposer({
             textAlignVertical="top"
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
-            <View style={styles.leadingControls}>
+            <MobileNativeChatDictationLeading
+              {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
+            >
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}
                 onAttachFiles={structured?.onAttachFiles}
                 structured={structured !== null}
                 isAttaching={isAttaching}
-                disabled={disabled}
+                disabled={disabled || offline}
                 menu={menu}
               />
               {sessionOptions ? (
@@ -364,18 +374,12 @@ export function MobileNativeChatComposer({
               ) : null}
               <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
               {goal.chip}
-            </View>
-            {contextRing.ring}
+            </MobileNativeChatDictationLeading>
             {onMicPress ? (
               <MobileNativeChatComposerMic
-                onMicPress={onMicPress}
-                micActive={micActive}
-                micStarting={micStarting}
-                micProcessing={micProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={onMicPressIn}
-                onMicPressOut={onMicPressOut}
-                disabled={disabled}
+                {...{ onMicPress, micActive, micStarting, micProcessing, dictationMode }}
+                {...{ onMicPressIn, onMicPressOut, cancelRef }}
+                disabled={disabled || offline}
               />
             ) : null}
             {editSession ? (
@@ -419,11 +423,4 @@ export function MobileNativeChatComposer({
       {content}
     </MobileNativeChatComposerAllocation>
   )
-}
-
-export function MobileNativeChatDraftComposer({
-  draftKey,
-  ...props
-}: Omit<Props, 'value'> & { draftKey: string | null }): React.JSX.Element {
-  return <MobileNativeChatComposer {...props} value={useMobileNativeChatDraft(draftKey)} />
 }

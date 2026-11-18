@@ -1,7 +1,7 @@
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import {
   readTerminalStreamFrameId,
@@ -56,7 +56,7 @@ export function declareRelayedPhoneCapabilities(frame: string): string {
 
 const LAUNCH_METHODS_READING_CHAT_DEFAULT = new Set(['agent.launch', 'agent.launchReplay'])
 
-// The relaying desktop owns the user chat default; older servers strip this additive field.
+// The phone's own Chat or CLI pick wins, then the relaying desktop's default; older servers strip this additive field.
 export function withRelayedLaunchChatDefault(
   frame: string,
   method: string,
@@ -70,9 +70,13 @@ export function withRelayedLaunchChatDefault(
     return frame
   }
   const agent = typeof parsed.params.agent === 'string' ? parsed.params.agent : ''
+  const picked = parsed.params.nativeChatDefault
   return JSON.stringify({
     ...parsed,
-    params: { ...parsed.params, nativeChatDefault: nativeChatDefaultFor(agent) }
+    params: {
+      ...parsed.params,
+      nativeChatDefault: typeof picked === 'boolean' ? picked : nativeChatDefaultFor(agent)
+    }
   })
 }
 

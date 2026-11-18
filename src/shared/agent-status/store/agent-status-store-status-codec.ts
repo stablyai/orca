@@ -6,8 +6,8 @@ import {
   parseAgentStatusProviderAlias
 } from '../contracts/agent-status-run'
 import { normalizeAgentStatusPayload } from '../contracts/agent-status-types'
-import { assertJsonTextStructureWithinLimits } from '../../json-text-structure-limit'
-import { measureUtf8ByteLength } from '../../utf8-byte-limits'
+import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
+import { measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 
 const MAX_STATUS_BYTES = 256 * 1024
 const MAX_ID_LENGTH = 4_096

@@ -8,8 +8,10 @@ type RuntimeGitCommandName =
   | 'getRuntimeGitHistory'
   | 'getRuntimeGitConflictOperation'
   | 'getRuntimeGitMutationInFlight'
+  | 'readRuntimeWorktreeAtRiskLocalFiles'
   | 'abortRuntimeGitMerge'
   | 'abortRuntimeGitRebase'
+  | 'switchRuntimeGitBranch'
   | 'checkoutRuntimeGitBranch'
   | 'listRuntimeGitLocalBranches'
   | 'getRuntimeGitDiff'
@@ -25,6 +27,11 @@ type RuntimeGitCommandName =
   | 'getRuntimeGitBranchDiff'
   | 'getRuntimeGitCommitDiff'
   | 'commitRuntimeGit'
+  | 'createRuntimeGitBranch'
+  | 'cherryPickRuntimeGit'
+  | 'revertRuntimeGit'
+  | 'sequencerAbortRuntimeGit'
+  | 'sequencerContinueRuntimeGit'
   | 'completeRuntimeGitMerge'
   | 'generateRuntimeCommitMessage'
   | 'discoverRuntimeCommitMessageModels'
@@ -40,6 +47,7 @@ type RuntimeGitCommandName =
   | 'discardRuntimeGitPath'
   | 'getRuntimeGitRemoteFileUrl'
   | 'getRuntimeGitRemoteCommitUrl'
+  | 'getRuntimeGitBlame'
 
 export type RuntimeGitCommandSurface = Pick<RuntimeGitCommands, RuntimeGitCommandName>
 
@@ -55,8 +63,11 @@ export function installRuntimeGitCommandSurface(
     getRuntimeGitHistory: commands.getRuntimeGitHistory.bind(commands),
     getRuntimeGitConflictOperation: commands.getRuntimeGitConflictOperation.bind(commands),
     getRuntimeGitMutationInFlight: commands.getRuntimeGitMutationInFlight.bind(commands),
+    readRuntimeWorktreeAtRiskLocalFiles:
+      commands.readRuntimeWorktreeAtRiskLocalFiles.bind(commands),
     abortRuntimeGitMerge: commands.abortRuntimeGitMerge.bind(commands),
     abortRuntimeGitRebase: commands.abortRuntimeGitRebase.bind(commands),
+    switchRuntimeGitBranch: commands.switchRuntimeGitBranch.bind(commands),
     checkoutRuntimeGitBranch: commands.checkoutRuntimeGitBranch.bind(commands),
     listRuntimeGitLocalBranches: commands.listRuntimeGitLocalBranches.bind(commands),
     getRuntimeGitDiff: commands.getRuntimeGitDiff.bind(commands),
@@ -72,6 +83,11 @@ export function installRuntimeGitCommandSurface(
     getRuntimeGitBranchDiff: commands.getRuntimeGitBranchDiff.bind(commands),
     getRuntimeGitCommitDiff: commands.getRuntimeGitCommitDiff.bind(commands),
     commitRuntimeGit: commands.commitRuntimeGit.bind(commands),
+    createRuntimeGitBranch: commands.createRuntimeGitBranch.bind(commands),
+    cherryPickRuntimeGit: commands.cherryPickRuntimeGit.bind(commands),
+    revertRuntimeGit: commands.revertRuntimeGit.bind(commands),
+    sequencerAbortRuntimeGit: commands.sequencerAbortRuntimeGit.bind(commands),
+    sequencerContinueRuntimeGit: commands.sequencerContinueRuntimeGit.bind(commands),
     completeRuntimeGitMerge: commands.completeRuntimeGitMerge.bind(commands),
     generateRuntimeCommitMessage: commands.generateRuntimeCommitMessage.bind(commands),
     discoverRuntimeCommitMessageModels: commands.discoverRuntimeCommitMessageModels.bind(commands),
@@ -87,6 +103,7 @@ export function installRuntimeGitCommandSurface(
     bulkDiscardRuntimeGitPaths: commands.bulkDiscardRuntimeGitPaths.bind(commands),
     discardRuntimeGitPath: commands.discardRuntimeGitPath.bind(commands),
     getRuntimeGitRemoteFileUrl: commands.getRuntimeGitRemoteFileUrl.bind(commands),
-    getRuntimeGitRemoteCommitUrl: commands.getRuntimeGitRemoteCommitUrl.bind(commands)
+    getRuntimeGitRemoteCommitUrl: commands.getRuntimeGitRemoteCommitUrl.bind(commands),
+    getRuntimeGitBlame: commands.getRuntimeGitBlame.bind(commands)
   } satisfies RuntimeGitCommandSurface)
 }

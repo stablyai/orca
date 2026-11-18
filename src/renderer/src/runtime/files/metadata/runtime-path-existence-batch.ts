@@ -3,7 +3,7 @@ import {
   PATH_EXISTENCE_BATCH_CAPABILITY,
   requirePathExistenceResults,
   type PathExistenceResult
-} from '../../../../../shared/path-existence-batch'
+} from '../../../../../shared/file-access/path-existence-batch'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import { assertLocalFilesystemFallbackAllowed, getRemoteFileArgs } from '../runtime-file-routing'
 import { isMissingRuntimePathError, runtimePathExists } from './runtime-file-metadata-client'
@@ -61,7 +61,7 @@ export async function runtimePathsExist(
         15_000
       ))
     ) {
-      return fallback()
+      return await fallback()
     }
     const result = requirePathExistenceResults(
       await callRuntimeRpc(

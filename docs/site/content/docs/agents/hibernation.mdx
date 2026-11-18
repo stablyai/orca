@@ -27,7 +27,7 @@ Orca only hibernates an agent terminal when **all** of the following are true:
 
 A terminal that fails any check stays running. Each agent pane is checked and hibernated on its own, so a finished pane can sleep while a sibling pane or tab in the same worktree keeps running.
 
-Manual sleep is different: it stops the whole worktree at once. Sleep a worktree from the sidebar (including **Sleep with Descendants** when nested children exist). See [Worktrees](/docs/model/worktrees). Manual sleep keeps **finished** and **interrupted** resumable sessions so reopening the worktree can still relaunch with the same resume flags — it does not wipe those session records just because the pane was no longer "live."
+Manual sleep is different: it stops the whole worktree at once. Sleep a worktree from the sidebar (use **Sleep → With Descendants** when nested children exist). See [Worktrees](/docs/model/worktrees). Manual sleep keeps **finished** and **interrupted** resumable sessions so reopening the worktree can still relaunch with the same resume flags — it does not wipe those session records just because the pane was no longer "live."
 
 ## Tuning the idle window
 

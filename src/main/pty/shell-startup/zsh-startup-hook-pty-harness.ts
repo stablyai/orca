@@ -12,10 +12,12 @@ export const ZSH_PATH = hasZsh
   : ''
 
 export const MARKERS = {
+  // oxlint-disable-next-line no-control-regex -- OSC markers are delimited by ESC and BEL bytes
   identity: /\]777;orca-shell-start:\d+/,
   ready: ']777;orca-shell-ready',
   promptStart: ']133;A',
   commandStart: ']133;C',
+  // oxlint-disable-next-line no-control-regex -- OSC markers are delimited by ESC and BEL bytes
   commandDone: /\]133;D;\d+/
 } as const
 

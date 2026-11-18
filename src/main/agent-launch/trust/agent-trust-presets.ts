@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { writeFileAtomically } from '../../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { upsertOrcaCreatedProjectTrustLevel } from '../../codex/trust/toml/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from '../../codex/trust/toml/codex-trust-config-mutation-queue'
 import { recordOrcaCreatedAntigravityTrust } from './antigravity-workspace-trust-ownership'
@@ -163,8 +163,9 @@ function canonicalize(p: string): string {
 }
 
 function cursorWorkspaceSlug(absPath: string): string {
-  const stripped = absPath.replace(/^[\\/]+/, '')
-  // Windows paths contain characters forbidden in Cursor’s project-directory names.
-  const slug = stripped.replace(/[\\/:*?"<>|]+/g, '-')
-  return slug
+  // Mirrors cursor-agent's project-directory name; any mismatch leaves the trust menu up.
+  return absPath
+    .replace(/[^a-zA-Z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }

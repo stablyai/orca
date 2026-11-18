@@ -6,10 +6,10 @@ import {
   terminalRewriteOutputRenderRefreshDecision,
   terminalRewriteOutputPrefersRenderRefresh,
   windowsEastAsianOutputPrefersRenderRefresh
-} from '@/lib/pane-manager/terminal-complex-script'
+} from '@/lib/pane-manager/terminal-rendering/terminal-complex-script'
 import { RESET_AFTER_BYTE_GAP } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
-import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
+import { recordTerminalOutput } from '@/lib/pane-manager/terminal-scroll/pane-scroll'
+import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-rendering/terminal-arabic-shaping-joiner'
 import { registerPtyModelRestoreNeededHandler } from '../../pty-transport/delivery/pty-model-restore-channel'
 import type { PtyModelRestoreNeededEvent } from '../../../../../../shared/terminal/replay/pty-model-restore-marker'
 import {
@@ -27,6 +27,7 @@ import {
   consumeInactiveForegroundImmediateBudget
 } from './foreground-output-budgets'
 import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
+import { syncRemoteOutputCadence } from './remote-output-cadence'
 
 import { terminalInputEchoAllowanceMs } from './terminal-input-echo-delay'
 
@@ -160,6 +161,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
   session.syncHiddenRendererPtyDelivery = (): void => {
     const ptyId = session.transport.getPtyId()
     syncModelRestoreNeededSubscription(ptyId)
+    syncRemoteOutputCadence(session)
     if (session.remoteOutputGatedPtyId !== null && session.remoteOutputGatedPtyId !== ptyId) {
       session.remoteOutputGatedPtyId = null
       if (!session.mainSideEffectAuthority) {

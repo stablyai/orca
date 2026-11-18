@@ -5,7 +5,7 @@ import type {
   TabContentType,
   TabGroup,
   TabGroupLayoutNode
-} from '../../../../../shared/tab-types'
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 
@@ -28,6 +28,8 @@ export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
+  /** Window-only: group id to worktree id for groups a chat split opened as a chooser. Never saved or sent. */
+  splitLandingGroupIds: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
   createUnifiedTab: (
     worktreeId: string,
@@ -154,7 +156,7 @@ export type TabsSlice = {
     worktreeId: string,
     sourceGroupId: string,
     direction: TabSplitDirection,
-    opts?: { activate?: boolean }
+    opts?: { activate?: boolean; landing?: boolean }
   ) => string | null
   moveUnifiedTabToGroup: (
     tabId: string,

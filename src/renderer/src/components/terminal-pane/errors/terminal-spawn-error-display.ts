@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
+import type { Translate } from '@/i18n/use-translate'
+import { resolveClientEnvironmentFooter } from '@/app-shell/platform/client-environment-info'
 import {
   LEGACY_PTY_ALLOCATION_HINT,
   LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
@@ -10,16 +11,16 @@ import {
 } from '../../../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 
 /** Swaps the host's English resource-limit hints for the viewer's locale. */
-export function localizeTerminalSpawnHints(error: string): string {
-  const ptyAllocation = translate(
+export function localizeTerminalSpawnHints(error: string, t: Translate = translate): string {
+  const ptyAllocation = t(
     'auto.components.terminal.pane.TerminalErrorToast.ptyAllocationLimit',
     PTY_ALLOCATION_HINT
   )
-  const processLimit = translate(
+  const processLimit = t(
     'auto.components.terminal.pane.TerminalErrorToast.terminalProcessLimit',
     TERMINAL_PROCESS_LIMIT_HINT
   )
-  const hostCap = translate(
+  const hostCap = t(
     'auto.components.terminal.pane.TerminalErrorToast.hostTerminalCap',
     TERMINAL_HOST_CAP_HINT
   )

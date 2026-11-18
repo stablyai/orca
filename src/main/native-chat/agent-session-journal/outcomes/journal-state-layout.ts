@@ -1,7 +1,9 @@
+import { memoryJournalMap } from '../journal-memory-collections'
 import type { JournalReducerState } from '../projection/journal-reducer'
 
 // Every reducer field has a storage home; queue splits its revision from its keyed cards.
 export const journalStateLayout = {
+  queries: 'prepared',
   sessionId: 'scalar',
   epoch: 'scalar',
   lastSequence: 'scalar',
@@ -44,8 +46,9 @@ type ScalarKey = {
 
 type Collection = { path: string; entries: Iterable<[unknown, unknown]> }
 
-export function journalStateScalars(state: JournalReducerState): string {
-  const stop = state.queuePauseMarks.latestStop
+export function journalStateScalars(state: JournalReducerState, format: 2 | 3 = 3): string {
+  const { manualStop, ...marks } = state.queuePauseMarks
+  const stop = marks.latestStop
   return JSON.stringify({
     sessionId: state.sessionId,
     epoch: state.epoch,
@@ -56,13 +59,15 @@ export function journalStateScalars(state: JournalReducerState): string {
     derivedTurnScope: state.derivedTurnScope.snapshot(),
     latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
     queuePauseMarks: {
-      ...state.queuePauseMarks,
+      ...marks,
+      ...(format === 3 && manualStop !== undefined ? { manualStop } : {}),
       latestStop: stop && { sequence: stop.sequence, event: stop.event }
     },
     queue: { revision: state.queue.revision },
-    historyOrigin: state.historyOrigin,
     ...(state.contextBoundary > 1 ? { contextBoundary: state.contextBoundary } : {})
-  } satisfies Record<Exclude<ScalarKey, 'contextBoundary'>, unknown> & { contextBoundary?: number })
+  } satisfies Record<Exclude<ScalarKey, 'contextBoundary' | 'historyOrigin'>, unknown> & {
+    contextBoundary?: number
+  })
 }
 
 export function journalStateCollections(state: JournalReducerState): Collection[] {
@@ -74,7 +79,7 @@ export function journalStateCollections(state: JournalReducerState): Collection[
       return [{ path, entries: value.entries() }]
     }
     if (path === 'queue') {
-      return [{ path: 'queue.cards', entries: state.queue.cards }]
+      return [{ path: 'queue.cards', entries: memoryJournalMap(state.queue.cards) }]
     }
     return []
   })

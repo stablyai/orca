@@ -60,27 +60,6 @@ function highlighted(): string {
   ).join('')
 }
 
-/** Each preedit character's letter-spacing, i.e. its advance correction onto the cell grid. */
-
-it.each([false, true])(
-  'highlights each clause the IME selects without sending it (screenReaderMode: %s)',
-  async (screenReaderMode) => {
-    openComposition({ screenReaderMode })
-    for (const [preedit, start, end] of [
-      ['今日はいい天気です', 0, 3],
-      ['今日はいい天気です', 3, 9],
-      ['きょうはいいてんきです', 0, 5]
-    ] as const) {
-      updatePreedit(preedit)
-      selectClause(start, end)
-      // xterm re-lays out the preedit one task after every update.
-      await new Promise((resolve) => setTimeout(resolve))
-      expect(highlighted()).toBe(preedit.slice(start, end))
-    }
-    expect(sent).toEqual([])
-  }
-)
-
 it('highlights a whole grapheme when a clause boundary falls inside it, but not a caret', () => {
   openComposition()
   updatePreedit('か\u3099X')

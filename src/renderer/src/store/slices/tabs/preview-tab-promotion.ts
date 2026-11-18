@@ -1,11 +1,11 @@
 // Main-owned previews end in main’s frame; paired-server layouts and host_not_owned twins promote in the window copy.
 
-import type { Tab } from '../../../../../shared/tab-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { sendLayoutApply } from '@/runtime/layout-apply-send'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
+import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import type { AppState } from '../../types'
-import { patchTab } from '../tab-group-state'
+import { patchTab } from './tab-group-state'
 
 type OwnerState = Parameters<typeof sendLayoutApply>[0]
 type TabsState = Pick<AppState, 'unifiedTabsByWorktree'>

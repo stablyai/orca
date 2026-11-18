@@ -7,12 +7,12 @@ import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { DiffSectionItem } from '@/components/editor/diff/sections/DiffSectionItem'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
-import type { GitHubPRFile } from '../../../../../shared/github/pull-request-types'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { GitBranchChangeEntry } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { PRFilesCombinedDiffToolbar } from './pr-files-combined-diff-toolbar'
 
@@ -89,6 +89,7 @@ export function PRFilesCombinedDiffBody({
   modifiedEditorsRef: React.RefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
   handleSectionSaveRef: React.MutableRefObject<(index: number) => Promise<void>>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <PRFilesCombinedDiffToolbar
@@ -145,18 +146,18 @@ export function PRFilesCombinedDiffBody({
                     retrySection={retrySection}
                     toggleSection={toggleSection}
                     openSection={openFilesOnGitHub}
-                    openSectionTitle={translate(
+                    openSectionTitle={t(
                       'auto.components.GitHubItemDialog.85a2b66f54',
                       'Open files on GitHub'
                     )}
                     renderHeaderTrailingContent={renderViewedCheckbox}
                     imageUploadAddress={imageUploadAddress}
                     onAddLineComment={handleAddLineComment}
-                    addLineCommentLabel={translate(
+                    addLineCommentLabel={t(
                       'auto.components.GitHubItemDialog.bf43425540',
                       'Comment'
                     )}
-                    addLineCommentPlaceholder={translate(
+                    addLineCommentPlaceholder={t(
                       'auto.components.GitHubItemDialog.86d84a17ca',
                       'Add a review comment'
                     )}

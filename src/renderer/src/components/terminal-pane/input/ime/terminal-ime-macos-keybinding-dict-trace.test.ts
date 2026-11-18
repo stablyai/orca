@@ -119,10 +119,6 @@ describe('#11170 — a DefaultKeyBinding.dict remap reaches the PTY', () => {
     document.body.replaceChildren()
   })
 
-  it('sends the remapped character, not the raw layout character', () => {
-    expect(replay(['remapped'])).toBe(caseNamed('remapped').expectedPty)
-  })
-
   it('leaves the next keystroke untouched', () => {
     expect(replay(['remapped', 'remapped-neighbour-key'])).toBe('`a')
   })

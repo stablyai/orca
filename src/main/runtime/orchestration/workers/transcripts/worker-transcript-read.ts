@@ -1,9 +1,13 @@
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
-import type { OrchestrationWorkerReadFallbackReason } from '../../../../../shared/orchestration-worker-output'
+import type { OrchestrationWorkerReadFallbackReason } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../../../native-chat/session-file-resolver'
-import { nativeChatLineDecoderForAgent } from '../../../../native-chat/transcript-tail-reader'
+import {
+  nativeChatLineDecoderForAgent,
+  type NativeChatLineDecoder
+} from '../../../../native-chat/transcript-tail-reader'
+import { decodeClaudeTranscriptLine } from '../../../../native-chat/transcript-decoding/transcript-line-decoders-claude'
 import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
@@ -12,6 +16,11 @@ import {
   readForwardLocalWorkerTranscriptPage,
   readInitialLocalWorkerTranscriptPage
 } from './worker-transcript-local-read'
+import { readInitialWorkerTranscriptReusing } from './worker-transcript-initial-read-cache'
+import {
+  nativeChatTurnEvidenceObserverForAgent,
+  type NativeChatTurnEvidence
+} from '../../../../native-chat/transcript-decoding/transcript-turn-evidence'
 
 type WorkerTranscriptReadFailure = {
   ok: false
@@ -19,7 +28,7 @@ type WorkerTranscriptReadFailure = {
   warnings: string[]
 }
 
-type WorkerTranscriptReadSuccess = {
+export type WorkerTranscriptReadSuccess = {
   ok: true
   filePath: string
   sourceFingerprint: string
@@ -29,9 +38,17 @@ type WorkerTranscriptReadSuccess = {
   limited: boolean
   clipping: string[]
   warnings: string[]
+  /** A first page's newest turn marker, decoded from the same bytes as its messages; cursor
+   *  pages carry none. */
+  turn?: NativeChatTurnEvidence
 }
 
 export type WorkerTranscriptReadResult = WorkerTranscriptReadFailure | WorkerTranscriptReadSuccess
+
+/** Whether readWorkerTranscript can read this agent's transcript at all. */
+export function canReadWorkerTranscript(agent: AgentType): boolean {
+  return Boolean(resolveNativeChatTranscriptAgent(agent) && nativeChatLineDecoderForAgent(agent))
+}
 
 export async function readWorkerTranscript(args: {
   agent: AgentType
@@ -50,7 +67,11 @@ export async function readWorkerTranscript(args: {
   if (!transcriptAgent) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
-  const decode = nativeChatLineDecoderForAgent(args.agent)
+  // Workers read text; the chat's wordless turn markers have none to give.
+  const decode =
+    transcriptAgent === 'claude'
+      ? decodeClaudeTranscriptLine
+      : nativeChatLineDecoderForAgent(args.agent)
   if (!decode) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
@@ -67,10 +88,32 @@ export async function readWorkerTranscript(args: {
     return { ok: false, reason: 'transcript_missing', warnings: [] }
   }
   const limit = clampWorkerTranscriptLimit(args.limit)
+  const resolvedPath = filePath
+  const read = () => readResolvedWorkerTranscript(resolvedPath, decode, limit, args)
+  // A first read of an unchanged file serves its settled page; any other read scans.
+  return args.offset === undefined && args.expectedSourceFingerprint === undefined
+    ? readInitialWorkerTranscriptReusing(resolvedPath, [limit, decode], read)
+    : read()
+}
+
+async function readResolvedWorkerTranscript(
+  filePath: string,
+  decode: NativeChatLineDecoder,
+  limit: number,
+  args: Pick<
+    Parameters<typeof readWorkerTranscript>[0],
+    'agent' | 'offset' | 'expectedSourceFingerprint' | 'expectedBoundaryCheckpoint'
+  >
+): Promise<WorkerTranscriptReadResult> {
   try {
     const page =
       args.offset === undefined
-        ? await readInitialLocalWorkerTranscriptPage(filePath, limit, decode)
+        ? await readInitialLocalWorkerTranscriptPage(
+            filePath,
+            limit,
+            decode,
+            nativeChatTurnEvidenceObserverForAgent(args.agent)
+          )
         : await readForwardLocalWorkerTranscriptPage(
             filePath,
             args.offset,
@@ -88,6 +131,10 @@ export async function readWorkerTranscript(args: {
       return { ok: false, reason: 'source_changed', warnings: [] }
     }
     const bounded = boundWorkerTranscriptMessages(page.messages, filePath)
+    const turn =
+      page.turn?.state === 'completed' && !bounded.messages[page.turn.replyIndex ?? -1]
+        ? undefined
+        : page.turn
     return {
       ok: true,
       filePath,
@@ -100,7 +147,8 @@ export async function readWorkerTranscript(args: {
         ...(page.limited ? ['message_limit_or_scan_window'] : []),
         ...(bounded.limited ? ['transcript_payload'] : [])
       ],
-      warnings: [...page.warnings, ...bounded.warnings]
+      warnings: [...page.warnings, ...bounded.warnings],
+      ...(turn ? { turn } : {})
     }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code

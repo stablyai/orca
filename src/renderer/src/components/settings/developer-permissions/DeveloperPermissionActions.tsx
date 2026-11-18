@@ -3,8 +3,8 @@ import { toast } from 'sonner'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionStatus
-} from '../../../../../shared/developer-permissions-types'
-import { translate } from '@/i18n/i18n'
+} from '../../../../../shared/app-lifecycle/permissions/developer-permissions-types'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 
 type DeveloperPermissionActionsProps = {
@@ -22,12 +22,13 @@ export function DeveloperPermissionActions({
   status,
   onRequest
 }: DeveloperPermissionActionsProps): React.JSX.Element {
+  const t = useTranslate()
   const openSettings = async (): Promise<void> => {
     try {
       await window.api.developerPermissions.openSettings({ id })
     } catch {
       toast.error(
-        translate(
+        t(
           'auto.components.settings.DeveloperPermissionsPane.openSettingsFailed',
           'Could not open System Settings'
         )
@@ -46,12 +47,12 @@ export function DeveloperPermissionActions({
       >
         <ExternalLink className="size-3.5" />
         {pending
-          ? translate('auto.components.settings.DeveloperPermissionsPane.dac08ec03e', 'Working...')
+          ? t('auto.components.settings.DeveloperPermissionsPane.dac08ec03e', 'Working...')
           : actionLabel}
       </Button>
       {id === 'local-network' && (
         <Button variant="outline" size="sm" onClick={() => void openSettings()}>
-          {translate(
+          {t(
             'auto.components.settings.DeveloperPermissionsPane.localNetworkOpenSystemSettings',
             'Open System Settings'
           )}

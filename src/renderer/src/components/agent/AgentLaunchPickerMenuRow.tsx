@@ -1,3 +1,4 @@
+import { terminalPendingLabel } from './launch-menu/new-tab-agent-menu-model'
 import { memo, useId } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -5,12 +6,12 @@ import {
   DropdownMenuShortcut,
   useDropdownMenuClose
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentLaunchSetupButton, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
 import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
-import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
+import { chatUnavailableLabel } from './launch-menu/agent-menu-row-presentation'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import {
   agentPickerDraft,
@@ -18,6 +19,7 @@ import {
   type AgentPickerEntry,
   type AgentPickerSurface
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { useTranslate } from '@/i18n/use-translate'
 
 function pickerLaunchRow(entry: AgentPickerEntry, surface: AgentPickerSurface): NewTabAgentMenuRow {
   return {
@@ -30,9 +32,7 @@ function pickerLaunchRow(entry: AgentPickerEntry, surface: AgentPickerSurface): 
 export type AgentPickerMenuLaunch = (
   row: NewTabAgentMenuRow,
   draft?: AgentPickerDraft,
-  entry?: AgentPickerEntry,
-  /** Select mode: the surface explicitly accepted by a named launch action. */
-  surface?: AgentPickerSurface
+  entry?: AgentPickerEntry
 ) => boolean | void | Promise<boolean>
 
 // Why: catalog and seed reads land one agent at a time after the menu opens; only that row re-renders.
@@ -51,6 +51,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   mode,
   setupDisabled,
   disabled,
+  terminalBlocked,
   runLaunch,
   shortcut,
   onSelectAgent,
@@ -79,6 +80,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   mode?: 'launch' | 'select'
   setupDisabled?: boolean
   disabled?: boolean
+  terminalBlocked?: boolean
   runLaunch: AgentPickerMenuLaunch
   shortcut?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
@@ -86,6 +88,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   /** Base agent rows only; setup rows are presets, not default-agent choices. */
   onSetDefault?: (agent: AgentPickerEntry['agent']) => void
 }) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const setupId = useId()
   const preset = initialModel ? { model: initialModel, effort: initialEffort } : undefined
@@ -99,6 +102,10 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       })
     : undefined
   const closeMenu = useDropdownMenuClose()
+  const surface =
+    initial?.surface ?? (mode === 'select' ? selected?.surface : undefined) ?? entry.defaultSurface
+  const launchBlocked = mode !== 'select' && terminalBlocked && surface === 'terminal'
+  const reasonId = useId()
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
   const setDefault =
     onSetDefault && entry.surfaces.length ? () => onSetDefault(entry.agent) : undefined
@@ -106,11 +113,17 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     return (
       <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
         <DropdownMenuItem
-          disabled={disabled || !entry.surfaces.length}
+          className="min-h-9"
+          disabled={disabled || launchBlocked || !entry.surfaces.length}
           data-search-default={searchDefault || undefined}
-          onSelect={() => {
+          aria-description={launchBlocked ? terminalPendingLabel(t) : undefined}
+          onSelect={(event) => {
             onSelectAgent?.(entry.agent)
-            runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface))
+            if (
+              runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface)) === false
+            ) {
+              event.preventDefault()
+            }
           }}
         >
           <AgentIcon agent={entry.agent} size={14} />
@@ -127,17 +140,14 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   }
   return (
     <AgentLaunchSetupButton
-      submenu
       draftScope={draftScope}
       draftId={draftId}
       preset={preset}
       entry={entry}
       initial={source}
-      seed={initial ?? selected ?? source}
-      surface={selected?.surface}
-      mode={mode}
+      seed={initial ?? source}
+      terminalBlocked={terminalBlocked}
       open={openSetup === setupId}
-      replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}
       disabled={disabled || setupDisabled || !entry.surfaces.length}
       onOpenChange={(next) => {
         if (next || openSetup === setupId) {
@@ -148,11 +158,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         }
       }}
       onUse={(draft) => {
-        const chosen = mode === 'select' ? draft.surface : undefined
-        const result =
-          chosen === undefined
-            ? runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
-            : runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry, chosen)
+        const result = runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
         if (result !== false) {
           closeMenu()
         }
@@ -164,10 +170,10 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           data-search-default={searchDefault || undefined}
           onClick={(event) => {
             event.preventDefault()
-            if (disabled || !entry.surfaces.length) {
+            if (disabled || launchBlocked || !entry.surfaces.length) {
               return
             }
-            const draft = initial ?? (mode === 'select' ? selected : undefined)
+            const draft = initial
             const surface = draft?.surface ?? entry.defaultSurface
             const row = draft
               ? pickerLaunchRow(entry, surface)
@@ -193,17 +199,28 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         >
           {/* Why: the anchor is a Radix sub-trigger's asChild child, so the context menu wraps the label instead. */}
           <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
-            <Button asChild variant="menu-launch" size="menu">
-              <span>
-                <AgentIcon agent={entry.agent} size={14} />
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-                {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-                {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
-                  <span className="text-xs text-muted-foreground">
-                    {chatUnavailableLabel(unavailable.reason)}
-                  </span>
-                ) : null}
-              </span>
+            <Button
+              type="button"
+              variant="menu-launch"
+              size="menu-launch"
+              aria-disabled={launchBlocked || undefined}
+              aria-describedby={launchBlocked ? reasonId : undefined}
+            >
+              <AgentIcon agent={entry.agent} size={14} />
+              <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+              {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+              {launchBlocked ? (
+                <span
+                  id={reasonId}
+                  className="min-w-0 shrink truncate text-xs text-muted-foreground"
+                >
+                  {terminalPendingLabel()}
+                </span>
+              ) : unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
+                <span className="text-xs text-muted-foreground">
+                  {chatUnavailableLabel(unavailable.reason)}
+                </span>
+              ) : null}
             </Button>
           </AgentDefaultContextMenu>
           {trigger}

@@ -1,4 +1,3 @@
-import { journalInputOrder } from '../input-order/journal-input-order'
 import type { JournalInputContext } from '../input-order/journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from '../projection/journal-item-echo'
 import type {
@@ -7,12 +6,11 @@ import type {
   AgentSessionJournalProviderHandle
 } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   type AgentJournalSubmission,
   type AgentJournalItemBody,
   type AgentJournalProducerLinkage,
-  type AgentJournalRowAttribution,
   journalRowSchemaVersion
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
@@ -37,7 +35,11 @@ import {
 import { assertSubmissionIdUnused } from './journal-write-guards'
 import { turnEndAfterStop } from '../context-epochs/journal-stop-turn-end'
 import { nextJournalItemRevision } from '../projection/journal-item-revision'
-import type { ResolveDispatchInput, JournalSubmissionInput } from '../journal-store-contracts'
+import type {
+  ResolveDispatchInput,
+  JournalSubmissionInput,
+  JournalItemAppendOptions
+} from '../journal-store-contracts'
 import {
   journalLifecycleMutationItemId,
   journalLifecycleMutationRow,
@@ -51,19 +53,17 @@ export function journalItemRowBuilder(
   state: () => JournalReducerState,
   address: AgentJournalItemIdentity | string,
   body: AgentJournalItemBody,
-  options: AgentJournalRowAttribution & {
-    echoOf?: JournalItemEcho['echoOf']
-    fence: number
-    ownerFence?: number
-    executionOwner?: number
-    observedAt?: number
-    recovered?: true
-  },
+  options: JournalItemAppendOptions,
   revisions?: Map<string, number>
 ): RowBuilder<JournalItemRow> {
-  return (seq, ts) =>
-    buildJournalItemRow({
-      state: state(),
+  return (seq, ts) => {
+    const current = state()
+    const stopped =
+      options.stoppedTurnId === undefined
+        ? null
+        : current.queries.latestItemForTurn(current, options.stoppedTurnId)
+    return buildJournalItemRow({
+      state: current,
       ...(typeof address === 'string' ? { itemId: address } : { identity: address }),
       body,
       ...journalItemEchoFields(options),
@@ -74,9 +74,10 @@ export function journalItemRowBuilder(
       ts: options.observedAt ?? ts,
       recovered: options.recovered,
       linkage: options,
-      turnScope: options.turnScope,
+      turnScope: stopped ? { kind: 'turn', turnItemId: stopped.itemId } : options.turnScope,
       revisions
     })
+  }
 }
 
 export function journalTombstoneRowBuilder(
@@ -104,11 +105,6 @@ export function journalSubmissionRowBuilder(
     const queuedMessageId = consume?.messageId ?? input.queuedMessageId
     return buildJournalSubmissionRow({
       state: state(),
-      inputOrderContext: {
-        source: { epoch: state().epoch, sequence: seq },
-        basis: 'observed',
-        cut: journalInputOrder(state()).lineage.at(seq)
-      },
       providerHandle: agentSessionJournalProviderHandle(identity),
       ...input,
       ...(queuedMessageId !== undefined ? { queuedMessageId } : {}),

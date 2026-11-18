@@ -4,7 +4,7 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse
 } from '../../../shared/ai-vault/search/ai-vault-search-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 
 /** A host that ranks a fixed list and fences its own cursors on a generation change. */
@@ -138,27 +138,55 @@ it('calls a leg that times out unreachable and retries it on the next page', asy
   }
 })
 
-it('reads at most three pages from one host per merged request', async () => {
-  // Three-page budget stops a six-page host walk; retain its unread cursor for the next merged page.
-  const host = new StubHost('local', sessions('a', 12), 2)
-  const first = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle', limit: 10 }, [host.leg()])
+it('replays bounded partial and terminal host pages without refetching or inheriting another query scope', async () => {
+  const a = new StubHost('local', sessions('a', 2))
+  const b = new StubHost('ssh:b', sessions('b', 2))
+  const request = { query: 'needle', limit: 2, filters: { scopePaths: ['/repo'] } }
+  const first = resultsOf(await searchAllExecutionHosts(request, [a.leg(), b.leg()]))
+  expect(first.hits.map((hit) => hit.sessionId)).toEqual(['a-0', 'b-0'])
+  // A new request would fail; the terminal tails have already been read and need no validation call.
+  const fail = (executionHostId: ExecutionHostId): SessionSearchHostLeg => ({
+    executionHostId,
+    search: () => {
+      throw new Error('must not refetch a captured page')
+    }
+  })
+  const next = resultsOf(
+    await searchAllExecutionHosts({ ...request, cursor: first.page.cursor! }, [
+      fail('local'),
+      fail('ssh:b')
+    ])
   )
-  expect(host.pages).toBe(3)
-  expect(first.hits.map((hit) => hit.sessionId)).toEqual(['a-0', 'a-1', 'a-2', 'a-3', 'a-4', 'a-5'])
-  expect(first.page.hasMore).toBe(true)
+  expect(next.hits.map((hit) => hit.sessionId)).toEqual(['a-1', 'b-1'])
+  expect(next.page).toEqual({ hasMore: false, cursor: null })
+  expect(
+    await searchAllExecutionHosts({ ...request, query: 'other', cursor: first.page.cursor! }, [
+      a.leg(),
+      b.leg()
+    ])
+  ).toEqual({ kind: 'malformed-cursor' })
+  expect(
+    await searchAllExecutionHosts(
+      { ...request, filters: { scopePaths: ['/private'] }, cursor: first.page.cursor! },
+      [a.leg(), b.leg()]
+    )
+  ).toEqual({ kind: 'malformed-cursor' })
+})
 
-  const second = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle', limit: 10, cursor: first.page.cursor! }, [
+it('accepts an existing merged cursor and continues using an older host opaque cursor', async () => {
+  const host = new StubHost('local', sessions('a', 4))
+  const cursor = Buffer.from(
+    JSON.stringify({ l: 2, s: 'relevance', h: { local: { c: null, e: 1, g: 1 } } })
+  ).toString('base64url')
+  const page = resultsOf(
+    await searchAllExecutionHosts({ query: 'needle', limit: 2, cursor }, [host.leg()])
+  )
+  expect(page.hits.map((hit) => hit.sessionId)).toEqual(['a-1', 'a-2'])
+  const tail = resultsOf(
+    await searchAllExecutionHosts({ query: 'needle', limit: 2, cursor: page.page.cursor! }, [
       host.leg()
     ])
   )
-  expect(second.hits.map((hit) => hit.sessionId)).toEqual([
-    'a-6',
-    'a-7',
-    'a-8',
-    'a-9',
-    'a-10',
-    'a-11'
-  ])
+  expect(tail.hits.map((hit) => hit.sessionId)).toEqual(['a-3'])
+  expect(tail.page.hasMore).toBe(false)
 })

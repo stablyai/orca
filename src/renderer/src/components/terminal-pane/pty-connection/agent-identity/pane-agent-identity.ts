@@ -6,12 +6,12 @@ import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../../shared/terminal/pr
 import {
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
-} from '@/lib/pane-manager/windows-pty-compatibility'
+} from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
 import { createTerminalCommandLifecycle } from '../../emulation/commands/terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from './foreground-process/pane-foreground-agent-tracker'
-import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-execution-host-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
-import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
+import { dispatchTerminalCommandFinishedEvent } from '@/lib/terminal/output/terminal-command-finished-event'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   isTuiAgent,
@@ -25,12 +25,11 @@ import {
 } from './pane-launch-agent-candidate'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent-title'
-import { retireConfirmedShellAgent } from './confirmed-process-exit-row-retire'
 
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   // Share expected-agent derivation between 133;D confirmation and visible resampling so their identity guards cannot drift.
   session.paneHasLiveHookAgentIcon = (state: ReturnType<typeof useAppStore.getState>): boolean => {
-    const entry = state.agentStatusByPaneKey[session.cacheKey]
+    const entry = state.agentStatusByPaneKey.get(session.cacheKey)
     return entry?.state !== 'done' && Boolean(agentTypeToIconAgent(entry?.agentType))
   }
   // One launch ladder serves finish confirmation, visible sampling and OSC color-reply suppression.
@@ -70,7 +69,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.deferredConfirmedShellReconcile = null
   /** Confirmed shell return retires main’s latches using one acceptedStatusSeq anchor across the full ladder; deferred row removal is not newer evidence. A foreign delete/rebuild can reset the ordinal, but command-start already cancels normal relaunch races. */
   session.reconcileEndedProcessIfPaneQuiet = (armedAcceptedStatusSeq: number | undefined): void => {
-    const current = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const current = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
     if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
       return
     }
@@ -175,7 +174,6 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
       // Agents that leave their OSC title (grok, codex) never trip the title exit; Orca's own hibernation stop keeps its chat.
       if (!isHibernationWakeRecord) {
-        retireConfirmedShellAgent(session.cacheKey)
         session.deps.onAgentExitedRef.current(session.pane.leafId)
       }
       // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
@@ -218,7 +216,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     // Commands can change HEAD/index; nudge git UI immediately instead of waiting for polling.
     dispatchTerminalCommandFinishedEvent(session.deps.worktreeId, bestEffortExitCode)
     const state = useAppStore.getState()
-    const entry = state.agentStatusByPaneKey[session.cacheKey]
+    const entry = state.agentStatusByPaneKey.get(session.cacheKey)
     const inferenceResult = session.flushPendingInterruptInference()
     const dropStatus = (): void => {
       if (inferenceResult === true) {

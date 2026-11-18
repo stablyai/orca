@@ -1,7 +1,7 @@
 import { readStreamedSessionDocument } from '../../transcripts/session-document-stream'
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import {
@@ -9,16 +9,17 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addDecodedSessionMessage } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addDecodedSessionMessage } from '../../parsing/session-scanner-messages'
 import {
   decodeSessionMessage,
   type DecodedSessionMessage
 } from '../../transcripts/session-decoded-message'
-import { arrayValue, extractString } from '../../session-scanner-values'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractContentText } from '../../session-scanner-text-normalization'
-import { numberValue } from '../../session-scanner-token-values'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/text/trimmed-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
+import { extractContentText } from '../../parsing/session-scanner-text-normalization'
+import { numberValue } from '../../parsing/session-scanner-token-values'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -139,11 +140,14 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
   )
   const metrics = asRecord(metadata?.metrics)
   const extra = asRecord(stepRecord.extra)
-  accumulator.model ??=
-    extractString(stepRecord.model_name) ??
-    extractString(extra?.generation_model) ??
-    extractString(metadata?.generation_model) ??
-    extractString(metrics?.generation_model)
+  if (!accumulator.model) {
+    const model =
+      extractString(stepRecord.model_name) ??
+      extractString(extra?.generation_model) ??
+      extractString(metadata?.generation_model) ??
+      extractString(metrics?.generation_model)
+    accumulator.model = model && ownRetainedString(model)
+  }
   accumulator.totalTokens += devinStepTokenTotal(metadata, metrics, asRecord(stepRecord.metrics))
   // System steps contribute usage but must not become messages, titles or previews.
   const source = extractString(stepRecord.source)
@@ -198,7 +202,8 @@ export async function parseDevinSessionDocument(
       })
     },
     consume: consumeDevinSessionStep,
-    signal
+    signal,
+    drain: () => messages?.drain?.() ?? Promise.resolve()
   })
   if (!parsed) {
     return null

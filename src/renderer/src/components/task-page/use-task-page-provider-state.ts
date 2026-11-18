@@ -1,6 +1,6 @@
 import type { TaskPageSourceAvailabilityModel } from './use-task-page-source-availability'
 import { useRef, useState, useEffect, useMemo } from 'react'
-import { resolveVisibleTaskProvider } from '../../../../shared/task-providers'
+import { resolveVisibleTaskProvider } from '../../../../shared/work-items/task-providers'
 import type {
   GitLabTaskFilter,
   GitLabIssueFilter
@@ -9,7 +9,7 @@ import type {
   GitLabMRInvolvement,
   GitLabWorkItem,
   GitLabTodo
-} from '../../../../shared/gitlab-types'
+} from '../../../../shared/gitlab/gitlab-types'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 import { isGitLabIssueFilter, isGitLabMRFilter } from './task-page-source-context'
 export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel) {

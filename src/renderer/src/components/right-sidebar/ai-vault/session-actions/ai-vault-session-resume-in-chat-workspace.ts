@@ -1,21 +1,21 @@
 import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   structuredAgentSessionLaunchFeasible,
   type AgentSessionStructuredFeasibilityRequest
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
+import { resolveStructuredAgentSessionOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store/index'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
-} from '../../../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
-} from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+} from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
 import {
   resolveAiVaultSessionResumeInChatEligibility,

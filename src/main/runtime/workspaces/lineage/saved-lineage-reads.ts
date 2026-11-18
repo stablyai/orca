@@ -1,8 +1,11 @@
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 /** Read ownership-scoped metadata without migration; validation must not adopt another host's legacy row. */
 export function savedInstanceIdReader(

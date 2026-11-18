@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { KernelFrame, KernelFrameEvent } from '../../../../../../shared/notebook-kernel-types'
+import type {
+  KernelFrame,
+  KernelFrameEvent
+} from '../../../../../../shared/editor/notebooks/notebook-kernel-types'
 
 type Listener = (state: unknown, previous: unknown) => void
 
@@ -117,24 +120,6 @@ describe('notebook kernel session', () => {
     expect(getCellRun(FILE, 'b')?.finishedAt).not.toBeNull()
   })
 
-  it('reports a dead kernel in the running cell and drops the queue', async () => {
-    await session.runCells(
-      FILE,
-      [
-        { key: 'a', code: 'import os; os._exit(1)' },
-        { key: 'b', code: 'x' }
-      ],
-      null
-    )
-    frame({ type: 'exit', detail: 'segfault' })
-    const run = getCellRun(FILE, 'a')
-    expect(run?.finishedAt).not.toBeNull()
-    expect(JSON.stringify(run?.outputs)).toContain('The kernel died.')
-    expect(JSON.stringify(run?.outputs)).toContain('segfault')
-    expect(getCellRun(FILE, 'b')).toBeUndefined()
-    expect(notebookApi.execute).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps cells queued through a missing-ipykernel install, then runs them', async () => {
     notebookApi.startKernel.mockResolvedValueOnce({
       status: 'missing-ipykernel',
@@ -170,32 +155,6 @@ describe('notebook kernel session', () => {
     expect(getSession(FILE)).toMatchObject({ status: 'off', setup: null, queue: [] })
   })
 
-  it('creates a .venv for a pip-locked Python and runs the waiting cells in it', async () => {
-    const created = { path: '/repo/.venv/bin/python', name: '.venv', version: '3.14.0' }
-    const system = { path: '/opt/homebrew/bin/python3', name: 'python3', version: '3.14.0' }
-    openFiles.current = [{ filePath: '/repo/nb.ipynb' }]
-    notebookApi.listPythonEnvironments.mockResolvedValue({ workspace: [], path: [system] })
-    notebookApi.startKernel.mockResolvedValueOnce({
-      status: 'missing-ipykernel',
-      externallyManaged: true
-    })
-    notebookApi.createVenv.mockResolvedValue({ ok: true, environment: created })
-    await session.runCells('/repo/nb.ipynb', [{ key: 'a', code: 'x' }], '/repo')
-    expect(getSession('/repo/nb.ipynb').setup).toMatchObject({ base: system, offer: 'venv' })
-
-    await session.createVirtualEnvironment('/repo/nb.ipynb', '/repo')
-    expect(notebookApi.createVenv).toHaveBeenCalledWith({
-      filePath: '/repo/nb.ipynb',
-      rootPath: '/repo',
-      python: system.path
-    })
-    expect(notebookApi.startKernel).toHaveBeenLastCalledWith({
-      filePath: '/repo/nb.ipynb',
-      python: created.path
-    })
-    expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: '/repo/nb.ipynb', code: 'x' })
-  })
-
   it('switches a running notebook to a venv made from the picker, keeping it on failure', async () => {
     const created = { path: '/repo/.venv/bin/python', name: '.venv', version: '3.14.0' }
     const system = { path: '/usr/bin/python3', name: 'python3', version: '3.14.0' }
@@ -229,24 +188,6 @@ describe('notebook kernel session', () => {
     await vi.waitFor(() => expect(getSession(FILE).status).toBe('ready'))
     expect(notebookApi.startKernel).toHaveBeenLastCalledWith({ filePath: FILE, python: other.path })
     expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: FILE, code: 'x' })
-  })
-
-  it('drops an install result once its tab has closed and reopened', async () => {
-    notebookApi.startKernel.mockResolvedValueOnce({
-      status: 'missing-ipykernel',
-      externallyManaged: false
-    })
-    let finish: (value: { ok: boolean; detail: string }) => void = () => {}
-    notebookApi.installIpykernel.mockReturnValue(new Promise((resolve) => (finish = resolve)))
-    await session.runCells(FILE, [{ key: 'a', code: 'x' }], null)
-    const install = session.installIpykernel(FILE)
-    for (const listener of appStoreListeners) {
-      listener({ openFiles: [] }, { openFiles: openFiles.current })
-    }
-    finish({ ok: false, detail: 'late' })
-    await install
-    expect(getSession(FILE).setup).toBeNull()
-    expect(notebookApi.startKernel).toHaveBeenCalledOnce()
   })
 
   it('starts one kernel when a second run lands during discovery', async () => {

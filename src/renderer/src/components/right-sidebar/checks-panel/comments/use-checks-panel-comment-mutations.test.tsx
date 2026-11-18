@@ -3,9 +3,9 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type { SetStateAction } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { PRComment } from '../../../../../../shared/github/comment-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useChecksPanelCommentMutations } from './use-checks-panel-comment-mutations'
 

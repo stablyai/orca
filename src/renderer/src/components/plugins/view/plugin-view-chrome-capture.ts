@@ -3,7 +3,7 @@ import type {
   PluginViewReply,
   PluginViewRequest
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
-import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { nextPaintedFrames, waitForColorScheme } from './plugin-view-panel-settle'
 
 type Rect = { x: number; y: number; width: number; height: number }

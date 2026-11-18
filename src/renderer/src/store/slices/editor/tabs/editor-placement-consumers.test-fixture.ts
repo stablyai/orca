@@ -1,19 +1,22 @@
 import { useAppStore } from '@/store/index'
-import { makeOpenFile, makeTabGroup, makeUnifiedTab } from '../../store-session-test-harness'
-import { makeWorktree, TEST_REPO } from '../../worktrees-slice-test-fixtures'
+import { makeOpenFile } from '../types/open-file.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
 import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import type { OpenFile } from '../types/open-file'
-import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
-import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
+import { createGlobalSettingsFixture } from '../../../../../../shared/settings/global-settings-test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
+import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { beginPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
+import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
 import { editorTabContent } from './editor-tab-open-through-layout-owner'
 import { isEditorTabContentType } from './editor-tab-content-type'
+import { markHydratedBrowserPageHandles } from '../../browser/hosts/browser-initialization-presentation-ownership'
 
 export const EDITOR_OWNER = 'repo1::/repo'
 export const EDITOR_PLACEMENT = 'folder:feature'
@@ -22,7 +25,16 @@ export function seedEditorPlacementConsumers(
   overrides: Partial<OpenFile> = {},
   ownerPlacement = true
 ) {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  const initialState = useAppStore.getInitialState()
+  useAppStore.setState(
+    {
+      ...initialState,
+      remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({
+        ...initialState.remoteBrowserPageHandlesByPageId
+      })
+    },
+    true
+  )
   const file = makeOpenFile({
     id: overrides.mode === 'edit' ? (overrides.filePath ?? '/repo/notes.md') : 'content',
     filePath: '/repo/notes.md',

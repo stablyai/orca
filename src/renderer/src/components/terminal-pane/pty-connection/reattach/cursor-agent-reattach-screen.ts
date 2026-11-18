@@ -1,6 +1,6 @@
 import type { IBuffer } from '@xterm/xterm'
-import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
-import { CSI_SEQUENCE_PATTERN } from '../../../../../../shared/ansi-escape-sequences'
+import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-input/terminal-ime-anchor'
+import { CSI_SEQUENCE_PATTERN } from '../../../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 
 export type TerminalWithFocusMode = {
   textarea?: HTMLTextAreaElement | null

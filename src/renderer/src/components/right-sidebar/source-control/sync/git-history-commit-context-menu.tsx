@@ -1,24 +1,27 @@
 import { useSourceControlState, useSourceControlScope } from '../panel/worktree-scope'
-import type React from 'react'
 import { Copy, Globe, Hash, Sparkles } from 'lucide-react'
 import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator
 } from '@/components/ui/context-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import type React from 'react'
 import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 export type GitHistoryCommitAction = 'open-remote' | 'copy-hash' | 'copy-message' | 'explain'
 
 export function GitHistoryCommitContextMenu({
   item,
+  children,
   onAction
 }: {
   item: GitHistoryItem
+  children?: React.ReactNode
   onAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const scope = useSourceControlScope()
   const managedBrowserCreationEnabled = useSourceControlState(
     (state) =>
@@ -28,10 +31,11 @@ export function GitHistoryCommitContextMenu({
   )
   return (
     <ContextMenuContent className="w-56">
+      {children}
       {managedBrowserCreationEnabled ? (
         <ContextMenuItem onSelect={() => onAction('open-remote', item)}>
           <Globe className="size-3.5" />
-          {translate(
+          {t(
             'auto.components.right.sidebar.GitHistoryCommitContextMenu.7b1c4e9a02',
             'Open commit in browser'
           )}
@@ -39,14 +43,14 @@ export function GitHistoryCommitContextMenu({
       ) : null}
       <ContextMenuItem onSelect={() => onAction('copy-hash', item)}>
         <Hash className="size-3.5" />
-        {translate(
+        {t(
           'auto.components.right.sidebar.GitHistoryCommitContextMenu.8c2d5fab13',
           'Copy commit hash'
         )}
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => onAction('copy-message', item)}>
         <Copy className="size-3.5" />
-        {translate(
+        {t(
           'auto.components.right.sidebar.GitHistoryCommitContextMenu.9d3e60bc24',
           'Copy commit message'
         )}
@@ -54,7 +58,7 @@ export function GitHistoryCommitContextMenu({
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => onAction('explain', item)}>
         <Sparkles className="size-3.5" />
-        {translate(
+        {t(
           'auto.components.right.sidebar.GitHistoryCommitContextMenu.ae4f71cd35',
           'Explain changes'
         )}

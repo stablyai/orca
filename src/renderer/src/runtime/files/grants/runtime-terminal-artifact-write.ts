@@ -1,4 +1,4 @@
-import type { RuntimeFileReadResult } from '../../../../../shared/runtime-file-contracts'
+import type { RuntimeFileReadResult } from '../../../../../shared/file-content/runtime-file-read'
 import {
   compareDiskWritePrecondition,
   isConfirmedFileNotFoundError,
@@ -6,10 +6,10 @@ import {
   FILE_WRITE_UNCHANGED,
   type FileWriteDiskPrecondition,
   type FileWriteResult
-} from '../../../../../shared/file-write-disk-precondition'
+} from '../../../../../shared/file-write/file-write-disk-precondition'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { assertRemoteWriteFitsOneRequest } from '../mutations/runtime-file-mutation-client'
 import {
   isRecoverableRemoteRuntimeConnectionError,

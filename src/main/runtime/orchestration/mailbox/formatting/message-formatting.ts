@@ -1,7 +1,11 @@
 import type { MessageRow } from '../../db/orchestration-records'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
-import type { OrchestrationMailContent } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { OrchestrationMailContent } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import {
+  formatReportFollowUpLine,
+  type ReportFollowUpAction
+} from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
@@ -17,6 +21,8 @@ export type MessageFormattingOptions = {
   supportedActionHints?: readonly string[]
   /** The CLI name the recipient runs; a chat's reply line must name the one it has. */
   cliCommand?: OrchestrationCliCommand
+  /** A finished task's report offers its follow-up instead of a reply its worker would never read. */
+  followUp?: ReportFollowUpAction
 }
 
 function resolveAuthority(
@@ -96,7 +102,9 @@ export function formatMessageBannerWithContent(
   const body = msg.body ? appendField(msg.body) : undefined
   const payload = msg.payload ? appendField(msg.payload, '[Payload: ', ']') : undefined
 
-  if (authority === 'current') {
+  if (authority === 'current' && options.followUp) {
+    lines.push(`[${formatReportFollowUpLine(options.followUp, options.cliCommand ?? 'orca')}]`)
+  } else if (authority === 'current') {
     const explicitFrom =
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
         ? ''
@@ -123,18 +131,23 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
   return `\n--- Orchestration Messages (${messages.length}) ---\n${banners}\n---\n`
 }
 
+/** A Run mailbox's `check` must name its Run: a plain check reads only the terminal's newest Run. */
+export function orchestrationCheckRunFlag(mailboxHandle: string | undefined): string {
+  return mailboxHandle?.startsWith('run:') ? ` --run ${mailboxHandle.slice('run:'.length)}` : ''
+}
+
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,
   cliCommand: OrchestrationCliCommand = 'orca',
-  heldDeliveryId?: string
+  heldDeliveryId?: string,
+  terminalHandle?: string
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
-  const runFlag = mailboxHandle?.startsWith('run:')
-    ? ` --run ${mailboxHandle.slice('run:'.length)}`
-    : ''
+  const runFlag = orchestrationCheckRunFlag(mailboxHandle)
+  const checkCommand = `${cliCommand} orchestration check${runFlag}${terminalHandle ? ` --terminal ${terminalHandle}` : ''}`
   if (heldDeliveryId) {
-    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${cliCommand} orchestration check${runFlag}\` to see it again; once it is handled, run \`${cliCommand} orchestration check${runFlag} --ack ${heldDeliveryId}\`, then \`${cliCommand} orchestration check${runFlag}\` for the new mail.\n`
+    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${checkCommand}\` to see it again; once it is handled, run \`${checkCommand} --ack ${heldDeliveryId}\`, then \`${checkCommand}\` for the new mail.\n`
   }
-  return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
+  return `\nYou have ${count} orchestration ${noun}. Run \`${checkCommand}\`.\n`
 }

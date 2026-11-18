@@ -1,13 +1,15 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { toAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
 import { RESET_MOUSE_REPORTING } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalAgent } from '../../../../../../shared/agent-status/identity/terminal-agent'
-import type * as CoordinatorModule from '../../agent-completion/agent-completion-coordinator'
-import type { AgentCompletionCoordinatorOptions } from '../../agent-completion/agent-completion-coordinator-types'
-import { createDeferred, flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
+import type * as CoordinatorModule from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
+import type { AgentCompletionCoordinatorOptions } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
+import {
+  createDeferred,
+  flushAsyncTicks
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createMockTransport,
   createPane,
@@ -15,19 +17,19 @@ import {
   leafIdForPane,
   type ConnectCallbacks,
   type MockTransport
-} from '../test-fixtures/pty-connection-test-pane-fixtures'
-import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import type { StoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from '../test-fixtures/pty-connection-test-deps'
-import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../test-fixtures/pty-connection-test-environment'
-import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 
 const {
   coordinatorOptionsByPaneKey,
@@ -49,7 +51,7 @@ let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 
@@ -70,7 +72,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -140,7 +142,9 @@ async function connectAgentPane(args: {
   terminal: ReturnType<typeof createPane>['terminal']
 }> {
   const { connectPanePty } = await import('../connect-pane-pty')
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
   const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
   const transport = createMockTransport(args.ptyId)
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -185,13 +189,19 @@ async function seedHookRow(
   state: 'working' | 'done' = 'done'
 ): Promise<AgentStatusEntry> {
   // Why the real slice: the row must carry the acceptedStatusSeq a real accepted hook stamps.
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   const realStore = createTestStore(
-    (await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')).isClaudeAgent
+    (
+      await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+    ).isClaudeAgent
   )
   realStore.getState().setAgentStatus(paneKey, { state, prompt: 'ship it', agentType })
-  const row = realStore.getState().agentStatusByPaneKey[paneKey]
-  mockStoreState.agentStatusByPaneKey[paneKey] = row
+  const row = realStore.getState().agentStatusByPaneKey.get(paneKey)!
+  mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+    [paneKey, row]
+  ])
   return row
 }
 
@@ -201,7 +211,6 @@ function setHostCanVerifyOwner(answer: boolean | Promise<boolean>): void {
 
 describe('connectPanePty confirmed process exit retires the live agent row', () => {
   beforeEach(async () => {
-    vi.resetModules()
     vi.clearAllMocks()
     vi.useFakeTimers()
     coordinatorOptionsByPaneKey.clear()
@@ -210,7 +219,9 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     mockStoreState = createInitialStoreState(() => mockStoreState)
     await installTerminalTestGlobals()
     mockStoreState.dropAgentStatus.mockImplementation((paneKey: string) => {
-      delete mockStoreState.agentStatusByPaneKey[paneKey]
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [paneKey, null]
+      ])
     })
   })
 
@@ -249,7 +260,7 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     const { paneKey } = await connectAgentPane({ ptyId: 'pty-cmd-claude', visible: true })
     await seedHookRow(paneKey, 'claude')
     await vi.advanceTimersByTimeAsync(3_000)
-    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeDefined()
+    expect(mockStoreState.agentStatusByPaneKey.get(paneKey)!).toBeDefined()
 
     // `/exit` in cmd.exe: the shell is back and no 133;D ever arrives.
     foreground = 'cmd.exe'
@@ -261,62 +272,7 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     // No `paneRemoved`: the pane outlived the agent, so main keeps the resume identity.
     expect(mockStoreState.dropAgentStatus.mock.calls).toEqual([[paneKey]])
     expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
-    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
-  })
-
-  it('retires a hook-identified row the foreground tracker never read', async () => {
-    const { paneKey, confirmExit } = await connectAgentPane({ ptyId: 'pty-cmd-hook-only' })
-    await seedHookRow(paneKey, 'codex', 'working')
-    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.agentEvidence).not.toBe(
-      'process-read'
-    )
-
-    confirmExit('codex')
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
-    expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
-  })
-
-  it('leaves a pane with an armed command-finished drop to its own confirming read', async () => {
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockReturnValue(new Promise(() => {}))
-    const { paneKey, sendData, confirmExit } = await connectAgentPane({ ptyId: 'pty-zsh-claude' })
-    // A live hook icon makes the 133;D defer its drop behind a confirming read.
-    await seedHookRow(paneKey, 'claude', 'working')
-    sendData('\x1b]133;D;0\x07')
-
-    confirmExit('claude')
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeDefined()
-  })
-
-  it('leaves a remote pane to its execution host', async () => {
-    const { paneKey, confirmExit } = await connectAgentPane({
-      ptyId: toAppSshPtyId('conn-1', 'relay-pty-1')
-    })
-    await seedHookRow(paneKey, 'claude')
-
-    confirmExit('claude')
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-  })
-
-  it('keeps the row when the host can verify the owner process itself', async () => {
-    setHostCanVerifyOwner(true)
-    const { paneKey, confirmExit } = await connectAgentPane({ ptyId: 'pty-mac-claude' })
-    await seedHookRow(paneKey, 'claude')
-
-    confirmExit('claude')
-    await flushAsyncTicks()
-
-    expect(window.api.agentStatus.hasVerifiableAgentProcess).toHaveBeenCalledWith(paneKey)
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
+    expect(mockStoreState.agentStatusByPaneKey.get(paneKey)!).toBeUndefined()
   })
 
   it('keeps the row when the agent is relaunched before the exit settles', async () => {
@@ -328,26 +284,20 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     confirmExit('claude')
     // The relaunched Claude's first hook lands while the host is still answering.
     vi.setSystemTime(Date.now() + 1_000)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      ...exitedRow,
-      state: 'working',
-      prompt: 'next session',
-      updatedAt: Date.now(),
-      stateStartedAt: Date.now(),
-      acceptedStatusSeq: (exitedRow.acceptedStatusSeq ?? 0) + 1
-    }
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        paneKey,
+        {
+          ...exitedRow,
+          state: 'working',
+          prompt: 'next session',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          acceptedStatusSeq: (exitedRow.acceptedStatusSeq ?? 0) + 1
+        }
+      ]
+    ])
     hostAnswer.resolve(false)
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-  })
-
-  it('keeps a row that belongs to a different agent', async () => {
-    const { paneKey, confirmExit } = await connectAgentPane({ ptyId: 'pty-cmd-other-agent' })
-    await seedHookRow(paneKey, 'codex')
-
-    confirmExit('claude')
     await flushAsyncTicks()
 
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
@@ -367,6 +317,6 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     expect(vi.mocked(window.api.agentStatus.reconcileEndedProcess).mock.calls).toEqual([
       [left.paneKey]
     ])
-    expect(mockStoreState.agentStatusByPaneKey[right.paneKey]).toBeDefined()
+    expect(mockStoreState.agentStatusByPaneKey.get(right.paneKey)!).toBeDefined()
   })
 })

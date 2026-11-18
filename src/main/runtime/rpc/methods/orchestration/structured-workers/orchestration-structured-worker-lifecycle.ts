@@ -1,16 +1,14 @@
+import type { StructuredAgentSessionCloseWork } from '../../../../../native-chat/agent-session-wire/termination/structured-agent-session-close-work'
 /** Use live/unverifiable/exited evidence like SSH: loss of host-generation contact never proves death, including a structured host not yet installed. */
 
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { OrchestrationWorkerReadTranscriptResult } from '../../../../../../shared/orchestration-worker-output'
+import type { OrchestrationWorkerReadTranscriptResult } from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import {
-  buildStructuredJournalArchive,
-  captureRetiredLineageArchive,
-  type WorkerStructuredJournalArchive
-} from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
+import type { WorkerStructuredJournalArchive } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
+import type { WorkerTerminalReleaseState } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import {
   readStructuredLineageJournalPage,
   type StructuredLineageJournalPage
@@ -20,10 +18,7 @@ import {
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
 } from '../../../../orchestration/workers/transcripts/worker-output-cursor'
-import {
-  boundWorkerTranscriptMessages,
-  clampWorkerTranscriptLimit
-} from '../../../../orchestration/workers/transcripts/worker-transcript-payload'
+import { pageWorkerTranscriptMessages } from '../../../../orchestration/workers/transcripts/worker-transcript-payload'
 import {
   projectStructuredItemToNativeChat,
   projectStructuredItemsToNativeChat
@@ -36,14 +31,12 @@ import {
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 
 import type { StructuredWorkerObservation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
-import { structuredWorkerOwned } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import type { WorkerTerminalReleaseState } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
 import {
   closeStructuredAgentSessionChild,
   type StructuredSessionSurfaceRuntime
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import {
   chatAssigneeJournal,
   type StructuredJournalSource
@@ -73,7 +66,7 @@ export async function stopStructuredWorker(
   identity: StructuredWorkerIdentity,
   runtime?: StructuredSessionSurfaceRuntime &
     Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>,
-  admitClose?: () => boolean
+  admitClose?: (work: StructuredAgentSessionCloseWork) => boolean
 ): Promise<StructuredWorkerStopOutcome> {
   const closed = new Set<string>()
   // Any close this stop issued, so a later session's failure cannot erase an earlier close.
@@ -147,6 +140,8 @@ export async function readStructuredWorkerJournal(args: {
   workerState: string
   liveness: StructuredWorkerObservation['status']
   agent: AgentType
+  /** A released worker's history, read from its closed session. */
+  archived?: boolean
   cursor?: string | number
   limit?: number
 }): Promise<OrchestrationWorkerReadTranscriptResult> {
@@ -158,7 +153,6 @@ export async function readStructuredWorkerJournal(args: {
       `The transcript for Dispatch ${args.dispatchId} could not be read; its session is not attached.`
     )
   }
-  const bounded = boundWorkerTranscriptMessages(projectStructuredItemsToNativeChat(page.items))
   // Identity of the PREFIX the caller already holds — see `structuredJournalPrefixIdentity`.
   const identityAt = (position: number): string =>
     structuredJournalPrefixIdentity({ identity: args.identity, page, position })
@@ -173,19 +167,17 @@ export async function readStructuredWorkerJournal(args: {
     )
   }
   return pageMessages({
-    messages: bounded.messages,
-    warnings: [
-      ...bounded.warnings,
-      ...(page.hasOlder ? ['Older journal items were omitted from this page.'] : [])
-    ],
-    limited: bounded.limited || page.hasOlder,
+    messages: projectStructuredItemsToNativeChat(page.items),
+    alreadyBounded: false,
+    warnings: page.hasOlder ? ['Older journal items were omitted from this page.'] : [],
+    limited: page.hasOlder,
     dispatchId: args.dispatchId,
     workerState: args.workerState,
     agent: args.agent,
     identityAt,
     start: cursor?.position ?? 0,
     limit: args.limit,
-    archived: false,
+    archived: args.archived ?? false,
     liveness: args.liveness
   })
 }
@@ -221,38 +213,6 @@ function structuredJournalPrefixIdentity(args: {
   ])
 }
 
-/** Freezes the journal before the session is closed, so a released worker is still readable. */
-export async function captureStructuredWorkerArchive(
-  identity: StructuredWorkerIdentity,
-  agent: AgentType
-): Promise<WorkerStructuredJournalArchive> {
-  const running = requireRunningStructuredWorker(identity)
-  // Open resting journals too and preserve the whole /clear lineage.
-  const page = await readStructuredLineageJournalPage(running.lineage)
-  if (page) {
-    return buildStructuredJournalArchive({
-      agent,
-      processIncarnation: identity.processIncarnation,
-      items: page.items,
-      hasOlder: page.hasOlder
-    })
-  }
-  // Unreadable owned/unverifiable journals must retain evidence for later archive.
-  // Only proven-retired lineages may skip missing journals: a user-closed chat can never supply more evidence.
-  if (structuredWorkerOwned(running) !== false) {
-    throw new OrchestrationError(
-      'archive_failed',
-      'Output could not be preserved for this structured worker; the session was retained.'
-    )
-  }
-  // A retired lineage's unreadable sessions are gone for good; earlier ones may not be.
-  return captureRetiredLineageArchive({
-    agent,
-    processIncarnation: identity.processIncarnation,
-    lineage: running.lineage
-  })
-}
-
 export function readArchivedStructuredJournal(args: {
   dispatchId: string
   workerState: string
@@ -279,6 +239,7 @@ export function readArchivedStructuredJournal(args: {
   }
   return pageMessages({
     messages: args.archive.messages,
+    alreadyBounded: true,
     warnings: args.archive.warnings,
     limited: args.archive.limited,
     dispatchId: args.dispatchId,
@@ -296,6 +257,8 @@ export function readArchivedStructuredJournal(args: {
 
 function pageMessages(input: {
   messages: readonly NativeChatMessage[]
+  alreadyBounded: boolean
+  /** Source-level omissions, independent of this page. */
   warnings: string[]
   limited: boolean
   dispatchId: string
@@ -308,8 +271,8 @@ function pageMessages(input: {
   archived: boolean
   liveness: StructuredWorkerObservation['status']
 }): OrchestrationWorkerReadTranscriptResult {
-  const start = Math.min(input.start, input.messages.length)
-  const end = Math.min(start + clampWorkerTranscriptLimit(input.limit), input.messages.length)
+  const page = pageWorkerTranscriptMessages(input)
+  const end = page.end
   // Stamp the prefix through end so later revisions below it invalidate the next cursor.
   const sourceIdentity = input.identityAt(end)
   const nextCursor = encodeWorkerOutputCursor(input.dispatchId, 'transcript', sourceIdentity, end)
@@ -319,10 +282,10 @@ function pageMessages(input: {
     sourceIdentity,
     provider: input.agent,
     transcript: {
-      messages: input.messages.slice(start, end),
+      messages: page.messages,
       nextCursor,
-      limited: input.limited || end < input.messages.length,
-      returnedMessageCount: end - start
+      limited: input.limited || page.limited,
+      returnedMessageCount: page.messages.length
     },
     cursor: nextCursor,
     status: {
@@ -331,7 +294,7 @@ function pageMessages(input: {
       liveness: input.liveness
     },
     fallbackReason: null,
-    warnings: input.warnings,
+    warnings: [...page.warnings, ...input.warnings],
     ...(input.archived ? { archived: true } : {})
   }
 }

@@ -13,6 +13,7 @@ export type TerminalMultiplexEvent =
         outputPause?: 1
         outputPauseDropNotice?: 1
         inputAck?: 1
+        outputCadence?: 1
       }
       inputLedgerId?: string
     }

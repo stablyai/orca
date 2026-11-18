@@ -33,7 +33,9 @@ const extensionStateSchema = z.object({
   /** Scripts this profile's worker registration was made from; a mismatch re-registers it. */
   workerSignature: z.string().optional(),
   /** Versions at the last load; absent means runtime.onInstalled has not fired in this profile. */
-  lastLoaded: z.object({ extensionVersion: z.string(), chromiumVersion: z.string() }).optional()
+  lastLoaded: z.object({ extensionVersion: z.string(), chromiumVersion: z.string() }).optional(),
+  /** sidePanel.setPanelBehavior; Chrome keeps it across restarts, unlike the panel options. */
+  openSidePanelOnActionClick: z.boolean().optional()
 })
 
 export type StoredContextMenuItem = z.infer<typeof contextMenuItemSchema>
@@ -52,6 +54,7 @@ export function emptyBrowserExtensionProfileState(): BrowserExtensionProfileStat
 export class BrowserExtensionProfileStateStore {
   private cache: StateFile | null = null
   private timer: NodeJS.Timeout | null = null
+  private dirty = false
   /** Bumped by every change, so hot paths can cache what they derive from the state. */
   revision = 0
 
@@ -117,18 +120,20 @@ export class BrowserExtensionProfileStateStore {
       clearTimeout(this.timer)
       this.timer = null
     }
-    if (!this.cache) {
+    if (!this.cache || !this.dirty) {
       return
     }
     mkdirSync(this.rootDirectory, { recursive: true })
     const target = join(this.rootDirectory, STATE_FILE_NAME)
     writeFileSync(`${target}.tmp`, JSON.stringify(this.cache))
     renameSync(`${target}.tmp`, target)
+    this.dirty = false
   }
 
   // Why debounce: extensions create menus item by item at startup.
   private schedulePersist(): void {
     this.revision++
+    this.dirty = true
     if (this.timer) {
       return
     }

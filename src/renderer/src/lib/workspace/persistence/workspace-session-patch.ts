@@ -6,11 +6,8 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../../shared/works
 import { normalizeBrowserHistoryEntries } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../../../shared/workspace-session/workspace-doc-history'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
-import {
-  buildEditorSessionData,
-  buildSanitizedTabsByWorktree,
-  buildTerminalSessionData
-} from './workspace-session'
+import { buildEditorSessionData, buildTerminalSessionData } from './workspace-session'
+import { buildSanitizedTabsByWorktree } from './workspace-session-sanitized-tabs'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 import {
   buildPersistedBrowserPagesByWorkspace,
@@ -134,7 +131,8 @@ export function buildWorkspaceSessionPatch(
       'editorDrafts',
       'markdownFrontmatterVisible',
       'activeFileIdByWorktree',
-      'activeTabTypeByWorktree'
+      'activeTabTypeByWorktree',
+      'strandedEditorDrafts'
     ] as const)
   ) {
     Object.assign(
@@ -144,7 +142,8 @@ export function buildWorkspaceSessionPatch(
         snapshot.editorDrafts,
         snapshot.markdownFrontmatterVisible,
         snapshot.activeFileIdByWorktree,
-        snapshot.activeTabTypeByWorktree
+        snapshot.activeTabTypeByWorktree,
+        snapshot.strandedEditorDrafts
       )
     )
   }
@@ -155,10 +154,15 @@ export function buildWorkspaceSessionPatch(
       snapshot.browserTabsByWorktree
     )
   }
-  if (stagedVisibilityChanged || changed.has('browserPagesByWorkspace')) {
+  if (
+    stagedVisibilityChanged ||
+    changed.has('browserPagesByWorkspace') ||
+    changed.has('browserAnnotationsByPageId')
+  ) {
     patch.browserPagesByWorkspace = buildPersistedBrowserPagesByWorkspace(
       snapshot.browserPagesByWorkspace,
-      snapshot.remoteBrowserPageHandlesByPageId
+      snapshot.remoteBrowserPageHandlesByPageId,
+      snapshot.browserAnnotationsByPageId
     )
   }
   if (stagedVisibilityChanged || changed.has('activeBrowserTabIdByWorktree')) {

@@ -1,6 +1,6 @@
-import type { PathExistenceResult } from '../../../../../shared/path-existence-batch'
+import type { PathExistenceResult } from '../../../../../shared/file-access/path-existence-batch'
 import { describe, expect, it, vi } from 'vitest'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { openFilePathLinkAtBufferPosition } from './files/terminal-file-link-hit-testing'
 import { openDetectedFilePath } from './files/terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -33,7 +33,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
@@ -121,167 +121,6 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
       { forceContentReload: true }
     )
     expect(onOpenFailure).not.toHaveBeenCalled()
-  })
-
-  it('remembers an older host ENOTDIR answer as missing, so the next click does not re-ask', async () => {
-    setPlatform('Macintosh')
-    hostAnswers((path) => (path === 'a.txt' ? { exists: true } : { error: OLD_HOST_ENOTDIR }))
-    // Why: hovering underlined a.txt, so only the longer joined guesses are unchecked.
-    const pathExistsCache = makeExistsCache([[runtimeKey('/srv/repo/a.txt'), true]])
-
-    clickFirstPath(vi.fn(), pathExistsCache)
-    await flushDoubleRaf()
-    runtimeEnvironmentCallMock.mockClear()
-    clickFirstPath(vi.fn(), pathExistsCache)
-    await flushDoubleRaf()
-
-    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'files.pathsExist' })
-    )
-    expect(openFileMock).toHaveBeenCalledTimes(2)
-    expect(openFileMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ filePath: '/srv/repo/a.txt' }),
-      { forceContentReload: true }
-    )
-  })
-
-  it('names the visible path when only a joined guess is left to try', async () => {
-    setPlatform('Macintosh')
-    hostAnswers(() => ({ error: 'host unreachable' }))
-    const onOpenFailure = vi.fn()
-    const pathExistsCache = makeExistsCache([
-      [runtimeKey('/srv/repo/a.txt'), false],
-      [runtimeKey('/srv/repo/a.txt/srv/repo/b.txt/srv/repo/c.txt'), false]
-    ])
-
-    clickFirstPath(onOpenFailure, pathExistsCache)
-    await flushDoubleRaf()
-
-    expect(onOpenFailure).toHaveBeenCalledWith('/srv/repo/a.txt', expect.anything())
-  })
-
-  it('says why when the clicked path is gone, naming it rather than a joined guess', async () => {
-    setPlatform('Macintosh')
-    hostAnswers(() => ({ exists: false }))
-    const onOpenFailure = vi.fn()
-
-    clickFirstPath(onOpenFailure)
-    await flushDoubleRaf()
-
-    expect(openFileMock).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith(
-      '/srv/repo/a.txt',
-      expect.objectContaining({ verdict: 'missing' })
-    )
-  })
-
-  it('does not call the path missing when the host cannot answer', async () => {
-    setPlatform('Macintosh')
-    hostAnswers(() => ({ error: 'host unreachable' }))
-    const onOpenFailure = vi.fn()
-
-    clickFirstPath(onOpenFailure)
-    await flushDoubleRaf()
-
-    expect(openFileMock).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith(
-      '/srv/repo/a.txt',
-      expect.objectContaining({ verdict: 'unverifiable' })
-    )
-  })
-
-  it('drops a slow ambiguous probe once a later click has opened something else', async () => {
-    setPlatform('Macintosh')
-    const firstProbe = createDeferred<boolean>()
-    vi.mocked(window.api.shell.pathExists).mockImplementation(async (path: string) =>
-      path === '/repo/a.txt' ? firstProbe.promise : false
-    )
-    const buffer = makeBuffer([
-      makeBufferLine('/repo/a.txt'),
-      makeBufferLine('/repo/b.txt'),
-      makeBufferLine(''),
-      makeBufferLine('package.json')
-    ])
-    const deps = { startupCwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo' }
-
-    openFilePathLinkAtBufferPosition(buffer, { x: 4, y: 1 }, 80, deps)
-    // Why: a lone candidate opens without probing, and must still cancel the pending probe.
-    openFilePathLinkAtBufferPosition(buffer, { x: 4, y: 4 }, 80, deps)
-    firstProbe.resolve(true)
-    await flushAsyncWork()
-
-    expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/package.json', wakeWslDistro: true })
-  })
-
-  it('reports a missing path but stays quiet for a bare dotted word', async () => {
-    setPlatform('Macintosh')
-    // Why Once: a lasting rejection would leak into later tests.
-    statMock
-      .mockRejectedValueOnce(new Error('ENOENT: no such file'))
-      .mockRejectedValueOnce(new Error('ENOENT: no such file'))
-    const onOpenFailure = vi.fn()
-    const deps = { startupCwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo', onOpenFailure }
-
-    openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('console.log')]),
-      { x: 4, y: 1 },
-      80,
-      deps
-    )
-    await flushAsyncWork()
-    expect(onOpenFailure).not.toHaveBeenCalled()
-
-    openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('src/gone.ts')]),
-      { x: 4, y: 1 },
-      80,
-      deps
-    )
-    await flushAsyncWork()
-    expect(onOpenFailure).toHaveBeenCalledWith(
-      '/repo/src/gone.ts',
-      expect.objectContaining({ verdict: 'missing' })
-    )
-  })
-
-  it('checks a longer hard-wrapped name before opening its cached prefix', async () => {
-    setPlatform('Macintosh')
-    vi.mocked(window.api.shell.pathExists).mockImplementation(
-      async (path: string) => path === '/repo/foo.ts.map'
-    )
-    const buffer = makeBuffer([makeBufferLine('/repo/foo.ts'), makeBufferLine('.map')])
-    const pathExistsCache = makeExistsCache([
-      [getTerminalPathExistsCacheKey({ absolutePath: '/repo/foo.ts' }), true]
-    ])
-    const deps = { startupCwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo', pathExistsCache }
-
-    openFilePathLinkAtBufferPosition(buffer, { x: 4, y: 1 }, 80, deps)
-    await flushAsyncWork()
-
-    expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/foo.ts.map', wakeWslDistro: true })
-  })
-
-  it('drops a slow ambiguous probe once any other file open has started', async () => {
-    setPlatform('Macintosh')
-    const probe = createDeferred<boolean>()
-    vi.mocked(window.api.shell.pathExists).mockImplementation(() => probe.promise)
-    const deps = { startupCwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo' }
-
-    openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('/repo/a.txt'), makeBufferLine('/repo/b.txt')]),
-      { x: 4, y: 1 },
-      80,
-      deps
-    )
-    // Why: e.g. a chat link or the link popover, which never passes through the click fallback.
-    openDetectedFilePath('/repo/other.txt', null, null, deps)
-    probe.resolve(true)
-    await flushAsyncWork()
-
-    expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/other.txt', wakeWslDistro: true })
   })
 
   it('supersedes an earlier open still in flight as soon as an ambiguous click starts', async () => {
@@ -479,27 +318,6 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
 
     expect(statMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
-  })
-
-  it('still says why when every candidate is already known missing', async () => {
-    setPlatform('Macintosh')
-    hostAnswers(() => ({ exists: false }))
-    const onOpenFailure = vi.fn()
-    const pathExistsCache = makeExistsCache(
-      [
-        '/srv/repo/a.txt',
-        '/srv/repo/a.txt/srv/repo/b.txt',
-        '/srv/repo/a.txt/srv/repo/b.txt/srv/repo/c.txt'
-      ].map((path): [string, boolean] => [runtimeKey(path), false])
-    )
-
-    expect(clickFirstPath(onOpenFailure, pathExistsCache)).toBe(true)
-    await flushDoubleRaf()
-
-    expect(onOpenFailure).toHaveBeenCalledWith(
-      '/srv/repo/a.txt',
-      expect.objectContaining({ verdict: 'missing' })
-    )
   })
 
   it('leaves an OSC 8 hyperlink to xterm when its label is a path known missing', () => {

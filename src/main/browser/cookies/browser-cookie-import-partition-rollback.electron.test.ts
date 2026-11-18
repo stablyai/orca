@@ -149,7 +149,7 @@ async function runFixture(): Promise<FixtureResult> {
     [
       `export { openCookieClearStore } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/cookies/browser-cookie-clear-store.ts'))}`,
       `export { removeTransplantableCookies } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/cookies/browser-cookie-import-clear.ts'))}`,
-      `export { importedDomainScope } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/cookies/browser-cookie-import-policy.ts'))}`
+      `export { importedDomainScope } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/cookies/policy/cookie-import-scope.ts'))}`
     ].join('\n')
   )
   await buildVite({

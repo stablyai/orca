@@ -14,7 +14,8 @@ import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-proje
 import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
@@ -102,11 +103,32 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return null
     }
 
-    const snapshot = await this.serializeProviderTerminalBuffer(
+    const { snapshot, late } = await this.awaitProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
       { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
     )
+    if (late && this.ptyLifecycleGenerationById.get(ptyId) === generation) {
+      // Why: later reads must not re-await a slow capture; its frame lands in the cache instead.
+      this.providerVisibleRetryAtByPtyId.set(ptyId, Number.POSITIVE_INFINITY)
+      void late
+        .then((landed) => {
+          if (this.ptyLifecycleGenerationById.get(ptyId) !== generation) {
+            return
+          }
+          return this.adoptProviderVisibleSnapshot(ptyId, generation, landed)
+        })
+        .catch(() => {})
+      return null
+    }
+    return this.adoptProviderVisibleSnapshot(ptyId, generation, snapshot)
+  }
+
+  private async adoptProviderVisibleSnapshot(
+    ptyId: string,
+    generation: number,
+    snapshot: PtyProviderBufferSnapshot | null
+  ): Promise<RuntimeVisibleTerminalState | null> {
     if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
@@ -270,7 +292,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       if (!snapshot || snapshot.data.length === 0) {
         return { lines: [] }
       }
-      return this.parseVisibleSnapshot(snapshot)
+      return await this.parseVisibleSnapshot(snapshot)
     } catch {
       return { lines: [] }
     }

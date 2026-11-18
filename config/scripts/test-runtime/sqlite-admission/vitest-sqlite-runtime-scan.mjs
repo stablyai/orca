@@ -21,16 +21,22 @@ const SQLITE_HARNESSES = new Set([
   'journal-host-database-test-support',
   'terminal-topology-profile-fixture',
   'acknowledged-terminal-tab-retirement-fixture',
+  'last-status.test-fixtures',
   // Opens the index read-only after the indexer closes; Bun's macOS SQLite refuses a WAL file then.
-  'session-search-indexer-test-fixture'
+  'session-search-indexer-test-fixture',
+  'session-search-index-test-fixture',
+  'session-search-engine-test-fixture'
 ])
 export const SQLITE_MODULES = [
   'src/main/sqlite/sync-database',
+  'src/main/agent-hooks/server/agent-hook-server',
+  'src/main/ai-vault-search/storage/session-search-schema',
+  'src/main/ai-vault-search/storage/session-search-store',
   'src/main/persistence/profile-state/profile-state-sqlite-authority',
   'src/main/native-chat/agent-session-journal/database/journal-host-database',
   'src/main/runtime/orchestration/db',
   'src/main/runtime/orchestration/db/orchestration-db',
-  'src/main/runtime/agent-session/structured-agent-session-runtime',
+  'src/main/runtime/agent-session/installation/structured-agent-session-runtime',
   'src/main/runtime/agent-session/records/agent-session-record-store-slot'
 ]
 const SQLITE_MODULE_PATHS = new Set(SQLITE_MODULES.map((module) => resolve(root, module)))

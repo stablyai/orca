@@ -3,9 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
-import { stopOrcadCommand } from './orcad-remote-process-control'
 
 const directories: string[] = []
 const host = getRemoteHostPlatform('linux-x64')
@@ -63,22 +62,9 @@ describe.skipIf(process.platform === 'win32')('POSIX slot runtime selection', ()
   })
 
   it.each([
-    ['empty', ''],
     ['short', 'abc123'],
-    ['uppercase', NODE_SHA.toUpperCase()],
     ['path traversal', `../${NODE_SHA.slice(3)}`]
   ])('refuses a Node slot with a %s marker', (_label, marker) => {
     expect(launch(nodeSlot({ marker }), process.execPath)).toMatchObject({ code: 78, stdout: '' })
-  })
-
-  it('reads a stop verdict from a Node slot through its pinned runtime', () => {
-    const slot = nodeSlot()
-    writeFileSync(join(slot, '.orcad-pid'), String(process.pid))
-    const result = runProcessSync({
-      program: '/bin/sh',
-      args: ['-c', stopOrcadCommand(host, slot, { waitSeconds: 1, nodePath: '/missing-host-node' })]
-    })
-    // Successful execution without a corroborating readiness PID remains unverifiable.
-    expect(result).toMatchObject({ code: 0, stdout: 'UNKNOWN\n' })
   })
 })

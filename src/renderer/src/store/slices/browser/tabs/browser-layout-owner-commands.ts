@@ -1,7 +1,10 @@
 // In layout-owner builds send browser commands before changing state; main frames draw tab/page/profile fields, then window writes page-local state. Refusal preserves tabs.
 
-import { sendLayoutApply, type WindowLayoutCommand } from '@/runtime/layout-apply-send'
-import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import {
+  sendLayoutApply,
+  type WindowLayoutCommand
+} from '@/runtime/workspace-layout/commands/layout-apply-send'
+import { beginPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { BrowserSliceGet } from '../browser-slice-contract'
 
 type BrowserLayoutCommand = Extract<

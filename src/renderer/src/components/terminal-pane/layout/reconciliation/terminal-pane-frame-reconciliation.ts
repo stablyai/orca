@@ -4,9 +4,9 @@ import {
   type PaneCloseKind,
   takePaneCloseIntent,
   takePaneMountUnfocused
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { planTerminalLiveLayoutInsertions } from './terminal-live-layout-reconciliation'
-import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 
 /** Draw main’s tree by mounting added panes, attaching main-started terminals and moving existing panes/ratios. Apply requested local closes; other removals wait for main’s notice. Return whether panes changed. */
 export function reconcileMountedPanesToLayout(args: {

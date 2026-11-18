@@ -1,11 +1,12 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './native-chat-resume-setting-target'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from './native-chat-usage-limit-continue-setting-target'
 
-export const getChatBehaviorTitle = (): string =>
-  translate('components.settings.nativeChat.behaviorTitle', 'Behavior')
+export const getChatBehaviorTitle = (t: Translate = translate): string =>
+  t('components.settings.nativeChat.behaviorTitle', 'Behavior')
 
 export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
   resumeOnRestart: {
@@ -77,6 +78,18 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.scrollToLatestOnSendSearchPosition', 'position')
     ]
   },
+  markNewMessages: {
+    targetSectionId: 'chat-mark-new-messages',
+    title: translate(
+      'components.settings.nativeChat.markNewMessagesTitle',
+      'Mark new messages when returning to a chat'
+    ),
+    description: translate(
+      'components.settings.nativeChat.markNewMessagesCopy',
+      'Coming back to a chat draws a New line above what arrived while you were away, and scrolls to it if you were reading the latest.'
+    ),
+    keywords: [translate('components.settings.nativeChat.markNewMessagesSearchUnread', 'unread')]
+  },
   linkPreviews: {
     targetSectionId: 'chat-link-previews',
     title: translate('components.settings.nativeChat.linkPreviewsTitle', 'Link previews'),
@@ -87,6 +100,33 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
     keywords: [
       translate('components.settings.nativeChat.linkPreviewsSearchUnfurl', 'unfurl'),
       translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
+    ]
+  },
+  composerSpellcheck: {
+    targetSectionId: 'chat-composer-spellcheck',
+    title: translate(
+      'components.settings.nativeChat.composerSpellcheckTitle',
+      'Spellcheck and autocorrect'
+    ),
+    description: translate(
+      'components.settings.nativeChat.composerSpellcheckCopy',
+      'Underlines misspelled words and applies system text replacements in the message box. Turn off to stop both here without changing them system-wide.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.composerSpellcheckSearchSpelling', 'spellcheck'),
+      translate('components.settings.nativeChat.composerSpellcheckSearchAutocorrect', 'autocorrect')
+    ]
+  },
+  promptSuggestions: {
+    targetSectionId: 'chat-prompt-suggestions',
+    title: translate('components.settings.nativeChat.promptSuggestionsTitle', 'Suggested prompts'),
+    description: translate(
+      'components.settings.nativeChat.promptSuggestionsCopy',
+      'After Claude replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward your Claude usage.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.promptSuggestionsSearchNext', 'next prompt'),
+      translate('components.settings.nativeChat.promptSuggestionsSearchGhost', 'ghost text')
     ]
   },
   shellEnvironment: {
@@ -107,6 +147,6 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
   }
 }))
 
-export function getChatBehaviorSearchEntries(): SettingsSearchEntry[] {
-  return [{ title: getChatBehaviorTitle() }, ...Object.values(getChatBehaviorEntriesByKey())]
+export function getChatBehaviorSearchEntries(t?: Translate): SettingsSearchEntry[] {
+  return [{ title: getChatBehaviorTitle(t) }, ...Object.values(getChatBehaviorEntriesByKey())]
 }

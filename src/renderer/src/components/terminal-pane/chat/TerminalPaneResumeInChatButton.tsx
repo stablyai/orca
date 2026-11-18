@@ -2,10 +2,13 @@ import { useShallow } from 'zustand/react/shallow'
 import { MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { resolveCliChatResumeSource } from '../../tab-bar/cli-chat-resume-source'
-import { runCliChatResume, useCliChatResumePending } from '../../tab-bar/cli-chat-resume-run'
+import { resolveCliChatResumeSource } from '../../tab-bar/session-actions/cli-chat-resume-source'
+import {
+  runCliChatResume,
+  useCliChatResumePending
+} from '../../tab-bar/session-actions/cli-chat-resume-run'
 
 export function TerminalPaneResumeInChatButton({
   tabId,
@@ -16,6 +19,7 @@ export function TerminalPaneResumeInChatButton({
   worktreeId: string
   paneKey: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const source = useAppStore(
     useShallow((state) =>
       resolveCliChatResumeSource(state, {
@@ -26,12 +30,12 @@ export function TerminalPaneResumeInChatButton({
   )
   const pending = useCliChatResumePending(source)
   const updateRequired = source?.hostUpdateRequired === true
-  const label = translate(
+  const label = t(
     'components.tab.bar.SortableTabContextMenu.switchToChatView',
     'Continue in Chat UI'
   )
   const tooltip = updateRequired
-    ? translate(
+    ? t(
         'components.native-chat.resumeInNewChat.hostUpdateRequired',
         'Update Orca on this host to continue in Chat UI.'
       )

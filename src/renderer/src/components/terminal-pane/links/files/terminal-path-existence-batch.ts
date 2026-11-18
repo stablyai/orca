@@ -1,7 +1,7 @@
 import {
   createPathExistenceBatch,
   type PathExistenceResult
-} from '../../../../../../shared/path-existence-batch'
+} from '../../../../../../shared/file-access/path-existence-batch'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { runtimePathsExist } from '@/runtime/files/metadata/runtime-path-existence-batch'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'

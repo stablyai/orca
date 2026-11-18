@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getEligibleFolderParents, storeAcceptsFolderParentIn } from './worktree-parent-candidates'
 
 const NO_FOLDER_PARENTS: Worktree[] = []

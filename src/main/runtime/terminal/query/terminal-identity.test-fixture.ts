@@ -1,7 +1,10 @@
-import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../construction/test-context/runtime-test-module-registration.spec'
 import { vi, type Mock, type MockInstance } from 'vitest'
-import { store, TEST_WORKTREE_ID } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-session-contracts'
+import {
+  store,
+  TEST_WORKTREE_ID
+} from '../../construction/test-context/orca-runtime-test-fixtures.spec'
+import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TerminalIdentitySource } from '../identity/terminal-identity-source'
 
 import type {

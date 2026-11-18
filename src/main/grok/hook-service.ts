@@ -5,14 +5,14 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
+import { resolveGrokHomeDir } from '../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import {
   readHooksJson,
-  readHooksJsonWithRaw,
-  writeHooksJson,
-  writeManagedScript
-} from '../agent-hooks/installer-utils'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+  readHooksJsonWithRaw
+} from '../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import { isOrcaOwnedRemnant, removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
 import {
   removeGrokHookBackupEntries,

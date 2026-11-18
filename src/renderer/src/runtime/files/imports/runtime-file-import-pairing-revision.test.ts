@@ -5,13 +5,16 @@ import {
   markRuntimeEnvironmentCompatible
 } from '../../rpc/compatibility/runtime-compatibility-cache'
 import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
-import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status-connection-generation'
-import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../../shared/files-runtime-capabilities'
+import {
+  clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests,
+  setRuntimeEnvironmentConnectionGenerationForTests
+} from '@/store/slices/runtime-status/runtime-status-connection-generation'
+
+import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../../shared/file-access/files-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/remote-runtime/protocol/protocol-version'
 
 const ENVIRONMENT_ID = 'env-repaired'
 const CAPTURED_REVISION = 41

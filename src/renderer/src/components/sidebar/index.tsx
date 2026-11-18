@@ -1,54 +1,62 @@
 import React, { useEffect, useMemo } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
-import SidebarHeader from './SidebarHeader'
-import SidebarNav from './SidebarNav'
-import { setSidebarLiveWidth } from './sidebar-live-width'
-import { SidebarSeamScrollbarStrip } from './SidebarSeamScrollbarStrip'
-import SetupScriptPromptCard from './SetupScriptPromptCard'
+import SidebarHeader from './chrome/SidebarHeader'
+import SidebarNav from './chrome/SidebarNav'
+import { setSidebarLiveWidth } from './chrome/sidebar-live-width'
+import SetupScriptPromptCard from './setup-script-prompts/SetupScriptPromptCard'
 import WorktreeList from './worktree-list/listing/WorktreeList'
-import WslMovedProjectsSection from './WslMovedProjectsSection'
-import SidebarToolbar from './SidebarToolbar'
+import WslMovedProjectsSection from '../wsl-move/WslMovedProjectsSection'
+import HiddenProjectsSection from './hidden-projects/HiddenProjectsSection'
+import SidebarToolbar from './chrome/SidebarToolbar'
 import WorkspaceKanbanDrawer from './workspace-board/surface/WorkspaceKanbanDrawer'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
-import { cn } from '@/lib/utils'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
+import { cn } from '@/lib/class-names'
 import { FolderPlus, Loader2 } from 'lucide-react'
-import { ActivityThreadCollapseContext } from '@/components/activity/activity-thread-collapse-context'
+import { ActivityThreadCollapseContext } from '@/components/activity/thread-list/activity-thread-collapse-context'
 import { useSidebarProjectDrop } from './project-admission/drop/useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBoardPanel'
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
-import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
-import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
-import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
-import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
+import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { LocalGitToolchainScanBanner } from '../repo/toolchain/LocalGitToolchainScanBanner'
+import { SeveredTerminalDaemonBanner } from '../maintenance/terminal-daemon/SeveredTerminalDaemonBanner'
+import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/StalledTerminalDaemonBanner'
+import { StartupWorktreeRefreshStatus } from './worktree-list/listing/StartupWorktreeRefreshStatus'
+import { WorktreeCardsIntroNotice } from './workspace-card/template/WorktreeCardsIntroNotice'
+import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
 
-// Keep the Agents activity pipeline out of the workspace view’s initial bundle.
-const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
+// Load the shared Activity badge/list pipeline after the sidebar shell.
+const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
 
 const WorktreeMetaDialog = lazyWithRetry(
   () => import('./workspace-card/metadata/WorktreeMetaDialog')
 )
-const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
+const RemoveFolderDialog = lazyWithRetry(
+  () => import('./workspace-actions/deletion/RemoveFolderDialog')
+)
 const SleepTwinWorkspaceDialog = lazyWithRetry(
   () => import('./workspace-actions/sleep/SleepTwinWorkspaceDialog')
 )
 const WorktreeVisibilityDialog = lazyWithRetry(
   () => import('./workspace-visibility/dialog/WorktreeVisibilityDialog')
 )
-const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
+const OrcaYamlTrustDialog = lazyWithRetry(
+  () => import('./workspace-creation/hook-trust/OrcaYamlTrustDialog')
+)
 const ForgetSshWorkspaceDialog = lazyWithRetry(
   () => import('./workspace-actions/deletion/ForgetSshWorkspaceDialog')
 )
-const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSidebarHost'))
+const AgentDashboardSidebarHost = lazyWithRetry(
+  () => import('../dashboard/sidebar/AgentDashboardSidebarHost')
+)
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
-// Why: stay above retained panes and past the seam strip so scrolling and resizing remain separate.
+// Why: start on the divider pixel so pointing at the visible seam resizes instead of scrolling the list.
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
-  'peer absolute -right-3.5 top-0 z-20 h-full w-2.5 cursor-col-resize'
+  'peer absolute -right-[9px] top-0 z-20 h-full w-[9px] cursor-col-resize'
 // Why: an open drawer covers the outer side of the seam, so keep the inner overlap wide enough to grab.
 const WORKTREE_SIDEBAR_RESIZE_HANDLE_UNDER_DRAWER_CLASS_NAME = '-right-1.5 w-3'
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
@@ -82,6 +90,7 @@ function Sidebar({
   const [projectsCollapseTarget, setProjectsCollapseTarget] = React.useState<HTMLDivElement | null>(
     null
   )
+  const [agentBadgeTarget, setAgentBadgeTarget] = React.useState<HTMLSpanElement | null>(null)
   const agentsScrollTopRef = React.useRef(0)
   // Retain collapse state and scroll geometry across Agents-list unmounts.
   const [agentsCollapsedGroupKeys, setAgentsCollapsedGroupKeys] = React.useState<
@@ -169,7 +178,7 @@ function Sidebar({
   )
 
   return (
-    <TooltipProvider delayDuration={400}>
+    <TooltipProvider>
       {/* Why: the handle lives outside the clipped sidebar so its outer half isn't cut off. */}
       <div className="relative flex min-h-0 flex-shrink-0 scrollbar-sleek-parent">
         <div
@@ -182,31 +191,37 @@ function Sidebar({
             <>
               <SidebarNav />
               <SidebarHeader
+                activityBadgeTarget={setAgentBadgeTarget}
                 onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
                 activityOptionsTarget={setAgentOptionsTarget}
                 projectsCollapseTarget={setProjectsCollapseTarget}
               />
               <SeveredTerminalDaemonBanner />
               <StalledTerminalDaemonBanner />
-              {sidebarBody === 'agents' ? (
-                <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
-                  <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
-                    <SidebarAgentsList
-                      readFilter={agentReadFilter}
-                      setReadFilter={setAgentReadFilter}
-                      groupBy={agentGroupBy}
-                      setGroupBy={setAgentGroupBy}
-                      query={agentQuery}
-                      setQuery={setAgentQuery}
-                      optionsTarget={agentOptionsTarget}
-                      scrollTopRef={agentsScrollTopRef}
-                    />
-                  </ActivityThreadCollapseContext.Provider>
-                </React.Suspense>
-              ) : (
+              <React.Suspense
+                fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}
+              >
+                <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
+                  <SidebarAgentsList
+                    active={sidebarBody === 'agents'}
+                    readFilter={agentReadFilter}
+                    setReadFilter={setAgentReadFilter}
+                    groupBy={agentGroupBy}
+                    setGroupBy={setAgentGroupBy}
+                    query={agentQuery}
+                    setQuery={setAgentQuery}
+                    optionsTarget={agentOptionsTarget}
+                    badgeTarget={agentBadgeTarget}
+                    scrollTopRef={agentsScrollTopRef}
+                  />
+                </ActivityThreadCollapseContext.Provider>
+              </React.Suspense>
+              {sidebarBody !== 'agents' && (
                 <>
                   <LocalGitToolchainScanBanner />
                   <StartupWorktreeRefreshStatus />
+                  <WorktreeCardsUpdateNotice />
+                  <WorktreeCardsIntroNotice />
                   <WorktreeList
                     scrollOffsetRef={worktreeScrollOffsetRef}
                     scrollAnchorRef={worktreeScrollAnchorRef}
@@ -218,6 +233,7 @@ function Sidebar({
                     projectsCollapseTarget={projectsCollapseTarget}
                   />
                   <WslMovedProjectsSection />
+                  <HiddenProjectsSection />
                 </>
               )}
 
@@ -255,9 +271,6 @@ function Sidebar({
 
         {sidebarOpen && (
           <>
-            {drawerCoversSeam ? null : (
-              <SidebarSeamScrollbarStrip sidebarRef={containerRef} onResizeStart={onResizeStart} />
-            )}
             <div
               data-sidebar-resize-handle=""
               className={cn(

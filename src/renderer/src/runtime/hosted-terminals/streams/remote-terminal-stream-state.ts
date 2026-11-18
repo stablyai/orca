@@ -1,3 +1,4 @@
+import type { TerminalOutputCadence } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { RemoteTerminalStreamWatchdog } from './recovery/remote-terminal-stream-watchdog'
 import type { RemoteRuntimeMultiplexedTerminalCallbacks } from './remote-terminal-stream-contracts'
 import type {
@@ -19,6 +20,10 @@ export type RemoteRuntimeMultiplexedTerminalState = {
   supportsInputAck: boolean
   inputLedgerId: string | null
   outputPaused: boolean
+  supportsOutputCadence: boolean
+  /** Desired cadence; `hostOutputCadence` is what the host last accepted, so changes before the capability echo still land. */
+  outputCadence: TerminalOutputCadence
+  hostOutputCadence: TerminalOutputCadence
   streamGeneration: string | null
   sourceAckedEndByte: number
   heldAckBytes: number

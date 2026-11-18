@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem.test-fixture'
-import { isPlainObject } from '../agent-hooks/installer-utils'
+import { createManagedHookLocalFilesystem } from '../agent-hooks/installation/remote/testing/managed-hook-local-filesystem.test-fixture'
+import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
 import { KiroHookService } from './hook-service'
 import { getKiroManagedCommandMatcher, KIRO_HOOK_EVENTS } from './hook-settings'
 
@@ -208,6 +208,4 @@ describe('KiroHookService', () => {
     expect(Object.keys(remote.hooks).sort()).toEqual([...KIRO_HOOK_EVENTS].sort())
     expect(readAgent('stale').hooks).toBeUndefined()
   })
-
-  // Check command shapes everywhere; windows-hook-payload-delivery.test.ts executes them under Kiro's shells.
 })

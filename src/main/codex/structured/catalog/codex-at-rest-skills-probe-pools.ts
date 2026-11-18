@@ -1,4 +1,4 @@
-import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 import type { AtRestCommandScan } from '../../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import type * as Source from './codex-at-rest-skills-probe'
 
@@ -7,7 +7,6 @@ const FAILED_START_BACKOFF_MS = [10_000, 30_000, 90_000, 5 * 60_000] as const
 
 export type FolderRequest = {
   cwd: string
-  generation: number
   isCurrent: () => boolean
   admitted: () => void
   answer: PromiseWithResolvers<AtRestCommandScan>
@@ -89,7 +88,8 @@ export function createCodexSkillsProbePools(
       if (owner.pending.size === 0) {
         return
       }
-      deps.prepareHome?.(owner.accountHomePath)
+      await deps.prepareHome?.(owner.accountHomePath)
+      owner.controller.signal.throwIfAborted()
       owner.started = true
       await probe(deps, owner, now(), () => {
         initialized = true

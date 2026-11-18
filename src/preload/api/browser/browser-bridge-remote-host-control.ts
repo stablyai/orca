@@ -5,7 +5,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_HOST_NOTICE_CHANNEL,
   DESKTOP_BROWSER_BRIDGE_HOST_STOP_CHANNEL,
   type DesktopBrowserBridgeHostNotice
-} from '../../../shared/desktop-browser-bridge-host-control-contract'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-host-control-contract'
 
 /** The once-per-host notice that an SSH host is controlling a browser tab, and its answers. */
 export const browserRemoteHostControlApi = {

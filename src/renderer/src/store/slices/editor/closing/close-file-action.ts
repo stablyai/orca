@@ -8,9 +8,9 @@ import {
 } from '../tabs/workspace-editor-files'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { getRecentlyClosedTabPosition } from '../../recently-closed-tab-position'
-import { pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
-import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
+import { getRecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
+import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
 import { type ClosedEditorTabSnapshot, MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
 import { removeMarkdownVisibilityKeys } from '../tabs/workspace-editor-item'
 import {
@@ -22,7 +22,7 @@ import { mayShareEditorBackingFile } from '../file-ids/editor-file-ids'
 import { isSameOwnedDocument } from '../file-ids/same-owned-editor-document'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import { closeFileTabsThroughLayoutOwner } from '../tabs/editor-tab-close-through-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 
 export function createCloseFileAction(
   set: EditorSet,

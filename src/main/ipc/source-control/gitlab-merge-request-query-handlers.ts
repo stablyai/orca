@@ -1,15 +1,18 @@
 import { ipcMain } from 'electron'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
-import type { GitLabMRInvolvement } from '../../../shared/gitlab-types'
+import type { GitLabMRInvolvement } from '../../../shared/gitlab/gitlab-types'
 import {
   normalizeGitLabMRInvolvement,
   normalizeGitLabMRListState,
   normalizeGitLabPositiveInteger,
   normalizeGitLabSearchQuery
-} from '../../gitlab/gitlab-preload-args'
-import { getMergeRequest, getMergeRequestForBranch } from '../../gitlab/merge-request-lookup'
-import { listMergeRequests } from '../../gitlab/merge-request-list'
+} from '../../gitlab/requests/gitlab-preload-args'
+import {
+  getMergeRequest,
+  getMergeRequestForBranch
+} from '../../gitlab/merge-requests/merge-request-lookup'
+import { listMergeRequests } from '../../gitlab/merge-requests/merge-request-list'
 
 import {
   type GitLabRepoSelectorArgs,

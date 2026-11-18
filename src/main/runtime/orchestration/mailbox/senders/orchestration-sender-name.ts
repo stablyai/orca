@@ -1,8 +1,9 @@
 import { senderDispatchLaunch } from './sender-dispatch-launch'
-import { readWorkerTerminalHostScope } from '../../../../../shared/worker-terminal-host-scope'
+import { agentSessionRecordShownName } from '../../../agent-session/records/agent-session-record-shown-name'
+import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { crewDisplayName } from '../../crew/crew-rules'
-import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
-import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import {
   getAgentRowConversationName,
   type ConversationNameTab
@@ -10,8 +11,8 @@ import {
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import { structuredChatDisplayName } from '../../../../../shared/structured-chat-row-name'
-import type { Tab } from '../../../../../shared/tab-types'
+import { structuredChatDisplayName } from '../../../../../shared/agent-session/view/structured-chat-row-name'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -252,12 +253,16 @@ function observedTaskName(
   return task?.display_name || task?.task_title || null
 }
 
+export function liveSenderAgent(observation: SenderObservation): AgentType | null {
+  return observation.chat?.agent || observation.terminal?.agent || null
+}
+
 /** Current live kind wins; exact durable dispatch knowledge survives loss of live observations. */
 export function orchestrationSenderAgent(
   sources: Pick<SenderNamingSources, 'db' | 'dispatchLaunch'>,
   observation: SenderObservation
 ): AgentType | null {
-  const live = observation.chat?.agent || observation.terminal?.agent
+  const live = liveSenderAgent(observation)
   if (live) {
     return live
   }
@@ -284,7 +289,8 @@ export function structuredChatNaming(
   }
   const tab = sources.chatTab(record.location.workspaceId, record.sessionId)
   const fallback = tab?.label.trim() || defaultAgentChatLabel(record.provider)
-  const ownName = structuredChatDisplayName(tab?.customLabel, record.conversationName, '') || null
+  const shownName = sources.records ? agentSessionRecordShownName(sources.records, record) : null
+  const ownName = structuredChatDisplayName(tab?.customLabel, shownName, '') || null
   return { ownName, fallback, agent: record.provider }
 }
 

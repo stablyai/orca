@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { STAGED_FILE_SAVE_LIMITS } from '../../../shared/staged-file-save'
+import { STAGED_FILE_SAVE_LIMITS } from '../../../shared/file-write/staged-file-save'
 import { StagedFileSaves } from './staged-file-saves'
 
 // An append can be held open to put other ops beside it.

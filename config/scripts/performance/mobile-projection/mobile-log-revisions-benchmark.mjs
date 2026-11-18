@@ -7,7 +7,7 @@ import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 
 const baseline = process.argv[2] ?? '20ab9950654'
-const file = 'mobile/src/transport/connection-log-buffer.ts'
+const file = 'mobile/src/diagnostics/connection/connection-log-buffer.ts'
 async function load(contents) {
   const result = await build({
     stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(file)) },

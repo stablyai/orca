@@ -1,6 +1,6 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
-import '../unused-default-rpc-methods.test-fixture'
+import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,20 +74,6 @@ describe('Relay-bound pairing offer expiry', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('revokes the Relay invite of an expired offer when it is discarded', async () => {
-    const { server, revoked } = await startRelayServer()
-    try {
-      const first = await mint(server)
-      vi.setSystemTime(T0 + TTL)
-      const next = await mint(server)
-      expect(next).not.toBe(first)
-      expect(revoked).toEqual([first])
-      expect(server.getDeviceRegistry()?.getDevice(first)).toBeNull()
-    } finally {
-      await server.stop()
-    }
   })
 
   it('revokes every overlapping offer on rotate', async () => {

@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto'
 import { fingerprintAuthenticatedPairingCredential } from '../../rpc/server/pairing/device-principal'
 import type {
+  RuntimeRequestGuard,
   RuntimeRequestPreparation,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export type OrchestrationWorkerServer = {
   environmentId: string
@@ -17,18 +18,22 @@ export type OrchestrationWorkerServer = {
 /** Callers that already proved the contract, or that pin the pairing generation they resolved against. */
 export type OrchestrationEnvironmentCallOptions = {
   prepareRequest?: RuntimeRequestPreparation
+  prepareGuard?: RuntimeRequestGuard
   contractVerified?: boolean
   expectedEnvironmentPairingRevision?: number
 }
 
 export type OrchestrationEnvironmentSendOptions = {
   prepareRequest?: RuntimeRequestPreparation
+  prepareGuard?: RuntimeRequestGuard
   /** Send only to this host incarnation; any other answers runtime_environment_changed before sending. */
   expectedRuntimeId?: string
 }
 
 export type OrchestrationEnvironmentTransport = {
-  resolve(selector: string): OrchestrationWorkerServer
+  resolve(selector: string): OrchestrationWorkerServer | Promise<OrchestrationWorkerServer>
+  /** False once the server is removed from this host, so its relays stop instead of retrying forever. */
+  hasEnvironment?(environmentId: string): boolean | Promise<boolean>
   call(
     selector: string,
     method: string,
@@ -38,6 +43,8 @@ export type OrchestrationEnvironmentTransport = {
     expectedEnvironmentPairingRevision?: number,
     send?: OrchestrationEnvironmentSendOptions
   ): Promise<RuntimeRpcResponse<unknown>>
+  /** Fires when a server's status turns verified, so backed-off relays retry at once. */
+  onEnvironmentVerified?(listener: (environmentId: string) => void): () => void
 }
 
 export function fingerprintOrchestrationPeer(publicKeyB64: string): string {

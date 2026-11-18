@@ -1,9 +1,9 @@
 import { randomBytes, randomUUID } from 'node:crypto'
-import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
-import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
+import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
 import type { TokenDeviceEntry } from './device-entry'
 import { validGrants } from './device-registry-row-validation'
-import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 
 export function mintDeviceCredential(): { deviceId: string; token: string } {
   return { deviceId: randomUUID(), token: randomBytes(24).toString('hex') }

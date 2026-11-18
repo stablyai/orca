@@ -17,7 +17,7 @@ import type {
   LinearWorkspaceSelection
 } from '../../../../../shared/linear/workspace-types'
 import type { CacheEntry } from '../../github/cache/cache-model'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { LinearIssueAttributeFilter } from '../../../../../shared/linear/issue-attribute-filter'
 
 export type LinearIssueListReadArgs = {

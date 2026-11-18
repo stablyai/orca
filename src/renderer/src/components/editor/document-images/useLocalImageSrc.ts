@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useState } from 'react'
 import { resolveImageAbsolutePath } from '../markdown/link-routing/markdown-preview-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { readLocalImagePreview } from './local-image-src-reader'
-import type { LocalFileAccess } from '../../../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import {
   blobUrlCache,
   cacheLocalImageBlob,
@@ -12,7 +12,7 @@ import {
   subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated
 } from './local-image-src-cache'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
-import { readBrowserAttachmentFile } from '@/lib/browser-attachment-files'
+import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function getLocalImageCacheKey(

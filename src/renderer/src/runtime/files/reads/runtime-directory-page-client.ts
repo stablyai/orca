@@ -1,12 +1,12 @@
 import { useAppStore } from '@/store/index'
-import type { DirEntry } from '../../../../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../../../../shared/file-listing/directory-entry'
 import {
   dirEntryPageAfter,
   type DirEntryCursor,
   type DirEntryPage
-} from '../../../../../shared/file-dir-page'
-import { sortDirEntries } from '../../../../../shared/file-name-sort'
-import { FILE_READ_DIR_PAGED_RUNTIME_CAPABILITY } from '../../../../../shared/files-runtime-capabilities'
+} from '../../../../../shared/file-listing/file-dir-page'
+import { sortDirEntries } from '../../../../../shared/file-listing/file-name-sort'
+import { FILE_READ_DIR_PAGED_RUNTIME_CAPABILITY } from '../../../../../shared/file-access/files-runtime-capabilities'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus

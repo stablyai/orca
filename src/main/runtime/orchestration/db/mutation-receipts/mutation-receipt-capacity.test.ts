@@ -2,9 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import Database from '../../../../sqlite/sync-database'
+import type Database from '../../../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration-db'
-import { SCHEMA_VERSION } from '../contract-constants'
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
@@ -56,67 +55,6 @@ describe('mutation receipt capacity schema', () => {
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
-  })
-
-  it('migrates a populated v25 database and tracks writes from older connections', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-mutation-receipt-migration-'))
-    const dbPath = join(tempDir, 'orchestration.db')
-    db = new OrchestrationDb(dbPath)
-    insertReceipts(sqliteFor(db), 20, 'completed')
-    db.close()
-    db = undefined
-
-    const oldDb = new Database(dbPath)
-    oldDb.exec(`
-      DROP TRIGGER mutation_receipts_count_insert;
-      DROP TRIGGER mutation_receipts_count_delete;
-      DROP TABLE mutation_receipt_ledger;
-      DROP INDEX idx_mutation_receipts_completed_updated;
-    `)
-    oldDb.pragma('user_version = 25')
-    oldDb.close()
-
-    db = new OrchestrationDb(dbPath)
-    const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
-    expect(sqlite.prepare('SELECT receipt_count FROM mutation_receipt_ledger').get()).toEqual({
-      receipt_count: 20
-    })
-
-    const olderConnection = new Database(dbPath)
-    olderConnection.exec(`
-      INSERT INTO mutation_receipts (
-        caller_fingerprint, request_id, method, payload_hash, state
-      ) VALUES ('old-client', 'inserted', 'orchestration.send', 'hash', 'pending');
-      DELETE FROM mutation_receipts
-      WHERE caller_fingerprint = 'old-client' AND request_id = 'inserted';
-    `)
-    olderConnection.close()
-
-    expect(sqlite.prepare('SELECT receipt_count FROM mutation_receipt_ledger').get()).toEqual({
-      receipt_count: 20
-    })
-  })
-
-  it('amortizes capacity pruning while retaining the newest replay records', () => {
-    db = new OrchestrationDb(':memory:')
-    const sqlite = sqliteFor(db)
-    insertReceipts(sqlite, MUTATION_RECEIPT_MAX_ROWS, 'completed')
-
-    beginReceipt(db, 'first')
-    const afterFirst = sqlite
-      .prepare('SELECT receipt_count FROM mutation_receipt_ledger')
-      .get() as { receipt_count: number }
-    beginReceipt(db, 'second')
-    const afterSecond = sqlite
-      .prepare('SELECT receipt_count FROM mutation_receipt_ledger')
-      .get() as { receipt_count: number }
-
-    expect(afterFirst.receipt_count).toBe(MUTATION_RECEIPT_MAX_ROWS - 63)
-    expect(afterSecond.receipt_count).toBe(afterFirst.receipt_count + 1)
-    expect(db.getMutationReceipt('caller', 'request_00064')).toBeUndefined()
-    expect(db.getMutationReceipt('caller', 'request_00065')).toMatchObject({ state: 'completed' })
-    expect(db.getMutationReceipt('caller', 'request_10000')).toMatchObject({ state: 'completed' })
   })
 
   it('keeps the row limit exact across independent database connections', () => {

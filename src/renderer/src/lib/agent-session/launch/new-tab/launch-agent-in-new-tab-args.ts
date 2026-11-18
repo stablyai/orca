@@ -1,10 +1,10 @@
 import type { AgentSessionLaunchRequest } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import type { LaunchAgentInNewTabRequest } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
-import type { NativeChatComposerFocusIntent } from '@/components/native-chat/native-chat-composer-focus-intent'
+import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 
 export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   requestedSurface?: AgentSessionLaunchRequest['requestedSurface']
@@ -20,6 +20,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   groupId?: string
   /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
   prompt?: string
+  /** A surface the user already sees for this launch presents a preparation refusal, not a toast. */
+  presentsRefusal?: true
   /** Optional CLI arguments appended to the selected agent command; a chat has no command line. */
   agentArgs?: string | null
   /** Raw action Arguments replace configured Arguments while inheriting host permission. */

@@ -4,8 +4,13 @@ import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-titl
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-interrupt'
+import type { ClaudeTerminalEvidence } from '../../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-terminal-interrupt'
 import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
+import { hermesNativeTitleStatus } from '../../../../shared/agent-status/title/providers/hermes-terminal-title'
+import { jcodePaneTitleStatus } from '../../../../shared/agent-status/title/providers/jcode-terminal-title'
+
+/** Claude fires PermissionRequest just before it reports the block; older wait hooks belong to other prompts. */
+const PERMISSION_HOOK_LEAD_MS = 5_000
 
 export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
   protected abstract collectPaneKeysForPty(ptyId: string): Set<string>
@@ -37,6 +42,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   protected abstract clearAgentPromptCorrelationForPty(ptyId: string): void
   protected abstract collectAgentStatusPaneKeysForPty(ptyId: string): Set<string>
   protected abstract markPaneLiveTitlesDirty(): void
+  /** A title moved a terminal agent to another status; worktree.ps rows show it without a hook row. */
+  protected abstract onTitleAgentStatusChanged(): void
 
   observeClaudeTerminalEvidence(ptyId: string, evidence: ClaudeTerminalEvidence): void {
     if (!this.onClaudeTerminalEvidence || this.ptysById.get(ptyId)?.connectionId) {
@@ -50,8 +57,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   /** The PTY's agent status under this title: the program's own OSC 7501 activity while it
    *  reports one, else what the title glyph says. */
   protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
+    const agent = this.getPaneTerminalAgent(ptyId)
     return (
       this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
+      hermesNativeTitleStatus(rawTitle, agent) ??
+      jcodePaneTitleStatus(rawTitle, agent) ??
       detectAgentStatusFromTitle(rawTitle)
     )
   }
@@ -126,6 +136,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
           (agentStatus === 'idle' && !statusOnly && prevTitle !== recordedTitle))
       const observedAt = this.nextTitleObservationSequence()
       const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
+      // A fresh title retires a stale-working display clear, so the row shows the agent again.
+      const retiresDisplayClear = !statusOnly && pty.titleDisplayClear != null
       if (!statusOnly) {
         pty.titleDisplayClear = null
         pty.lastOscTitle = recordedTitle
@@ -137,12 +149,26 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       if (prevStatus === 'working' && agentStatus === null) {
         this.confirmPtyAgentExit(ptyId, true)
       }
+      const titleBlocksHooks =
+        identityOnlyTitle || terminalTitleBlocksExplicitAgentStatus(recordedTitle)
+      if (titleBlocksHooks || prevStatus !== agentStatus) {
+        pty.permissionWaitHookedAfterEpochMs =
+          !titleBlocksHooks && agentStatus === 'permission' && observedAtEpochMs !== null
+            ? Math.max(
+                pty.lastAgentStatusRichInvalidatedAtEpochMs ?? 0,
+                pty.lastAgentStatusStartedAtEpochMs ?? 0,
+                observedAtEpochMs - PERMISSION_HOOK_LEAD_MS
+              )
+            : undefined
+      }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
       }
+      if (prevStatus !== agentStatus || retiresDisplayClear) {
+        this.onTitleAgentStatusChanged()
+      }
       if (
-        identityOnlyTitle ||
-        terminalTitleBlocksExplicitAgentStatus(recordedTitle) ||
+        titleBlocksHooks ||
         (prevStatus !== null && agentStatus !== null && prevStatus !== agentStatus)
       ) {
         pty.lastAgentStatusRichInvalidatedAtEpochMs = observedAtEpochMs ?? Date.now()
@@ -220,6 +246,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     if (nativeStatus === clearedStatus) {
       return previousTitle !== normalizedTitle
     }
+    this.onTitleAgentStatusChanged()
     const foregroundRefresh = this.ptyForegroundAgent.refresh(ptyId, observedAt)
     if (this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)) {
       this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)
@@ -298,11 +325,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       return
     }
     this.terminalSideEffectConsumerAvailable = nextAvailable
-    for (const [ptyId, entry] of this.ptyTitleTrackersByPtyId) {
+    for (const entry of this.ptyTitleTrackersByPtyId.values()) {
       entry.tracker.setTransientSideEffectScanningEnabled(nextAvailable)
-      entry.commandCodeDetector = nextAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
     }
   }
 }

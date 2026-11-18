@@ -1,14 +1,14 @@
 import {
   WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
   buildPosixClaudeBackgroundJobGuardLines
-} from '../../../agent-hooks/claude-background-job-guard'
-import { buildPosixAgentHookPostCommand } from '../../../agent-hooks/hook-post-command'
+} from '../../../agent-hooks/installation/scripts/claude-background-job-guard'
+import { buildPosixAgentHookPostCommand } from '../../../agent-hooks/installation/scripts/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../../../agent-hooks/hook-stdin-contract'
-import { buildWindowsAgentHookCurlPostCommand } from '../../../agent-hooks/installer-utils'
+} from '../../../agent-hooks/installation/scripts/hook-stdin-contract'
+import { buildWindowsAgentHookCurlPostCommand } from '../../../agent-hooks/installation/commands/windows-agent-hook-post-command'
 
 export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {

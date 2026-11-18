@@ -1,15 +1,19 @@
 // The execution host's own `agy acp`: preferred for new chats when it answers as a compatible server.
 
 import { existsSync } from 'node:fs'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
-import { AcpConnectionClosedError } from '../acp/acp-errors'
+import { AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
+} from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../shared/app-lifecycle/identity/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import {
   createAntigravityHostCredentialBackend,
@@ -23,7 +27,8 @@ export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
 const AGY_HOME_FOLDER = '.gemini'
 /** Approves tools, not plans; the check launches with it, so a build without it stays managed. */
 export const AGY_SKIP_PERMISSIONS_FLAG = '--dangerously-skip-permissions'
-const PROBE_TIMEOUT_MS = 5_000
+// agy.exe took 6-7s to list sessions while Orca started, and Windows has no managed fallback.
+const PROBE_TIMEOUT_MS = process.platform === 'win32' ? 15_000 : 5_000
 const RECHECK_MS = 5 * 60_000
 
 export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse): boolean {
@@ -95,7 +100,7 @@ export async function antigravityHostAcpReady(
         // A present keychain item does not prove agy can sign in silently; session requests
         // answer "Authentication required" until it has. Unlike session/new, listing writes no
         // conversation into agy's history.
-        await connection.listSessions(folder)
+        await connection.listSessions({ cwd: folder })
       }
     ).then(
       () => true,
@@ -135,20 +140,10 @@ export async function agyUsesApiKey(homePath: string): Promise<boolean> {
   }
 }
 
-/** Whether Orca's own Chat sign-in has left credentials in its managed home or a folder inside it. */
+/** Whether Orca's own Chat holds the managed server's personal sign-in token. */
 export async function hasManagedAntigravityChatSignIn(managedHome: string): Promise<boolean> {
-  const entries = await readdir(managedHome, { withFileTypes: true }).catch(() => [])
-  const folders = [
-    managedHome,
-    ...entries.filter((entry) => entry.isDirectory()).map((entry) => join(managedHome, entry.name))
-  ]
-  for (const folder of folders) {
-    const names = await readdir(folder).catch(() => [])
-    if (names.some((name) => name.endsWith('oauth-token'))) {
-      return true
-    }
-  }
-  return false
+  const token = join(managedHome, ANTIGRAVITY_ACP_HOME, 'acp_token.json')
+  return (await stat(token).catch(() => null)) !== null
 }
 
 /** Whether agy itself is signed in on this host; an unreadable store counts as signed out. */

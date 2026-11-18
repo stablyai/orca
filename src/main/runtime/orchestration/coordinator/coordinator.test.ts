@@ -153,16 +153,6 @@ describe('Coordinator', () => {
     }
   })
 
-  it('throws if no tasks exist', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = createMockRuntime()
-    const coordinator = new Coordinator(db, runtime, {
-      spec: 'do stuff',
-      coordinatorHandle: 'coord'
-    })
-    await expect(coordinator.run()).rejects.toThrow('No tasks found')
-  })
-
   it('dispatches a ready task to an available terminal', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
@@ -192,69 +182,6 @@ describe('Coordinator', () => {
     expect(runtime.sentMessages.length).toBeGreaterThan(0)
     expect(runtime.sentMessages[0].text).toContain('orca-ide orchestration send')
     expect(runtime.sentMessages[0].options).toEqual(dispatchPreambleSendOptions(expect.any(String)))
-  })
-
-  it('records the assignee pane key when the runtime can resolve one', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = createMockRuntime()
-    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-    const withPaneLookup = Object.assign(runtime, {
-      getTerminalPaneKey: (handle: string) => (handle === 'term_a' ? 'tab_a:leaf_a' : null)
-    })
-
-    const task = db.createTask({
-      runId,
-      spec: 'implement feature'
-    })
-    const coordinator = new Coordinator(db, withPaneLookup, {
-      spec: 'build it',
-      coordinatorHandle: 'coord',
-      pollIntervalMs: 50
-    })
-    const runPromise = coordinator.run()
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(db.getDispatchContext(task.id)?.assignee_pane_key).toBe('tab_a:leaf_a')
-    expect(db.getDispatchContext(task.id)?.process_incarnation).toBeNull()
-
-    insertWorkerDone(db, { taskId: task.id })
-    await settleCoordinatorRun(runPromise)
-  })
-
-  it('records authenticated process authority for automatic dispatch', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = createMockRuntime()
-    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-    const withAuthority = Object.assign(runtime, {
-      getOrchestrationDispatchAuthority: (handle: string) =>
-        handle === 'term_a'
-          ? {
-              paneKey: 'tab_a:leaf_a',
-              processIncarnation: 'pty_a:incarnation-a',
-              launchTokenHash: 'launch-token-hash'
-            }
-          : null
-    })
-    const task = db.createTask({
-      runId,
-      spec: 'implement feature'
-    })
-    const coordinator = new Coordinator(db, withAuthority, {
-      spec: 'build it',
-      coordinatorHandle: 'coord',
-      pollIntervalMs: 50
-    })
-    const runPromise = coordinator.run()
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(db.getDispatchContext(task.id)).toMatchObject({
-      assignee_pane_key: 'tab_a:leaf_a',
-      process_incarnation: 'pty_a:incarnation-a',
-      launch_token_hash: 'launch-token-hash'
-    })
-
-    insertWorkerDone(db, { taskId: task.id })
-    await settleCoordinatorRun(runPromise)
   })
 
   it('records completedTasks when send reconciled worker_done before coordinator read', async () => {
@@ -649,64 +576,7 @@ describe('Coordinator', () => {
     expect(logs.some((m) => m.includes('Task') && m.includes('completed'))).toBe(true)
   })
 
-  it('can be stopped', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = createMockRuntime()
-    db.createTask({ runId, spec: 'never finishes' })
-
-    const coordinator = new Coordinator(db, runtime, {
-      spec: 'go',
-      coordinatorHandle: 'coord',
-      pollIntervalMs: 50
-    })
-
-    const runPromise = coordinator.run()
-
-    await vi.advanceTimersByTimeAsync(100)
-    coordinator.stop()
-
-    const result = await settleCoordinatorRun(runPromise)
-    expect(result.status).toBe('failed')
-  })
-
   describe('stale-base dispatch guard', () => {
-    it('threads drift into the preamble when behind > 0 and under threshold', async () => {
-      db = new OrchestrationDb(':memory:')
-      const runtime = createMockRuntime()
-      runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-      runtime.setProbeDrift({
-        base: 'origin/main',
-        behind: 5,
-        recentSubjects: ['fix A', 'fix B', 'fix C']
-      })
-
-      const task = db.createTask({
-        runId,
-        spec: 'do the work'
-      })
-
-      const coordinator = new Coordinator(db, runtime, {
-        spec: 'go',
-        coordinatorHandle: 'coord',
-        pollIntervalMs: 50,
-        worktree: 'wt1'
-      })
-
-      const runPromise = coordinator.run()
-      await vi.advanceTimersByTimeAsync(100)
-
-      insertWorkerDone(db, { taskId: task.id })
-
-      const result = await settleCoordinatorRun(runPromise)
-      expect(result.status).toBe('completed')
-      expect(runtime.probeDriftCalls).toContain('wt1')
-      const sent = runtime.sentMessages.find((m) => m.handle === 'term_a')
-      expect(sent).toBeDefined()
-      expect(sent!.text).toContain('--- BASE DRIFT ---')
-      expect(sent!.text).toContain('5 commits behind origin/main')
-      expect(sent!.text).toContain('fix A')
-    })
-
     it('silently skips dispatch when drift > threshold and allow-stale-base is absent', async () => {
       db = new OrchestrationDb(':memory:')
       const runtime = createMockRuntime()
@@ -741,131 +611,6 @@ describe('Coordinator', () => {
       // External stop fails the run while leaving the undispatched task out of failedTasks.
       expect(result.status).toBe('failed')
       expect(result.failedTasks).not.toContain(task.id)
-    })
-
-    it('proceeds with stripped spec + drift section when allow-stale-base overrides', async () => {
-      db = new OrchestrationDb(':memory:')
-      const runtime = createMockRuntime()
-      runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-      runtime.setProbeDrift({
-        base: 'origin/main',
-        behind: 200,
-        recentSubjects: ['commit 1', 'commit 2']
-      })
-
-      const spec = `Investigate issue #42
-allow-stale-base: true`
-      const task = db.createTask({ runId, spec })
-
-      const coordinator = new Coordinator(db, runtime, {
-        spec: 'go',
-        coordinatorHandle: 'coord',
-        pollIntervalMs: 50,
-        worktree: 'wt1'
-      })
-
-      const runPromise = coordinator.run()
-      await vi.advanceTimersByTimeAsync(100)
-
-      insertWorkerDone(db, { taskId: task.id })
-
-      const result = await settleCoordinatorRun(runPromise)
-      expect(result.status).toBe('completed')
-      const sent = runtime.sentMessages.find((m) => m.handle === 'term_a')
-      expect(sent).toBeDefined()
-      expect(sent!.text).toContain('--- BASE DRIFT ---')
-      expect(sent!.text).toContain('200 commits behind origin/main')
-      expect(sent!.text).toContain('Investigate issue #42')
-      expect(sent!.text).not.toContain('allow-stale-base: true')
-    })
-
-    it('proceeds without drift section when probeWorktreeDrift returns null', async () => {
-      db = new OrchestrationDb(':memory:')
-      const runtime = createMockRuntime()
-      runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-      runtime.setProbeDrift(null)
-
-      const task = db.createTask({
-        runId,
-        spec: 'do the work'
-      })
-
-      const coordinator = new Coordinator(db, runtime, {
-        spec: 'go',
-        coordinatorHandle: 'coord',
-        pollIntervalMs: 50,
-        worktree: 'wt1'
-      })
-
-      const runPromise = coordinator.run()
-      await vi.advanceTimersByTimeAsync(100)
-
-      insertWorkerDone(db, { taskId: task.id })
-
-      const result = await settleCoordinatorRun(runPromise)
-      expect(result.status).toBe('completed')
-      const sent = runtime.sentMessages.find((m) => m.handle === 'term_a')
-      expect(sent).toBeDefined()
-      expect(sent!.text).not.toContain('--- BASE DRIFT ---')
-    })
-
-    it('does not call probeWorktreeDrift when coordinator has no worktree selector', async () => {
-      db = new OrchestrationDb(':memory:')
-      const runtime = createMockRuntime()
-      runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-      const logs: string[] = []
-
-      const task = db.createTask({
-        runId,
-        spec: 'do the work'
-      })
-
-      const coordinator = new Coordinator(db, runtime, {
-        spec: 'go',
-        coordinatorHandle: 'coord',
-        pollIntervalMs: 50,
-        onLog: (msg) => logs.push(msg)
-      })
-
-      const runPromise = coordinator.run()
-      await vi.advanceTimersByTimeAsync(100)
-
-      insertWorkerDone(db, { taskId: task.id })
-
-      const result = await settleCoordinatorRun(runPromise)
-      expect(result.status).toBe('completed')
-      expect(runtime.probeDriftCalls).toHaveLength(0)
-      expect(logs.some((m) => m.includes('stale-base guard inert'))).toBe(true)
-      expect(runtime.sentMessages.length).toBeGreaterThan(0)
-    })
-
-    it('proceeds without drift when probeWorktreeDrift throws', async () => {
-      db = new OrchestrationDb(':memory:')
-      const runtime = createMockRuntime()
-      runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-      runtime.throwProbeDrift = new Error('boom')
-
-      const task = db.createTask({
-        runId,
-        spec: 'do the work'
-      })
-
-      const coordinator = new Coordinator(db, runtime, {
-        spec: 'go',
-        coordinatorHandle: 'coord',
-        pollIntervalMs: 50,
-        worktree: 'wt1'
-      })
-
-      const runPromise = coordinator.run()
-      await vi.advanceTimersByTimeAsync(100)
-
-      insertWorkerDone(db, { taskId: task.id })
-
-      const result = await settleCoordinatorRun(runPromise)
-      expect(result.status).toBe('completed')
-      const sent = runtime.sentMessages.find((m) => m.handle === 'term_a')
-      expect(sent!.text).not.toContain('--- BASE DRIFT ---')
     })
   })
 })

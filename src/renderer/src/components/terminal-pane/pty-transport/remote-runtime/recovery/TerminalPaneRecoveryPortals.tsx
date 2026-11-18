@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PtyTransport } from '../../pty-transport-types'
-import { useWslHostUnavailableReason } from '../../../../../lib/wsl-host-availability'
+import { useWslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
 import {
   useManagedPairingRefusedEnvironmentId,
   useManagedServerReplaced
@@ -16,10 +16,10 @@ import {
 import { RemoteServerOutageNotice } from '../../recovery/server-outage/RemoteServerOutageNotice'
 import { WslHostStoppedCard } from '../../recovery/wsl/WslHostStoppedCard'
 import { useRetryPanesWhenWslHostReturns } from '../../recovery/wsl/use-wsl-host-return-retry'
-import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
+import { useCalmStatusReveal } from '@/runtime/hosts/connections/use-calm-status-reveal'
 import { useAppStore } from '@/store/index'
-import { paneShowsWslHostStoppedCard } from '@/lib/wsl-host-stopped-status'
-import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host-stopped-message'
+import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
+import { withoutWslHostStoppedLines } from '../../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
 

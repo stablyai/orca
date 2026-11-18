@@ -1,18 +1,23 @@
+import type { AgentSessionForkedFromMark } from '../conversation-naming/agent-session-fork-name'
+import type {
+  AgentJournalApprovalMatchedAskRule,
+  AgentJournalApprovalSubject
+} from './agent-session-journal-approval-subject'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
-import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
+import type { AgentSessionProviderContextBoundary } from '../conversation-context/agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
 
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentSessionFailureRowWords } from '../failures/agent-session-failure-words'
-import type { AgentSessionQuestionAnswer } from '../agent-session-question-answer'
+import type { AgentSessionQuestionAnswer } from '../requests/prompts/agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
-import type { AgentSessionContextUsage } from '../agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../conversation-context/agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
-import type { AgentMessageSource } from '../agent-session-message-source'
-import type { AgentSessionExecutionOptions } from '../options/agent-session-execution-options'
+import type { AgentMessageSource } from './agent-session-message-source'
+import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
 import type {
   AgentJournalAgentHandoffItem,
   AgentJournalAgentStartItem
@@ -133,10 +138,27 @@ export type AgentJournalResolution = {
   resolvedAt: number | null
 }
 
+export const AGENT_JOURNAL_PROMPT_INTENTS = [
+  'allow_once',
+  'allow_always',
+  'reject_once',
+  'reject_always'
+] as const
+/** What choosing an approval option means, set by the provider adapter that knows its own options. */
+export type AgentJournalPromptIntent = (typeof AGENT_JOURNAL_PROMPT_INTENTS)[number]
+
+export function isAgentJournalPromptIntent(value: unknown): value is AgentJournalPromptIntent {
+  return AGENT_JOURNAL_PROMPT_INTENTS.some((intent) => intent === value)
+}
+
 export type AgentJournalPromptOption = {
   id: string
   label: string
   description?: string
+  /** A block the user compares before choosing (a mockup or snippet), shown as plain monospace text. */
+  preview?: string
+  /** Approvals only; absent when the option neither grants nor refuses this one call (a stop). */
+  intent?: AgentJournalPromptIntent
 }
 
 export type AgentJournalFreeTextInput = {
@@ -157,30 +179,14 @@ export type AgentJournalQuestion = {
   freeTextInput?: AgentJournalFreeTextInput
 }
 
-export type AgentJournalApprovalMatchedAskRule = {
-  source: string
-  toolName: string
-  ruleContent?: string
-}
-
-export type AgentJournalPlanApprovalSubject = {
-  kind: 'plan'
-  text: string
-  filePath?: string
-}
-
-declare const agentJournalUnknownKind: unique symbol
-/** A kind tag this build does not know. Branded, so it never stands in for a known tag. */
-export type AgentJournalUnknownKind = string & { readonly [agentJournalUnknownKind]: true }
-
-/** A subject of a kind a newer Orca wrote: carried as it was, with whatever fields it holds, and
- *  never drawn or approved here. */
-export type AgentJournalUnknownApprovalSubject = { readonly kind: AgentJournalUnknownKind }
-
-/** Open, as the journal schema reads it: narrow with `isPlanApprovalSubject` before reading it. */
-export type AgentJournalApprovalSubject =
-  | AgentJournalPlanApprovalSubject
-  | AgentJournalUnknownApprovalSubject
+export type {
+  AgentJournalApprovalMatchedAskRule,
+  AgentJournalApprovalSubject,
+  AgentJournalPlanApprovalSubject,
+  AgentJournalUrlApprovalSubject,
+  AgentJournalUnknownApprovalSubject,
+  AgentJournalUnknownKind
+} from './agent-session-journal-approval-subject'
 
 export type AgentJournalApprovalItem = {
   kind: 'approval'
@@ -191,6 +197,7 @@ export type AgentJournalApprovalItem = {
   blockedPath?: string
   matchedAskRule?: AgentJournalApprovalMatchedAskRule
   subject?: AgentJournalApprovalSubject
+  personOnly?: true
   detail: string | null
   options: AgentJournalPromptOption[]
   resolution: AgentJournalResolution
@@ -291,7 +298,7 @@ type AgentJournalStatusItemFields = {
    *  host may name one this build does not know), so read it with `readAgentSessionOrcaStop`. */
   orcaStop?: { cause: string }
   /** On the derived "Forked from" row: the chat this one was forked from. */
-  forkedFrom?: { sessionId: string }
+  forkedFrom?: AgentSessionForkedFromMark
 }
 
 /** A status row that reports no failure; its text is its writer's own. */

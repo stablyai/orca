@@ -14,23 +14,24 @@ import {
   type WslMoveOrchestratorUserAction
 } from '../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { Store } from '../../persistence/loading-store/store'
-import { listWslMoveCutoverChain } from '../../persistence/moving-wsl-projects/wsl-move-cutover-journal'
+import { listWslMoveCutoverChain } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
 import { moveProjectsToWslHost } from '../../persistence/moving-wsl-projects/wsl-move-driver'
-import { previewWslMove } from '../../persistence/moving-wsl-projects/wsl-move-driver-preview'
-import { wslMovedDistroVerdict } from '../../persistence/moving-wsl-projects/wsl-move-moved-distro-check'
+import { previewWslMove } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-preview'
+import { wslMoveDistroMappedDrivesLastKnown } from './wsl-move-mapped-drive-ports'
+import { wslMovedDistroVerdict } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-moved-distro-check'
 import { WslMoveOrchestrator } from '../../persistence/moving-wsl-projects/wsl-move-orchestrator'
 import type {
   WslMoveFinishedMove,
   WslMoveHostReadiness
-} from '../../persistence/moving-wsl-projects/wsl-move-orchestrator-ports'
-import { prepareWslMoveHost } from '../../persistence/moving-wsl-projects/wsl-move-host-readiness'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-ports'
+import { prepareWslMoveHost } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-readiness'
 import { readConfirmedRunningWslDistros } from '../../wsl/discovery/wsl-background-distro-gate'
 import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 import {
   readWslMoveOrchestratorRecords,
   writeWslMoveOrchestratorRecords
-} from '../../persistence/moving-wsl-projects/wsl-move-orchestrator-store'
-import type { WslMoveDriverDeps } from '../../persistence/moving-wsl-projects/wsl-move-driver-ports'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store'
+import type { WslMoveDriverDeps } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import {
   trackWslMoveOrchestrator,
   wslMoveOrchestratorEventProps
@@ -49,7 +50,7 @@ import { onWslHostUserAction } from '../../wsl/host-lifecycle/wsl-host-user-acti
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from '../ui'
 import { onWslMoveReleasedByUser, releaseWslMoveChainHere } from './wsl-move-release-here'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
-import { isDistroInUse } from '../../persistence/moving-wsl-projects/wsl-move-distro-in-use'
+import { isDistroInUse } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-distro-in-use'
 import { answerWslMoveSleptPanes, requestSleptPanes } from './wsl-move-orchestrator-slept-panes'
 import { wslHostRemovalPending } from './wsl-move-host-connect'
 import { wslMoveAutoMovesBridgeProjects } from '../../../shared/wsl-move/wsl-move-rollout-stage'
@@ -103,8 +104,8 @@ function prepareHost(
     {
       readRunningDistros: readConfirmedRunningWslDistros,
       isHostReady,
-      removalPending: () => wslHostRemovalPending(userDataPath, distro),
-      hasHost: () => service.recordForEnvironment(environmentId) !== null,
+      removalPending: async () => await wslHostRemovalPending(userDataPath, distro),
+      hasHost: async () => (await service.recordForEnvironment(environmentId)) !== null,
       connect: () => service.connect(environmentId),
       // Re-checked here: a block learned after the step began must still stop the add.
       add: () =>
@@ -137,10 +138,14 @@ function createOrchestrator(
       process.env[WSL_MOVE_ORCHESTRATOR_AUTO_ENV] !== '0' && wslHostsOptedIn(store.getSettings()),
     autoMovesBridgeProjects: wslMoveAutoMovesBridgeProjects,
     prepareHost: (distro, stillWanted) => prepareHost(userDataPath, distro, stillWanted),
-    isDistroInUse: (distro) => isDistroInUse(store, userDataPath, distro),
-    hostRemovalPending: (distro) => wslHostRemovalPending(userDataPath, distro),
-    hasHost: (distro) =>
-      getWslHostService()?.recordForEnvironment(defaultWslOrcadEnvironmentId(distro)) != null,
+    isDistroInUse: async (distro) =>
+      await isDistroInUse(store, userDataPath, distro, () =>
+        wslMoveDistroMappedDrivesLastKnown(store, distro)
+      ),
+    hostRemovalPending: async (distro) => await wslHostRemovalPending(userDataPath, distro),
+    hasHost: async (distro) =>
+      (await getWslHostService()?.recordForEnvironment(defaultWslOrcadEnvironmentId(distro))) !=
+      null,
     isHostReady,
     preview: async (distro, userAsked) =>
       previewWslMove(
@@ -148,14 +153,14 @@ function createOrchestrator(
         { distro, sleptPanes: await requestSleptPanes() },
         { settleInterrupted: userAsked ? 'finish-now' : 'finish-at-restart' }
       ),
-    start: async (distro, stillWanted) => {
+    start: async (distro, stillWanted, fromPreview) => {
       const sleptPanes = await requestSleptPanes()
       // The user may have released or snoozed the distro while the window answered.
       if (!stillWanted()) {
         return { outcome: 'refused', code: 'wsl_move_cancelled' }
       }
       return runTrackedWslMove(driverDeps(), (deps) =>
-        moveProjectsToWslHost(deps, { distro, sleptPanes })
+        moveProjectsToWslHost(deps, { distro, sleptPanes, ...fromPreview })
       )
     },
     finishedMove: (distro) => finishedWslMove(userDataPath, distro),
@@ -289,11 +294,11 @@ export function registerWslMoveOrchestrator(
     const created = createOrchestrator(store, driverDeps)
     orchestrator = created
     followHostReadiness(created)
-    onWslMoveReleasedByUser((distro) => created.releasedByUser(distro, 'released-here'))
+    onWslMoveReleasedByUser(async (distro) => await created.releasedByUser(distro, 'released-here'))
     // A Remove is the user declining the host; only their own Add (or Retry) takes it back.
-    onWslHostUserAction(({ kind, distro }) =>
+    onWslHostUserAction(async ({ kind, distro }) =>
       kind === 'removed'
-        ? created.releasedByUser(distro, 'removed')
+        ? await created.releasedByUser(distro, 'removed')
         : created.hostAddedByUser(distro)
     )
   } catch (error) {

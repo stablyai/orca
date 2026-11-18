@@ -1,8 +1,8 @@
 /** R39: each ready control socket to a WSL host says which Orca installation it belongs to. */
-import { getAppEnvironment } from '../../../shared/app-environment'
-import { ORCAD_DECLARE_CLIENT_METHOD } from '../../../shared/orcad-peer-desktops-contract'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { ORCAD_DECLARE_CLIENT_METHOD } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { wslHostClientInstanceId } from './wsl-host-client-instance'
 
 const DECLARE_TIMEOUT_MS = 10_000
@@ -14,12 +14,12 @@ type ControlRequest = (
 ) => Promise<RuntimeRpcResponse<unknown>>
 
 /** Sent on the control socket itself, so the server ties the tag to exactly that socket. */
-export function declareWslHostClient(
+export async function declareWslHostClient(
   environmentId: string,
   request: ControlRequest,
-  isWslHost: (environmentId: string) => boolean = isWslHostEnvironment
-): void {
-  if (!isWslHost(environmentId)) {
+  isWslHost: (environmentId: string) => boolean | Promise<boolean> = isWslHostEnvironment
+): Promise<void> {
+  if (!(await isWslHost(environmentId))) {
     return
   }
   void request(
@@ -38,9 +38,12 @@ export function declareWslHostClient(
     })
 }
 
-function isWslHostEnvironment(environmentId: string): boolean {
+async function isWslHostEnvironment(environmentId: string): Promise<boolean> {
   try {
-    const environment = resolveEnvironment(getAppEnvironment().getPath('userData'), environmentId)
+    const environment = await resolveEnvironment(
+      getAppEnvironment().getPath('userData'),
+      environmentId
+    )
     return environment.orcadDeployment?.kind === 'wsl'
   } catch {
     return false

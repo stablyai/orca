@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
-import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
-import type { NotificationsApi } from '../../../src/preload/api/os-permission-api'
+import { RUNTIME_CAPABILITIES } from '../../../src/shared/remote-runtime/protocol/protocol-version'
+import type { NotificationsApi } from '../../../src/preload/api/desktop-permissions/os-permission-api'
 
 const transport = vi.hoisted(() => ({
   call: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   ensureLocalRuntimeCapabilities: async () => RUNTIME_CAPABILITIES
 }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 

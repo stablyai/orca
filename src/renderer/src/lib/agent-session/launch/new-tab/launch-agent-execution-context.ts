@@ -1,17 +1,17 @@
-import { toast } from 'sonner'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { launchHostIsRemote } from '../../../../../../shared/agent-launch/startup/agent-launch-remote'
-import '@/lib/connection-context'
+import '@/lib/workspace/ownership/connection-context'
 import {
   getConnectionIdFromState,
   getConnectionIdForWorktreeCopy
-} from '@/lib/connection-owner-resolution'
+} from '@/lib/workspace/ownership/connection-owner-resolution'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import {
   refineLocalLaunchPlatform,
   resolveExecutionHostAgentStartupShell,
   resolveWorktreeExecutionHostPlatform
-} from '@/lib/execution-host-facts'
+} from '@/runtime/hosts/platform/execution-host-facts'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { useAppStore } from '@/store/index'
 
 export type AgentLaunchExecutionContext = {
@@ -37,11 +37,13 @@ export function agentTabLaunchStore(
     : store
 }
 
-/** `null` means the host's OS is unknown; the user has been told why the launch stopped. */
+/** Preparation returns facts; the launch action owns failure presentation. */
 export function resolveAgentLaunchExecutionContext(
   store: ReturnType<typeof useAppStore.getState>,
   args: Pick<LaunchAgentInNewTabArgs, 'worktreeId' | 'launchPlatform' | 'workspaceExecutionHostId'>
-): AgentLaunchExecutionContext | null {
+):
+  | AgentLaunchExecutionContext
+  | { unavailable: Extract<ExecutionHostPlatformFact, { kind: 'withheld' }> } {
   // Why: `undefined` (rival host rows disagree) is not evidence of a remote; main rejects it anyway.
   const worktreeSshConnectionId = args.workspaceExecutionHostId
     ? getConnectionIdForWorktreeCopy(store, args.worktreeId, args.workspaceExecutionHostId)
@@ -59,8 +61,7 @@ export function resolveAgentLaunchExecutionContext(
     args.workspaceExecutionHostId
   )
   if (fact.kind === 'withheld') {
-    toast.error(fact.reason)
-    return null
+    return { unavailable: fact }
   }
   const launchHost = refineLocalLaunchPlatform(fact, args.launchPlatform)
   return {
