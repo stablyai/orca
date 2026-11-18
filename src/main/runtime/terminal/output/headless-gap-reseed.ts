@@ -38,12 +38,13 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   protected readonly ptyGapCounts = new Map<string, number>()
 
   protected reseedHeadlessTerminalAfterDataGap(ptyId: string): void {
-    this.ptyGapCounts.set(ptyId, (this.ptyGapCounts.get(ptyId) ?? 0) + 1)
     if (this.ptysById.get(ptyId)?.connected === false) {
       // An exited PTY has no screen left to restore.
       this.disposeHeadlessTerminal(ptyId)
       return
     }
+    // Kept until the PTY exits: replacing the model must not erase a reader's evidence.
+    this.ptyGapCounts.set(ptyId, (this.ptyGapCounts.get(ptyId) ?? 0) + 1)
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const gapEnd = this.getPtyOutputSequence(ptyId)
     state.writeChain = state.writeChain
@@ -51,7 +52,12 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
         await state.emulator.write('\x18')
         // Here, in stream order: chunks queued before the gap finished their carries already.
-        resetFreebuffTerminalStatusAfterGap(state.emulator)
+        const pty = this.ptysById.get(ptyId)
+        resetFreebuffTerminalStatusAfterGap(
+          state.emulator,
+          this.terminalSpawnCommandsByPtyId.get(ptyId),
+          pty?.launchAgent
+        )
         resetCodexNoticeTrackersAfterGap(state.emulator)
         // The dropped bytes are behind this model now; a snapshot at the gap end needs nothing newer.
         state.outputSequence = Math.max(state.outputSequence, gapEnd)
@@ -241,7 +247,6 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
 
   /** A retired model's recovery leaves the capture line at once instead of holding it until a slot frees. */
   protected leaveGapCaptureLine(ptyId: string): void {
-    this.ptyGapCounts.delete(ptyId)
     const grant = this.gapCaptureWaiters.get(ptyId)
     if (grant) {
       this.gapCaptureWaiters.delete(ptyId)

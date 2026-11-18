@@ -123,6 +123,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.clearWaitBlockedCheckState(ptyId)
     this.trustDialogStatus.forget(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
+    this.ptyGapCounts.delete(ptyId)
     this.providerSequenceInitializedPtys.delete(ptyId)
     this.providerSequenceOffsetByPtyId.delete(ptyId)
     this.providerSnapshotPreferredPtys.delete(ptyId)

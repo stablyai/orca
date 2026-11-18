@@ -2,6 +2,8 @@ import type { GapRecovery } from '../records/runtime-terminal-state-records'
 
 // Only the capture-slot holders journal, so the fleet holds at most slots × this.
 const GAP_JOURNAL_MAX_CHARS = 1024 * 1024
+// Charged per record too, so tiny chunks cannot pile up records the text budget never sees.
+const GAP_JOURNAL_RECORD_CHARS = 32
 
 export function newGapRecovery(): GapRecovery {
   return {
@@ -40,12 +42,13 @@ export function journalGapRecoveryChunk(
   seq: number,
   raw: boolean
 ): void {
-  if (!recovery.journal) {
+  // Empty frames that advance nothing (stream refills) have nothing to replay.
+  if (!recovery.journal || (data === '' && seq === recovery.journalEnd)) {
     return
   }
   const start = recovery.journalEnd
   recovery.journalEnd = seq
-  recovery.journalChars += data.length
+  recovery.journalChars += data.length + GAP_JOURNAL_RECORD_CHARS
   if (recovery.journalChars > GAP_JOURNAL_MAX_CHARS) {
     // The attempt fails and retries; the live model keeps parsing meanwhile.
     stopGapJournal(recovery)

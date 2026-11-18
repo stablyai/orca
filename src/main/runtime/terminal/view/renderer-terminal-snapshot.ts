@@ -111,8 +111,8 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
     },
     trailingOutput: { data: string; seq: number }[] = []
   ): void {
-    // Why: the renderer missed dropped output too; only the provider snapshot may end a gap recovery.
-    if (!snapshot.data || this.headlessTerminals.get(ptyId)?.gapReseed) {
+    // Why: the renderer missed dropped output too; after any gap only the provider snapshot rebuilds this model.
+    if (!snapshot.data || this.ptyGapCounts.has(ptyId)) {
       return
     }
     // Why: a redraw byte can create a suffix-only model before the renderer settles; replace it with the exact snapshot already sent mobile.

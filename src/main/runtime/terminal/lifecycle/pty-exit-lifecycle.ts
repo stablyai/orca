@@ -203,6 +203,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       this.setupCompletionTokenByPtyId.delete(ptyId)
       this.clearWaitBlockedCheckState(ptyId)
       this.ptyOutputSequenceById.delete(ptyId)
+      this.ptyGapCounts.delete(ptyId)
       this.providerSequenceInitializedPtys.delete(ptyId)
       this.providerSequenceOffsetByPtyId.delete(ptyId)
       this.providerSnapshotPreferredPtys.delete(ptyId)

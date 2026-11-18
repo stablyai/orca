@@ -4,9 +4,29 @@ import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulat
 
 const trackers = new WeakMap<HeadlessEmulator, FreebuffScreenStatusTracker>()
 
-/** At a gap's place in the stream: a dropped frame end must not hold the next screen. */
-export function resetFreebuffTerminalStatusAfterGap(emulator: HeadlessEmulator): void {
-  trackers.get(emulator)?.resetAfterGap()
+function trackerFor(
+  emulator: HeadlessEmulator,
+  startupCommand: string | undefined,
+  launchAgent: string | null | undefined
+): FreebuffScreenStatusTracker {
+  let tracker = trackers.get(emulator)
+  if (!tracker) {
+    const identified =
+      launchAgent === 'freebuff' ||
+      recognizeAgentProcessFromCommandLine(startupCommand)?.agent === 'freebuff'
+    tracker = new FreebuffScreenStatusTracker(identified)
+    trackers.set(emulator, tracker)
+  }
+  return tracker
+}
+
+/** At a gap's place in the stream: a dropped frame end must not hold the next screen, which is read once rebuilt. */
+export function resetFreebuffTerminalStatusAfterGap(
+  emulator: HeadlessEmulator,
+  startupCommand: string | undefined,
+  launchAgent: string | null | undefined
+): void {
+  trackerFor(emulator, startupCommand, launchAgent).resetAfterGap()
 }
 
 export function observeFreebuffTerminalStatus(
@@ -16,15 +36,7 @@ export function observeFreebuffTerminalStatus(
   launchAgent?: string | null,
   screenTrusted = true
 ) {
-  let tracker = trackers.get(emulator)
-  if (!tracker) {
-    const identified =
-      launchAgent === 'freebuff' ||
-      recognizeAgentProcessFromCommandLine(startupCommand)?.agent === 'freebuff'
-    tracker = new FreebuffScreenStatusTracker(identified)
-    trackers.set(emulator, tracker)
-  }
-  return tracker.observe(
+  return trackerFor(emulator, startupCommand, launchAgent).observe(
     data,
     () => ({ lines: emulator.getVisibleLines(), alternate: emulator.isAlternateScreen }),
     screenTrusted
