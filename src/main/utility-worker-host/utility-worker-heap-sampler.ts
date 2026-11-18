@@ -100,13 +100,14 @@ export function sampleUtilityWorkerHeaps(
         clearTimeout(timer)
         timer = undefined
         // An idle host can live 30 s more; its exit must not report readers that already left.
-        if (!last || last.workers.length > 0) {
-          last = {
-            sampledAt: Date.now(),
-            hostBytes: getHeapStatistics().total_heap_size,
-            workers: []
-          }
-          post(last)
+        const idle = {
+          sampledAt: Date.now(),
+          hostBytes: getHeapStatistics().total_heap_size,
+          workers: []
+        }
+        if (utilityWorkerHeapReportChanged(last, idle)) {
+          last = idle
+          post(idle)
         }
       } else if (!timer && !sampling) {
         // The first report comes soon, so a host that dies young still says what it held.
