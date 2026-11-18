@@ -69,6 +69,17 @@ describe('createEventLoopStallSummary', () => {
     ])
   })
 
+  it('writes nothing for a reported sleep, however long', () => {
+    const windows: EventLoopStallWindow[] = []
+    const summary = createEventLoopStallSummary(0, MINUTE, (window) => windows.push(window))
+    summary.tick(500)
+    summary.pause()
+    summary.tick(3_600_500)
+    summary.resume(3_600_510)
+    onTimeUntil(summary, 3_601_010, 3_720_010)
+    expect(windows).toEqual([])
+  })
+
   it('holds a stalled window until it can be recorded, then reports all of it', () => {
     const windows: EventLoopStallWindow[] = []
     let sinkReady = false
