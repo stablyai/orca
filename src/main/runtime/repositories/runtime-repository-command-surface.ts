@@ -28,6 +28,7 @@ type GitHubRepositoryQueryCommandName =
   | 'getRepoWorkItemByOwnerRepo'
   | 'getRepoWorkItemDetails'
   | 'countRepoWorkItems'
+  | 'getRepoIssueSource'
   | 'listRepoLabels'
   | 'listRepoAssignableUsers'
   | 'getGitHubRateLimit'
@@ -190,6 +191,7 @@ export function installRuntimeRepositoryCommandSurface(
     getRepoWorkItemByOwnerRepo: queries.getRepoWorkItemByOwnerRepo.bind(queries),
     getRepoWorkItemDetails: queries.getRepoWorkItemDetails.bind(queries),
     countRepoWorkItems: queries.countRepoWorkItems.bind(queries),
+    getRepoIssueSource: queries.getRepoIssueSource.bind(queries),
     listRepoLabels: queries.listRepoLabels.bind(queries),
     listRepoAssignableUsers: queries.listRepoAssignableUsers.bind(queries),
     getGitHubRateLimit: queries.getGitHubRateLimit.bind(queries),

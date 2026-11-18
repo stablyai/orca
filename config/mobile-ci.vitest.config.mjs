@@ -1,3 +1,4 @@
+import { availableParallelism } from 'node:os'
 import { defaultExclude, mergeConfig } from 'vitest/config'
 import original from '../mobile/vitest.config.ts'
 
@@ -22,7 +23,8 @@ export default {
     isolate: true,
     ...(process.versions.bun
       ? {
-          maxWorkers: 3,
+          // The Node role holds one core; more Bun workers than the rest starve timed tests on 2-core runners.
+          maxWorkers: Math.max(1, Math.min(3, availableParallelism() - 1)),
           exclude: [...(config.test?.exclude ?? defaultExclude), ...nodeFiles]
         }
       : { maxWorkers: 1, include: nodeFiles })

@@ -1131,6 +1131,9 @@
       "composer": {
         "planMode": "計畫",
         "exitPlanMode": "結束計畫模式"
+      },
+      "goal": {
+        "sentAsGoal": "作為目標傳送"
       }
     }
   },
@@ -2769,6 +2772,9 @@
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "找不到該訊息。"
     }
   },
   "settings": {
@@ -4337,6 +4343,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "配對電腦",
+      "pairRequired": "若要開啟此連結，請將這部手機與電腦配對。",
+      "pairAction": "配對電腦",
+      "openFailed": "無法開啟此連結",
+      "ambiguous": "此機器人位於 {{names}}。請在你想用的電腦上透過 Orca 開啟聊天。",
+      "computer": "你的電腦",
+      "updateNeeded": "請更新 {{names}} 上的 Orca 以開啟此連結。",
+      "unreachable": "無法連線至 {{names}}。請確認其中一台電腦正在執行 Orca，然後重試。",
+      "missing": "你配對的電腦上都沒有此機器人。",
+      "offline": "{{name}} 已離線。請在它重新上線後再次開啟連結。",
+      "chatOpenFailed": "{{name}} 無法開啟此聊天。請重試此連結。",
+      "unreachableSingle": "無法連線至 {{name}}。請確認該電腦正在執行 Orca，然後重試。",
+      "workspaceDeleted": "此聊天的工作區已在 {{name}} 上被刪除。"
     }
   }
 }

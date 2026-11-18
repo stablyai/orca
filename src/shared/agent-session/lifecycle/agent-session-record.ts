@@ -144,6 +144,8 @@ export type AgentSessionRecord = {
   launchArgs?: AgentSessionLaunchArgs
   /** The chat this one was forked from; the marker after its inherited history derives from it. */
   forkedFrom?: AgentSessionForkedFrom
+  /** Key of the host-owned instructions this provider context was confirmed to hold; absent: unknown. */
+  instructionsKey?: string
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -270,10 +272,8 @@ function isStoredRecordObject(value: unknown): value is Record<string, unknown> 
 function isPersistedAgentSessionObservationLease(
   lease: unknown
 ): lease is PersistedAgentSessionObservationLease {
-  if (!isStoredRecordObject(lease)) {
-    return false
-  }
   return (
+    isStoredRecordObject(lease) &&
     isAgentSessionId(lease.sessionId) &&
     isPersistedAgentSessionRuntimeKind(lease.runtimeKind) &&
     typeof lease.runtimeFence === 'number' &&

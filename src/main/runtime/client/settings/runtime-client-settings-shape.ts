@@ -76,7 +76,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'codexWorkspaceAccounts'
   | 'claudeWorkspaceAccounts'
   | 'claudeSubagentNavigationEnabled'
-  | 'experimentalConnectors'
+  | 'botsEnabled'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'
   | 'agentDefaultArgs'
