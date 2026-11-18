@@ -53,6 +53,8 @@ import type { StructuredAgentSessionCaller } from '../host/structured-agent-sess
 import '../options/structured-agent-session-options-read'
 import { recordStructuredAgentSessionOptionIntent } from '../options/structured-agent-session-option-intent'
 import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
+import { applyStructuredAgentSessionPermissionPick } from '../options/structured-agent-session-live-permission'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
 
 export function sendStructuredAgentSessionTurn(
   context: StructuredAgentSessionMutationContext,
@@ -239,7 +241,9 @@ export async function setStructuredAgentSessionOption(
         const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, params, {
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
-        if (picked.ok) {
+        if (picked.ok && params.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
+          applyStructuredAgentSessionPermissionPick(context, ctx)
+        } else if (picked.ok) {
           const confirming = confirmIdleStructuredAgentSessionOption(context, ctx, params)
           context.trackProviderOperation?.(confirming)
           void confirming.catch((error) => {

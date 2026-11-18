@@ -16,7 +16,7 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
-} from '@/hooks/worktree-file-change-event'
+} from '@/runtime/files/watching/worktree-file-change-event'
 
 const WATCH_REFRESH_DEBOUNCE_MS = 125
 

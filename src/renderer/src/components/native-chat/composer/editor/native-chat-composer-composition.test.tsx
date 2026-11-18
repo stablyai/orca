@@ -123,3 +123,50 @@ describe('native chat composer composition ownership', () => {
     expect(promptValue(input)).toBe('하늘')
   })
 })
+
+describe('the suggested next prompt in an empty composer', () => {
+  it('is shown in place of the placeholder and Tab puts it in the draft without sending', () => {
+    const onDraftChange = vi.fn()
+    // The pane's own handler, which sends on Enter as it always has.
+    const onKeyDown = vi.fn((event: React.KeyboardEvent) => event.preventDefault())
+    render(
+      <TestField
+        {...fieldProps({ promptSuggestion: 'add a test for it', onDraftChange, onKeyDown })}
+      />
+    )
+    const input = textarea()
+    expect(input.querySelector('[data-placeholder]')?.getAttribute('data-placeholder')).toBe(
+      'add a test for it'
+    )
+
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onKeyDown).toHaveBeenCalledOnce()
+    expect(promptValue(input)).toBe('')
+
+    fireEvent.keyDown(input, { key: 'Tab' })
+    expect(promptValue(input)).toBe('add a test for it')
+    expect(onDraftChange).toHaveBeenLastCalledWith('add a test for it', expect.anything())
+    expect(onKeyDown).toHaveBeenCalledOnce()
+  })
+
+  it('leaves Tab to an open picker and Right Arrow to an IME composition', () => {
+    const onKeyDown = vi.fn()
+    const props = fieldProps({ promptSuggestion: 'add a test for it', onKeyDown })
+    const view = render(
+      <TestField
+        {...props}
+        autocomplete={{ mode: 'mention', query: '', triggerKey: 'mention:0' }}
+      />
+    )
+    fireEvent.keyDown(textarea(), { key: 'Tab' })
+    expect(promptValue(textarea())).toBe('')
+
+    view.rerender(<TestField {...props} />)
+    fireEvent.keyDown(textarea(), { key: 'ArrowRight', isComposing: true })
+    // A keydown the browser leaves unmarked still belongs to the composition the field tracks.
+    fireEvent.compositionStart(textarea())
+    fireEvent.keyDown(textarea(), { key: 'ArrowRight' })
+    expect(promptValue(textarea())).toBe('')
+    expect(onKeyDown).toHaveBeenCalledTimes(3)
+  })
+})

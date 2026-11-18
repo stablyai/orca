@@ -17,7 +17,7 @@ import {
   storeRepo,
   storeWorktreeMeta,
   type PartialRuntimeStore
-} from '../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 

@@ -89,7 +89,8 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
               })
               return { ...invocation, env }
             },
-            minimumVersions
+            minimumVersions,
+            ...(spec.versionArgs ? { versionArgs: spec.versionArgs } : {})
           }
         }
       : {}),

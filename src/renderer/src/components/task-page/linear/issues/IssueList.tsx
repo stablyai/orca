@@ -2,7 +2,7 @@ import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-
 import { TaskPageLinearIssueToolbar } from './IssueToolbar'
 import { useTranslate } from '@/i18n/use-translate'
 import { TaskPageLinearIssueBoard } from './IssueBoard'
-import { LinearCollectionNotice } from '@/components/linear-project-view-surfaces'
+import { LinearCollectionNotice } from '@/components/task-page/linear/projects/linear-project-view-surfaces'
 import { PaginationBar } from '../../PaginationBar'
 export function TaskPageLinearIssueList({
   model

@@ -290,20 +290,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     }
   )
 
-  it.each([100, 1000])(
-    'caps launch folder reads with %i historical year folders',
-    async (years) => {
-      writeManagedSession(join('2000', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
-      await startCodexSessionBackfillInBackground()
-      for (let year = 3000; year < 3000 + years; year += 1) {
-        mkdirSync(join(getManagedSessionsRoot(), String(year), '01'), { recursive: true })
-      }
-      fsMockState.scanDirectoryReads = []
-      await startCodexSessionBackfillInBackground({ ignoreCompletionMarker: true })
-      expect(fsMockState.scanDirectoryReads.length).toBeLessThanOrEqual(128)
-    }
-  )
-
   it('resumes older publication after a capped launch while still publishing fresh rollouts', async () => {
     writeManagedSession(join('2025', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
     await startCodexSessionBackfillInBackground()

@@ -46,3 +46,15 @@ export function nativeChatUsageLimitAutoContinueKind(
   }
   return state === 'scheduled' ? 'scheduled' : 'cancelled'
 }
+
+/** Settled facts that leave this machine no say in the chat's automatic continue: the host lacks
+ *  the feature, or another machine's own setting is off. Loading or unpublished state is not one. */
+export function nativeChatUsageLimitAutoContinueUnavailable(
+  capability: 'supported' | 'unsupported' | 'unknown',
+  state: NativeChatUsageLimitContinueState | undefined,
+  { localHost }: { localHost: boolean }
+): boolean {
+  return (
+    capability === 'unsupported' || (capability === 'supported' && state === 'off' && !localHost)
+  )
+}
