@@ -1,5 +1,8 @@
 const OPENCODE_SQLITE_PATH_SEPARATOR = '#'
 
+/** Agents whose Session History rows are `<database>#<session id>` references into one SQLite store. */
+export type SqliteSessionAgent = 'opencode' | 'opencode2' | 'zcode' | 'hermes'
+
 export function buildOpenCodeSqliteCandidatePath(dbPath: string, sessionId: string): string {
   return `${dbPath}${OPENCODE_SQLITE_PATH_SEPARATOR}${sessionId}`
 }
@@ -7,7 +10,7 @@ export function buildOpenCodeSqliteCandidatePath(dbPath: string, sessionId: stri
 // A database row reference is metadata, never a transcript file path.
 export function splitOpenCodeSqliteCandidate(
   candidatePath: string,
-  agent: 'opencode' | 'opencode2' | 'zcode' = 'opencode'
+  agent: SqliteSessionAgent = 'opencode'
 ): { dbPath: string; sessionId: string } | null {
   const separatorIndex = candidatePath.lastIndexOf(OPENCODE_SQLITE_PATH_SEPARATOR)
   if (separatorIndex <= 0 || separatorIndex === candidatePath.length - 1) {
@@ -20,7 +23,9 @@ export function splitOpenCodeSqliteCandidate(
   const validName =
     agent === 'zcode'
       ? databaseName.toLowerCase() === 'db.sqlite'
-      : /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/i.test(databaseName)
+      : agent === 'hermes'
+        ? databaseName.toLowerCase() === 'state.db'
+        : /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/i.test(databaseName)
   return validName ? { dbPath, sessionId } : null
 }
 

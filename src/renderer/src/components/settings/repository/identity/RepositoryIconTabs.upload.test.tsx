@@ -12,7 +12,7 @@ import {
 } from '../../../../../../shared/repository/appearance/repo-icon'
 import { RepositoryIconTabs } from './RepositoryIconTabs'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../../shared/constants'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../../shared/repository/appearance/repo-badge-color'
 
 vi.mock('../../../repo/repo-icon', () => ({
   getRepoLucideIconOptions: () => [],

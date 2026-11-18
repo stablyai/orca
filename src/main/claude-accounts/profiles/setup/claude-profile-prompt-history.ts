@@ -19,6 +19,7 @@ import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
+import { MERGE_PENDING_SUFFIX } from '../../../filesystem/merged-directory-link'
 import {
   ClaudeProfileSurfaceError,
   warnClaudeProfile,
@@ -26,9 +27,8 @@ import {
   type ClaudeProfileSurfaceOutcome
 } from '../claude-profile-report'
 
-export const CLAUDE_PROFILE_MERGE_SUFFIX = '.orca-profile-merge'
 const HISTORY = 'history.jsonl'
-const PENDING = `${HISTORY}${CLAUDE_PROFILE_MERGE_SUFFIX}`
+const PENDING = `${HISTORY}${MERGE_PENDING_SUFFIX}`
 // Track Windows hardlink identity to detect replacement of the shared file.
 const LINK_RECORD = `${HISTORY}.orca-profile-link`
 

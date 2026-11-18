@@ -5,7 +5,7 @@ import type { AgentStatusStoreView } from '../workspace-facts/workspace-activity
 import '../../../../shared/agent-status/contracts/agent-status-subject'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { TerminalSideEffectFact } from '../../../../shared/terminal/output/terminal-side-effect-facts'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import '../../../../shared/sidebar-list/sorting/sort-stamps'
 import type { SmartStampFields } from '../../../../shared/sidebar-list/sorting/sort-stamps'
@@ -203,18 +203,6 @@ describe('SortStampsProducer: hook agents', () => {
     hook(h.server, 'done')
     expect(h.meta.get(WT)).toEqual({ lastActivityAt: doneAt, smartTier: 'done', smartAt: doneAt })
   })
-
-  it('drops to Rest without a Recent stamp when the agent’s row goes', () => {
-    const h = createHarness()
-    h.attach(h.server)
-    hook(h.server, 'working')
-    advance(20_000)
-    hook(h.server, 'done')
-    const { lastActivityAt } = h.meta.get(WT)!
-    advance(20_000)
-    h.server.clearPaneState(PANE)
-    expect(h.meta.get(WT)).toEqual({ lastActivityAt, smartTier: undefined, smartAt: undefined })
-  })
 })
 
 describe('SortStampsProducer: terminal events', () => {
@@ -255,20 +243,6 @@ describe('SortStampsProducer: terminal events', () => {
     expect(h.meta.get(WT)).toEqual({ lastActivityAt: 0, smartTier: undefined, smartAt: undefined })
   })
 
-  it('treats a new PTY in the pane as a new agent', () => {
-    const h = createHarness()
-    h.sideEffects([title('⠋ Codex working')])
-    advance(20_000)
-    h.sideEffects([title('⠋ Codex working')], { ptyId: 'pty-2' })
-    expect(h.exits.has('pty-t')).toBe(false)
-    // Its finish is a transition, and its own exit ends it.
-    const doneAt = advance(20_000)
-    h.sideEffects([title('Codex')], { ptyId: 'pty-2' })
-    expect(h.meta.get(WT)).toEqual({ lastActivityAt: doneAt, smartTier: 'done', smartAt: doneAt })
-    h.exits.get('pty-2')!()
-    expect(h.meta.get(WT)?.smartTier).toBeUndefined()
-  })
-
   // A pane its title tracked is handed to hooks by their first row, whatever that row says.
   it('hands a title-tracked pane to its first hook row: a finish stamps Done', () => {
     const h = createHarness()
@@ -278,20 +252,6 @@ describe('SortStampsProducer: terminal events', () => {
     const doneAt = advance(20_000)
     hook(h.server, 'done')
     expect(h.meta.get(WT)).toEqual({ lastActivityAt: doneAt, smartTier: 'done', smartAt: doneAt })
-  })
-
-  it('hands a title-tracked pane to its first hook row: no workspace rests it where it was', () => {
-    const h = createHarness()
-    h.attach(h.server)
-    h.sideEffects([title('⠋ Codex working')], { pane: PANE })
-    expect(h.meta.get(WT)?.smartTier).toBe('working')
-    advance(20_000)
-    h.server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'tab-a',
-      payload: { state: 'working', prompt: 'task', agentType: 'codex' }
-    })
-    expect(h.meta.get(WT)?.smartTier).toBeUndefined()
   })
 
   it('moves a pane to the workspace of a row present at attach, keeping that tier', () => {

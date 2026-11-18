@@ -1,4 +1,4 @@
-import { asyncQuestionSourceScope as questionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
+import { useMobileStructuredAsyncQuestions } from './use-mobile-structured-async-questions'
 import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -23,7 +23,7 @@ import type {
 import type { MobileNativeChatVisualSource } from '../visual/mobile-native-chat-visual-read'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredStopPress } from '../composer/delivery/use-mobile-structured-stop-press'
-import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
+import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-execution'
 import { useMobileStructuredPromptResponses } from '../input/prompts/use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
 import { useHostModelCatalogCache } from '../input/session-options/mobile-host-model-catalog-query'
@@ -261,7 +261,7 @@ export function useMobileStructuredAgentSession(
       () => (client && sessionId ? { client, sessionId } : null),
       [client, sessionId]
     ),
-    asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
+    ...useMobileStructuredAsyncQuestions(args, epoch),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     submissions: state.submissions,
     session: {

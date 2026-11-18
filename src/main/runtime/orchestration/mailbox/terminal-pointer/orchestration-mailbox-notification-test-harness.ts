@@ -9,11 +9,11 @@ import type Database from '../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import type { RuntimeStore } from '../../../construction/runtime-store-contract'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   bindPaneFirst,
   registerBoundPty
-} from '../../../orca-runtime-tests/bind-first-pane.test-fixture'
+} from '../../../terminal/layout/bind-first-pane.test-fixture'
 import { publishHeadlessRuntimeGraph } from '../../../session-graph/headless-runtime-graph'
 
 export const TAB_ID = '11111111-1111-4111-8111-111111111111'

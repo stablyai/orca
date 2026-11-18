@@ -23,27 +23,9 @@ import {
   RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB
 } from './config/build-plugins/rollup-warning-filter'
 import { reactPluginOptions } from './config/build-plugins/react-compiler'
+import { BUNDLED_MAIN_DEPENDENCIES } from './config/build-plugins/bundled-main-dependencies'
 import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
 
-const BUNDLED_MAIN_DEPENDENCIES = new Set([
-  'stream-json',
-  'stream-chain',
-  '@xterm/headless',
-  '@xterm/addon-serialize',
-  'tldts',
-  'smol-toml',
-  'yaml',
-  'fflate',
-  'mime-types',
-  'mime-db',
-  // Linear save confirmation; bundled like orcad so packaging needs no extra node_modules.
-  'unified',
-  'remark-parse',
-  'remark-gfm',
-  'hast-util-from-html-isomorphic',
-  // Windows NSIS copies app.asar before external resources; bootstrap must not race resources/node_modules.
-  'zod'
-])
 // Official CI alone injects ORCA_BUILD_IDENTITY (stable|rc) and ORCA_POSTHOG_WRITE_KEY secrets; other builds substitute literal null.
 // Compile-time substitution gates telemetry at module load without runtime env fallback; declarations live in src/types/build-constants.d.ts.
 const orcaBuildIdentity = process.env.ORCA_BUILD_IDENTITY

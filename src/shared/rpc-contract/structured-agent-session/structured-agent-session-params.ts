@@ -15,10 +15,10 @@ import {
 import * as z from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { normalizeExecutionHostId } from '../../execution-host'
-import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH } from '../../agent-session/agent-session-question-answer'
+import { normalizeExecutionHostId } from '../../execution-host/execution-host'
+import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH } from '../../agent-session/requests/prompts/agent-session-question-answer'
 
-import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../../agent-session/agent-session-thread-goal-wire'
+import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../../agent-session/thread-goals/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
 import { SOURCE_FIELDS, ResumeWriterAdmission } from './structured-agent-session-resume-params'
 

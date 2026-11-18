@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getRepoRoutingConnectionId } from '../execution-host'
+import { getRepoRoutingConnectionId } from './execution-host'
 
 describe('getRepoRoutingConnectionId', () => {
   it.each([

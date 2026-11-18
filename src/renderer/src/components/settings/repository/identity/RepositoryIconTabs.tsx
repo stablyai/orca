@@ -9,7 +9,7 @@ import {
 } from '../../../../../../shared/repository/appearance/repo-icon'
 import { blobToBase64, convertImageBlobToPng } from '@/lib/clipboard/images/image-blob-png'
 import { Button } from '../../../ui/button'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import { Input } from '../../../ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'

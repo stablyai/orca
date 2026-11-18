@@ -14,7 +14,7 @@ import {
   type AgentSkillShareRequest
 } from '../../../../shared/skills/sharing/agent-skill-sharing-contract'
 import type { DiscoveredSkill } from '../../../../shared/skills/discovery/skills'
-import { SharingUnavailableOnHostError } from '../../../../shared/sharing-unavailable-on-host'
+import { SharingUnavailableOnHostError } from '../../../../shared/remote-runtime/host-status/sharing-unavailable-on-host'
 import { SKILL_SHARE_NAME_TAKEN_ERROR } from '../../../../shared/skills/sharing/skill-sharing-contract'
 import { selectDiscoveredSkills } from '../../../skills/sharing/agent-skill-selection'
 import { SkillSharePreparationService } from '../../../skills/sharing/skill-share-preparation'

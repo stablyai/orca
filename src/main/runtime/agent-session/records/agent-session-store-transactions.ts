@@ -1,4 +1,5 @@
 import { AgentSessionProviderAliasIndex } from './agent-session-provider-alias-index'
+import { AgentSessionLeaseHolderIndex } from './agent-session-lease-holder-index'
 import {
   applyAgentSessionStoreCommand,
   type AgentSessionStoreCommand,
@@ -17,7 +18,7 @@ import type { CommandReceiptScope } from '../../../native-chat/agent-session-jou
 import {
   agentSessionRuntimeIncarnation,
   attributeAgentSessionRuntime
-} from '../agent-session-runtime-attribution'
+} from './agent-session-runtime-attribution'
 import {
   beginAgentSessionRuntimeRecord,
   readAgentSessionRuntimeEnds
@@ -25,7 +26,7 @@ import {
 import {
   agentSessionReplacedRuntimes,
   type AgentSessionReplacedRuntime
-} from '../agent-session-replaced-runtime'
+} from '../ownership/agent-session-replaced-runtime'
 import {
   agentSessionStoreRowChanges,
   type AgentSessionStoreRowWrites
@@ -49,13 +50,14 @@ export class AgentSessionStoreTransactions {
   private readonly admittedSends = new Map<string, number>()
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
-  readonly firstRecordListeners = new Set<() => void>()
+  readonly heldChangeListeners = new Set<() => void>()
   private published: AgentSessionStoreState
   /** Moves only when a commit changes what chat sender identity reads. */
   senderIdentityRevision = 0
   /** Lineage survives admission and lease writes; membership and committed clear invalidate it. */
   private lineage: object = {}
   private providerAliases: AgentSessionProviderAliasIndex | null = null
+  readonly leaseHolders: AgentSessionLeaseHolderIndex
   private readonly receiptCommits = new WeakMap<
     JournalReceiptStage,
     { remaining: number; results: (readonly JournalWriterEffectResult[])[]; failed: boolean }
@@ -72,6 +74,7 @@ export class AgentSessionStoreTransactions {
       ...loaded,
       runtimeEnds: readAgentSessionRuntimeEnds(journalDatabase.stateDirectory)
     }
+    this.leaseHolders = new AgentSessionLeaseHolderIndex(this.published)
     this.replacedRuntimes = agentSessionReplacedRuntimes(this.published, {
       hostId,
       incarnation: agentSessionRuntimeIncarnation()
@@ -298,6 +301,7 @@ export class AgentSessionStoreTransactions {
       } else {
         this.published = draft
       }
+      this.leaseHolders.applyCommitted(this.published, writes.records)
       if (published.unreadableRecords !== draft.unreadableRecords) {
         this.providerAliases = null
       } else {
@@ -307,11 +311,12 @@ export class AgentSessionStoreTransactions {
       for (const id of changes.deaths) {
         this.deathEvidenceListeners.forEach((listener) => listener(id))
       }
+      // Cleanup can delete the last chat, so held flips both ways.
       if (
-        !heldBefore &&
+        heldBefore !==
         (this.published.records.size > 0 || this.published.unreadableRecords.size > 0)
       ) {
-        this.firstRecordListeners.forEach((listener) => listener())
+        this.heldChangeListeners.forEach((listener) => listener())
       }
     }
   }

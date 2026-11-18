@@ -1,10 +1,10 @@
 import {
   isFloatingWorkspaceId,
   floatingWorkspaceToWorktree
-} from '../../../../../shared/floating-workspace-worktree'
+} from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { useAppStore } from '@/store/index'
-import type { Tab } from '../../../../../shared/tab-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   findAmbiguousWorktreeIds,
   getPaletteOwnershipWorktreeIds,

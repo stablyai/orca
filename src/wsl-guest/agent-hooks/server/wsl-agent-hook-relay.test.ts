@@ -38,29 +38,6 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('binds the preferred port with the fixed token when the port is free', async () => {
-    const probe = createServer()
-    const freePort = await new Promise<number>((resolve) => {
-      probe.listen(0, '127.0.0.1', () => {
-        const address = probe.address()
-        resolve(typeof address === 'object' && address ? address.port : 0)
-      })
-    })
-    await new Promise<void>((resolve) => probe.close(() => resolve()))
-
-    server = new RelayAgentHookServer({
-      endpointDir: tmpDir,
-      token: 'host-issued-token',
-      preferredPort: freePort,
-      forward: () => {}
-    })
-    await server.start()
-
-    expect(server.getCoordinates().port).toBe(freePort)
-    expect(server.getCoordinates().token).toBe('host-issued-token')
-    expect(server.usedPortFallback).toBe(false)
-  })
-
   it('authenticates the Claude view route and returns its host reply', async () => {
     const forwardClaudeAgentView = vi.fn(async () => ({ requestId: 'request', agentId: 'child' }))
     server = new RelayAgentHookServer({

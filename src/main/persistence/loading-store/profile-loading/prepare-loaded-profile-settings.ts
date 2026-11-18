@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../../shared/execution-host/project-runtime-legacy-migration'
 import { normalizeTaskProviderSettings } from '../../../../shared/work-items/task-providers'

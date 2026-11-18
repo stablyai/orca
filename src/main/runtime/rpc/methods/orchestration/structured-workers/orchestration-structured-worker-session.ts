@@ -1,13 +1,13 @@
 import {
   closeStructuredAgentSessionChild,
   type StructuredAgentSessionCloseOptions
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 /** Create structured workers directly; attach is not readiness, so hold the preamble until the agent takes it.
  * Open dispatches retain agents through the idle sweep; settled workers rest and restart on mail. The preamble is a turn, never keystrokes. */
 
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { readAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureDetailText,
@@ -97,6 +97,8 @@ export async function createStructuredWorkerSession(args: {
   host: StructuredAgentSessionHost
   /** The lease the create was admitted at. */
   fence: number
+  /** The provider options the session launches with: the dispatch's own over the seeded saved selection. */
+  options?: Readonly<Record<string, string>>
 }> {
   const sessionId = randomUUID()
   // Register before attach builds child env or missing ORCA_TERMINAL_HANDLE can misroute orchestration to the coordinator.
@@ -149,7 +151,7 @@ export async function createStructuredWorkerSession(args: {
       )
     }
     ensureStructuredWorkerSessionBinding(identity)
-    return { identity, host, fence: created.value.fence }
+    return { identity, host, fence: created.value.fence, options: record.options }
   } catch (error) {
     // Failed post-create starts must retire the otherwise unowned live provider child.
     structuredWorkerIdentities.forget(identity.handle)

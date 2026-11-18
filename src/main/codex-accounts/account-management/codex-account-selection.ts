@@ -3,6 +3,7 @@ import type {
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
 } from '../../../shared/agent-accounts/managed-account-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { Store } from '../../persistence/loading-store/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
@@ -95,7 +96,7 @@ export class CodexAccountSelection {
       null
     )
 
-    this.dependencies.store.updateSettings({
+    this.saveSettings({
       codexManagedAccounts: nextAccounts,
       activeCodexManagedAccountId: nextActiveId,
       activeCodexManagedAccountIdsByRuntime: nextSelection,
@@ -134,11 +135,7 @@ export class CodexAccountSelection {
       normalizeManagedAccountDisplayName(displayName)
     )
     if (names) {
-      // Notify windows: their status-bar rows read names from settings.
-      this.dependencies.store.updateSettings(
-        { managedAccountDisplayNames: names },
-        { notifyListeners: true }
-      )
+      this.saveSettings({ managedAccountDisplayNames: names })
     }
     return this.snapshot()
   }
@@ -169,7 +166,7 @@ export class CodexAccountSelection {
       accountId,
       effectiveTarget
     )
-    this.dependencies.store.updateSettings({
+    this.saveSettings({
       activeCodexManagedAccountId:
         effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
       activeCodexManagedAccountIdsByRuntime: nextSelection
@@ -185,6 +182,11 @@ export class CodexAccountSelection {
 
     this.startQuotaRefresh(outgoingAccountId, effectiveTarget)
     return this.snapshot()
+  }
+
+  // Notify every window of changes made by the CLI, paired clients, or other windows.
+  saveSettings(patch: Partial<GlobalSettings>): void {
+    this.dependencies.store.updateSettings(patch, { notifyListeners: true })
   }
 
   // A `codex login` run inside a managed home swaps its account; label the row with what actually runs (#22284).

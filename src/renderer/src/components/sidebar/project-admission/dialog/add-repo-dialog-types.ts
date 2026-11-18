@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WslHostWindowsDriveRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 
 export type AddRepoDialogStep = 'add' | 'clone' | 'remote' | 'server-path' | 'create' | 'nested'

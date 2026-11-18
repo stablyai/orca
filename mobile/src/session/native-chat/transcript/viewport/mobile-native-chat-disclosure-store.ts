@@ -1,7 +1,7 @@
 // Store disclosures above recycled transcript rows so opened tools remain open when rows remount.
 
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react'
-import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
 import { MAX_CACHED_TRANSCRIPTS } from '../persistence/mobile-native-chat-transcript-cache'
 import type { MobileNativeChatRootPosition } from './mobile-native-chat-scroll-root-handle'

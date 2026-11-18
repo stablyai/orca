@@ -3,7 +3,10 @@ import {
   filePreviewExtension,
   filePreviewForPath
 } from '../../../../shared/file-preview/file-preview-kind'
-import { openLocalRegularFile, readImageFileSignature } from '../local-regular-file-read'
+import {
+  openLocalRegularFile,
+  readImageFileSignature
+} from '../../../filesystem/local-file-io/local-regular-file-read'
 import { windowsFsPath } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
 
 /** Chat draws images only (PDFs need another surface); Telegram's `.jpg` links lead to extensionless files, so those count by their bytes. */

@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog }
 }))
 
-import { registerShellHandlers } from './shell'
+import { registerShellHandlers } from './shell/shell'
 
 let directory: string
 

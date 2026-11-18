@@ -9,7 +9,7 @@ import { githubRepoIdentityKey } from '../../../../../src/shared/github/reposito
 import {
   createNativeChatFileLinkChecker,
   type NativeChatFileLinkExistence
-} from '../../../../../src/shared/native-chat/native-chat-file-link-existence'
+} from '../../../../../src/shared/native-chat/file-access/native-chat-file-link-existence'
 import {
   createPathExistenceBatch,
   requirePathExistenceResults

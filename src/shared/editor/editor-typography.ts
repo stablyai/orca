@@ -1,5 +1,5 @@
 import type { EditorTypographySettings } from './appearance/editor-typography-settings-types'
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 import { buildFontFamily } from '../styles/monospace-font-family'
 import { normalizeFontWeight } from '../terminal/appearance/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../terminal/appearance/terminal-ligatures'

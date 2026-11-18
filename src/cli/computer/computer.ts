@@ -5,7 +5,7 @@ import type {
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
   ComputerSnapshotResult
-} from '../../shared/computer-use-runtime-types'
+} from '../../shared/computer/computer-use-runtime-types'
 import type { CommandHandler } from '../dispatch/dispatch'
 import {
   getOptionalNonNegativeIntegerFlag,
@@ -38,7 +38,7 @@ import {
   getComputerTextActionFlags,
   getComputerTypeTextActionFlags
 } from './computer-action-flags'
-import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer-use-type-text-target'
+import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer/computer-use-type-text-target'
 
 export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer capabilities': async ({ client, json }) => {

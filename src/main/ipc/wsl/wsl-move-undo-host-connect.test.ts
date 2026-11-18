@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import {
+  getDefaultUIState,
+  getDefaultWorkspaceSession
+} from '../../../shared/orca-profiles/constants'
 import { wslMoveCutoverFixture } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 
@@ -36,7 +39,9 @@ const store = {
   getWorkspaceSession: () => getDefaultWorkspaceSession(),
   patchWorkspaceSession: vi.fn(),
   listAutomations: () => [],
-  updateAutomation: vi.fn()
+  updateAutomation: vi.fn(),
+  getUI: () => getDefaultUIState(),
+  updateUI: vi.fn()
 }
 
 describe("undo's stop of the host's terminals: connecting the host", () => {

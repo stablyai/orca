@@ -6,7 +6,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
@@ -17,7 +17,7 @@ import {
   getSavedProjectPathKeys
 } from '../../git/repositories/cloning/repo-clone-path'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
@@ -36,6 +36,7 @@ import {
   repoCreateFailure,
   type RepoCreateFailure
 } from '../../../shared/repository/creation/repo-create-failure-copy'
+import { getDefaultCreateProjectParent } from './default-create-project-parent'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -289,6 +290,11 @@ export class RuntimeRepositoryRegistrationController {
         detail: message
       })
     }
+  }
+
+  /** Read on this host so a paired client suggests this host's Workspace Directory, not its own. */
+  defaultCreateParent(): string {
+    return getDefaultCreateProjectParent(this.requireStore().getSettings())
   }
 
   private requireStore(): RuntimeStore {

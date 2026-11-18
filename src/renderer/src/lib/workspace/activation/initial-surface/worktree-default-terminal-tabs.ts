@@ -3,7 +3,7 @@ import type {
   WorktreeSetupLaunch
 } from '../../../../../../shared/worktree/creation/launch-types'
 import { agentKindToTuiAgent } from '../../../../../../shared/agent-status/identity/agent-kind'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { useAppStore } from '@/store/index'
 import { recordLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'

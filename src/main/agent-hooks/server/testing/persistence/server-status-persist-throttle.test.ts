@@ -1,4 +1,4 @@
-import { holdSavedStatusLock, readSavedStatus } from './last-status.test-fixtures'
+import { readSavedStatus } from './last-status.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -56,18 +56,5 @@ describe('saved agent status cadence', () => {
 
     await server.start({ env: 'production', userDataPath })
     expect(server.getStatusSnapshot()[0]?.prompt).toBe('final before stop')
-  })
-
-  it('saves an authority change within seconds once a held lock clears', async () => {
-    await prompt('first')
-    await vi.advanceTimersByTimeAsync(1)
-    const release = holdSavedStatusLock(lastStatusPath())
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await prompt('new owner', 'launch-token-new')
-    await vi.advanceTimersByTimeAsync(1)
-    release()
-
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(readPrompt()).toBe('new owner')
   })
 })

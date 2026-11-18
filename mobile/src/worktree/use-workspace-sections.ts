@@ -1,16 +1,16 @@
 import { useMemo } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type {
   WorkspaceGroupBy,
   WorkspaceSortBy
 } from '../../../src/shared/workspace-view/workspace-view-options'
 import {
-  buildSectionRepoMap,
   buildMobileWorkspacePlan,
   type ProjectSectionCatalog
 } from './workspace-list/workspace-list-sections'
+import { buildSectionRepoMap } from './workspace-list/section-repo-map'
 import type {
   FilterState,
   Section,

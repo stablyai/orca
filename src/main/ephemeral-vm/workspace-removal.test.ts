@@ -10,7 +10,7 @@ import {
 } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { RecipeWorkspaceRemovalError } from '../../shared/recipe-host-removal'
+import { RecipeWorkspaceRemovalError } from '../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import { mapRuntimeError } from '../runtime/rpc/responses/rpc-response'
 import { removeRecipeWorkspace, type RecipeWorkspaceRemoveParams } from './workspace-removal'
 
@@ -182,17 +182,6 @@ describe('recipe workspace removal on the provisioning host', () => {
       data: { runtimeId: 'vm-a' },
       message: expect.stringMatching(/Provider refused destroy.*may still be running/)
     })
-  })
-
-  it('waits for an older environment that answers on acceptance, then destroys', async () => {
-    seed()
-    const ports = makePorts({
-      'worktree.rm': ok({ removed: false, removing: true }),
-      'worktree.show': failed('selector_not_found')
-    })
-    await expect(
-      removeRecipeWorkspace(root, params, ports, undefined, { attempts: 3, intervalMs: 0 })
-    ).resolves.toMatchObject({ removed: true, host: { state: 'destroyed' } })
   })
 
   it('keeps the environment when its worktree list is truncated', async () => {

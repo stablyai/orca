@@ -1,4 +1,4 @@
-import { isRepoOnCatalogHost } from '../../../shared/execution-host'
+import { isRepoOnCatalogHost } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { ArchiveHookOverride } from '../../../shared/worktree/removal/archive-hook-removal-gate'

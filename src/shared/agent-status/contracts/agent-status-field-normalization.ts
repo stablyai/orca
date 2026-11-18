@@ -1,6 +1,6 @@
 // Share single-line previews and multiline bodies with surrogate-safe cuts; agent-status-types.ts owns payload shapes and caps.
 
-import { compactDispatchPromptForStatus } from '../../orca-dispatch-status-prompt'
+import { compactDispatchPromptForStatus } from '../../orchestration/workers/orca-dispatch-status-prompt'
 
 /** Maximum character length for the prompt field. Truncated on parse. */
 export const AGENT_STATUS_MAX_FIELD_LENGTH = 200

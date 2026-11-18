@@ -5,7 +5,7 @@ import type {
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-lifecycle-refs'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
