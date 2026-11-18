@@ -268,7 +268,11 @@ function summarizePtyTreeMemory(
   addMemoryDetails(details, '', sumMemory(rows))
   // getAppMetrics omits the detached daemon. Its other descendants (console hosts, PTYs
   // the registry could not attribute) are reported apart so they never read as daemon memory.
-  if (daemonPid !== null) {
+  // The authenticated pid may be stale (restart, pid reuse): require it to parent a PTY root.
+  const parentsPtyRoot =
+    daemonPid !== null &&
+    ptys.some((pty) => pty.pid != null && index.byPid.get(pty.pid)?.ppid === daemonPid)
+  if (daemonPid !== null && parentsPtyRoot) {
     const daemonRow = index.byPid.get(daemonPid)
     if (daemonRow) {
       addMemoryDetails(details, 'Daemon', sumMemory([daemonRow]))
