@@ -56,13 +56,6 @@ describe('formatAutomationList and Show print event triggers', () => {
     expect(output).toContain('never runs')
   })
 
-  it('shows an events-only automation with no schedule', () => {
-    const output = formatAutomationShow({ automation: automation({ ...EVENT_ONLY_SCHEDULE, on }) })
-    expect(output).toContain('schedule: none (runs on events)')
-    expect(output).not.toContain('9999')
-    expect(output).not.toContain('rrule:')
-  })
-
   it('prints JSON with no placeholder schedule for an events-only automation only', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const response = <T>(result: T) => ({

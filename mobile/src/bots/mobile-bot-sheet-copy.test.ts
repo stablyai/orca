@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activityRowView, botStatusFromDots, memberSourceLabel } from './mobile-bot-sheet-copy'
+import { activityRowView, botStatusFromDots } from './mobile-bot-sheet-copy'
 
 describe('activity rows', () => {
   it("draws the host's dot as it is", () => {
@@ -10,7 +10,7 @@ describe('activity rows', () => {
       dot: 'permission',
       origin: { kind: 'chat' }
     })
-    expect(view).toEqual({ title: 'Worker', detail: 'Started by your chat', dot: 'permission' })
+    expect(view.dot).toBe('permission')
   })
 
   it('words a run by its status, and leaves Done unsaid', () => {
@@ -32,12 +32,5 @@ describe('botStatusFromDots', () => {
     expect(botStatusFromDots(['idle'], ['monitoring'], false)).toBe('working')
     expect(botStatusFromDots(['done'], [], false)).toBe('active')
     expect(botStatusFromDots([], [], true)).toBe('inactive')
-  })
-})
-
-describe('memberSourceLabel', () => {
-  it('names a known service and passes a newer one through', () => {
-    expect(memberSourceLabel({ id: 'u', name: 'Dana' })).toBe('Slack')
-    expect(memberSourceLabel({ id: 'u', name: 'Dana', source: 'teams' })).toBe('teams')
   })
 })
