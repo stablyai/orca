@@ -90,7 +90,7 @@ async function openPane(page: Page, deviceName: string): Promise<Locator> {
     .filter({ visible: true })
     .first()
     .click()
-  await page.getByText('New Mobile Emulator', { exact: true }).click()
+  await page.getByRole('button', { name: 'New Mobile Emulator', exact: true }).click()
   const pane = page.locator('[data-emulator-pane]').filter({ visible: true })
   await pane.getByRole('combobox', { name: 'Choose emulator' }).click()
   await page.getByPlaceholder('Search devices…').fill(deviceName)
@@ -98,6 +98,10 @@ async function openPane(page: Page, deviceName: string): Promise<Locator> {
   await expect(pane.getByText('Connected', { exact: true })).toBeVisible({ timeout: 120_000 })
   const screen = pane.getByRole('application', { name: /Emulator screen/ })
   await expect(screen).toBeVisible()
+  const dismiss = pane.getByRole('button', { name: 'Not now' })
+  if (await dismiss.isVisible()) {
+    await dismiss.click()
+  }
   return screen
 }
 
