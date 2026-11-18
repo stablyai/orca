@@ -143,6 +143,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   outputObservedSince?: number | null
   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
   commandPaint?: TerminalCommandPaint
+  /** The root PID reattach discovery listed for this incarnation: an old owner's only terminal anchor. */
+  adoptedRootProcess?: { incarnationId: string | null; pid: number } | null
 }
 
 export type RuntimePtyTabCloseAuthority = {

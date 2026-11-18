@@ -195,21 +195,38 @@ export async function readExactAgentForeground(
   runtime: {
     readLaunchedAgentForeground(ptyId: string, agent: TuiAgent): Promise<LaunchedAgentForeground>
   },
-  controller:
-    | Pick<RuntimePtyController, 'confirmForegroundProcess' | 'supportsForegroundObservation'>
-    | null
-    | undefined,
-  host: { remote: boolean },
+  controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
   ptyId: string,
   agent: TuiAgent
 ): Promise<LaunchedAgentForeground> {
-  // Why the name alone on an old local owner: its group read fetches the owner's whole inventory per pane.
-  if (host.remote || controller?.supportsForegroundObservation?.(ptyId)) {
-    const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
-    if (foreground !== 'agent') {
-      return foreground
-    }
+  const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
+  return foreground === 'agent' ? confirmAgentNameAtOwner(controller, ptyId, agent) : foreground
+}
+
+/** The same exact read for a local owner without foreground observation, scoped to the terminal of
+ *  the root PID its reattach discovery listed rather than refetching the owner's every session. */
+export async function readAdoptedRootAgentForeground(
+  controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
+  rootPid: number,
+  ptyId: string,
+  agent: TuiAgent
+): Promise<LaunchedAgentForeground> {
+  try {
+    const rows = await readTerminalProcessRows(rootPid)
+    const foreground = rows ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
+    return foreground === 'agent'
+      ? await confirmAgentNameAtOwner(controller, ptyId, agent)
+      : foreground
+  } catch {
+    return 'unknown'
   }
+}
+
+async function confirmAgentNameAtOwner(
+  controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
+  ptyId: string,
+  agent: TuiAgent
+): Promise<LaunchedAgentForeground> {
   const name = (await controller?.confirmForegroundProcess?.(ptyId)) ?? null
   return recognizeAgentProcess(name)?.agent === agent ? 'agent' : 'unknown'
 }

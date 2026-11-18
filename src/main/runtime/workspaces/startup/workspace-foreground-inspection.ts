@@ -1,7 +1,9 @@
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operations'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   describeLaunchedAgentHost,
+  readAdoptedRootAgentForeground,
   readExactAgentForeground,
   readLaunchedAgentForeground,
   type LaunchedAgentForeground,
@@ -38,14 +40,13 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
    *  for the process now running. */
   protected async confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean> {
     // Why first: a host that can't find an agent in front (Windows, WSL) can never confirm one.
-    const host = this.launchedAgentHost(ptyId)
-    if (host.windows) {
+    if (!this.launchedAgentHostProvesAgent(ptyId)) {
       return false
     }
     const pty = this.ptysById.get(ptyId)
     const outputClockAt = this.readOutputClockAt(ptyId)
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const foreground = await readExactAgentForeground(this, this.ptyController, host, ptyId, agent)
+    const foreground = await this.readRestTitleForeground(pty, ptyId, agent)
     if (
       foreground !== 'agent' ||
       !pty ||
@@ -58,6 +59,21 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     }
     this.applyReattachedAgentStatus(ptyId, 'idle')
     return true
+  }
+
+  private readRestTitleForeground(
+    pty: RuntimePtyWorktreeRecord | undefined,
+    ptyId: string,
+    agent: TuiAgent
+  ): Promise<LaunchedAgentForeground> {
+    if (pty && !pty.connectionId && !this.ptyController?.supportsForegroundObservation?.(ptyId)) {
+      // Why not the launched-agent read: on an old owner it lists every session to find one root PID.
+      const root = pty.adoptedRootProcess
+      return root && root.incarnationId === pty.incarnationId
+        ? readAdoptedRootAgentForeground(this.ptyController, root.pid, ptyId, agent)
+        : Promise.resolve('unknown')
+    }
+    return readExactAgentForeground(this, this.ptyController, ptyId, agent)
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */
