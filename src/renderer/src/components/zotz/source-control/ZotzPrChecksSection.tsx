@@ -15,6 +15,7 @@ import { SwitchIndicator } from '@/components/ui/switch'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useAppStore } from '@/store/index'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
@@ -95,15 +96,19 @@ function usePrChecks(worktreeId: string, review: HostedReviewInfo): PRCheckDetai
       running = (result ?? []).some((check) => check.status !== 'completed')
     }
     void load()
-    // One fixed tick; settled checks just skip ticks until their slower cadence is due.
-    const timer = setInterval(() => {
-      if (running || Date.now() - lastLoadAt >= POLL_SETTLED_MS) {
-        void load()
-      }
-    }, POLL_RUNNING_MS)
+    // Pauses while the window is hidden; settled checks skip ticks until their slower cadence.
+    const stop = installWindowVisibilityInterval({
+      run: () => {
+        if (running || Date.now() - lastLoadAt >= POLL_SETTLED_MS) {
+          void load()
+        }
+      },
+      intervalMs: POLL_RUNNING_MS,
+      slowWhileUnfocused: true
+    })
     return () => {
       alive = false
-      clearInterval(timer)
+      stop()
     }
   }, [repo, fetchPRChecks, review.number, review.githubRepository, head])
   return checks
@@ -164,11 +169,9 @@ export function ZotzPrChecksSection({
         return null
       }
       setFixing(true)
-      try {
-        return await fixZotzPrChecks({ worktreeId, repo, review, checks, onlyIfIdle })
-      } finally {
+      return fixZotzPrChecks({ worktreeId, repo, review, checks, onlyIfIdle }).finally(() =>
         setFixing(false)
-      }
+      )
     },
     [repo, checks, fixing, worktreeId, review]
   )
