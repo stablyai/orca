@@ -64,8 +64,12 @@ function shadow(defaults) { return translate('test.shadow', defaults.literal) }
     expect(
       references
         .filter((reference) => reference.key.startsWith('test.'))
-        .every((reference) => reference.fallback === undefined)
-    ).toBe(true)
+        .map(({ key, fallback }) => [key, fallback])
+    ).toStrictEqual([
+      ['test.literal', undefined],
+      ['test.dynamic', undefined],
+      ['test.shadow', undefined]
+    ])
     writeFileSync(
       path.join(componentDir, 'Example.tsx'),
       `import { COPY as defaults } from './copy'
