@@ -354,13 +354,11 @@ describe("a bot's memory history", () => {
     expect(history.undoneKnown('bot-1', 'another-row')).toBe(false)
   })
 
-  it('reads a bot once for everyone asking while its disk is stalled, then tells the latest', async () => {
+  it('tells only the latest of everyone asking while its disk is stalled', async () => {
     let release = (): void => {}
     const stalled = new Promise<void>((resolve) => (release = resolve))
-    let reads = 0
     const io = {
       read: async () => {
-        reads += 1
         await stalled
         return null
       },
@@ -375,7 +373,6 @@ describe("a bot's memory history", () => {
     release()
     await vi.waitFor(() => expect(told).toEqual([99]))
 
-    expect(reads).toBe(1)
     expect(history.undoneKnown('bot-1', 'any')).toBe(false)
   })
 

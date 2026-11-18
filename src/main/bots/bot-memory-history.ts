@@ -286,7 +286,10 @@ export function createBotMemoryHistory(
           undoneLoads.delete(botId)
           loaded?.()
         },
-        () => undoneLoads.delete(botId)
+        (error: unknown) => {
+          undoneLoads.delete(botId)
+          console.warn('[bots] memory history not read', error)
+        }
       )
     },
     settled
