@@ -5,6 +5,7 @@ import { normalizeClaudePromptId } from '../../../listener-limits'
 import { readString } from '../../../tool-input-preview'
 import { readFirstString } from '../../../interactive-tool'
 import { withClaudeToolRequestId } from '../../../claude-tool-request-identity'
+import { isClaudePluginToolCall } from './claude-tool-events'
 
 /** A UserPromptSubmit whose turn already began: it landed late, or was typed into the running turn. */
 export const CLAUDE_LATE_PROMPT_SUBMIT_EVENT = 'UserPromptSubmit:late'
@@ -52,7 +53,12 @@ function orderClaudeTurn(
 ): ClaudeTurnOrder | null {
   const passThrough = { eventName, opensTurn: false }
   // Child events share the lead's prompt_id but say nothing about the lead's turn order.
-  if (source !== 'claude' || readFirstString(hookPayload, ['agent_id', 'agentId']) !== undefined) {
+  // Plugin-made tool calls can run after Stop and do not belong to the lead's turn order either.
+  if (
+    source !== 'claude' ||
+    readFirstString(hookPayload, ['agent_id', 'agentId']) !== undefined ||
+    isClaudePluginToolCall(hookPayload)
+  ) {
     return passThrough
   }
   const isPrompt = eventName === 'UserPromptSubmit'
