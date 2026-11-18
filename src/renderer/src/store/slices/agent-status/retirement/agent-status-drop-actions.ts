@@ -1,0 +1,175 @@
+import { linkRecordWrite } from '../../../record-transitions/keyed-record-transitions'
+import type {
+  DropAgentStatusByTabPrefixOptions,
+  DropAgentStatusOptions
+} from '../contracts/agent-status-contract'
+import type { AgentStatusSlice } from '../contracts/agent-status-slice-contract'
+import type { AgentStatusRuntime } from '../status-ownership/agent-status-runtime'
+import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
+import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
+import { retireAgentPaneAuthorityAliasesByOwnerTab } from '../pane-authority/agent-pane-authority'
+import { removePaneKeys } from '../pane-authority/agent-status-pane-keyed-records'
+import {
+  agentProcessRetirementPatch,
+  isSleepingAgentStatus
+} from './agent-status-process-retirement'
+
+function removeAcknowledgement(
+  acknowledgements: Record<string, number>,
+  paneKey: string
+): Record<string, number> {
+  if (!(paneKey in acknowledgements)) {
+    return acknowledgements
+  }
+  const next = { ...acknowledgements }
+  delete next[paneKey]
+  return linkRecordWrite(next, acknowledgements, [paneKey])
+}
+
+export function createAgentStatusDropActions(
+  runtime: AgentStatusRuntime
+): Pick<
+  AgentStatusSlice,
+  | 'dropAgentStatus'
+  | 'dropAgentStatusByTabPrefix'
+  | 'dropHibernatedAgentStatusPane'
+  | 'retireAgentStatusProcess'
+> {
+  const { get, set, freshness } = runtime
+  const retireAgentStatusProcess = (paneKey: string, ptyId?: string): void => {
+    if (!isSleepingAgentStatus(get().agentStatusByPaneKey.get(paneKey), ptyId)) {
+      get().removeAgentStatus(paneKey)
+      return
+    }
+    retireSleepingPane(paneKey)
+  }
+  const retireSleepingPane = (paneKey: string): void => {
+    let hadLive = false
+    set((s, changedPaneKeys) => {
+      const row = s.agentStatusByPaneKey.get(paneKey)
+      hadLive = row !== undefined && !isSleepingAgentStatus(row)
+      const agentStatusByPaneKey = hadLive
+        ? removePaneKeys(s.agentStatusByPaneKey, new Set([paneKey]))
+        : s.agentStatusByPaneKey
+      const processRetirement = agentProcessRetirementPatch(s, paneKey)
+      if (!hadLive && !processRetirement.changed) {
+        return s
+      }
+      if (hadLive) {
+        changedPaneKeys.add(paneKey)
+      }
+      // The sleeping pane still owns its read/clear state.
+      return {
+        agentStatusByPaneKey,
+        ...processRetirement.patch,
+        agentStatusEpoch: s.agentStatusEpoch + 1,
+        sortEpoch: s.sortEpoch + 1
+      }
+    })
+    if (hadLive) {
+      freshness.scheduleDeferred()
+    }
+  }
+  return {
+    dropAgentStatus: (paneKey, opts?: DropAgentStatusOptions) => {
+      let liveExisted = false
+      set((s, changedPaneKeys) => {
+        const hasLive = s.agentStatusByPaneKey.has(paneKey)
+        liveExisted = hasLive
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) => entry.paneKey === paneKey
+        )
+        const nextAck = removeAcknowledgement(s.acknowledgedAgentsByPaneKey, paneKey)
+        // Dismissal preserves cutoff/manual-unread because live panes can republish cleared history.
+        const nextClearedAt = opts?.paneRemoved
+          ? removeAcknowledgement(s.activityClearedAtByPaneKey, paneKey)
+          : s.activityClearedAtByPaneKey
+        const nextManualUnread = opts?.paneRemoved
+          ? removeAcknowledgement(s.manuallyUnreadTurnsByPaneKey, paneKey)
+          : s.manuallyUnreadTurnsByPaneKey
+        const nextConversations = opts?.paneRemoved
+          ? removePaneKeys(s.agentConversationsByPaneKey, new Set([paneKey]))
+          : s.agentConversationsByPaneKey
+        const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
+        const nextLaunchConfigs = hasLaunchConfig
+          ? { ...s.agentLaunchConfigByPaneKey }
+          : s.agentLaunchConfigByPaneKey
+        if (hasLaunchConfig) {
+          delete nextLaunchConfigs[paneKey]
+        }
+        if (!hasLive && !migrationUnsupported.changed) {
+          const cleanupPatch = {
+            ...(nextConversations !== s.agentConversationsByPaneKey
+              ? { agentConversationsByPaneKey: nextConversations }
+              : {}),
+            ...(hasLaunchConfig ? { agentLaunchConfigByPaneKey: nextLaunchConfigs } : {}),
+            ...(nextAck !== s.acknowledgedAgentsByPaneKey
+              ? { acknowledgedAgentsByPaneKey: nextAck }
+              : {}),
+            ...(nextClearedAt !== s.activityClearedAtByPaneKey
+              ? { activityClearedAtByPaneKey: nextClearedAt }
+              : {}),
+            ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
+              ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
+              : {})
+          }
+          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
+        }
+        const nextLive = hasLive
+          ? s.agentStatusByPaneKey.replace([[paneKey, null]])
+          : s.agentStatusByPaneKey
+        if (hasLive) {
+          changedPaneKeys.add(paneKey)
+        }
+        return {
+          agentStatusByPaneKey: nextLive,
+          agentConversationsByPaneKey: nextConversations,
+          agentLaunchConfigByPaneKey: nextLaunchConfigs,
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
+          ...(nextAck !== s.acknowledgedAgentsByPaneKey
+            ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
+          activityClearedAtByPaneKey: nextClearedAt,
+          manuallyUnreadTurnsByPaneKey: nextManualUnread,
+          agentStatusEpoch:
+            hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+        }
+      })
+      if (liveExisted) {
+        freshness.scheduleDeferred()
+      }
+      if (typeof window !== 'undefined') {
+        window.api?.agentStatus?.drop?.(paneKey)
+      }
+    },
+
+    dropAgentStatusByTabPrefix: (tabIdPrefix, opts?: DropAgentStatusByTabPrefixOptions) => {
+      const retiredAliasPaneKeys = retireAgentPaneAuthorityAliasesByOwnerTab(tabIdPrefix)
+      let hadLive = false
+      set((s, changedPaneKeys) => {
+        const dropped = buildAgentStatusTabPrefixDropPatch(
+          s,
+          tabIdPrefix,
+          retiredAliasPaneKeys,
+          opts
+        )
+        hadLive = dropped.hadLive
+        for (const key of dropped.removedPaneKeys) {
+          changedPaneKeys.add(key)
+        }
+        return dropped.patch
+      })
+      if (hadLive) {
+        freshness.scheduleDeferred()
+      }
+      if (typeof window !== 'undefined') {
+        window.api?.agentStatus?.dropByTabPrefix?.(tabIdPrefix)
+      }
+    },
+
+    dropHibernatedAgentStatusPane: (_worktreeId, paneKey) => retireSleepingPane(paneKey),
+    retireAgentStatusProcess
+  }
+}

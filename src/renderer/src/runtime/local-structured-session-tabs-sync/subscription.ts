@@ -25,6 +25,11 @@ const REPAIR_DROPPED_EPOCHS: StructuredSessionSnapshotApplyOptions = {
     )
 }
 
+const STREAM_UPDATE: StructuredSessionSnapshotApplyOptions = {
+  ...REPAIR_DROPPED_EPOCHS,
+  skipVersionOnlyRepeats: true
+}
+
 type SessionTabsEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
   | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: boolean }
@@ -104,7 +109,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
           // Each subscription opens with one census: the host is reachable again.
           recheckUnconfirmedStructuredAgentLaunches(LOCAL_EXECUTION_HOST_ID)
         } else if (event.type === 'snapshot' || event.type === 'updated') {
-          applyStructuredSessionTabSnapshots([event], undefined, REPAIR_DROPPED_EPOCHS)
+          applyStructuredSessionTabSnapshots([event], undefined, STREAM_UPDATE)
         } else if (event.type === 'end' && generation === subscriptionGeneration) {
           // Reattach with one refresh so a runtime-restart boundary cannot strand stale tabs.
           subscriptionGeneration += 1

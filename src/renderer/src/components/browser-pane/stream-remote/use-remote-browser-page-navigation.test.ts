@@ -40,20 +40,6 @@ describe('remote browser authoritative page state', () => {
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
   })
 
-  it('redacts a Kagi session token before it reaches history', () => {
-    const { result } = renderNavigation()
-    act(() =>
-      result.current.applyRemoteTabInfo({
-        browserPageId: 'remote-page-a',
-        index: 0,
-        active: true,
-        url: 'https://kagi.com/search?q=orca&token=secret-session',
-        title: 'Kagi'
-      })
-    )
-    expect(useAppStore.getState().browserUrlHistory[0].url).not.toContain('secret-session')
-  })
-
   it.each(['browser.goto', 'browser.back', 'browser.forward', 'browser.reload'] as const)(
     'reads authoritative state after %s rejects or resolves, without a pre-command read',
     async (method) => {

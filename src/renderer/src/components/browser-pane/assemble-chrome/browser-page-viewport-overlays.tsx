@@ -18,7 +18,7 @@ import type {
 } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
-import { useSshWorkspaceBrowserLoadFailureRoute } from '../use-ssh-workspace-browser-route'
+import { useSshWorkspaceBrowserLoadFailureRoute } from './profile-routing/use-ssh-workspace-browser-route'
 import type { BrowserLoadFailureAutoRetry } from '../navigate/browser-load-failure-auto-retry'
 import BrowserFind from './find/BrowserFind'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'

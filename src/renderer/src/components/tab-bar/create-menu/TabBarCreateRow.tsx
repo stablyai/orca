@@ -3,7 +3,7 @@ import { Settings } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import {
   DropdownMenuItem,
   DropdownMenuShortcut,
@@ -25,6 +25,7 @@ import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
 import { TabBarCreateRowCustomizer } from './TabBarCreateRowCustomizer'
 import { CREATE_ROW_HIGHLIGHT_CLASS, TabBarCreateRowIcons } from './TabBarCreateRowIcons'
 import { useCreateRowScroller } from './use-create-row-scroller'
+import type { IntroArrowAnchor } from '../../emulator-pane/tab-intro/use-intro-arrow'
 
 const EMPTY_LAYOUT: NewTabMenuLayout = { order: [], hidden: [] }
 
@@ -43,7 +44,7 @@ export function TabBarCreateRow({
   customizable: boolean
   layoutSetting: keyof NewTabMenuSettings
   /** Content tied to shown items, e.g. an intro for an icon the user has not hidden. */
-  renderBelow?: (shownIds: ReadonlySet<string>) => React.ReactNode
+  renderBelow?: (shownIds: ReadonlySet<string>, anchor: IntroArrowAnchor) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const closeMenu = useDropdownMenuClose()
@@ -63,12 +64,13 @@ export function TabBarCreateRow({
   const [keyboardNav, setKeyboardNav] = useState(false)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const pointerInside = useRef(false)
-  const { scrollerRef, attachScroller, overflow, revealIcon } = useCreateRowScroller()
+  const { scrollerRef, scroller, attachScroller, overflow, revealIcon } = useCreateRowScroller()
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
   const customizeIndex = visible.length
   const active = Math.min(activeIndex, customizeIndex)
   const keyboardActive = rowFocused && keyboardNav
-  const below = renderBelow?.(new Set(visible.map((item) => item.id)))
+  const visibleIds = visible.map((item) => item.id)
+  const below = renderBelow?.(new Set(visibleIds), { scroller, order: visibleIds.join(' ') })
 
   useShortcutRecorderFocus(recordingActionId !== null)
 

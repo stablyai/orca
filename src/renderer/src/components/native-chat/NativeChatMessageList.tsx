@@ -1,4 +1,4 @@
-import { copyChatMathSelection } from '../sidebar/chat-markdown-math-selection'
+import { copyChatMathSelection } from '../comment-markdown/chat-markdown-math-selection'
 import {
   nativeChatTranscriptOuterClass,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS

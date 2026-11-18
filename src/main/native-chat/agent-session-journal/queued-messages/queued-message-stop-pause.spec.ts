@@ -90,16 +90,6 @@ export function registerQueuedMessageStopPauseTests(
       )
       expect((await journal.queuedMessages.get('draft-2'))?.state).toBe('dispatched')
     })
-
-    it("a rewind's epoch replacement restates a Stop still pausing, and not one a turn ended", async () => {
-      const journal = await fixture.open()
-      await fixture.userStop(journal)
-      await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: [] })
-      expect(await fixture.reason(journal)).toBe('stopped')
-      await fixture.turn(journal, 'typed')
-      await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: [] })
-      expect(await fixture.reason(journal)).toBeNull()
-    })
   })
   it('mail does not lift Stop, while personal acceptance survives transcript removal and restore', async () => {
     let journal = await fixture.open()

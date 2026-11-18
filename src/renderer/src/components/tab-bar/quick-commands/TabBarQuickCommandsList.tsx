@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useState, type RefObject } from 'react'
 import { CommandList, CommandSeparator } from '@/components/ui/command'
-import { VirtualizedList } from '@/components/virtualized-list'
-import type { HostedTerminalQuickCommand } from '@/hooks/use-terminal-quick-command-hosts'
+import { VirtualizedList } from '@/components/ui/virtualized-list'
+import type { HostedTerminalQuickCommand } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function TabBarQuickCommandsList({

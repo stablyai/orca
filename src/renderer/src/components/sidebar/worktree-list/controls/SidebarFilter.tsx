@@ -28,7 +28,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'

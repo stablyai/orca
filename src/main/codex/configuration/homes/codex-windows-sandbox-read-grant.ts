@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { getSystem32ExePath } from '../../../windows/windows-command-paths'
 
-// Codex's elevated sandbox runs commands as members of this local group (codex-rs windows-sandbox-rs/src/winutil.rs).
+// Codex's elevated sandbox runs commands as members of this local group.
 const CODEX_SANDBOX_USERS_GROUP = 'CodexSandboxUsers'
 // Never the home root: the group is machine-wide and the root holds auth.json.
 const SANDBOX_READABLE_ENTRIES = ['generated_images', 'skills', 'plugins'] as const
