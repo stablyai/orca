@@ -1,5 +1,5 @@
 import React from 'react'
-import type { Editor } from '@tiptap/react'
+import { useEditorState, type Editor } from '@tiptap/react'
 import {
   ChevronRight,
   Heading1,
@@ -26,8 +26,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { insertToggle } from './rich-markdown-slash-command-primitives'
+import { countWords } from './rich-markdown-word-count'
 
 type RichMarkdownToolbarProps = {
   editor: Editor | null
@@ -87,6 +88,29 @@ function RichMarkdownMoreBlocksMenu({ editor }: { editor: Editor | null }): Reac
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function RichMarkdownWordCount({ editor }: { editor: Editor }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const count = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => {
+      const { empty, from, to } = currentEditor.state.selection
+      const text = empty
+        ? currentEditor.state.doc.textContent
+        : currentEditor.state.doc.textBetween(from, to, ' ')
+      return countWords(text, intlLocale)
+    }
+  })
+  return (
+    <span className="rich-markdown-word-count" data-testid="rich-markdown-word-count">
+      {t('auto.components.editor.RichMarkdownToolbar.wordCount', '{{count}} words', {
+        count,
+        defaultValue_one: '{{count}} word'
+      })}
+    </span>
   )
 }
 
@@ -193,6 +217,7 @@ export function RichMarkdownToolbar({
         <ImageIcon className="size-3.5" />
       </RichMarkdownToolbarButton>
       <RichMarkdownMoreBlocksMenu editor={editor} />
+      {editor ? <RichMarkdownWordCount editor={editor} /> : null}
     </div>
   )
 }

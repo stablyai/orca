@@ -18139,7 +18139,9 @@
           "2cd9e0bbb3": "Headings",
           "b05e14620d": "Heading 4",
           "6bbf827ef5": "Heading 5",
-          "d1bbf9a835": "Collapsible section"
+          "d1bbf9a835": "Collapsible section",
+          "wordCount_one": "{{count}} word",
+          "wordCount_other": "{{count}} words"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Save",

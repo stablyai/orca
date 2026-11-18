@@ -316,6 +316,10 @@
           "e72e6b03f4": "Rust",
           "edfcc64182": "Go"
         },
+        "RichMarkdownToolbar": {
+          "wordCount_one": "{{count}} word",
+          "wordCount_other": "{{count}} words"
+        },
         "editor": {
           "save": {
             "bytesUpdateRequired": "Saving binary files here requires a newer Orca server. Update the Orca server and try again.",
