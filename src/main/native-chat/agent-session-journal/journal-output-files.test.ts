@@ -8,13 +8,14 @@ import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { runJournalTransaction } from './database/journal-database'
 import { readJournalDomainItems } from './journal-sql-item-reads'
+import { storeJournalItemOutput } from './journal-stored-output'
 import {
   JOURNAL_OUTPUT_FILE_INDEX,
   JOURNAL_OUTPUT_FILE_SCHEMA,
   journalOutputFilePath,
-  registerJournalOutputFileRoot,
-  sweepJournalOutputFiles
+  registerJournalOutputFileRoot
 } from './journal-output-files'
+import { sweepJournalOutputFiles } from './journal-output-file-sweep'
 
 /** One whole sweep: every unit until the sweep says it is done. */
 function sweepAll(db: Database.Database, now: number) {
@@ -107,12 +108,23 @@ it('stores a completed output over the detail size as a head beside its whole-te
   sweepAll(db, 2 * day)
   expect(existsSync(path)).toBe(true)
 
+  // A saved output blob would drop the file's name.
+  const fileBacked: AgentJournalRenderItem = JSON.parse(
+    String(db.prepare('SELECT payload_json FROM journal_items').get()!.payload_json)
+  )
+  expect(storeJournalItemOutput(fileBacked)).toBeNull()
+
   db.prepare('DELETE FROM journal_items').run()
   sweepAll(db, 3 * day)
   expect(existsSync(path)).toBe(true)
-  sweepAll(db, 4 * day - 1)
+  // Named again, then dropped again: the grace starts over.
+  write(tool(3))
+  db.prepare('DELETE FROM journal_items').run()
+  sweepAll(db, 4 * day)
   expect(existsSync(path)).toBe(true)
-  expect(sweepAll(db, 4 * day)).toMatchObject({
+  sweepAll(db, 5 * day - 1)
+  expect(existsSync(path)).toBe(true)
+  expect(sweepAll(db, 5 * day)).toMatchObject({
     removed: 1,
     freedBytes: 10_800_000
   })

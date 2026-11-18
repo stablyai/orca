@@ -19,7 +19,10 @@ import {
 } from './journal-domain-maintenance'
 import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
 import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
-import { sweepJournalOutputFiles, type JournalOutputFileSweepResult } from './journal-output-files'
+import {
+  sweepJournalOutputFiles,
+  type JournalOutputFileSweepResult
+} from './journal-output-file-sweep'
 import {
   discardJournalDomainImportPage,
   type JournalDomainImportDiscard

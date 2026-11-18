@@ -89,8 +89,9 @@ export function continuationContextReader(
     // Apart from published snapshots, so the crash sweep visits only spills.
     const spillRoot = join(snapshotRoot, 'spills')
     // One extraction per text, written by the reader to a private file main then streams.
-    const spill = async (part: JournalContinuedPayload, trimEnd: boolean) => {
-      const file = files[context.continued.indexOf(part)]
+    const spill = async (index: number, trimEnd: boolean) => {
+      const part = context.continued[index]
+      const file = files[index]
       if (file) {
         return continuedFileText(file, trimEnd)
       }
@@ -128,11 +129,7 @@ export function continuationContextReader(
       path = await writeAgentSessionContextSnapshot(
         deps.journalDatabase.stateDirectory,
         input.sessionId,
-        continued
-          ? markers.transcript(formatted, (index, trimEnd) =>
-              spill(context.continued[index], trimEnd)
-            )
-          : text
+        continued ? markers.transcript(formatted, (index, trimEnd) => spill(index, trimEnd)) : text
       )
     } catch (error) {
       if (error instanceof ContinuedPayloadSuperseded) {

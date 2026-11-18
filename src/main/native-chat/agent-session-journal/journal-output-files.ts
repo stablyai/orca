@@ -1,15 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
-import {
-  closeSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeSync
-} from 'node:fs'
+import { closeSync, fsyncSync, mkdirSync, openSync, rmSync, statSync, writeSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type Database from '../../sqlite/sync-database'
 import type {
@@ -24,15 +15,18 @@ import { JOURNAL_ITEM_DETAIL_MAX_BYTES } from './journal-domain-item-wire'
 /** Off until builds that export only a saved head are out of the downgrade window; reads always work. */
 export const JOURNAL_OUTPUT_FILE_WRITES = false
 
-const DIRECTORY = 'agent-session-outputs'
-// A capture or fork that read a reference before its row went keeps the file through this window.
-const UNREFERENCED_GRACE_MS = 24 * 60 * 60 * 1000
+export const JOURNAL_OUTPUT_FILE_DIRECTORY = 'agent-session-outputs'
+const DIRECTORY = JOURNAL_OUTPUT_FILE_DIRECTORY
 const WRITE_SLICE_CHARS = 1024 * 1024
-const STAGING = 'staging'
+export const JOURNAL_OUTPUT_FILE_STAGING = 'staging'
+const STAGING = JOURNAL_OUTPUT_FILE_STAGING
 const OUTPUT_FILE_ROWS = `instr(payload_json,'"outputFile":"')>0`
 const OUTPUT_FILE = `(CASE WHEN json_valid(payload_json) THEN coalesce(
   json_extract(payload_json,'$.body.output.outputFile'),
   json_extract(payload_json,'$.body.patch.outputFile')) END)`
+
+/** Rows naming one file, through the ownership index once writes build it. */
+export const JOURNAL_OUTPUT_FILE_REFERENCED = `SELECT 1 FROM journal_items WHERE ${OUTPUT_FILE_ROWS} AND ${OUTPUT_FILE}=? LIMIT 1`
 
 export const JOURNAL_OUTPUT_FILE_SCHEMA = `CREATE TABLE IF NOT EXISTS journal_output_file_unreferenced (
   digest TEXT PRIMARY KEY,
@@ -54,6 +48,10 @@ export function registerJournalOutputFileRoot(
   writes = JOURNAL_OUTPUT_FILE_WRITES
 ): void {
   roots.set(db, { root: stateDirectory, writes })
+}
+
+export function journalOutputFileRoot(db: Database.Database): string | undefined {
+  return roots.get(db)?.root
 }
 
 export function journalOutputFilePath(stateDirectory: string, digest: string): string {
@@ -82,27 +80,36 @@ export function moveJournalItemOutputToFile<T extends AgentJournalRenderItem>(
       : body.kind === 'diff'
         ? body.patch
         : undefined
+  const referenced = journalOutputFile(payload)
+  if (root && referenced) {
+    referencedAgain(db, referenced)
+    return item
+  }
   if (
     !writes ||
     !root ||
     !payload ||
     payload.truncated ||
-    journalOutputFile(payload) ||
     payload.head.length <= JOURNAL_ITEM_DETAIL_MAX_BYTES / 3 ||
     !payload.head.isWellFormed()
   ) {
     return item
   }
-  if (Buffer.byteLength(payload.head, 'utf8') <= JOURNAL_ITEM_DETAIL_MAX_BYTES) {
+  const bytes = Buffer.byteLength(payload.head, 'utf8')
+  // A size that disagrees with the text would make every export of it fail.
+  if (bytes <= JOURNAL_ITEM_DETAIL_MAX_BYTES || bytes !== payload.byteLength) {
     return item
   }
   let digest: string
   try {
-    digest = saveJournalOutputFile(root, payload.head)
+    digest =
+      savedJournalOutputFile(root, payload.digest, bytes) ??
+      saveJournalOutputFile(root, payload.head)
   } catch (error) {
     console.warn('[agent-session-journal] kept a large output inline; its file failed', error)
     return item
   }
+  referencedAgain(db, digest)
   const saved: JournalFileBackedPayload = {
     head: boundedHead(payload.head),
     byteLength: payload.byteLength,
@@ -116,19 +123,34 @@ export function moveJournalItemOutputToFile<T extends AgentJournalRenderItem>(
   }
 }
 
-/** Escaping can grow a head up to six times, so the encoded head is what must fit. */
+/** A file named by a row again starts its grace over the next time no row names it. */
+function referencedAgain(db: Database.Database, digest: string): void {
+  db.prepare('DELETE FROM journal_output_file_unreferenced WHERE digest=?').run(digest)
+}
+
+/** Escaping can grow a head up to six times, so the encoded head is what must fit: the longest that does. */
 function boundedHead(text: string): string {
-  let limit = JOURNAL_ITEM_DETAIL_MAX_BYTES - 64 * 1024
-  for (;;) {
-    const head = utf8Head(text, limit)
-    if (
-      Buffer.byteLength(JSON.stringify(head), 'utf8') <=
-      JOURNAL_ITEM_DETAIL_MAX_BYTES - 64 * 1024
-    ) {
-      return head
+  const budget = JOURNAL_ITEM_DETAIL_MAX_BYTES - 64 * 1024
+  const fits = (limit: number) =>
+    Buffer.byteLength(JSON.stringify(utf8Head(text, limit)), 'utf8') <= budget
+  let low = Math.floor(budget / 6)
+  let high = budget
+  while (high - low > 1024) {
+    const middle = Math.floor((low + high) / 2)
+    if (fits(middle)) {
+      low = middle
+    } else {
+      high = middle
     }
-    limit = Math.floor(limit / 2)
   }
+  return utf8Head(text, low)
+}
+
+/** The digest of an existing file of this content, when the payload's sha256 already names one. */
+function savedJournalOutputFile(root: string, digest: string, bytes: number): string | null {
+  return /^[0-9a-f]{64}$/.test(digest) && fileSize(journalOutputFilePath(root, digest)) === bytes
+    ? digest
+    : null
 }
 
 /**
@@ -166,9 +188,15 @@ function saveJournalOutputFile(root: string, text: string): string {
     const digest = hash.digest('hex')
     const path = journalOutputFilePath(root, digest)
     if (fileSize(path) !== bytes) {
-      mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+      const created = mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
       renameFileWithWindowsRetry(temporary, path)
       syncDirectory(dirname(path))
+      // A new folder is durable only once the folder holding it is synced too.
+      for (let folder = created && dirname(path); folder;) {
+        const parent = dirname(folder)
+        syncDirectory(parent)
+        folder = folder === created || parent === folder ? undefined : parent
+      }
     }
     return digest
   } finally {
@@ -195,117 +223,6 @@ function syncDirectory(path: string): void {
   } finally {
     closeSync(fd)
   }
-}
-
-export type JournalOutputFileSweepResult = {
-  kind: 'output-file-sweep'
-  more: boolean
-  files: number
-  bytes: number
-  removed: number
-  freedBytes: number
-}
-
-// One unit per call: each of the 256 digest shards, then the staging folder.
-const SWEEP_UNITS = 257
-const sweepCursors = new WeakMap<Database.Database, number>()
-
-/**
- * One bounded unit of the sweep: removes files no row has referenced for the grace window, and
- * staging files a crash left; a referenced file is never touched.
- */
-export function sweepJournalOutputFiles(
-  db: Database.Database,
-  now: number
-): JournalOutputFileSweepResult {
-  const unit = sweepCursors.get(db) ?? 0
-  const more = unit + 1 < SWEEP_UNITS
-  sweepCursors.set(db, more ? unit + 1 : 0)
-  const result = {
-    kind: 'output-file-sweep' as const,
-    more,
-    files: 0,
-    bytes: 0,
-    removed: 0,
-    freedBytes: 0
-  }
-  const root = roots.get(db)?.root
-  if (!root) {
-    return result
-  }
-  if (unit === SWEEP_UNITS - 1) {
-    for (const entry of listFiles(join(root, DIRECTORY, STAGING))) {
-      // A live write renames within its own transaction; an old one was left by a crash.
-      if (entry.modifiedAt <= now - UNREFERENCED_GRACE_MS) {
-        rmSync(entry.path, { force: true })
-      }
-    }
-    return result
-  }
-  const shard = unit.toString(16).padStart(2, '0')
-  const files = listFiles(join(root, DIRECTORY, shard)).filter((entry) =>
-    /^[0-9a-f]{64}\.txt$/.test(entry.name)
-  )
-  const referenced = db.prepare(
-    `SELECT 1 FROM journal_items WHERE ${OUTPUT_FILE_ROWS} AND ${OUTPUT_FILE}=? LIMIT 1`
-  )
-  const mark = db.prepare(
-    'INSERT OR IGNORE INTO journal_output_file_unreferenced(digest,since) VALUES(?,?)'
-  )
-  const since = db.prepare('SELECT since FROM journal_output_file_unreferenced WHERE digest=?')
-  const clear = db.prepare('DELETE FROM journal_output_file_unreferenced WHERE digest=?')
-  db.prepare(`DELETE FROM journal_output_file_unreferenced WHERE substr(digest,1,2)=?
-    AND digest NOT IN (SELECT value FROM json_each(?))`).run(
-    shard,
-    JSON.stringify(files.map((entry) => entry.name.slice(0, 64)))
-  )
-  for (const { name, path, size } of files) {
-    const digest = name.slice(0, 64)
-    result.files++
-    result.bytes += size
-    if (referenced.get(digest)) {
-      clear.run(digest)
-      continue
-    }
-    mark.run(digest, now)
-    if (Number(since.get(digest)!.since) > now - UNREFERENCED_GRACE_MS) {
-      continue
-    }
-    try {
-      rmSync(path, { force: true, maxRetries: 8, retryDelay: 150 })
-      clear.run(digest)
-      result.removed++
-      result.freedBytes += size
-    } catch (error) {
-      console.warn('[agent-session-journal] could not remove an unreferenced output file', error)
-    }
-  }
-  if (result.removed > 0) {
-    console.info(
-      `[agent-session-journal] removed ${result.removed} unreferenced output files (${result.freedBytes} bytes) in shard ${shard}`
-    )
-  }
-  return result
-}
-
-function listFiles(
-  directory: string
-): { name: string; path: string; size: number; modifiedAt: number }[] {
-  let names: string[]
-  try {
-    names = readdirSync(directory)
-  } catch {
-    return []
-  }
-  return names.flatMap((name) => {
-    const path = join(directory, name)
-    try {
-      const stat = statSync(path)
-      return stat.isFile() ? [{ name, path, size: stat.size, modifiedAt: stat.mtimeMs }] : []
-    } catch {
-      return []
-    }
-  })
 }
 
 /** A saved body whose output moved to its file still equals the whole output it was cut from. */
