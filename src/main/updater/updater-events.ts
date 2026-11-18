@@ -6,6 +6,7 @@ import {
 } from './mac-install/updater-mac-install'
 import { compareVersions } from './releases/updater-fallback'
 import { fetchChangelog } from './releases/updater-changelog'
+import { fetchReleaseHistory } from './releases/updater-release-history'
 import { getUnsupportedSystemUpdate } from './releases/updater-system-requirement'
 import type { UpdaterHandlerContext } from './updater-handler-context'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
@@ -129,10 +130,13 @@ export function registerAutoUpdaterHandlers({
     markUpdateAvailableEventPending(attemptId)
     void (async () => {
       try {
-        const changelog =
-          isLocalBuildCheck() || isPinnedBuildCheck()
-            ? null
-            : await fetchChangelog(info.version, app.getVersion()).catch(() => null)
+        const releaseCheck = !isLocalBuildCheck() && !isPinnedBuildCheck()
+        const [changelog, releaseHistory] = releaseCheck
+          ? await Promise.all([
+              fetchChangelog(info.version, app.getVersion()).catch(() => null),
+              fetchReleaseHistory(info.version, app.getVersion())
+            ])
+          : [null, null]
 
         if (!isActiveUpdateCheckAttempt(attemptId)) {
           return
@@ -162,6 +166,7 @@ export function registerAutoUpdaterHandlers({
             state: 'available',
             version: info.version,
             changelog,
+            ...(releaseHistory ? { releaseHistory } : {}),
             // Tell clients this host cannot self-update before offering a download.
             ...(isExternallyManagedLinuxInstall() ? { externallyManaged: true } : {})
           }

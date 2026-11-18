@@ -37,7 +37,8 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         left.activeNudgeId === right.activeNudgeId &&
         left.releaseUrl === right.releaseUrl &&
         // Changelog objects are recreated per check; dedupe by presence rather than reference.
-        Boolean(left.changelog) === Boolean(right.changelog)
+        Boolean(left.changelog) === Boolean(right.changelog) &&
+        Boolean(left.releaseHistory) === Boolean(right.releaseHistory)
       )
     case 'downloading':
       return (

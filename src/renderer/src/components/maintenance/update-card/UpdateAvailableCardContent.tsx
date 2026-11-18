@@ -1,8 +1,12 @@
 import { X } from 'lucide-react'
-import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
+import type {
+  ChangelogData,
+  UpdateReleaseHistory
+} from '../../../../../shared/updater/update-status-types'
 import { Button } from '../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { UpdateReleaseHistoryPager } from './UpdateReleaseHistoryPager'
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
@@ -24,6 +28,7 @@ function ExternallyManagedNote(): React.JSX.Element {
 export function UpdateAvailableRichContent({
   release,
   releasesBehind,
+  releaseHistory,
   prefersReducedMotion,
   mediaFailed,
   mediaLoaded,
@@ -35,6 +40,7 @@ export function UpdateAvailableRichContent({
 }: {
   release: NonNullable<ChangelogData['release']>
   releasesBehind: number | null
+  releaseHistory?: UpdateReleaseHistory
   prefersReducedMotion: boolean
   mediaFailed: boolean
   mediaLoaded: boolean
@@ -83,7 +89,7 @@ export function UpdateAvailableRichContent({
       )}
       <p className="text-sm text-muted-foreground">
         {release.description}
-        {releasesBehind !== null && releasesBehind > 1 && (
+        {!releaseHistory && releasesBehind !== null && releasesBehind > 1 && (
           <>
             {' '}
             <button
@@ -100,6 +106,7 @@ export function UpdateAvailableRichContent({
           </>
         )}
       </p>
+      {releaseHistory && <UpdateReleaseHistoryPager history={releaseHistory} />}
       <button
         type="button"
         className="text-xs text-muted-foreground underline hover:text-foreground self-start"
@@ -121,12 +128,14 @@ export function UpdateAvailableRichContent({
 export function UpdateAvailableSimpleContent({
   version,
   releaseUrl,
+  releaseHistory,
   onUpdate,
   onClose,
   externallyManaged = false
 }: {
   version: string
   releaseUrl?: string
+  releaseHistory?: UpdateReleaseHistory
   onUpdate: () => void
   onClose: () => void
   externallyManaged?: boolean
@@ -153,6 +162,7 @@ export function UpdateAvailableSimpleContent({
           value0: version
         })}
       </p>
+      {releaseHistory && <UpdateReleaseHistoryPager history={releaseHistory} />}
       {externallyManaged ? (
         <ExternallyManagedNote />
       ) : (
@@ -160,7 +170,7 @@ export function UpdateAvailableSimpleContent({
           {t('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
         </p>
       )}
-      {releaseUrl && (
+      {releaseUrl && !releaseHistory && (
         <button
           type="button"
           className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground self-start"
