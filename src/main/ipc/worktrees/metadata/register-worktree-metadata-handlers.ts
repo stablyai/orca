@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/metadata/display-name-provenance'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
@@ -33,7 +34,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       args: {
         worktreeId: string
         executionHostId?: string
-        updates: Partial<WorktreeMeta>
+        updates: Partial<WorktreeMeta> & DiffCommentBaseMutation
       }
     ) => {
       const executionHostId =

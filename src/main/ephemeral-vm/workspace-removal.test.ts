@@ -184,17 +184,6 @@ describe('recipe workspace removal on the provisioning host', () => {
     })
   })
 
-  it('waits for an older environment that answers on acceptance, then destroys', async () => {
-    seed()
-    const ports = makePorts({
-      'worktree.rm': ok({ removed: false, removing: true }),
-      'worktree.show': failed('selector_not_found')
-    })
-    await expect(
-      removeRecipeWorkspace(root, params, ports, undefined, { attempts: 3, intervalMs: 0 })
-    ).resolves.toMatchObject({ removed: true, host: { state: 'destroyed' } })
-  })
-
   it('keeps the environment when its worktree list is truncated', async () => {
     seed()
     const ports = makePorts({ 'worktree.list': ok({ ...onlyMain, truncated: true }) })

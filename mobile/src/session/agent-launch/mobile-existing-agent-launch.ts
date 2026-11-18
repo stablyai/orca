@@ -31,7 +31,7 @@ import {
 export const PROMPTED_AGENT_LAUNCH_TIMEOUT_MS = 90_000
 
 export const AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE =
-  'Update Orca on your computer to start an agent from your phone.'
+  'Update Orca on this host to start an agent from your phone.'
 
 // host-status-gates keeps re-reading a failed status in the background, so the user need not act.
 export const AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE = "Could not read this host's status. Retrying…"

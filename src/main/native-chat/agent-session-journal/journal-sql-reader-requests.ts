@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { JournalSqlReaderOperation } from './journal-sql-reader-protocol'
 import type { ReaderSlot } from './journal-sql-reader-slot'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 
 /**
  * Each journal reader's oldest unanswered read, recorded on main before the reader gets it. A
@@ -13,7 +14,8 @@ export type JournalReaderRunningRequest = {
   startedAt: number
   /** Requests waiting behind this one on the same reader, kept current. */
   queued: number
-  threadId: number
+  /** Null for a reader hosted in the utility process. */
+  threadId: number | null
 }
 
 type RunningRequestSink = (reader: number, request: JournalReaderRunningRequest | null) => void
@@ -58,6 +60,20 @@ export function recordJournalReaderRequest(
 
 export function readJournalReaderRequests(): (JournalReaderRunningRequest & { reader: number })[] {
   return running.flatMap((request, reader) => (request ? [{ ...request, reader }] : []))
+}
+
+/** Breadcrumb fields naming each reader's oldest unanswered read. */
+export function journalReaderRequestData(
+  requests: readonly (JournalReaderRunningRequest & { reader: number })[]
+): CrashReportBreadcrumbData {
+  const data: CrashReportBreadcrumbData = {}
+  for (const request of requests) {
+    data[`r${request.reader}_readOp`] = request.operation
+    data[`r${request.reader}_readChat`] = request.chat
+    data[`r${request.reader}_readQueued`] = request.queued
+    data[`r${request.reader}_readAgeMs`] = Date.now() - request.startedAt
+  }
+  return data
 }
 
 /** Main's crash diagnostics: called synchronously, before the reader receives the request. */
