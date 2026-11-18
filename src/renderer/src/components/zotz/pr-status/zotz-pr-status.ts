@@ -80,3 +80,23 @@ export function zotzPrStatusLabel(kind: ZotzPrStatusKind, t: Translate): string 
       return t('zotz.pr.open', 'Open')
   }
 }
+
+/**
+ * The cached PR status refreshes slowly; live check counts win while the PR is open.
+ * Merged, closed, draft and conflicts come only from the PR itself.
+ */
+export function zotzLivePrStatus(
+  cached: ZotzPrStatusKind,
+  checks: { loaded: boolean; failed: number; running: number; total: number }
+): ZotzPrStatusKind {
+  if (cached === 'merged' || cached === 'closed' || cached === 'draft' || cached === 'conflicts') {
+    return cached
+  }
+  if (!checks.loaded || checks.total === 0) {
+    return cached
+  }
+  if (checks.failed > 0) {
+    return 'failing'
+  }
+  return checks.running > 0 ? 'pending' : 'ready'
+}

@@ -1,5 +1,11 @@
 import React, { useState } from 'react'
-import { ArrowUpRight, GitMerge, GitPullRequestCreate } from 'lucide-react'
+import {
+  ArrowUpRight,
+  ChevronDown,
+  ChevronRight,
+  GitMerge,
+  GitPullRequestCreate
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -11,8 +17,17 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
 import { mergeGitHubHostedReview } from '../../right-sidebar/hosted-review/provider-actions/hosted-review-github-actions'
-import { useZotzWorktreePr } from '../pr-status/use-zotz-worktree-pr'
-import { ZOTZ_PR_TONE_TEXT, zotzPrStatusLabel, zotzPrTone } from '../pr-status/zotz-pr-status'
+import { useZotzWorktreePr, type ZotzWorktreePr } from '../pr-status/use-zotz-worktree-pr'
+import {
+  ZOTZ_PR_TONE_TEXT,
+  zotzLivePrStatus,
+  zotzPrStatusLabel,
+  zotzPrTone
+} from '../pr-status/zotz-pr-status'
+import { useZotzPrChecksMonitor } from './use-zotz-pr-checks'
+import { ZotzPrChecksList, ZotzPrChecksSummary } from './ZotzPrChecksList'
+import { zotzReviewRef } from './ZotzPrChip'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { sendToZotzConversationAgent, ZOTZ_CREATE_PR_PROMPT } from './zotz-agent-send'
 
 /**
@@ -75,7 +90,33 @@ export function ZotzPrStatusStrip({
     )
   }
 
-  const { pr, githubPR, status } = found
+  return <StripWithPr worktreeId={worktreeId} repo={repo} found={found} />
+}
+
+/** The strip once there is a PR: live check counts, the checks list on demand, and Merge. */
+function StripWithPr({
+  worktreeId,
+  repo,
+  found
+}: {
+  worktreeId: string
+  repo: Repo
+  found: ZotzWorktreePr
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [busy, setBusy] = useState(false)
+  const monitor = useZotzPrChecksMonitor(worktreeId, zotzReviewRef(found))
+  const { pr, githubPR } = found
+  const { counts } = monitor
+  const status = zotzLivePrStatus(found.status, {
+    loaded: monitor.checks !== null,
+    failed: counts.failed,
+    running: counts.running,
+    total: monitor.sorted.length
+  })
+  // Opens on its own when something fails; the user can still fold it.
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null)
+  const open = openOverride ?? counts.failed > 0
   const tone = zotzPrTone(status)
   const canMerge = status === 'ready' && pr.provider === 'github'
   const merge = async (): Promise<void> => {
@@ -103,29 +144,51 @@ export function ZotzPrStatusStrip({
   return (
     <div
       className={cn(
-        'flex shrink-0 items-center gap-2 border-b px-3 py-1.5',
+        'shrink-0 border-b px-3 py-1.5',
         tone === 'success'
           ? 'border-status-success-border bg-status-success-background'
           : 'border-border'
       )}
     >
-      <button
-        type="button"
-        disabled={!pr.url}
-        onClick={() => pr.url && openAppHttpLink(pr.url, { destination: 'system' })}
-        className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-medium hover:bg-accent"
-      >
-        PR #{pr.number}
-        <ArrowUpRight className="size-3" />
-      </button>
-      <span className={cn('min-w-0 flex-1 truncate text-xs font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
-        {zotzPrStatusLabel(status, t)}
-      </span>
-      {canMerge ? (
-        <Button type="button" size="xs" disabled={busy} onClick={() => void merge()}>
-          {busy ? <LoadingSpinner className="size-3" /> : <GitMerge className="size-3" />}
-          {t('zotz.pr.merge', 'Merge')}
-        </Button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={!pr.url}
+          onClick={() => pr.url && openAppHttpLink(pr.url, { destination: 'system' })}
+          className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-medium hover:bg-accent"
+        >
+          PR #{pr.number}
+          <ArrowUpRight className="size-3" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpenOverride(!open)}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <span className={cn('shrink-0 font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
+            {zotzPrStatusLabel(status, t)}
+          </span>
+          <span className="min-w-0 truncate text-muted-foreground">
+            <ZotzPrChecksSummary monitor={monitor} />
+          </span>
+          {open ? (
+            <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+        {canMerge ? (
+          <Button type="button" size="xs" disabled={busy} onClick={() => void merge()}>
+            {busy ? <LoadingSpinner className="size-3" /> : <GitMerge className="size-3" />}
+            {t('zotz.pr.merge', 'Merge')}
+          </Button>
+        ) : null}
+      </div>
+      {open ? (
+        <div className="mt-2">
+          <ZotzPrChecksList worktreeId={worktreeId} monitor={monitor} showSummary={false} />
+        </div>
       ) : null}
     </div>
   )

@@ -43,7 +43,7 @@ export function ZotzPrChecksSummary({
     return <span>{t('zotz.prChecks.none', 'No checks on this pull request')}</span>
   }
   return (
-    <span className="flex flex-wrap items-center gap-x-3">
+    <span className="flex items-center gap-x-2 whitespace-nowrap">
       {counts.failed > 0 ? (
         <span className="font-medium text-destructive">
           {t('zotz.prChecks.failed', '{{count}} failed', { count: counts.failed })}
@@ -60,18 +60,23 @@ export function ZotzPrChecksSummary({
 /** The checks, failed first, with the autofix switch and "Fix errors". */
 export function ZotzPrChecksList({
   worktreeId,
-  monitor
+  monitor,
+  showSummary = true
 }: {
   worktreeId: string
   monitor: ZotzPrChecksMonitor
+  /** Off where the summary already sits in the surrounding header. */
+  showSummary?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const visible = monitor.sorted.slice(0, LIST_LIMIT)
   return (
     <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">
-        <ZotzPrChecksSummary monitor={monitor} />
-      </div>
+      {showSummary ? (
+        <div className="text-xs text-muted-foreground">
+          <ZotzPrChecksSummary monitor={monitor} />
+        </div>
+      ) : null}
       {visible.length > 0 ? (
         <ul className="scrollbar-sleek max-h-72 space-y-0.5 overflow-y-auto">
           {visible.map(({ check, kind }) => (

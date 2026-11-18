@@ -10,7 +10,12 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { useZotzWorktreePr, type ZotzWorktreePr } from '../pr-status/use-zotz-worktree-pr'
-import { ZOTZ_PR_TONE_TEXT, zotzPrStatusLabel, zotzPrTone } from '../pr-status/zotz-pr-status'
+import {
+  ZOTZ_PR_TONE_TEXT,
+  zotzLivePrStatus,
+  zotzPrStatusLabel,
+  zotzPrTone
+} from '../pr-status/zotz-pr-status'
 import { useZotzPrChecksMonitor } from './use-zotz-pr-checks'
 import { ZotzPrChecksList } from './ZotzPrChecksList'
 import type { ZotzReviewRef } from './zotz-pr-fix-checks'
@@ -59,7 +64,13 @@ function ChipBody({
   const review = zotzReviewRef(found)
   const monitor = useZotzPrChecksMonitor(worktree.id, review)
   const total = useAppStore((s) => s.gitBranchLineTotalByWorktree?.[worktree.id] ?? null)
-  const tone = zotzPrTone(found.status)
+  const status = zotzLivePrStatus(found.status, {
+    loaded: monitor.checks !== null,
+    failed: monitor.counts.failed,
+    running: monitor.counts.running,
+    total: monitor.sorted.length
+  })
+  const tone = zotzPrTone(status)
   const branch = worktree.branch.replace(/^refs\/heads\//, '')
   return (
     <div
@@ -77,7 +88,7 @@ function ChipBody({
       <span className="text-muted-foreground">{repoName}</span>
       <span className="min-w-0 truncate rounded-sm bg-muted px-1.5 py-0.5 font-mono">{branch}</span>
       <span className={cn('shrink-0 font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
-        {zotzPrStatusLabel(found.status, t)}
+        {zotzPrStatusLabel(status, t)}
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-2">
         {total && (total.added > 0 || total.removed > 0) ? (
