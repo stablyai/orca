@@ -36,6 +36,7 @@ import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-m
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type WorktreeContextMenuProps = {
   worktree: Worktree
@@ -117,7 +118,7 @@ export function useWorktreeContextMenuModel({
   const showsUnread = useAppStore((s) =>
     menuOpen ? selectWorkspaceShowsUnread(s, worktree) : worktree.isUnread
   )
-  const agentStatusByPaneKey = useAppStore((s) =>
+  const agentStatusByPaneKey = useAppStoreWithChannels((s) =>
     selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
   )
   const structuredChatSleptAtByPaneKey = useAppStore((s) =>

@@ -8,6 +8,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Build in-window snapshots from the store; pop-out windows instead receive the bridge’s serialized version of the same builder. */
 export function useLiveDashboardSnapshot(): DashboardSnapshot {
@@ -15,7 +16,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const agentStatusByPaneKey = useAppStoreWithChannels((s) => s.agentStatusByPaneKey)
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const runtimeAgentOrchestrationByPaneKey = useAppStore(
     (s) => s.runtimeAgentOrchestrationByPaneKey
@@ -46,7 +47,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const removedRuntimeEnvironmentIds = useAppStore((s) => s.removedRuntimeEnvironmentIds)
   const paneForegroundAgentByPaneKey = useAppStore((s) => s.paneForegroundAgentByPaneKey)
   // Freshness can change buckets without map writes; the epoch invalidates stale-decay memos.
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const agentStatusEpoch = useAppStoreWithChannels((s) => s.agentStatusEpoch)
   const chatNames = useStructuredChatTabNames()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)

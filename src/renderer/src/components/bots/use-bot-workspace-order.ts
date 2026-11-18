@@ -6,11 +6,12 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { rankWorktreesForSort } from '../../../../shared/sidebar-list/sorting/smart-sort'
 import { ranksFollowPersistedOrder } from '../../../../shared/sidebar-list/sorting/smart-sort-phase'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** A bot's workspaces in the project list's Smart order, held still while the pointer is on the bots list. */
 export function useBotWorkspaceOrder(worktrees: readonly Worktree[]): Worktree[] {
   // Re-rank when the project list does, so a bot's lines never move more often than its rows.
-  const settledSortEpoch = useAppStore((s) => s.settledSortEpoch)
+  const settledSortEpoch = useAppStoreWithChannels((s) => s.settledSortEpoch)
   const sortOrderEpoch = useAppStore((s) => s.sortOrderEpoch)
   // Latched like the project list: once live, Smart stays live after the activity ends.
   const latchedRef = useRef(false)

@@ -23,6 +23,7 @@ import {
 } from './ai-vault-original-pane-index'
 import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
@@ -34,7 +35,7 @@ export function useAiVaultOriginalPaneActions(): {
   jumpToOriginalPane: (session: AiVaultSession) => Promise<boolean>
   jumpToWorktree: (worktreeId: string) => void
 } {
-  const originalPaneLookupState = useAppStore(
+  const originalPaneLookupState = useAppStoreWithChannels(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
       agentConversationsByPaneKey: s.agentConversationsByPaneKey,

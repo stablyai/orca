@@ -20,6 +20,7 @@ import {
   getWorktreeIdFromHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // Compute settled order synchronously; selection side effects must not reorder rows under the user.
 function useSettledSidebarWorktreeSortOrder(args: {
@@ -28,7 +29,7 @@ function useSettledSidebarWorktreeSortOrder(args: {
 }): string[] {
   const { repoMap, sortBy } = args
   // Coalesce sort bumps so bursts cannot make rows jump.
-  const settledSortEpoch = useAppStore((s) => s.settledSortEpoch)
+  const settledSortEpoch = useAppStoreWithChannels((s) => s.settledSortEpoch)
   const sortOrderEpoch = useAppStore((s) => s.sortOrderEpoch)
 
   // Why a latching ref: a live signal makes Smart authoritative for the session, even after that activity ends.

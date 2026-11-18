@@ -31,6 +31,7 @@ import {
   subscribeHiddenVmCheckouts,
   withoutHiddenVmWorktrees
 } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 
@@ -84,7 +85,9 @@ export function useVisibleSidebarWorktrees(args: {
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const botListedWorktreeIdentities = useBotListedWorktreeIdentities()
   const repos = useAppStore((s) => s.repos)
-  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  const agentStatusEpoch = useAppStoreWithChannels((s) =>
+    !showSleepingWorkspaces ? s.agentStatusEpoch : 0
+  )
   // Opt-out lists must skip the clock so they cannot evict the sample shared by live lists.
   const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
   const selectPairedDevices = useMemo(

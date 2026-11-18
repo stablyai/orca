@@ -1,21 +1,17 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
 import type { StoreSetArgs } from '../../../diagnostics/react-commit-cascade-write-probe'
+import { createAppStoreNotificationRouter } from '../../../channels/app-store-notification-router'
+import { isChannelOnlyWrite } from '../../../channels/app-store-channels'
 
 /** Outermost policy: finish transformations and getters before publishing mutable keyed owners. */
 export function withAgentStatusOwnership(
   createState: StateCreator<AppState, [], []>
 ): StateCreator<AppState, [], []> {
   return (set, get, api) => {
-    const subscribe = api.subscribe
-    api.subscribe = (listener) =>
-      subscribe((...args) => {
-        try {
-          listener(...args)
-        } catch (error) {
-          console.error('Store observer failed', error)
-        }
-      })
+    const router = createAppStoreNotificationRouter(api.subscribe)
+    api.subscribe = router.subscribe
+    Object.assign(api, { subscribeRootSelector: router.subscribeRootSelector })
     const wrap =
       (write: typeof set): typeof set =>
       (...args: StoreSetArgs<AppState>): void => {
@@ -44,6 +40,9 @@ export function withAgentStatusOwnership(
         )
         publishProjection()
         publishStatuses()
+        router.classifyNextWrite(
+          args[1] !== true && !fullResync && isChannelOnlyWrite(current, next, requested)
+        )
         write(next, true)
         statuses.projection.notify()
       }

@@ -27,6 +27,7 @@ import { botRowLineText, botRowReplyingAt } from '../../../../shared/bots/bot-ro
 import { countLiveBotWorkspaces } from '../../../../shared/bots/bot-sidebar-workspaces'
 import { useBotWorkerWorkspaces, useLiveWorkspaceStatuses } from './use-bot-worker-statuses'
 import { useBotOwnChats } from '@/lib/bot-own-chats'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 import type { NamedUsageLimitStop } from '../../../../shared/bots/bot-usage-limit-stop'
 import { useBotUsageLimitStops } from './use-bot-usage-limit-stops'
 import { usageLimitStopText } from './BotUsageLimitMark'
@@ -60,7 +61,7 @@ export function useBotRowLine(
     [bot.paused, bot.chatSessionId, links, chats]
   )
   // Its chats' and threads' own status rows: a settled chat has no tab, so the home's row list drops it.
-  const ownEntries = useAppStore(
+  const ownEntries = useAppStoreWithChannels(
     useShallow((state) =>
       paneKeys.flatMap((paneKey) => {
         const entry = state.agentStatusByPaneKey.get(paneKey)

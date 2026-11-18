@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useAppStore } from '../../../store/index'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import {
   getTerminalTabActivityFlags,
@@ -8,6 +7,7 @@ import {
   type TerminalTabActivityFlags,
   type TerminalTabActivityStatus
 } from './terminal-tab-activity-status'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type TerminalTabActivity = {
   activityStatus: TerminalTabActivityStatus
@@ -68,7 +68,7 @@ export function useTerminalTabActivity(
 ): TerminalTabActivity {
   // Every store write reruns this per mounted tab; skip title heuristics when this tab's inputs held.
   const [selectActivityStatus] = useState(createActivityStatusSelector)
-  const activityStatus = useAppStore((s) =>
+  const activityStatus = useAppStoreWithChannels((s) =>
     selectActivityStatus({
       tab,
       agentStatusByPaneKey: s.agentStatusByPaneKey,
@@ -78,7 +78,7 @@ export function useTerminalTabActivity(
       terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
     })
   )
-  const programProgress = useAppStore((s) =>
+  const programProgress = useAppStoreWithChannels((s) =>
     resolveTerminalTabProgramProgress({
       tabId: tab.id,
       status: activityStatus,

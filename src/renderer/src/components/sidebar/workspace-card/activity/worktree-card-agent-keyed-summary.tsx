@@ -5,6 +5,7 @@ import { recomputeOn } from '@/lib/recompute-on'
 import { useAgentPresentation } from './useWorktreeAgentRows'
 import { createRootsUnreadSelector } from './worktree-card-agent-ack-inputs'
 import { CompactAgentSummaryButton } from './worktree-card-compact-agents'
+import { useAppStateValueWithChannels } from '@/store/retained-views/app-state-view'
 
 /** The compact pill over a card's root agents, from keyed groups unless rows must regroup. */
 export function KeyedSummary({
@@ -25,7 +26,7 @@ export function KeyedSummary({
     `groups\0${worktreeId}`,
     useCallback((p) => p.display.summary(worktreeId), [worktreeId])
   )
-  const projection = useAppStateValue((s) => s.agentStatusByPaneKey.projection)
+  const projection = useAppStateValueWithChannels((s) => s.agentStatusByPaneKey.projection)
   const revision = useAgentPresentation(
     `list\0${worktreeId}`,
     useCallback((p) => p.revision(worktreeId), [worktreeId])

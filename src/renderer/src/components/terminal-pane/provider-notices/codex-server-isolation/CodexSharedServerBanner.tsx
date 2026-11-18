@@ -19,6 +19,7 @@ import {
   PaneTopWarningBanner
 } from '../../appearance/pane-top-banner/PaneTopWarningBanner'
 import { retireCodexTerminalServerIsolationNotice } from './codex-terminal-server-isolation-notice'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // Why a ladder: Codex joins or starts the server a few seconds after its process appears.
 const CHECK_DELAYS_MS = [1_000, 4_000, 10_000] as const
@@ -101,7 +102,7 @@ export function CodexSharedServerBanner({
     (state) => state.settings !== null && isCodexSharedServerWarningEnabled(state.settings)
   )
   // Why either signal: a typed codex is seen by the process read, or by its hooks when that read has no command marks.
-  const codexInPane = useAppStore(
+  const codexInPane = useAppStoreWithChannels(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'codex' ||
       state.agentStatusByPaneKey.get(paneKey)?.agentType === 'codex'

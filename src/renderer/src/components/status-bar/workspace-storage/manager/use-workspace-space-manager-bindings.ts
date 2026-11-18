@@ -9,6 +9,7 @@ import type {
 } from './workspace-space-presentation'
 import type { WorkspaceGitRefreshState } from './workspace-space-manager-state-types'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useWorkspaceSpaceManagerBindings() {
   const analysis = useAppStore((state) => state.workspaceSpaceAnalysis)
@@ -26,10 +27,10 @@ export function useWorkspaceSpaceManagerBindings() {
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
-  const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
+  const agentStatusByPaneKey = useAppStoreWithChannels((state) => state.agentStatusByPaneKey)
   const migrationUnsupportedByPtyId = useAppStore((state) => state.migrationUnsupportedByPtyId)
   const runtimePaneTitlesByTabId = useAppStore((state) => state.runtimePaneTitlesByTabId)
-  const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)
+  const agentStatusEpoch = useAppStoreWithChannels((state) => state.agentStatusEpoch)
   const openFiles = useAppStore((state) => state.openFiles)
   const editorDrafts = useAppStore((state) => state.editorDrafts)
   const browserTabsByWorktree = useAppStore((state) => state.browserTabsByWorktree)

@@ -4,8 +4,10 @@ import { withBrowserInitializationPresentations } from './slices/browser/hosts/b
 import { registerTerminalNoticeShutdownReader } from '@/components/terminal-pane/pty-transport/delivery/pty-notice-exit'
 import { registerStructuredSelectionCatalogStore } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { canOfferHttpLinkGroupAction } from '@/lib/browser/navigation/http-link-in-group-availability'
-import { create, type StateCreator } from 'zustand'
+import { useCallback, useSyncExternalStore } from 'react'
+import { createStore, type StateCreator } from 'zustand'
 import type { AppState } from './types'
+import { channelApi, type AppStore, type RootSelectorState } from './channels/app-store-channels'
 import { createRepoSlice } from './repos/create-repo-slice'
 import { createSparsePresetsSlice } from './slices/worktrees/create/sparse-presets'
 import { createWorktreeSlice } from './slices/worktrees/create-worktree-slice'
@@ -69,7 +71,6 @@ import {
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/browser/navigation/http-link-routing'
 import { registerAppHttpLinkStateAccessor } from '@/lib/browser/navigation/app-http-link-open'
-import { installStoreListenerCensus } from './diagnostics/store-listener-census'
 import { installSettledSortEpoch } from './slices/ui/settled-sort-epoch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { withReactCommitCascadeWriteProbe } from './diagnostics/react-commit-cascade-write-probe'
@@ -96,7 +97,7 @@ const withAppStoreWritePolicies = (createState: StateCreator<AppState, [], []>) 
 
 // Presentation ownership follows accepted buffer reconciliation; probes see the caller’s patch.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
-export const useAppStore = create<AppState>()(
+const appStoreApi = createStore<AppState>()(
   withAgentStatusOwnership(
     withBrowserInitializationPresentations(
       withEditorBufferRecords(
@@ -107,8 +108,6 @@ export const useAppStore = create<AppState>()(
             if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
               installSettledSortEpoch(a[2])
             }
-            // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
-            installStoreListenerCensus(a[2])
             return {
               ...createRepoSlice(...a),
               ...createSparsePresetsSlice(...a),
@@ -172,6 +171,18 @@ export const useAppStore = create<AppState>()(
     )
   )
 )
+
+const { subscribeRootSelector } = channelApi(appStoreApi)
+
+// Why not zustand's bound hook: root selectors register apart from other subscribers, so a
+// channel-only write can skip them; selection itself matches zustand's useStore.
+function useAppStoreSelector<U>(selector: (state: RootSelectorState) => U): U {
+  const read = useCallback(() => selector(appStoreApi.getState()), [selector])
+  const readInitial = useCallback(() => selector(appStoreApi.getInitialState()), [selector])
+  return useSyncExternalStore(subscribeRootSelector, read, readInitial)
+}
+
+export const useAppStore: AppStore = Object.assign(useAppStoreSelector, appStoreApi)
 
 registerTerminalNoticeShutdownReader(
   (ptyId) => (useAppStore.getState().pendingPtyShutdownIds[ptyId] ?? 0) > 0

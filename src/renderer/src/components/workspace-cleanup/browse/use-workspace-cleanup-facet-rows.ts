@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
 import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-status/presentation/workspace-board-status-label'
 import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
@@ -39,6 +38,7 @@ import {
 } from '../query/workspace-cleanup-facet-row-caches'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type WorkspaceCleanupFacetRows = {
   rows: WorkspaceCleanupFacets[]
@@ -91,7 +91,7 @@ export function useWorkspaceCleanupFacetRows({
   facetPanelOpen?: boolean
 }): WorkspaceCleanupFacetRows {
   const languageRevision = useUiLanguageRevision()
-  const sources = useAppStore(
+  const sources = useAppStoreWithChannels(
     useShallow((s) => ({
       worktreesByRepo: selectWorktreesByRepo(s),
       hostedReviewCache: s.hostedReviewCache,

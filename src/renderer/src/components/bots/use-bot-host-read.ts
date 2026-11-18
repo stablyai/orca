@@ -15,6 +15,7 @@ import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind } from '../../../../shared/bots/bot-change-scope'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type BotReadEntry<T> = {
   bot: BotRef
@@ -251,7 +252,7 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
           .join('|')
       : ''
   )
-  const chatState = useAppStore((s) =>
+  const chatState = useAppStoreWithChannels((s) =>
     followsChats && chatPaneKey ? s.agentStatusByPaneKey.get(chatPaneKey)?.state : undefined
   )
   const subscribe = useCallback(

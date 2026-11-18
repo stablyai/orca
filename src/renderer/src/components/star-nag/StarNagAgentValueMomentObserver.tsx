@@ -4,6 +4,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts
 import { agentTurnEndedUncleanly } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { useAppStore } from '@/store'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // Leave a quiet window after completion so prompts cannot interrupt follow-up typing or status churn.
 const QUIET_WINDOW_MS = 1200
@@ -44,7 +45,7 @@ function isTypingKeyEvent(event: KeyboardEvent): boolean {
 }
 
 export function StarNagAgentValueMomentObserver(): null {
-  const projection = useAppStore((state) => state.agentStatusByPaneKey.projection)
+  const projection = useAppStoreWithChannels((state) => state.agentStatusByPaneKey.projection)
   const pendingRef = useRef(false)
   const requestedRef = useRef(false)
   const preparationRef = useRef<AgentValueMomentPreparation | null>(null)

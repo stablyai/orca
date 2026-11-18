@@ -30,6 +30,7 @@ import type {
   ThreadReadFilter
 } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 const EMPTY_THREADS: AgentPaneThread[] = []
@@ -47,7 +48,7 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
 } {
   const storeData = useAllAgentPaneThreadStoreData()
   // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const agentStatusEpoch = useAppStoreWithChannels((s) => s.agentStatusEpoch)
   const chatNames = useStructuredChatTabNames()
 
   // Per-hook caches preserve unchanged pane/event/thread identities across status writes, including repeated StrictMode/deferred builds.
