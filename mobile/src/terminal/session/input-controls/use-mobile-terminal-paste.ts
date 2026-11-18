@@ -1,8 +1,14 @@
 import { separateImagePasteFromFollowingText } from '../../../../../src/shared/terminal/input/image-paste-following-text'
 import {
+  BRACKETED_PASTE_END,
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText
 } from '../../../../../src/shared/terminal/input/terminal-bracketed-paste-text'
+import {
+  isTerminalInputTooLargeWithYield,
+  splitTerminalInputChunks
+} from '../../../../../src/shared/terminal/input/terminal-input'
+import { TERMINAL_LIVE_INPUT_MAX_BYTES } from '../../live-input/terminal-live-input'
 import { useCallback, type RefObject } from 'react'
 import { translate } from '../../../i18n/mobile-i18n'
 import { terminalInputSend } from '../../host-operations/mobile-terminal-operations'
@@ -108,12 +114,12 @@ export function useMobileTerminalPaste({
         )
       }
 
-      const wrappedBytes = new TextEncoder().encode(payload).byteLength
-      if (wrappedBytes > 256 * 1024) {
+      // Desktop's 16 MiB paste cap; each send stays within the phone's per-request size.
+      if (await isTerminalInputTooLargeWithYield(payload)) {
         onError()
-        console.warn('[mobile-clip] paste oversized', { wrappedBytes })
+        console.warn('[mobile-clip] paste oversized', { length: payload.length })
         showToast(
-          translate('session.useTerminalPaste.pasteTooLarge', 'Paste too large (max 256 KiB)'),
+          translate('session.useTerminalPaste.pasteTooLarge', 'Paste too large (max 16 MiB)'),
           1500
         )
         return
@@ -148,15 +154,26 @@ export function useMobileTerminalPaste({
         showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
         return
       }
-      const response = await sendTerminalUserInput(currentClient, {
-        terminal: targetHandle,
-        text: payload,
-        enter: false,
-        ...(deviceTokenRef.current
-          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-          : {})
-      })
-      if (terminalInputSend.interpret(response) !== true) {
+      const sendChunk = (text: string) =>
+        sendTerminalUserInput(currentClient, {
+          terminal: targetHandle,
+          text,
+          enter: false,
+          ...(deviceTokenRef.current
+            ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+            : {})
+        }).then(
+          (response) => terminalInputSend.interpret(response) === true,
+          () => false
+        )
+      // Queue every chunk at once so typing during a long paste lands after it, never inside it.
+      const chunks = splitTerminalInputChunks(payload, TERMINAL_LIVE_INPUT_MAX_BYTES)
+      const accepted = await Promise.all(chunks.map(sendChunk))
+      if (accepted.includes(false)) {
+        // Like desktop, close a bracketed paste whose start landed so the program leaves paste mode.
+        if (accepted[0] && !accepted.at(-1) && payload.endsWith(BRACKETED_PASTE_END)) {
+          await sendChunk(BRACKETED_PASTE_END)
+        }
         throw new Error('Terminal input was not accepted')
       }
       onSuccess()

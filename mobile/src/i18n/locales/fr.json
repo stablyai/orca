@@ -2713,7 +2713,7 @@
       "disconnected": "Échec du collage (déconnexion)",
       "imageTooLarge": "Image trop volumineuse pour être collée",
       "pasteFailed": "Échec du collage",
-      "pasteTooLarge": "Contenu à coller trop volumineux (max. 256 Kio)",
+      "pasteTooLarge": "Contenu à coller trop volumineux (max. 16 Mio)",
       "terminalChanged": "Collage annulé (changement de terminal)"
     },
     "worktreeLabel": {
