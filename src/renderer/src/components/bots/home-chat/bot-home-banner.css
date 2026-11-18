@@ -63,7 +63,7 @@
   }
 }
 
-/* Match the existing narrow-pane breakpoint without taking space from the pane actions. */
+/* Hide the entire pill at a header container content width of 260 CSS px or less. */
 .pane-title-bar:has(> [data-bot-home-banner]) {
   container-type: inline-size;
 }

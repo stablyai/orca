@@ -1,4 +1,4 @@
-// The bot's floating name pill over its Home Chat (UX variant 3): full near the top, its avatar alone once scrolled.
+// Home's pill shrinks to its avatar on scroll; header containers at most 260 CSS px wide hide it entirely.
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
