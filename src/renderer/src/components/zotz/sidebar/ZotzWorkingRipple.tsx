@@ -59,12 +59,12 @@ export function ZotzWorkingRipple(): React.JSX.Element {
     >
       <defs>
         <linearGradient id={fadeId} x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0" stopColor="white" stopOpacity="0" />
-          <stop offset="0.3" stopColor="white" stopOpacity="1" />
-          <stop offset="0.7" stopColor="white" stopOpacity="1" />
-          <stop offset="1" stopColor="white" stopOpacity="0" />
+          <stop offset="0" stopColor="currentColor" stopOpacity="0" />
+          <stop offset="0.3" stopColor="currentColor" stopOpacity="1" />
+          <stop offset="0.7" stopColor="currentColor" stopOpacity="1" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
-        <mask id={maskId}>
+        <mask id={maskId} style={{ maskType: 'alpha' }}>
           <rect width={WIDTH} height={HEIGHT} fill={`url(#${fadeId})`} />
         </mask>
       </defs>
