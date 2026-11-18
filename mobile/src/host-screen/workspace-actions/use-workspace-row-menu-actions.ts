@@ -109,13 +109,17 @@ export function useWorkspaceRowMenuActions(args: {
         close()
       }
     },
-    {
-      id: 'moveToStatus',
-      label: t('hostScreen.hostScreenOverlays.moveToStatus', 'Move to Status'),
-      icon: Kanban,
-      disabled: serverUnreachable,
-      onPress: () => onMoveToStatus(row)
-    },
+    // A server row's columns are that server's own, which the desktop does not relay to the phone yet.
+    ...(server.server
+      ? []
+      : [
+          {
+            id: 'moveToStatus',
+            label: t('hostScreen.hostScreenOverlays.moveToStatus', 'Move to Status'),
+            icon: Kanban,
+            onPress: () => onMoveToStatus(row)
+          }
+        ]),
     {
       id: 'delete',
       label: t('common.delete', 'Delete'),

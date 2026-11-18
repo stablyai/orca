@@ -142,8 +142,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
           ) : actionTarget && statusTarget === actionTarget ? (
             <WorkspaceStatusSheet
               row={actionTarget}
-              desktopStatuses={state.view.workspaceStatuses}
-              serverClient={actionServer.server?.client ?? null}
+              statuses={state.view.workspaceStatuses}
               onPick={actions.setWorktreeStatus}
               onClose={closeActionSheet}
             />

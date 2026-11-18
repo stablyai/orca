@@ -833,8 +833,7 @@
       "markUnread": "Mark Unread",
       "muteNotifications": "Mute Notifications",
       "unmuteNotifications": "Unmute Notifications",
-      "moveToStatus": "Move to Status",
-      "statusesUnreadable": "Couldn't read this server's statuses. Try again in a moment."
+      "moveToStatus": "Move to Status"
     },
     "workspaceRenameSheet": {
       "title": "Rename Workspace",

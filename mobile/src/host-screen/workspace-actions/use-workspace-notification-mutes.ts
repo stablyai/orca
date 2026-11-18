@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
@@ -27,6 +27,8 @@ export function useWorkspaceNotificationMutes(args: {
   // Kept with the client it was read from, so another host's map is never shown.
   const [read, setRead] = useState<{ client: RpcClient; mutes: Mutes | null } | null>(null)
   const mutes = read && read.client === client ? read.mutes : null
+  // Each toggle reads then replaces the whole map, so toggles run one after another.
+  const queueRef = useRef<Promise<void>>(Promise.resolve())
 
   useEffect(() => {
     if (!menuOpen || !client || connState !== 'connected') {
@@ -51,7 +53,8 @@ export function useWorkspaceNotificationMutes(args: {
         return
       }
       // The write replaces the desktop's whole map, so it starts from a fresh read, not the menu's copy.
-      void readMutes(client)
+      queueRef.current = queueRef.current
+        .then(() => readMutes(client))
         .then(async (fresh) => {
           if (!fresh) {
             return
