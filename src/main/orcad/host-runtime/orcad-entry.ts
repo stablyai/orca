@@ -1,6 +1,7 @@
 import process from 'node:process'
 import { startBackendCore } from '../../backend/core-runtime'
 import { resolveUserDataPath } from './orcad-app-paths'
+import { loadGuestWindowsDriveMounts } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { prepareOrcadCliLauncher } from '../serve-startup/orcad-cli-launcher'
 import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
 import { prepareOrcadSecretStoreAndMigrate } from '../credentials/orcad-secret-store-startup'
@@ -16,6 +17,8 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   const userDataPath = resolveUserDataPath()
   // Override inherited data roots so CLI-shared Codex homes resolve on this host.
   process.env.ORCA_USER_DATA_PATH = userDataPath
+  // WSL host: read the guest's Windows drive mounts before any agent detection or launch needs them.
+  await loadGuestWindowsDriveMounts()
   return startBackendCore({
     userDataPath,
     supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1',
