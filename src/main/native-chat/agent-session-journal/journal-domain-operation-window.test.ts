@@ -303,3 +303,21 @@ it('drops output from a row whose input is large too, when the reader asks for n
     output: { head: '', byteLength: 35_651_584, truncated: true }
   })
 })
+
+it('refuses a row past a whole reply that cutting cannot shrink, before decoding it', async () => {
+  const { f, reads } = await chat(1)
+  await f.run({
+    kind: 'item',
+    identity: identity('huge-input'),
+    options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+    body: {
+      kind: 'tool-call',
+      name: 'Write',
+      input: { content: 'i'.repeat(65 * 1024 * 1024) },
+      state: 'completed'
+    }
+  })
+  await expect(
+    reads.operationWindow({ afterSequence: 0, withoutToolOutput: true })
+  ).rejects.toThrow(/exceeds 67108864 bytes/)
+})
