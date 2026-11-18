@@ -2,7 +2,6 @@ import type { Page } from '@stablyai/playwright-test'
 import { test } from '../../../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
 import { serverCall } from '../host-lifecycle/orcad-convert-flow'
-import { openFileExplorer } from '../../../editor/file-explorer/file-explorer'
 import {
   activateManagedWorkspace,
   launchConvertedProfile,
@@ -55,7 +54,6 @@ for (const workspace of ['worktree', 'folder'] as const) {
       const worktreeId = workspace === 'folder' ? folderWorkspaceKey(folderId) : seeded.worktreeId
       const rootPath = workspace === 'folder' ? folderPath : host.remoteRepoPath
       await activateManagedWorkspace(page, worktreeId, environmentId)
-      await openFileExplorer(page)
       await page.evaluate(() => {
         window.addEventListener('orca:worktree-file-change', (event) => {
           if (event instanceof CustomEvent) {

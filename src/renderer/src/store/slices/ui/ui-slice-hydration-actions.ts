@@ -128,7 +128,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             s.combinedDiffFileTreeWidth
           ),
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
-          rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : false,
+          rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
           ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
           activityBarPosition: sanitizeActivityBarPosition(ui.activityBarPosition),
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
