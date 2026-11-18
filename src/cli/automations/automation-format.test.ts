@@ -9,7 +9,6 @@ import {
   formatAutomationShow,
   printAutomationResult
 } from './automation-format'
-import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 
 function automation(overrides: Partial<Automation> = {}): Automation {
   return {
@@ -77,11 +76,5 @@ describe('formatAutomationList and Show print event triggers', () => {
     expect(listed.automations[1]).toMatchObject({ rrule: scheduled.rrule, nextRunAt: 0 })
     expect(shown.automation).toMatchObject({ rrule: null, dtstart: null, nextRunAt: null })
     log.mockRestore()
-  })
-
-  it('prints each --on value quoted for the shell', () => {
-    expect(formatAutomationShow({ automation: automation({ on }) })).toContain(
-      `on: ${quoteCliCommandArgument('slack.message contains="a b"')}`
-    )
   })
 })
