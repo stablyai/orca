@@ -26,7 +26,7 @@ async function collect(): Promise<void> {
   }
 }
 
-async function blockedSubscriber(sessionId = SESSION, now = (): number => Date.now()) {
+async function blockedSubscriber(sessionId = SESSION) {
   const journal = await journals.open({
     identity: {
       sessionId,
@@ -37,7 +37,7 @@ async function blockedSubscriber(sessionId = SESSION, now = (): number => Date.n
     },
     stateDirectory: join(fixture.root, sessionId)
   })
-  const subscribers = new AgentSessionSubscribers({ now })
+  const subscribers = new AgentSessionSubscribers()
   const ends: unknown[] = []
   const transport = Promise.withResolvers<void>()
   let blocked = false
@@ -60,7 +60,7 @@ async function blockedSubscriber(sessionId = SESSION, now = (): number => Date.n
   blocked = true
   const snapshots: WeakRef<object>[] = []
   // Distinct growing text, as a streaming reply publishes it.
-  const publish = (index: number): void => {
+  const publish = (index: number, characters = 32 * 1024): void => {
     const items: AgentJournalRenderItem[] = [
       {
         itemId: 'orca:text',
@@ -71,7 +71,7 @@ async function blockedSubscriber(sessionId = SESSION, now = (): number => Date.n
         body: {
           kind: 'message',
           role: 'assistant',
-          blocks: [{ type: 'text', text: `${index}:`.padEnd(32 * 1024, 'x') }]
+          blocks: [{ type: 'text', text: `${index}:`.padEnd(characters, 'x') }]
         }
       }
     ]
@@ -133,26 +133,20 @@ it('ends the stream instead of holding live text past the chat budget', async ()
   }
 })
 
-it('ends the longest-waiting holder, not a newer stream, when the chat budget is full', async () => {
-  let clock = 0
-  const stalled = await blockedSubscriber('stalled-session', () => clock)
-  const fresh = await blockedSubscriber('fresh-session', () => clock)
-  stalled.publish(0)
-  await Promise.resolve()
-  stalled.publish(1)
-  clock = 1_000
-  fresh.publish(0)
-  await Promise.resolve()
-  const others = chatLiveTextRetainedBytes.claim(
-    CHAT_LIVE_TEXT_RETAINED_BYTES - chatLiveTextRetainedBytes.reading().bytes
-  )
+it('ends only the stream whose own live text outgrows its share', async () => {
+  const large = await blockedSubscriber('large-session')
+  const small = await blockedSubscriber('small-session')
   try {
-    fresh.publish(1)
-    expect(stalled.ends).toHaveLength(1)
-    expect(fresh.ends).toHaveLength(0)
+    // 3M characters each: the delivering snapshot plus a waiting one pass 8 MiB at two bytes each.
+    large.publish(0, 3_000_000)
+    small.publish(0)
+    await Promise.resolve()
+    large.publish(1, 3_000_000)
+    small.publish(1)
+    expect(large.ends).toHaveLength(1)
+    expect(small.ends).toHaveLength(0)
   } finally {
-    others?.()
-    stalled.release()
-    fresh.release()
+    large.release()
+    small.release()
   }
 })

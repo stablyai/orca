@@ -7,6 +7,8 @@ import { createRetainedBytesBudget, observeRetainedBytes } from '../../memory/re
 export const CHAT_PATH_RETAINED_BYTES = 256 * 2 ** 20
 /** Live text waiting behind subscriber deliveries; each shared snapshot is charged once. */
 export const CHAT_LIVE_TEXT_RETAINED_BYTES = 128 * 2 ** 20
+/** One subscriber's live text being delivered plus waiting; past it, that stream ends itself. */
+export const CHAT_LIVE_TEXT_SUBSCRIBER_BYTES = 8 * 2 ** 20
 
 export const chatPathRetainedBytes = createRetainedBytesBudget({
   maxBytes: CHAT_PATH_RETAINED_BYTES

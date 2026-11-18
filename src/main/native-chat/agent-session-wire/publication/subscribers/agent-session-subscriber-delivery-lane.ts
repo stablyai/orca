@@ -4,6 +4,7 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../age
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import {
   ChatRetainedBytesRefused,
+  CHAT_LIVE_TEXT_SUBSCRIBER_BYTES,
   claimSharedLiveText,
   heldBytesOf,
   noteChatRetainedBytesRefused
@@ -59,9 +60,6 @@ export type SubscriberDeliveryRetention = {
  * transport retains at most the active delivery, one catch-up, one background refresh and the
  * latest live text per run of ordered work, never every superseded snapshot.
  */
-/** Lanes whose waiting live text holds a charge; read only when the budget refuses one. */
-const charged = new Set<SubscriberDeliveryLane>()
-
 export class SubscriberDeliveryLane {
   private readonly pending: LaneEntry[] = []
   private active: LaneEntry | undefined
@@ -108,6 +106,9 @@ export class SubscriberDeliveryLane {
    * across ordered work: an opening or snapshot republishes the current live text itself.
    */
   liveText(liveText: SubscriberLiveText): void {
+    if (this.stopped.aborted) {
+      return
+    }
     const index = this.pending.findIndex((entry) => entry.kind === 'live-text')
     const replaced = index === -1 ? undefined : this.pending.splice(index, 1)[0]
     if (replaced?.kind === 'live-text') {
@@ -118,42 +119,16 @@ export class SubscriberDeliveryLane {
       this.add({ kind: 'live-text', since, liveText, release: () => {} })
       return
     }
-    const claim = this.claimLiveText(liveText.items, since)
-    if (!claim) {
+    // A stream holding more than its share ends itself; the shared budget only refuses a newcomer.
+    const delivering = this.active?.kind === 'live-text' ? this.active.liveText.items : undefined
+    const held = heldBytesOf(liveText.items) + (delivering ? heldBytesOf(delivering) : 0)
+    const release = held <= CHAT_LIVE_TEXT_SUBSCRIBER_BYTES && claimSharedLiveText(liveText.items)
+    if (!release) {
       // The client resumes from its cursor and reads the text again.
       this.refuse()
       return
     }
-    charged.add(this)
-    const release = (): void => {
-      charged.delete(this)
-      claim()
-    }
     this.add({ kind: 'live-text', since, liveText, release })
-  }
-
-  /** Over the budget, the longest-waiting holder ends first: a stalled stream gives way, not a new one. */
-  private claimLiveText(items: object, since: number): (() => void) | null {
-    let claim = claimSharedLiveText(items)
-    while (!claim) {
-      let oldest: SubscriberDeliveryLane | undefined
-      for (const lane of charged) {
-        if (lane !== this && (!oldest || lane.waitingSince() < oldest.waitingSince())) {
-          oldest = lane
-        }
-      }
-      if (!oldest || oldest.waitingSince() >= since) {
-        return null
-      }
-      oldest.refuse()
-      claim = claimSharedLiveText(items)
-    }
-    return claim
-  }
-
-  private waitingSince(): number {
-    const entry = this.pending.find((pending) => pending.kind === 'live-text')
-    return entry?.since ?? Infinity
   }
 
   private refuse(): void {

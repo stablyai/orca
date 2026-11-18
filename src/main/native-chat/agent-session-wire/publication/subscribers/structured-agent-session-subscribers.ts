@@ -154,8 +154,11 @@ export class AgentSessionSubscribers {
     targets = this.subscribers(sessionId)
   ): void => {
     const hostNow = this.now()
-    for (const subscriber of targets.filter(this.isActive)) {
-      this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
+    for (const subscriber of targets) {
+      // Checked per subscriber: an earlier one's delivery can end a later one mid fan-out.
+      if (this.isActive(subscriber)) {
+        this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
+      }
     }
   }
 
