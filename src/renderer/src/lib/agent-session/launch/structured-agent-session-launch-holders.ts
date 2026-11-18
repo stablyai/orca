@@ -41,5 +41,8 @@ export function getJoinableStructuredLaunchState(
   return structuredLaunchesHoldingIdentity(
     (candidate) => candidate === identity,
     requestId
-  ).findLast((state) => state.intent.params.omitEffort === omitEffort)
+  ).findLast(
+    (state) =>
+      state.callers.attempt.requestId === requestId || state.intent.params.omitEffort === omitEffort
+  )
 }

@@ -86,18 +86,7 @@ export function withoutAgentEffortArgs(
     parsed: tokenizeStartupCommand(text, grammar)
   }))
   if (parsed.some((entry) => !entry.parsed.ok)) {
-    // A picker has no consuming shell yet; harmless text can wait for the host's proof.
-    const valid = parsed.filter((entry) => entry.parsed.ok)
-    return valid.length &&
-      valid.every(({ grammar }) => {
-        const candidate = analyzeChoiceArgs(agent, text, [grammar])
-        return (
-          !candidate.opaqueKeys.has('effort') &&
-          !candidate.occurrences.some((entry) => entry.key === 'effort')
-        )
-      })
-      ? text
-      : null
+    return null
   }
   const analysis = analyzeChoiceArgs(agent, text, grammars)
   const effort = analysis.occurrences.filter((entry) => entry.key === 'effort')

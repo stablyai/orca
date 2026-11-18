@@ -112,6 +112,7 @@ export async function launchStructuredWorktreeSession(
     // One create is one user action: a retry of it re-delivers the same request.
     requestId: args.creationId,
     agent,
+    ...(request.launchInputs?.omitEffort ? { omitEffort: request.launchInputs.omitEffort } : {}),
     ...(request.launchInputs?.sessionOptions
       ? { launchOptions: request.launchInputs.sessionOptions }
       : {}),

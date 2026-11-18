@@ -125,7 +125,10 @@ export function agentLaunchSetupOptionRows(
                 ? option.kind.defaultValue
                 : undefined
           : undefined)
-      if (argumentsView.context.analysis.opaqueKeys.has(option.id)) {
+      if (
+        argumentsView.context.analysis.opaqueKeys.has(option.id) &&
+        !(option.id === 'effort' && draft.delegated?.includes('effort'))
+      ) {
         return argumentsOwnedRow(option.id, option.label, option.category, t)
       }
       const valueKnown =
@@ -180,7 +183,8 @@ export function agentLaunchSetupOptionRows(
     })
   if (sharedEffort) {
     rows.push(
-      argumentsView.context.analysis.opaqueKeys.has('effort')
+      argumentsView.context.analysis.opaqueKeys.has('effort') &&
+        !draft.delegated?.includes('effort')
         ? argumentsOwnedRow('effort', sharedEffort.label, sharedEffort.category, t)
         : {
             ...sharedEffort,

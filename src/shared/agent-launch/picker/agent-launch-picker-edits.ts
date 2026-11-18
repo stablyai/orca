@@ -201,6 +201,10 @@ export function applyAgentPickerEdit(
   const defaultEffort =
     edit.kind === 'choice' && edit.patch.options?.effort === TEXT_ACTION_DEFAULT_MODEL
   const clearedEffort = defaultEffort ? withoutAgentEffortArgs(entry.agent, source) : null
+  const deferredEffort = defaultEffort && clearedEffort === null
+  if (deferredEffort) {
+    keys.delete('effort')
+  }
   const visible = agentPickerPanelArguments(entry, draft)
   draft = { ...draft, literalKeys: visible.context.literalKeys }
   const catalog = getAgentSessionOptionLaunchCatalog(entry.agent)
@@ -223,10 +227,7 @@ export function applyAgentPickerEdit(
       ? { permissionRanges: agentPickerArgumentPermission(entry, draft)?.ranges }
       : {})
   })
-  if (
-    (defaultEffort && clearedEffort === null) ||
-    [...keys].some((key) => analysis.opaqueKeys.has(key))
-  ) {
+  if ([...keys].some((key) => analysis.opaqueKeys.has(key))) {
     return draft
   }
   const domain =
@@ -248,6 +249,12 @@ export function applyAgentPickerEdit(
     result,
     result.effects,
     false,
-    domain ? domain.arguments : draft.arguments !== undefined ? result.userArgs || null : undefined
+    domain
+      ? domain.arguments
+      : deferredEffort
+        ? draft.arguments
+        : draft.arguments !== undefined
+          ? result.userArgs || null
+          : undefined
   )
 }

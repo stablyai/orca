@@ -141,3 +141,51 @@ it('preserves valid host Arguments when another shell cannot parse them', () => 
   expect(result.agentArgs).toBe("--append-system-prompt don\\'t\\ panic")
   expect(result.sessionOptions?.effort).toBeUndefined()
 })
+
+it.each([false, true])(
+  'Default defers POSIX-only effort removal to the consuming host, owned Arguments: %s',
+  (owned) => {
+    const raw = "--effort high --append-system-prompt don\\'t\\ panic"
+    const entry: AgentPickerEntry = {
+      agent: 'claude',
+      label: 'Claude',
+      rows: [{ kind: 'terminal', agent: 'claude' }],
+      surfaces: ['terminal'],
+      defaultSurface: 'terminal',
+      terminal: { model: 'opus' },
+      structured: {},
+      arguments: raw,
+      catalog: { origin: 'unknown' }
+    }
+    const draft = agentPickerDraft(entry)
+    const cleared = applyAgentPickerEdit(entry, owned ? { ...draft, arguments: raw } : draft, {
+      kind: 'choice',
+      patch: { options: { effort: TEXT_ACTION_DEFAULT_MODEL } }
+    })
+    const inputs = agentPickerLaunchInputs(cleared, entry)
+    expect(inputs.omitEffort).toBe(true)
+    expect(inputs.agentArgs).toBe(owned ? raw : undefined)
+    const resolved = terminalSessionOptionInputs({
+      ...inputs,
+      agent: 'claude',
+      shell: 'posix',
+      agentArgs: inputs.agentArgs,
+      sessionOptions: inputs.sessionOptions,
+      settings: {
+        agentPermissionDefault: 'own',
+        agentDefaultArgs: { claude: raw },
+        agentLaunchChoices: { claude: { model: 'opus' } }
+      }
+    })
+    const launch = resolveAgentLaunchCommand({
+      ...resolved,
+      agent: 'claude',
+      cmdOverrides: {},
+      platform: 'linux',
+      shell: 'posix'
+    })
+    expect(launch.ok && launch.command).toBe(
+      "claude '--append-system-prompt' 'don'\\''t panic' '--model' 'opus'"
+    )
+  }
+)

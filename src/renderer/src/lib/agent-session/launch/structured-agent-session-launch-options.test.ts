@@ -246,6 +246,21 @@ describe('picks made while a chat launches', () => {
     ])
   })
 
+  it('redelivers the same Default launch after a concrete effort pick without opening another chat', () => {
+    const intent = launchIntent()
+    intent.createMessageSupport = true
+    mocks.createIntent.mockReturnValue(intent)
+    mocks.launch.mockReturnValue(new Promise(() => {}))
+    const options = { requestId: 'default-retry', omitEffort: true as const }
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', options)
+    void holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
+    intent.prepareCreate?.(true)
+
+    const replay = startStructuredAgentLaunch(WORKTREE_ID, 'codex', options)
+    expect(replay.joined).toBe(true)
+    expect(replay.sessionId).toBe('session-1')
+  })
+
   it('reports a refusal the host threw as its fact, never the bare code it carries as a message', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
     startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-4' })
