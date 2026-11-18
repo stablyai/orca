@@ -11,19 +11,28 @@ const MAX_CONSECUTIVE_FAILURES = 3
 // and a restart syncs its header on main, so checkpointing more often would add main-thread syncs.
 const CHECKPOINT_FRAMES = 1000
 
-type CheckpointResult = { id: number; ok: boolean }
+type CheckpointResult = { id: number; ok: boolean; unsupported?: boolean }
 
 /**
  * Evaluated source. `mode=rw` never creates a removed cache; a PASSIVE checkpoint never waits on
  * the writer, and counts as done only when it folded every frame. The handle lives for one
- * request, so a closed cache's file is free again within milliseconds. NOOP needs SQLite 3.51;
- * an older one fails every request and hands checkpoints back.
+ * request, so a closed cache's file is free again within milliseconds. Older SQLite runs an unknown
+ * wal_checkpoint mode as PASSIVE, which would checkpoint after every commit, so before 3.51 (NOOP)
+ * the worker reports itself unsupported and every connection checkpoints itself again.
  */
 export const rowCacheCheckpointWorkerSource = `
 const { parentPort } = require('node:worker_threads');
 const { pathToFileURL } = require('node:url');
 const { DatabaseSync } = require('node:sqlite');
+const probe = new DatabaseSync(':memory:');
+const [major, minor] = probe.prepare('SELECT sqlite_version() AS v').get().v.split('.').map(Number);
+probe.close();
+const supported = major > 3 || (major === 3 && minor >= 51);
 parentPort.on('message', ({ id, path }) => {
+  if (!supported) {
+    parentPort.postMessage({ id, ok: false, unsupported: true });
+    return;
+  }
   let ok = false;
   let db;
   try {
@@ -59,8 +68,9 @@ type Registration = { path: string; restore: () => void; failures: number }
 /**
  * Row caches commit on main, and a commit that crosses the WAL auto-checkpoint threshold also
  * checkpoints and fsyncs inside the commit; under disk load one agent-status save held main for
- * 346 ms. While this worker is healthy, registered connections never auto-checkpoint and the
- * worker checkpoints after their commits. Any worker failure hands checkpoints back at once.
+ * 346 ms. While this worker is healthy, it checkpoints after registered connections' commits, and
+ * they auto-checkpoint only at 10,000 pages, a backstop for commits that keep landing during
+ * checkpoints. Any worker failure hands checkpoints back at once.
  */
 export class RowCacheWalCheckpoints {
   private readonly host: LazyWorkerThreadHost<CheckpointResult> | null
@@ -130,7 +140,11 @@ export class RowCacheWalCheckpoints {
     }
   }
 
-  private settle({ id, ok }: CheckpointResult): void {
+  private settle({ id, ok, unsupported }: CheckpointResult): void {
+    if (unsupported) {
+      this.fail()
+      return
+    }
     clearTimeout(this.inFlight.get(id))
     this.inFlight.delete(id)
     const registration = this.registrations.get(id)

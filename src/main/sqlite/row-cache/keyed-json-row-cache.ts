@@ -324,7 +324,7 @@ export class KeyedJsonRowCache {
       }
     })
     if (this.walRegistration !== null) {
-      db.pragma('wal_autocheckpoint = 0')
+      db.pragma('wal_autocheckpoint = 10000') // Backstop only; the worker folds at 1000.
     }
     // A fresh connection cannot vouch for a baseline read through an earlier one.
     this.dataVersion = undefined
