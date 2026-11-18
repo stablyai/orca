@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { requiredString } from '../rpc-param-primitives'
 import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../orchestration/fleet/orchestration-fleet-projection'
 
@@ -25,3 +25,6 @@ export const WorkerListParams = z.object({
   // A paired server's own list, paged by its cursor.
   on: z.string().min(1).optional()
 })
+
+/** A native chat's own Orca session id: the workers it started. */
+export const SessionWorkersParams = z.object({ session: requiredString('Missing --session') })

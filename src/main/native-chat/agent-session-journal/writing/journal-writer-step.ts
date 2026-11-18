@@ -1,9 +1,9 @@
-import type {
-  AgentJournalAgentStartItem,
-  AgentJournalAgentHandoffItem
-} from '../../../../shared/agent-session/journal/agent-journal-creation-facts'
+import type { AgentJournalOrcaCardItem } from '../../../../shared/agent-journal-orca-card-items'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalPlainStatusItem,
+  AgentJournalRenderItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   JournalItemAppendInput,
   JournalItemAppendOptions,
@@ -38,7 +38,8 @@ export type JournalWriterStep =
       kind: 'creation-fact'
       epoch: string
       reservedBytes: number
-      body: AgentJournalAgentStartItem | AgentJournalAgentHandoffItem
+      /** Orca's own cards and status lines; each named once by its identity. */
+      body: AgentJournalOrcaCardItem | AgentJournalPlainStatusItem
     })
   | {
       kind: 'resolved-item'
