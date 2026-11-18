@@ -208,7 +208,7 @@ export function NewBotDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        // A proposal's lines get a wider, single-column dialog; past the window's height its body scrolls above a pinned footer.
+        // Proposals get a wider dialog with a height limit so the footer stays in view.
         className={cn(
           'max-w-md sm:max-w-md',
           proposal && 'max-h-[calc(100vh-3rem)] grid-rows-[auto_minmax(0,1fr)] max-w-xl sm:max-w-xl'
@@ -254,78 +254,83 @@ export function NewBotDialog({
           <div
             className={
               proposal
-                ? '-mx-1 min-h-0 space-y-4 overflow-y-auto px-1 scrollbar-sleek'
-                : 'space-y-4'
+                ? '-mx-1 flex min-h-0 flex-col gap-4 overflow-y-auto px-1 scrollbar-sleek'
+                : undefined
             }
           >
-            {/* The nudge reads this computer's other apps, so it shows only while this computer is picked. */}
-            {onImport && hostId === LOCAL_EXECUTION_HOST_ID ? (
-              <BotImportNudge
-                open={open}
-                onImport={() => {
-                  close()
-                  onImport()
-                }}
+            <div className="shrink-0 space-y-4">
+              {/* The nudge reads this computer's other apps, so it shows only while this computer is picked. */}
+              {onImport && hostId === LOCAL_EXECUTION_HOST_ID ? (
+                <BotImportNudge
+                  open={open}
+                  onImport={() => {
+                    close()
+                    onImport()
+                  }}
+                />
+              ) : null}
+              <BotPicturePicker
+                value={picture.value}
+                custom={picture.custom}
+                onChange={picture.onChange}
+                onUpload={picture.onUpload}
+                uploadLink
               />
-            ) : null}
-            <BotPicturePicker
-              value={picture.value}
-              custom={picture.custom}
-              onChange={picture.onChange}
-              onUpload={picture.onUpload}
-              uploadLink
-            />
-            <div className="space-y-1">
-              <ImeInput
-                ref={nameRef}
-                className={BARE_HEADING_CLASS}
-                aria-label={t('bots.new.name', 'Name')}
-                autoComplete="off"
-                spellCheck={false}
-                value={name}
-                maxLength={BOT_NAME_MAX_LENGTH}
-                placeholder={t('bots.new.namePlaceholder', 'Name your bot')}
-                onChange={(event) => setName(event.target.value)}
-              />
-              <NewBotPurposeField
-                value={draft.purpose}
-                onChange={(purpose) => setDraft({ ...draft, purpose })}
-              />
-            </div>
-            <BotRunsOnPicker
-              variant="caption"
-              hostChoice={hostChoice}
-              setup={agentSetup.setup}
-              model={menu.model}
-              choices={choices}
-              onSetupChange={agentSetup.setSetup}
-              name={name}
-            />
-            {proposal ? (
-              <div className="border-t border-border pt-4">
-                <NewBotProposalFields
-                  draft={draft}
-                  worktrees={proposal.worktrees}
-                  onChange={(fields) => setDraft({ ...draft, ...fields })}
+              <div className="space-y-1">
+                <ImeInput
+                  ref={nameRef}
+                  className={BARE_HEADING_CLASS}
+                  aria-label={t('bots.new.name', 'Name')}
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={name}
+                  maxLength={BOT_NAME_MAX_LENGTH}
+                  placeholder={t('bots.new.namePlaceholder', 'Name your bot')}
+                  onChange={(event) => setName(event.target.value)}
+                />
+                <NewBotPurposeField
+                  value={draft.purpose}
+                  onChange={(purpose) => setDraft({ ...draft, purpose })}
                 />
               </div>
-            ) : null}
-            {template ? (
-              <NewBotTemplateParts
-                template={template}
-                packages={templatePackages}
-                hostLabel={hostChoice.host.label}
-                kept={kept}
-                onKeptChange={(skill, on) => {
-                  const next = new Set(kept)
-                  if (on) {
-                    next.add(skill)
-                  } else {
-                    next.delete(skill)
-                  }
-                  setKept(next)
-                }}
+              <BotRunsOnPicker
+                variant="caption"
+                hostChoice={hostChoice}
+                setup={agentSetup.setup}
+                model={menu.model}
+                choices={choices}
+                onSetupChange={agentSetup.setSetup}
+                name={name}
               />
+            </div>
+            {proposal ? (
+              // The minimum leaves room to read details even when a short window needs to scroll the form.
+              <div className="-mx-1 min-h-24 space-y-4 overflow-y-auto px-1 scrollbar-sleek">
+                <div className="border-t border-border pt-4">
+                  <NewBotProposalFields
+                    draft={draft}
+                    worktrees={proposal.worktrees}
+                    onChange={(fields) => setDraft({ ...draft, ...fields })}
+                  />
+                </div>
+                {template ? (
+                  <NewBotTemplateParts
+                    template={template}
+                    packages={templatePackages}
+                    hostLabel={hostChoice.host.label}
+                    kept={kept}
+                    onKeptChange={(skill, on) => {
+                      const next = new Set(kept)
+                      if (on) {
+                        next.add(skill)
+                      } else {
+                        next.delete(skill)
+                      }
+                      setKept(next)
+                    }}
+                  />
+                ) : null}
+              </div>
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-3 pt-1">
