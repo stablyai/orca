@@ -65,6 +65,7 @@ function BotPageBar({
         }
         activityBarPosition="top"
         onChangeActivityBarPosition={() => {}}
+        arrangementItems={items}
       />
       <div className="h-6" />
     </div>
