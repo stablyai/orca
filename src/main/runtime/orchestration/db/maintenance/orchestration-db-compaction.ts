@@ -1,4 +1,5 @@
-import { open } from 'node:fs/promises'
+import { open, statfs } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
 import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
@@ -33,8 +34,12 @@ const { statfsSync } = require('node:fs');
 const { dirname } = require('node:path');
 const w = workerData;
 const available = (dir) => {
-  const disk = statfsSync(dir);
-  return Number(disk.bavail) * Number(disk.bsize);
+  try {
+    const disk = statfsSync(dir);
+    return Number(disk.bavail) * Number(disk.bsize);
+  } catch {
+    return 0;
+  }
 };
 const started = performance.now();
 let db;
@@ -80,6 +85,20 @@ try {
 }
 `
 
+/** Where SQLite builds VACUUM's copy: it honors SQLITE_TMPDIR first. */
+function sqliteTempDir(): string {
+  return process.env.SQLITE_TMPDIR || tmpdir()
+}
+
+async function availableBytesIn(dir: string): Promise<number> {
+  try {
+    const disk = await statfs(dir)
+    return Number(disk.bavail) * Number(disk.bsize)
+  } catch {
+    return 0
+  }
+}
+
 /** The page counts in a SQLite header; null when the file is missing or not a database. */
 async function readHeaderCounts(filename: string): Promise<PageCounts | null> {
   let file
@@ -122,6 +141,16 @@ export async function compactOrchestrationDbOnce(
   if (!counts || !isCompactionWarranted(counts)) {
     return { kind: 'not-needed' }
   }
+  // Checked here too, so a file that can't compact starts no worker on every launch.
+  const liveBytes = (counts.pages - counts.freePages) * counts.pageSize
+  if (liveBytes > MAX_LIVE_BYTES) {
+    return { kind: 'too-large', liveBytes }
+  }
+  const neededBytes = 2 * counts.pages * counts.pageSize
+  const availableBytes = await availableBytesIn(dirname(filename))
+  if (availableBytes < neededBytes || (await availableBytesIn(sqliteTempDir())) < liveBytes) {
+    return { kind: 'low-disk', neededBytes, availableBytes }
+  }
   return new Promise((resolve) => {
     let worker: ReturnType<typeof spawnWorkerThread>
     try {
@@ -130,7 +159,7 @@ export async function compactOrchestrationDbOnce(
         eval: true,
         workerData: {
           filename,
-          tempDir: tmpdir(),
+          tempDir: sqliteTempDir(),
           minFreeBytes: MIN_FREE_BYTES,
           minFreeFraction: MIN_FREE_FRACTION,
           maxLiveBytes: MAX_LIVE_BYTES
