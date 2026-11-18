@@ -1,7 +1,7 @@
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
-} from '@/hooks/requestVirtualizedScrollAnchorRecord'
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 
 function getSidebarWorktreeOptions(worktreeId: string): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-id]')).filter(

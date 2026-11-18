@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
-import type { ClaudeStartupOutcome } from './claude-structured-startup-outcome'
+import type { ClaudeStartupOutcome } from './startup/claude-structured-startup-outcome'
 import type {
   ClaudeCliFlagCheck,
   ClaudeCliFlagFact
@@ -24,17 +24,14 @@ import type { ClaudeBackgroundTaskTracker } from '../background-tasks/claude-bac
 import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from '../command-catalog/claude-at-rest-commands'
-import type { ClaudeInitProof } from './claude-structured-init-proof'
+import type { ClaudeInitProof } from './startup/claude-structured-init-proof'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-invocation'
-import type { ClaudeInitializeFacts } from './claude-structured-session-startup'
+import type { ClaudeInitializeFacts } from './startup/claude-structured-session-startup'
 
-export type {
-  ClaudeAuthDiagnostic,
-  ClaudeStructuredSessionEvent
-} from './claude-structured-session-event'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from './lifecycle/claude-structured-session-event'
+import type { ClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
 
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
@@ -155,6 +152,7 @@ export type ClaudeSession = {
   cliFlag?: ClaudeCliFlagCheck
   /** Whether the CLI answers live effort and Fast changes; `unknown` ones are rechecked, then tried. */
   flagSettingsControl?: ClaudeCliFlagFact
+  promptSuggestionPause?: ClaudePromptSuggestionPause
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker

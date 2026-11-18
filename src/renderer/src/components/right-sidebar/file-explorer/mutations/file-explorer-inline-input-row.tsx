@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from 'react'
 import { File } from 'lucide-react'
-import { FolderIcon } from '@/components/FileTypeIcon'
+import { FolderIcon } from '@/components/icons/FileTypeIcon'
 import {
   isImeCompositionKeyDown,
   useImeEnterGestureOwnership

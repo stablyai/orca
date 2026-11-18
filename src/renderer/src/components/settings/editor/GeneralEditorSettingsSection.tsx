@@ -20,6 +20,7 @@ import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorFormatOnSaveSetting } from './EditorFormatOnSaveSetting'
 import { EditorInsertFinalNewlineSetting } from './EditorInsertFinalNewlineSetting'
+import { EditorEndOfLineSetting } from './EditorEndOfLineSetting'
 import { EditorTypographySettings } from './EditorTypographySettings'
 import {
   createAutoSaveDelayDraftState,
@@ -96,6 +97,7 @@ export function GeneralEditorSettingsSection({
       <SettingsGroup title={t('settings.general.editorGroups.saving', 'Saving')}>
         <EditorFormatOnSaveSetting settings={settings} updateSettings={updateSettings} />
         <EditorInsertFinalNewlineSetting settings={settings} updateSettings={updateSettings} />
+        <EditorEndOfLineSetting settings={settings} updateSettings={updateSettings} />
         <SearchableSetting
           id={GENERAL_SETTING_ANCHORS.autoSaveDelay}
           title={t(
@@ -179,6 +181,25 @@ export function GeneralEditorSettingsSection({
             onChange={() =>
               updateSettings({ editorMinimapEnabled: !settings.editorMinimapEnabled })
             }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          id={GENERAL_SETTING_ANCHORS.inlineBlame}
+          title={t('settings.general.inlineBlameTitle', 'Inline git blame')}
+          description={t(
+            'settings.general.inlineBlameDescription',
+            'Show who last changed the cursor line, and when, at the end of the line.'
+          )}
+          keywords={['blame', 'git', 'author', 'annotation']}
+        >
+          <SettingsSwitchRow
+            label={t('settings.general.inlineBlameTitle', 'Inline git blame')}
+            description={t(
+              'settings.general.inlineBlameDescription',
+              'Show who last changed the cursor line, and when, at the end of the line.'
+            )}
+            checked={settings.editorInlineBlame}
+            onChange={() => updateSettings({ editorInlineBlame: !settings.editorInlineBlame })}
           />
         </SearchableSetting>
       </SettingsGroup>

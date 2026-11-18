@@ -9,7 +9,7 @@ import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import {
   readAgentTabShortcutActions,
   resolveAgentTabShortcutAction
-} from '../../terminal-agent-tab-shortcut'
+} from '../../terminal/keyboard-shortcuts/terminal-agent-tab-shortcut'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NewTabAgentMenuModel } from './new-tab-agent-menu-model'

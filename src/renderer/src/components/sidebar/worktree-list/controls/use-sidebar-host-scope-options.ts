@@ -1,4 +1,4 @@
-import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
+import { selectWslHostsServing } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'

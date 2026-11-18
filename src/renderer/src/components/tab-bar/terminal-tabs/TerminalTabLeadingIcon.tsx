@@ -1,4 +1,4 @@
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/class-names'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'

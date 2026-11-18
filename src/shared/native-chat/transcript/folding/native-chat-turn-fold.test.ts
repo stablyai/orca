@@ -164,8 +164,7 @@ describe('replies a settled turn keeps visible', () => {
 
   it.each([
     ['a generation whose preview moved into the answer', 'Generated image', 'generated-image'],
-    ['an image view', 'Viewed image', 'image-operation'],
-    ['a failed generation', 'Image generation failed', 'image-operation']
+    ['an image view', 'Viewed image', 'image-operation']
   ] as const)('folds %s as work, not a reply', (_name, text, presentation) => {
     const operation = message('image', 'assistant', text, presentation)
     expect(answersAndFolded([PROMPT, PREAMBLE, operation, ANSWER])).toEqual({

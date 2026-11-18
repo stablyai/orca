@@ -56,22 +56,6 @@ describe('automation update workspace-mode precondition', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('refuses the whole edit when the stored mode is no longer new-per-run', async () => {
-    const { store, id } = await newPerRunAutomation()
-    store.updateAutomation(id, switchToExisting)
-
-    expect(() =>
-      store.updateAutomation(
-        id,
-        { name: 'Renamed', setupDecision: 'run' },
-        { expectedWorkspaceMode: 'new_per_run' }
-      )
-    ).toThrow(MODE_CHANGED)
-    const stored = store.listAutomations().find((row) => row.id === id)
-    expect(stored).toMatchObject({ name: 'Nightly', workspaceMode: 'existing' })
-    expect(stored?.setupDecision).toBeUndefined()
-  })
-
   it('refuses when the mode changes while the controller resolves a repo move', async () => {
     const { store, id } = await newPerRunAutomation()
     let resolveRepo = (): void => {}

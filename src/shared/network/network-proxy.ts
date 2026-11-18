@@ -24,7 +24,7 @@ function proxyUrlFailure(code: ProxyUrlFailureCode): ProxyUrlValidationResult {
 const PROXY_URL_MAX_LENGTH = 2048
 const PROXY_BYPASS_RULES_MAX_LENGTH = 4096
 const PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks:', 'socks4:', 'socks5:'])
-const PROXY_ENV_KEYS = [
+export const PROXY_ENV_KEYS = [
   'HTTPS_PROXY',
   'https_proxy',
   'ALL_PROXY',

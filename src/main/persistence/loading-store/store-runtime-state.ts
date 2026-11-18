@@ -18,6 +18,7 @@ import {
   type TerminalScrollbackSnapshotStorage
 } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
+import type { KeyedJsonRowCache } from '../../sqlite/row-cache/keyed-json-row-cache'
 import { getDataFile, getGithubCacheFile } from './user-data-path'
 import { dirname, join } from 'node:path'
 import { STALE_DURABLE_WRITE_TEMP_AGE_MS } from '../tracking-repos/worktree-metadata-normalization'
@@ -94,6 +95,8 @@ export class StoreRuntimeState {
   githubCacheLegacyFileHash: string | null = null
   /** The saved cache or an older build's sidecar was unreadable at load: save nothing this session. */
   githubCachePersistenceDisabled = false
+  /** Held between saves; suspend and saves while fenced (maintenance, quit) close it. */
+  githubCacheRows: KeyedJsonRowCache | null = null
   readonly githubCacheWriteListeners = new Set<() => void>()
   readonly staleGithubCacheTempCleanup: Promise<void>
   readonly staleProfileStateTempCleanup: Promise<void>

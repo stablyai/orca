@@ -47,15 +47,17 @@ function posixReadinessWaitCommand(
     `probe_error=$(LC_ALL=C kill -0 "$pid" 2>&1) || { case "$probe_error" in ${POSIX_NO_SUCH_PROCESS_CASE}) return 0;; esac; return 1; };`,
     'case "$(ps -o stat= -p "$pid" 2>/dev/null)" in Z*) return 0;; esac; return 1; };',
     // Probe fractional sleep once; POSIX hosts may support only integer seconds.
-    'if sleep 0.25 2>/dev/null; then orcad_readiness_wait_step=0.25;',
-    'else orcad_readiness_wait_step=1; fi;',
+    'if sleep 0.05 2>/dev/null; then orcad_readiness_wait_step=0.05; orcad_readiness_full_every=5;',
+    'else orcad_readiness_wait_step=1; orcad_readiness_full_every=1; fi;',
     // Bound elapsed time, not iterations: slow filesystem reads otherwise overrun the client exec deadline.
-    `orcad_readiness_wait_end=$(($(date +%s) + ${waitSeconds}));`,
-    'while [ "$(date +%s)" -lt "$orcad_readiness_wait_end" ]; do',
+    `orcad_readiness_wait_end=$(($(date +%s) + ${waitSeconds})); orcad_readiness_polls=0;`,
+    // Between full checks (every 0.25 s) only a builtin test watches for the file, so polling spawns nothing.
+    `while :; do if [ -s ${file} ] || [ $((orcad_readiness_polls % orcad_readiness_full_every)) -eq 0 ]; then`,
+    '[ "$(date +%s)" -lt "$orcad_readiness_wait_end" ] || break;',
     `[ "$(${read} | wc -l)" -gt 0 ] && break;`,
     `[ "$(${read} | wc -c)" -gt ${ORCAD_READINESS_MAX_BYTES} ] && break;`,
     `orcad_launch_exited && { echo ${ORCAD_LAUNCH_EXITED_MARKER}; break; };`,
-    'sleep "$orcad_readiness_wait_step"; done;',
+    'fi; orcad_readiness_polls=$((orcad_readiness_polls + 1)); sleep "$orcad_readiness_wait_step"; done;',
     `${read} || true`
   ].join(' ')
 }

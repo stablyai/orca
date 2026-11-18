@@ -7,7 +7,7 @@ import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/
 import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail
-} from '@/hooks/terminal-command-finished-event'
+} from '@/lib/terminal/output/terminal-command-finished-event'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
