@@ -44,7 +44,7 @@ export function claudePooledUsageLimit(text: string, now: number): AgentSessionU
 // The CLI's own limit line when it sends no typed api_error: older builds' "Claude AI usage limit
 // reached|<epoch s>", and the "You've hit your session limit · resets 3pm" family.
 const LEGACY_LIMIT = /^Claude AI usage limit reached\|(\d{9,11})\s*$/i
-const HIT_LIMIT = /^You(?:'|’)ve hit your (?:[\w-]+ )*limit\b/i
+const HIT_LIMIT = /^You(?:'|\u2019)ve hit your (?:[\w-]+ )*limit\b/i
 
 /** Only for text the CLI sent as a rate-limit error or failed result, never for prose. */
 export function claudeLimitLine(text: string, now: number): AgentSessionUsageLimit | null {
