@@ -57,7 +57,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   /** Only a loaded chat with a known reset has a schedule whose state can change. */
   private async publishScheduled(): Promise<void> {
     for (const id of this.deps.sessions.keys()) {
-      if ((await this.deps.readLoadedCut(id))?.resetsAt !== undefined) {
+      if ((await this.cold.readForSweep(id))?.resetsAt !== undefined) {
         this.deps.publish(id)
       }
     }
@@ -184,7 +184,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         if (!this.deps.sessions.has(id) && !this.cold.has(id)) {
           continue
         }
-        const cut = await this.cold.read(id)
+        const cut = await this.cold.readForSweep(id)
         const previous = this.attempts.get(id)
         if (!cut || previous?.identity !== identity(cut)) {
           this.attempts.delete(id)

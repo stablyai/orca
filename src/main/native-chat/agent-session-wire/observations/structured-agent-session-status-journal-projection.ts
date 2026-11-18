@@ -15,6 +15,7 @@ import type {
 } from '../../agent-session-journal/journal-observer-read'
 import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usage-limit-chain'
 import { sameJournalCursor } from '../../agent-session-journal/replay/journal-cursor'
+import { CorruptJournalReads } from './corrupt-journal-reads'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
 export type StructuredAgentSessionStatusState = JournalObserverResult['state']
@@ -57,6 +58,7 @@ export class StructuredAgentSessionJournalProjections {
   // Key by journal lifetime; task-progress frames must not rescan unchanged conversations.
   private readonly byJournal = new WeakMap<SqlAgentSessionJournal, ProjectionEntry>()
   private readonly pending = new WeakMap<SqlAgentSessionJournal, PendingObservation>()
+  private readonly corrupt = new CorruptJournalReads()
 
   savedStop(
     journal: SqlAgentSessionJournal,
@@ -243,15 +245,18 @@ export class StructuredAgentSessionJournalProjections {
       contextId,
       input
     })
+    this.corrupt.throwIfKnown(journal, key)
     let pending = this.pending.get(journal)
     if (pending?.key !== key) {
       const next: PendingObservation = {
         key,
-        result: journal.reads.observer(input).finally(() => {
-          if (this.pending.get(journal) === next) {
-            this.pending.delete(journal)
-          }
-        })
+        result: this.corrupt
+          .remember(journal, key, journal.reads.observer(input))
+          .finally(() => {
+            if (this.pending.get(journal) === next) {
+              this.pending.delete(journal)
+            }
+          })
       }
       this.pending.set(journal, next)
       pending = next
