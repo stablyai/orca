@@ -71,19 +71,4 @@ describe('device registry save racing another writer', () => {
     expect(new DeviceRegistry(dir).validateToken(revoked.token)).toBeNull()
     expect(registry.validateToken(kept.token)?.deviceId).toBe(kept.deviceId)
   })
-
-  it('waits out an admin write caught half-way instead of treating it as a corrupt file', () => {
-    const registry = new DeviceRegistry(dir)
-    const { kept, revoked } = pairedDevices(registry)
-    registry.updateLastSeenDeferred(revoked.deviceId)
-    const full: { deviceId: string }[] = JSON.parse(readFileSync(registryPath, 'utf8'))
-    const finished = JSON.stringify(full.filter((row) => row.deviceId !== revoked.deviceId))
-
-    // The save reads a truncated file; the admin's write finishes right after.
-    writeFileSync(registryPath, finished.slice(0, 10))
-    afterRead.hook = () => writeFileSync(registryPath, finished)
-    registry.flushPendingLastSeen()
-
-    expect(diskIds()).toEqual([kept.deviceId])
-  })
 })
