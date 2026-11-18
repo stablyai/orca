@@ -23,6 +23,8 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
       updateTabPtyId?: 'always' | 'if-missing'
       replacePtyId?: string
       sampleVisibleForegroundAgent?: boolean
+      /** A cold restore's new process, not a reattach to a live one. */
+      newProcess?: boolean
     } = {}
   ): boolean => {
     // A disposed pane can still receive an already-queued transport callback; it no longer owns state.
@@ -113,7 +115,10 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
     // Sync again at concrete binding because the frame-level sync may have run before async spawn/attach resolved.
     scheduleRuntimeGraphSync()
     session.agentCompletionCoordinator.startProcessTracking()
-    session.onAgentPreReadyDraftPtyBound?.(ptyId, session.spawnedFreshPtyId === ptyId)
+    session.onAgentPreReadyDraftPtyBound?.(
+      ptyId,
+      session.spawnedFreshPtyId === ptyId || options.newProcess === true
+    )
     // Seed command confirmation on fresh no-OSC agent launches: its retry ladder spans boot without latching a slow-start shell and poisoning recovery (#7620, #9703). Real OSC 133;C supersedes it.
     if (options.sampleVisibleForegroundAgent === true) {
       session.sampleVisiblePaneForegroundAgent()
@@ -126,9 +131,14 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
     return true
   }
 
-  session.onPtySpawn = (ptyId: string): void => {
+  session.onPtySpawn = (
+    ptyId: string,
+    spawn?: { shellWrapperLaunch?: boolean; incarnationId?: string }
+  ): void => {
     // Track actual fresh spawns so unused shell-startup failures remain visible; reattach/cold restore must retain ordinary exit semantics.
     session.spawnedFreshPtyId = ptyId
+    session.spawnShellWrapperLaunch = spawn?.shellWrapperLaunch === true
+    session.spawnIncarnationId = spawn?.incarnationId
     // Seed Command Code working state once bound; it has no prompt-start hook, and later hooks refine it.
     const bound = session.bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
     if (!bound) {

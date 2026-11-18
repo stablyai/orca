@@ -22,6 +22,8 @@ export type PtySpawnResult = TerminalLaunchResult & {
   exitCause?: TerminalExitCause
   /** Host marker proof: false means inspected/unarmed; absent means legacy and retains the client guess. */
   shellReadyArmed?: boolean
+  /** Orca's shell wrapper runs the launch, so keys written now reach the agent; older hosts omit it. */
+  shellWrapperLaunch?: true
   /** OS shell PID for subtree memory collection; null when the host cannot publish one during spawn. */
   pid?: number | null
   /** Minimal allowlisted launch ownership returned by daemon reattach. */

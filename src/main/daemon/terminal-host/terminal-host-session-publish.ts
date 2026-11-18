@@ -30,6 +30,7 @@ import {
 import {
   attachSessionInputViewer,
   isSessionInputClosed,
+  markSessionStartupLaunchTyped,
   trackSessionInput
 } from '../sessions/session-input-path'
 import {
@@ -121,8 +122,10 @@ export async function spawnAndPublishSession(
           claim: () => takeShellWrapperStartupClaim(wrapperStartup.claimPath),
           build: () => {
             discardStagedStartupCommand(wrapperStartup.staging)
-            return buildSubmission(wrapperCommand)
-          }
+            // Ctrl-E then Ctrl-U: erase keys sent ahead for the wrapper; some shells' Ctrl-U kills only back to the cursor.
+            return `\x05\x15${buildSubmission(wrapperCommand)}`
+          },
+          onTyped: () => markSessionStartupLaunchTyped(session)
         }
       : undefined
   const session = new Session({
@@ -259,6 +262,7 @@ export async function spawnAndPublishSession(
     incarnationId: session.incarnationId,
     ...getDaemonSessionResultMetadata(session),
     ...(isSessionInputClosed(session) ? { inputClosed: true as const } : {}),
+    ...(startupCommandByWrapper ? { shellWrapperLaunch: true as const } : {}),
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
     attachToken: token
   }

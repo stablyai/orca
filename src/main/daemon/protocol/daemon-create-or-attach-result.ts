@@ -22,6 +22,10 @@ export type DaemonCreateOrAttachResult = {
   cwdReadableByDaemon?: boolean
   /** The live child can no longer take input through its PTY; older daemons omit this field. */
   inputClosed?: true
+  /** Orca's shell wrapper runs the launch, so keys written now reach the agent; older hosts omit it. */
+  shellWrapperLaunch?: true
+  /** The host typed the startup launch itself; older daemons omit this field. */
+  startupLaunchTyped?: true
 }
 
 export function getDaemonSessionResultMetadata(session: {

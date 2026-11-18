@@ -36,6 +36,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       this.resultForExitBeforeSpawnReply(sessionId, result, operation) ?? {
         ...spawnResult,
         ...(!result.isNew ? { isReattach: true } : {}),
+        ...(result.isNew && result.shellWrapperLaunch ? { shellWrapperLaunch: true as const } : {}),
         ...(result.isNew && !historyRecovery.identityChanged
           ? { startupCwdSource: effectiveCwd === opts.cwd ? 'request' : 'recovered-history' }
           : {})
@@ -84,7 +85,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     if (result.incarnationId) {
       this.sessionIncarnations.set(sessionId, result.incarnationId)
     }
-    this.inputClosedIncarnations.sync(sessionId, result)
+    this.incarnationFlags.sync(sessionId, result)
     this.hostLossSessionIds.delete(sessionId)
     let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
     // Null overrides caller WSL preference; undefined preserves compatibility with older daemons.
@@ -158,7 +159,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         if (result.incarnationId) {
           this.sessionIncarnations.set(sessionId, result.incarnationId)
         }
-        this.inputClosedIncarnations.sync(sessionId, result)
+        this.incarnationFlags.sync(sessionId, result)
         this.hostLossSessionIds.delete(sessionId)
         providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
         wslDistro = providerWslDistro ?? undefined

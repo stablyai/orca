@@ -25,7 +25,8 @@ describeZsh('typing while an agent tab starts', () => {
     writeFileSync(join(home, '.zshrc'), zshrc)
     const host = new TerminalHost({ spawnSubprocess: createPtySubprocess })
     let output = ''
-    await host.createOrAttach({
+    const launchTyped: string[] = []
+    const created = await host.createOrAttach({
       sessionId: SESSION_ID,
       cols: 100,
       rows: 30,
@@ -41,13 +42,17 @@ describeZsh('typing while an agent tab starts', () => {
         TERM: 'xterm-256color'
       },
       envToDelete: ['ZDOTDIR', 'ORCA_ORIG_ZDOTDIR'],
-      streamClient: { onData: (data: string) => (output += data), onExit: () => {} }
+      streamClient: {
+        onData: (data: string) => (output += data),
+        onExit: () => {},
+        onStartupLaunchTyped: (incarnationId) => launchTyped.push(incarnationId)
+      }
     })
     cleanup = async () => {
       await host.dispose()
       rmSync(home, { recursive: true, force: true })
     }
-    return { host, output: () => output }
+    return { host, output: () => output, launchTyped, incarnationId: created.incarnationId }
   }
 
   // A real login shell runs a slow rc before the agent command starts.
@@ -104,5 +109,27 @@ describeZsh('typing while an agent tab starts', () => {
     )
     await vi.waitFor(() => expect(tab.output()).toContain('AGENT_STARTED'), { timeout: 10_000 })
     expect(tab.output().split('AGENT_STARTED').length - 1).toBe(1)
+  }, 15_000)
+
+  // A real shell re-execs itself, so the host types the launch after a shortened readiness timeout.
+  it('clears keys typed into a shell that never reached the wrapper before typing the launch', async () => {
+    const tab = await start(
+      'if [[ -z "${ORCA_TEST_REEXEC:-}" ]]; then export ORCA_TEST_REEXEC=1; exec /bin/zsh -l -i; fi\n',
+      COMMAND,
+      1_500
+    )
+    tab.host.write(SESSION_ID, 'early')
+    await vi.waitFor(() => expect(tab.output()).toContain('AGENT_STARTED'), { timeout: 8_000 })
+    expect(tab.output()).not.toContain('command not found')
+  }, 15_000)
+
+  // Without a line editor the wrapper never runs, so the host types the launch after a shortened readiness timeout.
+  it('reports the launch it typed itself exactly once', async () => {
+    const tab = await start('unsetopt zle\n', COMMAND, 1_500)
+    tab.host.write(SESSION_ID, 'early')
+    await vi.waitFor(() => expect(tab.output()).toContain('AGENT_STARTED'), { timeout: 8_000 })
+    expect(tab.launchTyped).toEqual([tab.incarnationId])
+    expect(tab.output().split('AGENT_STARTED').length - 1).toBe(1)
+    expect(tab.output()).not.toContain('command not found')
   }, 15_000)
 })

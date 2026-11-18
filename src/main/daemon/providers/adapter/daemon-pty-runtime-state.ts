@@ -1,5 +1,6 @@
 import { DaemonClient } from '../../transport/client/daemon-client'
-import { DaemonPtyInputClosedIncarnations } from './daemon-pty-input-closed-incarnations'
+import { DaemonPtyIncarnationFlags } from './daemon-pty-incarnation-flags'
+import { emitPtyListeners } from './daemon-pty-listener-emission'
 import { DaemonPtyInventoryObservation } from './daemon-pty-inventory-observation'
 import { createDaemonAuditEligibilityTracker } from '../../observability/daemon-audit-eligibility-event'
 import type {
@@ -130,7 +131,11 @@ export abstract class DaemonPtyRuntimeState {
     this.activeSessionIds,
     this.sessionIncarnations
   )
-  protected inputClosedIncarnations = new DaemonPtyInputClosedIncarnations()
+  protected incarnationFlags = new DaemonPtyIncarnationFlags((id, incarnationId) =>
+    emitPtyListeners(this.backgroundStreamListeners, (listener) =>
+      listener({ id, kind: 'startupLaunchTyped', incarnationId })
+    )
+  )
   protected pendingSpawnOperationsBySessionId = new Map<string, Set<PendingDaemonSpawnOperation>>()
   protected pendingClaimSpawnOperations = new Set<PendingDaemonSpawnOperation>()
   protected historySpawnLocks = new Map<string, Promise<void>>()
@@ -182,7 +187,7 @@ export abstract class DaemonPtyRuntimeState {
       return
     }
     this.activeSessionIds.delete(sessionId)
-    this.inputClosedIncarnations.delete(sessionId)
+    this.incarnationFlags.delete(sessionId)
     this.clearSessionAwaitingDaemonRecovery(sessionId)
     this.dirtySessionVersions.delete(sessionId)
     this.pausedProducerSessionIds.delete(sessionId)

@@ -99,6 +99,7 @@ export const ptySessionControlApi = {
     launchToken?: string
     resumeProviderSession?: TerminalLaunchResult['resumeProviderSession']
     shellReadyArmed?: boolean
+    shellWrapperLaunch?: true
   }> => ipcRenderer.invoke('pty:spawn', opts),
   write: (id: string, data: string, inputKind: TerminalInputKind): void => {
     ipcRenderer.send('pty:write', { id, data, inputKind })
@@ -116,6 +117,16 @@ export const ptySessionControlApi = {
       callback(payload)
     ipcRenderer.on('pty:writeUnavailable', handler)
     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
+  },
+  onStartupLaunchTyped: (
+    callback: (payload: { id: string; incarnationId: string }) => void
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: { id: string; incarnationId: string }
+    ): void => callback(payload)
+    ipcRenderer.on('pty:startupLaunchTyped', handler)
+    return () => ipcRenderer.removeListener('pty:startupLaunchTyped', handler)
   },
   resize: (id: string, cols: number, rows: number): void => {
     ipcRenderer.send('pty:resize', { id, cols, rows })

@@ -8,6 +8,7 @@ import type { ListSessionsResult, ShutdownIfIdleResult } from '../../protocol/da
 import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import { readDaemonWslQuitCwds } from '../wsl/daemon-wsl-sleep-cwd'
+import type { InputClosedEvent, StartupLaunchTypedEvent } from '../../protocol/daemon-stream-events'
 
 export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
   onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
@@ -45,6 +46,13 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
         console.warn('[daemon] Write unavailable listener failed:', error)
       }
     })
+  }
+
+  /** Kept per incarnation: either report can land before its own spawn reply. */
+  protected noteIncarnationFlag(event: InputClosedEvent | StartupLaunchTypedEvent): void {
+    const { sessionId, payload } = event
+    // The renderer fences startupLaunchTyped by incarnation, so recording forwards it without waiting for the spawn reply.
+    this.incarnationFlags[event.event].record(sessionId, payload.incarnationId)
   }
 
   dispose(): void {

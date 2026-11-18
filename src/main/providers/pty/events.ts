@@ -28,3 +28,5 @@ export type PtyBackgroundStreamEvent =
     }
   | { id: string; kind: 'dataGap'; droppedChars: number; sequenceChars?: number }
   | { id: string; kind: 'transientFact'; fact: PtyTransientFact }
+  /** The host typed the startup launch itself, erasing keys the renderer sent ahead for the wrapper. */
+  | { id: string; kind: 'startupLaunchTyped'; incarnationId: string }

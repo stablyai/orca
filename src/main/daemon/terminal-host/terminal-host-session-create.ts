@@ -14,7 +14,11 @@ import { TerminalAttachCanceledError, SessionNotFoundError } from '../protocol/d
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 
 import { resolveWslSessionContext } from '../pty-subprocess/wsl-session-context'
-import { attachSessionInputViewer, isSessionInputClosed } from '../sessions/session-input-path'
+import {
+  attachSessionInputViewer,
+  isSessionInputClosed,
+  isSessionStartupLaunchTyped
+} from '../sessions/session-input-path'
 import { describeAgentRestore } from './terminal-host-session-process'
 export type TerminalHostSessionCreateDependencies = {
   sessions: Map<string, Session>
@@ -77,6 +81,7 @@ export async function createOrAttachTerminalSession(
       incarnationId: existing.incarnationId,
       ...getDaemonSessionResultMetadata(existing),
       ...(isSessionInputClosed(existing) ? { inputClosed: true as const } : {}),
+      ...(isSessionStartupLaunchTyped(existing) ? { startupLaunchTyped: true as const } : {}),
       attachToken: token
     }
   }

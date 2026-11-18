@@ -14,6 +14,7 @@ const modelLaunchOperations = new WeakMap<IpcPtyTransportOptions, AgentSessionCr
 export type IpcPtySpawnResponse = PtyConnectResult & {
   isReattach?: boolean
   incarnationId?: string
+  shellWrapperLaunch?: true
 }
 
 export async function spawnIpcPty(

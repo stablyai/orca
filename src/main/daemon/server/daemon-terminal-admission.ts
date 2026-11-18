@@ -28,6 +28,7 @@ import {
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { sessionExitCauseLogFields } from '../observability/session-exit-log-fields'
+import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
 type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>
 
@@ -191,8 +192,25 @@ export class DaemonTerminalAdmission {
       ...(result.cwdReadableByDaemon !== undefined
         ? { cwdReadableByDaemon: result.cwdReadableByDaemon }
         : {}),
-      ...(result.inputClosed ? { inputClosed: true as const } : {})
+      ...(result.inputClosed ? { inputClosed: true as const } : {}),
+      ...(result.shellWrapperLaunch ? { shellWrapperLaunch: true as const } : {}),
+      ...(result.startupLaunchTyped ? { startupLaunchTyped: true as const } : {})
     }
+  }
+
+  private sendIncarnationEvent(
+    clientId: string,
+    routedSessionId: string,
+    event: 'inputClosed' | 'startupLaunchTyped',
+    incarnationId: PtyIncarnationId
+  ): void {
+    this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
+      type: 'event',
+      event,
+      sessionId: routedSessionId,
+      payload: { incarnationId }
+    })
+    this.options.streamDataBatcher.flush(clientId)
   }
 
   private createStreamClient(
@@ -217,14 +235,10 @@ export class DaemonTerminalAdmission {
         })
       },
       onInputClosed: (incarnationId) => {
-        const routedSessionId = sessionId()
-        this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
-          type: 'event',
-          event: 'inputClosed',
-          sessionId: routedSessionId,
-          payload: { incarnationId }
-        })
-        this.options.streamDataBatcher.flush(clientId)
+        this.sendIncarnationEvent(clientId, sessionId(), 'inputClosed', incarnationId)
+      },
+      onStartupLaunchTyped: (incarnationId) => {
+        this.sendIncarnationEvent(clientId, sessionId(), 'startupLaunchTyped', incarnationId)
       },
       onExit: (code, incarnationId, cause) => {
         const routedSessionId = sessionId()

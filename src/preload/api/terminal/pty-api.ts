@@ -118,6 +118,8 @@ export type PtyApi = {
     resumeProviderSession?: TerminalLaunchResult['resumeProviderSession']
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
+    /** Orca's shell wrapper runs the launch, so keys written now reach the agent. */
+    shellWrapperLaunch?: true
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
   /** Genuine xterm input admitted by a local or remote transport; carries no terminal bytes. */
@@ -130,6 +132,10 @@ export type PtyApi = {
     options?: { requireWriteSettlement?: true; requireStartupDialog?: string }
   ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
+  /** The host typed the startup launch itself, erasing keys sent ahead for the shell wrapper. */
+  onStartupLaunchTyped?: (
+    callback: (payload: { id: string; incarnationId: string }) => void
+  ) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
   /** Who besides this window is viewing or typing into these PTYs; empty for unknown ids. */

@@ -101,6 +101,8 @@ export type PtyConnectResult = TerminalLaunchResult & {
   /** The provider adopted an existing session rather than creating a fresh one.
    *  Startup commands may be ignored; recovery still requires separate ownership evidence. */
   isReattach?: boolean
+  /** The daemon's shell wrapper runs this new process's launch, so typed-ahead keys reach the agent. */
+  shellWrapperLaunch?: true
   launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
@@ -338,7 +340,10 @@ export type IpcPtyTransportOptions = {
   telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
-  onPtySpawn?: (ptyId: string) => void
+  onPtySpawn?: (
+    ptyId: string,
+    spawn?: { shellWrapperLaunch?: boolean; incarnationId?: string }
+  ) => void
   /** Current surface may retain a late disposed spawn for its successor; absent/false authorizes kill (disposed-spawn-retention.ts). */
   retainDisposedSpawn?: () => boolean
   /** Rebind an existing pane after its provider replaces the PTY identity. */

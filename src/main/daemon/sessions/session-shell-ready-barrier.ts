@@ -37,6 +37,8 @@ export type SessionShellReadyBarrierDeps = {
 export type StartupCommandFallback = {
   claim(): Promise<boolean>
   build(): string
+  /** The launch line was written; keys sent ahead of it for the wrapper were erased. */
+  onTyped(): void
 }
 
 /** Strip startup markers and hold startup commands until shell readiness resolves. */
@@ -213,6 +215,7 @@ export class SessionShellReadyBarrier {
     void fallback?.claim().then((won) => {
       if (won && !this.writesClosed) {
         this.deps.subprocess.write(fallback.build())
+        fallback.onTyped()
       }
     })
   }

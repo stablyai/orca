@@ -76,6 +76,14 @@ export type InputClosedEvent = {
   payload: { incarnationId: PtyIncarnationId }
 }
 
+/** The host typed the startup launch because Orca's shell wrapper never claimed it; older mains ignore this. */
+export type StartupLaunchTypedEvent = {
+  type: 'event'
+  event: 'startupLaunchTyped'
+  sessionId: string
+  payload: { incarnationId: PtyIncarnationId }
+}
+
 export type DaemonEvent =
   | DataEvent
   | ExitEvent
@@ -84,3 +92,4 @@ export type DaemonEvent =
   | DataGapEvent
   | TransientFactEvent
   | InputClosedEvent
+  | StartupLaunchTypedEvent

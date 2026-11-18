@@ -41,6 +41,8 @@ export type CreateOrAttachOptions = {
     onExit: (code: number, incarnationId: PtyIncarnationId, cause?: TerminalExitCause) => void
     /** The child may still run, but its PTY master no longer takes input. */
     onInputClosed?: (incarnationId: PtyIncarnationId) => void
+    /** The host typed the startup launch because Orca's shell wrapper never claimed it. */
+    onStartupLaunchTyped?: (incarnationId: PtyIncarnationId) => void
   }
   /** Resolve the adopted owner’s canonical ID before stream callbacks can emit output. */
   onSessionResolved?: (sessionId: string) => void
@@ -62,4 +64,8 @@ export type CreateOrAttachResult = {
   cwdReadableByDaemon?: boolean
   /** The live child can no longer take input through its PTY master. */
   inputClosed?: true
+  /** Orca's shell wrapper runs the launch, so keys written now reach the agent; older hosts omit it. */
+  shellWrapperLaunch?: true
+  /** The host typed the startup launch itself, erasing keys sent ahead for the wrapper. */
+  startupLaunchTyped?: true
 }

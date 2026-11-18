@@ -10,7 +10,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
     if (
       !this.client.isConnected() ||
       this.sessionsAwaitingDaemonRecovery.has(id) ||
-      this.inputClosedIncarnations.isClosed(id, this.ptyInventory.currentIncarnation(id))
+      this.incarnationFlags.inputClosed.has(id, this.ptyInventory.currentIncarnation(id))
     ) {
       return false
     }
@@ -20,7 +20,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
 
   write(id: string, data: string): boolean {
     // Remount recovery cannot reopen a live child's retired PTY master; refuse instead of dropping.
-    if (this.inputClosedIncarnations.isClosed(id, this.ptyInventory.currentIncarnation(id))) {
+    if (this.incarnationFlags.inputClosed.has(id, this.ptyInventory.currentIncarnation(id))) {
       return false
     }
     const recoverable = this.prepareWrite(id)
@@ -29,7 +29,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
 
   /** Preserve ambiguous delivery as a settlement: throwing would look like proven refusal and permit replay. */
   async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
-    if (this.inputClosedIncarnations.isClosed(id, this.ptyInventory.currentIncarnation(id))) {
+    if (this.incarnationFlags.inputClosed.has(id, this.ptyInventory.currentIncarnation(id))) {
       return writeRefused('provider_refused_write')
     }
     let recoverable: boolean
