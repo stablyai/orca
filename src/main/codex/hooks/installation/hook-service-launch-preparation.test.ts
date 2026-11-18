@@ -191,6 +191,32 @@ describe('completed Codex launch preparation', () => {
     expect(readFileSync(`${runtime}.bak`, 'utf8')).toBe('model = "recoverable"\n')
   })
 
+  it('reports the mirrored config current only until a source edit', async () => {
+    const { service, home, source } = seed()
+    prepareFactoryHooks.mockImplementation(service.prepareRuntimeHomeForLaunch.bind(service))
+    const prepare = createCodexRuntimeHomeLaunchPreparation({
+      getRuntimeHome: () => ({
+        prepareForCodexLaunchAsync: async (_target, _env, options) => {
+          options?.deferConfigSync?.(() =>
+            syncSystemConfigIntoManagedCodexHome({
+              systemHomePath: join(homes.tmpHome, '.codex'),
+              runtimeHomePath: home
+            })
+          )
+          return home
+        }
+      }),
+      getSettings: () => undefined
+    })
+    expect(await service.isConfigPreparationCurrent(home)).toBe(false)
+    for (let index = 0; index < 3; index++) {
+      await prepare()
+    }
+    expect(await service.isConfigPreparationCurrent(home)).toBe(true)
+    writeFileSync(source, 'model = "A"\n')
+    expect(await service.isConfigPreparationCurrent(home)).toBe(false)
+  })
+
   it('honors Off before effects when it changes during the asynchronous snapshot', async () => {
     const { service, home } = seed()
     await settle(service, home)

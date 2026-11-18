@@ -218,6 +218,7 @@
     "check:process-host-imports": "node config/scripts/static-analysis/process-boundaries/check-process-host-imports.mjs",
     "check:main-sync-spawn-ratchet": "node config/scripts/static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs",
     "check:main-sync-fs-ratchet": "node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-sync-fs-ratchet.mjs",
+    "check:main-blocking-helper-ratchet": "node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs",
     "check:recurring-timer-ratchet": "node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-recurring-timer-ratchet.mjs",
     "check:compat-boundary-imports": "node config/scripts/static-analysis/process-boundaries/check-compat-boundary-imports.mjs",
     "check:import-boundaries": "bun config/scripts/static-analysis/process-boundaries/check-import-boundaries.mjs"
@@ -265,7 +266,7 @@
     "@oxlint/plugins": "1.89.0",
     "@playwright/test": "^1.64.1",
     "@sanity/diff-match-patch": "^3.2.1",
-    "@shadcn/lint": "~0.1.5",
+    "@shadcn/lint": "~0.2.5",
     "@stablyai/playwright-test": "^2.1.16",
     "@tailwindcss/vite": "^4.3.5",
     "@tanstack/react-virtual": "^3.14.13",

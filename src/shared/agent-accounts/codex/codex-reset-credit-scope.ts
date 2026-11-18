@@ -105,3 +105,44 @@ export function buildCodexResetCreditExpectedScope({
     offerRevision
   }
 }
+
+type CodexResetScopeSnapshot = {
+  codex: {
+    accounts: readonly NonNullable<BuildCodexResetCreditExpectedScopeOptions['account']>[]
+    activeAccountIdsByRuntime?: { host: string | null; wsl: Record<string, string | null> }
+  }
+  rateLimits: { codexTarget: RateLimitRuntimeTarget; codex: ProviderRateLimits | null }
+}
+
+/** The account a host's shown Codex usage belongs to: its selection for that usage's runtime. */
+export function getActiveCodexAccountIdForRateLimitTarget(
+  snapshot: Pick<CodexResetScopeSnapshot, 'codex'> & {
+    rateLimits: Pick<CodexResetScopeSnapshot['rateLimits'], 'codexTarget'>
+  }
+): string | null {
+  const target = snapshot.rateLimits.codexTarget
+  const selection = snapshot.codex.activeAccountIdsByRuntime
+  if (!selection) {
+    return null
+  }
+  if (target.runtime === 'host') {
+    return target.wslDistro === null ? selection.host : null
+  }
+  const distro = target.wslDistro?.trim()
+  return distro ? (selection.wsl[distro] ?? null) : null
+}
+
+/** Scope a reset to the account a host's accounts snapshot shows usage for. */
+export function buildActiveCodexResetCreditExpectedScope(
+  snapshot: CodexResetScopeSnapshot
+): CodexResetCreditExpectedScope | null {
+  const activeAccountId = getActiveCodexAccountIdForRateLimitTarget(snapshot)
+  const account = activeAccountId
+    ? (snapshot.codex.accounts.find((candidate) => candidate.id === activeAccountId) ?? null)
+    : null
+  return buildCodexResetCreditExpectedScope({
+    target: snapshot.rateLimits.codexTarget,
+    account,
+    limits: snapshot.rateLimits.codex
+  })
+}

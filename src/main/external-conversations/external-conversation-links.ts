@@ -18,6 +18,10 @@ import {
   writeWorkspaceRecord,
   type WorkspaceRecordStore
 } from '../runtime/workspaces/metadata/workspace-activity-records'
+import {
+  savedWorkspaceCatalog,
+  WORKTREE_METADATA_DOMAINS
+} from '../persistence/profile-save-domains'
 import { CONNECTOR_AGENTS } from './connector-agents'
 import type { ConversationKey } from './external-conversation-types'
 
@@ -32,6 +36,8 @@ export type ExternalConversationLinkStore = WorkspaceRecordStore<
     hostId: ExecutionHostId
   ) => Record<string, LinkRecord & { hostId?: ExecutionHostId }>
   getFolderWorkspaces?: () => readonly (LinkRecord & { id: string })[]
+  /** Real stores report every mutation's domains, which lets lookups reuse one link index. */
+  onStateWritten?: (listener: (dirtyDomains: readonly string[] | undefined) => void) => unknown
 }
 
 export type LinkedConversation = { workspace: AgentPaneWorkspace; link: ExternalConversationLink }
@@ -110,16 +116,90 @@ export function* allLinks(store: ExternalConversationLinkStore): Generator<Linke
   }
 }
 
+type LinkIndex = {
+  byPane: Map<string, LinkedConversation>
+  byConversation: Map<string, LinkedConversation>
+}
+
+type LinkIndexSlot = { current: LinkIndex | null }
+
+const linkIndexes = new WeakMap<ExternalConversationLinkStore, LinkIndexSlot>()
+
+const LINK_DOMAINS: readonly string[] = WORKTREE_METADATA_DOMAINS
+
+function conversationIndexKey(key: ConversationKey): string {
+  return `${key.source}\0${key.externalId}`
+}
+
+function buildLinkIndex(store: ExternalConversationLinkStore): LinkIndex {
+  const index: LinkIndex = {
+    byPane: new Map(),
+    byConversation: new Map()
+  }
+  // First in scan order wins, as the scans this replaces returned.
+  for (const linked of allLinks(store)) {
+    if (!index.byPane.has(linked.link.paneKey)) {
+      index.byPane.set(linked.link.paneKey, linked)
+    }
+    const conversation = conversationIndexKey(linked.link)
+    if (!index.byConversation.has(conversation)) {
+      index.byConversation.set(conversation, linked)
+    }
+  }
+  return index
+}
+
+function hasStateWrites(
+  store: ExternalConversationLinkStore
+): store is ExternalConversationLinkStore &
+  Required<Pick<ExternalConversationLinkStore, 'onStateWritten'>> {
+  return typeof store.onStateWritten === 'function'
+}
+
+function watchLinkWrites(
+  store: ExternalConversationLinkStore &
+    Required<Pick<ExternalConversationLinkStore, 'onStateWritten'>>
+): LinkIndexSlot {
+  const slot: LinkIndexSlot = { current: null }
+  // Synchronous with the write, so no lookup can see a removed or moved link. One metadata row's
+  // write can change which row other locators and hosts resolve to, so any such write drops it.
+  store.onStateWritten((dirtyDomains) => {
+    if (
+      savedWorkspaceCatalog(dirtyDomains) ||
+      dirtyDomains?.some((domain) => LINK_DOMAINS.includes(domain))
+    ) {
+      slot.current = null
+    }
+  })
+  return slot
+}
+
+/** Status events look links up far more often than links, metadata or the catalog change. */
+function linkIndex(store: ExternalConversationLinkStore): LinkIndex {
+  if (!hasStateWrites(store)) {
+    return buildLinkIndex(store)
+  }
+  let slot = linkIndexes.get(store)
+  if (!slot) {
+    slot = watchLinkWrites(store)
+    linkIndexes.set(store, slot)
+  }
+  slot.current ??= buildLinkIndex(store)
+  return slot.current
+}
+
 export function findLink(
   store: ExternalConversationLinkStore,
   key: ConversationKey
 ): LinkedConversation | null {
-  for (const linked of allLinks(store)) {
-    if (sameConversation(linked.link, key)) {
-      return linked
-    }
-  }
-  return null
+  return linkIndex(store).byConversation.get(conversationIndexKey(key)) ?? null
+}
+
+export function findLinkForPane(
+  store: ExternalConversationLinkStore,
+  paneKey: string
+): LinkedConversation | null {
+  return linkIndex(store).byPane.get(paneKey) ?? null
 }
 
 export function requireLink(

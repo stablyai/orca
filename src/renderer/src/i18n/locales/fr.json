@@ -1739,7 +1739,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Emplacement du projet non défini"
+        "locationNotSet": "Emplacement du projet non défini",
+        "hostLocalGitProject": "Ce projet n'a pas de dépôt Git distant correspondant",
+        "hostLocalFolderProject": "Les projets de dossier ne peuvent pas être liés à d'autres hôtes"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Mettez à jour le serveur pour voir les ports de ses hôtes SSH.",
@@ -5377,8 +5379,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Fermer",
           "64c71cf7b9": "Orca n'a encore installé aucun skill sur cette machine.",
-          "0900db719a": "— déconnecté",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Cet ordinateur",
           "3677ae58e7": "Skills installés par Orca depuis un lien. Réinstallez-les, revenez à une version antérieure ou supprimez-les.",
           "44d118a8f7": "Installés par Orca",
@@ -5413,8 +5413,6 @@
           "a4dfd33095": "Un seul espace de travail",
           "c779621aa0": "Skills globaux",
           "63cc9e31fe": "Destination",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— déconnecté",
           "0785d0a503": "— mise à jour requise",
           "8562dd1e6e": "Cet ordinateur",
           "b8a0b706ad": "Machine"
@@ -6069,6 +6067,9 @@
           "removeDescriptionSsh": "Ceci retire uniquement {{name}} d'Orca. Ses fichiers restent sur {{host}} — rajoutez cet hôte SSH pour le récupérer.",
           "removeDescriptionLocal": "Ceci retire uniquement {{name}} d'Orca. Il est toujours sur votre disque.",
           "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés.",
+          "linkedWorkspaceWarning_one": "{{count}} espace de travail de ce projet sera aussi retiré d'Orca.",
+          "linkedWorkspaceWarning_other": "{{count}} espaces de travail de ce projet seront aussi retirés d'Orca.",
+          "linkedWorkspaceWarning_many": "{{count}} espaces de travail de ce projet seront aussi retirés d'Orca.",
           "openTerminalWarning_one": "{{count}} terminal ouvert dans ce projet sera fermé.",
           "openTerminalWarning_other": "{{count}} terminaux ouverts dans ce projet seront fermés.",
           "openTerminalWarning_many": "{{count}} terminaux ouverts dans ce projet seront fermés."

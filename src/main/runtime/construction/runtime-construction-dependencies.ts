@@ -88,7 +88,7 @@ export type RuntimeConstructionDependencies = {
   resolveCodexStructuredLaunchHome?: (input: {
     launchEnv: NodeJS.ProcessEnv
   }) => string | null | Promise<string | null>
-  prepareCodexCatalogProbeHome?: (homePath: string) => void
+  prepareCodexCatalogProbeHome?: (homePath: string) => void | Promise<void>
   buildAgentHookPtyEnv?: () => Record<string, string>
   getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
   /** Live headless-model depth; a host with no renderer to reveal from needs only its PTY provider's live window. */

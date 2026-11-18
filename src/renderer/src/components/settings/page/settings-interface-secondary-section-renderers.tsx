@@ -52,6 +52,7 @@ export type ChatSettingsRenderContext = {
     | 'sourceControlAiPromptDiscardSignal'
     | 'hasUnsavedChatPromptChanges'
     | 'showDesktopOnlySettings'
+    | 'settingsHostScope'
   >
   interactions: Pick<
     SettingsRenderContext['interactions'],
@@ -75,6 +76,7 @@ export function renderChatSettingsSection(context: ChatSettingsRenderContext): R
       hasUnsavedChatPromptChanges={model.hasUnsavedChatPromptChanges}
       searchEntries={navigation.getSectionSearchEntries('chat')}
       showDesktopOnlySettings={model.showDesktopOnlySettings}
+      hostScope={model.settingsHostScope}
       isMounted={view.isSectionMounted('chat')}
     />
   )

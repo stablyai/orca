@@ -1980,7 +1980,9 @@
         "noSavedConversation": "此聊天没有可复制的已保存对话"
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "尚未设置项目位置"
+        "locationNotSet": "尚未设置项目位置",
+        "hostLocalGitProject": "此项目没有匹配的 Git 远程仓库",
+        "hostLocalFolderProject": "文件夹项目无法关联到其他主机"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+ 点击检查最新候选发布版(RC)，{{perfKey}}+ 点击检查最新性能测试构建",
@@ -5647,8 +5649,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "关闭",
           "64c71cf7b9": "Orca 尚未在此计算机上安装任何技能",
-          "0900db719a": "— 已断开连接",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "此计算机",
           "3677ae58e7": "Orca 通过链接安装的技能。可以重新安装、回退到早期版本或将其删除",
           "44d118a8f7": "由 Orca 安装",
@@ -5682,8 +5682,6 @@
           "a4dfd33095": "单个工作区",
           "c779621aa0": "全局技能",
           "63cc9e31fe": "目标位置",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— 已断开连接",
           "0785d0a503": "— 需要更新",
           "8562dd1e6e": "此计算机",
           "b8a0b706ad": "计算机"
@@ -6001,7 +5999,6 @@
           "74fc00776f": "错误详情",
           "ca3b225195": "分支自动命名失败",
           "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
-          "dismissError": "清除错误",
           "dismissing": "正在清除…"
         },
         "CreateProjectLocationField": {
@@ -6153,6 +6150,7 @@
           "removeDescriptionSsh": "此操作仅将 {{name}} 从 Orca 中移除，文件仍保留在 {{host}} 上 — 重新添加该 SSH 主机即可恢复",
           "removeDescriptionLocal": "此操作仅将 {{name}} 从 Orca 中移除，文件仍保留在您的磁盘上",
           "removeDescriptionVmRecipe": "这将从 Orca 中移除 {{name}}，其 VM 配方决定是否永久删除环境及其文件",
+          "linkedWorkspaceWarning_other": "此项目中的 {{count}} 个工作区也将从 Orca 中移除",
           "openTerminalWarning_other": "此项目中打开的 {{count}} 个终端将被关闭"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {

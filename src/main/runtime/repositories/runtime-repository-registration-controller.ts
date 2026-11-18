@@ -19,6 +19,7 @@ import {
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
+import { matchLinkedWorktreeMainCheckout } from '../../workspaces/catalog/linked-worktree-main-checkout'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -98,7 +99,11 @@ export class RuntimeRepositoryRegistrationController {
       sameHostRepos().find(
         (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
       )
-    const existing = findAtPath() ?? (await findProjectAtSameRealPath(sameHostRepos(), repoPath))
+    const isMainCheckout = matchLinkedWorktreeMainCheckout(gitInfo)
+    const existing =
+      findAtPath() ??
+      (await findProjectAtSameRealPath(sameHostRepos(), repoPath)) ??
+      sameHostRepos().find(isMainCheckout)
     if (existing) {
       return this.reuseExisting(store, existing, executionHostId)
     }
@@ -109,7 +114,7 @@ export class RuntimeRepositoryRegistrationController {
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
     // A concurrent add of the same folder can finish while the awaits above are pending.
-    const raceWinner = findAtPath()
+    const raceWinner = findAtPath() ?? sameHostRepos().find(isMainCheckout)
     if (raceWinner) {
       return this.reuseExisting(store, raceWinner, executionHostId)
     }
