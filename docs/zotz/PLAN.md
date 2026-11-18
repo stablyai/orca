@@ -583,4 +583,5 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 
 - **Tope de agentes:** 6 Claude seguidos → 4 en marcha en ~10 s y el resto en cola (`concurrency`); al cerrar uno, el siguiente arranca solo. Antes del arreglo, la reserva de 90 s contaba doble y dejaba un lugar vacío ese tiempo.
 - **Memoria en macOS:** `memory_pressure` cuenta como libre lo que macOS puede mandar a swap; con 16 GB ocupados Zotz seguía viendo 9–12 GB libres. Ahora la presión también sale de `kern.memorystatus_vm_pressure_level` y del swap escrito en 2 min (≥ 1 GiB). Con 12 GB ocupados: presión `elevated`, un Claude nuevo esperó con motivo `pressure` y arrancó solo ~80 s después de liberar la RAM.
-- **Pendiente:** cancelar desde la API/tablero una tarea cuya pestaña sigue abierta la vuelve a encolar (el pane reintenta el spawn). Cancelar debería cerrar o marcar el pane. Repetir la prueba de memoria en la MSI (Windows mide distinto).
+- **Cancelar:** la cola resuelve `canceled` y recuerda el pane; la terminal abre como shell sin el agente, con una franja "cancelado en la cola" y la marca en la barra simple. Antes el pane reintentaba el spawn y volvía a la cola.
+- **Pendiente:** repetir la prueba de memoria en la MSI (Windows mide distinto).
