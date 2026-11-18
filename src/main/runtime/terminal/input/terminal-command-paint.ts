@@ -256,8 +256,10 @@ export function isCurrentCommandStatus(
   return record.commandPaint?.isCurrentStatus(titleObservedAt) ?? true
 }
 
-export function takeReattachedRepaintRequest(record: TerminalCommandPaintRecord): boolean {
-  return record.commandPaint?.takeReattachedRepaintRequest() ?? false
+export function takeReattachedRepaintRequest(
+  record: TerminalCommandPaintRecord | undefined
+): boolean {
+  return record?.commandPaint?.takeReattachedRepaintRequest() ?? false
 }
 
 /** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */

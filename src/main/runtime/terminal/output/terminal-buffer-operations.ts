@@ -16,6 +16,7 @@ import {
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   admitRestoredTerminalReport,
   hasTerminalCommandPainted,
@@ -284,6 +285,9 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
           readOutputClockAt: () => this.readOutputClockAt(ptyId),
           hasPaintedSinceReattach: () => hasTerminalCommandPainted(pty),
           requestRepaint: () => this.requestReattachedRepaint(ptyId),
+          readRestTitle: () => pty.lastOscTitle ?? null,
+          confirmForeground: async () =>
+            isTuiAgent(agent) && (await this.readLaunchedAgentForeground(ptyId, agent)) === 'agent',
           isCurrent,
           applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
         })
@@ -293,8 +297,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
 
   /** One repaint per reattach, whether restored status or a queued wait asks first. */
   protected requestReattachedRepaint(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (pty && takeReattachedRepaintRequest(pty)) {
+    if (takeReattachedRepaintRequest(this.ptysById.get(ptyId))) {
       this.ptyController?.requestRepaint?.(ptyId)
     }
   }
