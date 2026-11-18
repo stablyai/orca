@@ -99,6 +99,26 @@ async function postHook(endpoint, pane, payload) {
   }
 }
 
+/**
+ * Setup, not measured: answer the worktree-cards intro and keep classic cards. Builds that have the intro (#43028)
+ * otherwise preview the new cards on a profile that never answered it, so OLD and NEW would click different things.
+ */
+export async function pinClassicWorktreeCards(page) {
+  return page.evaluate(async () => {
+    const state = window.__store.getState()
+    state.markWorktreeCardsIntroNoticeSeen?.()
+    state.setWorktreeCardsIntroChoice?.('classic')
+    if (state.settings?.experimentalNewWorktreeCardStyle) {
+      await state.updateSettings({ experimentalNewWorktreeCardStyle: false })
+    }
+    const after = window.__store.getState()
+    return after.worktreeCardsIntroChoice === 'new' ||
+      after.settings?.experimentalNewWorktreeCardStyle === true
+      ? 'new'
+      : 'classic'
+  })
+}
+
 /** Setup, not measured: one finished agent turn on every seeded terminal, like a fleet of idle agents. */
 export async function seedAgentStatuses({ page, userDataDir, count }) {
   const endpoint = readHookEndpoint(userDataDir)
@@ -218,11 +238,13 @@ async function clearPathTo(page, id) {
       dismiss.click()
       return { path: 'tip' }
     }
-    const surface = target
-      ? document.querySelector(
-          `[data-worktree-id="${CSS.escape(target)}"] [data-worktree-card-surface]`
-        )
+    // The title, not the card centre: what sits at the centre differs by card style (e.g. an agent row).
+    const card = target
+      ? document.querySelector(`[data-worktree-id="${CSS.escape(target)}"]`)
       : null
+    const surface =
+      card?.querySelector('[data-worktree-title-inline-rename]') ??
+      card?.querySelector('[data-worktree-card-surface]')
     const box = surface?.getBoundingClientRect()
     if (!box) {
       return { path: 'clear' }
@@ -276,7 +298,9 @@ function uncoveredCardPair(page) {
       const id = card.getAttribute('data-worktree-id')
       const rect = card.getBoundingClientRect()
       if (id && id !== active && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight) {
-        const surface = card.querySelector('[data-worktree-card-surface]')
+        const surface =
+          card.querySelector('[data-worktree-title-inline-rename]') ??
+          card.querySelector('[data-worktree-card-surface]')
         const box = surface?.getBoundingClientRect()
         const hit = box
           ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)

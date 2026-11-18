@@ -26,7 +26,7 @@ import {
   waitForLaunches,
   writeClaudeStub
 } from './fleet-gate-launch-burst.mjs'
-import { SCENARIOS, seedAgentStatuses } from './fleet-gate-scenarios.mjs'
+import { pinClassicWorktreeCards, SCENARIOS, seedAgentStatuses } from './fleet-gate-scenarios.mjs'
 import {
   buildSyntheticFleetSeed,
   ensureFleetCorpus,
@@ -360,6 +360,11 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       result.incomplete.push('store notify loop not found: store pubs/wakeups not measured')
     }
     console.log(`[fleet-gate] ${label} up; settling ${options.settleMs / 1000}s`)
+    if ((await pinClassicWorktreeCards(page)) !== 'classic') {
+      result.incomplete.push(
+        'could not keep classic worktree cards: switch would click a different card'
+      )
+    }
     const agents = await seedAgentStatuses({ page, userDataDir, count: AGENT_PANES })
     if (agents.panes === 0) {
       result.incomplete.push(`no idle agent statuses: ${JSON.stringify(agents)}`)
