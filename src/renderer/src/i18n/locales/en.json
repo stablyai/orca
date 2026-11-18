@@ -23990,6 +23990,7 @@
     "new": "New sparse preset",
     "edit": "Edit sparse preset",
     "saveFailed": "Could not save the preset. Try again.",
+    "updateServerToRemove": "Update Orca on this project’s server to remove its presets.",
     "nameRequired": "Name is required.",
     "nameTooLong": "Name must be 80 characters or fewer.",
     "nameExists": "A preset named “{{name}}” already exists.",
