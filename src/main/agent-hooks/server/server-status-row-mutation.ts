@@ -9,6 +9,8 @@ import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-l
 
 import { AgentHookServerStatusApplication } from './server-status-application'
 
+const MAX_REMEMBERED_SUBMISSIONS = 1_000
+
 export abstract class AgentHookServerStatusRowMutation extends AgentHookServerStatusApplication {
   /** When the user last submitted a line in each pane; a resumed CLI's startup ends there. */
   protected readonly lastSubmittedAtByPaneKey = new Map<string, number>()
@@ -23,13 +25,15 @@ export abstract class AgentHookServerStatusRowMutation extends AgentHookServerSt
     if (row?.observation?.origin !== 'launch') {
       return
     }
-    // Panes whose rows are gone (closed tabs) leave with the next submission.
-    for (const key of this.lastSubmittedAtByPaneKey.keys()) {
-      if (!this.state.lastStatusByPaneKey.has(key)) {
-        this.lastSubmittedAtByPaneKey.delete(key)
+    // Pane teardown forgets marks; the oldest go first if panes outrun that.
+    this.lastSubmittedAtByPaneKey.delete(resolved)
+    this.lastSubmittedAtByPaneKey.set(resolved, Date.now())
+    if (this.lastSubmittedAtByPaneKey.size > MAX_REMEMBERED_SUBMISSIONS) {
+      const oldest = this.lastSubmittedAtByPaneKey.keys().next().value
+      if (oldest !== undefined) {
+        this.lastSubmittedAtByPaneKey.delete(oldest)
       }
     }
-    this.lastSubmittedAtByPaneKey.set(resolved, Date.now())
   }
 
   protected preserveAcceptedTurn(
