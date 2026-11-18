@@ -39,13 +39,11 @@ export function exposeNativeUsageIdentity(dispatch: DispatchContextRow) {
   }
   try {
     const value: unknown = JSON.parse(raw)
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !('status' in value)) {
       return unavailable
     }
-    const receipt = new Map<string, unknown>(Object.entries(value))
-    const status = receipt.get('status')
-    const reason = receipt.get('reason')
-    const observedAt = receipt.get('observedAt')
+    const status = value.status
+    const reason = 'reason' in value ? value.reason : undefined
     if (
       status === 'unavailable' &&
       (reason === 'session_not_reported' || reason === 'session_changed_or_shared')
@@ -54,17 +52,37 @@ export function exposeNativeUsageIdentity(dispatch: DispatchContextRow) {
     }
     if (
       status === 'observed' &&
-      ['agent', 'sessionId', 'paneKey', 'processIncarnation', 'hostScope', 'launchTokenHash'].every(
-        (key) => {
-          const field = receipt.get(key)
-          return typeof field === 'string' && field.length > 0
-        }
-      ) &&
-      typeof observedAt === 'number' &&
-      Number.isFinite(observedAt)
+      'agent' in value &&
+      typeof value.agent === 'string' &&
+      value.agent.trim().length > 0 &&
+      'sessionId' in value &&
+      typeof value.sessionId === 'string' &&
+      value.sessionId.trim().length > 0 &&
+      'paneKey' in value &&
+      typeof value.paneKey === 'string' &&
+      value.paneKey.trim().length > 0 &&
+      'processIncarnation' in value &&
+      typeof value.processIncarnation === 'string' &&
+      value.processIncarnation.trim().length > 0 &&
+      'hostScope' in value &&
+      typeof value.hostScope === 'string' &&
+      value.hostScope.trim().length > 0 &&
+      'launchTokenHash' in value &&
+      typeof value.launchTokenHash === 'string' &&
+      value.launchTokenHash.trim().length > 0 &&
+      'observedAt' in value &&
+      typeof value.observedAt === 'number' &&
+      Number.isFinite(value.observedAt)
     ) {
       return {
-        ...Object.fromEntries(receipt),
+        status,
+        agent: value.agent,
+        sessionId: value.sessionId,
+        paneKey: value.paneKey,
+        processIncarnation: value.processIncarnation,
+        hostScope: value.hostScope,
+        launchTokenHash: value.launchTokenHash,
+        observedAt: value.observedAt,
         profile: { status: 'unavailable', reason: 'profile_not_verified' },
         usageAttribution: { status: 'unavailable', reason: 'segment_ownership_unproven' }
       }

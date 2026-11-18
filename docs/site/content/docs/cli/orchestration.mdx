@@ -91,11 +91,13 @@ orca orchestration worker-start --task <taskId> --retry-of <dispatchId> --worktr
 identifies a reported native agent session and its pane, process
 incarnation, host scope, launch-token hash, and observation time. An `unavailable`
 receipt gives `session_not_reported` or `session_changed_or_shared`; malformed or
-missing evidence is treated as `session_not_reported`. Older runtimes may omit the
-field, and a remote-owned show without replicated evidence reports it unavailable.
+missing evidence, including blank identity fields, is treated as
+`session_not_reported`. Older runtimes may omit the field, and a remote-owned show
+without replicated evidence reports it unavailable.
 `hostScope` is a JSON-encoded host-scope object; `agent` and `sessionId` name the
-provider session on that host. The provider profile is not verified by this
-receipt, so these values are not a globally unique accounting key.
+provider session on that host, not a provider-account namespace. An unchanged
+session ID does not establish an exclusive writer. Only documented receipt fields
+are exposed; extra stored fields are ignored.
 
 An `observed` receipt includes `profile: {status: "unavailable", reason:
 "profile_not_verified"}` and `usageAttribution: {status: "unavailable", reason:
@@ -104,6 +106,26 @@ or shared session cannot be charged as a whole without exact segment proof.
 Never substitute working-directory or timing correlation for that proof.
 Deploying the runtime changes to the worker host is required before it can report
 this evidence; the CLI alone cannot produce it.
+
+Usage consumers must keep token totals **unavailable**, not zero, while
+`usageAttribution.status` is unavailable (or this field is absent). This receipt
+does not recover historical dispatch counts.
+
+An exact accounting contract additionally needs an ingestion-attested transcript
+or store namespace and incarnation, and dispatch-owned native usage-event
+membership. Fresh launches need acknowledgment of actual new history before the
+first owned work, not just fresh-launch intent. Resumed launches must exclude
+pre-existing or copied history; shared sessions require per-event ownership
+rather than time bounds or session-total subtraction. A serial segment can use
+native start/end cursors only with a proven exclusive-writer interval. Replay,
+streaming corrections, forks and counter resets must retain event identity and
+never charge inherited usage twice.
+
+Once that exact namespaced segment is attested, a provider profile is not a
+separate prerequisite for token attribution; profiles help discover the source,
+but neither profiles nor transcript ownership prove the billed provider account.
+The current receipt supplies neither segment membership nor exclusive-writer
+proof, so adding a profile or transcript path alone cannot make totals exact.
 
 When a worker stops at a permission prompt, the escalation names the prompt. Only a person can allow it, so carry on with other work until its closing message arrives; if it is holding up the task, deny it with a reason and the worker carries on another way:
 

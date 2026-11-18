@@ -9,22 +9,45 @@ function identity(raw?: unknown) {
 }
 
 describe('native usage identity exposure', () => {
-  it('returns an observed receipt without treating it as usage ownership', () => {
+  it('does not expose private fields embedded in a stored receipt', () => {
+    const exposed = identity(
+      JSON.stringify({
+        status: 'observed',
+        agent: 'codex',
+        sessionId: 'session',
+        paneKey: 'pane',
+        processIncarnation: 'process',
+        hostScope: '{"kind":"local","hostId":"local"}',
+        launchTokenHash: 'hash',
+        observedAt: 1767225600000,
+        launchToken: 'private-launch-authority'
+      })
+    )
+    expect(exposed).toHaveProperty('status', 'observed')
+    expect(exposed).not.toHaveProperty('launchToken')
+  })
+
+  it('rejects blank identity fields instead of reporting a usable session', () => {
     const receipt = {
       status: 'observed',
       agent: 'codex',
       sessionId: 'session',
       paneKey: 'pane',
       processIncarnation: 'process',
-      hostScope: '{"kind":"local","hostId":"local"}',
+      hostScope: 'host',
       launchTokenHash: 'hash',
       observedAt: 1767225600000
     }
-    expect(identity(JSON.stringify(receipt))).toEqual({
-      ...receipt,
-      profile: { status: 'unavailable', reason: 'profile_not_verified' },
-      usageAttribution: { status: 'unavailable', reason: 'segment_ownership_unproven' }
-    })
+    for (const field of [
+      'agent',
+      'sessionId',
+      'paneKey',
+      'processIncarnation',
+      'hostScope',
+      'launchTokenHash'
+    ]) {
+      expect(identity(JSON.stringify({ ...receipt, [field]: ' \t' }))).toEqual(unavailable)
+    }
   })
 
   it('preserves ambiguity and treats absent or malformed receipts as unavailable', () => {

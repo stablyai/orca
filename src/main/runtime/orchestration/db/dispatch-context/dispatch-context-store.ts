@@ -130,11 +130,10 @@ export function getDispatchContextById(
   this: OrchestrationDb,
   dispatchId: string
 ): DispatchContextRow | undefined {
-  // SELECT * also exposes additive evidence columns when a newer schema has them.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this selects exactly one dispatch row.
-  return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(dispatchId) as
-    | DispatchContextRow
-    | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
+  return this.db
+    .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
+    .get(dispatchId) as DispatchContextRow | undefined
 }
 
 /** The newest Dispatches a chat created, by the Orca session id it is addressed by. */
