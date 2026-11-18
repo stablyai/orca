@@ -49,7 +49,7 @@ export function listWorkerTerminalReleaseBacklog(
     .all(limit ?? -1) as WorkerTerminalResourceRow[]
 }
 
-/** Older builds settled a stop or exit without releasing its terminal; these rows pin their Run. */
+/** Terminal (not chat) workers older builds settled without releasing their row; these pin their Run. */
 export function listSettledWorkerTerminalsStillOwned(
   this: OrchestrationDb,
   afterRowid: number,
@@ -64,6 +64,7 @@ export function listSettledWorkerTerminalsStillOwned(
         WHERE res.rowid > ? AND w.state IN ('succeeded', 'failed', 'stopped', 'abandoned')
           AND res.ownership_state = 'owned' AND res.release_state = 'not_requested'
           AND res.process_incarnation IS NOT NULL AND res.updated_at < ?
+          AND res.terminal_handle NOT LIKE 'structworker\\_%' ESCAPE '\\'
         ORDER BY res.rowid LIMIT ?`
     )
     .all(afterRowid, updatedBefore, limit) as (WorkerTerminalResourceRow & { row_id: number })[]

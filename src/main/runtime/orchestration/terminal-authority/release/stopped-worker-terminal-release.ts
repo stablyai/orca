@@ -1,10 +1,10 @@
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
-import type { WorkerTerminalProcessIndex } from './worker-terminal-process-liveness'
+import { isMintedPtyIncarnation, type WorkerTerminalProcessIndex } from './worker-terminal-process-liveness'
 import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestration/worker/stop/worker-stop-archive'
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 
 const PAGE_ROWS = 50
+const CLOCK_STEP_MS = 1_000
 
 const activeSweeps = new WeakMap<WorkerTerminalReleaseRuntime, Promise<void>>()
 
@@ -36,7 +36,8 @@ export function sweepStoppedWorkerTerminals(
 /**
  * Releases settled terminal workers' rows that are still owned and never requested, as older builds
  * left them after a stop or exit, so their Run can retire. Only an exact process exit counts; a live or
- * unverifiable process keeps its row. Each host is listed once per sweep.
+ * unverifiable process keeps its row. Each host is listed once per sweep. Chat workers can restart on
+ * mail between the check and the release, so only their proven stop releases them.
  */
 async function releaseExitedWorkerTerminals(
   runtime: WorkerTerminalReleaseRuntime,
@@ -49,6 +50,7 @@ async function releaseExitedWorkerTerminals(
   const inventories = new Map<string, Promise<WorkerTerminalProcessIndex | null>>()
   // Timestamps are whole seconds: only rows written before the sweep's second predate every listing.
   const fence = readSqliteNow(db)
+  const clockSkew = Date.now() - performance.now()
   const exited: {
     requestingDispatchId: string
     resourceId: string
@@ -68,8 +70,8 @@ async function releaseExitedWorkerTerminals(
       if (!processIncarnation) {
         continue
       }
-      // A chat worker can restart on mail between this check and the release; only its stop settles it.
-      if (isStructuredWorkerHandle(resource.terminal_handle)) {
+      // A legacy runtime:pty:generation fence never appears in a list, so absence proves nothing.
+      if (!isMintedPtyIncarnation(processIncarnation)) {
         continue
       }
       const liveness = await runtime
@@ -95,8 +97,9 @@ async function releaseExitedWorkerTerminals(
       break
     }
   }
-  // A wall clock stepped back since the fence could let a newer row slip under it.
-  if (exited.length === 0 || stopped() || readSqliteNow(db) < fence) {
+  // A wall clock stepped since the fence could let a newer row slip under it.
+  const clockStepped = Math.abs(Date.now() - performance.now() - clockSkew) > CLOCK_STEP_MS
+  if (exited.length === 0 || stopped() || clockStepped || readSqliteNow(db) < fence) {
     return 0
   }
   for (const release of exited) {

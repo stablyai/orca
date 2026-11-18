@@ -63,3 +63,11 @@ export function classifyIndexedWorkerTerminalProcessIncarnation(
   }
   return classifyWorkerTerminalProcessIncarnation(processIncarnation, candidates)
 }
+
+const MINTED_INCARNATION = /:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** A `ptyId:<uuid>` identity a current PTY minted; a legacy `runtime:pty:generation` fence is not one,
+ *  and absence from a list proves nothing about it. */
+export function isMintedPtyIncarnation(processIncarnation: string): boolean {
+  return MINTED_INCARNATION.test(processIncarnation)
+}

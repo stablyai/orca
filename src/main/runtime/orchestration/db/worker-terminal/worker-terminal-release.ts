@@ -151,6 +151,8 @@ export function settleDeadWorkerTerminalReleases(
   try {
     const released = releases.filter(
       (release) =>
+        // A retain or release request since the sweep read the row wins over the sweep.
+        this.getWorkerTerminalResource(release.resourceId)?.release_state === 'not_requested' &&
         releaseDeadWorkerTerminalInTransaction(this, release).release_state === 'released'
     ).length
     this.db.exec('COMMIT')

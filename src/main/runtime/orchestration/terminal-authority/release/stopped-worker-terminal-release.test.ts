@@ -8,6 +8,7 @@ import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-run
 import { sweepStoppedWorkerTerminals } from './stopped-worker-terminal-release'
 
 let db: OrchestrationDb | undefined
+const INCARNATION = '0f6e2b8c-3c1d-4a5e-9b7f-2d4c6a8e0b13'
 
 afterEach(() => {
   db?.close()
@@ -26,7 +27,7 @@ function leftOwnedStoppedWorker(d: OrchestrationDb, name: string): string {
     dispatchId: started.dispatch.id,
     handle: `term_${name}`,
     paneKey: `tab_${name}:leaf_${name}`,
-    processIncarnation: `pty-${name}:incarnation`,
+    processIncarnation: `pty-${name}:${INCARNATION}`,
     worktreeId: 'repo::worktree',
     setupState: 'not_applicable',
     terminalOwnership: 'created',
@@ -47,17 +48,14 @@ function leftOwnedStoppedWorker(d: OrchestrationDb, name: string): string {
 
 function fakeRuntime(
   d: OrchestrationDb,
-  verdicts: Record<string, 'live' | 'exited' | 'unverifiable'>,
-  maps: Set<unknown>
+  verdicts: Record<string, 'live' | 'exited' | 'unverifiable'>
 ): WorkerTerminalReleaseRuntime {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these three members.
   return {
     getExistingOrchestrationDb: () => d,
     ensureStructuredAgentSessionHost: async () => undefined,
-    inspectTerminalProcessIncarnationLiveness: async (incarnation: string, _scope, inventories) => {
-      maps.add(inventories)
-      return verdicts[incarnation] ?? 'unverifiable'
-    }
+    inspectTerminalProcessIncarnationLiveness: async (incarnation: string) =>
+      verdicts[incarnation] ?? 'unverifiable'
   } as WorkerTerminalReleaseRuntime
 }
 
@@ -67,18 +65,15 @@ describe('sweepStoppedWorkerTerminals', () => {
     const exited = leftOwnedStoppedWorker(db, 'exited')
     const live = leftOwnedStoppedWorker(db, 'live')
     const unknown = leftOwnedStoppedWorker(db, 'unknown')
-    const maps = new Set<unknown>()
 
     await sweepStoppedWorkerTerminals(
-      fakeRuntime(db, { 'pty-exited:incarnation': 'exited', 'pty-live:incarnation': 'live' }, maps),
+      fakeRuntime(db, { [`pty-exited:${INCARNATION}`]: 'exited', [`pty-live:${INCARNATION}`]: 'live' }),
       () => false
     )
 
     expect(db.getWorkerTerminalResourceByOwner(exited)?.release_state).toBe('released')
     expect(db.getWorkerTerminalResourceByOwner(live)?.release_state).toBe('not_requested')
     expect(db.getWorkerTerminalResourceByOwner(unknown)?.release_state).toBe('not_requested')
-    // One inventory cache for the whole sweep, so each host is listed once.
-    expect(maps.size).toBe(1)
   })
 
   it('admits no work once its owner has stopped', async () => {
@@ -86,7 +81,7 @@ describe('sweepStoppedWorkerTerminals', () => {
     const exited = leftOwnedStoppedWorker(db, 'exited')
 
     await sweepStoppedWorkerTerminals(
-      fakeRuntime(db, { 'pty-exited:incarnation': 'exited' }, new Set()),
+      fakeRuntime(db, { [`pty-exited:${INCARNATION}`]: 'exited' }),
       () => true
     )
 
