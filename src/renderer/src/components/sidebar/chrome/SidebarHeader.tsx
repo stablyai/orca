@@ -84,40 +84,40 @@ const SidebarHeader = React.memo(function SidebarHeader({
       sectionId={groupBy === 'repo' ? 'projects' : 'workspaces'}
       fold={fold}
       titleControl={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="xs"
-                // Truncate localized titles because fixed-width actions cannot shrink inside the short header row.
-                className="min-w-0"
-                data-sidebar-section-title={
-                  sidebarBody === 'conversations'
-                    ? 'projects'
-                    : sidebarBody === 'agents'
-                      ? 'activity'
-                      : 'workspaces'
-                }
-              >
-                {sidebarTitle}
-                <ChevronDown aria-hidden="true" className="size-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onSelect={() => setSidebarBody('conversations')}>
-                <FolderTree />
-                {t('dashboard.sidebar.projects', 'Projects')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setSidebarBody('workspaces')}>
-                <GitBranch />
-                {workspaceTitle}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setSidebarBody('agents')}>
-                <Activity />
-                {t('dashboard.sidebar.activity', 'Activity')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="xs"
+              // Truncate localized titles because fixed-width actions cannot shrink inside the short header row.
+              className="min-w-0"
+              data-sidebar-section-title={
+                sidebarBody === 'conversations'
+                  ? 'projects'
+                  : sidebarBody === 'agents'
+                    ? 'activity'
+                    : 'workspaces'
+              }
+            >
+              {sidebarTitle}
+              <ChevronDown aria-hidden="true" className="size-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={() => setSidebarBody('conversations')}>
+              <FolderTree />
+              {t('dashboard.sidebar.projects', 'Projects')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setSidebarBody('workspaces')}>
+              <GitBranch />
+              {workspaceTitle}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setSidebarBody('agents')}>
+              <Activity />
+              {t('dashboard.sidebar.activity', 'Activity')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       }
       tourTarget={groupBy === 'repo' ? 'projects-collapse-all' : undefined}
       // WorktreeList portals the collapse-all toggle here; it owns the rendered project rows.
@@ -154,7 +154,9 @@ const SidebarHeader = React.memo(function SidebarHeader({
                       aria-label={activityLabel}
                       aria-pressed={agentsViewActive}
                       aria-describedby={activityBadgeId}
-                      onClick={() => setSidebarBody?.(agentsViewActive ? 'conversations' : 'agents')}
+                      onClick={() =>
+                        setSidebarBody?.(agentsViewActive ? 'conversations' : 'agents')
+                      }
                     >
                       <span className="relative h-5 w-6 shrink-0">
                         <Bell className="absolute left-0 top-1 size-3" />
