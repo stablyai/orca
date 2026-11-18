@@ -76,13 +76,18 @@ export function continuationContextReader(
       return { status: 'current', capturedText: '' }
     }
     const spills: string[] = []
+    let prepared: Promise<void> | undefined
     const spillRoot = agentSessionContextSnapshotRoot(deps.journalDatabase.stateDirectory)
     // One extraction per text, written by the reader to a private file main then streams.
     const spill = async (part: JournalContinuedPayload, trimEnd: boolean) => {
-      if (!(await ensureOwnedTempStagingRoot(spillRoot))) {
-        throw new Error('Chat context snapshot folder is not private')
-      }
-      await removeStaleSpills(spillRoot)
+      // Checked and swept once per export, before its first spill.
+      prepared ??= ensureOwnedTempStagingRoot(spillRoot).then(async (owned) => {
+        if (!owned) {
+          throw new Error('Chat context snapshot folder is not private')
+        }
+        await removeStaleSpills(spillRoot)
+      })
+      await prepared
       const path = join(spillRoot, `${randomUUID()}.spill`)
       spills.push(path)
       const { itemId, revision, field } = part
@@ -93,7 +98,7 @@ export function continuationContextReader(
       if (bytes === null) {
         throw new ContinuedPayloadSuperseded()
       }
-      return continuedFileText(path, trimEnd)
+      return continuedFileText(path, trimEnd, () => rm(path, { force: true }))
     }
     let path: string
     try {

@@ -77,15 +77,26 @@ export type ContinuedText = { chunks: AsyncIterable<string>; empty: boolean }
 const READ_BYTES = 1024 * 1024
 const TRIM_SCAN_BYTES = 64 * 1024
 
-/** A file of stored UTF-8 text, streamed one read at a time; `trimEnd` stops where trimEnd would. */
-export async function continuedFileText(path: string, trimEnd: boolean): Promise<ContinuedText> {
+/**
+ * A file of stored UTF-8 text, streamed one read at a time; `trimEnd` stops where trimEnd would.
+ * `done` runs once the text is streamed, so a spill can go before the next one is written.
+ */
+export async function continuedFileText(
+  path: string,
+  trimEnd: boolean,
+  done: () => Promise<void> = async () => {}
+): Promise<ContinuedText> {
   const end = trimEnd ? await trimmedEnd(path) : (await stat(path)).size
-  return {
-    empty: end === 0,
-    chunks:
-      end === 0
-        ? (async function* () {})()
-        : decodeStoredText(createReadStream(path, { end: end - 1, highWaterMark: READ_BYTES }))
+  return { empty: end === 0, chunks: streamFile(path, end, done) }
+}
+
+async function* streamFile(path: string, end: number, done: () => Promise<void>) {
+  try {
+    if (end > 0) {
+      yield* decodeStoredText(createReadStream(path, { end: end - 1, highWaterMark: READ_BYTES }))
+    }
+  } finally {
+    await done()
   }
 }
 
