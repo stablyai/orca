@@ -215,9 +215,7 @@ async function admitBotRequestMail(
     toBotId: target.id,
     purpose
   }
-  const blockedReceipt = (
-    blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>
-  ): { sent: false; receipt: unknown } => {
+  const blockedReceipt = (blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>) => {
     const earlier = db.getMessageById(blocked.messageId)
     return {
       sent: false,

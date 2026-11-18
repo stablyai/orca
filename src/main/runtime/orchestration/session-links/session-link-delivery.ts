@@ -1,6 +1,7 @@
 import { sessionLinkNextMessage } from '../../../../shared/session-link-wait'
 import { sessionLinkMessageBody } from './session-link-message'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { canAdmitBackgroundMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-background-message'
 import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { conversationRecordReader } from '../addressing/session-lineage/structured-session-lineage'
@@ -141,7 +142,7 @@ async function deliverNext(
   ) {
     return
   }
-  if (!(await host.canAdmitBackgroundMessage(sessionId))) {
+  if (!(await canAdmitBackgroundMessage(host, sessionId))) {
     return
   }
   const reserved = store.reserve(linkId, event.id)
@@ -181,7 +182,7 @@ async function deliverNext(
             currentReach.session.sessionId !== sessionId ||
             current.state !== 'active' ||
             current.version !== link.version ||
-            !(await host.canAdmitBackgroundMessage(sessionId, reserved.operationId))
+            !(await canAdmitBackgroundMessage(host, sessionId, reserved.operationId))
           ) {
             held = true
             throw new Error('Session link delivery held before dispatch.')

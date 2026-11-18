@@ -1,4 +1,3 @@
-import { ORCHESTRATION_LINK_COMMAND_SPECS } from './orchestration-link-specs'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import type { CommandSpec } from '../discovery/command-spec'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
@@ -7,7 +6,6 @@ import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs
 const REPLY_FLAGS = ['id', 'body', 'body-file', 'run', 'from', 'on', 'retry-request']
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
-  ...ORCHESTRATION_LINK_COMMAND_SPECS,
   {
     path: ['orchestration', 'run-create'],
     summary: 'Create and bind a lightweight orchestration Run',
