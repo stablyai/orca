@@ -1,5 +1,6 @@
 // Recheck stored offers against live journals and the same launch support used by startup.
 
+import type { StructuredAgentSessionAutomaticRestart } from './structured-agent-session-restart-resume-contract'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
@@ -54,7 +55,10 @@ export function createStructuredAgentSessionRestartCandidateReaders(
 ): {
   derive: StructuredAgentSessionRestartCandidateReader
   deriveAtSend: StructuredAgentSessionRestartCandidateReader
-  deriveAutomatic: StructuredAgentSessionRestartCandidateReader
+  /** The ordinary reader, or under the automatic policy the one an automatic action uses throughout. */
+  deriveFor: (
+    automatic: StructuredAgentSessionAutomaticRestart | undefined
+  ) => StructuredAgentSessionRestartCandidateReader
 } {
   const derive = createStructuredAgentSessionRestartCandidateReader(deps)
   return {
@@ -63,23 +67,28 @@ export function createStructuredAgentSessionRestartCandidateReaders(
       ...deps,
       savedByNewerOrca: () => false
     }),
-    deriveAutomatic: async (markers, leaseState) => {
-      const derived = await derive(markers, leaseState)
-      const bySession = new Map(markers.map((marker) => [marker.sessionId, marker]))
-      const candidates: typeof derived.candidates = []
-      for (const candidate of derived.candidates) {
-        const marker = bySession.get(candidate.sessionId)
-        const journal = deps.sessions.get(candidate.sessionId)?.journal
-        if (!marker || !journal || restartActivityWaitsOnPerson(candidate.activity)) {
-          continue
-        }
-        const context = await journal.reads.continuationContext()
-        if (restartAutoContinuationAllowed(marker, context, Date.now())) {
-          candidates.push(candidate)
-        }
-      }
-      return { ...derived, candidates }
-    }
+    deriveFor: (automatic) =>
+      !automatic
+        ? derive
+        : async (markers, leaseState) => {
+            const derived = await derive(markers, leaseState)
+            const bySession = new Map(markers.map((marker) => [marker.sessionId, marker]))
+            const candidates: typeof derived.candidates = []
+            for (const candidate of derived.candidates) {
+              const marker = bySession.get(candidate.sessionId)
+              const journal = deps.sessions.get(candidate.sessionId)?.journal
+              if (!marker || !journal || restartActivityWaitsOnPerson(candidate.activity)) {
+                continue
+              }
+              const context = await journal.reads.continuationContext()
+              if (
+                restartAutoContinuationAllowed(marker, context, Date.now(), automatic.recentCrashes)
+              ) {
+                candidates.push(candidate)
+              }
+            }
+            return { ...derived, candidates }
+          }
   }
 }
 

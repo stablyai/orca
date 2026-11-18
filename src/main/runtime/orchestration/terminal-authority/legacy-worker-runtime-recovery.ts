@@ -20,6 +20,16 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     ...args: Parameters<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
   ): ReturnType<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
 
+  /** After startup restoration, whichever path ran it; off the startup path, as continuations wait on providers. */
+  protected startStructuredAgentSessionLaunchContinuation(): void {
+    this.structuredAgentSessionLaunchContinuation.start(
+      structuredAgentSessionLaunchContinuationDeps(
+        getStructuredAgentSessionHost(),
+        () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true
+      )
+    )
+  }
+
   async reconcileLegacyWorkerTerminals(
     options: { connectionId?: string; materializeRenderer?: boolean } = {}
   ): Promise<LegacyWorkerTerminalRecoveryResult> {
@@ -44,13 +54,6 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       await this.prepareStructuredAgentSessionStartupRestoration().catch((error: unknown) => {
         console.warn('[orchestration] chat worker restart reconcile failed', error)
       })
-      // Off the startup path: continuations start providers and wait for their answers.
-      this.structuredAgentSessionLaunchContinuation.start(
-        structuredAgentSessionLaunchContinuationDeps(
-          getStructuredAgentSessionHost(),
-          () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true
-        )
-      )
       if (!this.canRecoverPersistentLocalPtysFn()) {
         return
       }

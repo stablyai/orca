@@ -50,4 +50,23 @@ describe('restart auto-continuation cap', () => {
     expect(allowed([tookContinuation(NOW - 20 * MINUTE), ...took.slice(1)])).toBe(true)
     expect(allowed([tookContinuation(NOW - MINUTE, 'warning'), ...took.slice(1)])).toBe(true)
   })
+
+  it('counts what crashed runs sent, even when each died before its note', () => {
+    const sentBy = (runtime: string, minutesAgo: number) =>
+      submission(
+        restartContinuationId(
+          marker({ teardownId: `crash:${runtime}`, trigger: 'crash' }),
+          'op',
+          NOW - minutesAgo * MINUTE
+        ),
+        'unknown'
+      )
+    const submissions = [sentBy('runtime-1', 3), sentBy('runtime-2', 2), sentBy('runtime-3', 1)]
+    const crashes = ['runtime-1', 'runtime-2', 'runtime-3']
+    const allowed = (sent: typeof submissions, recentCrashes = crashes) =>
+      restartAutoContinuationAllowed(offer, { items: [], submissions: sent }, NOW, recentCrashes)
+    expect(allowed(submissions)).toBe(false)
+    expect(allowed(submissions, crashes.slice(1))).toBe(true)
+    expect(allowed([sentBy('runtime-1', 20), ...submissions.slice(1)])).toBe(true)
+  })
 })

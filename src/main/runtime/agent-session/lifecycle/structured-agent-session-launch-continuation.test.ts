@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   continueStructuredAgentSessionsAtLaunch,
-  STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER
+  StructuredAgentSessionLaunchContinuationOnce,
+  STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
+  type StructuredAgentSessionLaunchContinuationDeps
 } from './structured-agent-session-launch-continuation'
 
 function launch(resumeWorkOnRestart: boolean, end: 'crash' | 'quit' = 'crash') {
@@ -22,7 +24,10 @@ function launch(resumeWorkOnRestart: boolean, end: 'crash' | 'quit' = 'crash') {
         runtime: sessionId === 'chat-1' ? 'runtime-crashed' : 'runtime-older'
       })
     },
-    previousRun: async () => ({ runtime: 'runtime-crashed', end }),
+    recentRuns: async () => [
+      { runtime: 'runtime-crashed', startedAt: 4, end },
+      { runtime: 'runtime-older', startedAt: 2, end: 'crash' as const }
+    ],
     startedAt: 5,
     resumeWorkOnRestart: () => resumeWorkOnRestart
   })
@@ -38,7 +43,7 @@ describe('continuing interrupted chats at launch', () => {
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
       undefined,
-      { automatic: true }
+      { automatic: { recentCrashes: ['runtime-crashed', 'runtime-older'] } }
     )
   })
 
@@ -54,5 +59,22 @@ describe('continuing interrupted chats at launch', () => {
     await result
     expect(adoptCrashCuts).not.toHaveBeenCalled()
     expect(continueAfterRestart).toHaveBeenCalledOnce()
+  })
+
+  it('lets waiters go on without a host, and still runs once a retried restoration has one', async () => {
+    const once = new StructuredAgentSessionLaunchContinuationOnce()
+    once.start(undefined)
+    expect((await once.done).continued).toEqual(new Set())
+    const continueAfterRestart = vi.fn(async () => ({ resumed: [], continued: [] }))
+    const deps: StructuredAgentSessionLaunchContinuationDeps = {
+      restartResume: { adoptCrashCuts: vi.fn(async () => 0), continueAfterRestart },
+      store: { listHeldSessionIds: () => [], replacedRuntime: () => undefined },
+      recentRuns: async () => [],
+      startedAt: 0,
+      resumeWorkOnRestart: () => true
+    }
+    once.start(deps)
+    once.start(deps)
+    await vi.waitFor(() => expect(continueAfterRestart).toHaveBeenCalledOnce())
   })
 })

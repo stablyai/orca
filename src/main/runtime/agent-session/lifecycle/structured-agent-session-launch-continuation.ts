@@ -2,10 +2,12 @@
 // a paired server each act under their own setting and no window has to be open for it.
 
 import type { StructuredAgentSessionRestartResume } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
-import type { AgentSessionOrcaStopCause } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-orca-stop'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import { readPreviousAgentSessionRuntime } from '../records/agent-session-runtime-end-record'
+import {
+  readRecentAgentSessionRuntimes,
+  type RecordedAgentSessionRuntime
+} from '../records/agent-session-runtime-end-record'
 import { agentSessionRuntimeIncarnation } from '../records/agent-session-runtime-attribution'
 
 export const STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER =
@@ -22,8 +24,8 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
     'adoptCrashCuts' | 'continueAfterRestart'
   >
   store: Pick<AgentSessionRecordStore, 'listHeldSessionIds' | 'replacedRuntime'>
-  /** The run before this one; only its own crash is read back, older ones had their start. */
-  previousRun: () => Promise<{ runtime: string; end?: AgentSessionOrcaStopCause } | null>
+  /** Earlier runs, latest first: only the last one's crash is read back, older ones had their start. */
+  recentRuns: () => Promise<RecordedAgentSessionRuntime[]>
   /** When this process started: what settlement wrote since then is this start's reading of the crash. */
   startedAt: number
   resumeWorkOnRestart: () => boolean
@@ -32,7 +34,8 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
 export async function continueStructuredAgentSessionsAtLaunch(
   deps: StructuredAgentSessionLaunchContinuationDeps
 ): Promise<StructuredAgentSessionLaunchContinuation> {
-  const previous = await deps.previousRun()
+  const runs = await deps.recentRuns()
+  const previous = runs[0]
   if (previous?.end === 'crash') {
     const held = deps.store
       .listHeldSessionIds()
@@ -49,7 +52,11 @@ export async function continueStructuredAgentSessionsAtLaunch(
     undefined,
     STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
     undefined,
-    { automatic: true }
+    {
+      automatic: {
+        recentCrashes: runs.flatMap((run) => (run.end === 'crash' ? [run.runtime] : []))
+      }
+    }
   )
   return {
     continued: new Set(
@@ -67,8 +74,8 @@ export function structuredAgentSessionLaunchContinuationDeps(
     ? {
         restartResume: host.restartResume,
         store: host.deps.store,
-        previousRun: () =>
-          readPreviousAgentSessionRuntime(
+        recentRuns: () =>
+          readRecentAgentSessionRuntimes(
             host.deps.journalDatabase.stateDirectory,
             agentSessionRuntimeIncarnation()
           ),
@@ -87,14 +94,19 @@ export class StructuredAgentSessionLaunchContinuationOnce {
     return this.settled.promise
   }
 
-  /** Without deps there is nothing to continue this start; the offers stay for a person. */
+  /** Without a host (none saved, refused, or restoration failed) this start continues nothing and the
+   *  offers stay for a person; waiters go on, and a restoration retried after a failure still runs it. */
   start(deps?: StructuredAgentSessionLaunchContinuationDeps): void {
+    const nothing = { continued: new Set<string>() }
+    if (!deps) {
+      this.settled.resolve(nothing)
+      return
+    }
     if (this.started) {
       return
     }
     this.started = true
-    const nothing = { continued: new Set<string>() }
-    void (deps ? continueStructuredAgentSessionsAtLaunch(deps) : Promise.resolve(nothing))
+    void continueStructuredAgentSessionsAtLaunch(deps)
       .catch((error: unknown) => {
         console.warn('[agent-session] continuing interrupted chats at launch failed', error)
         return nothing

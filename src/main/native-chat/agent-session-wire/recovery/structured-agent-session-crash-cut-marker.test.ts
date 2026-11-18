@@ -109,6 +109,11 @@ describe('crash cut resume marker', () => {
     expect(derive([interrupted(), crashCut(), later])).toBeNull()
     expect(derive([turnItem('turn-1', 'completed')])).toBeNull()
     expect(derive([turnItem('turn-1', 'completed'), backgroundTask('done')])).toBeNull()
+    const earlierTurnsCut = {
+      ...crashCut(),
+      turnScope: { kind: 'turn', turnItemId: 'turn:turn-0' }
+    } as const
+    expect(derive([turnItem('turn-1', 'completed'), earlierTurnsCut])).toBeNull()
     const older = { recovered: true, recoveredAt: STARTED - 1 } as const
     expect(
       derive([

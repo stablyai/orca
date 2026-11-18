@@ -149,19 +149,21 @@ function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCau
   }
 }
 
-/** The run before this one: the latest recorded start other than this runtime's own. */
-export async function readPreviousAgentSessionRuntime(
+export type RecordedAgentSessionRuntime = { runtime: string } & RecordedRun
+
+/** Recorded runs other than this one, latest start first. */
+export async function readRecentAgentSessionRuntimes(
   stateDirectory: string,
   current: string
-): Promise<{ runtime: string; end?: AgentSessionOrcaStopCause } | null> {
+): Promise<RecordedAgentSessionRuntime[]> {
   const directory = join(stateDirectory, RUNTIMES_DIRECTORY)
   let names: string[]
   try {
     names = await readdir(directory)
   } catch {
-    return null
+    return []
   }
-  let previous: ({ runtime: string } & RecordedRun) | null = null
+  const runs: RecordedAgentSessionRuntime[] = []
   for (const name of names) {
     const runtime = RECORD_FILE.exec(name)?.[1]
     if (!runtime || runtime === current) {
@@ -171,11 +173,11 @@ export async function readPreviousAgentSessionRuntime(
       (read) => parseRecordedRun(read.buffer.toString('utf8'), runtime),
       () => undefined
     )
-    if (run && (!previous || run.startedAt > previous.startedAt)) {
-      previous = { runtime, ...run }
+    if (run) {
+      runs.push({ runtime, ...run })
     }
   }
-  return previous && { runtime: previous.runtime, ...(previous.end ? { end: previous.end } : {}) }
+  return runs.sort((left, right) => right.startedAt - left.startedAt)
 }
 
 /** Missing/unreadable runtime records give no cause; null means the directory itself could not be listed. */

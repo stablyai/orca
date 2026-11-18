@@ -19,7 +19,9 @@ const hex16 = (parts: readonly unknown[]): string =>
   createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 16)
 
 /** Shared offer tag across all of its continuation actions. */
-function restartOfferTag(marker: AgentSessionResumeMarker): string {
+export function restartOfferTag(
+  marker: Pick<AgentSessionResumeMarker, 'teardownId' | 'sessionId'>
+): string {
   return hex16([marker.teardownId, marker.sessionId])
 }
 
@@ -39,13 +41,20 @@ export function restartContinuationId(
   ])}`
 }
 
+/** When a continuation-shaped id was sent and which offer tag it carries; a person's send has the shape too. */
+export function readRestartContinuationId(
+  clientMessageId: string
+): { sentAt: number; offerTag: string } | null {
+  return /^\d{13}-[0-9a-f]{32}$/.test(clientMessageId)
+    ? { sentAt: Number(clientMessageId.slice(0, 13)), offerTag: clientMessageId.slice(14, 30) }
+    : null
+}
+
 export function isRestartContinuationOf(
   marker: AgentSessionResumeMarker,
   clientMessageId: string
 ): boolean {
-  return /^\d{13}-[0-9a-f]{32}$/.test(clientMessageId)
-    ? clientMessageId.slice(14, 30) === restartOfferTag(marker)
-    : false
+  return readRestartContinuationId(clientMessageId)?.offerTag === restartOfferTag(marker)
 }
 
 /** Fence fills the envelope; operation ID defines send identity. */

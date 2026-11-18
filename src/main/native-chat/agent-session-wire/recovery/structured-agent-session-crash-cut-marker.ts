@@ -133,8 +133,9 @@ export function crashCutResumeMarker(input: {
   }
   const prompts = cancelledPrompts(settled, turnItem.itemId)
   const tasks = lostTasks(settled, turnItem.itemId)
+  // Only this turn's cut counts; a cut turn is itself settled, so a row outside it adds nothing.
   const leadCut =
-    settled.some((item) => orcaStopCauseOfRow(item) === 'crash') ||
+    settled.some((item) => inTurn(item, turnItem.itemId) && orcaStopCauseOfRow(item) === 'crash') ||
     (settled.includes(turnItem) && (turn.state === 'interrupted' || turn.state === 'unverifiable'))
   // A finished turn with nothing left running was not interrupted.
   if (!leadCut && tasks.length === 0) {

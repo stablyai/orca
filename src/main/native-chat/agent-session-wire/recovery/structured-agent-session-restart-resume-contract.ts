@@ -8,6 +8,8 @@ import type {
   StructuredAgentSessionResumeFailure
 } from './structured-agent-session-restart-resume-set'
 
+export type StructuredAgentSessionAutomaticRestart = { recentCrashes: readonly string[] }
+
 export type StructuredAgentSessionRestartResume = {
   /** Snapshot before Stop, confirm proven exit, then persist confirmed offers together. */
   beginTeardown: (trigger: AgentSessionResumeTrigger) => void
@@ -27,12 +29,14 @@ export type StructuredAgentSessionRestartResume = {
     settledSince: number
   ) => Promise<number>
   /** Unnamed actions continue visible offers; named actions may also retry selected failures.
-   *  `automatic` skips chats waiting on a person and chats continued too often already. */
+   *  `automatic` skips chats waiting on a person and chats continued too often already; its
+   *  `recentCrashes` are runs whose offers' sends count even without a note. The policy applies
+   *  again to what the action reserved, since a newer offer may have replaced one. */
   continueAfterRestart: (
     sessionIds: readonly string[] | undefined,
     owner: string,
     audience?: StructuredAgentSessionRestartAudience,
-    options?: { automatic?: boolean }
+    options?: { automatic?: StructuredAgentSessionAutomaticRestart }
   ) => Promise<{
     resumed: StructuredAgentSessionResumeOutcome[]
     continued: StructuredAgentSessionContinuationOutcome[]
