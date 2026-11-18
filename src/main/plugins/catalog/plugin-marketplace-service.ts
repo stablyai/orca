@@ -1,3 +1,4 @@
+import { PluginCatalogRepositoryStore } from './plugin-catalog-repository'
 import {
   OFFICIAL_MARKETPLACE_GIT_SOURCE,
   isMarketplaceListingSupported,
@@ -45,6 +46,7 @@ type MarketplaceFetcher = (
 
 export class PluginMarketplaceService {
   private readonly store: PluginMarketplaceStore
+  private readonly repositories: PluginCatalogRepositoryStore | null
   private readonly fetcher: MarketplaceFetcher
   private readonly getKillListEntry: (
     pluginKey: string
@@ -52,6 +54,7 @@ export class PluginMarketplaceService {
   private readonly hostVersion: string | null
   private readonly imageCache: PluginImageCache | null
   private readonly refreshChains = new Map<string, Promise<PluginMarketplaceSourceState>>()
+  private readonly removingSources = new Set<string>()
   private readonly sourceErrors = new Map<string, string>()
   private officialSeedPromise: Promise<PluginMarketplaceSourceState> | null = null
   private officialSeedRequested = false
@@ -66,12 +69,22 @@ export class PluginMarketplaceService {
     /** Picks which of an entry's releases to offer; without it the newest is offered. */
     hostVersion?: string
     imageCache?: PluginImageCache
+    repositories?: PluginCatalogRepositoryStore
     getTeamCapabilities?: () => OrcaCloudCapabilities | undefined
   }) {
     this.hostVersion = options.hostVersion ?? null
     this.imageCache = options.imageCache ?? null
     this.store = options.store ?? new PluginMarketplaceStore(options.pluginsDataDir)
-    this.fetcher = options.fetcher ?? fetchPluginMarketplace
+    this.repositories =
+      options.repositories ??
+      (options.fetcher ? null : new PluginCatalogRepositoryStore(options.pluginsDataDir))
+    this.fetcher =
+      options.fetcher ??
+      (async (source) =>
+        fetchPluginMarketplace(source, {
+          repositories: this.repositories ?? undefined,
+          publishedCommit: (await this.store.readSnapshot(source.id))?.marketplaceCommit
+        }))
     this.getKillListEntry = options.getKillListEntry ?? (() => null)
     this.teamPolicy = new PluginMarketplaceTeamPolicy(options.getTeamCapabilities)
     this.communitySeed = new CommunityMarketplaceSeed(this.store, (source) =>
@@ -100,6 +113,9 @@ export class PluginMarketplaceService {
       throw new Error('This plugin catalog is turned off by your team.')
     }
     const sourceId = marketplaceSourceId(parsedSource)
+    if (this.removingSources.has(sourceId)) {
+      throw new Error('catalog removal is in progress')
+    }
     const existing = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
     const candidate: PluginMarketplaceRegisteredSource = existing ?? {
       id: sourceId,
@@ -113,11 +129,13 @@ export class PluginMarketplaceService {
     const registered = existing ?? (await this.store.addSource(parsedSource, candidate.addedAt))
     try {
       const snapshot = await this.store.writeSnapshot({ source: registered, ...fetched })
+      await this.publishRepository(registered.id, snapshot.marketplaceCommit)
       this.sourceErrors.delete(registered.id)
       return pluginMarketplaceSourceState(registered, snapshot, undefined, this.teamPolicy)
     } catch (error) {
       if (!existing) {
-        await this.store.removeSource(registered.id).catch(() => undefined)
+        await this.store.removeSource(sourceId).catch(() => undefined)
+        await this.repositories?.remove(sourceId).catch(() => undefined)
       }
       throw error
     }
@@ -135,15 +153,22 @@ export class PluginMarketplaceService {
     if (source && isOfficialMarketplaceGitSource(source.source.url)) {
       throw new Error('the official marketplace is managed by Orca and cannot be removed')
     }
-    const removed = await this.store.removeSource(sourceId)
-    if (removed) {
-      this.sourceErrors.delete(sourceId)
-      if (this.officialSeedRequested) {
-        // Recover the managed source when a full profile frees a slot, without restart.
-        await this.seedOfficialSource().catch(() => undefined)
+    this.removingSources.add(sourceId)
+    try {
+      await this.refreshChains.get(sourceId)?.catch(() => undefined)
+      const removed = await this.store.removeSource(sourceId)
+      if (removed) {
+        await this.repositories?.remove(sourceId)
+        this.sourceErrors.delete(sourceId)
+        if (this.officialSeedRequested) {
+          // Recover the managed source when a full profile frees a slot, without restart.
+          await this.seedOfficialSource().catch(() => undefined)
+        }
       }
+      return removed
+    } finally {
+      this.removingSources.delete(sourceId)
     }
-    return removed
   }
 
   seedOfficialSource(): Promise<PluginMarketplaceSourceState> {
@@ -172,6 +197,9 @@ export class PluginMarketplaceService {
   }
 
   async refreshSource(sourceId: string): Promise<PluginMarketplaceSourceState> {
+    if (this.removingSources.has(sourceId)) {
+      throw new Error('catalog removal is in progress')
+    }
     const previous = this.refreshChains.get(sourceId) ?? Promise.resolve(null)
     const refresh = previous.catch(() => null).then(() => this.performRefresh(sourceId))
     this.refreshChains.set(sourceId, refresh)
@@ -246,6 +274,7 @@ export class PluginMarketplaceService {
     try {
       const fetched = await this.fetchAndValidate(source)
       const snapshot = await this.store.writeSnapshot({ source, ...fetched })
+      await this.publishRepository(source.id, snapshot.marketplaceCommit)
       this.sourceErrors.delete(source.id)
       return pluginMarketplaceSourceState(source, snapshot, undefined, this.teamPolicy)
     } catch (error) {
@@ -281,6 +310,12 @@ export class PluginMarketplaceService {
   private async waitForOfficialSeed(): Promise<void> {
     await this.officialSeedPromise?.catch(() => undefined)
     await this.communitySeed.settled()
+  }
+
+  private async publishRepository(sourceId: string, commit: string): Promise<void> {
+    await this.repositories?.publish(sourceId, commit).catch((error: unknown) => {
+      console.warn('[plugins] could not prune retained catalog repository:', error)
+    })
   }
 
   private async fetchAndValidate(

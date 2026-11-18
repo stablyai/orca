@@ -2,9 +2,15 @@
  *  verified; the renderer never loads a plugin or catalog image from anywhere else. */
 export const PLUGIN_IMAGE_SCHEME = 'orca-plugin-image'
 
+export type PluginCatalogImageIdentity = {
+  kind: 'icon' | 'cover' | 'screenshot'
+  width: number
+  height: number
+}
+
 export type PluginImageReference =
   /** Bytes main verified and cached by hash (catalog images, preview images). */
-  | { kind: 'sha'; sha256: string }
+  | { kind: 'sha'; sha256: string; image?: PluginCatalogImageIdentity }
   /** An image an installed plugin declares, pinned to the installed content hash. */
   | { kind: 'installed'; pluginKey: string; contentHash: string; slot: string }
 
@@ -16,8 +22,9 @@ export type PluginHostImages = {
   screenshots?: (PluginHostImage & { caption?: string; theme?: 'light' | 'dark' })[]
 }
 
-export function pluginShaImageUrl(sha256: string): string {
-  return `${PLUGIN_IMAGE_SCHEME}://sha/${sha256}`
+export function pluginShaImageUrl(sha256: string, image?: PluginCatalogImageIdentity): string {
+  const url = `${PLUGIN_IMAGE_SCHEME}://sha/${sha256}`
+  return image ? `${url}?kind=${image.kind}&width=${image.width}&height=${image.height}` : url
 }
 
 /** `slot` is `icon`, `cover`, `screenshot-<index>`, a contribution's icon: `editor-<index>`
@@ -43,7 +50,24 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
   }
   const parts = parsed.pathname.split('/').filter(Boolean)
   if (parsed.hostname === 'sha' && parts.length === 1 && /^[0-9a-f]{64}$/.test(parts[0] ?? '')) {
-    return { kind: 'sha', sha256: parts[0] ?? '' }
+    const kind = parsed.searchParams.get('kind')
+    if (kind === null) {
+      return { kind: 'sha', sha256: parts[0] ?? '' }
+    }
+    const width = Number(parsed.searchParams.get('width'))
+    const height = Number(parsed.searchParams.get('height'))
+    if (
+      (kind !== 'icon' && kind !== 'cover' && kind !== 'screenshot') ||
+      !Number.isInteger(width) ||
+      width < 1 ||
+      width > 4096 ||
+      !Number.isInteger(height) ||
+      height < 1 ||
+      height > 4096
+    ) {
+      return null
+    }
+    return { kind: 'sha', sha256: parts[0] ?? '', image: { kind, width, height } }
   }
   const [key, contentHash, slot] = parts
   if (

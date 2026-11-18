@@ -18,7 +18,7 @@ import { sha256Hex } from '../media/plugin-image-cache'
 // Why a catalog-wide cap: a large catalog must not turn one refresh into an unbounded download.
 const CATALOG_IMAGES_MAX_BYTES = 64 * 1024 * 1024
 
-type CatalogImage = NonNullable<PluginCatalogImages['cover']>
+export type CatalogImage = NonNullable<PluginCatalogImages['cover']>
 
 export type CatalogBlobReader = (path: string, maxBytes: number) => Promise<Buffer | null>
 
@@ -46,7 +46,8 @@ export async function extractCatalogImages(
   marketplace: PluginMarketplace,
   readBlob: CatalogBlobReader,
   fill?: CatalogEntryImageFill,
-  memo?: CatalogBufferMemo
+  memo?: CatalogBufferMemo,
+  onDemand = false
 ): Promise<{ marketplace: PluginMarketplace; images: Buffer[] }> {
   const verified = new Map<string, Buffer>()
   const rejected = new Set<string>()
@@ -56,27 +57,29 @@ export async function extractCatalogImages(
     kind: PluginImageKind,
     read: CatalogBlobReader
   ): Promise<boolean> => {
-    if (verified.has(image.sha256)) {
-      return true
-    }
-    if (rejected.has(image.sha256)) {
+    const key = `${kind}:${image.path}:${image.sha256}:${image.width}x${image.height}`
+    if (rejected.has(key)) {
       return false
     }
+    const cached = verified.get(image.sha256)
     const maxBytes = Math.min(PLUGIN_IMAGE_RULES[kind].maxBytes, budget)
-    const bytes = maxBytes > 0 ? await read(image.path, maxBytes).catch(() => null) : null
-    const info = bytes ? catalogImageHeader(bytes, memo) : 'missing'
-    const ok =
-      bytes !== null &&
-      typeof info !== 'string' &&
-      catalogImageDigest(bytes, memo) === image.sha256 &&
-      info.width === image.width &&
-      info.height === image.height &&
-      pluginImageRuleError(kind, info, bytes.byteLength) === null
-    if (ok && bytes) {
+    const bytes =
+      cached ?? (maxBytes > 0 ? await read(image.path, maxBytes).catch(() => null) : null)
+    if (!bytes) {
+      if (!onDemand) {
+        rejected.add(key)
+      }
+      return onDemand
+    }
+    const ok = validateCatalogImage(bytes, image, kind, {
+      info: catalogImageHeader(bytes, memo),
+      sha256: catalogImageDigest(bytes, memo)
+    })
+    if (ok && !cached) {
       budget -= bytes.byteLength
       verified.set(image.sha256, bytes)
-    } else {
-      rejected.add(image.sha256)
+    } else if (!ok) {
+      rejected.add(key)
     }
     return ok
   }
@@ -121,6 +124,24 @@ export async function extractCatalogImages(
     plugins.push({ ...entry, releases })
   }
   return { marketplace: { ...marketplace, plugins }, images: [...verified.values()] }
+}
+
+/** Checks one declared use without performing reads or spending the catalog budget. */
+export function validateCatalogImage(
+  bytes: Uint8Array,
+  image: Pick<CatalogImage, 'sha256' | 'width' | 'height'>,
+  kind: PluginImageKind,
+  facts?: { info: PluginImageInfo | string; sha256: string }
+): boolean {
+  const info = facts?.info ?? readPluginImageHeader(bytes)
+  return (
+    typeof info !== 'string' &&
+    bytes.byteLength <= PLUGIN_IMAGE_RULES[kind].maxBytes &&
+    (facts?.sha256 ?? sha256Hex(bytes)) === image.sha256 &&
+    info.width === image.width &&
+    info.height === image.height &&
+    pluginImageRuleError(kind, info, bytes.byteLength) === null
+  )
 }
 
 /** sha256 of bytes, remembered per buffer when a pass-spanning memo is supplied. */

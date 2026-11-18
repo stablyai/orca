@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { PluginHostImage } from '../../../../../shared/plugins/images/plugin-image-url'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
@@ -10,12 +11,14 @@ export function PluginPageIcon({
   entry: PluginListEntry
   icon: PluginHostImage | undefined
 }): React.JSX.Element {
-  if (!icon) {
+  const [failedIcon, setFailedIcon] = useState<string | null>(null)
+  if (!icon || failedIcon === icon.url) {
     return <PluginRowArt entry={entry} size="page" />
   }
   return (
     <img
       src={icon.url}
+      onError={() => setFailedIcon(icon.url)}
       alt=""
       width={64}
       height={64}

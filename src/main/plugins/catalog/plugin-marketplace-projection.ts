@@ -16,6 +16,7 @@ import type {
 import { selectPluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog'
 import {
   pluginShaImageUrl,
+  type PluginCatalogImageIdentity,
   type PluginHostImages
 } from '../../../shared/plugins/images/plugin-image-url'
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
@@ -94,17 +95,22 @@ export function pluginCatalogListingImages(release: PluginCatalogRelease | undef
   if (!images) {
     return {}
   }
-  const host = (image: { sha256: string; alt: string; width: number; height: number }) => ({
-    url: pluginShaImageUrl(image.sha256),
+  const host = (
+    kind: PluginCatalogImageIdentity['kind'],
+    image: { sha256: string; alt: string; width: number; height: number }
+  ) => ({
+    url: pluginShaImageUrl(image.sha256, { kind, width: image.width, height: image.height }),
     alt: image.alt,
     width: image.width,
     height: image.height
   })
   return {
     images: {
-      ...(images.icon ? { icon: host(images.icon) } : {}),
-      ...(images.cover ? { cover: host(images.cover) } : {}),
-      ...(images.screenshots?.length ? { screenshots: images.screenshots.map(host) } : {})
+      ...(images.icon ? { icon: host('icon', images.icon) } : {}),
+      ...(images.cover ? { cover: host('cover', images.cover) } : {}),
+      ...(images.screenshots?.length
+        ? { screenshots: images.screenshots.map((image) => host('screenshot', image)) }
+        : {})
     }
   }
 }

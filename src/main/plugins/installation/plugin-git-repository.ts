@@ -1,3 +1,5 @@
+import { findGitSubcommandIndex } from '../../../shared/git/commands/git-command-classification'
+import { performance } from 'node:perf_hooks'
 import { lstat, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -57,15 +59,23 @@ export async function runPluginGit(
   cwd: string,
   signal?: AbortSignal
 ): Promise<string> {
-  const { stdout } = await gitExecFileAsync(args, {
-    cwd,
-    env: { ...process.env, GIT_ALLOW_PROTOCOL: pluginGitAllowedProtocols() },
-    timeout: PLUGIN_GIT_TIMEOUT_MS,
-    signal: signal ? AbortSignal.any([signal, pluginGitShutdown.signal]) : pluginGitShutdown.signal,
-    // Why: abort must stop remote-https and index-pack too, and settle only once they exit.
-    terminationBarrier: true
-  })
-  return stdout.trim()
+  const name = args[findGitSubcommandIndex(args)] ?? ''
+  const command = /^[a-z]+(?:-[a-z]+)*$/.test(name) ? name : 'command'
+  const started = performance.now()
+  console.debug('[plugins:git] start', command)
+  try {
+    const { stdout } = await gitExecFileAsync(args, {
+      cwd,
+      env: { ...process.env, GIT_ALLOW_PROTOCOL: pluginGitAllowedProtocols() },
+      timeout: PLUGIN_GIT_TIMEOUT_MS,
+      signal: signal ? AbortSignal.any([signal, pluginGitShutdown.signal]) : pluginGitShutdown.signal,
+      // Why: abort must stop remote-https and index-pack too, and settle only once they exit.
+      terminationBarrier: true
+    })
+    return stdout.trim()
+  } finally {
+    console.debug('[plugins:git] complete', command, `${Math.round(performance.now() - started)}ms`)
+  }
 }
 
 async function directoryBytes(path: string): Promise<number> {
@@ -175,6 +185,93 @@ export async function readPluginGitCommit<T>(
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true })
   }
+}
+
+/** Reuses a shallow catalog repository; the published snapshot remains pinned during refresh. */
+export async function readRetainedPluginGitCommit<T>(
+  input: {
+    url: string
+    ref: string
+    directory: string
+    maxDownloadBytes: number
+    publishedCommit?: string
+  },
+  read: (repository: string, commit: string) => Promise<T>
+): Promise<{ commit: string; value: T }> {
+  if (!isAllowedPluginGitUrl(input.url)) {
+    throw new Error('plugin Git URL must use HTTPS or SSH')
+  }
+  if (input.publishedCommit && !SHA1_COMMIT_PATTERN.test(input.publishedCommit)) {
+    throw new Error('invalid published catalog commit')
+  }
+  const repository = join(input.directory, 'repository')
+  const hooks = join(input.directory, 'no-hooks')
+  const config = pluginGitConfigArgs(hooks)
+  let reusable = false
+  const exists = await lstat(repository).then(
+    (entry) => entry.isDirectory(),
+    () => false
+  )
+  if (exists) {
+    try {
+      await runPluginGit([...config, 'fsck', '--no-dangling'], repository)
+      reusable =
+        (await runPluginGit([...config, 'remote', 'get-url', 'origin'], repository)) === input.url
+      if (input.publishedCommit) {
+        await runPluginGit(
+          [...config, 'cat-file', '-e', `${input.publishedCommit}^{commit}`],
+          repository
+        )
+      }
+    } catch {
+      reusable = false
+    }
+  }
+  if (!reusable) {
+    await rm(input.directory, { recursive: true, force: true })
+    await mkdir(hooks, { recursive: true })
+    await mkdir(repository)
+    await runPluginGit([...config, 'init', '--bare', '--quiet', '--template='], repository)
+    await runPluginGit([...config, 'remote', 'add', 'origin', input.url], repository)
+    await runPluginGit([...config, 'config', '--unset-all', 'remote.origin.fetch'], repository)
+  }
+  if (reusable && input.publishedCommit) {
+    await runPluginGit(
+      [...config, 'update-ref', 'refs/orca/snapshot', input.publishedCommit],
+      repository
+    )
+    const pending = await runPluginGit(
+      ['rev-parse', '--verify', '--quiet', 'refs/orca/fetched^{commit}'],
+      repository
+    ).catch(() => null)
+    await runPluginGit([...config, 'update-ref', '-d', 'refs/orca/fetched'], repository)
+    if (pending && pending !== input.publishedCommit) {
+      await runPluginGit([...config, 'reflog', 'expire', '--expire=now', '--all'], repository)
+      await runPluginGit([...config, '-c', 'pack.threads=2', 'gc', '--prune=now'], repository)
+    }
+  }
+  const ref = input.ref.trim()
+  if (PLUGIN_COMMIT_PATTERN.test(ref) && !SHA1_COMMIT_PATTERN.test(ref)) {
+    throw new Error('SHA-256 plugin repositories are not supported')
+  }
+  if (!SHA1_COMMIT_PATTERN.test(ref)) {
+    await runPluginGit([...config, 'check-ref-format', '--branch', ref], repository)
+  }
+  await runBoundedDownload(
+    [...config, '--git-dir', repository, ...pluginGitFetchCommitArgs(ref)],
+    repository,
+    repository,
+    input.maxDownloadBytes
+  )
+  const commit = await runPluginGit(['rev-parse', '--verify', 'FETCH_HEAD^{commit}'], repository)
+  if (!SHA1_COMMIT_PATTERN.test(commit)) {
+    throw new Error('Git resolved an invalid catalog commit identity')
+  }
+  if (SHA1_COMMIT_PATTERN.test(ref) && commit !== ref) {
+    throw new Error('Git fetched a different commit than requested')
+  }
+  await runPluginGit([...config, 'update-ref', 'refs/orca/fetched', commit], repository)
+  return { commit, value: await read(repository, commit) }
 }
 
 /** Writes one ref's exact files into an empty destination and returns its commit. */

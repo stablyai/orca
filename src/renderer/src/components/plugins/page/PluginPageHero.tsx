@@ -18,12 +18,14 @@ export function PluginPageHero({
   images: PluginHostImages | undefined
   palettes: readonly PluginArtPalette[]
 }): React.JSX.Element {
+  const [failedCover, setFailedCover] = useState<string | null>(null)
   const cover = images?.cover
   return (
     <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-border/70 bg-muted/40">
-      {cover ? (
+      {cover && cover.url !== failedCover ? (
         <img
           src={cover.url}
+          onError={() => setFailedCover(cover.url)}
           alt={cover.alt}
           width={cover.width}
           height={cover.height}
@@ -52,18 +54,32 @@ export function PluginScreenshots({
   images: PluginHostImages | undefined
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const [open, setOpen] = useState<number | null>(null)
-  const thumbs = useRef<(HTMLButtonElement | null)[]>([])
-  const returnTo = useRef<number | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
+  const [failedShots, setFailedShots] = useState<ReadonlySet<string>>(new Set())
+  const thumbs = useRef(new Map<string, HTMLButtonElement>())
+  const returnTo = useRef<string | null>(null)
   // Why the URL: it names the verified bytes by hash, so equal URLs are the same picture.
-  const shots = (images?.screenshots ?? []).filter((shot) => shot.url !== images?.cover?.url)
+  const shots = (images?.screenshots ?? []).filter(
+    (shot) =>
+      shot.url.split('?')[0] !== images?.cover?.url.split('?')[0] && !failedShots.has(shot.url)
+  )
   if (shots.length === 0) {
     return null
   }
-  const shown = open === null ? null : shots[open]
+  const shown = shots.find((shot) => shot.url === open) ?? null
+  const hideShot = (url: string): void => {
+    setFailedShots((current) => new Set([...current, url]))
+    if (open === url) {
+      setOpen(null)
+    }
+  }
   const step = (delta: number): void =>
     setOpen((current) =>
-      current === null ? current : (current + delta + shots.length) % shots.length
+      current === null
+        ? current
+        : (shots[
+            (shots.findIndex((shot) => shot.url === current) + delta + shots.length) % shots.length
+          ]?.url ?? null)
     )
   return (
     <section className="mt-6">
@@ -72,11 +88,15 @@ export function PluginScreenshots({
         <span className="font-normal tracking-normal normal-case">{shots.length}</span>
       </h3>
       <ul className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 scrollbar-sleek">
-        {shots.map((shot, index) => (
+        {shots.map((shot) => (
           <li key={shot.url} className="w-60 shrink-0 snap-start">
             <button
               ref={(node) => {
-                thumbs.current[index] = node
+                if (node) {
+                  thumbs.current.set(shot.url, node)
+                } else {
+                  thumbs.current.delete(shot.url)
+                }
               }}
               type="button"
               className="block w-full overflow-hidden rounded-lg border border-border/70 bg-muted/40 outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -86,12 +106,13 @@ export function PluginScreenshots({
                 { value0: shot.alt }
               )}
               onClick={() => {
-                returnTo.current = index
-                setOpen(index)
+                returnTo.current = shot.url
+                setOpen(shot.url)
               }}
             >
               <img
                 src={shot.url}
+                onError={() => hideShot(shot.url)}
                 alt=""
                 width={shot.width}
                 height={shot.height}
@@ -110,7 +131,7 @@ export function PluginScreenshots({
           onCloseAutoFocus={(event) => {
             // Why: the dialog opened from a thumbnail, so focus goes back to that one.
             event.preventDefault()
-            thumbs.current[returnTo.current ?? 0]?.focus()
+            thumbs.current.get(returnTo.current ?? '')?.focus()
           }}
           onKeyDown={(event) => {
             if (event.key === 'ArrowRight') {
@@ -128,6 +149,7 @@ export function PluginScreenshots({
               {/* Why the top margin: the close button sits above the image, never over it. */}
               <img
                 src={shown.url}
+                onError={() => hideShot(shown.url)}
                 alt={shown.alt}
                 className="mt-6 block max-h-[calc(100vh-14rem)] w-full rounded-lg object-contain"
               />
@@ -141,7 +163,10 @@ export function PluginScreenshots({
                       {t(
                         'auto.components.settings.PluginPageHero.position',
                         '{{value0}} of {{value1}}',
-                        { value0: (open ?? 0) + 1, value1: shots.length }
+                        {
+                          value0: shots.findIndex((shot) => shot.url === open) + 1,
+                          value1: shots.length
+                        }
                       )}
                     </span>
                     <Button

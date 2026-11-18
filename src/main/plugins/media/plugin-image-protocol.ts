@@ -1,3 +1,4 @@
+import { validateCatalogImage } from '../catalog/plugin-catalog-image-extraction'
 import { protocol } from 'electron'
 import {
   PLUGIN_IMAGE_SCHEME,
@@ -14,6 +15,7 @@ import { parsePluginFontSlot } from '../../../shared/plugins/contributions/plugi
 
 export type PluginImageProtocolDependencies = {
   cache: PluginImageCache
+  ensureCatalogImage?: (sha256: string) => Promise<void>
   findValidPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
   /** Enabled and consented; fonts are served only for these. */
   findApprovedPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
@@ -60,6 +62,25 @@ export function createPluginImageRequestHandler(
       const isFont = reference?.kind === 'installed' && parsePluginFontSlot(reference.slot) !== null
       if (reference?.kind === 'sha') {
         asset = await dependencies.cache.get(reference.sha256)
+        if (!asset && dependencies.ensureCatalogImage) {
+          await dependencies.ensureCatalogImage(reference.sha256)
+          asset = await dependencies.cache.get(reference.sha256)
+        }
+        if (
+          asset &&
+          reference.image &&
+          !validateCatalogImage(
+            asset.bytes,
+            {
+              sha256: reference.sha256,
+              width: reference.image.width,
+              height: reference.image.height
+            },
+            reference.image.kind
+          )
+        ) {
+          asset = null
+        }
       } else if (reference?.kind === 'installed' && isFont) {
         const plugin = dependencies.findApprovedPlugin(reference.pluginKey)
         asset =
@@ -73,7 +94,7 @@ export function createPluginImageRequestHandler(
           : null
       }
       if (!asset) {
-        return new Response(null, { status: 404 })
+        return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } })
       }
       return new Response(request.method === 'HEAD' ? null : new Uint8Array(asset.bytes), {
         headers: {
@@ -91,7 +112,7 @@ export function createPluginImageRequestHandler(
         }
       })
     } catch {
-      return new Response(null, { status: 404 })
+      return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } })
     }
   }
 }
