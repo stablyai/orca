@@ -21,7 +21,8 @@ export type Adoption = {
 
 /**
  * A pass over chats due a copy reads only those chats' claims and looks this file's tabs up one at a
- * time; a copy never takes the original's saved tab.
+ * time; a copy never takes the original's saved tab. Neither table is indexed by chat, so that pass
+ * still scans each once in SQLite, keeping only the due chats' rows.
  */
 export function readAdoption(
   source: Database.Database,
