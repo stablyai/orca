@@ -3,7 +3,20 @@
 // narrow the detail opens in place of the list. Use opens New bot over it, prefilled: nothing is made
 // before its Create.
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, Link2, Plus, Search, X } from 'lucide-react'
+import {
+  Bell,
+  ChevronLeft,
+  CodeXml,
+  FileText,
+  LayoutGrid,
+  Link2,
+  MessagesSquare,
+  Plus,
+  Rocket,
+  Search,
+  Wrench,
+  X
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -34,6 +47,15 @@ import { BotTemplatesEmpty } from './BotTemplatesEmpty'
 // Below this dialog width the detail column folds away (the @max-[56rem] classes, 896px) and a row opens
 // the detail in place of the list.
 const DETAIL_COLUMN_MIN_WIDTH = 896
+
+const CATEGORY_ICONS = {
+  coding: CodeXml,
+  releases: Rocket,
+  support: MessagesSquare,
+  planning: FileText,
+  ops: Wrench,
+  personal: Bell
+}
 
 /** Mounted only while `activeModal` is 'bot-templates', so search, scroll and the in-place detail start fresh. */
 export default function BotTemplatesDialog(): React.JSX.Element {
@@ -137,7 +159,7 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
         surface="opaque-panel"
         showCloseButton={false}
         aria-describedby={undefined}
-        className="@container grid h-[min(780px,calc(100vh-2rem))] w-[min(1080px,calc(100vw-2rem))] max-w-none grid-rows-[auto_minmax(0,1fr)] sm:max-w-none"
+        className="@container grid h-[min(780px,calc(100vh-2rem))] w-[min(1400px,calc(100vw-2rem))] max-w-none grid-rows-[auto_minmax(0,1fr)] sm:max-w-none"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           searchRef.current?.focus()
@@ -223,13 +245,18 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
                   }}
                 >
                   <ToggleGroupItem value="all">
+                    <LayoutGrid className="size-3" aria-hidden />
                     {t('bots.templates.allCategories', 'All')}
                   </ToggleGroupItem>
-                  {BOT_TEMPLATE_CATEGORIES.map((option) => (
-                    <ToggleGroupItem key={option} value={option}>
-                      {label(option)}
-                    </ToggleGroupItem>
-                  ))}
+                  {BOT_TEMPLATE_CATEGORIES.map((option) => {
+                    const Icon = CATEGORY_ICONS[option]
+                    return (
+                      <ToggleGroupItem key={option} value={option}>
+                        <Icon className="size-3" aria-hidden />
+                        {label(option)}
+                      </ToggleGroupItem>
+                    )
+                  })}
                 </ToggleGroup>
               </div>
               <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
@@ -299,7 +326,7 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
             </div>
           ) : null}
           {selected ? (
-            <aside className="w-96 shrink-0 border-l border-border @max-[56rem]:hidden">
+            <aside className="w-[30%] min-w-100 shrink-0 border-l border-border @max-[56rem]:hidden">
               <div className="flex h-full flex-col">
                 <BotTemplateDetail
                   key={selected.id}
