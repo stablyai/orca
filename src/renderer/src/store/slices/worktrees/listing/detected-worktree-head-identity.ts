@@ -2,9 +2,9 @@ import type {
   DetectedWorktree,
   WorktreeHeadIdentity
 } from '../../../../../../shared/worktree/types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import type { AppState } from '../../../types'
-import { findWorktreeByPath } from '../../../../hooks/worktree-head-identity-apply'
+import { findWorktreeByPath } from './worktree-head-identity-apply'
 import { deriveGitIdentityDisplayName } from '../metadata/detached-head-display-name'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from './worktree-host-ownership'
 import { selectDetectedWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'

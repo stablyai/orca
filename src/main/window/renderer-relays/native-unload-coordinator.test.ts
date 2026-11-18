@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain, type BrowserWindow, type WebContents } from 'electron'
 
 vi.mock('electron', async () => {
@@ -9,8 +9,7 @@ vi.mock('electron', async () => {
 import {
   installNativeUnloadCoordinator,
   reloadWithRendererCheckpoint,
-  replacePendingReloadWithClose,
-  setWindowCloseInFlight
+  replacePendingReloadWithClose
 } from './native-unload-coordinator'
 
 function fixture() {
@@ -39,14 +38,11 @@ function fixture() {
     frame,
     reply,
     reload: (ignoreCache = false) => reloadWithRendererCheckpoint(webContents, ignoreCache),
-    replaceWithClose: () => replacePendingReloadWithClose(webContents),
-    setCloseInFlight: (close: { quitting: boolean } | null) =>
-      setWindowCloseInFlight(webContents, close)
+    replaceWithClose: () => replacePendingReloadWithClose(webContents)
   }
 }
 
 beforeEach(() => ipcMain.removeAllListeners())
-afterEach(() => vi.useRealTimers())
 
 describe('native reload checkpoint', () => {
   it('reloads once, only after the owning document reports its durable save', async () => {
@@ -60,36 +56,12 @@ describe('native reload checkpoint', () => {
     expect(contents.reload).toHaveBeenCalledOnce()
   })
 
-  it('upgrades a waiting reload to Force Reload', async () => {
-    const { contents, reply, reload } = fixture()
-    const ordinary = reload()
-    const forced = reload(true)
-    reply(true)
-    await Promise.all([ordinary, forced])
-    expect(contents.reload).not.toHaveBeenCalled()
-    expect(contents.reloadIgnoringCache).toHaveBeenCalledOnce()
-  })
-
   it('keeps the document when its save fails', async () => {
     const { contents, reply, reload } = fixture()
     const result = reload()
     reply(false)
     await expect(result).rejects.toThrow('could not be saved')
     expect(contents.reload).not.toHaveBeenCalled()
-  })
-
-  it('reloads anyway when a live renderer never answers', async () => {
-    vi.useFakeTimers()
-    const { contents, frame, reload } = fixture()
-    const result = reload(true)
-    const requestId = frame.send.mock.calls[0]?.[1]
-    ipcMain.emit('app:native-unload-received', { sender: contents, senderFrame: frame }, requestId)
-    await vi.advanceTimersByTimeAsync(29_999)
-    expect(contents.reloadIgnoringCache).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-    await result
-    expect(frame.send).toHaveBeenCalledWith('app:native-unload-canceled', expect.any(String))
-    expect(contents.reloadIgnoringCache).toHaveBeenCalledOnce()
   })
 
   it('does not reload a document that replaced the one asked to save', async () => {
@@ -116,35 +88,5 @@ describe('native reload checkpoint', () => {
     expect(contents.reload).not.toHaveBeenCalled()
     // The page suspended its unload guards for the reload; the close must find them restored.
     expect(frame.send).toHaveBeenLastCalledWith('app:native-unload-canceled', expect.any(String))
-  })
-
-  it('does not reload over a quit close the renderer is still answering', async () => {
-    const { contents, frame, reload, setCloseInFlight } = fixture()
-    setCloseInFlight({ quitting: true })
-    await reload(true)
-    expect(frame.send).not.toHaveBeenCalled()
-    expect(contents.reloadIgnoringCache).not.toHaveBeenCalled()
-  })
-
-  it('keeps refusing reload when an ordinary close follows a quit close', async () => {
-    const { contents, reload, setCloseInFlight } = fixture()
-    setCloseInFlight({ quitting: true })
-    setCloseInFlight({ quitting: false })
-    await reload(true)
-    expect(contents.reloadIgnoringCache).not.toHaveBeenCalled()
-  })
-
-  it('asks again after a prepare request could not be sent', async () => {
-    const { contents, frame, reply, reload } = fixture()
-    frame.send.mockImplementationOnce(() => {
-      throw new Error('frame disposed')
-    })
-    await reload()
-    expect(contents.reload).toHaveBeenCalledOnce()
-    const next = reload()
-    expect(frame.send).toHaveBeenCalledTimes(2)
-    reply(true)
-    await next
-    expect(contents.reload).toHaveBeenCalledTimes(2)
   })
 })

@@ -15,7 +15,7 @@ import { openHeaderCreateComposer } from '../rows/header-create-workspace-target
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import {
@@ -23,7 +23,7 @@ import {
   isProjectSectionGroupKey
 } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { SidebarWorktreeListDialogs } from '../rows/ProjectGroupDialogs'
 import { SidebarWorktreeListEmptyState } from './EmptyState'
 import { VirtualizedWorktreeViewport } from '../viewport/VirtualizedWorktreeViewport'

@@ -14,14 +14,14 @@ import {
   readAgentJournalTurnOutcome
 } from '../lifecycle/records/agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
-import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/visuals/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
   commandTurnsOf,
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandRow,
   type AgentJournalBodyLookup
-} from '../structured-agent-session-command-entry'
+} from './structured-agent-session-command-entry'
 import type { NativeChatBlock } from '../../native-chat/native-chat-types'
 
 export type StructuredAgentSessionLatestRequest = {

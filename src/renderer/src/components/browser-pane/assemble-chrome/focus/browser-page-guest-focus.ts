@@ -1,5 +1,5 @@
 import { useMemo, type RefObject } from 'react'
-import { hasBrowserClientPageAttachedGuest } from '../../browser-client-page-retained-elements'
+import { hasBrowserClientPageAttachedGuest } from '../../host-guest/client-pages/browser-client-page-retained-elements'
 
 /** Abstract webview and streamed-surface focus so chrome rules stay consistent across backends. */
 export type BrowserPageGuestFocus = {

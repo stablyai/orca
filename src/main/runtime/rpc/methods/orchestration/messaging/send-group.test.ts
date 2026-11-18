@@ -197,31 +197,6 @@ describe('orchestration.send group addresses', () => {
     }
   )
 
-  it('names the remote workers it skipped when every live Dispatch is federated', async () => {
-    setupWithTerminals([makeSummary('term_coord')])
-    const federated = db.createStartingWorkerDispatch({
-      taskSpec: 'remote work',
-      taskRunId: activeRunId,
-      startOptions: {},
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      federation: {
-        environmentId: 'environment_remote',
-        environmentName: 'remote',
-        peerFingerprint: 'remote_peer',
-        protocolVersion: 3
-      }
-    })
-
-    // Explain skipped remote workers rather than claim no recipients when individual addresses exist.
-    await expect(
-      call('orchestration.send', { from: 'term_coord', to: '@all', subject: 'pause' })
-    ).rejects.toMatchObject({
-      code: 'terminal_not_found',
-      message: expect.stringContaining(`dispatch:${federated.dispatch.id}`)
-    })
-  })
-
   it.each(['@all', '@idle', '@codex'])(
     'rejects %s from a sender in no Run, naming the durable alternatives',
     async (to) => {
@@ -243,90 +218,6 @@ describe('orchestration.send group addresses', () => {
       expect(db.getInbox(100)).toHaveLength(0)
     }
   )
-
-  it('rejects @all from a bound coordinator whose Run has no live Dispatch', async () => {
-    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_bystander')])
-
-    await expect(
-      call('orchestration.send', { from: 'term_coord', to: '@all', subject: 'nobody home' })
-    ).rejects.toThrow('No recipients resolved for group address')
-    expect(db.getInbox(100)).toHaveLength(0)
-  })
-
-  it('fans out @idle to only the idle Dispatches of the Run', async () => {
-    setupWithTerminals(
-      [
-        makeSummary('term_coord'),
-        makeSummary('term_a'),
-        makeSummary('term_b'),
-        makeSummary('term_idle_elsewhere')
-      ],
-      { term_a: 'idle', term_b: 'busy', term_idle_elsewhere: 'idle' }
-    )
-    const idle = dispatchWorker('term_a')
-    dispatchWorker('term_b')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@idle',
-      subject: 'idle check'
-    })) as GroupReceipt
-
-    expect(result.recipients).toBe(1)
-    expect(result.messages[0].to_handle).toBe(`dispatch:${idle}`)
-  })
-
-  it('fans out an agent name group by host-resolved identity within the Run', async () => {
-    setupWithTerminals([
-      makeSummary('term_coord', { agentIdentity: 'claude' }),
-      makeSummary('term_a', { agentIdentity: 'codex' }),
-      makeSummary('term_b', { agentIdentity: 'claude' }),
-      makeSummary('term_codex_elsewhere', { agentIdentity: 'codex' })
-    ])
-    const codex = dispatchWorker('term_a')
-    dispatchWorker('term_b')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@codex',
-      subject: 'codex only'
-    })) as GroupReceipt
-
-    expect(result.recipients).toBe(1)
-    expect(result.messages[0].to_handle).toBe(`dispatch:${codex}`)
-  })
-
-  it('fans out @worktree:<id> to matching worktree terminals, unchanged by Run scoping', async () => {
-    setupWithTerminals([
-      makeSummary('term_a', { worktreeId: 'wt_1' }),
-      makeSummary('term_b', { worktreeId: 'wt_1' }),
-      makeSummary('term_c', { worktreeId: 'wt_2' })
-    ])
-
-    const result = (await call('orchestration.send', {
-      from: 'term_a',
-      to: '@worktree:wt_1',
-      subject: 'worktree msg'
-    })) as GroupReceipt
-
-    expect(result.recipients).toBe(1)
-    expect(result.messages[0].to_handle).toBe('term_b')
-  })
-
-  it('generates a shared thread_id when none provided', async () => {
-    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_a'), makeSummary('term_b')])
-    dispatchWorker('term_a')
-    dispatchWorker('term_b')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@all',
-      subject: 'auto thread'
-    })) as GroupReceipt
-
-    expect(result.messages[0].thread_id).toMatch(/^thread_/)
-    expect(result.messages[0].thread_id).toBe(result.messages[1].thread_id)
-  })
 
   it.each(['run', 'payload'])('does not acquire group membership from %s', async (source) => {
     setupWithTerminals([

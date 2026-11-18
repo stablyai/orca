@@ -8,7 +8,7 @@ import {
   type SetStateAction
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
 import { hostConnectionEpoch, readHostStatusReply } from '../query/host-status-query'

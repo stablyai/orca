@@ -8,7 +8,7 @@ import {
   getRepoSshConnectionId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   canInspectLocalMcpConfigRoot,
   inspectMcpConfigContent,

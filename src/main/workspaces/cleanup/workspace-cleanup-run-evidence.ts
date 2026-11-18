@@ -10,7 +10,7 @@ import {
   isRepoOnCatalogHost,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   getPersistedWorkspaceCleanupActivityAt,

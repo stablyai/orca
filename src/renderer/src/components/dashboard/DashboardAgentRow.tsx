@@ -10,7 +10,7 @@ import {
   agentStateLabel,
   agentStateProgressLabel,
   type AgentDotState
-} from '@/components/AgentStateDot'
+} from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -44,11 +44,10 @@ import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
-} from '@/components/agent-child-row-text'
+} from '@/components/agent/status/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useHasWorktreeCardUnreadRollup } from '@/components/sidebar/workspace-card/surface/worktree-card-title-status'
 
 function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
   const delta = now - ts
@@ -131,7 +130,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   onSendTargetClick
 }: Props) {
   const t = useTranslate()
-  const hasUnreadRollup = useHasWorktreeCardUnreadRollup()
   useUiLanguageRevision()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
@@ -320,7 +318,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                 title={null}
                 progress={presentation.progress}
                 unread={isUnvisited}
-                unreadDisplay={hasUnreadRollup ? 'label' : 'dot'}
               />
             </span>
           </TooltipTrigger>

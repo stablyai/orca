@@ -8,14 +8,9 @@ import { styles as markdownStyles } from '../../../../components/markdown/mobile
 import { colors, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { CHAT_PROSE_SCALE } from '../messages/mobile-native-chat-message-styles'
+import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
 import type { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-
-const FOLDED_HEIGHT =
-  NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES *
-  markdownStyles.paragraph.lineHeight *
-  CHAT_PROSE_SCALE
 
 export function MobileNativeChatUserMessageFold({
   text,
@@ -39,7 +34,12 @@ export function MobileNativeChatUserMessageFold({
   const t = useMobileTranslation()
   const longText = useMemo(() => nativeChatUserMessageFolds(text), [text])
   const [height, setHeight] = useState<number | null>(null)
-  const clip = FOLDED_HEIGHT * fontScale
+  const { textScale, lineSpacing } = useNativeChatProseText(fontScale)
+  const clip =
+    NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES *
+    markdownStyles.paragraph.lineHeight *
+    textScale *
+    lineSpacing
   // Native clips measure at the folded height; use >= with rounding tolerance or expanding to measure would loop.
   const folds = longText && (height === null || height >= clip - 1)
   return (

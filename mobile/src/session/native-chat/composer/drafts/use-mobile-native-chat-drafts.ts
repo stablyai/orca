@@ -161,7 +161,8 @@ export function useMobileNativeChatDrafts(args: {
       if (!draftKey) {
         return null
       }
-      const tail = messagesRef.current.at(-1)
+      // Echoes match against image-folded rows, so the boundary must be a row that survives the fold.
+      const tail = normalizeImageTranscriptMessages(messagesRef.current).at(-1)
       return {
         draftKey,
         draftDestination: mobileNativeChatDraftDestination(draftKey),

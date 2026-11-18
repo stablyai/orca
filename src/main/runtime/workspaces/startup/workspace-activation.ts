@@ -5,7 +5,7 @@ import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
 } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { phoneWakeReport } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
@@ -18,7 +18,7 @@ import {
   buildWorktreeStartupForDraft,
   resolveWorktreeStartupDraftAgent
 } from './runtime-worktree-agent-startup'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineageResolution } from '../lineage/runtime-worktree-lineage-resolution'
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from '../lineage/runtime-worktree-lineage-recording'
@@ -287,7 +287,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       wslUserAct?: true
     },
     createdWorktree?: Worktree
-  ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
+  ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null; failed?: true }> {
     return provisionWorktreeTerminals(
       this.getWorktreeTerminalProvisioningHost(createdWorktree),
       args

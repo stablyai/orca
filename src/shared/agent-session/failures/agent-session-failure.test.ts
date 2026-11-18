@@ -99,7 +99,7 @@ describe('antigravity sign-in setup commands', () => {
   it('offers agy acp --login only for system host chats, not managed runtime chats', async () => {
     const { agentSessionSignInCommand } =
       await import('../lifecycle/launch/agent-session-setup-commands')
-    const { notSignedInSentence } = await import('../agent-session-availability-sentences')
+    const { notSignedInSentence } = await import('./agent-session-availability-sentences')
     const { sayAgentSessionFailureEnglish } = await import('./agent-session-failure-copy')
 
     expect(agentSessionSignInCommand('antigravity', { account: 'system', remote: true })).toBe(

@@ -1,5 +1,8 @@
 import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../../input/composer/agent-image-paste'
-import { imageReferenceToken, replaceImageReferences } from '../../native-chat-image-reference'
+import {
+  imageReferenceToken,
+  replaceImageReferences
+} from '../../attachments/native-chat-image-reference'
 import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from '../../native-chat-types'
 
 export const IMAGE_PROMPT_MARKER = /\[Image #\d+\]/

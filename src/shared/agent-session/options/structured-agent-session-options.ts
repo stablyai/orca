@@ -27,6 +27,7 @@ import type {
   AgentSessionOptionsResult
 } from './protocol/agent-session-options-result'
 import { labelFromModelId } from './model-catalog/model-id-label'
+import type { AgentSessionChildPermissionFields } from './permissions/agent-session-status-permission-fields'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import { listingVerifiedModelIds } from './model-catalog/structured-agent-session-listing-verified-ids'
 import { decodeStructuredAgentSessionOptionValue } from './selection/structured-agent-session-option-codec'
@@ -56,7 +57,8 @@ export function structuredAgentSessionOptionCatalog(
   return { ...seed, models, defaultModelIsCliDefault: true }
 }
 
-export type StructuredAgentSessionOptionState = {
+/** Child permission choices are live-host reports, absent on older hosts. */
+export type StructuredAgentSessionOptionState = AgentSessionChildPermissionFields & {
   catalog: AgentSessionOptionCatalog | null
   /** Catalog provenance, independent of known input: seed offers no replacement models;
    * builtin enables static rows only after unavailable discovery. */
@@ -77,8 +79,6 @@ export type StructuredAgentSessionOptionState = {
   defaultsUnsent?: true
   /** The permission mode the host or launch last stated; null shows no picker. */
   permissionMode: string | null
-  /** Optional live-host launch choice; absent on older hosts. */
-  launchPermissionMode?: string
   interactionModeSupported?: boolean
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null

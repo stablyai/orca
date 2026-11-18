@@ -35,7 +35,7 @@ import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { hasUniqueIndexedRepositoryHost } from '@/lib/workspace/ownership/repository-owner-index'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 

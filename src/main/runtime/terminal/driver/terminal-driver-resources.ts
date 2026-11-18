@@ -1,11 +1,11 @@
 import type { RuntimeServiceCommandSurface } from '../../construction/runtime-service-command-surface'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 import {
   remoteCliBrowserScopeWorkspaceId,
   resolveRemoteCliBrowserScopeSelector
 } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'

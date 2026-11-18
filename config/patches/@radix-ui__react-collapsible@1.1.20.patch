@@ -1,0 +1,60 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -97,13 +97,24 @@
+   const isOpen = context.open || isPresent;
+   const isMountAnimationPreventedRef = React.useRef(isOpen);
+   const originalStylesRef = React.useRef(void 0);
+-  React.useEffect(() => {
++  useLayoutEffect(() => {
++    const node = ref.current;
+     const rAF = requestAnimationFrame(() => isMountAnimationPreventedRef.current = false);
+-    return () => cancelAnimationFrame(rAF);
++    return () => {
++      cancelAnimationFrame(rAF);
++      isMountAnimationPreventedRef.current = true;
++      if (node?.getAttribute("data-state") === "open") {
++        node.style.transitionDuration = "0s";
++        node.style.animationName = "none";
++      }
++    };
+   }, []);
+   useLayoutEffect(() => {
+     const node = ref.current;
+     if (node) {
++      if (originalStylesRef.current && !context.open) {
++        isMountAnimationPreventedRef.current = false;
++      }
+       originalStylesRef.current = originalStylesRef.current || {
+         transitionDuration: node.style.transitionDuration,
+         animationName: node.style.animationName
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -137,13 +137,24 @@
+   const isOpen = context.open || isPresent;
+   const isMountAnimationPreventedRef = React.useRef(isOpen);
+   const originalStylesRef = React.useRef(void 0);
+-  React.useEffect(() => {
++  (0, import_react_use_layout_effect.useLayoutEffect)(() => {
++    const node = ref.current;
+     const rAF = requestAnimationFrame(() => isMountAnimationPreventedRef.current = false);
+-    return () => cancelAnimationFrame(rAF);
++    return () => {
++      cancelAnimationFrame(rAF);
++      isMountAnimationPreventedRef.current = true;
++      if (node?.getAttribute("data-state") === "open") {
++        node.style.transitionDuration = "0s";
++        node.style.animationName = "none";
++      }
++    };
+   }, []);
+   (0, import_react_use_layout_effect.useLayoutEffect)(() => {
+     const node = ref.current;
+     if (node) {
++      if (originalStylesRef.current && !context.open) {
++        isMountAnimationPreventedRef.current = false;
++      }
+       originalStylesRef.current = originalStylesRef.current || {
+         transitionDuration: node.style.transitionDuration,
+         animationName: node.style.animationName

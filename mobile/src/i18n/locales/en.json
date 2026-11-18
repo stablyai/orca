@@ -13,6 +13,12 @@
         "systemWithCurrent": "System ({{language}})",
         "heading": "LANGUAGE",
         "description": "System follows this device’s language. Permission prompts always use the device language."
+      },
+      "usage": {
+        "used": "Used",
+        "remaining": "Remaining",
+        "heading": "USAGE PERCENTAGES",
+        "description": "Usage bars on Home and Accounts show how much of each limit is used or left. Saved on this phone."
       }
     },
     "aboutScreen": {
@@ -73,10 +79,32 @@
       "on": "On",
       "off": "Off"
     },
+    "nativeChatText": {
+      "heading": "TEXT",
+      "footer": "Pinch in a chat to change it; it saves here.",
+      "size": "Text size",
+      "sizeDefault": "Default",
+      "sizePoints": "{{size}} pt",
+      "sizeSpoken": "{{size}} points",
+      "font": "Font",
+      "fontPickerTitle": "Chat font",
+      "fontSystem": "System",
+      "fontSerif": "Serif",
+      "fontMono": "Monospace",
+      "fontMonoSubtitle": "Same as code",
+      "lineSpacing": "Line spacing",
+      "spacingCompact": "Compact",
+      "spacingDefault": "Default",
+      "spacingRelaxed": "Relaxed",
+      "reset": "Reset text settings",
+      "previewQuestion": "Why is the resume test flaky?",
+      "previewTools": "Read 3 files · Ran pnpm test",
+      "previewAnswer": "The test waits on `setTimeout(0)` while the stream is still flushing, so it passes only when the flush wins."
+    },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Could not load delivery settings. Reopen this screen to retry.",
       "saveFailed": "Could not save delivery settings. Try again.",
-      "updateDesktopHint": "Pair an updated desktop to receive notifications on this phone."
+      "updateDesktopHint": "Pair an updated host to receive notifications on this phone."
     },
     "notificationDisplayTest": {
       "loadFailed": "Could not load paired desktops.",
@@ -196,14 +224,16 @@
     },
     "offline": {
       "waitingFor": "Waiting for {{host}}",
-      "waiting": "Waiting for desktop",
-      "message": "Check that your computer is awake and Orca is running.",
+      "waiting": "Waiting for host",
+      "message": "Check that the host is awake and Orca is running.",
       "reconnect": "Reconnect"
     },
     "noMatch": {
       "title": "No matches",
       "clearSearch": "Clear search"
-    }
+    },
+    "waitingForHost": "Waiting for host…",
+    "connectingToHost": "Connecting to host…"
   },
   "host": {
     "edit": {
@@ -265,19 +295,14 @@
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
       "tryAgain": "Try Again",
-      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again."
+      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.",
+      "runtimeAccessLink": "This link is for another Orca app. Scan the code in Settings → Mobile on your computer, or run orca pair --mobile on your server."
     },
     "pair": {
       "missingCode": "Missing pairing code",
       "backToHome": "Back to home"
     },
     "terminalSettings": {
-      "smallestText": "Smallest (50%)",
-      "smallerText": "Smaller (75%)",
-      "defaultText": "Default (100%)",
-      "largeText": "Large (125%)",
-      "largerText": "Larger (150%)",
-      "largestText": "Largest (200%)",
       "restoreAfterMinutes_one": "After {{count}} minute",
       "restoreAfterMinutes_other": "After {{count}} minutes",
       "keepPhoneSize": "Keep at phone size (default)",
@@ -287,11 +312,32 @@
       "leaveAppHeading": "WHEN YOU LEAVE THE APP",
       "leaveAppDescription": "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually.",
       "noPairedDesktops": "No paired desktops yet. Pair one to control terminal behavior.",
-      "textSizeHeading": "TEXT SIZE",
-      "textSizeDescription": "Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal itself, which updates this setting. Per-device display only; doesn't change the desktop terminal.",
-      "textSize": "Text size",
       "restoreHost": "Restore {{name}}",
-      "textSizePickerTitle": "Terminal text size"
+      "previewColumns_one": "{{count}} column",
+      "previewColumns_other": "{{count}} columns",
+      "previewLabel": "Terminal preview",
+      "previewHeading": "PREVIEW",
+      "fontHeading": "FONT",
+      "fontDescription": "Pinch in a terminal to change the size; it saves here. Only changes this device, not the desktop terminal.",
+      "font": "Font",
+      "size": "Size",
+      "sizePoints": "{{size}} pt",
+      "smaller": "Smaller",
+      "larger": "Larger",
+      "lineSpacing": "Line spacing",
+      "lineSpacingTight": "Tight",
+      "lineSpacingNormal": "Normal",
+      "lineSpacingRoomy": "Roomy",
+      "weight": "Weight",
+      "weightLight": "Light",
+      "weightRegular": "Regular",
+      "weightMedium": "Medium",
+      "fontPickerTitle": "Terminal font",
+      "fontsOnDevice": "On this device",
+      "fontsIncluded": "Included with Orca",
+      "systemMono": "System mono",
+      "defaultFont": "Default",
+      "resetFont": "Reset font settings"
     }
   },
   "appMove": {
@@ -341,6 +387,13 @@
       "otherAgents": "Other agents",
       "fableWindow": "Fable",
       "mcpWindow": "MCP"
+    },
+    "claude": {
+      "usageSignInLabel": "Sign in again",
+      "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default."
+    },
+    "usage": {
+      "percentLeft": "{{value}}% left"
     }
   },
   "agentHistory": {
@@ -825,8 +878,8 @@
       "localWindows": "Local Windows",
       "localLinux": "Local Linux",
       "thisComputer": "This computer",
-      "waitingForDesktop": "Still waiting for the desktop",
-      "savingToDesktop": "Saving to the desktop",
+      "waitingForDesktop": "Still waiting for the host",
+      "savingToDesktop": "Saving to the host",
       "backToOptions": "Back to Workspace options",
       "workspaceOptions": "Workspace options",
       "syncedAcrossDevices": "Synced across your devices",
@@ -1009,7 +1062,7 @@
   },
   "components": {
     "agentLaunchNotice": {
-      "updateRequired": "Update Orca on your computer to start an agent from your phone.",
+      "updateRequired": "Update Orca on this host to start an agent from your phone.",
       "statusUnreadable": "Could not read this host's status. Retrying…",
       "copyFailed": "Couldn't copy",
       "copyPrompt": "Copy prompt"
@@ -1076,7 +1129,7 @@
       "dismissNotice": "Dismiss notice"
     },
     "jiraConnectPrompt": {
-      "updateDesktop": "Update Orca desktop",
+      "updateDesktop": "Update Orca on this host",
       "connectOnDesktop": "Connect Jira on your desktop",
       "credentialUnreadable": "Jira is saved but unreadable: {{credentialError}}",
       "connectHint": "Add your Jira site in Orca desktop under Settings → Integrations, then check again.",
@@ -1128,7 +1181,7 @@
       "terminalLabel": "{{title}} ({{id}})",
       "terminal": "Terminal",
       "newAgentSession": "New Agent Session",
-      "updateRequired": "Update Orca on your computer",
+      "updateRequired": "Update Orca on this host",
       "statusUnreadable": "Could not read this host's status. Retrying…",
       "copyNotes": "Copy Notes",
       "sendUnsentNotes": "Send Unsent Notes",
@@ -1299,16 +1352,16 @@
     },
     "protocolBlockScreen": {
       "updateMobileTitle": "Update Orca Mobile",
-      "updateDesktopTitle": "Update Orca on your computer",
+      "updateDesktopTitle": "Update Orca on this host",
       "refreshWorkspaceTitle": "Refresh the mobile workspace",
-      "refreshWorkspaceBody": "The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.",
-      "mobileTooOldAppStore": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
-      "mobileTooOldGooglePlay": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
-      "mobileTooOldGitHubReleases": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
-      "workspaceNeedsUpdateAppStore": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
-      "workspaceNeedsUpdateGooglePlay": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
-      "workspaceNeedsUpdateGitHubReleases": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
-      "desktopTooOldBody": "This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.",
+      "refreshWorkspaceBody": "The workspace cached for this host is older than the host expects. Reconnect to this host to download the current one.",
+      "mobileTooOldAppStore": "This host needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
+      "mobileTooOldGooglePlay": "This host needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
+      "mobileTooOldGitHubReleases": "This host needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
+      "workspaceNeedsUpdateAppStore": "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
+      "workspaceNeedsUpdateGooglePlay": "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
+      "workspaceNeedsUpdateGitHubReleases": "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
+      "desktopTooOldBody": "Orca on this host is too old for your current Orca Mobile app. Update Orca there, then try this host again.",
       "openAppStore": "Open App Store",
       "openGooglePlay": "Open Google Play",
       "openGitHubReleases": "Open GitHub Releases",
@@ -1324,13 +1377,18 @@
       "newScriptLabel": "New setup script",
       "scriptLabel": "Setup script",
       "runHooks": "Run hooks",
-      "alwaysTrustAndRun": "Always trust and run",
       "dontRun": "Don't run",
       "runArchiveTitle": "Run archive script from {{repoName}}?",
       "archiveScriptChangedTitle": "{{repoName}}'s archive script changed",
       "archiveDescription": "This repository's orca.yaml runs before the workspace is deleted. Only run it if you trust this repository.",
       "archiveScriptLabel": "Archive script",
-      "newArchiveScriptLabel": "New archive script"
+      "newArchiveScriptLabel": "New archive script",
+      "runOnce": "Run once",
+      "alwaysTrust": "Always trust",
+      "alwaysTrustScope": "Always trust runs future orca.yaml changes in {{repoName}} without asking.",
+      "branchDiffersTitle": "This workspace's branch has different setup commands",
+      "branchDiffersDescription": "The workspace was created, but its setup didn't run: its branch's orca.yaml differs from what you approved. Run it in this workspace only if you trust this repository.",
+      "branchSetupLabel": "Branch's setup script"
     },
     "smartWorkspaceAdvancedFields": {
       "name": "Name",
@@ -1434,7 +1492,8 @@
       "copyCode": "Copy code",
       "openImage": "Open image",
       "wrapLines": "Wrap lines",
-      "disableLineWrap": "Disable line wrap"
+      "disableLineWrap": "Disable line wrap",
+      "codeLabel": "Code"
     },
     "markdownCallout": {
       "note": "Note",
@@ -1923,7 +1982,7 @@
     },
     "stream": {
       "updateApp": "Update the Orca app to stream browser tabs here.",
-      "updateDesktop": "Update desktop Orca to stream browser tabs on mobile.",
+      "hostCannotStream": "This host can't stream browser tabs here.",
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
       "timedOut": "Browser stream timed out."
@@ -1931,8 +1990,6 @@
   },
   "files": {
     "fileExplorerPanel": {
-      "connecting": "Connecting to desktop...",
-      "waiting": "Waiting for desktop...",
       "loadFailed": "Unable to load files",
       "closeFiles": "Close files",
       "backToSession": "Back to session",
@@ -1954,7 +2011,6 @@
     },
     "fileMediaPreview": {
       "loadFailed": "Unable to load media",
-      "waiting": "Waiting for desktop...",
       "downloading": "Downloading {{bytes}} of {{total}}",
       "loading": "Loading media..."
     },
@@ -1967,7 +2023,6 @@
     },
     "filePreviewScreen": {
       "loading": "Loading preview...",
-      "waiting": "Waiting for desktop...",
       "loadFailed": "Unable to load preview",
       "title": "Preview",
       "saveFailed": "Unable to save file",
@@ -2169,7 +2224,8 @@
       "newTab": "New tab",
       "quickCommands": "Quick commands",
       "fileExplorer": "File explorer",
-      "sourceControl": "Source control"
+      "sourceControl": "Source control",
+      "textSize": "Text size"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
@@ -2184,7 +2240,7 @@
       "newTab": "New Tab",
       "terminal": "Terminal",
       "browser": "Browser",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "markdownNote": "Markdown Note",
       "sendReviewNotes": "Send Review Notes",
       "notesHint": "Choose an agent session for the current notes.",
@@ -2195,6 +2251,8 @@
       "copyPath": "Copy Path",
       "file": "File",
       "chat": "Chat",
+      "cli": "CLI",
+      "cliOnly": "CLI only",
       "unsavedMarkdown": "Unsaved markdown changes",
       "draftsHint": "Copy or discard phone drafts before leaving.",
       "copyAllAndLeave": "Copy All & Leave",
@@ -2375,7 +2433,7 @@
     "diffReviewLoaders": {
       "committedChangesUnavailable": "Committed changes unavailable",
       "committedChangesFailed": "Committed changes failed",
-      "desktopUpdateRequired": "Update Orca desktop to review changes on mobile.",
+      "desktopUpdateRequired": "Update Orca on this host to review changes on mobile.",
       "reviewNotesLoadFailed": "Unable to load review notes",
       "diffLoadFailed": "Unable to load diff",
       "committedDiffUnavailable": "Committed diff is unavailable",
@@ -2502,7 +2560,7 @@
     },
     "prAiTriageLaunch": {
       "promptNotSent": "The agent started, but the prompt wasn't sent.",
-      "updateRequired": "Update Orca on your computer to start an agent from your phone.",
+      "updateRequired": "Update Orca on this host to start an agent from your phone.",
       "loadFailed": "Could not load the available agents.",
       "emptyPrompt": "This action's saved prompt is empty. Update Source Control AI settings on your computer.",
       "agentStartedIn": "Agent started in {{label}}",
@@ -2512,22 +2570,18 @@
       "reconnecting": "Attach failed (reconnecting)"
     },
     "useDiffReviewCommentActions": {
-      "waitingForDesktop": "Waiting for desktop...",
       "saveStateFailed": "Failed to save review state",
       "saveFailed": "Failed to save review"
     },
     "useDiffReviewController": {
       "missingWorktree": "Missing worktree",
-      "waitingForDesktop": "Waiting for desktop...",
       "loadFailed": "Unable to load review",
       "commitMissing": "Update the Orca app to open commit files here."
     },
     "useDiffReviewDiffLoading": {
-      "waitingForDesktop": "Waiting for desktop...",
       "loadFailed": "Unable to load diff"
     },
     "useDiffReviewGitActions": {
-      "waitingForDesktop": "Waiting for desktop...",
       "actionFailed": "Source control action failed"
     },
     "useDiffReviewInteractions": {
@@ -2536,7 +2590,6 @@
     "useDiffReviewSendActions": {
       "copyFailed": "Unable to copy the review notes",
       "notesCopied": "Review notes copied",
-      "waitingForDesktop": "Waiting for desktop...",
       "sendFailed": "Failed to send notes",
       "inputLocked": "Terminal input is locked",
       "notesSent": "Review notes sent",
@@ -2557,7 +2610,6 @@
       "stopNotSent": "Stop not sent"
     },
     "usePrAiTriage": {
-      "waitingForDesktop": "Waiting for desktop…",
       "launchFailed": "Failed to launch agent"
     },
     "usePrCommentActions": {
@@ -2577,14 +2629,13 @@
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
       "untitledNoteCreateFailed": "Unable to create untitled markdown note",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "invalidUrl": "Enter a valid URL",
       "browserCreateFailed": "Failed to create browser",
       "browserUnavailable": "Browser page is not available yet.",
       "browserCommandFailed": "Browser command failed"
     },
     "useDiffComments": {
-      "waitingForDesktop": "Waiting for desktop...",
       "saveNotesFailed": "Failed to save review notes",
       "noteAdded": "Note added",
       "saveNoteFailed": "Failed to save note",
@@ -2796,6 +2847,7 @@
       "historyUnreadable": "Orca couldn't read this chat's saved history.",
       "historyUnusable": "Unable to load this chat.",
       "historyUnavailable": "Orca couldn't open this chat's history right now.",
+      "savedInOtherFolder": "This conversation was saved in another folder.",
       "savedByNewerOrca": "Chats were saved by a newer Orca.",
       "updateOrcaToKeepUsing": "Update Orca to keep using them.",
       "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
@@ -2931,9 +2983,6 @@
       "openInBrowser": "Open in system browser",
       "copyLink": "Copy link"
     },
-    "useDiffReviewGitHub": {
-      "waitingForDesktop": "Waiting for desktop..."
-    },
     "usePrTextAction": {
       "updateFailed": "Failed to update pull request."
     },
@@ -2978,6 +3027,14 @@
       "next": "Next tab",
       "previous": "Previous tab",
       "hint": "Shows all tabs"
+    },
+    "textSizeSheet": {
+      "chatTitle": "Chat text",
+      "size": "Size",
+      "moreChat": "More text settings",
+      "terminalTitle": "Terminal text",
+      "pointsAndColumns": "{{points}} · {{count}} columns",
+      "moreTerminal": "More terminal settings"
     }
   },
   "chat": {
@@ -3116,6 +3173,7 @@
       "showAll": "Full task list"
     },
     "sessionOptionCopy": {
+      "none": "None",
       "ultracode": "Ultracode",
       "on": "On",
       "off": "Off",
@@ -3189,6 +3247,7 @@
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReviewApproved": "{{agent}} approved this action. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
+      "autoReviewDenied": "{{agent}}'s automatic review denied: {{action}}",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
       "modelFallback": "Claude switched models: {{from}} → {{to}}.",
       "forkedFrom": "Forked from",
@@ -3266,6 +3325,12 @@
     "interruptedContinue": {
       "failed": "Couldn't continue this chat. Try again, or send a message.",
       "explanation": "Continue, and the agent first checks whether its last step finished."
+    },
+    "restartNote": {
+      "continued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
+      "refused": "Orca couldn't continue this chat after the restart. Send a message to continue it.",
+      "unconfirmed": "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message.",
+      "notConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue."
     },
     "sendError": {
       "dismiss": "Dismiss"
@@ -3546,6 +3611,10 @@
         "failed": "{{count}} failed"
       },
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
+    },
+    "selectionQuote": {
+      "action": "Quote",
+      "hint": "Adds the selected text to your message as a quote"
     }
   },
   "sourceControl": {
@@ -3752,7 +3821,6 @@
       "loadFailed": "Failed to load history",
       "loadFilesFailed": "Unable to load commit files",
       "retryFiles": "Retry commit files",
-      "waitingForDesktop": "Waiting for desktop...",
       "noFileChanges": "No file changes",
       "noCommits": "No commits.",
       "loading": "Loading commits…"
@@ -3912,7 +3980,6 @@
       "noBranch": "No branch"
     },
     "useMobileCommitFailureRecovery": {
-      "waitingForDesktop": "Waiting for desktop...",
       "launchFailed": "Failed to launch agent"
     },
     "useMobileCommitMessageGeneration": {
@@ -3922,13 +3989,11 @@
       "branchRequired": "Check out a branch before creating a pull request."
     },
     "useMobileGitRequests": {
-      "waitingForDesktop": "Waiting for desktop...",
       "actionFailed": "Source control action failed",
       "commitFailed": "Commit failed",
       "branchUnavailable": "Branch status unavailable"
     },
     "actionSheetRunners": {
-      "waitingForDesktop": "Waiting for desktop...",
       "noBaseBranch": "No base branch to rebase onto"
     },
     "commitRunners": {
@@ -3936,9 +4001,7 @@
       "actionFailed": "Source control action failed"
     },
     "loaders": {
-      "connectingToDesktop": "Connecting to desktop...",
-      "waitingForDesktop": "Waiting for desktop...",
-      "updateDesktop": "Update Orca desktop to use Source Control on mobile.",
+      "updateDesktop": "Update Orca on this host to use Source Control on mobile.",
       "loadFailed": "Unable to load source control"
     },
     "runners": {
@@ -4127,6 +4190,11 @@
       "loading": "Loading",
       "downloading": "Downloading",
       "downloadProgress": "Downloading… {{progress}}"
+    },
+    "createdSetupReview": {
+      "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace.",
+      "changedAgain": "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it.",
+      "runFailed": "Could not start setup."
     }
   },
   "tasks": {
@@ -4342,8 +4410,8 @@
       "displayPropertiesTitle": "Display Properties"
     },
     "listSurface": {
-      "updateDesktopTitle": "Update Orca desktop",
-      "updateDesktopMessage": "This mobile Tasks view needs a newer desktop runtime.",
+      "updateDesktopTitle": "Update Orca on this host",
+      "updateDesktopMessage": "This mobile Tasks view needs a newer Orca on this host.",
       "jiraStatusFailed": "Failed to read Jira status",
       "connectLinearTitle": "Connect your Linear account",
       "connectLinearMessage": "Browse and start work on your assigned Linear issues directly from Tasks.",
@@ -4538,7 +4606,6 @@
     },
     "searchControl": {
       "projectPlaceholder": "Search project view...",
-      "jiraPlaceholder": "Jira JQL, e.g. project = ABC AND statusCategory != Done",
       "providerPlaceholder": "Search {{provider}} tasks..."
     },
     "workspaceCreateDrawer": {
@@ -4585,15 +4652,7 @@
       "creating": "Creating...",
       "runSetupAndCreate": "Run setup and create",
       "skipSetupAndCreate": "Skip setup and create",
-      "setupChangedTitle": "{{name}}'s setup script changed",
-      "runSetupTitle": "Run setup from {{name}}?",
-      "trustSubtitle": "This repository's orca.yaml runs on your machine before the workspace starts. Only run it if you trust this repository.",
-      "newSetupScript": "New setup script",
-      "setupScript": "Setup script",
-      "trustFailed": "Failed to trust setup script.",
-      "runHooks": "Run hooks",
-      "alwaysTrustAndRun": "Always trust and run",
-      "dontRun": "Don't run"
+      "trustFailed": "Failed to trust setup script."
     },
     "sparsePresetDraft": {
       "repoRelativeDirectoriesRequired": "Use repo-relative directories, not root, absolute paths, or parent segments.",
@@ -4680,15 +4739,7 @@
       "confirmGitHubRebase": "Rebase and merge PR #{{number}}?",
       "confirmGitLabMerge": "Merge merge request #{{number}}?",
       "confirmGitLabSquash": "Squash and merge merge request #{{number}}?",
-      "confirmGitLabRebase": "Rebase and merge merge request #{{number}}?",
-      "merged": "Merged",
-      "closed": "Closed",
-      "conflicts": "Conflicts",
-      "behind": "Behind",
-      "blocked": "Blocked",
-      "checksPending": "Checks pending",
-      "ableToMerge": "Able to merge",
-      "unknown": "Unknown"
+      "confirmGitLabRebase": "Rebase and merge merge request #{{number}}?"
     },
     "pagination": {
       "pageUnreachable": "Page {{page}} is beyond what GitHub search can return.",
@@ -4999,6 +5050,200 @@
               "cc71e252ba": "{{day}}s at {{time}}"
             }
           }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "Search issues or enter JQL, e.g. project = ABC",
+        "jiraTextMatchesNotice": "Showing text matches. Jira couldn't run this search as JQL."
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "Cancelled"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Merged",
+              "4f976d3450": "Closed",
+              "1f8eb81c0e": "Approval required",
+              "c606463dc2": "Changes requested",
+              "7e8bbe3cd7": "Conflicts",
+              "b169f943e1": "Merge when ready",
+              "autoMergeOn": "Auto-merge on",
+              "039c072f94": "Behind",
+              "bf5e4c6c92": "Blocked",
+              "87fa36ac83": "Checks failed",
+              "4e2507176b": "Checks pending",
+              "def355ff38": "Able to merge",
+              "f958920f3a": "Checking"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Merged",
+                  "88d044c42f": "Closed",
+                  "96b05e374c": "Conflicts",
+                  "5105b0e584": "Approval required",
+                  "893a999c8c": "Changes requested",
+                  "01ab632a21": "Unresolved threads",
+                  "bf628700f6": "Checks must pass",
+                  "65c847ad1e": "Checks pending",
+                  "382c70faeb": "Behind",
+                  "195917574e": "Checking",
+                  "4ecc0d90ee": "Blocked",
+                  "49ac4fec10": "Checks failed",
+                  "04a3015a12": "Able to merge"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira couldn't run this JQL query. Check the syntax and try again."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "No usage from {{server}}",
+            "remoteOwnerNotConfigured": "Not configured on {{server}}",
+            "claudeUnknownOnHost": "Claude usage isn't available from {{server}}. It may not be signed in there, or it may use API-key billing.",
+            "remoteOwnerSignInSavedHere": "Its sign-in is saved on this computer only.",
+            "f8b8dbed85": "Usage unavailable",
+            "e2c6a4f917": "Run Grok to refresh",
+            "f90b3d7a16": "Run Kimi to refresh",
+            "0d8d7cfe15": "Waiting for Claude session",
+            "claude": {
+              "waiting": {
+                "label": "Updates when Claude runs",
+                "message": "Claude usage updates the next time Claude runs."
+              }
+            },
+            "1804cd8c3f": "Refreshing sign-in",
+            "bf2e739f18": "Sign-in unavailable",
+            "f8f0f9d8cc": "Network issue",
+            "minimax": {
+              "expired": {
+                "label": "Sign-in expired",
+                "apiKey": "MiniMax API key expired. Replace it in Settings.",
+                "cookie": "MiniMax session cookie expired. Replace it in Settings."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Sign-in expired",
+                "message": "Run cursor-agent login in a terminal on the computer running Orca, then retry usage."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "No subscription"
+              }
+            },
+            "7ad719c4bf": "Limited",
+            "e740f92596": "Refresh failed",
+            "2c35eca8d4": "Unable to fetch usage",
+            "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",
+            "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
+            "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
+            "cabdc2a9e0": "Claude sign-in credentials could not be read.",
+            "a7517cccb6": "Claude usage is unavailable right now.",
+            "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in."
+          }
+        }
+      }
+    },
+    "lib": {
+      "rateLimits": {
+        "errors": {
+          "opencodeInvalidWorkspaceId": "Invalid workspace ID format",
+          "sessionCookieNotConfigured": "Session cookie not configured",
+          "opencodeNoAuthCookie": "No auth cookie found — paste the full Cookie header from opencode.ai DevTools",
+          "opencodeNoWorkspaceId": "No workspace ID found — set a Workspace ID override in settings",
+          "opencodeNoWorkspaceIdShort": "No workspace ID found",
+          "workspacesFetchFailed": "Workspaces fetch failed ({{status}})",
+          "usagePageFetchFailed": "Usage page fetch failed ({{status}})",
+          "couldNotParseUsagePage": "Could not parse usage data from page",
+          "couldNotParseUsageAnyWorkspace": "Could not parse usage data from any available workspace",
+          "minimaxCookieNotConfigured": "MiniMax session cookie not configured",
+          "minimaxSessionExpired": "MiniMax session expired. Replace the MiniMax cookie in Settings.",
+          "minimaxAuthCookieMissing": "MiniMax auth cookie not found — paste a Cookie header with _token",
+          "minimaxModelUsageMissing": "MiniMax usage data for the configured model was not found",
+          "minimaxCookieDecryptFailed": "MiniMax session cookie could not be decrypted",
+          "kimiNotSignedIn": "Not signed in to Kimi Code",
+          "kimiCredentialsInvalid": "Kimi credentials file is invalid",
+          "kimiCredentialsMissingToken": "Kimi credentials file is missing an access token",
+          "kimiQuotaWindowsMissing": "Kimi usage response did not include quota windows",
+          "wslKimiHomeUnavailable": "WSL Kimi home unavailable for {{distro}}",
+          "kimiSessionExpired": "Kimi session expired — run kimi {{where}}, then retry usage.",
+          "kimiUsageUnauthorizedHttp": "Kimi usage request unauthorized (HTTP {{status}})",
+          "kimiUsageFailedHttp": "Kimi usage request failed (HTTP {{status}})",
+          "grokNotSignedIn": "Not signed in to Grok — run grok login",
+          "grokAuthInvalid": "Grok auth file is invalid",
+          "grokAuthUnreadable": "Unable to read Grok auth file",
+          "grokSignInExpired": "Grok sign-in expired — run grok on the computer running Orca; sign in if prompted. No chat message is needed.",
+          "grokBillingConfigMissing": "Grok billing response did not include config",
+          "grokBillingUsageMissing": "Grok billing response did not include credit usage",
+          "grokUsageUnauthorizedHttp": "Grok usage request unauthorized (HTTP {{status}})",
+          "grokUsageFailedHttp": "Grok usage request failed (HTTP {{status}})",
+          "geminiOauthDisabled": "Gemini CLI OAuth is disabled in settings",
+          "geminiCredentialsNotFound": "Gemini CLI credentials not found",
+          "geminiProjectIdNotFound": "Gemini project ID not found",
+          "tokenRefreshFailed": "Token refresh failed",
+          "codexNotSignedIn": "Codex not signed in",
+          "codexHomeUnavailable": "Codex home unavailable",
+          "wslCodexHomeUnavailable": "WSL Codex home unavailable for {{distro}}",
+          "codexRebuildingIndex": "Codex is rebuilding its session index; usage will refresh when recovery finishes",
+          "chatgptAuthRequired": "ChatGPT authentication required to read rate limits",
+          "claudeRateLimited": "Claude usage is rate limited right now.",
+          "claudeUsageUnavailable": "Claude usage is unavailable right now.",
+          "claudeOauthTokenUnavailable": "Claude OAuth access token unavailable",
+          "claudeKeychainUnavailable": "Claude Keychain credentials unavailable",
+          "claudePlanUsageUnavailable": "Claude plan usage is unavailable for this Claude CLI session.",
+          "waitingForClaudeSession": "Waiting for Claude session",
+          "wslClaudeConfigUnavailable": "WSL Claude config unavailable for {{distro}}",
+          "noCredentials": "No credentials",
+          "fetchAborted": "Rate-limit fetch aborted",
+          "failedToLoadUsage": "Failed to load usage data",
+          "ptyUsageTimeout": "PTY timeout — /usage panel did not render",
+          "cliExitedBeforeUsage": "CLI exited before /usage rendered",
+          "cliExitedBeforeStatus": "CLI exited before status was available",
+          "quotaFetchFailed": "Quota fetch failed ({{status}})",
+          "geminiProjectIdLoadFailed": "Failed to load Gemini project ID (HTTP {{status}})",
+          "geminiProjectIdMissingInResponse": "Gemini project ID not found in API response",
+          "minimaxUsageFetchFailed": "MiniMax usage fetch failed ({{status}})",
+          "minimaxReturnedError": "MiniMax returned an error",
+          "minimaxInvalidUsageResponse": "Invalid MiniMax usage response",
+          "minimaxUnknownUsageError": "Unknown MiniMax usage error",
+          "kimiCredentialsUnreadable": "Unable to read Kimi credentials",
+          "kimiUsageRequestFailed": "Kimi usage request failed",
+          "grokUsageRequestFailed": "Grok usage request failed",
+          "rpcTimeout": "RPC timeout",
+          "rpcFailed": "RPC failed",
+          "signInWithChatgpt": "Sign in with ChatGPT",
+          "codexCliNotFound": "Codex CLI not found",
+          "codexCliCannotRun": "Codex CLI found but could not run — Node.js may not be in your PATH",
+          "rpcProcessExited": "RPC process exited unexpectedly",
+          "ptyTimeout": "PTY timeout",
+          "failedToParseCliOutput": "Failed to parse CLI output",
+          "codexSignInCheckTimeout": "Timed out while checking Codex sign-in status",
+          "codexSignInStatusUnavailable": "Codex sign-in status is unavailable",
+          "codexResetFailedHttp": "Codex reset failed: HTTP {{status}}",
+          "codexResetUnknownOutcome": "Unknown Codex reset outcome",
+          "codexResetIdempotencyRequired": "Codex reset idempotency key is required",
+          "noSubscriptionApiKeyBilling": "No subscription plan — API key billing",
+          "claudeWaitingCredentialRotate": "Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.",
+          "unknown": "Unknown error"
         }
       }
     }
