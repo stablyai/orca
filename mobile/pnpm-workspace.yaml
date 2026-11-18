@@ -20,3 +20,5 @@ patchedDependencies:
   deepmerge@4.3.1: patches/deepmerge@4.3.1.patch
   glob@13.0.6: patches/glob@13.0.6.patch
   minimatch@10.2.5: patches/minimatch@10.2.5.patch
+  picomatch@2.3.2: patches/picomatch@2.3.2.patch
+  picomatch@4.0.7: patches/picomatch@4.0.7.patch

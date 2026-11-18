@@ -2,7 +2,7 @@ import type {
   TabGroup,
   TabGroupLayoutNode
 } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 
 export class MountedTerminalWorktrees extends Set<string> {
   private readonly changedIds = new Set<string>()

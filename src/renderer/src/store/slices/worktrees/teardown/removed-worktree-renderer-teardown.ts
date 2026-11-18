@@ -7,7 +7,7 @@ import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/runtime/ephemeral-vm/ephemeral-vm-runtime-cleanup'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-session/launch/startup/agent-startup-delivery-guards'
 import { forgetForegroundTerminalTabs } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
-import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { requestVirtualizedScrollAnchorRecord } from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'

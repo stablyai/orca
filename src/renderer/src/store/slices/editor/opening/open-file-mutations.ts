@@ -18,7 +18,7 @@ import { getDiskBaselineSignature } from '../../../../../../shared/file-write/di
 import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { isSameEditorFileOperationIdentity } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
-import { replaceTabBuckets } from '../../../keyed-record-transitions'
+import { replaceTabBuckets } from '../../../record-transitions/keyed-record-transitions'
 import type { AppState } from '../../../types'
 
 function withoutKeys<T>(record: Record<string, T>, keys: readonly string[]): Record<string, T> {

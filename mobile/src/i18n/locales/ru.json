@@ -403,6 +403,7 @@
       "otherDevice": "другом устройстве"
     },
     "sessionOptionCopy": {
+      "none": "Нет",
       "availableAfterSessionStarts": "Доступно после запуска сессии.",
       "chooseInAgentPicker": "Выбрать в списке агентов…",
       "effort": "Усилие",
@@ -739,6 +740,10 @@
       "mark": "Форк ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Форк: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Цитировать",
+      "hint": "Добавляет выделенный текст в сообщение как цитату"
     }
   },
   "common": {
@@ -761,7 +766,9 @@
     "retry": "Повторить",
     "save": "Сохранить",
     "settings": "Настройки",
-    "unknown": "Неизвестно"
+    "unknown": "Неизвестно",
+    "waitingForHost": "Ожидание сервера…",
+    "connectingToHost": "Подключение к серверу…"
   },
   "components": {
     "accountsSnapshot": {
@@ -771,7 +778,7 @@
       "copyFailed": "Не удалось скопировать",
       "copyPrompt": "Копировать запрос",
       "statusUnreadable": "Не удалось получить статус этого сервера. Повторная попытка…",
-      "updateRequired": "Обновите Orca на компьютере, чтобы запустить агента с телефона."
+      "updateRequired": "Обновите Orca на этом сервере, чтобы запустить агента с телефона."
     },
     "agentSpinner": {
       "monitoring": "Наблюдает за фоновыми задачами",
@@ -906,7 +913,7 @@
       "unsentNotes_many": "{{count}} неотправленных заметок",
       "unsentNotes_one": "{{count}} неотправленная заметка",
       "unsentNotes_other": "{{count}} неотправленной заметки",
-      "updateRequired": "Обновите Orca на компьютере"
+      "updateRequired": "Обновите Orca на этом сервере"
     },
     "diffReviewFileSummary": {
       "changed": "Изменён",
@@ -972,7 +979,7 @@
       "connectHint": "Добавьте сайт Jira в Orca на компьютере в разделе «Настройки → Интеграции», затем проверьте снова.",
       "connectOnDesktop": "Подключите Jira на компьютере",
       "credentialUnreadable": "Не удалось прочитать сохранённые данные Jira: {{credentialError}}",
-      "updateDesktop": "Обновите Orca на компьютере"
+      "updateDesktop": "Обновите Orca на этом сервере"
     },
     "markdownBlocks": {
       "copyCode": "Копировать код",
@@ -1038,23 +1045,23 @@
     },
     "protocolBlockScreen": {
       "backToHosts": "Вернуться к серверам",
-      "desktopTooOldBody": "Версия Orca на сопряжённом компьютере устарела и несовместима с текущей версией Orca Mobile. Обновите Orca на компьютере, затем снова подключитесь к этому серверу.",
+      "desktopTooOldBody": "Версия Orca на этом сервере устарела и несовместима с текущей версией Orca Mobile. Обновите Orca на этом сервере, затем снова подключитесь к нему.",
       "getVersion": "Скачать Orca {{version}}",
-      "mobileTooOldAppStore": "Для работы с Orca на этом компьютере нужна более новая версия Orca Mobile. Обновите Orca Mobile через App Store, затем снова подключитесь к этому серверу.",
-      "mobileTooOldGooglePlay": "Для работы с Orca на этом компьютере нужна более новая версия Orca Mobile. Обновите Orca Mobile через Google Play, затем снова подключитесь к этому серверу.",
-      "mobileTooOldGitHubReleases": "Для работы с Orca на этом компьютере нужна более новая версия Orca Mobile. Обновите Orca Mobile через GitHub Releases, затем снова подключитесь к этому серверу.",
+      "mobileTooOldAppStore": "Для работы с Orca на этом сервере нужна более новая версия Orca Mobile. Обновите Orca Mobile через App Store, затем снова подключитесь к этому серверу.",
+      "mobileTooOldGooglePlay": "Для работы с Orca на этом сервере нужна более новая версия Orca Mobile. Обновите Orca Mobile через Google Play, затем снова подключитесь к этому серверу.",
+      "mobileTooOldGitHubReleases": "Для работы с Orca на этом сервере нужна более новая версия Orca Mobile. Обновите Orca Mobile через GitHub Releases, затем снова подключитесь к этому серверу.",
       "openAppStore": "Открыть App Store",
       "openGooglePlay": "Открыть Google Play",
       "openGitHubReleases": "Открыть GitHub Releases",
       "refreshRecoveryNote": "Если сообщение не исчезнет, удалите этот сервер и выполните сопряжение заново.",
-      "refreshWorkspaceBody": "Версия рабочего пространства этого сервера в кэше старее той, которую ожидает Orca на компьютере. Подключитесь к этому серверу заново, чтобы загрузить актуальную версию.",
+      "refreshWorkspaceBody": "Версия рабочего пространства этого сервера в кэше старее той, которую ожидает сервер. Подключитесь к этому серверу заново, чтобы загрузить актуальную версию.",
       "refreshWorkspaceTitle": "Обновите мобильное рабочее пространство",
-      "updateDesktopTitle": "Обновите Orca на компьютере",
+      "updateDesktopTitle": "Обновите Orca на этом сервере",
       "updateMobileTitle": "Обновите Orca Mobile",
       "updateRecoveryNote": "Уже обновили? Вернитесь в раздел «Серверы» и обновите подключение. Если сообщение не исчезнет, удалите этот сервер и выполните сопряжение заново.",
-      "workspaceNeedsUpdateAppStore": "Для мобильного рабочего пространства этого компьютера нужна более новая версия Orca Mobile. Обновите Orca Mobile через App Store, затем снова подключитесь к этому серверу.",
-      "workspaceNeedsUpdateGooglePlay": "Для мобильного рабочего пространства этого компьютера нужна более новая версия Orca Mobile. Обновите Orca Mobile через Google Play, затем снова подключитесь к этому серверу.",
-      "workspaceNeedsUpdateGitHubReleases": "Для мобильного рабочего пространства этого компьютера нужна более новая версия Orca Mobile. Обновите Orca Mobile через GitHub Releases, затем снова подключитесь к этому серверу."
+      "workspaceNeedsUpdateAppStore": "Для мобильного рабочего пространства этого сервера нужна более новая версия Orca Mobile. Обновите Orca Mobile через App Store, затем снова подключитесь к этому серверу.",
+      "workspaceNeedsUpdateGooglePlay": "Для мобильного рабочего пространства этого сервера нужна более новая версия Orca Mobile. Обновите Orca Mobile через Google Play, затем снова подключитесь к этому серверу.",
+      "workspaceNeedsUpdateGitHubReleases": "Для мобильного рабочего пространства этого сервера нужна более новая версия Orca Mobile. Обновите Orca Mobile через GitHub Releases, затем снова подключитесь к этому серверу."
     },
     "richMarkdownEditor": {
       "imageUrl": "URL изображения",
@@ -1471,12 +1478,10 @@
     "fileExplorerPanel": {
       "backToSession": "Вернуться к сессии",
       "closeFiles": "Закрыть файлы",
-      "connecting": "Подключение к компьютеру…",
       "emptyState": "Файлы не найдены",
       "loadFailed": "Не удалось загрузить файлы",
       "title": "Файлы",
-      "truncatedList": "{{worktreeLabel}} — показаны первые 5000",
-      "waiting": "Ожидание подключения к компьютеру…"
+      "truncatedList": "{{worktreeLabel}} — показаны первые 5000"
     },
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
@@ -1506,8 +1511,7 @@
     "fileMediaPreview": {
       "downloading": "Скачивание: {{bytes}} из {{total}}",
       "loadFailed": "Не удалось загрузить медиафайл",
-      "loading": "Загрузка медиафайла…",
-      "waiting": "Ожидание подключения к компьютеру…"
+      "loading": "Загрузка медиафайла…"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Не удалось проверить SSH-соединение. Подключитесь к серверу заново и повторите попытку."
@@ -1546,8 +1550,7 @@
       "saveArtifact": "Сохранить артефакт терминала",
       "saveFailed": "Не удалось сохранить файл",
       "stay": "Остаться",
-      "title": "Предпросмотр",
-      "waiting": "Ожидание подключения к компьютеру…"
+      "title": "Предпросмотр"
     },
     "filePreviewSourceText": {
       "previewLabel": "Предпросмотр файла",
@@ -1779,13 +1782,13 @@
       "localWindows": "Локальный ПК с Windows",
       "projectOrder": "Порядок проектов",
       "projects": "Проекты",
-      "savingToDesktop": "Сохранение на компьютере",
+      "savingToDesktop": "Сохранение на сервере",
       "show": "Показать",
       "showProperties": "Показывать свойства",
       "sortBy": "Сортировать по",
       "syncedAcrossDevices": "Синхронизация между вашими устройствами",
       "thisComputer": "Этот компьютер",
-      "waitingForDesktop": "Всё ещё ждём ответа компьютера",
+      "waitingForDesktop": "Всё ещё ждём ответа сервера",
       "workspaceOptions": "Параметры рабочих пространств"
     },
     "workspaceRenameSheet": {
@@ -2223,7 +2226,7 @@
       "committedChangesFailed": "Не удалось загрузить изменения в коммитах",
       "committedChangesUnavailable": "Изменения в коммитах недоступны",
       "committedDiffUnavailable": "Сравнение изменений в коммитах недоступно",
-      "desktopUpdateRequired": "Обновите Orca на компьютере, чтобы проверять изменения на мобильном устройстве.",
+      "desktopUpdateRequired": "Обновите Orca на этом сервере, чтобы проверять изменения на мобильном устройстве.",
       "diffLoadFailed": "Не удалось загрузить сравнение",
       "reviewNotesLoadFailed": "Не удалось загрузить заметки к проверке"
     },
@@ -2474,7 +2477,7 @@
       "emptyPrompt": "Сохранённый запрос для этого действия пуст. Измените настройки ИИ для управления версиями на компьютере.",
       "loadFailed": "Не удалось загрузить список доступных агентов.",
       "promptNotSent": "Агент запущен, но запрос не отправлен.",
-      "updateRequired": "Обновите Orca на компьютере, чтобы запускать агента с телефона."
+      "updateRequired": "Обновите Orca на этом сервере, чтобы запустить агента с телефона."
     },
     "prSidebarState": {
       "loadFailed": "Не удалось загрузить пул-реквест"
@@ -2566,7 +2569,6 @@
     },
     "sheets": {
       "browser": "Браузер",
-      "browserUpdateRequired": "Для трансляции браузера на телефон обновите Orca на компьютере",
       "chat": "Чат",
       "copyAllAndLeave": "Скопировать всё и выйти",
       "copyDraftsFailed": "Не удалось скопировать черновики",
@@ -2662,7 +2664,6 @@
       "browserCommandFailed": "Не удалось выполнить команду браузера",
       "browserCreateFailed": "Не удалось создать вкладку браузера",
       "browserUnavailable": "Страница браузера пока недоступна.",
-      "browserUpdateRequired": "Для трансляции браузера на телефон обновите Orca на компьютере",
       "invalidUrl": "Введите корректный URL",
       "noteCreateFailed": "Не удалось создать заметку Markdown",
       "untitledNoteCreateFailed": "Не удалось создать заметку Markdown без названия"
@@ -2673,26 +2674,21 @@
       "noteAdded": "Заметка добавлена",
       "notesCopied": "Заметки скопированы",
       "saveNoteFailed": "Не удалось сохранить заметку",
-      "saveNotesFailed": "Не удалось сохранить заметки по проверке",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "saveNotesFailed": "Не удалось сохранить заметки по проверке"
     },
     "useDiffReviewCommentActions": {
       "saveFailed": "Не удалось сохранить проверку",
-      "saveStateFailed": "Не удалось сохранить состояние проверки",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "saveStateFailed": "Не удалось сохранить состояние проверки"
     },
     "useDiffReviewController": {
       "loadFailed": "Не удалось загрузить проверку",
-      "missingWorktree": "Не указано рабочее дерево",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "missingWorktree": "Не указано рабочее дерево"
     },
     "useDiffReviewDiffLoading": {
-      "loadFailed": "Не удалось загрузить изменения",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "loadFailed": "Не удалось загрузить изменения"
     },
     "useDiffReviewGitActions": {
-      "actionFailed": "Не удалось выполнить действие управления версиями",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "actionFailed": "Не удалось выполнить действие управления версиями"
     },
     "useDiffReviewInteractions": {
       "openFailed": "Не удалось открыть в сессии"
@@ -2706,8 +2702,7 @@
       "notesSentWithWarning": "Заметки к проверке отправлены. {{warning}}",
       "promptNotSent": "Агент запущен, но заметки не отправлены. Нажмите «Скопировать заметки», чтобы вставить их.",
       "sendFailed": "Не удалось отправить заметки",
-      "startingAgent": "Запуск агента…",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "startingAgent": "Запуск агента…"
     },
     "useImageAttachment": {
       "attachFailed": "Не удалось прикрепить изображение",
@@ -2746,8 +2741,7 @@
       "presetsUnavailable": "Предустановки агентов недоступны"
     },
     "usePrAiTriage": {
-      "launchFailed": "Не удалось запустить агента",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "launchFailed": "Не удалось запустить агента"
     },
     "usePrCommentActions": {
       "actionFailed": "Не удалось выполнить действие с комментарием"
@@ -2815,6 +2809,7 @@
       "conversationCleared": "Этот разговор очищен.",
       "goalsUnsupported": "Этот агент не поддерживает цели.",
       "historyUnavailable": "Сейчас Orca не удалось открыть историю чата.",
+      "savedInOtherFolder": "Этот разговор сохранён в другой папке.",
       "historyUnreadable": "Orca не удалось прочитать сохранённую историю чата.",
       "historyUnusable": "Не удалось загрузить этот чат.",
       "hostReconciling": "После перезапуска Orca ещё проверяет состояние этого чата.",
@@ -3003,7 +2998,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Не удалось загрузить настройки доставки уведомлений. Откройте этот экран заново, чтобы повторить попытку.",
       "saveFailed": "Не удалось сохранить настройки доставки уведомлений. Повторите попытку.",
-      "updateDesktopHint": "Чтобы получать уведомления на этом телефоне, выполните сопряжение с компьютером, на котором установлена обновлённая версия Orca."
+      "updateDesktopHint": "Чтобы получать уведомления на этом телефоне, выполните сопряжение с сервером, на котором установлена обновлённая версия Orca."
     },
     "notificationDisplayTest": {
       "accepted": "Служба push-уведомлений Orca приняла запрос. Проверьте, пришло ли уведомление.",
@@ -3094,8 +3089,7 @@
   },
   "sourceControl": {
     "actionSheetRunners": {
-      "noBaseBranch": "Нет базовой ветки для перебазирования",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "noBaseBranch": "Нет базовой ветки для перебазирования"
     },
     "actions": {
       "checkingReviewStatus": "Получение статуса PR/MR.",
@@ -3286,8 +3280,7 @@
       "loadFilesFailed": "Не удалось загрузить файлы коммита",
       "noCommits": "Нет коммитов.",
       "noFileChanges": "Нет изменений в файлах",
-      "retryFiles": "Повторить загрузку файлов коммита",
-      "waitingForDesktop": "Ожидание ответа от компьютера…"
+      "retryFiles": "Повторить загрузку файлов коммита"
     },
     "gitStatus": {
       "conflicts": "Конфликты"
@@ -3352,10 +3345,8 @@
       "changes": "Изменения"
     },
     "loaders": {
-      "connectingToDesktop": "Подключение к компьютеру…",
       "loadFailed": "Не удалось загрузить данные управления версиями",
-      "updateDesktop": "Обновите Orca на компьютере, чтобы использовать управление версиями на мобильном устройстве.",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "updateDesktop": "Обновите Orca на этом сервере, чтобы использовать управление версиями на мобильном устройстве."
     },
     "modals": {
       "currentBranch": "текущая",
@@ -3540,8 +3531,7 @@
       "windowsBatchUnsafeArguments": "{{label}} запускается через пакетный скрипт Windows, который не может принять многострочный запрос как аргумент. В разделе «Настройки» укажите исполняемый файл агента или используйте свою команду без {prompt}, чтобы Orca передавала запрос через stdin."
     },
     "useMobileCommitFailureRecovery": {
-      "launchFailed": "Не удалось запустить агента",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "launchFailed": "Не удалось запустить агента"
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Не удалось сгенерировать сообщение коммита"
@@ -3549,8 +3539,7 @@
     "useMobileGitRequests": {
       "actionFailed": "Не удалось выполнить операцию управления версиями",
       "branchUnavailable": "Состояние ветки недоступно",
-      "commitFailed": "Не удалось создать коммит",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
+      "commitFailed": "Не удалось создать коммит"
     },
     "conflictActions": {
       "needsNewerHost": "Обновите Orca на компьютере, где запущено это рабочее пространство, чтобы разрешать конфликты слияния с телефона.",
@@ -3759,8 +3748,8 @@
       "connectLinearMessage": "Просматривайте назначенные вам задачи Linear и начинайте работу над ними прямо в разделе «Задачи».",
       "connectLinearTitle": "Подключите учётную запись Linear",
       "jiraStatusFailed": "Не удалось получить статус Jira",
-      "updateDesktopMessage": "Для раздела «Задачи» в мобильном приложении нужна более новая версия Orca на компьютере.",
-      "updateDesktopTitle": "Обновите Orca на компьютере"
+      "updateDesktopMessage": "Для раздела «Задачи» в мобильном приложении нужна более новая версия Orca на этом сервере.",
+      "updateDesktopTitle": "Обновите Orca на этом сервере"
     },
     "options": {
       "all": "Все",

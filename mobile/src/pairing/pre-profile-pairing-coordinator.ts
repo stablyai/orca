@@ -36,6 +36,7 @@ import { assertCommittedInstall, directHost, relayHost } from './pairing-relay-h
 import { recordHostDescriptorFromStatus } from '../host-descriptors/host-descriptor-recorder'
 import { adoptExchangedToken, exchangePairingTicket } from './pairing-ticket-exchange'
 import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
+import { assertMobilePairingOffer } from './mobile-pairing-offer-scope'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -163,6 +164,7 @@ async function runPairing(
   isDisposed: () => boolean,
   onJournalSaved: (journalId: string) => void
 ): Promise<{ hostId: string }> {
+  assertMobilePairingOffer(offer)
   const now = dependencies.now()
   // Use the preserved host id for every artifact so re-pairing updates one card (STA-1840).
   const { id: hostId, name: hostName } = await dependencies.resolveHostIdentity(

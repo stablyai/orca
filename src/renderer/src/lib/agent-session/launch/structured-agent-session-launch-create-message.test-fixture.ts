@@ -1,4 +1,4 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
