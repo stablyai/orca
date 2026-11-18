@@ -93,7 +93,7 @@ function setup(rows: DetectedWorktree[], repos: Repo[] = [repo], confirmationFai
         projects: [],
         projectHostSetups: [],
         settings: {},
-        activeModal: null,
+        activeModal: 'none',
         activeView: 'terminal',
         activeWorktreeId: null,
         activeWorkspaceExecutionHostId: null,

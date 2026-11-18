@@ -157,10 +157,11 @@ export async function openProjectDefaultCheckout({
   executionHostId?: ExecutionHostId
 }): Promise<void> {
   const generation = ++handoffGeneration
+  const initialModal = useAppStore.getState().activeModal
   const reveal = captureBrowserLinkReveal(
     useAppStore.getState,
     useAppStore.subscribe,
-    () => generation === handoffGeneration && useAppStore.getState().activeModal === null
+    () => generation === handoffGeneration && useAppStore.getState().activeModal === initialModal
   )
   try {
     const repo = findProjectRepo(repoId, executionHostId)
