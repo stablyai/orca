@@ -20,7 +20,22 @@ export function reportedDispatch(
     : undefined
 }
 
-/** A paired server's worker: its terminal is unknown here, so its report alone names its Dispatch. */
+/** The paired server's Dispatch an imported message came from, as the server's check found it. */
+export function importedRemoteDispatchId(
+  db: OrchestrationDb,
+  messageId: string
+): string | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one TEXT column.
+  const row = db.db
+    .prepare(
+      `SELECT p.dispatch_id FROM message_dispatch_provenance p
+       JOIN remote_dispatches r ON r.dispatch_id = p.dispatch_id WHERE p.message_id = ?`
+    )
+    .get(messageId) as { dispatch_id: string } | undefined
+  return row?.dispatch_id
+}
+
+/** A paired server's worker: its terminal is unknown here, so the Dispatch its mail names identifies it. */
 export function reportedRemoteDispatch(
   db: OrchestrationDb,
   dispatchId: string | undefined

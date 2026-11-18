@@ -17,6 +17,7 @@ import {
 } from '../senders/agent-message-relation'
 import { agentMessageSender, type SenderSnapshotResolver } from '../senders/agent-message-sender'
 import { answersConversationAsk } from '../senders/conversation-ask-answer'
+import { importedRemoteDispatchId } from '../senders/sender-reported-dispatch'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import {
@@ -67,7 +68,7 @@ export function structuredMailSource(input: {
         address,
         input.db,
         input.senderSnapshot,
-        reported?.kind === 'valid' ? reported.dispatchId : undefined,
+        senderDispatchHint(input.db, group[0]!.message, reported),
         // The oldest message decides, so mail sent before a rebind never takes the new coordinator.
         group.map(({ message }) => message.created_at).toSorted()[0]
       )
@@ -213,6 +214,21 @@ function withConversationNote(
       ? `[Orca: your final message and \`${cliCommand} bot reply\` (with any files) go to ${bound.place}.]`
       : `[Orca: this mail did not come from ${bound.place}, so your final message stays in Orca.]`
   return [{ type: 'text', text: note ? `${text}\n\n${note}` : text }]
+}
+
+/** The Dispatch a paired server's import recorded for the sender's mail, else a `worker_done`'s own. */
+function senderDispatchHint(
+  db: OrchestrationDb | null,
+  message: MailSourceMessage,
+  reported: ReportFact | undefined
+): string | undefined {
+  let imported: string | undefined
+  try {
+    imported = db ? importedRemoteDispatchId(db, message.id) : undefined
+  } catch {
+    // Failure to resolve a label must not block delivery.
+  }
+  return imported ?? (reported?.kind === 'valid' ? reported.dispatchId : undefined)
 }
 
 type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }
