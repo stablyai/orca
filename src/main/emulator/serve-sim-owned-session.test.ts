@@ -175,6 +175,7 @@ describe('owned iOS helper sessions', () => {
       await expect(sessions.stop(A, afterTeardown.helperPid, canceledShutdown)).rejects.toThrow(
         'deadline expired'
       )
+      await expect(sessions.stopOwnedHelpers()).rejects.toThrow('cleanup is incomplete')
       await expect(
         foreign.start(
           A,

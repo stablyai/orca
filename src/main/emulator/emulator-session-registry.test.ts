@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { EmulatorSessionRegistry } from './emulator-session-registry'
 
 describe('workspace emulator generation', () => {
@@ -45,5 +45,33 @@ describe('workspace emulator generation', () => {
     const iosGeneration = registry.generationForDevice(ios.deviceUdid)
     registry.registerActive('b', ios)
     expect(registry.generationForDevice(ios.deviceUdid)).toBe(iosGeneration)
+  })
+
+  it('evicts using the captured Android generation rather than a replacement', async () => {
+    const registry = new EmulatorSessionRegistry()
+    const info = {
+      deviceUdid: 'emulator-5554',
+      streamUrl: 'scrcpy://emulator-5554',
+      wsUrl: '',
+      backend: 'android' as const,
+      instanceId: 'old'
+    }
+    registry.registerActive('a', info, { managed: true })
+    let finish!: (ids: string[]) => void
+    const stop = vi.fn(async () => {})
+    const backend = {
+      listRunningDeviceIds: () =>
+        new Promise<string[]>((resolve) => {
+          finish = resolve
+        }),
+      stopHelperForDevice: stop
+    }
+    const census = registry.pruneGoneManagedSessions(() => backend)
+    finish([])
+    await census
+    expect(stop).toHaveBeenCalledWith(
+      'emulator-5554',
+      expect.objectContaining({ instanceId: 'old', requireInstanceId: true })
+    )
   })
 })

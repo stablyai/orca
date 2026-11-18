@@ -209,6 +209,7 @@ export class EmulatorStartLeaseRegistry {
         continue
       }
       const info = eligible[0].info
+      let helperStopped = false
       try {
         await backend.stopHelperForDevice(info.deviceUdid, {
           helperPid: info.helperPid,
@@ -217,6 +218,9 @@ export class EmulatorStartLeaseRegistry {
           includeOrphaned: eligible.some((request) => request.options.includeOrphaned),
           shutdownDevice: eligible.some((request) => request.options.shutdownDevice),
           assertShutdownAllowed: this.assertShutdownAllowed,
+          onHelperStopped: () => {
+            helperStopped = true
+          },
           releaseOnShutdownFailure: eligible.some(
             (request) => request.options.releaseOnShutdownFailure
           )
@@ -226,7 +230,16 @@ export class EmulatorStartLeaseRegistry {
         }
       } catch (error) {
         for (const request of eligible) {
-          request.reject(error)
+          if (helperStopped && !request.options.shutdownDevice) {
+            try {
+              request.options.validate?.()
+              request.resolve()
+            } catch (validationError) {
+              request.reject(validationError)
+            }
+          } else {
+            request.reject(error)
+          }
         }
       }
     }

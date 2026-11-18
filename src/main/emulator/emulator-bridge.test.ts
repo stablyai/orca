@@ -219,6 +219,26 @@ describe('EmulatorBridge helper ownership', () => {
     )
   })
 
+  it('uses the backend-owned Android generation for an unscoped explicit stop', async () => {
+    const bridge = new EmulatorBridge()
+    const android = bridge.listBackends().find((backend) => backend.kind === 'android')!
+    vi.spyOn(android, 'ownsDevice').mockResolvedValue(true)
+    vi.spyOn(android, 'resolveDeviceId').mockResolvedValue('emulator-5554')
+    vi.spyOn(android, 'ownedSessionInfo').mockReturnValue({
+      deviceUdid: 'emulator-5554',
+      streamUrl: 'scrcpy://emulator-5554',
+      wsUrl: '',
+      backend: 'android',
+      instanceId: 'owned-stream'
+    })
+    const stop = vi.spyOn(android, 'stopHelperForDevice').mockResolvedValue()
+    await bridge.kill('emulator-5554')
+    expect(stop).toHaveBeenCalledWith(
+      'emulator-5554',
+      expect.objectContaining({ instanceId: 'owned-stream', requireInstanceId: true })
+    )
+  })
+
   it('rejects reuse when a delayed readiness probe observes a replaced workspace', async () => {
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
@@ -345,6 +365,23 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
     netFetchMock.mockReset()
+  })
+
+  it('does not report unscoped attachment after the helper was stopped during lease release', async () => {
+    const bridge = new EmulatorBridge()
+    const info = session('device-1')
+    vi.spyOn(bridge, 'acquireHelperForDevice').mockResolvedValue({ info, release: async () => {} })
+    vi.spyOn(bridge, 'isOwnedSessionReusable').mockResolvedValue(false)
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({ mobileEmulatorEnabled: true })
+    })
+    await expect(commands.emulatorAttach({ device: 'device-1' })).rejects.toMatchObject({
+      code: 'emulator_attach_superseded'
+    })
   })
 
   it('reports when the requested iOS device differs from the active session', async () => {

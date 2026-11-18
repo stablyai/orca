@@ -5,8 +5,8 @@ import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
 import { EmulatorSessionRegistry } from './emulator-session-registry'
-import { destroySessions, reusableForWorkspace } from './emulator-session-cleanup'
-import { stopForSwitch, stopTargetSession } from './emulator-session-cleanup'
+import { censusCleanup, destroySessions, reusableForWorkspace } from './emulator-session-cleanup'
+import { stopForSwitch, stopTargetSession, stopWorkspaceSession } from './emulator-session-cleanup'
 import { EmulatorStartLeaseRegistry } from './emulator-start-lease-registry'
 import type { EmulatorStartLease } from './emulator-start-lease-registry'
 import { listAvailableEmulatorDevices } from './emulator-device-inventory'
@@ -24,6 +24,9 @@ import type {
 export class EmulatorBridge {
   private readonly sessionRegistry = new EmulatorSessionRegistry()
   private readonly startLeases = new EmulatorStartLeaseRegistry()
+  private readonly cleanupCensus = censusCleanup(this.sessionRegistry, this.startLeases, (kind) =>
+    this.backendForKind(kind)
+  )
   private readonly backends: EmulatorBackend[]
   private readonly iosBackend: IosEmulatorBackend
   private readonly androidBackend: AndroidEmulatorBackend
@@ -50,7 +53,11 @@ export class EmulatorBridge {
   }
 
   async listActiveSessions(worktreeId?: string): Promise<EmulatorActiveSession[]> {
-    return this.sessionRegistry.listLiveActive(worktreeId, (kind) => this.backendForKind(kind))
+    return this.sessionRegistry.listLiveActive(
+      worktreeId,
+      (kind) => this.backendForKind(kind),
+      this.cleanupCensus
+    )
   }
 
   async checkServeSimAvailable(): Promise<void> {
@@ -111,6 +118,10 @@ export class EmulatorBridge {
     )
   }
 
+  async isOwnedSessionReusable(info: EmulatorSessionInfo): Promise<boolean> {
+    return (await this.backendForKind(info.backend ?? 'ios')?.isSessionReusable(info)) ?? false
+  }
+
   async stopActiveForWorktree(
     worktreeId: string,
     options: { shutdownDevice?: boolean } = {}
@@ -129,41 +140,13 @@ export class EmulatorBridge {
     worktreeId: string,
     options: { shutdownDevice?: boolean; managedOnly?: boolean } = {}
   ): Promise<string | null> {
-    const key = this.sessionRegistry.getActiveSessionKey(worktreeId)
-    if (!key) {
-      return null
-    }
-    const session = this.sessionRegistry.getSession(key)
-    this.sessionRegistry.unregisterWorktree(worktreeId)
-    if (!session || (options.managedOnly && !session.managed)) {
-      return null
-    }
-    if (this.sessionRegistry.hasActiveWorktreeForSession(key)) {
-      return session.deviceUdid
-    }
-    const backend = this.backendForKind(session.backend)
-    if (!backend) {
-      return null
-    }
-    const sessionInfo = this.sessionRegistry.toSessionInfo(session)
-    try {
-      await this.startLeases.cleanupWhenIdle(
-        backend,
-        sessionInfo,
-        (info) => this.sessionRegistry.hasActiveWorktreeForSession(info.deviceUdid),
-        {
-          includeOrphaned: !options.managedOnly,
-          shutdownDevice: options.shutdownDevice
-        }
-      )
-    } catch (error) {
-      this.sessionRegistry.restoreIfUnchanged(worktreeId, session)
-      throw error
-    }
-    if (!this.sessionRegistry.hasActiveWorktreeForSession(key)) {
-      this.sessionRegistry.clearSessionAndWorktrees(key)
-    }
-    return session.deviceUdid
+    return stopWorkspaceSession(
+      this.sessionRegistry,
+      this.startLeases,
+      (kind) => this.backendForKind(kind),
+      worktreeId,
+      options
+    )
   }
 
   async shutdownActiveManagedForWorktree(worktreeId: string): Promise<string | null> {
@@ -284,7 +267,10 @@ export class EmulatorBridge {
   }
 
   hasLiveManagedSessions(): Promise<boolean> {
-    return this.sessionRegistry.pruneGoneManagedSessions((kind) => this.backendForKind(kind))
+    return this.sessionRegistry.pruneGoneManagedSessions(
+      (kind) => this.backendForKind(kind),
+      this.cleanupCensus
+    )
   }
 
   destroyAllSessions(options?: { deadline?: number; signal?: AbortSignal }): Promise<void> {

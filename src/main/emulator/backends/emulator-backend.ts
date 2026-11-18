@@ -57,6 +57,7 @@ export type EmulatorBackend = {
   resolveDeviceId(deviceOrName: string): Promise<string>
 
   startSession(deviceId: string, assertOpen?: () => void): Promise<EmulatorSessionInfo>
+  ownedSessionInfo?(deviceId: string): EmulatorSessionInfo | undefined
   // Stop the helper for a device without powering it off.
   stopHelperForDevice(
     deviceId: string,
@@ -68,6 +69,7 @@ export type EmulatorBackend = {
       instanceId?: string
       requireInstanceId?: boolean
       assertShutdownAllowed?: () => void
+      onHelperStopped?: () => void
     }
   ): Promise<void>
   shutdownDevice(deviceId: string): Promise<void>

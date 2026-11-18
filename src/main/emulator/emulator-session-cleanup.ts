@@ -5,6 +5,21 @@ import type { EmulatorSessionRegistry } from './emulator-session-registry'
 import type { EmulatorStartLeaseRegistry } from './emulator-start-lease-registry'
 import type { EmulatorSessionInfo } from './emulator-types'
 
+export function censusCleanup(
+  registry: EmulatorSessionRegistry,
+  leases: EmulatorStartLeaseRegistry,
+  backendForKind: (kind: EmulatorBackendKind) => EmulatorBackend | null
+): (kind: EmulatorBackendKind, info: EmulatorSessionInfo) => void {
+  return (kind, info) => {
+    const backend = backendForKind(kind)
+    if (backend) {
+      void leases
+        .cleanupWhenIdle(backend, info, (item) => !!registry.getSession(item.deviceUdid))
+        .catch(() => {})
+    }
+  }
+}
+
 export async function stopTargetSession(
   registry: EmulatorSessionRegistry,
   leases: EmulatorStartLeaseRegistry,
@@ -13,7 +28,10 @@ export async function stopTargetSession(
   shutdown: boolean
 ): Promise<string> {
   const session = registry.getSession(udid)
-  await leases.cleanupWhenIdle(backend, registry.sessionInfoOrTarget(udid), () => false, {
+  const info = session
+    ? registry.toSessionInfo(session)
+    : (backend.ownedSessionInfo?.(udid) ?? registry.sessionInfoOrTarget(udid))
+  await leases.cleanupWhenIdle(backend, info, () => false, {
     includeOrphaned: true,
     shutdownDevice: shutdown,
     force: true,
@@ -141,4 +159,48 @@ export async function reusableForWorkspace(
   const reusable = await backend.isSessionReusable(active)
   assertOwner()
   return reusable ? active : null
+}
+
+export async function stopWorkspaceSession(
+  registry: EmulatorSessionRegistry,
+  leases: EmulatorStartLeaseRegistry,
+  backendForKind: (kind: EmulatorBackendKind) => EmulatorBackend | null,
+  worktreeId: string,
+  options: { shutdownDevice?: boolean; managedOnly?: boolean }
+): Promise<string | null> {
+  const key = registry.getActiveSessionKey(worktreeId)
+  if (!key) {
+    return null
+  }
+  const session = registry.getSession(key)
+  registry.unregisterWorktree(worktreeId)
+  if (!session || (options.managedOnly && !session.managed)) {
+    return null
+  }
+  if (registry.hasActiveWorktreeForSession(key)) {
+    return session.deviceUdid
+  }
+  const backend = backendForKind(session.backend)
+  if (!backend) {
+    return null
+  }
+  const sessionInfo = registry.toSessionInfo(session)
+  try {
+    await leases.cleanupWhenIdle(
+      backend,
+      sessionInfo,
+      (info) => registry.hasActiveWorktreeForSession(info.deviceUdid),
+      {
+        includeOrphaned: !options.managedOnly,
+        shutdownDevice: options.shutdownDevice
+      }
+    )
+  } catch (error) {
+    registry.restoreIfUnchanged(worktreeId, session)
+    throw error
+  }
+  if (!registry.hasActiveWorktreeForSession(key)) {
+    registry.clearSessionAndWorktrees(key)
+  }
+  return session.deviceUdid
 }

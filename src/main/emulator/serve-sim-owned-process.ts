@@ -52,6 +52,7 @@ export async function stopOwnedSimulatorHelpers(
   sessions: { info: EmulatorSessionInfo; stopping: boolean }[],
   stop: (udid: string, pid?: number) => Promise<void>
 ): Promise<void> {
+  const retained = sessions.some((session) => session.stopping)
   const results = await Promise.allSettled(
     sessions
       .filter((session) => !session.stopping)
@@ -60,6 +61,9 @@ export async function stopOwnedSimulatorHelpers(
   const failure = results.find((result) => result.status === 'rejected')
   if (failure?.status === 'rejected') {
     throw failure.reason
+  }
+  if (retained) {
+    throw new Error('Simulator helper ownership retained; cleanup is incomplete.')
   }
 }
 

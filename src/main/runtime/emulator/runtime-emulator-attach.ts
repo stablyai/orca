@@ -184,7 +184,13 @@ export class RuntimeEmulatorAttach {
           )
         }
         this.notify(worktreeId, info, params.focus)
+      } else if (!(await bridge.isOwnedSessionReusable(info))) {
+        throw new EmulatorError(
+          'emulator_attach_superseded',
+          'The emulator changed before attachment completed.'
+        )
       }
+      assertCurrent()
       return { attached: true, info }
     } finally {
       if (ticket && this.pendingByWorkspace.get(params.worktree) === ticket) {

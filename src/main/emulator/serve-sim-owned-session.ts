@@ -7,14 +7,9 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { EmulatorError } from './emulator-errors'
 import { SERVE_SIM_OWNED_SERVER } from './serve-sim-owned-server'
-import {
-  simulatorOwnershipRoot,
-  stopOwnedSimulatorChild,
-  ownedSimulatorStateRoot,
-  stopOwnedSimulatorHelpers,
-  ownsSimulatorSession,
-  ownsSimulatorEndpoint
-} from './serve-sim-owned-process'
+import { simulatorOwnershipRoot, stopOwnedSimulatorChild } from './serve-sim-owned-process'
+import { ownedSimulatorStateRoot, stopOwnedSimulatorHelpers } from './serve-sim-owned-process'
+import { ownsSimulatorSession, ownsSimulatorEndpoint } from './serve-sim-owned-process'
 import { SimulatorShutdownError } from './simctl-simulator-devices'
 import { getServeSimEnv, type ServeSimExecutable } from './serve-sim-execution'
 import type { EmulatorSessionInfo } from './emulator-types'
@@ -249,7 +244,8 @@ export class ServeSimOwnedSessions {
     udid: string,
     helperPid?: number,
     shutdown?: () => Promise<void>,
-    releaseOnShutdownFailure = false
+    releaseOnShutdownFailure = false,
+    onHelperStopped?: () => void
   ): Promise<void> {
     const session = this.sessions.get(udid)
     if (!session) {
@@ -274,6 +270,7 @@ export class ServeSimOwnedSessions {
     try {
       await stopOwnedSimulatorChild(session.child)
       stopped = true
+      onHelperStopped?.()
       if (shutdown) {
         try {
           await shutdown()

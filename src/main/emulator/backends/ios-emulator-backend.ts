@@ -226,6 +226,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
       shutdownDevice?: boolean
       releaseOnShutdownFailure?: boolean
       assertShutdownAllowed?: () => void
+      onHelperStopped?: () => void
     } = {}
   ): Promise<void> {
     await this.sessions.stop(
@@ -237,7 +238,8 @@ export class IosEmulatorBackend implements EmulatorBackend {
             return this.shutdownDevice(deviceId)
           }
         : undefined,
-      options.releaseOnShutdownFailure
+      options.releaseOnShutdownFailure,
+      options.onHelperStopped
     )
   }
 
@@ -251,7 +253,11 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async isSessionReusable(info: EmulatorSessionInfo): Promise<boolean> {
     try {
-      return this.sessions.owns(info) && (await this.waitForEndpointReady(info.streamUrl))
+      return (
+        this.sessions.owns(info) &&
+        (await this.waitForEndpointReady(info.streamUrl)) &&
+        this.sessions.owns(info)
+      )
     } catch {
       return false
     }

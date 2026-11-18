@@ -138,6 +138,31 @@ describe('EmulatorStartLeaseRegistry', () => {
     )
   })
 
+  it('settles helper-only cleanup independently when shutdown fails after helper exit', async () => {
+    const { backend, stopHelperForDevice } = makeBackend()
+    stopHelperForDevice.mockImplementation(
+      async (_device: string, options: { onHelperStopped: () => void }) => {
+        options.onHelperStopped()
+        throw new Error('shutdown failed')
+      }
+    )
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'device', () => false)
+    const info = { ...lease.info, instanceId: 'stream-1' }
+    const kill = registry.cleanupWhenIdle(backend, info, () => false, { force: true })
+    const shutdown = registry.cleanupWhenIdle(backend, info, () => false, {
+      force: true,
+      shutdownDevice: true
+    })
+    const shutdownResult = shutdown.then(
+      () => 'stopped',
+      (error: Error) => error.message
+    )
+    await lease.release()
+    await expect(kill).resolves.toBeUndefined()
+    expect(await shutdownResult).toBe('shutdown failed')
+  })
+
   it('rejects only a stale request when a valid request for the same generation is queued', async () => {
     const { backend, stopHelperForDevice } = makeBackend()
     const registry = new EmulatorStartLeaseRegistry()

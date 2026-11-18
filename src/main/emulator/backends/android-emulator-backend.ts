@@ -191,11 +191,16 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
       instanceId?: string
       requireInstanceId?: boolean
       assertShutdownAllowed?: () => void
+      onHelperStopped?: () => void
     } = {}
   ): Promise<void> {
     await this.streams.stopForCleanup(deviceId, options, () =>
-      this.shutdownDevice(deviceId, options.assertShutdownAllowed)
+      this.shutdownDevice(deviceId, () => this.streams.assertShutdownAllowed(deviceId, options))
     )
+  }
+
+  ownedSessionInfo(deviceId: string): EmulatorSessionInfo | undefined {
+    return this.streams.ownedSessionInfo(deviceId)
   }
 
   async stopOwnedHelpers(): Promise<void> {

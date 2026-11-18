@@ -130,9 +130,10 @@ export class EmulatorSessionRegistry {
   /** One row per worktree's live session; a shared device appears once per worktree. */
   async listLiveActive(
     worktreeId: string | undefined,
-    backendForKind: CensusBackendForKind
+    backendForKind: CensusBackendForKind,
+    cleanup?: (kind: EmulatorBackendKind, info: EmulatorSessionInfo) => void
   ): Promise<EmulatorActiveSession[]> {
-    await this.pruneGoneManagedSessions(backendForKind)
+    await this.pruneGoneManagedSessions(backendForKind, cleanup)
     const rows: EmulatorActiveSession[] = []
     for (const [activeWorktreeId, key] of this.activeByWorktree) {
       const session = this.sessions.get(key)
@@ -167,7 +168,10 @@ export class EmulatorSessionRegistry {
   }
 
   /** Drop managed records whose device stopped outside Orca; true while any managed device still runs. */
-  async pruneGoneManagedSessions(backendForKind: CensusBackendForKind): Promise<boolean> {
+  async pruneGoneManagedSessions(
+    backendForKind: CensusBackendForKind,
+    cleanup?: (kind: EmulatorBackendKind, info: EmulatorSessionInfo) => void
+  ): Promise<boolean> {
     const managed = this.listSessions().filter((session) => session.managed)
     let live = false
     for (const kind of new Set(managed.map((session) => session.backend))) {
@@ -182,7 +186,18 @@ export class EmulatorSessionRegistry {
           live = live || this.sessions.has(session.deviceUdid)
         } else {
           this.clearSessionAndWorktrees(session.deviceUdid)
-          void backend?.stopHelperForDevice(session.deviceUdid).catch(() => {})
+          const info = toSessionInfo(session)
+          if (cleanup) {
+            cleanup(kind, info)
+          } else {
+            void backend
+              ?.stopHelperForDevice(session.deviceUdid, {
+                helperPid: info.helperPid,
+                instanceId: info.instanceId,
+                requireInstanceId: kind === 'android'
+              })
+              .catch(() => {})
+          }
         }
       }
     }

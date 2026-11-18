@@ -37,11 +37,13 @@ describe('Android stream identity', () => {
       expect(controller.isCurrent({ ...replacement, instanceId: undefined })).toBe(false)
       expect(controller.isCurrent(replacement)).toBe(true)
       const shutdown = vi.fn(async () => {})
-      await controller.stopForCleanup(
-        serial,
-        { instanceId: first.instanceId, requireInstanceId: true },
-        shutdown
-      )
+      await expect(
+        controller.stopForCleanup(
+          serial,
+          { instanceId: first.instanceId, requireInstanceId: true },
+          shutdown
+        )
+      ).rejects.toThrow('stream changed')
       await expect(
         controller.stopForCleanup(
           serial,
@@ -58,6 +60,18 @@ describe('Android stream identity', () => {
       ).rejects.toThrow('stream changed')
       expect(controller.isCurrent(replacement)).toBe(true)
       expect(shutdown).not.toHaveBeenCalled()
+      const failedShutdown = vi.fn(async () => {
+        throw new Error('adb failed')
+      })
+      await expect(
+        controller.stopForCleanup(
+          serial,
+          { instanceId: replacement.instanceId, requireInstanceId: true, shutdownDevice: true },
+          failedShutdown
+        )
+      ).rejects.toThrow('adb failed')
+      expect(controller.isCurrent(replacement)).toBe(false)
+      expect(controller.ownedSessionInfo(serial)?.instanceId).toBe(replacement.instanceId)
       await controller.stopForCleanup(
         serial,
         { instanceId: replacement.instanceId, requireInstanceId: true, shutdownDevice: true },

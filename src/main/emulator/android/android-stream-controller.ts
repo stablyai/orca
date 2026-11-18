@@ -18,7 +18,7 @@ export type AndroidStreamControllerDeps = {
 export class AndroidStreamController {
   private readonly handles = new Map<
     string,
-    { handle: AndroidStreamHandle; info: EmulatorSessionInfo }
+    { handle: AndroidStreamHandle; info: EmulatorSessionInfo; stopped: boolean }
   >()
   private readonly starts = new Map<string, Promise<EmulatorSessionInfo>>()
 
@@ -61,7 +61,7 @@ export class AndroidStreamController {
       throw error
     }
     const sessionInfo = { ...info, instanceId: randomUUID() }
-    this.handles.set(serial, { handle, info: sessionInfo })
+    this.handles.set(serial, { handle, info: sessionInfo, stopped: false })
     return sessionInfo
   }
 
@@ -70,36 +70,68 @@ export class AndroidStreamController {
     return (
       !!info.instanceId &&
       session?.info.instanceId === info.instanceId &&
+      !session.stopped &&
       scrcpyVideoRegistry.has(info.deviceUdid)
     )
   }
 
+  ownedSessionInfo(serial: string): EmulatorSessionInfo | undefined {
+    return this.handles.get(serial)?.info
+  }
+
+  isOwnedGeneration(serial: string, instanceId: string | undefined): boolean {
+    return !!instanceId && this.handles.get(serial)?.info.instanceId === instanceId
+  }
+
+  assertShutdownAllowed(
+    serial: string,
+    options: {
+      instanceId?: string
+      requireInstanceId?: boolean
+      assertShutdownAllowed?: () => void
+    }
+  ): void {
+    options.assertShutdownAllowed?.()
+    if (options.requireInstanceId && !this.isOwnedGeneration(serial, options.instanceId)) {
+      throw new EmulatorError(
+        'emulator_helper_failed',
+        'The Android emulator stream changed before shutdown.'
+      )
+    }
+  }
+
   async stopForCleanup(
     serial: string,
-    options: { instanceId?: string; requireInstanceId?: boolean; shutdownDevice?: boolean },
+    options: {
+      instanceId?: string
+      requireInstanceId?: boolean
+      shutdownDevice?: boolean
+      onHelperStopped?: () => void
+    },
     shutdown: () => Promise<void>
   ): Promise<void> {
+    const session = this.handles.get(serial)
     if (
       options.requireInstanceId &&
-      (!options.instanceId ||
-        !this.isCurrent({
-          deviceUdid: serial,
-          instanceId: options.instanceId,
-          streamUrl: '',
-          wsUrl: ''
-        }))
+      (!options.instanceId || session?.info.instanceId !== options.instanceId)
     ) {
-      if (!options.shutdownDevice && options.instanceId) {
-        return
-      }
       throw new EmulatorError(
         'emulator_helper_failed',
         'The Android emulator stream changed before cleanup.'
       )
     }
-    this.stop(serial)
+    if (session && !session.stopped) {
+      session.handle.close()
+      session.stopped = true
+    }
+    if (session) {
+      options.onHelperStopped?.()
+    }
     if (options.shutdownDevice) {
       await shutdown()
+    }
+    if (this.handles.get(serial) === session) {
+      this.handles.delete(serial)
     }
   }
 
@@ -112,7 +144,9 @@ export class AndroidStreamController {
   stop(serial: string): void {
     const session = this.handles.get(serial)
     if (session) {
-      session.handle.close()
+      if (!session.stopped) {
+        session.handle.close()
+      }
       this.handles.delete(serial)
     }
   }
