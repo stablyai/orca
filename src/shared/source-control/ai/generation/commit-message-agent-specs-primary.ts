@@ -253,15 +253,16 @@ export function buildPrimaryCommitMessageAgentSpecs({
       binary: 'devin',
       promptDelivery: 'argv',
       buildArgs: ({ prompt, model }) => [
+        // The prompt is --print's inline value; a trailing positional parses as [PATH]... and is rejected.
         '--print',
+        prompt,
         // Print mode cannot answer the workspace-trust prompt.
         '--respect-workspace-trust',
         'false',
         // No tool-disable flag exists; the planner materializes a deny-all user config here.
         '--config',
         DEVIN_TEXT_TASK_CONFIG_ARG,
-        ...(model && model !== 'default' ? ['--model', model] : []),
-        prompt
+        ...(model && model !== 'default' ? ['--model', model] : [])
       ],
       singletonOptions: [['--model'], ['--config']],
       modelSource: 'static',
