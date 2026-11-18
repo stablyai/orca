@@ -13,11 +13,25 @@ flowchart TD
     ).toBe(true)
   })
 
-  it('detects quoted values and elk sub-layouts', () => {
+  it('detects quoted values, comments and elk sub-layouts', () => {
     expect(
       sourceUsesElkLayout(`---
 config:
   layout: 'elk.stress'
+---
+flowchart TD
+  A --> B`)
+    ).toBe(true)
+    expect(
+      sourceUsesElkLayout(`---
+layout: elk # use the layered engine
+---
+flowchart TD
+  A --> B`)
+    ).toBe(true)
+    expect(
+      sourceUsesElkLayout(`---
+config: {layout: elk}
 ---
 flowchart TD
   A --> B`)
@@ -39,5 +53,8 @@ config:
 flowchart TD
   A --> B`)
     ).toBe(false)
+    expect(sourceUsesElkLayout('---\nconfig: {layout: dagre}\n---\nflowchart TD\n  A --> B')).toBe(
+      false
+    )
   })
 })
