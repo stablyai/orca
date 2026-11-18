@@ -1,7 +1,5 @@
-import {
-  replaceTabBuckets,
-  replaceRecordEntries
-} from '@/store/record-transitions/keyed-record-transitions'
+import { isCodexAccountRestart } from '../codex-account-restart-continuation'
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from '../ownership/terminal-tab-owner-index'
 import {
   isRemoteRuntimePtyId,
@@ -170,7 +168,16 @@ export function createTerminalPtyBindingActions(
           }
           if (hasReplacementRestartNotice) {
             const replacedNotice = nextCodexRestartNoticeByPtyId[replacementPtyId]
-            nextCodexRestartNoticeByPtyId[ptyId] ??= replacedNotice
+            const retiresAccountRequest = Object.values(s.pendingPaneAccountRestarts).some(
+              (request) =>
+                isCodexAccountRestart(request) &&
+                request.tabId === tabId &&
+                request.oldPtyId === replacementPtyId &&
+                request.resultPtyId !== ptyId
+            )
+            nextCodexRestartNoticeByPtyId[ptyId] ??= retiresAccountRequest
+              ? { ...replacedNotice, restartRequested: undefined, incarnationId: undefined }
+              : replacedNotice
             delete nextCodexRestartNoticeByPtyId[replacementPtyId]
           }
           if (hasReplacementMigrationUnsupported) {

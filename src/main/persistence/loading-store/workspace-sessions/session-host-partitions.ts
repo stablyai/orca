@@ -1,3 +1,7 @@
+import {
+  reconcileTrackedPtyBindingGenerations,
+  type GenerationRuntime
+} from '../terminal-bindings/pty-binding-generations'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -56,7 +60,8 @@ import {
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
   'state' | 'terminalScrollbackSnapshotStorage'
->
+> &
+  GenerationRuntime
 
 const sessionHostPartitionOperationsContext = Symbol('SessionHostPartitionOperations')
 type SessionHostPartitionOperationsContext = {
@@ -232,6 +237,12 @@ export function removeWorkspaceSessionOwnerInPartition(
   }
   // Releasing session ownership may unblock metadata pruning; no other signal covers this write.
   invalidateLocalWorktreeMetadataPruneInputs()
+  reconcileTrackedPtyBindingGenerations(
+    owner[sessionHostPartitionOperationsContext].runtime,
+    resolved,
+    current,
+    session
+  )
   if (resolved === LOCAL_EXECUTION_HOST_ID) {
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession = session
   } else {
@@ -306,6 +317,7 @@ export function setHostWorkspaceSession(
     pruneWorkspaceSessionBrowserHistory(scrollbackKept),
     runtime.state.workspaceSession
   )
+  reconcileTrackedPtyBindingGenerations(runtime, hostId, prior, pruned)
   runtime.state.workspaceSessionsByHostId = {
     ...runtime.state.workspaceSessionsByHostId,
     [hostId]: withRequiredWorkspaceSessionMaps(

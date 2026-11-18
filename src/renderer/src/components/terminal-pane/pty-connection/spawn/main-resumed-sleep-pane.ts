@@ -1,3 +1,4 @@
+import { routeCodexAccountRestartWake } from '../../account-restart/codex-account-restart-wake'
 // A slept workspace's pane: main resumes its agent, and this window only attaches to that terminal.
 
 import { useAppStore } from '@/store/index'
@@ -65,6 +66,10 @@ export async function attachToMainResumedSleepPane(
   options: FreshSpawnOptions,
   automatic?: boolean
 ): Promise<string | null> {
+  const accountWake = routeCodexAccountRestartWake(session, undefined, options)
+  if (accountWake !== undefined) {
+    return accountWake
+  }
   const generation = session.transportStreamGeneration
   const isCurrent = (): boolean => isMainResumedSleepPaneCurrent(session, startup)
   if (!isCurrent()) {

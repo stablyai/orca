@@ -1,3 +1,13 @@
+import {
+  accountRestartBindingIsRefused,
+  accountRestartRetirementIsRefused
+} from './account-restart-binding-refusal'
+import type {
+  PersistPtyBindingArgs,
+  RetirePtyBindingFence,
+  PtyBindingPersistenceOperationsRuntime
+} from './pty-binding-request'
+export type { PersistPtyBindingArgs } from './pty-binding-request'
 // oxfmt-ignore
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -5,9 +15,6 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../restoring-sessions/workspace-session-write-rollback'
 import { clearReplacedPaneBinding } from './replaced-pane-binding'
 
-import type { PtyBindingSourceExpectation } from '../store'
-
-import type { StoreRuntimeState } from '../store-runtime-state'
 // oxfmt-ignore
 import { resolveHostId, type SessionHostPartitionOperations } from '../workspace-sessions/session-host-partitions'
 import {
@@ -26,10 +33,8 @@ import {
   reportPtyBindingOwnerConflict,
   reportPtyBindingPlacement,
   startPtyBindingSpan,
-  type PtyBindingOrigin,
   type PtyBindingSpan
 } from './pty-binding-span'
-import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
@@ -49,41 +54,7 @@ import type {
   CommandOf,
   LayoutRefusalCode
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import { bumpPtyBindingGeneration } from './pty-binding-generations'
-
-type PtyBindingPersistenceOperationsRuntime = Pick<
-  StoreRuntimeState,
-  | 'runDurableMutation'
-  | 'lastDurableWriteGeneration'
-  | 'pendingWrite'
-  | 'quitFlushStarted'
-  | 'dirtyProfileStateDomains'
-  | 'state'
-  | 'writeGeneration'
-  | 'writeTimer'
-  | 'ptyBindingGenerations'
->
-
-export type PersistPtyBindingArgs = {
-  worktreeId: string
-  tabId: string
-  leafId: string
-  ptyId: string
-  incarnationId?: string
-  startupCwd?: string
-  correctStartupCwd?: string
-  expectedBinding?: { ptyId: string; incarnationId?: string }
-  expectedSourceBinding?: PtyBindingSourceExpectation
-  /** Spawns may precede layout saves; reattach must disable creation once absence proves a user close. */
-  mayCreate?: boolean
-  mayReviveRetiredSurface?: boolean
-  /** Tracing metadata only; persistence must not branch on origin. */
-  origin?: PtyBindingOrigin
-  /** Report-only until main owns layout; then determines split placement. */
-  placement?: TerminalPanePlacement
-  /** Replacement without incarnationId clears the saved incarnation. */
-  dropsIncarnation?: true
-}
+import { bumpPtyBindingGeneration, ptyBindingGenerationOf } from './pty-binding-generations'
 
 const ptyBindingPersistenceOperationsContext = Symbol('PtyBindingPersistenceOperations')
 type PtyBindingPersistenceOperationsContext = {
@@ -105,7 +76,7 @@ export class PtyBindingPersistenceOperations {
   async retirePtyBinding(
     binding: Pick<PersistPtyBindingArgs, 'worktreeId' | 'tabId' | 'leafId' | 'ptyId'>,
     hostId?: string | null,
-    fence?: { incarnationId: string | undefined }
+    fence?: RetirePtyBindingFence
   ): Promise<boolean> {
     const { runtime, sessions } = this[ptyBindingPersistenceOperationsContext]
     const resolved = resolveHostId(hostId)
@@ -115,6 +86,17 @@ export class PtyBindingPersistenceOperations {
     }
     return runtime.runDurableMutation(() => {
       const session = sessions.getWorkspaceSession(resolved)
+      if (
+        accountRestartRetirementIsRefused(
+          runtime,
+          session,
+          resolved,
+          binding,
+          fence?.accountRestart
+        )
+      ) {
+        return { value: false, persist: false, writtenHostIds: [] }
+      }
       const currentId =
         session.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
       if (!currentId) {
@@ -137,6 +119,10 @@ export class PtyBindingPersistenceOperations {
       // Publish directly: renderer snapshot repair would revive the retired binding.
       publish(retired)
       bumpPtyBindingGeneration(runtime, resolved, binding.leafId)
+      const generation = ptyBindingGenerationOf(runtime, resolved, binding.leafId)
+      if (generation !== undefined) {
+        fence?.onRetired?.(generation)
+      }
       return {
         value: true,
         writtenHostIds: [resolved],
@@ -183,6 +169,9 @@ export class PtyBindingPersistenceOperations {
         const partitions = sessions
           .getWorkspaceSessionHostIds()
           .map((hostId) => ({ hostId, session: sessions.getWorkspaceSession(hostId) }))
+        if (accountRestartBindingIsRefused(runtime, session, resolvedHostId, args)) {
+          return { value: false, persist: false, writtenHostIds: [] }
+        }
         if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey, partitions)) {
           outcome = 'refused'
           return { value: false, persist: false, writtenHostIds: [] }

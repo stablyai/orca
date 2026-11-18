@@ -14,11 +14,13 @@ import { paneResumeRecord } from './pane-resume-record'
 const SESSION_RUNNING_ELSEWHERE_NOTICE =
   '\r\n\x1b[2mThis agent session is already running in another tab.\x1b[0m\r\n'
 
-function providerSessionLiveInAnotherPane(resume: SleepingAgentSessionRecord): boolean {
+type ResumeIdentity = Pick<SleepingAgentSessionRecord, 'agent' | 'providerSession' | 'paneKey'>
+
+function providerSessionLiveInAnotherPane(resume: ResumeIdentity): string | null {
   const state = useAppStore.getState()
-  return Array.from(state.agentStatusByPaneKey.values()).some((entry) => {
+  for (const entry of state.agentStatusByPaneKey.values()) {
     const pane = entry.paneKey === resume.paneKey ? null : parsePaneKey(entry.paneKey)
-    return (
+    if (
       pane !== null &&
       entry.agentType === resume.agent &&
       agentProviderSessionsEqual(resume.agent, entry.providerSession, resume.providerSession) &&
@@ -28,14 +30,14 @@ function providerSessionLiveInAnotherPane(resume: SleepingAgentSessionRecord): b
         state.ptyIdsByTabId,
         state.terminalLayoutsByTabId[pane.tabId]
       )
-    )
-  })
+    ) {
+      return entry.paneKey
+    }
+  }
+  return null
 }
 
-function providerSessionQueuedInAnotherTab(
-  resume: SleepingAgentSessionRecord,
-  ownTabId: string
-): boolean {
+function providerSessionQueuedInAnotherTab(resume: ResumeIdentity, ownTabId: string): boolean {
   const state = useAppStore.getState()
   const sameSession = (
     agent: string | undefined,
@@ -55,17 +57,29 @@ function providerSessionQueuedInAnotherTab(
   )
 }
 
+export function paneResumeOwnershipElsewhere(
+  session: ConnectPanePtySession,
+  startupOverride: PendingStartupCommand | null | undefined,
+  captured?: ResumeIdentity
+): { kind: 'live'; paneKey: string } | { kind: 'queued' } | null {
+  const resume = captured ?? paneResumeRecord(session, startupOverride)
+  if (!resume) {
+    return null
+  }
+  const paneKey = providerSessionLiveInAnotherPane(resume)
+  return paneKey
+    ? { kind: 'live', paneKey }
+    : providerSessionQueuedInAnotherTab(resume, session.deps.tabId)
+      ? { kind: 'queued' }
+      : null
+}
+
 /** A settled failure may already have recovered in another pane before this Retry. */
 export function skipPaneResumeOwnedElsewhere(
   session: ConnectPanePtySession,
   startupOverride: PendingStartupCommand | null | undefined
 ): boolean {
-  const resume = paneResumeRecord(session, startupOverride)
-  if (
-    !resume ||
-    (!providerSessionLiveInAnotherPane(resume) &&
-      !providerSessionQueuedInAnotherTab(resume, session.deps.tabId))
-  ) {
+  if (!paneResumeOwnershipElsewhere(session, startupOverride)) {
     return false
   }
   writeTerminalOutput(session.pane.terminal, SESSION_RUNNING_ELSEWHERE_NOTICE, {

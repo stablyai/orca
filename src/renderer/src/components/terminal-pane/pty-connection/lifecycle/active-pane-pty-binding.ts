@@ -1,3 +1,4 @@
+import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store'
@@ -8,6 +9,7 @@ import { shouldIgnoreStalePanePtyLayoutBinding } from '../reattach/pane-pty-layo
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function installActivePanePtyBinding(session: ConnectPanePtySession): void {
+  const releaseHandoff = session.deps.releaseResumeInPlace
   session.observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
   session.reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
@@ -30,6 +32,12 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
       return false
     }
     const state = useAppStore.getState()
+    if (
+      session.deps.accountRestartToken &&
+      !currentCodexAccountRestart(state, session.deps.accountRestartToken)
+    ) {
+      return false
+    }
     const leafId = session.pane.leafId
     const existingPtyId = leafId
       ? state.terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[leafId]
@@ -61,6 +69,9 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
       ) {
         return false
       }
+    }
+    if (session.deps.accountRestartToken) {
+      state.updateCodexAccountRestart(session.deps.accountRestartToken, { resultPtyId: ptyId })
     }
     session.bindProcessExitState(ptyId, options.replacePtyId)
     if (session.activePanePtyBinding && session.activePanePtyBinding !== ptyId) {
@@ -101,7 +112,7 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
       // Publish the tab identity first so a late layout callback cannot leave a tab and pane split.
       session.syncPanePtyLayoutBinding(ptyId)
     }
-    session.deps.releaseResumeInPlace?.()
+    releaseHandoff?.()
     if (session.paneStartup && !session.startupPtyBound) {
       // Settles the captured one-shot startup only after this pane owns a concrete PTY.
       session.startupPtyBound = true
