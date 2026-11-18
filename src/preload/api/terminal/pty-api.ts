@@ -4,7 +4,7 @@ import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import type { ResourceViewAdmission } from '../../../shared/resource-view-admission'
+import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource-view-admission'
 import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
   SavedResumeDecision,
@@ -174,6 +174,7 @@ export type PtyApi = {
       expectedIncarnationId?: string
       scanChildProcesses?: boolean
       steadyState?: boolean
+      jobMembershipOnly?: boolean
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>

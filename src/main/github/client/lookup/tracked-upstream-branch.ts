@@ -21,7 +21,7 @@ import {
   type TrackedUpstreamSnapshotProbeResult
 } from './tracked-upstream-cache'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 export async function getTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,

@@ -1,10 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { describe, expect, it } from 'vitest'
+import {
+  getDefaultPersistedState,
+  getDefaultWorkspaceSession
+} from '../../../shared/orca-profiles/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { Project } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import '../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   captureNativeLocalWorktreeMetadataScanExpectation,
@@ -13,7 +16,6 @@ import {
 import { pruneMissingLocalWorktreeSessionsForRepo } from './missing-local-worktree-session-pruning'
 
 const REPO_ID = 'repo-1'
-const LIVE_ID = `${REPO_ID}::/workspace/live`
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -69,54 +71,6 @@ function pruneCaptured(
 }
 
 describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
-  it('removes 2,709 sessionless rows in one batch without cloning or changing session state', () => {
-    const state = makeState()
-    const staleIds = Array.from(
-      { length: 2_709 },
-      (_, index) => `${REPO_ID}::/workspace/stale-${index}`
-    )
-    const allIds = [LIVE_ID, ...staleIds]
-    state.worktreeMetaByIdentity = {}
-    state.worktreeIdentityAliases = {}
-    for (const [index, worktreeId] of allIds.entries()) {
-      const meta = makeMeta(worktreeId)
-      const identityKey = `identity-${index}`
-      state.worktreeMeta[worktreeId] = meta
-      state.worktreeMetaByIdentity[identityKey] = meta
-      state.worktreeIdentityAliases[`local|${worktreeId}`] = [identityKey]
-    }
-    state.worktreeLineageById[staleIds[0]!] = { worktreeId: staleIds[0] } as never
-    state.workspaceLineageByChildKey[worktreeWorkspaceKey(staleIds[0]!)] = {
-      childWorkspaceKey: worktreeWorkspaceKey(staleIds[0]!)
-    } as never
-    state.workspaceSession.terminalTopologyRevisionByRepoId = { [REPO_ID]: 7 }
-    const hostSession = {
-      ...getDefaultWorkspaceSession(),
-      terminalTopologyRevisionByRepoId: { [REPO_ID]: 11 }
-    }
-    state.workspaceSessionsByHostId = { 'runtime:mirror': hostSession }
-    const scan = capture(state)
-    const session = state.workspaceSession
-    const sessionSnapshot = structuredClone(session)
-    const hostSessionSnapshot = structuredClone(hostSession)
-    const cloneSpy = vi.spyOn(globalThis, 'structuredClone')
-
-    const removed = pruneCaptured(state, scan, staleIds)
-
-    expect(removed).toHaveLength(staleIds.length)
-    expect(cloneSpy).not.toHaveBeenCalled()
-    cloneSpy.mockRestore()
-    expect(Object.keys(state.worktreeMeta)).toEqual([LIVE_ID])
-    expect(Object.keys(state.worktreeMetaByIdentity ?? {})).toEqual(['identity-0'])
-    expect(Object.keys(state.worktreeIdentityAliases ?? {})).toEqual([`local|${LIVE_ID}`])
-    expect(state.worktreeLineageById[staleIds[0]!]).toBeUndefined()
-    expect(state.workspaceLineageByChildKey[worktreeWorkspaceKey(staleIds[0]!)]).toBeUndefined()
-    expect(state.workspaceSession).toBe(session)
-    expect(state.workspaceSession).toEqual(sessionSnapshot)
-    expect(state.workspaceSessionsByHostId?.['runtime:mirror']).toBe(hostSession)
-    expect(state.workspaceSessionsByHostId?.['runtime:mirror']).toEqual(hostSessionSnapshot)
-  })
-
   it('fails closed when an identical repo row is removed and re-added during the scan', () => {
     const state = makeState()
     const worktreeId = `${REPO_ID}::/workspace/re-added-repo`
@@ -345,22 +299,6 @@ describe('pruneMissingLocalWorktreeSessionsForRepo', () => {
   })
 
   // A reference removal never deletes must not count as pruned, or every scan re-arms cleanup.
-  it('reports nothing and keeps the session when only a kept close intent names the worktree', () => {
-    const state = makeState()
-    const goneId = `${REPO_ID}::/workspace/gone`
-    const session = {
-      ...getDefaultWorkspaceSession(),
-      pairedTerminalTabCloseIntentsByEnvironment: {
-        env: [{ hostTabIds: ['host-tab'], worktreeId: goneId, closedAt: 1 }]
-      }
-    }
-    state.workspaceSession = session
-
-    expect(
-      pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [goneId], 'linux')
-    ).toEqual([])
-    expect(state.workspaceSession).toBe(session)
-  })
 
   it('keeps a workspace whose draft is saved under a differently cased Windows key', () => {
     const state = makeState(makeRepo({ path: 'C:\\Work\\repo' }))

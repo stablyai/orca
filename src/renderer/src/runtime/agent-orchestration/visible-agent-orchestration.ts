@@ -4,7 +4,7 @@ import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
@@ -15,7 +15,7 @@ import {
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
+import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,

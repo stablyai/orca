@@ -4,7 +4,10 @@
  * runs Git changes. Refused when Windows Git couldn't safely own the repo's worktrees.
  */
 import { win32 } from 'node:path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { Project } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'

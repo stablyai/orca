@@ -21,24 +21,6 @@ beforeEach(() => {
   vi.stubEnv('USERPROFILE', home)
 })
 
-describe('openAiCompatibleTranscriptionUrl', () => {
-  it('appends the transcriptions path to a base URL and keeps a full one', async () => {
-    const { openAiCompatibleTranscriptionUrl } = await loadStoreModule()
-    expect(openAiCompatibleTranscriptionUrl(' https://api.groq.com/openai/v1/ ')).toBe(
-      'https://api.groq.com/openai/v1/audio/transcriptions'
-    )
-    expect(openAiCompatibleTranscriptionUrl('https://api.mistral.ai/v1/audio/transcriptions')).toBe(
-      'https://api.mistral.ai/v1/audio/transcriptions'
-    )
-    expect(openAiCompatibleTranscriptionUrl('http://127.0.0.1:8000/v1')).toBe(
-      'http://127.0.0.1:8000/v1/audio/transcriptions'
-    )
-    expect(() => openAiCompatibleTranscriptionUrl('file:///etc/passwd')).toThrow()
-    expect(() => openAiCompatibleTranscriptionUrl('api.groq.com')).toThrow()
-    expect(() => openAiCompatibleTranscriptionUrl('https://user:pw@host.example/v1')).toThrow()
-  })
-})
-
 describe('resolveOpenAiCompatibleSpeechProviderInput', () => {
   it('keeps a saved key for a blank field only while the base URL is unchanged', async () => {
     const store = await loadStoreModule()

@@ -1,4 +1,7 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'

@@ -68,6 +68,8 @@ export function traceShellStep(
     case 'page-ready-deadline':
     case 'document-load-deadline':
     case 'layout-changed':
+    case 'app-resumed':
+    case 'update-swap':
       return trace
   }
 }
@@ -184,6 +186,15 @@ function eventLines(
       return before.documentLoaded || before.pageReady
         ? []
         : [pageLine('warn', 'Web shell: document never finished loading before the deadline')]
+    case 'update-swap':
+      return [
+        pageLine(
+          'info',
+          'Web shell: reopening on a newer build after resume',
+          `from=${buildPrefix(before.state.buildId)}`
+        )
+      ]
+    case 'app-resumed':
     case 'document-started':
     case 'document-loaded':
     case 'page-ready':

@@ -7,12 +7,15 @@ import {
   type DownloadProgressFeed
 } from '../presentation/download-progress-feed'
 import type { GenerationStore } from '../generations/generation-store'
+import type { GenerationHold } from '../generations/generation-deferred-commits'
 import { deriveHostCacheKey } from '../generations/host-cache-key'
 import { runShellEffect, type FlowManifest } from './mobile-web-shell-session-effects'
 import { documentMayTalk } from '../host-gates/mobile-web-shell-gates'
 import { readMobileWebShellReachability } from '../host-gates/mobile-web-shell-reachability'
 import { createMobileWebShellRuntime, type MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { useMobileWebShellGates } from '../host-gates/use-mobile-web-shell-gates'
+import { useResumeSwapConsent } from './use-resume-swap-consent'
+import { askPagesAgain, latestAppResumeRound } from './app-resume-rounds'
 import { shellPageBackClaimed } from '../page-document/shell-page-back-claim'
 import { recordShellLifecycleLine } from '../diagnostics/shell-lifecycle-line-recorder'
 import {
@@ -61,6 +64,8 @@ export type MobileWebShellSessionView = {
   readonly reportPageReady: () => void
   readonly reportPagePainted: () => void
   readonly reportPageBackClaim: (claimed: boolean) => void
+  // The page's answer to a return from the background: whether it may reload onto a newer build now.
+  readonly reportSwapSafe: (safe: boolean, round: number) => void
   // Project document facts into React state: page-ready alone changes no session-state identity to trigger a render.
   readonly pageReady: boolean
   // Project paint for the same reason: the ready state itself does not change.
@@ -129,7 +134,7 @@ export function useMobileWebShellSession(args: {
   // The flow's manifest reply, so its download reads windows without asking for the manifest again.
   const manifestRef = useRef<FlowManifest | null>(null)
   // Held while this shell shows a generation, so no update commits under it.
-  const releaseHoldRef = useRef<(() => void) | null>(null)
+  const holdRef = useRef<GenerationHold | null>(null)
   const logTraceRef = useRef(EMPTY_SHELL_LOG_TRACE)
   const runEffectRef = useRef<
     ((epoch: number, flow: number, effect: MobileWebShellSessionEffect) => void) | null
@@ -144,8 +149,8 @@ export function useMobileWebShellSession(args: {
   }, [deadline])
 
   const releaseHold = useCallback((): void => {
-    releaseHoldRef.current?.()
-    releaseHoldRef.current = null
+    holdRef.current?.release()
+    holdRef.current = null
   }, [])
 
   const dispatch = useCallback(
@@ -168,8 +173,12 @@ export function useMobileWebShellSession(args: {
       const next = stepped.session.state
       // Take the hold before any effect runs, so another shell's open-cache cannot commit under this one.
       if (next.kind === 'ready' || next.kind === 'activating') {
-        releaseHoldRef.current ??=
-          storeRef.current?.holdGeneration(deriveHostCacheKey(hostIdRef.current)) ?? null
+        holdRef.current ??=
+          storeRef.current?.holdGeneration(deriveHostCacheKey(hostIdRef.current), {
+            swap: () => dispatch(epoch, { type: 'update-swap' }),
+            askAgain: () => askPagesAgain(hostIdRef.current),
+            latestRound: latestAppResumeRound
+          }) ?? null
       } else {
         releaseHold()
       }
@@ -381,6 +390,10 @@ export function useMobileWebShellSession(args: {
     [reportFromView]
   )
 
+  const reportSwapSafe = useResumeSwapConsent(holdRef, hostId, () =>
+    dispatch(epochRef.current, { type: 'app-resumed' })
+  )
+
   return {
     state,
     downloadProgress,
@@ -399,6 +412,7 @@ export function useMobileWebShellSession(args: {
     reportPageReady,
     reportPagePainted,
     reportPageBackClaim,
+    reportSwapSafe,
     backClaimed
   }
 }

@@ -1,7 +1,7 @@
 import {
   projectAgentSessionConversationOutline,
   type AgentSessionConversationOutline
-} from '../../../shared/agent-session/agent-session-conversation-outline'
+} from '../../../shared/agent-session/view/messages/agent-session-conversation-outline'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import { boundJournalConversationOutline } from './journal-outline-budget'

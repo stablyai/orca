@@ -1,5 +1,5 @@
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import { BRIDGE_APP_INACTIVE_FRAME } from '../bridge/page-lifecycle/bridge-app-inactive'
+import { BridgePageReaders } from './bridge-page-readers'
 
 import { BridgeCapExceededError } from './bridge-host-errors'
 import { createNativeVerbServer } from '../native-capabilities/bridge-host-native-verbs'
@@ -74,9 +74,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   let initSent = options.sessionEstablished
   // What the page's init reader accepts, carried across a rebuild because the page does not
   // re-handshake. Null is a page older than `storageKeys`, which gets the legacy keys only.
-  let pageStorageKeys: readonly string[] | null = options.sessionBack?.storageKeys ?? null
-  let pageReadsConnectionPath = options.sessionBack?.connectionPathFrames === true
-  let pageReadsAppInactive = options.sessionBack?.appInactiveFrames === true
+  const pageReaders = new BridgePageReaders(
+    options.sessionBack,
+    options.sessionEstablished,
+    options.onRouteRefused
+  )
 
   const frames = createBridgeHostFrames({
     post: options.post,
@@ -124,6 +126,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     if (route === null || (refreshTerminalShortcuts && !deliverable())) {
       return
     }
+    if (!pageReaders.accepts(route)) {
+      return
+    }
     initSent = true
     verdict.noteInit()
     void postJson(
@@ -148,7 +153,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           host,
           ownsHostArea: options.ownsHostArea === true,
           hostStatus: options.readHostStatus?.() ?? null,
-          ...pageStorageForReader(options.readStorage(), pageStorageKeys),
+          ...pageStorageForReader(options.readStorage(), pageReaders.storageKeys),
           refreshTerminalShortcuts
         })
       )
@@ -226,9 +231,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     // Every ready claims the view, whether a new document or a repeated ask.
     if (message.type === 'ready') {
       serving = true
-      pageStorageKeys = message.storageKeys ?? null
-      pageReadsConnectionPath = message.connectionPathFrames === true
-      pageReadsAppInactive = message.appInactiveFrames === true
+      pageReaders.ready(message)
       back.readReady()
       // Dropped like the Back claim: a page still showing a terminal claims again on this `init`.
       reportRailClaim(false)
@@ -289,7 +292,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // A relay dial can start or fail without a state change; the page labels the dial from these.
   const unsubscribeConnectionPath =
     client.onConnectionPathChange?.(() => {
-      if (pageReadsConnectionPath) {
+      if (pageReaders.connectionPathFrames) {
         send({ v: BRIDGE_PROTOCOL_VERSION, type: 'connectionPath', connection: snapshot() })
       }
     }) ?? (() => {})
@@ -314,10 +317,12 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       }
       dispatch(read.message)
     },
-    publishRoute: (next) => routes.publish(next, serving && initSent),
-    publishSafeAreaInsets: (next) => {
-      routes.publishSafeAreaInsets(next, deliverable())
+    publishRoute: (next) => {
+      if (!initSent || pageReaders.accepts(next)) {
+        routes.publish(next, serving && initSent)
+      }
     },
+    publishSafeAreaInsets: (next) => routes.publishSafeAreaInsets(next, deliverable()),
     publishKeyboardInset: (next) => routes.publishKeyboardInset(next, deliverable()),
     publishStorage: () => sendInit(true),
     publishHostStatus: () => verdict.publish(() => deliverable() && sendInit(), dispatch),
@@ -342,17 +347,15 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     publishUiLocale: (next) => {
       routes.publishUiLocale(next, deliverable())
     },
-    sendAppInactive: () => {
-      if (pageReadsAppInactive && deliverable()) {
-        send({ v: BRIDGE_PROTOCOL_VERSION, type: BRIDGE_APP_INACTIVE_FRAME })
+    sendAppFrame: (frame) => {
+      if (pageReaders.reads(frame.type) && deliverable()) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, ...frame })
       }
     },
     sendBack: back.send,
     readSessionBack: () => ({
       ...back.read(),
-      ...(pageStorageKeys === null ? {} : { storageKeys: pageStorageKeys }),
-      ...(pageReadsConnectionPath ? { connectionPathFrames: true as const } : {}),
-      ...(pageReadsAppInactive ? { appInactiveFrames: true as const } : {}),
+      ...pageReaders.retained(),
       ...(railClaimed ? { terminalKeyRailClaim: { inputOwner: railOwner } } : {})
     }),
     resetDocument(): void {

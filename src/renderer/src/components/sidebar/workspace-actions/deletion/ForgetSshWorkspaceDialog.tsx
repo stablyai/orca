@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Server, ServerOff } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -9,14 +8,17 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { DialogCancel, DialogWarning } from '@/components/ui/dialog-parts'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
-import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { useRemovalUnsavedFiles } from './use-removal-unsaved-files'
+import { unsavedFilesLine } from './removal-unsaved-files'
+import type { SshConnectionStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import {
@@ -53,6 +55,12 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     // Retain removed-host labels for ghost workspaces before falling back to raw IDs.
     return s.sshTargetLabels.get(targetId) ?? s.removedSshTargetLabels.get(targetId) ?? targetId
   })
+  const connectionStatus = useAppStore((s): SshConnectionStatus | undefined => {
+    const resolution = isForgetModalData(s.modalData) ? s.modalData.resolution : null
+    return resolution?.kind === 'saved'
+      ? s.sshConnectionStates.get(resolution.targetId)?.status
+      : undefined
+  })
   const [busy, setBusy] = useState(false)
   const mountedRef = useMountedRef()
   const unsavedTargets = useMemo(
@@ -67,6 +75,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
         : [],
     [modalData]
   )
+  const unsavedFiles = useRemovalUnsavedFiles(unsavedTargets, unsavedTargets.length > 0)
 
   if (!isForgetModalData(modalData)) {
     return null
@@ -136,45 +145,49 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
 
   return (
     <Dialog open onOpenChange={(open) => (!open ? closeModal() : undefined)}>
-      <DialogContent surface="security" className="sm:max-w-md" showCloseButton={false}>
-        <DialogHeader className="gap-1">
-          <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
-            <ServerOff className="size-4 text-muted-foreground" />
+      <DialogContent size="confirm" surface="security" busy={busy} initialFocus="cancel">
+        <DialogHeader>
+          <DialogTitle>
             {t(
-              'auto.components.sidebar.ForgetSshWorkspaceDialog.removeTitle',
-              'Remove “{{name}}” from Orca?',
+              'components.sidebar.ForgetSshWorkspaceDialog.removeFromOrcaTitle',
+              'Remove {{name}} from Orca?',
               { name: displayName }
             )}
           </DialogTitle>
-          <DialogDescription className="text-xs">
-            {resolution.kind === 'saved'
+          <DialogDescription>
+            {resolution.kind !== 'saved'
               ? t(
-                  'auto.components.sidebar.ForgetSshWorkspaceDialog.savedHostBody',
-                  'This workspace’s project isn’t served by Orca’s server on {{host}}, so Orca can’t delete it there. You can remove it from Orca; files, the Git worktree, and branches on {{host}} are left untouched.',
+                  'components.sidebar.ForgetSshWorkspaceDialog.ghostHostLine',
+                  '{{host}} is no longer a saved host. Its files stay on it.',
                   { host: hostLabel }
                 )
-              : t(
-                  'auto.components.sidebar.ForgetSshWorkspaceDialog.ghostBody',
-                  '{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.',
-                  { host: hostLabel }
-                )}
+              : // Why only disconnected: other states may still recover, so the copy stays neutral.
+                connectionStatus === 'disconnected'
+                ? t(
+                    'components.sidebar.ForgetSshWorkspaceDialog.disconnectedHostLine',
+                    '{{host}} isn’t connected. Its files stay on the host.',
+                    { host: hostLabel }
+                  )
+                : t(
+                    'components.sidebar.ForgetSshWorkspaceDialog.filesStayLine',
+                    'Its files stay on {{host}}.',
+                    { host: hostLabel }
+                  )}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-2.5 rounded-md border border-border/50 bg-card/40 px-3 py-2">
-          <Server className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-xs font-medium">{hostLabel}</span>
-        </div>
+        {unsavedFiles.length > 0 ? (
+          <DialogWarning>{unsavedFilesLine(unsavedFiles, t)}</DialogWarning>
+        ) : null}
 
-        <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled />
-
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" size="sm" onClick={() => closeModal()} disabled={busy}>
+        <DialogFooter>
+          <DialogCancel>
             {t('auto.components.sidebar.ForgetSshWorkspaceDialog.cancel', 'Cancel')}
-          </Button>
+          </DialogCancel>
           <Button size="sm" onClick={() => void handleForget()} disabled={busy}>
-            {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {t('auto.components.sidebar.ForgetSshWorkspaceDialog.forget', 'Remove from Orca')}
+            {busy
+              ? t('components.sidebar.ForgetSshWorkspaceDialog.removing', 'Removing…')
+              : t('auto.components.sidebar.ForgetSshWorkspaceDialog.forget', 'Remove from Orca')}
           </Button>
         </DialogFooter>
       </DialogContent>

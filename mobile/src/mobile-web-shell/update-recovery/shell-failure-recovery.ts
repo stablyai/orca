@@ -2,10 +2,12 @@ import type {
   MobileWebShellReportedFailure,
   MobileWebShellGates,
   MobileWebShellSession,
+  MobileWebShellSessionEffect,
   MobileWebShellSessionState,
   MobileWebShellStep
 } from '../session/mobile-web-shell-session-contract'
 import { step } from '../session/mobile-web-shell-session-step'
+import { CHECKING } from '../host-gates/mobile-web-shell-gates'
 
 const REMOUNT = { kind: 'remount' } as const
 
@@ -53,6 +55,43 @@ export function reduceShellFailed(
         ? step(session, { state: failedState(session, reason) })
         : refetch(session, session.gates)
   }
+}
+
+type StartFlow = (
+  session: MobileWebShellSession,
+  gates: MobileWebShellGates,
+  patch: Partial<MobileWebShellSession>,
+  before: readonly MobileWebShellSessionEffect[]
+) => MobileWebShellStep
+
+export function reduceRetryPressed(
+  session: MobileWebShellSession,
+  startFlow: StartFlow
+): MobileWebShellStep {
+  // Only explicit retry resets recovery latches; reconnect must not grant another remount.
+  const reset = {
+    retriedOnce: false,
+    remountedOnce: false,
+    reclaimedOnce: false,
+    pageRemountedOnce: false
+  }
+  const fresh: MobileWebShellSessionEffect[] = retryDeletesCache(session.state)
+    ? [{ kind: 'delete-cache' }]
+    : []
+  return session.gates === null
+    ? step(
+        session,
+        {
+          ...reset,
+          updateNotice: null,
+          requestedBuildId: null,
+          requestedCompat: null,
+          state: CHECKING,
+          flow: session.flow + 1
+        },
+        fresh
+      )
+    : startFlow(session, session.gates, { ...reset, cached: null }, fresh)
 }
 
 // Try again after these must not reopen the files that just failed: a damaged tree would fail again on every tap.

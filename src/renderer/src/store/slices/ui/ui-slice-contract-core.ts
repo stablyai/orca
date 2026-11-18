@@ -12,8 +12,8 @@ import type { TaskProvider } from '../../../../../shared/work-items/task-provide
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type {
   AutomationRunPageOrigin,
   AutomationsPageLocation,
@@ -218,6 +218,9 @@ export type UISliceCore = {
   closeSpacePage: () => void
   openSkillsPage: () => void
   closeSkillsPage: () => void
+  /** The template Bot templates last showed; it reopens on it. Null shows the first. */
+  botTemplateSelected: string | null
+  selectBotTemplate: (templateId: string) => void
   pendingSkillShareId: string | null
   openSkillShare: (shareId: string) => void
   clearPendingSkillShare: () => void

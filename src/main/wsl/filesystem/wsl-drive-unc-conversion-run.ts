@@ -4,7 +4,7 @@
  * journal the conversion and restart. The next startup rewrites everything before the window
  * opens (wsl-drive-unc-conversion-startup.ts); the woken panes reattach to their renamed sessions.
  */
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { getRepoMainWorktreeId } from '../../../shared/worktree/id'
 import type {
   WslDriveUncConversionBlocker,

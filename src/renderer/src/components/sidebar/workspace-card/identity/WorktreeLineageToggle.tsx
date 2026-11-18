@@ -16,9 +16,7 @@ const STATUS_ORDER: readonly WorktreeStatus[] = [
   'working',
   'monitoring',
   'unconfirmed',
-  'interrupted',
-  'done',
-  'active'
+  'interrupted'
 ]
 
 export function WorktreeLineageToggle({
@@ -100,11 +98,12 @@ export function WorktreeLineageToggle({
             </span>
           </Button>
         </TooltipTrigger>
+        {/* One line: the children's states when any runs or waits, else what a click does. */}
         <TooltipContent side="right" sideOffset={8}>
-          {collapsed
-            ? t('auto.components.sidebar.WorktreeCard.8cb634cda6', 'Show child workspaces')
-            : t('auto.components.sidebar.WorktreeCard.57eaa61b55', 'Hide child workspaces')}
-          {description ? <div>{description}</div> : null}
+          {description ||
+            (collapsed
+              ? t('auto.components.sidebar.WorktreeCard.8cb634cda6', 'Show child workspaces')
+              : t('auto.components.sidebar.WorktreeCard.57eaa61b55', 'Hide child workspaces'))}
         </TooltipContent>
       </Tooltip>
       {description ? (

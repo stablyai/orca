@@ -27,7 +27,7 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 type ScopeState = WorktreeOperationRouteState &
   Pick<ReturnType<typeof useAppStore.getState>, 'repos' | 'worktreesByRepo'>

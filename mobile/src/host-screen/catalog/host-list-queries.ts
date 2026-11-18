@@ -3,8 +3,8 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
-import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
+} from '../../../../src/shared/execution-host/execution-host'
+import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { Query, QueryClient } from '@tanstack/react-query'
 import { defineHostQuery } from '../../query/host-query'

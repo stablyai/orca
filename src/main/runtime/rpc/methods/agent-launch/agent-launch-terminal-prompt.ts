@@ -72,25 +72,6 @@ async function waitThroughBlockingPrompts(
   }
 }
 
-/** A freshly started agent's readiness, as a launch prompt waits for it, blocking prompts included. */
-export function waitForStartedAgentReady(
-  runtime: LaunchedAgentReadinessRuntime,
-  handle: string,
-  agent: TuiAgent,
-  signal?: AbortSignal,
-  terminalCreation?: TerminalReadinessCreation
-): Promise<RuntimeTerminalWait | undefined> {
-  return waitThroughBlockingPrompts(
-    runtime,
-    handle,
-    agent,
-    true,
-    REAL_CLOCK,
-    signal,
-    terminalCreation
-  )
-}
-
 /** Report whether text reached the pane without failing an already-running launch.
  * A stalled post-write verification still means delivered; reporting not-delivered invites a duplicate turn. */
 export async function deliverTerminalAgentLaunchPrompt(args: {

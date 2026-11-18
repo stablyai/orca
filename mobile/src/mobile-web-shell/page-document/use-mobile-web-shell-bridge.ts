@@ -19,6 +19,7 @@ import type { BridgeFoldDivision } from '../bridge/page-geometry/bridge-fold-div
 import type { BridgeHapticsKind } from '../bridge/native-capabilities/bridge-haptics-notify'
 import type { BridgeHost } from '../host-bridge/bridge-host'
 import type { BridgeNavigateBackOutcome } from '../host-bridge/bridge-host-contract'
+import { usePageAppPresence } from './use-page-app-presence'
 import type { BridgeSessionBack } from '../host-bridge/bridge-host-back'
 import type { BridgeNativeVerb } from '../bridge/native-capabilities/bridge-native-verbs'
 import type { BridgeErrorCapture } from '../bridge/protocol/bridge-error-capture'
@@ -69,8 +70,6 @@ export type MobileWebShellBridgeView = {
    * serves never said it takes one — the caller then leaves the key to the navigator.
    */
   readonly sendBack: () => boolean
-  /** Tells the mounted page the app is leaving the foreground; nothing with no host or an older page. */
-  readonly sendAppInactive: () => void
 }
 
 export type MobileWebShellBridgeArgs = {
@@ -111,6 +110,7 @@ export type MobileWebShellBridgeArgs = {
   // Document resets explicitly publish false so retired pages cannot retain Back.
   onPageBackClaim: (claimed: boolean) => void
   onPageLocation: (href: string) => void
+  onPageSwapSafe: (safe: boolean, round: number) => void
   /** The page shows a terminal with its key row, or stopped; false again on each new document. */
   onTerminalKeyRailClaim: (
     claimed: boolean,
@@ -234,6 +234,14 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     }
   }, [colorScheme, uiLocale, verdictOpen, sessionId])
 
+  // Fenced on the session like Back, so a host left from a past session hears nothing.
+  usePageAppPresence(args.hostId, (frame) => {
+    const mounted = hostRef.current
+    if (mounted?.sessionId === sessionId) {
+      mounted.host.sendAppFrame(frame)
+    }
+  })
+
   return {
     bridgeEnabled: ready !== null,
     viewRef: useCallback(
@@ -351,10 +359,6 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     sendBack: useCallback(() => {
       const mounted = hostRef.current
       return mounted !== null && mounted.sessionId === sessionId && mounted.host.sendBack()
-    }, [sessionId]),
-    sendAppInactive: useCallback(() => {
-      const mounted = hostRef.current
-      return mounted?.sessionId === sessionId ? mounted.host.sendAppInactive() : undefined
     }, [sessionId])
   }
 }

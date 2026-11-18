@@ -2,7 +2,7 @@ import { JournalSqlForkCopy } from '../journal-sql-fork-copy'
 import type { JournalForkPreparationInput } from '../journal-fork-preparation'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { AgentSessionTabTable } from '../../../runtime/agent-session/agent-session-tab-table'
+import { agentSessionTabTableFromStored } from '../../../runtime/agent-session/records/agent-session-tab-table'
 import type { AgentSessionStoreState } from '../../../runtime/agent-session/records/agent-session-store-state'
 import { JournalSqlOwner } from '../journal-sql-owner'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
@@ -173,11 +173,11 @@ export class JournalSqlDatabase {
     return this.restoreRecordTabs(result.records)
   }
 
-  private restoreRecordTabs(records: JournalSqlStoredRecords): AgentSessionStoreState {
+  private restoreRecordTabs(stored: JournalSqlStoredRecords): AgentSessionStoreState {
+    const { backgroundSessions, sessionTabs, ...records } = stored
     return {
       ...records,
-      sessionTabs:
-        records.sessionTabs === null ? null : new AgentSessionTabTable(records.sessionTabs)
+      sessionTabs: sessionTabs && agentSessionTabTableFromStored(sessionTabs, backgroundSessions)
     }
   }
 
@@ -266,6 +266,12 @@ export class JournalSqlDatabase {
       }
       return { target, commit }
     })
+  }
+
+  /** In the chat's lane after any conversion. Its epoch stays remembered as ready, so a conversion
+   *  page listed before the deletion returns it instead of importing the original again. */
+  forgetChat(sessionId: string, forget: () => Promise<boolean>): Promise<boolean> {
+    return this.serialize(sessionId, () => this.conversions.ensure(sessionId).then(forget))
   }
 
   write(command: JournalWriterCommand): Promise<JournalWriterCommit> {

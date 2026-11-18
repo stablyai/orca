@@ -42,6 +42,7 @@ import { keybindingsApi } from './api/preferences/keybindings-bridge'
 import { codexAccountsApi } from './api/agent-accounts/codex-accounts-bridge'
 import { claudeAccountsApi } from './api/agent-accounts/claude-accounts-bridge'
 import { cliApi } from './api/cli-install/cli-bridge'
+import { orcaUninstallApi } from './api/orca-uninstall/orca-uninstall-bridge'
 import { codexConfigSyncApi } from './api/agent-accounts/codex-config-sync-bridge'
 import { preflightApi } from './api/preflight/preflight-bridge'
 import { notificationsApi } from './api/notifications/notifications-bridge'
@@ -52,6 +53,9 @@ import { macosTccPromptsApi } from './api/desktop-permissions/macos-tcc-prompts-
 import { developerPermissionsApi } from './api/desktop-permissions/developer-permissions-bridge'
 import { computerUsePermissionsApi } from './api/desktop-permissions/computer-use-permissions-bridge'
 import { shellApi } from './api/terminal/shell-bridge'
+import { botChangesApi } from './api/bot-changes-bridge'
+import { googleSetupApi } from './api/google-setup-bridge'
+import { slackHandOffApi } from './api/slack-hand-off-bridge'
 import { skillsApi } from './api/skills/skills-bridge'
 import { petApi } from './api/pets/pet-bridge'
 import { appIconApi } from './api/window-ui/app-icon-bridge'
@@ -151,6 +155,7 @@ const api = {
   codexAccounts: codexAccountsApi,
   claudeAccounts: claudeAccountsApi,
   cli: cliApi,
+  orcaUninstall: orcaUninstallApi,
   codexConfigSync: codexConfigSyncApi,
   preflight: preflightApi,
   notifications: notificationsApi,
@@ -161,6 +166,9 @@ const api = {
   developerPermissions: developerPermissionsApi,
   computerUsePermissions: computerUsePermissionsApi,
   shell: shellApi,
+  botChanges: botChangesApi,
+  googleSetup: googleSetupApi,
+  slackHandOff: slackHandOffApi,
   skills: skillsApi,
   pet: petApi,
   appIcon: appIconApi,

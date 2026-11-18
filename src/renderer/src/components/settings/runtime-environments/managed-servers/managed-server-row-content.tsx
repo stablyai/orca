@@ -2,7 +2,7 @@ import { ArrowUpCircle, RefreshCw, RotateCcw, ServerOff, Trash2, Wrench } from '
 import type { OrcadManagedRuntimeStatus } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import { Button } from '../../../ui/button'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../../ui/dropdown-menu'
 import {

@@ -15,7 +15,7 @@ import {
 } from './browser-link-open.test-fixture'
 import type { BrowserLinkTestStore } from './browser-link-open.test-fixture'
 import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))

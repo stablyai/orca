@@ -10,6 +10,7 @@ import type {
 } from './mobile-web-shell-session-contract'
 import { onDownloadFailed } from '../update-recovery/mobile-web-shell-download-failure'
 import {
+  onResumeEvent,
   onDocumentGates,
   onUpdateFailed,
   onUpdateManifest,
@@ -321,6 +322,9 @@ export function reduceMobileWebShellSession(
       return step(session, pageDocumentStatePatch(session, event))
     case 'layout-changed':
       return onLayoutChanged(session, event.wide)
+    case 'app-resumed':
+    case 'update-swap':
+      return onResumeEvent(session, event.type, startFlow)
     case 'retry-pressed': {
       // Only explicit retry resets recovery latches; reconnect must not grant another remount.
       const reset = {

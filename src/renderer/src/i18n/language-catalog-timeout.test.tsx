@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../shared/constants'
+import { getDefaultSettings } from '../../../shared/orca-profiles/constants'
 import { useAppStore } from '@/store'
 import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-language-packs'
 import { OnboardingLanguageLoading } from '@/components/onboarding/OnboardingLanguageLoading'

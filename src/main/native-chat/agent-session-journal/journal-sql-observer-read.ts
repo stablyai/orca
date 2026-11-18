@@ -6,7 +6,7 @@ import { readJournalSqlStatusState } from './journal-sql-status-state'
 import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
 import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
 import { readJournalSqlGoalRows } from './journal-sql-item-reads'
-import { agentSessionThreadGoalStartsTurns } from '../../../shared/agent-session/agent-session-thread-goal'
+import { agentSessionThreadGoalStartsTurns } from '../../../shared/agent-session/thread-goals/agent-session-thread-goal'
 
 /** Status, cuts and current work share one ready snapshot and one captured live authority. */
 export function readJournalSqlObserver(
@@ -16,7 +16,12 @@ export function readJournalSqlObserver(
   const { authority } = input
   const work = readJournalSqlCurrentWork(context, authority)
   const state = withStructuredAgentSessionDiedTurnVerdict(
-    readJournalSqlStatusState(context, authority.record?.currentFence, work.scope),
+    readJournalSqlStatusState(
+      context,
+      authority.record?.currentFence,
+      work.scope,
+      input.botSession === true
+    ),
     work.diedTurn()
   )
   // A dead generation starts no next turn, so its active goal cannot hold completion.
@@ -43,6 +48,6 @@ export function readJournalSqlObserver(
     ),
     usageLimitCut: readJournalSqlUsageLimitCut(context),
     orcaStopCut: readJournalSqlOrcaStopCut(context),
-    work: readJournalSqlWorkState(context, work)
+    work: readJournalSqlWorkState(context, work, input.authority)
   }
 }

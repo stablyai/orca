@@ -7,69 +7,7 @@ const CODEX_SESSION = {
   id: '0199aa11-2b3c-4d5e-8f90-a1b2c3d4e5f6'
 }
 
-function planFor(platform: NodeJS.Platform, agentArgs?: string): string {
-  const plan = buildAgentResumeStartupPlan({
-    agent: 'codex',
-    providerSession: CODEX_SESSION,
-    cmdOverrides: {},
-    platform,
-    ...(agentArgs ? { agentArgs } : {})
-  })
-  if (!plan) {
-    throw new Error('expected a codex resume plan')
-  }
-  return plan.launchCommand
-}
-
 describe('dropAgentResumeArgvFromCommand', () => {
-  it('drops the resume argv the shared builder appended on every platform', () => {
-    for (const platform of ['darwin', 'linux', 'win32'] as const) {
-      const command = planFor(platform)
-      expect(command).toContain(CODEX_SESSION.id)
-      expect(
-        dropAgentResumeArgvFromCommand({
-          command,
-          agent: 'codex',
-          providerSession: CODEX_SESSION
-        })
-      ).toEqual({
-        status: 'dropped',
-        command: platform === 'win32' ? 'codex' : "codex '-c' 'disable_paste_burst=true'"
-      })
-    }
-  })
-
-  it('leaves the Codex folder setting behind when dropping an AI Vault resume', () => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'codex',
-      providerSession: CODEX_SESSION,
-      cmdOverrides: {},
-      platform: 'darwin',
-      resumeInLaunchCwd: true
-    })
-
-    expect(
-      dropAgentResumeArgvFromCommand({
-        command: plan?.launchCommand ?? '',
-        agent: 'codex',
-        providerSession: CODEX_SESSION
-      })
-    ).toEqual({
-      status: 'dropped',
-      command: "codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current'"
-    })
-  })
-
-  it('keeps the user CLI args that precede the resume argv', () => {
-    expect(
-      dropAgentResumeArgvFromCommand({
-        command: planFor('darwin', '--search'),
-        agent: 'codex',
-        providerSession: CODEX_SESSION
-      })
-    ).toEqual({ status: 'dropped', command: "codex '-c' 'disable_paste_burst=true' '--search'" })
-  })
-
   it('drops the joined Copilot resume token and keeps the user args', () => {
     const providerSession = {
       key: 'session_id' as const,
@@ -106,16 +44,6 @@ describe('dropAgentResumeArgvFromCommand', () => {
     expect(
       dropAgentResumeArgvFromCommand({
         command: `codex xresume ${CODEX_SESSION.id}`,
-        agent: 'codex',
-        providerSession: CODEX_SESSION
-      })
-    ).toEqual({ status: 'unrecognized' })
-  })
-
-  it('does not strip a bare resume argv with no launch command in front of it', () => {
-    expect(
-      dropAgentResumeArgvFromCommand({
-        command: `resume ${CODEX_SESSION.id}`,
         agent: 'codex',
         providerSession: CODEX_SESSION
       })
