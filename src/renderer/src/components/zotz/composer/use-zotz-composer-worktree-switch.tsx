@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
-import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { CreateFromPicker } from '@/components/repo/CreateFromPicker'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useWorktreesForRepo } from '@/store/slices/worktrees/listing/use-worktree-catalog'
@@ -44,15 +44,14 @@ export function zotzCheckoutSwitchTarget(
     : { kind: 'local', name: desired }
 }
 
-/** Puts the project's own checkout on the chosen branch; a dirty tree or busy branch refuses with a toast. */
+/** Puts the project's own checkout on the chosen branch; returns git's refusal (e.g. a dirty tree) or null. */
 async function moveCheckoutToBranch(
   checkout: Worktree,
-  wanted: string | undefined,
-  t: Translate
-): Promise<boolean> {
+  wanted: string | undefined
+): Promise<string | null> {
   const target = zotzCheckoutSwitchTarget(checkout.branch, wanted)
   if (!target) {
-    return true
+    return null
   }
   try {
     await switchRuntimeGitBranch(
@@ -63,15 +62,9 @@ async function moveCheckoutToBranch(
       },
       target
     )
-    return true
+    return null
   } catch (error) {
-    toast.error(
-      t('zotz.composer.switchFailed', 'Could not switch the project folder to that branch'),
-      {
-        description: error instanceof Error ? error.message : String(error)
-      }
-    )
-    return false
+    return error instanceof Error ? error.message : String(error)
   }
 }
 
@@ -88,6 +81,8 @@ export function useZotzComposerWorktreeSwitch(input: ComposerInputs): {
   const t = useTranslate()
   const [createWorktree, setCreateWorktree] = useState(true)
   const [busy, setBusy] = useState(false)
+  // Inline, not a toast: the user has to pick a way out, and repeat clicks must not stack.
+  const [switchError, setSwitchError] = useState<string | null>(null)
   const repoMap = useRepoMap()
   const repoWorktrees = useWorktreesForRepo(input.repoId)
   const checkout = repoWorktrees.find((worktree) => worktree.isMainWorktree) ?? null
@@ -100,9 +95,10 @@ export function useZotzComposerWorktreeSwitch(input: ComposerInputs): {
       return
     }
     setBusy(true)
-    const moved = await moveCheckoutToBranch(checkout, input.baseBranch, t)
+    const refusal = await moveCheckoutToBranch(checkout, input.baseBranch)
     setBusy(false)
-    if (!moved) {
+    setSwitchError(refusal)
+    if (refusal) {
       return
     }
     closeModal()
@@ -133,14 +129,20 @@ export function useZotzComposerWorktreeSwitch(input: ComposerInputs): {
               worktrees={repoWorktrees}
               // Without a worktree the folder stays on its branch until the user picks another.
               value={input.baseBranch ?? (createWorktree ? '' : shortBranch(checkout.branch))}
-              onValueChange={(next) => input.onBaseBranchChange?.(next || undefined)}
+              onValueChange={(next) => {
+                setSwitchError(null)
+                input.onBaseBranchChange?.(next || undefined)
+              }}
             />
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={createWorktree}
-            onClick={() => setCreateWorktree((value) => !value)}
+            onClick={() => {
+              setSwitchError(null)
+              setCreateWorktree((value) => !value)
+            }}
             className="group flex shrink-0 items-center gap-1.5 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <SwitchIndicator checked={createWorktree} size="compact" />
@@ -160,6 +162,43 @@ export function useZotzComposerWorktreeSwitch(input: ComposerInputs): {
                 'The conversation works on this branch in the project folder. Zotz switches the folder to it first.'
               )}
         </p>
+        {switchError && !createWorktree ? (
+          <div
+            role="alert"
+            className="space-y-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs"
+          >
+            <p className="font-medium text-destructive">
+              {t('zotz.composer.switchFailed', 'The project folder cannot switch to that branch')}
+            </p>
+            <p className="text-destructive/85">{switchError}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => {
+                  setSwitchError(null)
+                  setCreateWorktree(true)
+                }}
+              >
+                {t('zotz.composer.useWorktree', 'Use a worktree instead')}
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                onClick={() => {
+                  setSwitchError(null)
+                  input.onBaseBranchChange?.(undefined)
+                }}
+              >
+                {t('zotz.composer.stayOnBranch', 'Stay on {{branch}}', {
+                  branch: shortBranch(checkout.branch)
+                })}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     ) : null
 

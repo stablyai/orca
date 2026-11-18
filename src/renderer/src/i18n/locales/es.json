@@ -24338,7 +24338,9 @@
       "worktreeOff": "La conversación trabaja en esta rama dentro de la carpeta del proyecto. Zotz cambia la carpeta a esa rama antes de empezar.",
       "branchLabel": "Rama",
       "worktreeOn": "Se crea un worktree nuevo a partir de esta rama; la carpeta del proyecto no cambia.",
-      "switchFailed": "No se pudo cambiar la carpeta del proyecto a esa rama"
+      "switchFailed": "La carpeta del proyecto no puede cambiar a esa rama",
+      "useWorktree": "Usar un worktree",
+      "stayOnBranch": "Quedarme en {{branch}}"
     }
   }
 }

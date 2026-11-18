@@ -25964,7 +25964,9 @@
       "worktreeOff": "The conversation works on this branch in the project folder. Zotz switches the folder to it first.",
       "branchLabel": "Branch",
       "worktreeOn": "A new worktree is created from this branch; your project folder stays as it is.",
-      "switchFailed": "Could not switch the project folder to that branch"
+      "switchFailed": "The project folder cannot switch to that branch",
+      "useWorktree": "Use a worktree instead",
+      "stayOnBranch": "Stay on {{branch}}"
     }
   }
 }
