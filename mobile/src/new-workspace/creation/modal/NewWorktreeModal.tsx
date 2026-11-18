@@ -186,7 +186,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     setupRunPolicy: setupScript.setupRunPolicy,
     setupDecisionChoice: setupScript.setupDecisionChoice,
     runSetup: setupScript.runSetup,
-    waitForSetup: setupScript.waitForSetup,
+    setupWait: setupScript.waitForSetupChoice,
     trustedOrcaHooks: runtime.trustedOrcaHooks,
     setTrustedOrcaHooks: runtime.setTrustedOrcaHooks,
     getWorktreeCreateCutoverSupport,

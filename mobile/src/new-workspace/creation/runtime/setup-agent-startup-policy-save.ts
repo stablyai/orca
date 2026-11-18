@@ -6,8 +6,9 @@ import {
 } from '../../../../../src/shared/workspace-setup/repo-hook-settings-defaults'
 import { newWorkspaceRepoHookSettingsWrite } from './new-workspace-operations'
 import type { MobileWorkspaceRepo } from '../forms/new-worktree-modal-types'
+import { listHostRepos } from '../../../worktree/repositories/server-repos'
 
-/** As desktop: the host reads the repo's saved policy, so a changed "Wait for setup" is saved before create. */
+/** As desktop: the host reads the repo's saved policy, so a flipped "Wait for setup" is saved before create. */
 export async function saveStartupPolicy(
   client: RpcClient,
   repo: MobileWorkspaceRepo,
@@ -18,15 +19,22 @@ export async function saveStartupPolicy(
     return true
   }
   const policy = waitForSetup ? 'wait-for-setup' : 'start-immediately'
-  if (getRepoSetupAgentStartupPolicy(repo) === policy) {
-    return true
-  }
   try {
+    // repo.update replaces hookSettings whole, so build on the host's current row, not the form's snapshot.
+    const current = (await listHostRepos<MobileWorkspaceRepo>(client))?.find(
+      (row) => row.id === repo.id
+    )
+    if (!current) {
+      throw new Error('repo_not_listed')
+    }
+    if (getRepoSetupAgentStartupPolicy(current) === policy) {
+      return true
+    }
     const reply = await newWorkspaceRepoHookSettingsWrite.request(
       client,
       {
         repo: `id:${repo.id}`,
-        updates: { hookSettings: buildSetupAgentStartupHookSettings(repo.hookSettings, policy) }
+        updates: { hookSettings: buildSetupAgentStartupHookSettings(current.hookSettings, policy) }
       },
       { timeoutMs: 15_000 }
     )

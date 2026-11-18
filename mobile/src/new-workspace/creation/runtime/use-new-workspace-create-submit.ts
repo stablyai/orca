@@ -68,7 +68,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   setupRunPolicy: SetupRunPolicy
   setupDecisionChoice: Exclude<WorkspaceCreateSetupDecision, 'inherit'> | null
   runSetup: boolean
-  waitForSetup: boolean | null
+  setupWait: boolean | null
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   setTrustedOrcaHooks: (trust: PersistedTrustedOrcaHooks) => void
   getWorktreeCreateCutoverSupport: () => Promise<WorktreeCreateIdempotencySupport | false>
@@ -216,7 +216,7 @@ export function useNewWorkspaceCreateSubmit(args: {
         }
         setupApproval = resolved.approved
       }
-      if (!(await saveStartupPolicy(client, selectedRepo, args.waitForSetup, args.setError))) {
+      if (!(await saveStartupPolicy(client, selectedRepo, args.setupWait, args.setError))) {
         return
       }
       const createdWithAgentId =

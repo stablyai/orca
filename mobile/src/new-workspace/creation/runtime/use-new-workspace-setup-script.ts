@@ -30,6 +30,8 @@ export function useNewWorkspaceSetupScript(args: {
   setShowAdvanced: (show: boolean) => void
   /** Null when the host reports no setup script to wait for (or predates the report). */
   waitForSetup: boolean | null
+  /** The user's own flip of the switch, saved before create; null when untouched or hidden. */
+  waitForSetupChoice: boolean | null
   setWaitForSetup: (wait: boolean) => void
 } {
   const { client, selectedRepo } = args
@@ -122,6 +124,7 @@ export function useNewWorkspaceSetupScript(args: {
       ? (waitForSetupChoice ??
         getRepoSetupAgentStartupPolicy(selectedRepo ?? undefined) === 'wait-for-setup')
       : null,
+    waitForSetupChoice: activeDetails?.agentCanWaitForSetup ? waitForSetupChoice : null,
     setWaitForSetup: (waitForSetupChoice) => updateChoices({ waitForSetupChoice })
   }
 }
