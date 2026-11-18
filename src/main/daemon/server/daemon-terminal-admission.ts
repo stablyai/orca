@@ -193,6 +193,7 @@ export class DaemonTerminalAdmission {
         ? { cwdReadableByDaemon: result.cwdReadableByDaemon }
         : {}),
       ...(result.inputClosed ? { inputClosed: true as const } : {}),
+      ...(result.shellWrapperLaunch ? { shellWrapperLaunch: true as const } : {}),
       ...(result.startupLaunchTyped ? { startupLaunchTyped: true as const } : {})
     }
   }

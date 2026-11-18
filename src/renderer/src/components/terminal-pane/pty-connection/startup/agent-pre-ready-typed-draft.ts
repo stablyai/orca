@@ -15,6 +15,7 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { appendTypedDraftText } from '../../input/draft/typed-draft-text'
 import { TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from '../../../../../../shared/agent-launch/startup/startup-line-prompt-carry'
 import { watchPtyLaunchTyped } from '../../pty-transport/delivery/pty-startup-launch-typed'
+import { takePreHandlerPtyLaunchTyped } from '../../pty-transport/delivery/pty-pre-handler-buffer'
 
 const encoder = new TextEncoder()
 
@@ -149,7 +150,9 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       freshSpawn &&
       session.spawnShellWrapperLaunch === true &&
       !(session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted) &&
-      encoder.encode(draft).byteLength <= TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
+      encoder.encode(draft).byteLength <= TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES &&
+      // A launch the host already typed would leave these keys for the agent, then the watch would paste them again.
+      !takePreHandlerPtyLaunchTyped(ptyId, session.spawnIncarnationId)
     ) {
       // The shell wrapper runs the launch, so keys written at bind reach the agent ahead of later typing.
       const text = draft

@@ -8,7 +8,10 @@ type DaemonPtyIncarnationFlagResult = { isNew: boolean; incarnationId?: string }
 class DaemonPtyIncarnationFlag {
   private readonly flaggedBySession = new Map<string, Set<string>>()
 
-  constructor(private readonly flag: DaemonPtyIncarnationFlagName) {}
+  constructor(
+    private readonly flag: DaemonPtyIncarnationFlagName,
+    private readonly onRecorded?: (sessionId: string, incarnationId: string) => void
+  ) {}
 
   /** False when this incarnation already carried the fact. */
   record(sessionId: string, incarnationId: string): boolean {
@@ -18,6 +21,7 @@ class DaemonPtyIncarnationFlag {
     }
     flagged.add(incarnationId)
     this.flaggedBySession.set(sessionId, flagged)
+    this.onRecorded?.(sessionId, incarnationId)
     return true
   }
 
@@ -55,7 +59,15 @@ class DaemonPtyIncarnationFlag {
 /** Per-incarnation facts the daemon reports about its sessions. */
 export class DaemonPtyIncarnationFlags {
   readonly inputClosed = new DaemonPtyIncarnationFlag('inputClosed')
-  readonly startupLaunchTyped = new DaemonPtyIncarnationFlag('startupLaunchTyped')
+  readonly startupLaunchTyped: DaemonPtyIncarnationFlag
+
+  // Fires once per incarnation whether the stream event or a later attach reply reports it first.
+  constructor(onStartupLaunchTyped: (sessionId: string, incarnationId: string) => void) {
+    this.startupLaunchTyped = new DaemonPtyIncarnationFlag(
+      'startupLaunchTyped',
+      onStartupLaunchTyped
+    )
+  }
 
   sync(sessionId: string, result: DaemonPtyIncarnationFlagResult): void {
     this.inputClosed.sync(sessionId, result)

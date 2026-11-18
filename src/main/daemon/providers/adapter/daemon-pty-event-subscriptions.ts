@@ -51,18 +51,8 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
   /** Kept per incarnation: either report can land before its own spawn reply. */
   protected noteIncarnationFlag(event: InputClosedEvent | StartupLaunchTypedEvent): void {
     const { sessionId, payload } = event
-    if (event.event === 'inputClosed') {
-      this.incarnationFlags.inputClosed.record(sessionId, payload.incarnationId)
-    } else if (this.incarnationFlags.startupLaunchTyped.record(sessionId, payload.incarnationId)) {
-      // The renderer fences this by incarnation, so it need not wait for the spawn reply.
-      emitPtyListeners(this.backgroundStreamListeners, (listener) =>
-        listener({
-          id: sessionId,
-          kind: 'startupLaunchTyped',
-          incarnationId: payload.incarnationId
-        })
-      )
-    }
+    // The renderer fences startupLaunchTyped by incarnation, so recording forwards it without waiting for the spawn reply.
+    this.incarnationFlags[event.event].record(sessionId, payload.incarnationId)
   }
 
   dispose(): void {
