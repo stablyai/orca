@@ -148,7 +148,7 @@ export function persistBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string,
   updates: Partial<BrowserSessionMeta>
-): void {
+): boolean {
   try {
     const existing = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
     const tmpPath = `${resolveMetadataPath()}.tmp`
@@ -157,7 +157,10 @@ export function persistBrowserSessionMeta(
     renameSync(tmpPath, resolveMetadataPath())
     // After the rename: the read above cached the contents this write replaced.
     enabledExtensionIdsByPath.delete(resolveMetadataPath())
-  } catch {}
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Meta updates that forget a deleted profile: its staged cookie import and its enabled extensions. */

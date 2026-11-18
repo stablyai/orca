@@ -39,6 +39,12 @@ export function BrowserProfileSiteList({ profileId }: { profileId: string }): Re
       error = t('browser.siteList.errorIp', 'Line {{line}}: IP addresses are not supported.', {
         line
       })
+    } else if (parsed.error === 'single-label') {
+      error = t(
+        'browser.siteList.errorSingleLabel',
+        'Line {{line}}: enter a full host name such as example.com (only localhost may be a single word).',
+        { line }
+      )
     } else if (parsed.error === 'port-path-or-scheme') {
       error = t(
         'browser.siteList.errorForm',
@@ -65,6 +71,13 @@ export function BrowserProfileSiteList({ profileId }: { profileId: string }): Re
         setSaved(result.hosts)
         setText(result.hosts.join('\n'))
         toast.success(t('browser.siteList.saved', 'Site list saved.'))
+      } else if (result?.reason === 'save-failed') {
+        toast.error(
+          t(
+            'browser.siteList.writeFailed',
+            'Could not write the site list to disk, so it was not applied. The previous list is still in effect.'
+          )
+        )
       } else if (result?.reason !== 'cancelled') {
         toast.error(t('browser.siteList.saveFailed', 'Could not save the site list.'))
       }
@@ -78,7 +91,7 @@ export function BrowserProfileSiteList({ profileId }: { profileId: string }): Re
       <p className="text-[11px] text-muted-foreground">
         {t(
           'browser.siteList.description',
-          'Only these sites load in this profile. One host per line, such as example.com or *.example.com (subdomains only). Leave empty to allow every site.'
+          'Only these sites load in this profile. One host per line, such as example.com or *.example.com (subdomains only; example.com itself needs its own line). IP addresses and single-word names other than localhost cannot be listed. Leave empty to allow every site.'
         )}
       </p>
       <Textarea

@@ -24,10 +24,6 @@ import {
   persistBrowserSessionMeta,
   type BrowserSessionMeta
 } from './browser-session-meta-store'
-import {
-  replaceBrowserProfileSiteLists,
-  setBrowserProfileSiteList
-} from '../site-list/browser-session-site-list'
 import { installBrowserSessionPartitionPolicies } from '../partition-policies/browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
 import { inspectRetiredBrowserSessionProfileUserAgentModes } from '../../identity/mode/browser-retired-profile-identity-inspection'
@@ -63,7 +59,7 @@ class BrowserSessionRegistry {
   private readonly profiles = new Map<string, BrowserSessionProfile>()
   private activeOrcaProfileId = DEFAULT_LOCAL_ORCA_PROFILE_ID
   private metadataPathOverride: string | null = null
-  private defaultPartition = ORCA_BROWSER_PARTITION
+  defaultPartition = ORCA_BROWSER_PARTITION
   // Why: profiles change from IPC, the CLI and managed-profile owners; open windows and paired clients only learn of it here.
   onProfilesChanged: (() => void) | null = null
   onProfileDeleted: ((profileId: string) => Promise<void>) | null = null
@@ -91,7 +87,7 @@ class BrowserSessionRegistry {
     })
   }
 
-  private get metadataPath(): string {
+  get metadataPath(): string {
     return (
       this.metadataPathOverride ?? join(app.getPath('userData'), BROWSER_SESSION_META_FILE_NAME)
     )
@@ -117,8 +113,6 @@ class BrowserSessionRegistry {
   // Restore profiles and their policies before any webview loads.
   initializeBrowserSessionsFromPersistedState(): void {
     const meta = this.loadPersistedMeta()
-    // Lists must be live before any policy install binds a session to its profile.
-    replaceBrowserProfileSiteLists(meta.allowedHostsByProfileId)
     const migration = inspectRetiredBrowserSessionProfileUserAgentModes(
       meta.profiles,
       this.activeOrcaProfileId
@@ -178,22 +172,6 @@ class BrowserSessionRegistry {
 
   updatePinnedExtensionIds(update: ExtensionIdListUpdate): void {
     this.updateExtensionIdList('pinnedExtensionIdsByProfileId', update)
-  }
-
-  getAllowedHosts(profileId: string): string[] {
-    return this.loadPersistedMeta().allowedHostsByProfileId[profileId] ?? []
-  }
-
-  /** Persists a profile's validated site list and applies it to its live sessions. */
-  setAllowedHosts(profileId: string, entries: string[]): void {
-    const byProfileId = { ...this.loadPersistedMeta().allowedHostsByProfileId }
-    if (entries.length === 0) {
-      delete byProfileId[profileId]
-    } else {
-      byProfileId[profileId] = entries
-    }
-    this.persistMeta({ allowedHostsByProfileId: byProfileId })
-    setBrowserProfileSiteList(profileId, entries)
   }
 
   private updateExtensionIdList(key: ExtensionIdListKey, update: ExtensionIdListUpdate): void {
@@ -327,7 +305,6 @@ class BrowserSessionRegistry {
     this.persistMeta(
       forgetBrowserSessionProfileMeta(this.loadPersistedMeta(), profile, this.defaultPartition)
     )
-    setBrowserProfileSiteList(profileId, [])
     await retireDeletedBrowserSessionProfile(profile, () => this.onProfileDeleted?.(profileId))
     return true
   }

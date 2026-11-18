@@ -1,6 +1,11 @@
 export const MAX_BROWSER_SITE_LIST_ENTRIES = 256
 
-export type BrowserSiteListEntryError = 'empty' | 'invalid' | 'ip-address' | 'port-path-or-scheme'
+export type BrowserSiteListEntryError =
+  | 'empty'
+  | 'invalid'
+  | 'ip-address'
+  | 'port-path-or-scheme'
+  | 'single-label'
 
 export type BrowserSiteListParseResult =
   | { ok: true; entries: string[] }
@@ -18,7 +23,10 @@ const NETWORK_PROTOCOLS = new Set(['http:', 'https:', 'ws:', 'wss:'])
 // file: can read local disk and ftp: is not a hostname-matched protocol, so a list shuts both.
 const BLOCKED_PROTOCOLS = new Set(['file:', 'ftp:'])
 
-function normalizeHostname(raw: string): string | BrowserSiteListEntryError {
+// A single label (`com`, `*.com`) would admit a whole top-level domain; only `localhost` stays.
+const SINGLE_LABEL_EXCEPTION = 'localhost'
+
+function normalizeHostname(raw: string, wildcard: boolean): string | BrowserSiteListEntryError {
   if (/[:/\\?#@\s%[\]]/.test(raw)) {
     return 'port-path-or-scheme'
   }
@@ -35,10 +43,16 @@ function normalizeHostname(raw: string): string | BrowserSiteListEntryError {
   if (hostname.length > 253 || !labels.every((label) => LABEL.test(label))) {
     return 'invalid'
   }
+  if (labels.length === 1 && (wildcard || hostname !== SINGLE_LABEL_EXCEPTION)) {
+    return 'single-label'
+  }
   return hostname
 }
 
-/** Normalizes one `host` or `*.host` entry to lowercase punycode, or says why it is not one. */
+/**
+ * Normalizes one `host` or `*.host` entry to lowercase punycode, or says why it is not one.
+ * IP literals and single-label names (except exact `localhost`) are rejected.
+ */
 export function normalizeBrowserSiteListEntry(
   raw: string
 ): { ok: true; entry: string } | { ok: false; error: BrowserSiteListEntryError } {
@@ -47,8 +61,13 @@ export function normalizeBrowserSiteListEntry(
     return { ok: false, error: 'empty' }
   }
   const wildcard = trimmed.startsWith('*.')
-  const hostname = normalizeHostname(wildcard ? trimmed.slice(2) : trimmed)
-  if (hostname === 'port-path-or-scheme' || hostname === 'invalid' || hostname === 'ip-address') {
+  const hostname = normalizeHostname(wildcard ? trimmed.slice(2) : trimmed, wildcard)
+  if (
+    hostname === 'port-path-or-scheme' ||
+    hostname === 'invalid' ||
+    hostname === 'ip-address' ||
+    hostname === 'single-label'
+  ) {
     return { ok: false, error: hostname }
   }
   return { ok: true, entry: wildcard ? `*.${hostname}` : hostname }

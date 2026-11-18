@@ -6,6 +6,7 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { BrowserProfileRow, type BrowserProfileRowProps } from './BrowserProfileRow'
+import { BrowserProfileSiteLists } from './BrowserProfileSiteLists'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
@@ -167,6 +168,14 @@ export function BrowserSessionCookiesSection({
           />
         ))}
       </div>
+      {selectedHostId === 'local' ? (
+        <BrowserProfileSiteLists
+          profiles={[
+            { id: 'default', label: defaultProfile?.label ?? 'Default' },
+            ...nonDefaultProfiles
+          ]}
+        />
+      ) : null}
       <div className="flex items-center justify-between gap-3 pt-3">
         <div className="min-w-0 space-y-0.5">
           <Label>{t('browser.googleCookieClear.fe3f6e1721', 'Google cookies')}</Label>

@@ -5,7 +5,6 @@ import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import type { BrowserAgentPresenceApi } from './browser-agent-presence-api'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
-import type { BrowserSiteListSetResult } from '../../../shared/browser/profiles/browser-profile-site-list-ipc'
 import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
 import type { BrowserExtensionSidePanelApi } from './browser-extension-side-panel-api'
 import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
@@ -239,11 +238,6 @@ export type BrowserApi = {
   identityGet: () => Promise<BrowserIdentityModeStatus | null>
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
-  sessionGetAllowedHosts: (args: { profileId: string }) => Promise<string[]>
-  sessionSetAllowedHosts: (args: {
-    profileId: string
-    hosts: string[]
-  }) => Promise<BrowserSiteListSetResult>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   /** Null when the environment's pages are not client-hosted on this desktop. */

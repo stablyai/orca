@@ -47,14 +47,15 @@ function guardedSession(profileId: string): {
 }
 
 describe('browser profile site list in the request guard', () => {
-  it('cancels unlisted hosts, passes listed hosts and re-checks each redirect hop', () => {
+  it('cancels unlisted hosts and passes listed ones, judging each request by its own URL', () => {
     setBrowserProfileSiteList('profile-a', ['example.com', '*.cdn.example.com'])
     const { send } = guardedSession('profile-a')
 
     expect(send('https://example.com/app')).toEqual({})
     expect(send('https://a.cdn.example.com/x.js')).toEqual({})
     expect(send('https://tracker.test/pixel')).toEqual({ cancel: true })
-    // A redirect from a listed host arrives as its own request for the target.
+    // Electron raises onBeforeRequest again per redirect hop; a hop is just another URL here.
+    // (Real redirects are not simulated by this test.)
     expect(send('https://login.other.test/redirected')).toEqual({ cancel: true })
     expect(send('data:text/plain,ok')).toEqual({})
   })

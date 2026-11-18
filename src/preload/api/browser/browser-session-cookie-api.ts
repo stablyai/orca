@@ -3,6 +3,7 @@ import type {
   GoogleCookieClearResult
 } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import type { BrowserCookieImportResult } from '../../../shared/browser/workspaces/browser-workspace-types'
+import type { BrowserSessionSiteListApi } from './browser-session-site-list-api'
 
 export type BrowserSessionCookieApi = {
   /** Null when the environment's pages are not client-hosted on this desktop. */
@@ -19,4 +20,4 @@ export type BrowserSessionCookieApi = {
     target: GoogleCookieClearLocalTarget
   ) => Promise<GoogleCookieClearResult>
   sessionClearDefaultCookies: () => Promise<boolean>
-}
+} & BrowserSessionSiteListApi

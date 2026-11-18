@@ -37,7 +37,11 @@ describe('parseBrowserSiteList', () => {
     ['example.com.', 'invalid'],
     ['*.*.example.com', 'invalid'],
     ['exa*mple.com', 'invalid'],
-    ['*.', 'invalid']
+    ['*.', 'invalid'],
+    ['com', 'single-label'],
+    ['*.com', 'single-label'],
+    ['*.localhost', 'single-label'],
+    ['intranet', 'single-label']
   ])('rejects %s', (entry, error) => {
     expect(normalizeBrowserSiteListEntry(entry)).toEqual({ ok: false, error })
   })
@@ -50,6 +54,23 @@ describe('parseBrowserSiteList', () => {
     })
     const tooMany = Array.from({ length: 257 }, (_, i) => `h${i}.example.com`).join('\n')
     expect(parseBrowserSiteList(tooMany)).toEqual({ ok: false, error: 'too-many' })
+  })
+})
+
+describe('single-label entries', () => {
+  it('allows only exact localhost', () => {
+    expect(normalizeBrowserSiteListEntry('LocalHost')).toEqual({ ok: true, entry: 'localhost' })
+    expect(allowed(['localhost'], 'http://localhost:3000/')).toBe(true)
+    expect(allowed(['localhost'], 'http://app.localhost/')).toBe(false)
+  })
+
+  it('never lets a top-level domain admit every host under it', () => {
+    expect(parseBrowserSiteList('*.com')).toEqual({ ok: false, error: 'single-label', line: 1 })
+    expect(parseBrowserSiteList('example.com\ncom')).toEqual({
+      ok: false,
+      error: 'single-label',
+      line: 2
+    })
   })
 })
 

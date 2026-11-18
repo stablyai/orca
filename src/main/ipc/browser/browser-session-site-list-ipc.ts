@@ -1,6 +1,8 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { translateMain } from '../../i18n/main-i18n'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
+import { saveBrowserProfileSiteList } from '../../browser/sessions/site-list/browser-profile-site-list-store'
+import { getBrowserProfileSiteListEntries } from '../../browser/sessions/site-list/browser-session-site-list'
 import {
   compileBrowserSiteList,
   isSiteListEntryCovered,
@@ -10,6 +12,26 @@ import type { BrowserSiteListSetResult } from '../../../shared/browser/profiles/
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
 const MAX_HOSTS_IN_DIALOG = 15
+const MAX_CONFIRMATIONS_PER_EDIT = 3
+
+// One edit at a time: the dialog is async, so two edits must not both judge against the same list.
+let editQueue: Promise<unknown> = Promise.resolve()
+function runSerialized<T>(task: () => Promise<T>): Promise<T> {
+  const run = editQueue.then(task, task)
+  editQueue = run.catch(() => undefined)
+  return run
+}
+
+/** Hosts an edit adds beyond the list enforced right now; null when it does not widen. */
+function wideningAgainstCurrent(profileId: string, entries: string[]): string[] | null {
+  const current = getBrowserProfileSiteListEntries(profileId)
+  if (current.length === 0) {
+    return null
+  }
+  const currentList = compileBrowserSiteList(current)
+  const added = entries.filter((entry) => !isSiteListEntryCovered(currentList, entry))
+  return entries.length === 0 || added.length > 0 ? added : null
+}
 
 function describeWidening(added: string[]): string {
   if (added.length === 0) {
@@ -55,6 +77,41 @@ async function confirmWidening(
   return response === 0
 }
 
+async function applyEdit(
+  event: Electron.IpcMainInvokeEvent,
+  profileId: string,
+  entries: string[]
+): Promise<BrowserSiteListSetResult> {
+  const confirmedHosts = new Set<string>()
+  let confirmedClear = false
+  for (let attempt = 0; attempt <= MAX_CONFIRMATIONS_PER_EDIT; attempt++) {
+    // Re-evaluated after every await: the profile may be gone, and widening is judged against the
+    // list enforced now. Nothing awaits between the last check and the write below.
+    const profile = browserSessionRegistry.getProfile(profileId)
+    if (!profile) {
+      return { ok: false, reason: 'unavailable' }
+    }
+    const added = wideningAgainstCurrent(profile.id, entries)
+    const alreadyConfirmed =
+      added === null ||
+      (added.length === 0 ? confirmedClear : added.every((host) => confirmedHosts.has(host)))
+    if (alreadyConfirmed) {
+      return saveBrowserProfileSiteList(profile.id, entries)
+        ? { ok: true, hosts: entries }
+        : { ok: false, reason: 'save-failed' }
+    }
+    if (
+      attempt === MAX_CONFIRMATIONS_PER_EDIT ||
+      !(await confirmWidening(BrowserWindow.fromWebContents(event.sender), profile.label, added))
+    ) {
+      return { ok: false, reason: 'cancelled' }
+    }
+    confirmedClear = confirmedClear || added.length === 0
+    added.forEach((host) => confirmedHosts.add(host))
+  }
+  return { ok: false, reason: 'cancelled' }
+}
+
 // Renderer-only: agents driving the browser (runtime RPC, CLI) must not be able to edit the list.
 export function registerBrowserSessionSiteListHandlers(): void {
   ipcMain.removeHandler('browser:session:getAllowedHosts')
@@ -69,7 +126,7 @@ export function registerBrowserSessionSiteListHandlers(): void {
       ) {
         return []
       }
-      return browserSessionRegistry.getAllowedHosts(args.profileId)
+      return getBrowserProfileSiteListEntries(args.profileId)
     }
   )
 
@@ -92,20 +149,7 @@ export function registerBrowserSessionSiteListHandlers(): void {
       if (!parsed.ok) {
         return { ok: false, reason: 'invalid' }
       }
-      const current = browserSessionRegistry.getAllowedHosts(profile.id)
-      if (current.length > 0) {
-        const currentList = compileBrowserSiteList(current)
-        const added = parsed.entries.filter((entry) => !isSiteListEntryCovered(currentList, entry))
-        const widens = parsed.entries.length === 0 || added.length > 0
-        if (widens) {
-          const window = BrowserWindow.fromWebContents(event.sender)
-          if (!(await confirmWidening(window, profile.label, added))) {
-            return { ok: false, reason: 'cancelled' }
-          }
-        }
-      }
-      browserSessionRegistry.setAllowedHosts(profile.id, parsed.entries)
-      return { ok: true, hosts: parsed.entries }
+      return runSerialized(() => applyEdit(event, profile.id, parsed.entries))
     }
   )
 }

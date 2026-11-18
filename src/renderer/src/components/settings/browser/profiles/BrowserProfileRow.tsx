@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Globe, Import, Loader2, Trash2 } from 'lucide-react'
+import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import type {
@@ -22,7 +21,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { useConfirmationDialog } from '../../../dismiss/confirmation/confirmation-dialog-context'
 import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from './BrowserCookieImportMachineNotice'
-import { BrowserProfileSiteList } from './BrowserProfileSiteList'
 import { useAppStore } from '../../../../store/index'
 import '../../../../../../shared/orca-profiles/constants'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
@@ -63,7 +61,6 @@ export function BrowserProfileRow({
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const confirm = useConfirmationDialog()
-  const [siteListOpen, setSiteListOpen] = useState(false)
 
   const handleImportFromBrowser = async (
     browserFamily: string,
@@ -158,156 +155,141 @@ export function BrowserProfileRow({
 
   // Use role=button because nested dropdown/trash buttons make a native button invalid and trigger hydration warnings.
   return (
-    <div>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onSelect}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            onSelect()
-          }
-        }}
-        className={`flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors cursor-pointer ${
-          isActive
-            ? 'border-foreground/20 bg-accent/15'
-            : 'border-border/70 hover:border-border hover:bg-accent/8'
-        }`}
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">
-              {translateBrowserSessionProfileLabel(profile.label, profile.id)}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      className={`flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors cursor-pointer ${
+        isActive
+          ? 'border-foreground/20 bg-accent/15'
+          : 'border-border/70 hover:border-border hover:bg-accent/8'
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium">
+            {translateBrowserSessionProfileLabel(profile.label, profile.id)}
+          </span>
+          {isActive ? (
+            <span className="shrink-0 rounded border border-border/50 px-1.5 text-[10px] font-medium leading-4 text-foreground/80">
+              {t('auto.components.settings.BrowserProfileRow.c29648fe5b', 'Active')}
             </span>
-            {isActive ? (
-              <span className="shrink-0 rounded border border-border/50 px-1.5 text-[10px] font-medium leading-4 text-foreground/80">
-                {t('auto.components.settings.BrowserProfileRow.c29648fe5b', 'Active')}
-              </span>
-            ) : null}
-          </div>
-          <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
+          ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground"
-            aria-expanded={siteListOpen}
-            onClick={() => setSiteListOpen((open) => !open)}
-          >
-            <Globe className="size-3" />
-            {t('browser.siteList.label', 'Site list')}
-          </Button>
-          <DropdownMenu
-            onOpenChange={(open) => {
-              if (open) {
-                // Probe profile folders only when import opens; macOS treats them as protected app data.
-                void fetchDetectedBrowsers()
-              }
-            }}
-          >
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground"
-                disabled={isImporting}
-              >
-                {isImporting ? (
-                  <Loader2 className="size-3 animate-spin" />
-                ) : (
-                  <Import className="size-3" />
-                )}
-                {t('auto.components.settings.BrowserProfileRow.80bffd32bf', 'Import cookies')}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <BrowserCookieImportMachineNotice />
-              {detectedBrowsers.map((browser) =>
-                browser.profiles.length > 1 ? (
-                  <DropdownMenuSub key={browser.family}>
-                    <DropdownMenuSubTrigger>
-                      {t(
-                        'auto.components.settings.BrowserProfileRow.c5a273a809',
-                        'From {{value0}}',
-                        { value0: browser.label }
-                      )}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent>
-                        {browser.profiles.map((bp) => (
-                          <DropdownMenuItem
-                            key={bp.directory}
-                            onSelect={() =>
-                              void handleImportFromBrowser(browser.family, bp.directory)
-                            }
-                          >
-                            {bp.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
-                ) : (
-                  <DropdownMenuItem
-                    key={browser.family}
-                    onSelect={() => void handleImportFromBrowser(browser.family)}
-                  >
+        <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open) {
+              // Probe profile folders only when import opens; macOS treats them as protected app data.
+              void fetchDetectedBrowsers()
+            }
+          }}
+        >
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground"
+              disabled={isImporting}
+            >
+              {isImporting ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Import className="size-3" />
+              )}
+              {t('auto.components.settings.BrowserProfileRow.80bffd32bf', 'Import cookies')}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <BrowserCookieImportMachineNotice />
+            {detectedBrowsers.map((browser) =>
+              browser.profiles.length > 1 ? (
+                <DropdownMenuSub key={browser.family}>
+                  <DropdownMenuSubTrigger>
                     {t('auto.components.settings.BrowserProfileRow.c5a273a809', 'From {{value0}}', {
                       value0: browser.label
                     })}
-                  </DropdownMenuItem>
-                )
-              )}
-              {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-                {t('auto.components.settings.BrowserProfileRow.bd7d68f138', 'From file…')}
-              </DropdownMenuItem>
-              <BrowserCookieImportDisclosure />
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {isDefault ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-muted-foreground hover:text-destructive"
-                  aria-label={clearDefaultCookiesLabel}
-                  onClick={() => void handleClearDefaultCookies()}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent>
+                      {browser.profiles.map((bp) => (
+                        <DropdownMenuItem
+                          key={bp.directory}
+                          onSelect={() =>
+                            void handleImportFromBrowser(browser.family, bp.directory)
+                          }
+                        >
+                          {bp.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
+              ) : (
+                <DropdownMenuItem
+                  key={browser.family}
+                  onSelect={() => void handleImportFromBrowser(browser.family)}
                 >
-                  <Trash2 className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {clearDefaultCookiesLabel}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 text-muted-foreground hover:text-destructive"
-              onClick={async () => {
-                const ok = await useAppStore.getState().deleteBrowserSessionProfile(profile.id)
-                if (ok) {
-                  toast.success(
-                    t(
-                      'auto.components.settings.BrowserProfileRow.8e636cae25',
-                      'Profile "{{value0}}" removed.',
-                      { value0: translateBrowserSessionProfileLabel(profile.label, profile.id) }
-                    )
+                  {t('auto.components.settings.BrowserProfileRow.c5a273a809', 'From {{value0}}', {
+                    value0: browser.label
+                  })}
+                </DropdownMenuItem>
+              )
+            )}
+            {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
+              {t('auto.components.settings.BrowserProfileRow.bd7d68f138', 'From file…')}
+            </DropdownMenuItem>
+            <BrowserCookieImportDisclosure />
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {isDefault ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-destructive"
+                aria-label={clearDefaultCookiesLabel}
+                onClick={() => void handleClearDefaultCookies()}
+              >
+                <Trash2 className="size-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {clearDefaultCookiesLabel}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-destructive"
+            onClick={async () => {
+              const ok = await useAppStore.getState().deleteBrowserSessionProfile(profile.id)
+              if (ok) {
+                toast.success(
+                  t(
+                    'auto.components.settings.BrowserProfileRow.8e636cae25',
+                    'Profile "{{value0}}" removed.',
+                    { value0: translateBrowserSessionProfileLabel(profile.label, profile.id) }
                   )
-                }
-              }}
-            >
-              <Trash2 className="size-3" />
-            </Button>
-          )}
-        </div>
+                )
+              }
+            }}
+          >
+            <Trash2 className="size-3" />
+          </Button>
+        )}
       </div>
-      {siteListOpen ? <BrowserProfileSiteList profileId={profile.id} /> : null}
     </div>
   )
 }
