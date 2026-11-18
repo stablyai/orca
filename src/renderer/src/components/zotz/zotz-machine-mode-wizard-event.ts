@@ -13,3 +13,8 @@ export function onZotzMachineModeWizardOpen(callback: () => void): () => void {
 export function isZotzMachineModeHost(): boolean {
   return !('__ORCA_WEB_CLIENT__' in window && window.__ORCA_WEB_CLIENT__ === true)
 }
+
+/** E2E drivers run upstream suites; web clients have no zotzNode bridge. */
+export function isZotzAutomatedLaunch(): boolean {
+  return window.api?.zotzNode?.automatedLaunch === true
+}

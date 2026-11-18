@@ -145,7 +145,7 @@ it('stops naming admission and joins native helper finalization before runtime c
     {
       id: 1,
       method: 'initialize',
-      params: { clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' } }
+      params: { clientInfo: { name: 'orca_desktop', title: 'Zotz', version: '0.0.0' } }
     },
     { method: 'initialized' },
     { id: 2, method: 'thread/name/set', params: { threadId: 'thread-1', name: 'Saved name' } }

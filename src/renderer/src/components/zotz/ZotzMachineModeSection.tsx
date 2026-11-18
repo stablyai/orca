@@ -4,7 +4,11 @@ import { Button } from '../ui/button'
 import { SettingsRow, SettingsSwitchRow } from '../settings/form-controls/SettingsFormControls'
 import { useAppStore } from '../../store/index'
 import { SettingsGroup } from '../settings/section-layout/SettingsGroup'
-import { isZotzMachineModeHost, openZotzMachineModeWizard } from './zotz-machine-mode-wizard-event'
+import {
+  isZotzAutomatedLaunch,
+  isZotzMachineModeHost,
+  openZotzMachineModeWizard
+} from './zotz-machine-mode-wizard-event'
 import { isZotzConductorSidebar } from '../../../../shared/zotz/zotz-sidebar-layout'
 
 /** Settings → General entry to switch between personal and server, or re-run server setup. */
@@ -16,7 +20,9 @@ export function ZotzMachineModeSection({
   const t = useTranslate()
   const queueEnabled = useAppStore((state) => state.settings?.zotzAgentQueueEnabled !== false)
   const updateSettings = useAppStore((state) => state.updateSettings)
-  const simpleSidebar = useAppStore((state) => isZotzConductorSidebar(state.settings))
+  const simpleSidebar = useAppStore((state) =>
+    isZotzConductorSidebar(state.settings, isZotzAutomatedLaunch())
+  )
   if (!isZotzMachineModeHost()) {
     return null
   }

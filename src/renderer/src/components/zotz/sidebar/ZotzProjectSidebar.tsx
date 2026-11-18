@@ -11,7 +11,10 @@ import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { activityThreadStatusId } from '@/components/activity/activity-thread-presentation'
 import { useAllAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { AddProjectMenu } from '../../sidebar/project-admission/menu/AddProjectMenu'
 import type { AddRepoDialogEntryRequest } from '../../sidebar/project-admission/dialog/add-repo-dialog-types'
 import { openHeaderCreateComposer } from '../../sidebar/worktree-list/rows/header-create-workspace-target'
@@ -150,7 +153,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
   const t = useTranslate()
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const { allThreads } = useAllAgentPaneThreads()
@@ -181,13 +184,14 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
     () =>
       buildZotzProjectSections({
         repos,
-        worktreesByRepo,
+        worktreesByRepoId: worktreesByRepo,
         workspacesWithAgents: new Set([...statusByWorkspace.keys(), ...canceledWorkspaces])
       }),
     [repos, worktreesByRepo, statusByWorkspace, canceledWorkspaces]
   )
   const folders = useMemo(
-    () => buildZotzFolderConversations({ folderWorkspaces, tabsByWorkspace: tabsByWorktree }),
+    () =>
+      buildZotzFolderConversations({ folders: folderWorkspaces, tabsByWorkspace: tabsByWorktree }),
     [folderWorkspaces, tabsByWorktree]
   )
 
