@@ -17,12 +17,12 @@ const MAIN_STALL_SUMMARY: EventLoopStallSummaryOptions = {
   tickMs: TICK_MS,
   windowMs: 60_000,
   reportableMaxGapMs: 100,
+  // Missed sleep events (Windows clocks run on through sleep) must not read as hour-long stalls.
+  maxCountedGapMs: 60_000,
   canReport: hasActiveTraceSink
 }
 /** Input, IPC and browser page loads all wait on a gap this long. */
 const STALL_MS = 250
-/** Missed sleep events (Windows clocks run on through sleep) must not read as hour-long stalls. */
-const MAX_COUNTED_GAP_MS = 60_000
 
 export type EventLoopDelayWindow = {
   process: 'main' | 'orcad'
@@ -41,17 +41,22 @@ export type EventLoopDelayWindow = {
 export type EventLoopStallWindow = {
   windowMs: number
   maxGapMs: number
-  /** Process CPU during the worst gap: near the gap means main was busy, far below it means it was starved or throttled. */
+  /** Main-thread CPU over the tick with the worst gap: near the gap means main was busy, far below it starved or throttled. */
   maxGapCpuMs: number
   stallsSeen: number
   stalledMsSeen: number
+  /** Main-thread CPU over the window. */
   cpuMs: number
+  /** Longest gap past maxCountedGapMs: a missed sleep event, or a freeze too long to count as a stall. */
+  uncountedMaxGapMs: number
 }
 
 export type EventLoopStallSummaryOptions = {
   tickMs: number
   windowMs: number
   reportableMaxGapMs: number
+  /** Longer gaps are treated as sleep and not counted; unset counts every gap. */
+  maxCountedGapMs?: number
   /** False keeps a reportable window open, e.g. while startup has no trace sink yet. */
   canReport?: () => boolean
 }
@@ -64,7 +69,7 @@ export function isEventLoopDelayProbeEnabled(env: NodeJS.ProcessEnv = process.en
 export function createEventLoopStallSummary(
   startedAt: number,
   options: EventLoopStallSummaryOptions,
-  report: (window: EventLoopStallWindow) => void
+  report: (window: EventLoopStallWindow, now: number) => void
 ): {
   tick: (now: number, cpuMs?: number) => void
   pause: () => void
@@ -79,6 +84,7 @@ export function createEventLoopStallSummary(
   let maxGapCpuMs = 0
   let stallsSeen = 0
   let stalledMsSeen = 0
+  let uncountedMaxGapMs = 0
   return {
     tick: (now, cpuMs = 0) => {
       const gap = now - lastTick - options.tickMs
@@ -86,7 +92,10 @@ export function createEventLoopStallSummary(
       lastTick = now
       lastCpuMs = cpuMs
       windowCpuMs += tickCpuMs
-      const counted = !paused && gap < MAX_COUNTED_GAP_MS
+      const counted = !paused && gap < (options.maxCountedGapMs ?? Infinity)
+      if (!paused && !counted && gap > uncountedMaxGapMs) {
+        uncountedMaxGapMs = gap
+      }
       if (counted && gap > maxGapMs) {
         maxGapMs = gap
         maxGapCpuMs = tickCpuMs
@@ -98,18 +107,22 @@ export function createEventLoopStallSummary(
       if (now - windowStart < options.windowMs) {
         return
       }
-      if (maxGapMs >= options.reportableMaxGapMs) {
+      if (maxGapMs >= options.reportableMaxGapMs || uncountedMaxGapMs > 0) {
         if (options.canReport && !options.canReport()) {
           return
         }
-        report({
-          windowMs: Math.round(now - windowStart),
-          maxGapMs: Math.round(maxGapMs),
-          maxGapCpuMs: Math.round(maxGapCpuMs),
-          stallsSeen,
-          stalledMsSeen: Math.round(stalledMsSeen),
-          cpuMs: Math.round(windowCpuMs)
-        })
+        report(
+          {
+            windowMs: Math.round(now - windowStart),
+            maxGapMs: Math.round(maxGapMs),
+            maxGapCpuMs: Math.round(maxGapCpuMs),
+            stallsSeen,
+            stalledMsSeen: Math.round(stalledMsSeen),
+            cpuMs: Math.round(windowCpuMs),
+            uncountedMaxGapMs: Math.round(uncountedMaxGapMs)
+          },
+          now
+        )
       }
       windowStart = now
       windowCpuMs = 0
@@ -117,6 +130,7 @@ export function createEventLoopStallSummary(
       maxGapCpuMs = 0
       stallsSeen = 0
       stalledMsSeen = 0
+      uncountedMaxGapMs = 0
     },
     // System sleep stops timers without blocking the loop; never count it as a stall.
     pause: () => {
@@ -130,8 +144,8 @@ export function createEventLoopStallSummary(
   }
 }
 
-function processCpuMs(): number {
-  const { user, system } = process.cpuUsage()
+function mainThreadCpuMs(): number {
+  const { user, system } = process.threadCpuUsage()
   return (user + system) / 1_000
 }
 
@@ -146,6 +160,7 @@ function traceStallWindow(processKind: EventLoopDelayWindow['process']) {
         'eventLoop.stallsSeen': window.stallsSeen,
         'eventLoop.stalledMsSeen': window.stalledMsSeen,
         'eventLoop.cpuMs': window.cpuMs,
+        'eventLoop.uncountedMaxGapMs': window.uncountedMaxGapMs,
         // A busy machine starves main without main doing anything; Windows reports no load average.
         ...(process.platform === 'win32' ? {} : { 'host.loadAvg1m': loadavg()[0] })
       }
@@ -213,12 +228,12 @@ export function startEventLoopDelayProbe(
   if (stallSummary) {
     subscribeSystemPowerLifecycle({
       onSuspend: stallSummary.pause,
-      onResume: () => stallSummary.resume(performance.now(), processCpuMs())
+      onResume: () => stallSummary.resume(performance.now(), mainThreadCpuMs())
     })
   }
   const timer = setInterval(() => {
     const now = performance.now()
-    stallSummary?.tick(now, processCpuMs())
+    stallSummary?.tick(now, mainThreadCpuMs())
     delayReport?.(now)
   }, TICK_MS)
   timer.unref?.()

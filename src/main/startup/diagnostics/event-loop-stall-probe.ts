@@ -11,9 +11,9 @@ export function startEventLoopStallProbe(): void {
   const summary = createEventLoopStallSummary(
     started,
     { tickMs: TICK_MS, windowMs: REPORT_EVERY_MS, reportableMaxGapMs: 0 },
-    (window) =>
+    (window, now) =>
       logStartupDiagnostic('event-loop-stall', {
-        t: Math.round(performance.now()),
+        t: Math.round(now),
         maxGapMs: window.maxGapMs
       })
   )
