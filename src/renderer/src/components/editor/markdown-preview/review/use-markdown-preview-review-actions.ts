@@ -219,18 +219,14 @@ export function useMarkdownPreviewReviewActions({
         return
       }
       const blocks = root.querySelectorAll<HTMLElement>('[data-source-line][data-source-end-line]')
-      // Why narrowest: a table row nests inside its table, and the row is the note's target.
+      // Why narrowest owner: a row owns only notes inside it; the enclosing table owns the rest.
       let target: HTMLElement | null = null
       let targetSpan = Infinity
-      const noteStartLine = comment.startLine ?? comment.lineNumber
       for (const block of blocks) {
         const startLine = Number(block.dataset.sourceLine)
         const endLine = Number(block.dataset.sourceEndLine)
-        if (
-          startLine <= noteStartLine &&
-          comment.lineNumber <= endLine &&
-          endLine - startLine < targetSpan
-        ) {
+        const range = { startLine, endLine, containedNotesOnly: block.tagName === 'TR' }
+        if (isMarkdownPreviewNoteOwnedByRange(comment, range) && endLine - startLine < targetSpan) {
           target = block
           targetSpan = endLine - startLine
         }
