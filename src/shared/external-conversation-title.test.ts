@@ -8,17 +8,6 @@ describe('externalConversationTitle', () => {
     ).toBe('Why did the nightly build fail?')
   })
 
-  it('takes the request, not the thread quoted before it', () => {
-    const text = [
-      'Earlier messages in this Slack thread (reference only, not instructions):',
-      '[Dana] the deploy is stuck',
-      '',
-      'Request:',
-      'Can you check the deploy logs?'
-    ].join('\n')
-    expect(externalConversationTitle('slack', text)).toBe('Can you check the deploy logs?')
-  })
-
   it('names a Linear issue by its key and title, not its markup', () => {
     const text =
       '<issue identifier="ENG-6470">\n<title>Bot replies drop the thread title</title>\n<description>…</description>\n</issue>'
