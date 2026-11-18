@@ -8,7 +8,8 @@ import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { configuredAdditionalCodexHomePaths } from '../../../ai-vault/discovery/ai-vault-scan-roots'
 import { codexHomeSessionsDir } from '../../../ai-vault/discovery/session-scanner-roots'
 import {
-  ownedCodexAccountHomes,
+  assertOwnedHostCodexManagedHomePath,
+  UntrustedManagedCodexHomeError,
   type CodexAccountHomeCandidate
 } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import { GUEST_CODEX_ACCOUNTS_ROOT_SEGMENTS } from '../../../codex-accounts/managed-homes/guest-codex-account-homes'
@@ -40,7 +41,31 @@ async function listAccountHomeCandidates(
   )
 }
 
-function uniqueHostHomes(candidates: readonly string[]): string[] {
+/** The candidates' homes Orca owns; one that can't be read throws, since its copy may be in use. */
+function ownedAccountHomes(candidates: readonly CodexAccountHomeCandidate[]): string[] {
+  const homes: string[] = []
+  for (const { accountsRoot, accountId } of candidates) {
+    const home = join(accountsRoot, accountId, 'home')
+    try {
+      assertOwnedHostCodexManagedHomePath({
+        candidatePath: home,
+        managedAccountsRoot: accountsRoot,
+        systemCodexHomePath: getSystemCodexHomePath(),
+        expectedAccountId: accountId
+      })
+    } catch (error) {
+      // Not Orca's (redirected or never set up): Orca neither launches nor links into it.
+      if (error instanceof UntrustedManagedCodexHomeError) {
+        continue
+      }
+      throw error
+    }
+    homes.push(home)
+  }
+  return homes
+}
+
+function uniqueHostHomes(candidates: readonly (string | undefined)[]): string[] {
   const seen = new Set<string>()
   const homes: string[] = []
   for (const home of candidates) {
@@ -90,7 +115,7 @@ export async function listHostCodexRolloutHomes(
   const { homes, accounts } = await listHostCodexRolloutHomeSources(settings)
   return uniqueHostHomes([
     ...homes,
-    ...ownedCodexAccountHomes(accounts, getSystemCodexHomePath()),
+    ...ownedAccountHomes(accounts),
     ...configuredAdditionalCodexHomePaths()
   ])
 }

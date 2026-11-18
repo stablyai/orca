@@ -200,33 +200,5 @@ export function assertOwnedHostCodexManagedHomePath(
   throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: verdict.error })
 }
 
+/** An account folder whose home may be Orca's, before ownership is checked. */
 export type CodexAccountHomeCandidate = { accountsRoot: string; accountId: string }
-
-/**
- * The candidates' homes Orca owns; one that isn't Orca's (redirected or never set up) is left out,
- * and one that can't be read throws, since its copy may be in use.
- */
-export function ownedCodexAccountHomes(
-  candidates: readonly CodexAccountHomeCandidate[],
-  systemCodexHomePath: string
-): string[] {
-  const homes: string[] = []
-  for (const { accountsRoot, accountId } of candidates) {
-    const home = join(accountsRoot, accountId, 'home')
-    try {
-      assertOwnedHostCodexManagedHomePath({
-        candidatePath: home,
-        managedAccountsRoot: accountsRoot,
-        systemCodexHomePath,
-        expectedAccountId: accountId
-      })
-    } catch (error) {
-      if (error instanceof UntrustedManagedCodexHomeError) {
-        continue
-      }
-      throw error
-    }
-    homes.push(home)
-  }
-  return homes
-}

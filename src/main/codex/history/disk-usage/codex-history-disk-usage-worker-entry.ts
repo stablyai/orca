@@ -4,7 +4,10 @@ import { parentPort } from 'node:worker_threads'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import type { CodexHistoryDiskUsage } from '../../../../shared/workspace-cleanup/codex-history-disk-usage'
 import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
-import { ownedCodexAccountHomes } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
+import {
+  assertOwnedHostCodexManagedHomePath,
+  UntrustedManagedCodexHomeError
+} from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import type {
   CodexHistoryDiskUsageBudget,
   CodexHistoryDiskUsageWorkerRequest,
@@ -205,11 +208,19 @@ if (port) {
     try {
       const accountHomes: string[] = []
       let unreadableAccount = false
-      for (const account of request.accounts) {
+      // The deleter's ownership rule (codex-host-rollout-homes), checked here since it reads sync.
+      for (const { accountsRoot, accountId } of request.accounts) {
+        const home = join(accountsRoot, accountId, 'home')
         try {
-          accountHomes.push(...ownedCodexAccountHomes([account], request.systemCodexHomePath))
-        } catch {
-          unreadableAccount = true
+          assertOwnedHostCodexManagedHomePath({
+            candidatePath: home,
+            managedAccountsRoot: accountsRoot,
+            systemCodexHomePath: request.systemCodexHomePath,
+            expectedAccountId: accountId
+          })
+          accountHomes.push(home)
+        } catch (error) {
+          unreadableAccount ||= !(error instanceof UntrustedManagedCodexHomeError)
         }
       }
       const usage = measureCodexHistoryDiskUsage(
