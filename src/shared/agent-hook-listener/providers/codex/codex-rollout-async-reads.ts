@@ -17,11 +17,11 @@ const MAX_READS_IN_FLIGHT = 2
 // Why 5 s: a scanner hold is normally well under 2 s, and the approval hold already falls back at
 // 5 s, so a read slower than that no longer changes what the row shows.
 const READ_TIMEOUT_MS = 5_000
-// A timed-out read frees its slot but its I/O still holds a pool thread; at most one such read runs
-// beyond the slots, so hung opens never take every pool thread from the rest of the process.
+// Hard ceiling on outstanding rollout I/O, stuck opens included: a timed-out read frees its slot but
+// its I/O still holds a pool thread, so at most one such read runs beyond the slots and one of
+// libuv's four default threads always stays free. At the ceiling reads wait; status comes from hooks.
 const MAX_IO_IN_FLIGHT = MAX_READS_IN_FLIGHT + 1
-// An open that has not returned by now is written off, so stuck I/O can never stop all later reads.
-const IO_ABANDON_MS = 30_000
+const STUCK_IO_LOG_MS = 30_000
 const SLOW_QUEUE_LOG_MS = 1_000
 
 export type RolloutReadLog = (line: string) => void
@@ -117,13 +117,6 @@ export function scheduleRolloutRead<T>(
           startQueuedReads()
         }
       }
-      let ioCounted = true
-      const releaseIo = (): void => {
-        if (ioCounted) {
-          ioCounted = false
-          ioInFlight -= 1
-        }
-      }
       const timer = setTimeout(() => {
         options.log?.(
           `[agent-hooks] Codex rollout read timed out after ${READ_TIMEOUT_MS} ms (waited ${waitedMs} ms): ${label}`
@@ -132,18 +125,16 @@ export function scheduleRolloutRead<T>(
         resolveOutcome({ status: 'timedOut' })
       }, READ_TIMEOUT_MS)
       timer.unref?.()
-      const abandon = setTimeout(() => {
+      const stuck = setTimeout(() => {
         options.log?.(
-          `[agent-hooks] Codex rollout read still open after ${IO_ABANDON_MS} ms; no longer counted: ${label}`
+          `[agent-hooks] Codex rollout read still open after ${STUCK_IO_LOG_MS} ms; it keeps its I/O slot: ${label}`
         )
-        releaseIo()
-        startQueuedReads()
-      }, IO_ABANDON_MS)
-      abandon.unref?.()
+      }, STUCK_IO_LOG_MS)
+      stuck.unref?.()
       const finish = (result: RolloutReadOutcome<T>): void => {
         clearTimeout(timer)
-        clearTimeout(abandon)
-        releaseIo()
+        clearTimeout(stuck)
+        ioInFlight -= 1
         release()
         startQueuedReads()
         resolveOutcome(result)

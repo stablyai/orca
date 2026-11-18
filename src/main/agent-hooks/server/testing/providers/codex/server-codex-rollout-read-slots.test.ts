@@ -20,6 +20,8 @@ import { rolloutReadLimiterForTests as slots } from '../../../../../../shared/ag
 const io = vi.hoisted(() => {
   const state: {
     openDelayMs: (filePath: string) => number
+    /** An open that waits for this promise: one that may never return on its own. */
+    openHold?: (filePath: string) => Promise<void> | undefined
     opened: number
     openedPaths: string[]
     closed: number
@@ -43,6 +45,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return {
     ...actual,
     open: async (...args: Parameters<typeof actual.open>) => {
+      await io.openHold?.(String(args[0]))
       const delayMs = io.openDelayMs(String(args[0]))
       if (delayMs > 0) {
         // ast-grep-ignore: test-no-real-time-wait -- a slow open on fake timers that settle() drives
@@ -154,6 +157,7 @@ beforeEach(async () => {
   _internals.resetCachesForTests()
   Object.assign(io, {
     openDelayMs: () => 0,
+    openHold: undefined,
     opened: 0,
     openedPaths: [],
     closed: 0,
@@ -332,30 +336,61 @@ describe('Codex rollout reads share two slots per process', () => {
     expect(slots.inFlight()).toBe(0)
   })
 
-  it('keeps reading other panes when opens never return', async () => {
-    const stuck = [0, 1, 2].map((index) => rollout(`stuck-${index}`, taskStarted('turn-1')))
+  it('keeps stuck opens within the I/O ceiling, leaves status to hooks, and reads again once they return', async () => {
+    const stuckPanes = Array.from({ length: 12 }, (_, index) => pane(index))
+    const stuck = stuckPanes.map((_, index) =>
+      rollout(`stuck-${index}`, taskStarted('turn-1'), userReviewer('turn-1'))
+    )
     const stuckNames = new Set(stuck.map((path) => basename(path)))
-    io.openDelayMs = (filePath) => (stuckNames.has(basename(filePath)) ? 1e9 : 0)
-    for (const [index, path] of stuck.entries()) {
-      await post(pane(index), {
+    let unstick: () => void = () => {}
+    const stuckUntil = new Promise<void>((resolve) => (unstick = resolve))
+    // Opens on a dead network home: they return only when the test lets them.
+    io.openHold = (filePath) => (stuckNames.has(basename(filePath)) ? stuckUntil : undefined)
+    for (const [index, key] of stuckPanes.entries()) {
+      await post(key, {
         turn_id: 'turn-1',
-        transcript_path: path,
+        transcript_path: stuck[index],
         hook_event_name: 'UserPromptSubmit'
       })
     }
-    await settle(6_000)
-    const other = rollout('other', taskStarted('turn-1'))
-    await post(pane(3), {
+    const other = pane(12)
+    const otherFile = rollout('other', taskStarted('turn-1'))
+    await post(other, {
       turn_id: 'turn-1',
-      transcript_path: other,
+      transcript_path: otherFile,
       hook_event_name: 'UserPromptSubmit'
     })
     appendFileSync(
-      other,
+      otherFile,
       event({ type: 'task_complete', turn_id: 'turn-1', error: { message: 'x' } })
     )
-    await settle(40_000)
-    expect(shown(pane(3))).toEqual(['done', 'failure', undefined])
+    await settle(95_000)
+    // Two slots plus one timed-out read: a pool thread stays free however long the opens hang.
+    expect(io.maxReadersInFlight).toBe(3)
+
+    // Reads wait at the ceiling; hooks still drive status, and an approval falls back to Needs you.
+    await post(stuckPanes[0], {
+      turn_id: 'turn-1',
+      transcript_path: stuck[0],
+      hook_event_name: 'PermissionRequest',
+      ...BASH
+    })
+    await settle(5_500)
+    expect(shown(stuckPanes[0])).toEqual(['waiting', undefined, undefined])
+    await post(stuckPanes[1], {
+      turn_id: 'turn-1',
+      transcript_path: stuck[1],
+      hook_event_name: 'Stop'
+    })
+    expect(shown(stuckPanes[1])).toEqual(['done', undefined, undefined])
+    expect(shown(other)).toEqual(['working', undefined, undefined])
+
+    // Once the opens return, the waiting reads run: the other pane's rollout-only end lands.
+    unstick()
+    await settle(15_000)
+    expect(shown(other)).toEqual(['done', 'failure', undefined])
+    expect(io.maxReadersInFlight).toBe(3)
+    expect(io.closed).toBe(io.opened)
   })
 
   it('reads a busy pane only once its hooks go quiet, and still catches a turn end without a hook', async () => {
