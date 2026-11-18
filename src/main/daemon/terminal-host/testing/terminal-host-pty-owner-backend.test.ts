@@ -84,7 +84,7 @@ describe('TerminalHost PTY owner backend', () => {
 
     expect(subprocess.write).toHaveBeenCalledWith(reply)
     expect(onData).toHaveBeenCalledWith('', query.length, true, query.length)
-    expect(onData).not.toHaveBeenCalledWith(conptyEcho)
+    expect(onData).not.toHaveBeenCalledWith(conptyEcho, undefined, false, expect.any(Number))
   })
 
   it('treats an actually spawned WSL shell as wsl.exe, not ConPTY', async () => {
@@ -95,6 +95,11 @@ describe('TerminalHost PTY owner backend', () => {
     subprocess.emitData(conptyEcho)
 
     expect(subprocess.write).toHaveBeenCalledWith(reply)
-    expect(onData).toHaveBeenCalledWith(conptyEcho)
+    expect(onData).toHaveBeenCalledWith(
+      conptyEcho,
+      undefined,
+      false,
+      query.length + conptyEcho.length
+    )
   })
 })

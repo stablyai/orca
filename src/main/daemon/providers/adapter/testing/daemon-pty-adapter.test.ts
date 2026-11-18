@@ -120,7 +120,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         seq: query.length,
         transformed: true
       })
-      expect(onData).toHaveBeenCalledWith({ id, data: 'prompt' })
+      expect(onData).toHaveBeenCalledWith({
+        id,
+        data: 'prompt',
+        sequenceChars: 'prompt'.length,
+        seq: query.length + 'prompt'.length
+      })
       await expect(adapter.getBufferSnapshot(id)).resolves.toMatchObject({
         data: expect.not.stringContaining(']10;rgb')
       })

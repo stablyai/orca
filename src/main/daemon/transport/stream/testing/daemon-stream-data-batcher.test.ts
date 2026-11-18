@@ -143,7 +143,7 @@ describe('DaemonStreamDataBatcher', () => {
       batcher.enqueue('client-1', 'session-bulk', 'a'.repeat(3 * 64 * 1024), { seq: 200_000 })
       vi.advanceTimersByTime(2)
       const seqs = streamSocket.write.mock.calls
-        .map(([line]) => JSON.parse(String(line)) as { payload?: { data?: string; seq?: number } })
+        .map(([line]): { payload?: { data?: string; seq?: number } } => JSON.parse(String(line)))
         .filter((message) => (message.payload?.data ?? '') !== '')
         .map((message) => message.payload?.seq)
       expect(seqs).toEqual([68_928, 134_464, 200_000])

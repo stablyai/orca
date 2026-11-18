@@ -172,8 +172,8 @@ it('recaptures when output arrived during a capture whose seq cannot place it', 
   }
 })
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits this protected method with exactly this signature.
 const headlessOf = (runtime: OrcaRuntimeService) =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits this protected method with exactly this signature.
   runtime as unknown as {
     serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
   }
