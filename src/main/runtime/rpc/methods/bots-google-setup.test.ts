@@ -24,6 +24,9 @@ vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
     sessionId === 'ivy-chat' ? bots.list()[0] : null
 }))
+vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
+  botToolRelay: { botOf: (token: string) => (token === 'ivy-token' ? 'ivy' : null) }
+}))
 vi.mock('../../../bots/bot-chat-session', () => ({
   runtimeBotChats: () => ({
     sendToChat: async (...args: unknown[]) => {
@@ -117,6 +120,7 @@ describe('bots.googleSetup', () => {
   it('lets a bot move its own run from its chat', async () => {
     const started = await dispatcher.dispatch(
       request('bots.googleSetup.write', {
+        botToken: 'ivy-token',
         callerSessionId: 'ivy-chat',
         change: { action: 'start', mode: 'guide-here' }
       })
@@ -126,17 +130,30 @@ describe('bots.googleSetup', () => {
       result: { run: { botId: 'ivy', mode: 'guide-here' } }
     })
     expect(
-      await dispatcher.dispatch(request('bots.googleSetup.read', { callerSessionId: 'ivy-chat' }))
+      await dispatcher.dispatch(
+        request('bots.googleSetup.read', { botToken: 'ivy-token', callerSessionId: 'ivy-chat' })
+      )
     ).toMatchObject({ ok: true, result: { run: { botId: 'ivy' } } })
   })
 
-  it('records an owner card answer and tells the bot without a bubble', async () => {
+  it('records owner card answers and wakes the bot, without a bubble, once services are chosen', async () => {
     await dispatcher.dispatch(
       request('bots.googleSetup.write', {
+        botToken: 'ivy-token',
         callerSessionId: 'ivy-chat',
         change: { action: 'start' }
       })
     )
+    await dispatcher.dispatch(
+      request('bots.googleSetup.answer', { botId: 'ivy', card: 'path', values: ['do-it-for-me'] }),
+      { caller: DESKTOP_RPC_CALLER, clientKind: 'runtime' }
+    )
+    // The path brings the services card; the bot waits for it rather than opening Google Cloud.
+    expect(cards).toEqual([
+      ['ivy-chat', 'path'],
+      ['ivy-chat', 'services']
+    ])
+    expect(sent).toEqual([])
     const answered = await dispatcher.dispatch(
       request('bots.googleSetup.answer', {
         botId: 'ivy',
@@ -157,6 +174,7 @@ describe('bots.googleSetup', () => {
   it('never takes a card answer, or a lock-lifting change, from a CLI', async () => {
     await dispatcher.dispatch(
       request('bots.googleSetup.write', {
+        botToken: 'ivy-token',
         callerSessionId: 'ivy-chat',
         change: { action: 'start', mode: 'guide-here' }
       })
@@ -229,10 +247,16 @@ describe('bots.googleSetup', () => {
   it('says the key is missing while client is open, and keeps client open until it arrives', async () => {
     const bot = (change: Record<string, unknown>) =>
       dispatcher.dispatch(
-        request('bots.googleSetup.write', { callerSessionId: 'ivy-chat', change })
+        request('bots.googleSetup.write', {
+          botToken: 'ivy-token',
+          callerSessionId: 'ivy-chat',
+          change
+        })
       )
     const read = () =>
-      dispatcher.dispatch(request('bots.googleSetup.read', { callerSessionId: 'ivy-chat' }))
+      dispatcher.dispatch(
+        request('bots.googleSetup.read', { botToken: 'ivy-token', callerSessionId: 'ivy-chat' })
+      )
     await bot({ action: 'start' })
     store.runs?.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['do-it-for-me'] })
     await bot({ action: 'set', projectId: 'example-project-123' })
@@ -268,7 +292,11 @@ describe('bots.googleSetup', () => {
   it('writes the sign-in card again at the bottom when done is refused for want of it, once', async () => {
     const bot = (change: Record<string, unknown>) =>
       dispatcher.dispatch(
-        request('bots.googleSetup.write', { callerSessionId: 'ivy-chat', change })
+        request('bots.googleSetup.write', {
+          botToken: 'ivy-token',
+          callerSessionId: 'ivy-chat',
+          change
+        })
       )
     await bot({ action: 'start' })
     store.runs?.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['do-it-for-me'] })
@@ -287,7 +315,11 @@ describe('bots.googleSetup', () => {
   it('writes one Make a new key card however often the bot asks to finish client without the key', async () => {
     const bot = (change: Record<string, unknown>) =>
       dispatcher.dispatch(
-        request('bots.googleSetup.write', { callerSessionId: 'ivy-chat', change })
+        request('bots.googleSetup.write', {
+          botToken: 'ivy-token',
+          callerSessionId: 'ivy-chat',
+          change
+        })
       )
     await bot({ action: 'start' })
     store.runs?.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['do-it-for-me'] })
@@ -304,7 +336,11 @@ describe('bots.googleSetup', () => {
   it("refuses the bot's done until every chosen service is ready, naming the owner's buttons", async () => {
     const bot = (change: Record<string, unknown>) =>
       dispatcher.dispatch(
-        request('bots.googleSetup.write', { callerSessionId: 'ivy-chat', change })
+        request('bots.googleSetup.write', {
+          botToken: 'ivy-token',
+          callerSessionId: 'ivy-chat',
+          change
+        })
       )
     await bot({ action: 'start' })
     store.runs?.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['do-it-for-me'] })
@@ -339,7 +375,9 @@ describe('bots.googleSetup', () => {
       error: { message: expect.stringContaining("Your owner's card shows: Allow Gmail.") }
     })
     expect(
-      await dispatcher.dispatch(request('bots.googleSetup.read', { callerSessionId: 'ivy-chat' }))
+      await dispatcher.dispatch(
+        request('bots.googleSetup.read', { botToken: 'ivy-token', callerSessionId: 'ivy-chat' })
+      )
     ).toMatchObject({ ok: true, result: { blocker: { kind: 'needs-permission' } } })
     google.accounts = [
       { email: 'you@gmail.com', status: 'connected', connectedAt: 5, services: services('ready') }
@@ -363,6 +401,7 @@ describe("a bot's Google setup start when Google's app is already here", () => {
   const start = () =>
     dispatcher.dispatch(
       request('bots.googleSetup.write', {
+        botToken: 'ivy-token',
         callerSessionId: 'ivy-chat',
         change: { action: 'start' }
       })

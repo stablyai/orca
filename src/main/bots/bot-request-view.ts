@@ -213,9 +213,16 @@ export function botAnswerView(record: BotRequestRecord, posted: boolean): Record
 /** Why a request came back with no answer, for the sender to act on. */
 export function botRequestUnansweredText(
   record: BotRequestRecord,
-  why: 'ended' | 'paused' | 'deleted' | 'new-chat'
+  why: 'ended' | 'failed' | 'failed-continues' | 'paused' | 'deleted' | 'new-chat',
+  /** On a failure: why, as its chat words it; absent when the host recorded no reason. */
+  failure?: string
 ): string {
   const bot = record.toBotName
+  const failedTurn = `${bot}'s turn failed${failure ? `: ${failure}` : ' with an error.'}`
+  // Orca continues the turn itself after the reset: redoing it now would do the work twice.
+  if (why === 'failed-continues') {
+    return `${failedTurn} Your ${record.purpose} hasn't been handled yet; ${bot} continues on its own when the limit resets, so don't redo it.`
+  }
   // A handoff it read is its job now: no reply yet isn't a refusal.
   if (why === 'ended' && record.purpose === 'handoff' && askedInOwnersChat(record)) {
     return `${bot} read your handoff and ended its turn without a reply; the job is still ${bot}'s, so don't redo it or call it dropped. Your owner's card reads that ${bot} has it.`
@@ -223,9 +230,11 @@ export function botRequestUnansweredText(
   const what =
     why === 'ended'
       ? `${bot} ended its turn without answering your ${record.purpose}`
-      : why === 'new-chat'
-        ? `${bot} started a new Chat before it read your ${record.purpose}`
-        : `${bot} was ${why} before it read your ${record.purpose}`
+      : why === 'failed'
+        ? `${failedTurn} It ended without answering your ${record.purpose}`
+        : why === 'new-chat'
+          ? `${bot} started a new Chat before it read your ${record.purpose}`
+          : `${bot} was ${why} before it read your ${record.purpose}`
   return record.fromWorker
     ? `${what}, so do it yourself or tell ${record.fromBotName} that ${bot} couldn't take it.`
     : `${what}, so do it yourself or tell ${askersOf(record)} that ${bot} couldn't take it.`

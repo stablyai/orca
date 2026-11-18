@@ -1,5 +1,8 @@
 // `orca bot google-setup …`: the bot moves its Google setup run; Orca draws the cards from it.
-import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import {
+  readInjectedAgentSessionId,
+  readInjectedBotToken
+} from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
   currentGoogleSetupStep,
   GOOGLE_SETUP_STEPS,
@@ -18,12 +21,14 @@ import { callBots } from './bot'
 
 type Change = Record<string, unknown> & { action: string }
 
-function callerSessionId(): string {
+/** The bot run's token names the bot; its chat id says where it ran. */
+function botCaller(): { botToken?: string; callerSessionId: string } {
   const id = readInjectedAgentSessionId()
   if (!id) {
     throw new RuntimeClientError('invalid_argument', "Run this from a bot's chat.")
   }
-  return id
+  const botToken = readInjectedBotToken()
+  return { ...(botToken ? { botToken } : {}), callerSessionId: id }
 }
 
 type SetupRead = {
@@ -104,7 +109,7 @@ export function formatGoogleSetupWrite(result: SetupRead | StartRouted): string 
 function write(change: Change): CommandHandler {
   return async ({ client, json }) => {
     const result = await callBots<SetupRead | StartRouted>(client, 'bots.googleSetup.write', {
-      callerSessionId: callerSessionId(),
+      ...botCaller(),
       change
     })
     printResult(result, json, formatGoogleSetupWrite)
@@ -116,9 +121,7 @@ const defined = (fields: Record<string, unknown>) =>
 
 export const BOT_GOOGLE_SETUP_HANDLERS: Record<string, CommandHandler> = {
   'bot google-setup show': async ({ client, json }) => {
-    const result = await callBots<SetupRead>(client, 'bots.googleSetup.read', {
-      callerSessionId: callerSessionId()
-    })
+    const result = await callBots<SetupRead>(client, 'bots.googleSetup.read', botCaller())
     printResult(result, json, formatGoogleSetupRun)
   },
   'bot google-setup start': (context) =>

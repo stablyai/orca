@@ -253,7 +253,7 @@ describe('AddConnectorButton', () => {
     await waitFor(() => expect(addable()).toEqual(['Slack', 'Linear', 'Google']))
     fireEvent.click(screen.getByRole('button', { name: 'Add Linear' }))
 
-    expect(screen.getByText('Add Reviewer to Linear')).toBeTruthy()
+    expect(await screen.findByText('for Reviewer')).toBeTruthy()
     expect(await screen.findByRole('button', { name: /Connect Linear/ })).toBeTruthy()
   })
 

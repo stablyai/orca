@@ -26,6 +26,10 @@ import {
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import { generateId } from '../../../../orchestration/db/generated-id'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
+import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
+import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
 import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 
 const ACTIVE_DISPATCH = new Set(['pending', 'dispatched'])
@@ -101,10 +105,36 @@ export async function noteBotRequestPost(
   }
 }
 
-/** A turn on a request ended: with no answer and no work still running for it, the sender is told. */
+/** A turn on a request ended: with no answer and no work still running for it, the sender is told.
+ *  A failed turn is told by `settleBotRequestFailure`, which knows why. */
 export async function settleBotRequestTurn(
   runtime: OrcaRuntimeService,
-  sessionId: string
+  sessionId: string,
+  ended?: TurnEndedVerdict
+): Promise<void> {
+  if (ended?.outcome !== 'failure') {
+    await settleBotRequests(runtime, sessionId, 'ended')
+  }
+}
+
+/** A bot's request failed: the sender hears why, in the words its chat and worker escalations show. */
+export async function settleBotRequestFailure(
+  runtime: OrcaRuntimeService,
+  failure: StructuredAgentSessionRequestFailure
+): Promise<void> {
+  if (!botOfSession(runtime.bots, failure.sessionId)) {
+    return
+  }
+  const error = await readChatRequestError(failure)
+  const why = (await continuesAfterUsageLimit(failure.sessionId)) ? 'failed-continues' : 'failed'
+  await settleBotRequests(runtime, failure.sessionId, why, error?.text)
+}
+
+async function settleBotRequests(
+  runtime: OrcaRuntimeService,
+  sessionId: string,
+  why: 'ended' | 'failed' | 'failed-continues',
+  reason?: string
 ): Promise<void> {
   // Every chat's turn ends here; only a bot's can be on a request.
   if (!botOfSession(runtime.bots, sessionId)) {
@@ -124,9 +154,16 @@ export async function settleBotRequestTurn(
   await ensureSenderRecords(runtime, messages)
   for (const message of messages) {
     if (message) {
-      tellSender(runtime, db, message, 'unanswered', 'ended')
+      tellSender(runtime, db, message, 'unanswered', why, reason)
     }
   }
+}
+
+/** Orca sends the chat "continue" once the limit resets, which runs the failed turn's work again.
+ *  Nothing else reruns a failed turn on its own: Resume releases only the mail queued behind it. */
+async function continuesAfterUsageLimit(sessionId: string): Promise<boolean> {
+  const host = getStructuredAgentSessionHost()
+  return (await host?.readUsageLimitContinue(sessionId))?.state === 'scheduled'
 }
 
 /** Requests a bot will never read: it was paused or deleted, or its Chat replaced. */
@@ -171,13 +208,15 @@ function tellSender(
   db: OrchestrationDb,
   request: MessageRow,
   outcome: BotRequestOutcome,
-  why: Parameters<typeof botRequestUnansweredText>[1]
+  why: Parameters<typeof botRequestUnansweredText>[1],
+  reason?: string
 ): boolean {
   const record = botRequestRecord(db, request.id)
   if (!record || !awaitsAnswer(record.purpose)) {
     return true
   }
-  if (tellPeerSender(runtime, db, request, outcome, botRequestUnansweredText(record, why))) {
+  const body = botRequestUnansweredText(record, why, reason)
+  if (tellPeerSender(runtime, db, request, outcome, body)) {
     return true
   }
   const sender = reachableSender(runtime, db, request)
@@ -192,7 +231,7 @@ function tellSender(
     from: request.to_handle,
     to: recipient.to,
     subject: `Re: ${request.subject}`,
-    body: botRequestUnansweredText(record, why),
+    body,
     threadId: request.thread_id ?? request.id,
     runId: recipient.runId
   })

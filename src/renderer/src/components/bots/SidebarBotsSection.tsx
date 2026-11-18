@@ -247,7 +247,7 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
                   {newLabel}
                 </TooltipContent>
               </Tooltip>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent side="bottom" align="start" sideOffset={6}>
                 {/* New bot opens its dialog on click or Enter; hover or › shows the other ways to add one. */}
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger
