@@ -3,7 +3,14 @@ import { act } from 'react'
 import { describe, expect, it } from 'vitest'
 import type { GitHistoryResult } from '../../../../../../shared/git/history/git-history-types'
 import { deferred, flush } from '../panel/source-control-hook-test-harness'
-import { Probe, mount, historyResult, mocks, historyProbe } from './git-history-hook-test-harness'
+import {
+  ALL_WORKTREES,
+  Probe,
+  mount,
+  historyResult,
+  mocks,
+  historyProbe
+} from './git-history-hook-test-harness'
 
 describe('useSourceControlGitHistory stale completion', () => {
   it('drops a stale response for a worktree the user already left and returned to', async () => {
