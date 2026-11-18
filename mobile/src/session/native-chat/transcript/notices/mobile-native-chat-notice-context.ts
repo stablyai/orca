@@ -1,6 +1,7 @@
 import { createContext } from 'react'
 import type { MobileStructuredInterruptedContinue } from '../../composer/delivery/use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatUsageLimit } from '../../status/use-mobile-native-chat-usage-limit'
+import type { AgentJournalRenderItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 /** What a notice row needs: the Orca host behind the chat (null when unnamed), the agent, and Continue for an Orca-stopped turn. */
 export type MobileNativeChatNoticeView = {
@@ -16,6 +17,8 @@ export type MobileNativeChatNoticeView = {
   usageLimit?: MobileNativeChatUsageLimit | null
   /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
   openAccounts?: () => void
+  /** Setup failure rows before this turn are resolved, so they read muted and offer no sign-in. */
+  latestSucceededTurn?: AgentJournalRenderItem | null
 }
 
 export const MobileNativeChatNoticeContext = createContext<MobileNativeChatNoticeView>({

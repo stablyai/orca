@@ -297,6 +297,7 @@ export const MessageRow = memo(function MessageRow(
           messageId={message.id}
           timestamp={message.timestamp}
           agentName={agentName}
+          position={message.journalPosition}
         />
       </div>
     )

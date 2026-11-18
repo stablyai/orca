@@ -27,6 +27,7 @@ import { useMobileNativeChatMarkdownLinks } from './links/use-mobile-native-chat
 import { MobileMarkdownLinksContext } from '../../components/markdown/links/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { latestNativeChatSucceededTurn } from '../../../../src/shared/native-chat/transcript/turns/native-chat-setup-failure-resolution'
 
 type Props = {
   controller: MobileNativeChatController
@@ -229,12 +230,18 @@ function MobileNativeChatOverlayContent({
   const runInTerminal = useCallback((command: string) => runInTerminalRef.current(command), [])
   const t = useMobileTranslation()
   const continuation = controller.nativeChatInterruptedContinue
+  const journalItems = controller.nativeChatTurnJournal?.items
+  const latestSucceededTurn = useMemo(
+    () => (journalItems ? latestNativeChatSucceededTurn(journalItems) : null),
+    [journalItems]
+  )
   const noticeView = useMemo(
     () => ({
       hostName,
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
       onRunInTerminal: runInTerminal,
       usageLimit: controller.nativeChatUsageLimit,
+      latestSucceededTurn,
       ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
       ...(continuation
         ? {
@@ -256,6 +263,7 @@ function MobileNativeChatOverlayContent({
       onClearSendError,
       runInTerminal,
       controller.nativeChatUsageLimit,
+      latestSucceededTurn,
       onOpenAccounts
     ]
   )

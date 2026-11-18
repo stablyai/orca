@@ -23,6 +23,7 @@ import {
   type AgentSessionHostStatusPresentation
 } from '../../../../../../shared/agent-session/view/agent-session-host-status-rows'
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
+import type { AgentJournalPosition } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook,
@@ -44,6 +45,8 @@ import {
   ProviderFrameRow
 } from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
+import { useNativeChatHostSetupView } from '../../host-access/native-chat-host-setup'
+import { isResolvedNativeChatSetupFailure } from '../../../../../../shared/native-chat/transcript/turns/native-chat-setup-failure-resolution'
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -90,17 +93,21 @@ export function NativeChatNoticeRow({
   block,
   messageId,
   timestamp = null,
-  agentName
+  agentName,
+  position
 }: {
   block: NativeChatTextBlock
   /** The transcript row's message, so a plan's code blocks keep their wrap past the row's mount. */
   messageId?: string
   timestamp?: number | null
   agentName?: string
+  /** The row's journal place, so a failure a later turn resolved reads as resolved. */
+  position?: AgentJournalPosition
 }): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
+  const latestSucceededTurn = useNativeChatHostSetupView()?.latestSucceededTurn
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
     return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
@@ -305,7 +312,13 @@ export function NativeChatNoticeRow({
     )
   }
   const detail = failureDetail?.trim() !== text.trim() ? failureDetail : undefined
-  const tone = named ? 'notice' : look.kind === 'line' ? look.tone : null
+  const resolvedSetupFailure = isResolvedNativeChatSetupFailure(
+    failure?.kind,
+    position,
+    latestSucceededTurn
+  )
+  const lineTone = look.kind === 'line' ? look.tone : null
+  const tone = named || (lineTone && resolvedSetupFailure) ? 'notice' : lineTone
   const Icon =
     tone === 'warning'
       ? AlertTriangle
@@ -331,7 +344,7 @@ export function NativeChatNoticeRow({
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
         ) : null}
       </div>
-      <NativeChatSetupButton failureKind={block.failure?.kind} />
+      <NativeChatSetupButton failureKind={block.failure?.kind} position={position} />
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}

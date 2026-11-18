@@ -328,7 +328,7 @@ function MobileNativeChatMessageImpl({
                   blocks={drawnProse}
                   fontScale={fontScale}
                   onLongPress={onLongPress}
-                  cardId={message.id}
+                  message={message}
                 />
               ) : null}
               {isUser ? (

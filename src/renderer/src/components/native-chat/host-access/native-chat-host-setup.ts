@@ -12,6 +12,11 @@ import {
   agentSessionSignInCommand
 } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  latestNativeChatSucceededTurn,
+  NATIVE_CHAT_SIGN_IN_FAILURE_KINDS
+} from '../../../../../shared/native-chat/transcript/turns/native-chat-setup-failure-resolution'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
@@ -22,11 +27,6 @@ import {
 import type { AgentCliUpdateView } from '@/components/agent-cli-update/use-agent-cli-update'
 import { useNativeChatCliUpdate } from './native-chat-cli-update'
 
-const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
-  'notSignedIn',
-  'claudeAccountFolderMissing'
-])
-
 function isNativeChatSignInFailureKind(
   kind: string | undefined,
   signIn?: NativeChatSignIn | null
@@ -34,14 +34,9 @@ function isNativeChatSignInFailureKind(
   // The current no-model producer names /login; recheck this if another dialect adopts the kind.
   return (
     kind !== undefined &&
-    (SIGN_IN_FAILURE_KINDS.has(kind) ||
+    (NATIVE_CHAT_SIGN_IN_FAILURE_KINDS.has(kind) ||
       (kind === 'modelNotSelected' && Boolean(signIn?.loginCommand)))
   )
-}
-
-/** Failure kinds a host setup step can fix; rows check this before subscribing to the setup context. */
-export function isNativeChatSetupFailureKind(kind: string | undefined): boolean {
-  return kind === 'modelNotSelected' || kind === 'cliMissing' || isNativeChatSignInFailureKind(kind)
 }
 
 export type NativeChatSignIn = {
@@ -64,6 +59,8 @@ export type NativeChatHostSetup = {
   update?: AgentCliUpdateView | null
   /** The chat's host, so setup links open Settings on it. */
   host?: RuntimeClientTarget
+  /** Transcript failure rows before this turn are resolved, so they offer no setup action. */
+  latestSucceededTurn?: AgentJournalRenderItem | null
 }
 
 export const NativeChatHostSetupContext = createContext<NativeChatHostSetup | null>(null)
@@ -148,6 +145,7 @@ type NativeChatHostSetupInput = {
   account: AgentSessionAccountKind | undefined
   failure: unknown
   startFailures: readonly { kind: string }[]
+  journalItems: readonly AgentJournalRenderItem[]
   /** After a recheck reads the host's agents, so the chat can retry what the install fixed. */
   onRechecked: () => void
 }
@@ -284,14 +282,19 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const signIn = useNativeChatSignIn(input, terminal)
   const install = useNativeChatInstall(input, terminal)
   const update = useNativeChatCliUpdate(input.target, input.agent, input.onRechecked)
-  const { target } = input
+  const { target, journalItems } = input
+  const latestSucceededTurn = useMemo(
+    () => latestNativeChatSucceededTurn(journalItems),
+    [journalItems]
+  )
   return useMemo(
     () => ({
       signIn,
       install,
       update,
-      host: target
+      host: target,
+      latestSucceededTurn
     }),
-    [signIn, install, update, target]
+    [signIn, install, update, target, latestSucceededTurn]
   )
 }

@@ -14,12 +14,14 @@ import {
 import {
   isTextBlock,
   type NativeChatBlock,
+  type NativeChatMessage,
   type NativeChatTextBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureDetailText } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { agentSessionFailureSentence } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { agentSessionSignInCommand } from '../../../../../../src/shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import { isResolvedNativeChatSetupFailure } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-setup-failure-resolution'
 import { nativeChatOrcaStopRowText } from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import {
   MobileNativeChatForkedFromContext,
@@ -99,13 +101,14 @@ export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
   onLongPress,
-  cardId
+  message
 }: {
   blocks: readonly NativeChatBlock[]
   fontScale: number
   onLongPress?: () => void
-  /** The row's message id, for a bot card's fold and answer. */
-  cardId?: string
+  /** The row's message: its id for a bot card's fold and answer, and its journal place, so a
+   *  failure a later turn resolved reads as resolved. */
+  message?: Pick<NativeChatMessage, 'id' | 'journalPosition'>
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -137,7 +140,7 @@ export function MobileNativeChatNoticeRow({
     )
   }
   const botCard = mobileNativeChatBotCard(notice, {
-    cardId: cardId ?? '',
+    cardId: message?.id ?? '',
     timestamp: null,
     fallback: notice.text,
     fontScale
@@ -149,8 +152,13 @@ export function MobileNativeChatNoticeRow({
   const lineText = noticeLineText(notice, names, t)
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   const failureDetail = agentSessionFailureDetailText(failure)
+  const resolvedSetupFailure = isResolvedNativeChatSetupFailure(
+    failure?.kind,
+    message?.journalPosition,
+    names.latestSucceededTurn
+  )
   const signInCommand =
-    failure?.kind === 'notSignedIn'
+    failure?.kind === 'notSignedIn' && !resolvedSetupFailure
       ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
       : null
   const runInTerminal = names.onRunInTerminal
@@ -279,10 +287,11 @@ export function MobileNativeChatNoticeRow({
         </Text>
       )
     case 'line': {
+      const tone = look.tone && resolvedSetupFailure ? 'notice' : look.tone
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
-        look.tone && { color: toneColor(look.tone) }
+        tone && { color: toneColor(tone) }
       ]
       const continuation = names.continuation
       const continueOffered =
@@ -290,7 +299,7 @@ export function MobileNativeChatNoticeRow({
         notice.orcaStop?.turnItemId !== undefined &&
         notice.orcaStop.turnItemId === continuation.offeredTurnItemId
       const content = (
-        <View style={look.tone ? styles.toneText : undefined}>
+        <View style={tone ? styles.toneText : undefined}>
           <Text selectable={INLINE_TEXT_SELECTION} style={textStyle}>
             {lineText}
           </Text>
@@ -330,16 +339,15 @@ export function MobileNativeChatNoticeRow({
           ) : null}
         </View>
       )
-      if (!look.tone) {
+      if (!tone) {
         return content
       }
-      const Icon =
-        look.tone === 'warning' ? AlertTriangle : look.tone === 'error' ? AlertCircle : Info
+      const Icon = tone === 'warning' ? AlertTriangle : tone === 'error' ? AlertCircle : Info
       return (
         <View style={[styles.card, styles.toneCard]}>
           <Icon
             size={16 * fontScale}
-            color={toneColor(look.tone)}
+            color={toneColor(tone)}
             strokeWidth={2}
             style={styles.toneIcon}
           />
