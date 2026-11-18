@@ -4,7 +4,11 @@ import { CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL } from '../../../shared/agent-a
 import type { PreloadApi } from '../../api-types'
 
 export const codexAccountsApi = {
-  importHome: (args: CodexHomeImportRequest) => ipcRenderer.invoke('codexAccounts:add', args),
+  importHome: (args: CodexHomeImportRequest) =>
+    ipcRenderer.invoke('codexAccounts:importHome', args),
+  list: () => ipcRenderer.invoke('codexAccounts:list'),
+  add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
+    ipcRenderer.invoke('codexAccounts:add', args),
   cancelPendingLogin: (): Promise<boolean> =>
     ipcRenderer.invoke('codexAccounts:cancelPendingLogin'),
   getPendingLoginUrl: (): Promise<string | null> =>
