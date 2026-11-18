@@ -78,19 +78,19 @@ describe('todoist client', () => {
         return { results: [], next_cursor: null }
       }
       expect(url.searchParams.get('limit')).toBe('50')
-      switch (url.searchParams.get('cursor')) {
-        case 'c1':
-          return { results: [], next_cursor: 'c2' }
-        case 'c2':
-          return { results: [{ id: 't3', content: 'Later' }], next_cursor: 'c2' }
-        default:
-          return {
-            results: [
-              { id: 't1', content: 'Gone', is_deleted: true },
-              { id: 't2', content: 'Kept' }
-            ],
-            next_cursor: 'c1'
-          }
+      const cursor = url.searchParams.get('cursor')
+      if (cursor === 'c1') {
+        return { results: [], next_cursor: 'c2' }
+      }
+      if (cursor === 'c2') {
+        return { results: [{ id: 't3', content: 'Later' }], next_cursor: 'c2' }
+      }
+      return {
+        results: [
+          { id: 't1', content: 'Gone', is_deleted: true },
+          { id: 't2', content: 'Kept' }
+        ],
+        next_cursor: 'c1'
       }
     })
     const tasks = await listTodoistTasks('', 50)
