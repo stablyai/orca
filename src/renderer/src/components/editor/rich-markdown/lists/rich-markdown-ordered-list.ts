@@ -66,7 +66,10 @@ export const RichMarkdownOrderedList = OrderedList.extend({
     ...baseTokenizer,
     tokenize(src, tokens, lexer) {
       // Why: the base tokenizer scans the full remaining source before rejecting a non-list, and
-      // accepts exactly when its first line is an item.
+      // accepts exactly when its first line is an item. Check the marker first: most calls are prose.
+      if (!orderedListMarker.test(src)) {
+        return undefined
+      }
       const firstLineEnd = src.indexOf('\n')
       if (!isOrderedListItem(firstLineEnd === -1 ? src : src.slice(0, firstLineEnd))) {
         return undefined
