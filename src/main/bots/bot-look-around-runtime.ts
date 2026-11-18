@@ -6,7 +6,10 @@ import { botTurns, runtimeBotAutomationSessions } from './bot-automation-session
 import { systemBackgroundRunPower } from './bot-background-run-power'
 import { requireStructuredHost } from './bot-chat-session'
 import { noteInChat } from './bot-chat-status-line'
-import { LOOK_FAILURES_TO_TURN_OFF } from './bot-look-around-failures'
+import {
+  limitedLookContinuesInItsChat,
+  LOOK_FAILURES_TO_TURN_OFF
+} from './bot-look-around-failures'
 import { BotLookAroundRunner } from './bot-look-around-runner'
 import { runtimeTidyUpRunner } from './bot-memory-tidy-up-runtime'
 
@@ -28,6 +31,21 @@ export function runtimeLookAroundRunner(runtime: OrcaRuntimeService): BotLookAro
     sessions: runtimeBotAutomationSessions(runtime),
     stopTurn: botTurns.stop,
     turnRunning: botTurns.running,
+    usageLimitOf: async (sessionId) => {
+      const host = await requireStructuredHost(runtime)
+      const cut = await (await host.journalReads(sessionId)).usageLimitCut()
+      return cut ? (cut.resetsAt === undefined ? {} : { resetsAt: cut.resetsAt }) : null
+    },
+    usageLimitContinues: async (sessionId) => {
+      const host = await requireStructuredHost(runtime)
+      const cut = await (await host.journalReads(sessionId)).usageLimitCut()
+      return limitedLookContinuesInItsChat({
+        running: botTurns.running(sessionId),
+        stillLimited: cut !== null,
+        continueScheduled:
+          !!cut && host.usageLimitContinue.readState(sessionId, cut)?.state === 'scheduled'
+      })
+    },
     watchTurns: async () => watchBotTurnEnds(await requireStructuredHost(runtime)),
     turnOff: async (bot) => {
       await runtime.bots.update(bot.id, { lookAround: { on: false } })

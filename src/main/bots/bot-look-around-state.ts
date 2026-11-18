@@ -47,7 +47,8 @@ export {
 import {
   withBackgroundRun,
   type BackgroundRuns,
-  type LookAroundRun
+  type LookAroundRun,
+  type LookUsageLimit
 } from './bot-background-run-history'
 
 export type BotLookState = BackgroundRuns & {
@@ -121,13 +122,15 @@ export function endRun(
   now: number,
   error?: string,
   alerted = false,
-  asleep = false
+  asleep = false,
+  usageLimited?: LookUsageLimit
 ): BotLookState {
   const failure = error
     ? {
         error,
         ...(alerted ? { alerted: true as const } : {}),
-        ...(asleep ? { asleep: true as const } : {})
+        ...(asleep ? { asleep: true as const } : {}),
+        ...(usageLimited && !asleep ? { usageLimited } : {})
       }
     : {}
   const runs = state.runs.map((run) =>
