@@ -72,6 +72,34 @@ describe('remote browser authoritative page state', () => {
     }
   )
 
+  it("files the host's favicon in history only for the document that carries it", () => {
+    const { result } = renderNavigation()
+    const tab = (url: string): BrowserTabInfo => ({
+      browserPageId: 'remote-page-a',
+      index: 0,
+      active: true,
+      url,
+      title: 'Example'
+    })
+    act(() => {
+      useAppStore.getState().updateBrowserPageState('page-a', {
+        faviconUrl: 'https://example.test/icon.png'
+      })
+      useAppStore.getState().setBrowserPageUrl('page-a', 'https://example.test/')
+    })
+    act(() => result.current.applyRemoteTabInfo(tab('https://example.test/')))
+    act(() => result.current.applyRemoteTabInfo(tab('https://other.test/')))
+
+    expect(
+      useAppStore
+        .getState()
+        .browserUrlHistory.map(({ url, faviconUrl }) => ({ url, faviconUrl: faviconUrl ?? null }))
+    ).toEqual([
+      { url: 'https://other.test/', faviconUrl: null },
+      { url: 'https://example.test/', faviconUrl: 'https://example.test/icon.png' }
+    ])
+  })
+
   it('keeps a pending failure when a resolved reload outcome read times out', async () => {
     const { result } = renderNavigation()
     act(() => result.current.applyRemoteTabInfo(failedTab()))

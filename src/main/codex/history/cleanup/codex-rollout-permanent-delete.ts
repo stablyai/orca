@@ -7,6 +7,7 @@ import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesy
 import { resolveOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-home'
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
+import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
 
 type RolloutTarget = { agent: AiVaultAgent; filePath: string }
 type DeleteResult = { deleted: number; failed: number; freedBytes: number }
@@ -275,5 +276,8 @@ export async function deleteCodexRolloutsPermanently(
     await deleteRollout(target, listHomes, shouldDelete, result, deletedPaths)
   }
   await invalidateDeletedAiVaultSessionPaths(deletedPaths)
+  if (deletedPaths.length > 0) {
+    forgetCodexHistoryDiskUsage()
+  }
   return result
 }

@@ -206,7 +206,12 @@ describe('a rate-limited artifact request that needs a session refresh', () => {
     ])
     expect(new Set(cloudStub.sent.map(({ key }) => key)).size).toBe(1)
     expect(
-      getArtifactShareRecord(signin.profileId, signin.userDataPath, writeRequest.sourceKey, scope)
+      await getArtifactShareRecord(
+        signin.profileId,
+        signin.userDataPath,
+        writeRequest.sourceKey,
+        scope
+      )
     ).toMatchObject({ slug: 'artifact-a', editToken: 'edit-secret' })
   })
 
