@@ -31,7 +31,10 @@ import {
   prepareProfileStateDomainPatches,
   type ProfileStateDomainPatch
 } from './profile-state-domain-patches'
-import { preparePatchedProfileStateDomain } from './profile-state-patched-domains'
+import {
+  preparePatchedProfileStateDomain,
+  rememberPatchedProfileStateDomains
+} from './profile-state-patched-domains'
 import {
   prepareProfileStateDomainMutation,
   validateProfileStateDomainTransaction,
@@ -95,13 +98,17 @@ export function writeProfileStateDomains(
 ): ProfileStateDomainTransactionResult {
   validateProfileStateDomainTransaction(transaction)
 
-  const prepared = transaction.replacements.map(prepareProfileStateDomainMutation)
+  const prepared = transaction.replacements.map((replacement) =>
+    prepareProfileStateDomainMutation(replacement)
+  )
   const patches = prepareProfileStateDomainPatches(transaction.patches ?? [])
   if (patches.some(({ domain }) => prepared.some((mutation) => mutation.domain === domain))) {
     throw new Error('Profile state domain transaction patches a replaced domain')
   }
 
-  return withProfileStateWriteTransaction(db, () => {
+  const patched: PreparedProfileStateMutation[] = []
+  const result = withProfileStateWriteTransaction(db, () => {
+    patched.length = 0
     const actualRevision = readProfileStateRevision(db)
     if (actualRevision !== transaction.expectedRevision) {
       throw new ProfileStateRevisionConflictError(transaction.expectedRevision, actualRevision)
@@ -169,7 +176,9 @@ export function writeProfileStateDomains(
       admit(mutation)
     }
     for (const patch of patches) {
-      admit(preparePatchedProfileStateDomain(db, patch))
+      const mutation = preparePatchedProfileStateDomain(db, patch)
+      patched.push(mutation)
+      admit(mutation)
     }
     if (transaction.automationRunsAfter !== undefined) {
       const delta = prepareProfileStateAutomationRunsDelta(
@@ -281,4 +290,6 @@ export function writeProfileStateDomains(
       changedDomains: updates.map(({ domain }) => domain)
     }
   })
+  rememberPatchedProfileStateDomains(db, patched)
+  return result
 }
