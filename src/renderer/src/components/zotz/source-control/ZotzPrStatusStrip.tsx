@@ -146,9 +146,7 @@ function StripWithPr({
     <div
       className={cn(
         'shrink-0 border-b px-3 py-1.5',
-        tone === 'success'
-          ? 'border-status-success-border bg-status-success-background'
-          : 'border-border'
+        tone === 'success' ? 'border-zotz-gh-success/30 bg-zotz-gh-success/10' : 'border-border'
       )}
     >
       <div className="flex items-center gap-2">

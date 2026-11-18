@@ -83,8 +83,8 @@ function ChipBody({
       <span className="ml-auto flex shrink-0 items-center gap-2">
         {total && (total.added > 0 || total.removed > 0) ? (
           <span className="rounded-sm border border-border px-1.5 py-0.5 font-mono tabular-nums">
-            <span className="text-status-success">+{total.added}</span>{' '}
-            <span className="text-destructive">−{total.removed}</span>
+            <span className="text-zotz-gh-success">+{total.added}</span>{' '}
+            <span className="text-zotz-gh-danger">−{total.removed}</span>
           </span>
         ) : null}
         <Popover>

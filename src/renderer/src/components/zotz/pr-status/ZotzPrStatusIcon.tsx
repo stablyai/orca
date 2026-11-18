@@ -24,7 +24,7 @@ export function ZotzPrStatusIcon({
   const icon = cn('size-3.5 shrink-0', color, className)
   switch (status) {
     case 'pending':
-      return <LoadingSpinner className={cn(icon, 'text-zotz-working-wave')} />
+      return <LoadingSpinner className={icon} />
     case 'failing':
       return <CircleX className={icon} />
     case 'conflicts':

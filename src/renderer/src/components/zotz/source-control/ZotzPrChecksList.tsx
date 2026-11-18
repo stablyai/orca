@@ -14,11 +14,11 @@ const LIST_LIMIT = 10
 function CheckIcon({ kind }: { kind: ZotzCheckKind }): React.JSX.Element {
   switch (kind) {
     case 'failed':
-      return <CircleX className="size-3.5 shrink-0 text-destructive" />
+      return <CircleX className="size-3.5 shrink-0 text-zotz-gh-danger" />
     case 'running':
-      return <CircleDashed className="size-3.5 shrink-0 text-muted-foreground" />
+      return <CircleDashed className="size-3.5 shrink-0 text-zotz-gh-pending" />
     case 'passed':
-      return <CircleCheck className="size-3.5 shrink-0 text-status-success" />
+      return <CircleCheck className="size-3.5 shrink-0 text-zotz-gh-success" />
     case 'skipped':
       return <CircleMinus className="size-3.5 shrink-0 text-muted-foreground" />
   }
@@ -76,7 +76,7 @@ export function ZotzPrChecksSummary({
           icon={<CircleX className="size-3" />}
           count={counts.failed}
           label={t('zotz.prChecks.failed', '{{count}} failed', { count: counts.failed })}
-          className="text-destructive"
+          className="text-zotz-gh-danger"
         />
       ) : null}
       {counts.running > 0 ? (
@@ -84,7 +84,7 @@ export function ZotzPrChecksSummary({
           icon={<LoadingSpinner className="size-3" />}
           count={counts.running}
           label={t('zotz.prChecks.running', '{{count}} running', { count: counts.running })}
-          className="text-zotz-working-wave"
+          className="text-zotz-gh-pending"
         />
       ) : null}
       {counts.passed > 0 ? (
@@ -92,7 +92,7 @@ export function ZotzPrChecksSummary({
           icon={<CircleCheck className="size-3" />}
           count={counts.passed}
           label={t('zotz.prChecks.passed', '{{count}} passed', { count: counts.passed })}
-          className="text-status-success"
+          className="text-zotz-gh-success"
         />
       ) : null}
     </span>

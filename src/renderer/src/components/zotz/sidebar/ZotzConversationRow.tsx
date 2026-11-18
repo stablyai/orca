@@ -83,8 +83,10 @@ function LineTotalBadge({ worktreeId }: { worktreeId: string }): React.JSX.Eleme
   }
   return (
     <span className="shrink-0 rounded-sm border border-worktree-sidebar-border px-1 font-mono text-2xs tabular-nums group-hover/conversation:invisible">
-      <span className="text-status-success">+{total.added}</span>
-      {total.removed > 0 ? <span className="ml-1 text-destructive">−{total.removed}</span> : null}
+      <span className="text-zotz-gh-success">+{total.added}</span>
+      {total.removed > 0 ? (
+        <span className="ml-1 text-zotz-gh-danger">−{total.removed}</span>
+      ) : null}
     </span>
   )
 }

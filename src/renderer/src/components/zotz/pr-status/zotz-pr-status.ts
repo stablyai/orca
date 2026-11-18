@@ -12,7 +12,7 @@ export type ZotzPrStatusKind =
   | 'ready'
   | 'open'
 
-export type ZotzPrTone = 'success' | 'danger' | 'muted' | 'merged'
+export type ZotzPrTone = 'success' | 'danger' | 'pending' | 'muted' | 'merged'
 
 export function zotzPrStatus(pr: WorktreeCardPrDisplay): ZotzPrStatusKind {
   if (pr.state === 'merged') {
@@ -42,22 +42,24 @@ export function zotzPrTone(kind: ZotzPrStatusKind): ZotzPrTone {
       return 'success'
     case 'conflicts':
     case 'failing':
+    case 'closed':
       return 'danger'
     case 'merged':
       return 'merged'
-    case 'closed':
+    case 'pending':
+      return 'pending'
     case 'draft':
     case 'open':
-    case 'pending':
       return 'muted'
   }
 }
 
 export const ZOTZ_PR_TONE_TEXT: Record<ZotzPrTone, string> = {
-  success: 'text-status-success',
-  danger: 'text-destructive',
-  muted: 'text-muted-foreground',
-  merged: 'text-foreground'
+  success: 'text-zotz-gh-success',
+  danger: 'text-zotz-gh-danger',
+  pending: 'text-zotz-gh-pending',
+  muted: 'text-zotz-gh-neutral',
+  merged: 'text-zotz-gh-merged'
 }
 
 export function zotzPrStatusLabel(kind: ZotzPrStatusKind, t: Translate): string {
