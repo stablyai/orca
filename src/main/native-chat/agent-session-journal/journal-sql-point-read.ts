@@ -80,6 +80,17 @@ function read(
       }
     case 'naming-prompt':
     case 'automation-run':
+    case 'bot-memory-sources':
+    case 'automation-result-notes':
+    case 'operation-window':
+    case 'prompt-item':
+    case 'run-mentions':
+    case 'turn-ran-since':
+    case 'ended-turn-count':
+    case 'send-fingerprints':
+    case 'operation-sent':
+    case 'accepted-send-of-row':
+    case 'first-submitted-prompt':
       return readJournalDomainConsumer(scope, operation)
     case 'history-source-items':
       return {

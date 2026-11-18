@@ -15,6 +15,8 @@ import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 export type NativeChatLinkActions = {
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
   linkActionRequest: LinkActionRequest | null
+  /** Shows the popover for a click this hook's own context did not handle. */
+  requestLinkActions: (request: LinkActionRequest) => void
   closeLinkActions: (dismissed?: LinkActionRequest) => void
 }
 
@@ -25,7 +27,6 @@ export function useNativeChatLinkActions(
   scope: { sessionId: string | null; isVisible: boolean }
 ): NativeChatLinkActions {
   const [linkActionRequest, setLinkActionRequest] = useState<LinkActionRequest | null>(null)
-  const openFileLink = useNativeChatFileLinkClick(context, setLinkActionRequest, rootRef)
   const scopeKey = JSON.stringify([
     context?.worktreeId,
     context?.runtimeEnvironmentId,
@@ -40,6 +41,23 @@ export function useNativeChatLinkActions(
     setLinkActionRequest((current) => closeLinkActionRequest(current, dismissed))
   }, [])
 
+  const onLinkClick = useNativeChatLinkClick(context, setLinkActionRequest, rootRef)
+  return {
+    onLinkClick,
+    linkActionRequest,
+    requestLinkActions: setLinkActionRequest,
+    closeLinkActions
+  }
+}
+
+/** One transcript's link clicks; `request` shows the shared destination popover. A group room
+ *  has one popover and a link context per member, so it calls this once per member. */
+export function useNativeChatLinkClick(
+  context: NativeChatFileLinkContext | null,
+  request: (request: LinkActionRequest) => void,
+  rootRef: RefObject<HTMLElement | null>
+): CommentMarkdownLinkClickHandler | undefined {
+  const openFileLink = useNativeChatFileLinkClick(context, request, rootRef)
   const onLinkClick = useCallback<CommentMarkdownLinkClickHandler>(
     (event, href) => {
       if (!context) {
@@ -65,15 +83,11 @@ export function useNativeChatLinkActions(
         plainClickBehavior,
         restoreFocus: () =>
           (anchor.isConnected ? anchor : rootRef.current)?.focus({ preventScroll: true }),
-        request: setLinkActionRequest
+        request
       })
     },
-    [context, openFileLink, rootRef]
+    [context, openFileLink, request, rootRef]
   )
 
-  return {
-    onLinkClick: context ? onLinkClick : undefined,
-    linkActionRequest,
-    closeLinkActions
-  }
+  return context ? onLinkClick : undefined
 }
