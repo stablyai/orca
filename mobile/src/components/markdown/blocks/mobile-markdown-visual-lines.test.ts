@@ -87,14 +87,14 @@ describe('native-chat visual lines in mobile markdown', () => {
     expect(blocks.at(-1)).toEqual({ type: 'paragraph', text: lines.at(-1) })
   })
 
-  it('renders no visuals for text that already spells a placeholder', () => {
-    const { directives } = blocksOf('\uE000ORCA_VISUAL_0\uE000\n::orca-visual{file="a.html"}')
+  it('keeps a literal placeholder and directive as text when they collide', () => {
+    const placeholder = '\uE000ORCA_VISUAL_0\uE000'
+    const directive = '::orca-visual{file="a.html"}'
+    const { directives, blocks } = blocksOf(`${placeholder}\n\n${directive}`)
     expect(directives).toEqual([])
-  })
-
-  it('never treats a placeholder-looking line as a visual when none were protected', () => {
-    expect(topLevelBlocks('\uE000ORCA_VISUAL_0\uE000', 0)).toEqual([
-      { type: 'paragraph', text: '\uE000ORCA_VISUAL_0\uE000' }
+    expect(blocks).toEqual([
+      { type: 'paragraph', text: placeholder },
+      { type: 'paragraph', text: directive }
     ])
   })
 

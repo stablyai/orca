@@ -3,6 +3,7 @@ import { useMobileNativeChatTurnDiffs } from './use-mobile-native-chat-turn-diff
 import type { MobileNativeChatTurnRow } from '../projection/use-mobile-native-chat-row-props'
 import { useCallback, useMemo } from 'react'
 import { nativeChatAutomationTurnKeys } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-automation-turns'
+import { nativeChatActingTurnKeys } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-acting-turns'
 import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
 import { foldBotItemNotes } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import {
@@ -154,6 +155,7 @@ export function useMobileNativeChatTurnDisclosure({
     () => nativeChatAutomationTurnKeys(rows, turnKeys),
     [rows, turnKeys]
   )
+  const actingTurns = useMemo(() => nativeChatActingTurnKeys(rows, turnKeys), [rows, turnKeys])
 
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
@@ -229,6 +231,9 @@ export function useMobileNativeChatTurnDisclosure({
         ...(turnKey !== undefined && automationTurns.has(turnKey)
           ? { inAutomationTurn: true as const }
           : {}),
+        ...(turnKey !== undefined && actingTurns.has(turnKey)
+          ? { inActingTurn: true as const }
+          : {}),
         ...(fold.foldedRows.has(index) ? { foldedAway: true } : {}),
         // Without a user boundary, session working state remains authoritative; bridge chat knows only its synthetic stream row is live.
         activeTurnIsWorking: enabled
@@ -259,6 +264,7 @@ export function useMobileNativeChatTurnDisclosure({
     [
       turnKeys,
       automationTurns,
+      actingTurns,
       summaries,
       waiting,
       bars,

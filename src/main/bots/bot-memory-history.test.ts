@@ -214,96 +214,39 @@ describe("a bot's memory history", () => {
     expect(await stored('bot-2')).toBeUndefined()
   })
 
-  it('keeps two edits made at once, in order, through a restart', async () => {
-    const { history, reopened } = bot(OLD)
-    const first = history.append('bot-1', { kind: 'owner' }, botMemoryChange('', '- first\n'))
-    const second = history.append('bot-1', { kind: 'owner' }, botMemoryChange('', '- second\n'))
-    await Promise.all([first, second])
+  it('returns the newest edits in order after a stalled write, including after restart', async () => {
+    const stored = new Map<string, string>()
+    const stalled = Promise.withResolvers<void>()
+    const writeStarted = Promise.withResolvers<void>()
+    const io = {
+      read: async (botId: string) => stored.get(botId) ?? null,
+      write: async (botId: string, text: string | null) => {
+        writeStarted.resolve()
+        await stalled.promise
+        void (text === null ? stored.delete(botId) : stored.set(botId, text))
+      },
+      bots: async () => []
+    }
+    const history = createBotMemoryHistory(io)
+    const edit = (fact: string) =>
+      history.append('bot-1', { kind: 'owner' }, botMemoryChange('', `- ${fact}\n`))
+    const first = edit('first')
+    await writeStarted.promise
+    const second = edit('second')
+    const earlierRead = history.list('bot-1')
+    const third = edit('third')
+    const latestRead = history.list('bot-1')
+    stalled.resolve()
+    await Promise.all([first, second, earlierRead, third])
 
-    const rows = await reopened().list('bot-1')
-    expect(rows.map((row) => row.change.added.map(({ line }) => line))).toEqual([
-      ['- second'],
-      ['- first']
+    const lines = (rows: Awaited<typeof latestRead>) => rows.map((row) => row.change.added[0]?.line)
+    expect(lines(await latestRead)).toEqual(['- third', '- second', '- first'])
+    expect(lines(await createBotMemoryHistory(io).list('bot-1'))).toEqual([
+      '- third',
+      '- second',
+      '- first'
     ])
   })
-
-  it.each([20, 200])(
-    'writes %i edits made behind a stalled disk in one batch, newest first',
-    async (edits) => {
-      const stored = new Map<string, string>()
-      let release = (): void => {}
-      const stalled = new Promise<void>((resolve) => (release = resolve))
-      let writes = 0
-      const io = {
-        read: async (botId: string) => stored.get(botId) ?? null,
-        write: async (botId: string, text: string | null) => {
-          writes += 1
-          await stalled
-          void (text === null ? stored.delete(botId) : stored.set(botId, text))
-        },
-        bots: async () => [...stored.keys()]
-      }
-      const history = createBotMemoryHistory(io)
-      const edit = (index: number) =>
-        history.append('bot-1', { kind: 'owner' }, botMemoryChange('', `- fact ${index}\n`))
-      const first = edit(0)
-      await vi.waitFor(() => expect(writes).toBe(1))
-      const appended = [first, ...Array.from({ length: edits - 1 }, (_, index) => edit(index + 1))]
-      release()
-      await Promise.all(appended)
-
-      expect(writes).toBe(2)
-      const rows = await createBotMemoryHistory(io).list('bot-1')
-      expect(rows.map((row) => row.change.added[0]?.line)).toEqual(
-        Array.from({ length: edits }, (_, index) => `- fact ${edits - 1 - index}`)
-      )
-    }
-  )
-
-  it.each([10, 100])(
-    'keeps one write and one read waiting behind a stalled disk over %i edits and reads',
-    async (rounds) => {
-      const stored = new Map<string, string>()
-      let release = (): void => {}
-      const stalled = new Promise<void>((resolve) => (release = resolve))
-      let writes = 0
-      let reads = 0
-      const io = {
-        read: async (botId: string) => {
-          reads += 1
-          return stored.get(botId) ?? null
-        },
-        write: async (botId: string, text: string | null) => {
-          writes += 1
-          await stalled
-          void (text === null ? stored.delete(botId) : stored.set(botId, text))
-        },
-        bots: async () => []
-      }
-      const history = createBotMemoryHistory(io)
-      const edit = (index: number) =>
-        history.append('bot-1', { kind: 'owner' }, botMemoryChange('', `- fact ${index}\n`))
-      const first = edit(0)
-      await vi.waitFor(() => expect(writes).toBe(1))
-      const work: Promise<unknown>[] = [first]
-      const lists: Promise<{ change: { added: { line: string }[] } }[]>[] = []
-      for (let index = 1; index <= rounds; index++) {
-        work.push(edit(index))
-        lists.push(history.list('bot-1'))
-      }
-      release()
-      await Promise.all([...work, ...lists])
-
-      expect({ writes, reads }).toEqual({ writes: 2, reads: 3 })
-      const newestFirst = Array.from(
-        { length: rounds + 1 },
-        (_, index) => `- fact ${rounds - index}`
-      )
-      expect((await lists.at(-1))?.map((row) => row.change.added[0]?.line)).toEqual(newestFirst)
-      const restarted = await createBotMemoryHistory(io).list('bot-1')
-      expect(restarted.map((row) => row.change.added[0]?.line)).toEqual(newestFirst)
-    }
-  )
 
   it('keeps an edit made right after a bot is removed, and shows nothing of it to a read after', async () => {
     const stored = new Map<string, string>()

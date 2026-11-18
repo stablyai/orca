@@ -22,6 +22,9 @@ import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabAc
 import { MobileSessionBotSheet } from './MobileSessionBotSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
 import { MobileSessionTextSizeSheet } from './MobileSessionTextSizeSheet'
+import { useMobileWindowsShellChoices } from '../terminal/session/creation/mobile-windows-shell-choices'
+import { useRouteCapability } from '../worktree/execution-hosts/use-workspace-client'
+import { SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
@@ -100,6 +103,16 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
+  const offersShellChoices = useRouteCapability(
+    SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY
+  )
+  // The host owns which shells it would start here, as desktop's menu does for its own projects.
+  const terminalShells = useMobileWindowsShellChoices({
+    client,
+    enabled: offersShellChoices,
+    sheetOpen: showCreateTabDrawer,
+    worktreeId
+  })
   return (
     <>
       <MobileSessionBotSheet controller={controller} />
@@ -138,7 +151,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onCreateAgent={(agent, nativeChatDefault) =>
           void handleCreateTerminal(agent, undefined, nativeChatDefault)
         }
-        onCreateTerminal={() => void handleCreateTerminal()}
+        terminalShells={terminalShells}
+        onCreateTerminal={(shell) =>
+          void handleCreateTerminal(undefined, shell ? { shell } : undefined)
+        }
         onCreateBrowser={() => {
           if (browserScreencastSupported !== true) {
             showToast(
