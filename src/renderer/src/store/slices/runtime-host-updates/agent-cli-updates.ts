@@ -1,0 +1,120 @@
+import type { StateCreator } from 'zustand'
+import type { AppState } from '../../types'
+import {
+  AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
+  type AgentCliUpdate,
+  type AgentCliUpdateAgent,
+  type AgentCliUpdateRunResult
+} from '../../../../../shared/agent-launch/installation/agent-cli-update'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+
+// Above the host's own ten-minute limit, so its answer always arrives.
+const RUN_TIMEOUT_MS = 11 * 60_000
+
+export type AgentCliUpdateRun = { phase: 'running' } | { phase: 'failed'; output: string }
+
+/** One host's answer about the user's own agent CLIs, and the updates run there from this window. */
+export type AgentCliUpdateHost = {
+  updates: readonly AgentCliUpdate[]
+  runs: Partial<Record<AgentCliUpdateAgent, AgentCliUpdateRun>>
+}
+
+/** '' is this computer; otherwise the paired server's environment id. */
+export function agentCliUpdateHostKey(target: RuntimeClientTarget): string {
+  return target.kind === 'local' ? '' : target.environmentId
+}
+
+export function agentCliUpdateHostTarget(key: string): RuntimeClientTarget {
+  return key === '' ? { kind: 'local' } : { kind: 'environment', environmentId: key }
+}
+
+const EMPTY_HOST: AgentCliUpdateHost = { updates: [], runs: {} }
+const checks = new Map<string, Promise<void>>()
+
+export type AgentCliUpdatesSlice = {
+  agentCliUpdates: ReadonlyMap<string, AgentCliUpdateHost>
+  /** Asks the host which of the user's own CLIs are behind; the host caches its answer. */
+  checkAgentCliUpdates: (target: RuntimeClientTarget) => Promise<void>
+  /** Resolves true once the host reports the CLI current. */
+  runAgentCliUpdate: (target: RuntimeClientTarget, agent: AgentCliUpdateAgent) => Promise<boolean>
+}
+
+export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCliUpdatesSlice> = (
+  set,
+  get
+) => {
+  const writeHost = (key: string, write: (host: AgentCliUpdateHost) => AgentCliUpdateHost) =>
+    set((state) => {
+      const next = new Map(state.agentCliUpdates)
+      next.set(key, write(state.agentCliUpdates.get(key) ?? EMPTY_HOST))
+      return { agentCliUpdates: next }
+    })
+  const writeRun = (key: string, agent: AgentCliUpdateAgent, run: AgentCliUpdateRun | null) =>
+    writeHost(key, (host) => {
+      const runs = { ...host.runs }
+      if (run) {
+        runs[agent] = run
+      } else {
+        delete runs[agent]
+      }
+      return { ...host, runs }
+    })
+  const hostAnswers = (target: RuntimeClientTarget): boolean =>
+    target.kind === 'local' ||
+    lastVerifiedRuntimeStatus(
+      get().runtimeStatusByEnvironmentId.get(target.environmentId)
+    )?.capabilities?.includes(AGENT_CLI_UPDATE_RUNTIME_CAPABILITY) === true
+
+  return {
+    agentCliUpdates: new Map(),
+
+    checkAgentCliUpdates: (target) => {
+      const key = agentCliUpdateHostKey(target)
+      if (!hostAnswers(target)) {
+        return Promise.resolve()
+      }
+      let check = checks.get(key)
+      if (!check) {
+        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check')
+          .then(({ updates }) => writeHost(key, (host) => ({ ...host, updates })))
+          .catch((error: unknown) => {
+            console.warn('[agent-cli-update] check failed:', error)
+          })
+          .finally(() => checks.delete(key))
+        checks.set(key, check)
+      }
+      return check
+    },
+
+    runAgentCliUpdate: async (target, agent) => {
+      const key = agentCliUpdateHostKey(target)
+      if (get().agentCliUpdates.get(key)?.runs[agent]?.phase === 'running') {
+        return false
+      }
+      writeRun(key, agent, { phase: 'running' })
+      let result: AgentCliUpdateRunResult
+      try {
+        result = await callRuntimeRpc<AgentCliUpdateRunResult>(
+          target,
+          'agentCliUpdate.run',
+          { agent },
+          { timeoutMs: RUN_TIMEOUT_MS }
+        )
+      } catch (error) {
+        result = { ok: false, output: error instanceof Error ? error.message : String(error) }
+      }
+      if (!result.ok) {
+        writeRun(key, agent, { phase: 'failed', output: result.output })
+        return false
+      }
+      writeHost(key, (host) => {
+        const runs = { ...host.runs }
+        delete runs[agent]
+        return { updates: host.updates.filter((update) => update.agent !== agent), runs }
+      })
+      return true
+    }
+  }
+}

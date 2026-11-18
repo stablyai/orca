@@ -29295,5 +29295,33 @@
     "suggestionUse": "Use",
     "browseOnline": "Browse",
     "browseOnlineLabel": "Browse community translations on orca.dev (opens in your browser)"
+  },
+  "agentCliUpdate": {
+    "updating": "Updating…",
+    "tryAgain": "Try again",
+    "update": "Update",
+    "failedTooltip": "Update failed. The status bar has its output.",
+    "versions": "{{installed}} → {{latest}}",
+    "claudeProduct": "Claude Code",
+    "codexProduct": "Codex CLI",
+    "modelPickerRow": "Update {{product}} for new models",
+    "failed": "Update failed",
+    "commandCopied": "Command copied",
+    "commandNotCopied": "Could not copy the command",
+    "hideOutput": "Hide output",
+    "showOutput": "Show output",
+    "copyCommand": "Copy",
+    "manualHint": "Run in a terminal:",
+    "noOutput": "The command printed nothing.",
+    "heading": "Updates",
+    "updateAll": "Update all",
+    "thisComputer": "This computer",
+    "statusUpdating": "Updating CLIs",
+    "statusUpdatingTooltip": "Agent CLI updates are running",
+    "statusFailed": "CLI update failed",
+    "statusFailedTooltip": "Open to see what went wrong",
+    "statusOne": "CLI update",
+    "statusCount": "{{count}} CLI updates",
+    "statusTooltip": "Newer agent CLI versions are out"
   }
 }
