@@ -250,8 +250,9 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     const pty = this.ptysById.get(ptyId)
     if (pty && pty.lastOutputAt === null) {
       pty.outputObservedSince ??= Date.now()
-      awaitReattachedTerminalPaint(pty)
     }
+    // Why not only when silent: output can arrive before this runs.
+    awaitReattachedTerminalPaint(pty)
   }
 
   /** A surviving process main never saw live still has its agent's last own report, which the hook

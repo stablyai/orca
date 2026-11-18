@@ -79,4 +79,32 @@ describe('tui-idle on an agent with no rest signal', () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
+
+  it("does not take an exited Claude's rest title for the Claude now starting in its pane", async () => {
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'Terminal',
+      foregroundProcess: 'claude',
+      data: ''
+    })
+    vi.useFakeTimers()
+    const write = (chunk: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, chunk, Date.now())
+    const composer = '\x1b]0;✳ Claude Code\x07\x1b[?2031h\x1b[?2004h│ ❯\u00a0 │\x1b[?25h'
+    write('\x1b]133;A\x07~/repo % claude\r\n\x1b]133;C\x07\x1b]0;claude\x07')
+    await vi.advanceTimersByTimeAsync(500)
+    write(composer)
+    await vi.advanceTimersByTimeAsync(5_000)
+    // The first Claude exits; a wait starts before the shell has started the next one.
+    write('\r\nResume this session with:\r\n\x1b]133;D;0\x07\x1b]133;A\x07~/repo % ')
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    wait.then(settled, () => {})
+    await vi.advanceTimersByTimeAsync(300)
+    write('claude\r\n\x1b]133;C\x07\x1b]0;claude\x07')
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
+    expect(settled).not.toHaveBeenCalled()
+
+    write(composer)
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
 })

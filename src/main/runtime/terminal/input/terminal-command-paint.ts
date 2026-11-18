@@ -56,6 +56,11 @@ const AGENT_PAINT_SIGNALS: readonly DraftPasteMarkerSignal[] = [
 export class TerminalCommandPaint {
   private awaitingPaint = false
   private repaintRequestable = false
+  /** Between OSC 133;D and the next 133;C the shell owns the pane: no command is there to paint. */
+  private betweenCommands = false
+  /** When the current command started, or the reattach that hid its start; null before any marker. */
+  private startedAt: number | null = null
+  private commandFinishedInChunk = false
   private markerEndInChunk = -1
   /** Armed at each command start; absent before the first marker, where no command is attributable. */
   private composers: Map<
@@ -63,7 +68,9 @@ export class TerminalCommandPaint {
     { scanner: DraftPasteReadyScanner; seen: boolean }
   > | null = null
   private readonly scanner = createOsc133CommandFinishedScanner(
-    () => {},
+    () => {
+      this.commandFinishedInChunk = true
+    },
     (endInChunk) => {
       this.markerEndInChunk = endInChunk
     }
@@ -71,8 +78,11 @@ export class TerminalCommandPaint {
 
   observe(data: string, normalizedText: string): void {
     this.markerEndInChunk = -1
+    this.commandFinishedInChunk = false
     this.scanner.scan(data)
     if (this.markerEndInChunk !== -1) {
+      this.betweenCommands = false
+      this.startedAt = Date.now()
       this.repaintRequestable = false
       // Why the rest of this chunk counts: a fast binary can paint in the same read as the marker.
       const commandOutput = data.slice(this.markerEndInChunk)
@@ -84,6 +94,17 @@ export class TerminalCommandPaint {
         ])
       )
       this.observeComposers(commandOutput)
+      return
+    }
+    if (this.commandFinishedInChunk) {
+      // Why: the finished command's paint, a previous agent's ready screen included, speaks for nothing now.
+      this.betweenCommands = true
+      this.awaitingPaint = true
+      this.repaintRequestable = false
+      this.composers = new Map()
+      return
+    }
+    if (this.betweenCommands) {
       return
     }
     if (this.awaitingPaint && hasVisibleText(normalizedText)) {
@@ -107,6 +128,7 @@ export class TerminalCommandPaint {
   /** A reattached process's command start predates this observer, so only its next visible paint
    *  speaks for it; the screen it left may be an earlier program's. */
   awaitReattachedPaint(): void {
+    this.startedAt = Date.now()
     this.awaitingPaint = true
     this.composers = null
     this.repaintRequestable = true
@@ -117,6 +139,19 @@ export class TerminalCommandPaint {
     const take = this.repaintRequestable
     this.repaintRequestable = false
     return take
+  }
+
+  /** Whether this observer saw the current command start, or armed for a reattach. */
+  hasObservedCommand(): boolean {
+    return this.startedAt !== null
+  }
+
+  /** Whether the agent's own report at `observedAt` speaks for the command now running. */
+  isCurrentReport(observedAt: number | null | undefined): boolean {
+    if (this.startedAt === null) {
+      return true
+    }
+    return !this.betweenCommands && typeof observedAt === 'number' && observedAt >= this.startedAt
   }
 
   hasPainted(): boolean {
@@ -144,9 +179,23 @@ export function observeTerminalCommandPaint(
   record.commandPaint.observe(data, normalizedText)
 }
 
-export function awaitReattachedTerminalPaint(record: TerminalCommandPaintRecord): void {
+/** Arms the reattach fence unless this run already parsed the pane's current command start. */
+export function awaitReattachedTerminalPaint(record: TerminalCommandPaintRecord | undefined): void {
+  if (!record) {
+    return
+  }
   record.commandPaint ??= new TerminalCommandPaint()
-  record.commandPaint.awaitReattachedPaint()
+  if (!record.commandPaint.hasObservedCommand()) {
+    record.commandPaint.awaitReattachedPaint()
+  }
+}
+
+/** Without a command boundary or reattach to fence on, every report counts, as before. */
+export function isCurrentCommandReport(
+  record: TerminalCommandPaintRecord,
+  observedAt: number | null | undefined
+): boolean {
+  return record.commandPaint?.isCurrentReport(observedAt) ?? true
 }
 
 export function takeReattachedRepaintRequest(record: TerminalCommandPaintRecord): boolean {
