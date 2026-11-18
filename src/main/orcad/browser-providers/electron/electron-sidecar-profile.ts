@@ -95,12 +95,18 @@ export async function prepareElectronSidecarProfile(
     return createTemporaryElectronSidecarProfile(orcadUserDataPath)
   }
   // No sidecar runs here now: a killed one's metadata and Chromium locks would only block the next.
-  await Promise.all(
+  const cleared = await Promise.all(
     [
       getRuntimeMetadataPath(profilePath),
       ...CHROMIUM_SINGLETON_FILES.map((name) => join(profilePath, name))
     ].map((path) => rm(path, { force: true }))
+  ).then(
+    () => true,
+    () => false
   )
+  if (!cleared) {
+    return createTemporaryElectronSidecarProfile(orcadUserDataPath)
+  }
   return { path: profilePath, persistent: true }
 }
 

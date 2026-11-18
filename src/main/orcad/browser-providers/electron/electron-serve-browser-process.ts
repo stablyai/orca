@@ -167,8 +167,8 @@ export class ElectronServeBrowserProcess {
   }
 
   async stop(): Promise<void> {
-    const child = this.child
-    const sidecarPid = this.metadata?.pid ?? child?.pid ?? null
+    // An exited child's pid may already belong to another process.
+    const sidecarPid = this.metadata?.pid ?? this.pid()
     const profile = this.sidecarProfile
     this.child = null
     this.metadata = null
