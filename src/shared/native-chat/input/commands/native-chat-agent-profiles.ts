@@ -1,5 +1,5 @@
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
-import type { SkillDiscoverySource } from '../../../skills/discovery/skills'
+import type { DiscoveredSkill, SkillDiscoverySource } from '../../../skills/discovery/skills'
 import {
   getAgentSlashCommands,
   type NativeChatCommandReply,
@@ -79,18 +79,19 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
   }
 }
 
-/** Whether skills under `source` reach `profile`'s agent: shared roots, its own, and the skill
- *  folders of agents it also reads. */
+/** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill
+ *  folders of agents it also reads, without their plugins or the skills they bundle. */
 export function readsSkillSource(
   profile: Pick<NativeChatAgentProfile, 'skillSourceOwner' | 'readsSkillFoldersOf'>,
-  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>
+  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>,
+  skill: Pick<DiscoveredSkill, 'sourceKind'>
 ): boolean {
   return (
     source.owner === null ||
     source.owner === profile.skillSourceOwner ||
-    (source.owner !== null &&
-      profile.readsSkillFoldersOf?.includes(source.owner) === true &&
-      source.sourceKind !== 'plugin')
+    (profile.readsSkillFoldersOf?.includes(source.owner) === true &&
+      source.sourceKind !== 'plugin' &&
+      skill.sourceKind !== 'bundled')
   )
 }
 

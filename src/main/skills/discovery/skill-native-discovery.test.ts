@@ -182,6 +182,7 @@ describe('skill discovery', () => {
       [join(home, '.grok', 'skills'), 'grok-home'],
       [join(repo, '.cursor', 'skills'), 'cursor-project'],
       [join(repo, '.codex', 'skills'), 'codex-project'],
+      [join(home, '.codex', 'skills', '.system'), 'codex-bundled'],
       [join(home, '.pi', 'agent', 'skills'), 'pi-only']
     ]
     for (const [folder, name] of folders) {
