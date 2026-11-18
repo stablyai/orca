@@ -246,7 +246,6 @@ export function BotItemCommentBox({
   })
   const editorSelect = useLatestHandler(events.onTextareaSelect)
   const editorPaste = useLatestHandler(handlePaste)
-  const editorKeyUp = useLatestHandler(ime.onKeyUp)
   // Chat's keys: the `@` list's arrows and picks, Enter sends, Shift+Enter adds a line.
   const keyDown = useNativeChatComposerKeyDown({
     autocomplete: mentions.autocomplete,
@@ -282,8 +281,8 @@ export function BotItemCommentBox({
     }
   }
   const editorCompositionStart = useLatestHandler(() => ime.setComposing(true))
-  const editorCompositionEnd = useLatestHandler((event: React.CompositionEvent<HTMLDivElement>) => {
-    ime.setComposing(false, event.data)
+  const editorCompositionEnd = useLatestHandler(() => {
+    ime.setComposing(false)
     settle()
   })
   const editorBlur = useLatestHandler(() => {
@@ -378,7 +377,6 @@ export function BotItemCommentBox({
             onSelect={editorSelect}
             onPasteCapture={editorPaste}
             onKeyDownCapture={editorKeyDown}
-            onKeyUp={editorKeyUp}
             onCompositionStart={editorCompositionStart}
             onCompositionEnd={editorCompositionEnd}
             onBlur={editorBlur}
