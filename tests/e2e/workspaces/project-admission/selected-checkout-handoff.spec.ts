@@ -44,7 +44,6 @@ test('Add Project opens the selected hidden checkout and its subfolder without r
   orcaPage,
   registerPostElectronShutdownCleanup
 }, testInfo) => {
-  test.setTimeout(180_000)
   const paths = createFixture()
   registerPostElectronShutdownCleanup(async () =>
     rmSync(paths.root, { recursive: true, force: true })
