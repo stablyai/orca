@@ -7,9 +7,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 import { CACHE_ROOT, ensureBuild, git, pruneCache, resolveCommit } from './fleet-gate-builds.mjs'
-import { lockCacheEntry } from './fleet-gate-cache-lock.mjs'
+import { lockCacheEntryAsync, releaseHeldLocks } from './fleet-gate-cache-lock.mjs'
 import { copyProfile, stopCopyDaemons } from './fleet-gate-copies.mjs'
 import { startVirtualDisplay } from './fleet-gate-display.mjs'
+import { waitForAppWindow } from './fleet-gate-app-ready.mjs'
 import { hotPathChanges } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
@@ -28,6 +29,7 @@ import {
 import { SCENARIOS, seedAgentStatuses } from './fleet-gate-scenarios.mjs'
 import {
   buildSyntheticFleetSeed,
+  ensureFleetCorpus,
   readFleetCensus,
   readSeedReceipt,
   SEED_SHAPE
@@ -38,6 +40,9 @@ const KEEP_SEEDS = 2
 const AGENT_PANES = 200
 // Copies and helpers to stop if the gate itself is stopped (a release bot's timeout, Ctrl-C).
 const liveCleanups = new Set()
+let stopping = false
+// One close can take 30 s for the app plus a few seconds per daemon; a stop waits that long, then exits anyway.
+const STOP_BUDGET_MS = 60_000
 
 // Packaged builds don't expose the store the gate seeds, drives and probes through.
 function packagedAppUnsupported() {
@@ -177,68 +182,11 @@ function isolatedEnv(runDir, userDataDir) {
   }
 }
 
-const READY_TIMEOUT_MS = 300_000
-
-function readWindowState() {
-  return {
-    url: location.href,
-    hasApi: Boolean(window.api),
-    hasStore: Boolean(window.__store),
-    ready: window.__store?.getState().workspaceSessionReady ?? null,
-    text: (document.body?.innerText ?? '').replace(/\s+/g, ' ').slice(0, 300)
-  }
-}
-
-/** The session-ready app window; on timeout, writes what every window showed so one run explains the failure. */
-async function waitForAppWindow(app, { label, userDataDir, outDir, stderrTail }) {
-  const consoleErrors = []
-  const watch = (page) =>
-    page.on('console', (message) => {
-      if (message.type() === 'error') {
-        consoleErrors.push(message.text().slice(0, 300))
-        consoleErrors.splice(0, Math.max(0, consoleErrors.length - 20))
-      }
-    })
-  await app.firstWindow({ timeout: 180_000 })
-  app.windows().forEach(watch)
-  app.on('window', watch)
-  const deadline = Date.now() + READY_TIMEOUT_MS
-  while (Date.now() < deadline) {
-    for (const page of app.windows()) {
-      const ready = await page
-        .evaluate(() => window.__store?.getState().workspaceSessionReady === true)
-        .catch(() => false)
-      if (ready) {
-        return page
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2_000))
-  }
-  const windows = []
-  for (const page of app.windows()) {
-    windows.push(await page.evaluate(readWindowState).catch((error) => ({ error: String(error) })))
-  }
-  fs.mkdirSync(outDir, { recursive: true })
-  const stem = path.join(outDir, `not-ready-${label}-${Date.now()}`)
-  await app
-    .windows()[0]
-    ?.screenshot({ path: `${stem}.png` })
-    .catch(() => {})
-  const userDataFiles = fs.readdirSync(userDataDir).slice(0, 40)
-  fs.writeFileSync(
-    `${stem}.json`,
-    `${JSON.stringify({ windows, consoleErrors, stderrTail, userDataFiles }, null, 2)}\n`
-  )
-  console.log(`[fleet-gate] ${label} never became ready: ${JSON.stringify(windows).slice(0, 600)}`)
-  console.log(
-    `[fleet-gate] console errors: ${JSON.stringify(consoleErrors.slice(-5)).slice(0, 600)}`
-  )
-  console.log(`[fleet-gate] stderr tail: ${JSON.stringify(stderrTail.slice(-8)).slice(0, 800)}`)
-  throw new Error(`${label} not session-ready after ${READY_TIMEOUT_MS / 1000}s (${stem}.json)`)
-}
-
 /** Launches one hidden copy on userDataDir; close() quits it (gracefully first) and is safe to call twice. */
 async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraEnv = {} }) {
+  if (stopping) {
+    throw new Error('gate is stopping')
+  }
   const executablePath = createRequire(path.join(buildDir, 'package.json'))('electron')
   const app = await electron.launch({
     executablePath,
@@ -258,12 +206,13 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
     stderrTail.push(...text.split('\n').filter(Boolean))
     stderrTail.splice(0, Math.max(0, stderrTail.length - 40))
   })
-  let closed = false
-  const close = async () => {
-    if (closed) {
-      return
-    }
-    closed = true
+  let closing = null
+  // Every caller, including a stop signal arriving mid-close, waits for the same full close.
+  const close = () => {
+    closing ??= closeOnce()
+    return closing
+  }
+  const closeOnce = async () => {
     await Promise.race([
       app.close().catch(() => {}),
       new Promise((resolve) => setTimeout(resolve, 30_000))
@@ -352,7 +301,7 @@ async function ensureSeed({ oldSha, oldBuild, outDir }) {
   const seedsDir = path.join(CACHE_ROOT, 'seeds')
   const seedDir = path.join(seedsDir, oldSha)
   fs.mkdirSync(seedsDir, { recursive: true })
-  const unlock = lockCacheEntry(seedDir)
+  const unlock = await lockCacheEntryAsync(seedDir)
   try {
     return await seedUnderLock({ seedsDir, seedDir, oldSha, oldBuild, outDir })
   } finally {
@@ -474,12 +423,17 @@ async function main() {
   }
   const outDir = options.out ?? path.join(CACHE_ROOT, 'reports')
   fs.mkdirSync(outDir, { recursive: true })
+  // Synchronous cache work comes first, before stop handlers exist, so a stop signal still ends it at once.
+  const builds = { old: ensureBuild(repoRoot, oldSha), new: ensureBuild(repoRoot, newSha) }
+  if (!options.seed) {
+    ensureFleetCorpus(path.join(CACHE_ROOT, 'corpus'))
+  }
+  installStopHandlers()
   virtualDisplay = await startVirtualDisplay()
   // Without a private display copies stay hidden and unpainted, so clicks and focus can't be driven.
   options.scenarios ??= virtualDisplay
     ? [...Object.keys(SCENARIOS), 'burst']
     : ['idle', 'streaming', 'burst']
-  const builds = { old: ensureBuild(repoRoot, oldSha), new: ensureBuild(repoRoot, newSha) }
   const seed = options.seed
     ? { seedDir: options.seed, receipt: null }
     : await ensureSeed({ oldSha, oldBuild: builds.old, outDir })
@@ -565,18 +519,31 @@ async function main() {
   process.exitCode = { PASS: 0, FAIL: 1, INCOMPLETE: 2 }[result]
 }
 
-// A stopped gate still stops its copies, their daemons, the CPU load and Xvfb before it exits.
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.once(signal, () => {
-    console.error(`[fleet-gate] ${signal}: stopping copies`)
-    void Promise.race([
+// Copies still mid-launch register only once up, so keep going until none are left or the budget runs out.
+async function stopEverything() {
+  const deadline = Date.now() + STOP_BUDGET_MS
+  while (liveCleanups.size > 0 && Date.now() < deadline) {
+    await Promise.race([
       Promise.allSettled([...liveCleanups].map((cleanup) => cleanup())),
-      new Promise((resolve) => setTimeout(resolve, 20_000))
-    ]).finally(() => {
-      virtualDisplay?.stop()
-      process.exit(2)
+      new Promise((resolve) => setTimeout(resolve, Math.max(0, deadline - Date.now())))
+    ])
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+}
+
+/** A stopped gate still stops its copies, their daemons, the CPU load and Xvfb, and frees its cache locks. */
+function installStopHandlers() {
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.once(signal, () => {
+      stopping = true
+      console.error(`[fleet-gate] ${signal}: stopping copies`)
+      void stopEverything().finally(() => {
+        virtualDisplay?.stop()
+        releaseHeldLocks()
+        process.exit(2)
+      })
     })
-  })
+  }
 }
 
 // Exit explicitly: a launched copy's driver handles otherwise keep the process (and its qa-gate slot) alive.

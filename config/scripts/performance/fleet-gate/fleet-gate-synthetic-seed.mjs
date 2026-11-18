@@ -51,10 +51,19 @@ function buildCorpus(corpusDir, marker) {
   fs.writeFileSync(marker, `${new Date().toISOString()}\n`)
 }
 
+/** What a full seed holds; a receipt short of it, cached before this check existed, is rebuilt. */
+function seedShortfall({ census, chats, terminals }) {
+  return [
+    !(census?.workspaces >= SEED_SHAPE.worktrees + SEED_SHAPE.folders) && 'workspaces',
+    !(chats?.ok >= SEED_SHAPE.chats) && 'chats',
+    !(terminals?.ok >= SEED_SHAPE.terminals) && 'terminals'
+  ].filter(Boolean)
+}
+
 export function readSeedReceipt(seedDir) {
   try {
     const receipt = JSON.parse(fs.readFileSync(path.join(seedDir, '.fleet-seed.json'), 'utf8'))
-    return receipt.format === SEED_FORMAT ? receipt : null
+    return receipt.format === SEED_FORMAT && seedShortfall(receipt).length === 0 ? receipt : null
   } catch {
     return null
   }
@@ -236,11 +245,7 @@ export async function buildSyntheticFleetSeed({ seedDir, corpusDir, builtBy, lau
     const census = await readFleetCensus(page)
     const receipt = { format: SEED_FORMAT, builtBy, workspaces, chats, terminals, census }
     // A short fleet must never be cached: every later run would measure it as if it were full size.
-    const short = [
-      census.workspaces < SEED_SHAPE.worktrees + SEED_SHAPE.folders && 'workspaces',
-      chats.ok < SEED_SHAPE.chats && 'chats',
-      terminals.ok < SEED_SHAPE.terminals && 'terminals'
-    ].filter(Boolean)
+    const short = seedShortfall(receipt)
     if (short.length > 0) {
       throw new Error(`seed is short of ${short.join(', ')}: ${JSON.stringify(receipt)}`)
     }

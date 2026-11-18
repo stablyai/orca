@@ -21,6 +21,34 @@ export function copyProfile(sourceDir, targetDir) {
   })
 }
 
+function processInfo(pid) {
+  try {
+    const [started, ...args] = execFileSync('ps', ['-o', 'lstart=,args=', '-p', String(pid)], {
+      encoding: 'utf8'
+    })
+      .trim()
+      .split(/(?<=^\S+ \S+ +\S+ \S+ \S+) /)
+    return { startedAtMs: Date.parse(started), args: args.join(' ') }
+  } catch {
+    return null
+  }
+}
+
+/** Only a live process that matches its pid record (start time or entry path) is this copy's daemon, not a reused pid. */
+function isRecordedDaemon(record) {
+  const live = processInfo(record.pid)
+  if (!live) {
+    return false
+  }
+  if (typeof record.entryPath === 'string' && live.args.includes(record.entryPath)) {
+    return true
+  }
+  return (
+    typeof record.startedAtMs === 'number' &&
+    Math.abs(live.startedAtMs - record.startedAtMs) < 60_000
+  )
+}
+
 function readDaemonPids(userDataDir) {
   const daemonDir = path.join(userDataDir, 'daemon')
   if (!fs.existsSync(daemonDir)) {
@@ -31,20 +59,13 @@ function readDaemonPids(userDataDir) {
     if (!entry.endsWith('.pid')) {
       continue
     }
-    let raw = ''
     try {
-      raw = fs.readFileSync(path.join(daemonDir, entry), 'utf8').trim()
+      const record = JSON.parse(fs.readFileSync(path.join(daemonDir, entry), 'utf8'))
+      if (Number.isInteger(record.pid) && record.pid > 1 && isRecordedDaemon(record)) {
+        pids.push(record.pid)
+      }
     } catch {
-      continue
-    }
-    let pid = Number(raw)
-    try {
-      pid = JSON.parse(raw).pid ?? pid
-    } catch {
-      // A bare pid number.
-    }
-    if (Number.isInteger(pid) && pid > 1) {
-      pids.push(pid)
+      // Gone, torn, or a bare legacy pid with nothing to prove it is still the daemon.
     }
   }
   return pids
