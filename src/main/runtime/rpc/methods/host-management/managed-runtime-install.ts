@@ -18,11 +18,26 @@ import {
 } from '../../../agent-session/launch/structured-agent-launch-support'
 import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../../core'
+import { isAbsolute } from 'node:path'
+import { CLAUDE_MANAGED_RUNTIME } from '../../../../claude/managed-runtime/claude-managed-runtime'
+import { hasExplicitTuiLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
+import { resolveGuestNativeProgram } from '../../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 
 const installations = new Map<string, ManagedRuntimeInstallation>()
 
 function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRuntimeInstallation {
+  const existing = installations.get(agent)
+  if (existing) {
+    return existing
+  }
+  const installation =
+    agent === 'claude' ? claudeInstallation(runtime) : acpInstallation(agent, runtime)
+  installations.set(agent, installation)
+  return installation
+}
+
+function acpInstallation(agent: string, runtime: OrcaRuntimeService): ManagedRuntimeInstallation {
   const spec = acpLaunchSpecFor(agent)
   if (!spec?.managedRuntime) {
     throw new Error(`Orca installs no runtime for ${agent}.`)
@@ -60,27 +75,48 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
     launchGate
       ? launchGate.run(() => stopStructuredAgentChats(agent, managedRuntime.label), work)
       : Promise.reject(new Error(`${managedRuntime.label} cannot be removed on this host.`))
-  const installation =
-    installations.get(agent) ??
-    // The chat host's own state root, where its launches look.
-    new ManagedRuntimeInstallation(agent, managedRuntime, {
-      dataDirectory,
-      findExternal,
-      fence
+  // The chat host's own state root, where its launches look.
+  return new ManagedRuntimeInstallation(agent, managedRuntime, {
+    dataDirectory,
+    findExternal,
+    fence
+  })
+}
+
+/** Claude chats run the user's own install when the host has one, so Orca's copy is the fallback. */
+function claudeInstallation(runtime: OrcaRuntimeService): ManagedRuntimeInstallation {
+  const findExternal = async (): Promise<boolean> => {
+    const settings = runtime.requireStore().getSettings()
+    if (hasExplicitTuiLaunchCommand(settings, 'claude')) {
+      return true
+    }
+    const env = await resolveHostStructuredAgentLaunchEnvironment('claude', settings)
+    const homePath = env.HOME ?? env.USERPROFILE
+    const resolved = resolveGuestNativeProgram('claude', {
+      pathEnv: env.PATH ?? env.Path ?? null,
+      ...(homePath ? { homePath } : {})
     })
-  installations.set(agent, installation)
-  return installation
+    return resolved !== null && isAbsolute(resolved)
+  }
+  return new ManagedRuntimeInstallation('claude', CLAUDE_MANAGED_RUNTIME, {
+    dataDirectory: getProfileUserDataPath(),
+    findExternal,
+    // No launch gate tracks Claude processes; stopping its chats first is the closest fence.
+    fence: (work) => stopStructuredAgentChats('claude', CLAUDE_MANAGED_RUNTIME.label).then(work)
+  })
 }
 
 /** Each installation reclaims stale releases when created, so create them every launch, not only when a client asks. */
 export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
-  for (const spec of ACP_LAUNCH_SPECS) {
-    if (spec.managedRuntime) {
-      try {
-        installationFor(spec.agent, runtime)
-      } catch (error) {
-        console.warn(`[managed-runtime] ${spec.agent} releases not reclaimed at launch:`, error)
-      }
+  const agents = [
+    ...ACP_LAUNCH_SPECS.filter((spec) => spec.managedRuntime).map((spec) => spec.agent),
+    'claude'
+  ]
+  for (const agent of agents) {
+    try {
+      installationFor(agent, runtime)
+    } catch (error) {
+      console.warn(`[managed-runtime] ${agent} releases not reclaimed at launch:`, error)
     }
   }
 }

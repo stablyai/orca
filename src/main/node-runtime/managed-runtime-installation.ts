@@ -12,8 +12,7 @@ import { RevisionedState } from '../runtime/events/revisioned-state'
 import {
   reclaimRuntimeReleases,
   resolveInstalledRuntimeRelease,
-  type ManagedRuntime,
-  type ManagedRuntimePin
+  type ManagedRuntime
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
 
@@ -36,6 +35,9 @@ export function onManagedRuntimeReleasesChanged(listener: () => void): () => voi
 }
 type InstalledFacts = Omit<ManagedRuntimeInstallState, 'agent' | 'revision' | 'operation'>
 
+const unavailableText = (label: string): string =>
+  `${label} is not available on ${process.platform} ${process.arch}.`
+
 export class ManagedRuntimeInstallation {
   private readonly state = new RevisionedState<ManagedRuntimeOperation | null>(null)
   private readonly root: string
@@ -57,6 +59,11 @@ export class ManagedRuntimeInstallation {
     const { value: operation, revision } = this.state.get()
     const phase = `${operation?.id}:${operation?.phase}`
     let facts = this.facts
+    if (fresh && this.runtime.refreshPin) {
+      await this.runtime.refreshPin().catch((error: unknown) => {
+        console.warn(`[managed-runtime] ${this.agent} latest release unknown:`, error)
+      })
+    }
     if (fresh || facts?.phase !== phase) {
       const read = this.readInstalledFacts()
       facts = { phase, read }
@@ -96,8 +103,9 @@ export class ManagedRuntimeInstallation {
   install(): ManagedRuntimeOperation {
     const { label } = this.runtime
     const pin = this.runtime.pin()
-    if (!pin) {
-      throw new Error(`${label} is not available on ${process.platform} ${process.arch}.`)
+    // A runtime that follows its latest release looks it up when the install runs.
+    if (!pin && !this.runtime.refreshPin) {
+      throw new Error(unavailableText(label))
     }
     const current = this.state.get().value
     const { running } = this
@@ -113,11 +121,11 @@ export class ManagedRuntimeInstallation {
       kind: 'install',
       phase: 'downloading',
       downloadedBytes: 0,
-      totalBytes: pin.archiveBytes
+      totalBytes: pin?.archiveBytes ?? null
     }
     this.running = run
     this.state.set(operation)
-    this.mutation = this.mutation.then(() => this.runInstall(pin, run))
+    this.mutation = this.mutation.then(() => this.runInstall(run))
     return operation
   }
 
@@ -173,16 +181,23 @@ export class ManagedRuntimeInstallation {
     }
   }
 
-  private async runInstall(pin: ManagedRuntimePin, run: Run): Promise<void> {
+  private async runInstall(run: Run): Promise<void> {
     const deadline = AbortSignal.timeout(DEADLINE_MS)
+    const signal = AbortSignal.any([run.controller.signal, deadline])
     try {
+      await this.runtime.refreshPin?.(signal)
+      const pin = this.runtime.pin()
+      if (!pin) {
+        throw new Error(unavailableText(this.runtime.label))
+      }
+      this.publish(run, { totalBytes: pin.archiveBytes })
       await installRuntimeRelease({
         agent: this.agent,
         runtime: this.runtime,
         root: this.root,
         pin,
         fetcher: this.deps.fetcher,
-        signal: AbortSignal.any([run.controller.signal, deadline]),
+        signal,
         publish: (patch) => this.publish(run, patch),
         commit: () => {
           run.committed = true
