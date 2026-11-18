@@ -21,7 +21,9 @@ const SCENARIOS = [
   ['a draft typed after the turn ended', []],
   ['a saved record of another conversation', []],
   ['an agent inside tmux', []],
-  ['a turn Orca delivered after the turn ended', []]
+  ['a turn Orca delivered after the turn ended', []],
+  ['a turn Orca delivered after the agent was picked', []],
+  ['a Codex agent, whose hooks cannot show a running background job', []]
 ] as const
 
 describe('quit stops idle agents', () => {
@@ -33,7 +35,7 @@ describe('quit stops idle agents', () => {
             paneKey: PANE_KEY,
             tabId: 'host-tab',
             worktreeId: TEST_WORKTREE_ID,
-            agent: 'claude',
+            agent: scenario.startsWith('a Codex agent') ? 'codex' : 'claude',
             providerSession: {
               key: 'session_id',
               id:
@@ -56,7 +58,7 @@ describe('quit stops idle agents', () => {
       paneKey: PANE_KEY,
       state: scenario === 'a working agent' ? 'working' : 'done',
       prompt: 'fix the bug',
-      agentType: 'claude',
+      agentType: scenario.startsWith('a Codex agent') ? 'codex' : 'claude',
       connectionId: null,
       receivedAt: 200,
       stateStartedAt: 200,
@@ -115,6 +117,9 @@ describe('quit stops idle agents', () => {
     runtime.markGraphUnavailable(1)
     const targets = runtime.selectIdleAgentTerminalsForQuit()
     rows = []
+    if (scenario === 'a turn Orca delivered after the agent was picked') {
+      runtime.terminalRunFacts.recordInput('persisted-pty', 'orchestration', 'next task\r', 400)
+    }
 
     const stopped = await runtime.stopIdleAgentTerminalsForQuit(targets, Date.now() + 4_000)
 

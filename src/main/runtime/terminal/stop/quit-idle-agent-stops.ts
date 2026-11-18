@@ -5,7 +5,16 @@ import { completedAgentTurnAllowsStop } from '../../../../shared/agent-session/l
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
-export type QuitStopTarget = { ptyId: string; incarnationId: string | null }
+export type QuitStopTarget = {
+  ptyId: string
+  incarnationId: string | null
+  /** The PTY's last write at selection; a later one may have opened a turn. */
+  inputAt: number | null
+}
+
+// Agents whose hooks hold the status working while a background shell, monitor or cron runs; others
+// report done over a running job, and stopping them would kill it.
+const AGENTS_REPORTING_BACKGROUND_WORK = new Set(['claude'])
 
 /** Typing from the turn's start on may be a queued or unsent draft (with no turn start, any typing
  *  may be); any write after the turn ended, Orca's own deliveries included, may start the next turn. */
@@ -43,7 +52,12 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
     const rows = this.getAgentProviderSessionSnapshotFn?.() ?? []
     return rows.flatMap((row) => {
       // Placeholder and structured rows claim no finished turn; remote and WSL agents stay on their host.
-      if (row.providerSessionOnly || row.structuredHost || row.connectionId !== null) {
+      if (
+        row.providerSessionOnly ||
+        row.structuredHost ||
+        row.connectionId !== null ||
+        !AGENTS_REPORTING_BACKGROUND_WORK.has(row.agentType ?? '')
+      ) {
         return []
       }
       const ptyId = savedPanePtyId(session, row.paneKey)
@@ -69,14 +83,11 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
       }
       const { status } = identity
       const attention = this.getTerminalAttention(pty.ptyId)
+      const inputAt = this.terminalRunFacts.readLastInputAt(pty.ptyId)
       if (
         !completedAgentTurnAllowsStop(status) ||
         attention.shownRemotely ||
-        inputMayOpenTurn(
-          status,
-          attention.lastInputAt,
-          this.terminalRunFacts.readLastInputAt(pty.ptyId)
-        ) ||
+        inputMayOpenTurn(status, attention.lastInputAt, inputAt) ||
         this.ptyShowsComposerDraft(pty.ptyId)
       ) {
         return []
@@ -93,7 +104,7 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
       ) {
         return []
       }
-      return [{ ptyId: pty.ptyId, incarnationId: pty.incarnationId }]
+      return [{ ptyId: pty.ptyId, incarnationId: pty.incarnationId, inputAt }]
     })
   }
 
@@ -108,7 +119,11 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
       return []
     }
     const stopped = await Promise.all(
-      targets.map(async ({ ptyId, incarnationId }) => {
+      targets.map(async ({ ptyId, incarnationId, inputAt }) => {
+        // A write since selection (a delivered turn, a paired client) may have started work.
+        if (this.terminalRunFacts.readLastInputAt(ptyId) !== inputAt) {
+          return []
+        }
         // Reversible: the exit must not retire the saved conversation the next launch resumes.
         const settleStop = this.intentionalPtyStops.mark(ptyId, 'reversible', incarnationId)
         let done = false
