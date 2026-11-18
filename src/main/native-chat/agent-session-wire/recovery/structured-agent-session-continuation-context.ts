@@ -107,6 +107,7 @@ export function continuationContextReader(
       await prepared
       const path = join(spillRoot, `${randomUUID()}.spill`)
       spills.add(path)
+      activeSpills.add(path)
       const { itemId, revision, field } = part
       // One extraction at a time across exports: each can hold a whole stored text in the reader.
       const bytes = await runKeyedSerializedOperation(spillQueue, 'spill', () =>
@@ -118,6 +119,7 @@ export function continuationContextReader(
       return continuedFileText(path, trimEnd, async () => {
         await rm(path, { force: true })
         spills.delete(path)
+        activeSpills.delete(path)
       })
     }
     let path: string
@@ -138,7 +140,12 @@ export function continuationContextReader(
       }
       throw error
     } finally {
-      await Promise.all([...spills].map((spilled) => rm(spilled, { force: true })))
+      await Promise.all(
+        [...spills].map(async (spilled) => {
+          await rm(spilled, { force: true })
+          activeSpills.delete(spilled)
+        })
+      )
     }
     return {
       status: 'current',
@@ -151,13 +158,18 @@ export function continuationContextReader(
 class ContinuedPayloadSuperseded extends Error {}
 
 const spillQueue = new Map<string, Promise<void>>()
-// Longer than any export takes; an older spill was left by a crash.
+// Spills of exports still running, however long one sleeps; the sweep leaves them.
+const activeSpills = new Set<string>()
+// An unowned spill this old was left by a crash.
 const STALE_SPILL_MS = 60 * 60 * 1000
 
 async function removeStaleSpills(root: string): Promise<void> {
   const names = await readdir(root).catch(() => [])
-  for (const name of names) {
+  for (const name of names.filter((entry) => entry.endsWith('.spill'))) {
     const path = join(root, name)
+    if (activeSpills.has(path)) {
+      continue
+    }
     const modified = await stat(path).then(
       (info) => info.mtimeMs,
       () => Date.now()
