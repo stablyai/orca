@@ -229,7 +229,7 @@ describe('artifact writes in flight when the account changes', () => {
     const owner = await import('../orca-profiles/cloud-session/profile-cloud-session-owner')
     faults.beforePublish = (path) =>
       path.includes('intents') && owner.signOutCloudSession(account.profileId, account.userDataPath)
-    await expect(service.publish(request())).rejects.toThrow()
+    await expect(service.publish(request())).rejects.toThrow('account changed')
     expect(server.posts).toEqual([])
     expect(await intentFiles()).toEqual([])
   })

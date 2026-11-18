@@ -148,8 +148,10 @@ export async function getOrCreateArtifactCreateIntent(
     }
   }
   try {
+    const persisted = await persistedIntentCount(folder)
+    // Read after the scan: a create that published meanwhile is in the files, not the waiters.
     const others = (waitingCreatesByFolder.get(folder) ?? 1) - 1
-    if (others + (await persistedIntentCount(folder)) >= MAX_PENDING_ARTIFACT_CREATES) {
+    if (others + persisted >= MAX_PENDING_ARTIFACT_CREATES) {
       throw new Error(TOO_MANY_CREATES)
     }
     // One create per profile at a time: the temp sweep and the pending cap read the whole folder.
@@ -227,10 +229,16 @@ export async function removeArtifactCreateIntent(
   if (!(await intentExists(path))) {
     return
   }
+  let headKey: string | null
+  try {
+    headKey = await readIntentKey(path)
+  } catch {
+    // An I/O failure says nothing about whose intent this is; keep it, a replay dedupes.
+    return
+  }
   let matches = true
   try {
-    const known = (await readIntentKey(path)) ?? (await readIntent(path)).idempotencyKey
-    matches = known === expectedIdempotencyKey
+    matches = (headKey ?? (await readIntent(path)).idempotencyKey) === expectedIdempotencyKey
   } catch {
     // Unreadable intents cannot be replayed and may be discarded after completion.
   }
