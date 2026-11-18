@@ -1,13 +1,21 @@
-import type { GitHubAssignableUser } from './pull-request-types'
+import type { GitHubAssignableUser, GitHubPRTeamReviewRequest } from './pull-request-types'
 import type { GitHubWorkItem } from '../work-items/work-item-types'
 import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 
-type ReviewDisplayItem = Pick<GitHubWorkItem, 'reviewDecision' | 'reviewRequests' | 'latestReviews'>
+type ReviewDisplayItem = Pick<
+  GitHubWorkItem,
+  'reviewDecision' | 'reviewRequests' | 'latestReviews'
+> & {
+  teamReviewRequests?: GitHubPRTeamReviewRequest[]
+}
 export type GitHubPRPrimaryReviewer = Pick<GitHubAssignableUser, 'login' | 'avatarUrl'> & {
   name?: string | null
 }
 export type GitHubPRReviewerRow = GitHubPRPrimaryReviewer & {
   stateLabel: string
+  /** `REQUESTED` while a review request is open; otherwise the latest review's state. */
+  state: string | null
+  isTeam?: true
 }
 export const GITHUB_PR_REVIEWER_INPUT_MAX_BYTES = 2 * 1024
 
@@ -169,7 +177,18 @@ export function getGitHubPRReviewerRows(item: ReviewDisplayItem): GitHubPRReview
       login,
       name: user.name,
       avatarUrl: user.avatarUrl,
-      stateLabel: 'Requested'
+      stateLabel: 'Requested',
+      state: 'REQUESTED'
+    })
+  }
+  for (const team of item.teamReviewRequests ?? []) {
+    byLogin.set(team.slug.toLowerCase(), {
+      login: team.slug,
+      name: team.name,
+      avatarUrl: '',
+      stateLabel: 'Requested',
+      state: 'REQUESTED',
+      isTeam: true
     })
   }
   for (const review of item.latestReviews ?? []) {
@@ -182,7 +201,8 @@ export function getGitHubPRReviewerRows(item: ReviewDisplayItem): GitHubPRReview
       login,
       name: null,
       avatarUrl: review.avatarUrl ?? '',
-      stateLabel: formatReviewState(review.state)
+      stateLabel: formatReviewState(review.state),
+      state: review.state ?? null
     })
   }
   return Array.from(byLogin.values())

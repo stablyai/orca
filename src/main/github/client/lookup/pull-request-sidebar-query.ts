@@ -15,6 +15,19 @@ import {
 
 const CHECKS_FIELDS = prCheckRollupFields()
 
+const REVIEW_FIELDS = `reviewRequests(first: 25) {
+        totalCount
+        nodes { requestedReviewer {
+          __typename
+          ... on User { login name avatarUrl }
+          ... on Bot { login avatarUrl }
+          ... on Mannequin { login avatarUrl }
+          ... on Team { slug: combinedSlug name }
+        } }
+      }
+      latestReviews(first: 25) { totalCount nodes { state author { login avatarUrl } } }`
+const REVIEW_PATHS = new Set(['reviewRequests', 'latestReviews'])
+
 const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $checksCursor: String, $suitesCursor: String) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
@@ -26,6 +39,7 @@ const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $ch
       ${CHECKS_FIELDS}
       stack { number size baseRefName }
       stackEntry { position }
+      ${REVIEW_FIELDS}
     }
   }
 }`
@@ -59,7 +73,13 @@ const pullRequestSchema = z.object({
   headRepository: z.object({ name: z.string() }).nullable(),
   commits: z.unknown(),
   stack: z.unknown().optional(),
-  stackEntry: z.unknown().optional()
+  stackEntry: z.unknown().optional(),
+  reviewRequests: z.unknown().optional(),
+  latestReviews: z.unknown().optional()
+})
+const reviewConnectionSchema = z.object({
+  nodes: z.array(z.unknown()),
+  totalCount: z.number().int().nonnegative().optional()
 })
 const stackSchema = z.object({
   number: z.number().int().positive(),
@@ -156,7 +176,10 @@ export async function readPullRequestSidebarQuery(
       ({ path }) =>
         path?.[0] !== 'repository' ||
         path[1] !== 'pullRequest' ||
-        (path[2] !== 'stack' && path[2] !== 'stackEntry' && path[2] !== 'commits')
+        (path[2] !== 'stack' &&
+          path[2] !== 'stackEntry' &&
+          path[2] !== 'commits' &&
+          !REVIEW_PATHS.has(String(path[2])))
     )
   ) {
     if (response.failure) {
@@ -190,9 +213,34 @@ export async function readPullRequestSidebarQuery(
   const validStack = stack.success && entry.success && entry.data.position <= stack.data.size
   const stackMetadataChecked =
     stackErrors.length === 0 && ((pr.stack === null && pr.stackEntry === null) || validStack)
-  const { commits: _commits, stackEntry: _stackEntry, ...metadata } = pr
+  const reviewConnection = (field: 'reviewRequests' | 'latestReviews') => {
+    if (errors.some(({ path }) => path?.[2] === field)) {
+      return undefined
+    }
+    const connection = reviewConnectionSchema.safeParse(pr[field])
+    return connection.success ? connection.data : undefined
+  }
+  const reviewRequests = reviewConnection('reviewRequests')
+  const reviewPage = reviewConnection('latestReviews')
+  // A cut-off page could hide a change request behind approvals, so more than one page is unknown.
+  const latestReviews =
+    reviewPage && (reviewPage.totalCount ?? 0) <= reviewPage.nodes.length ? reviewPage : undefined
+  const {
+    commits: _commits,
+    stackEntry: _stackEntry,
+    reviewRequests: _reviewRequests,
+    latestReviews: _latestReviews,
+    ...metadata
+  } = pr
   return {
     ...metadata,
+    ...(reviewRequests
+      ? {
+          reviewRequests: reviewRequests.nodes,
+          reviewRequestCount: reviewRequests.totalCount ?? reviewRequests.nodes.length
+        }
+      : {}),
+    ...(latestReviews ? { latestReviews: latestReviews.nodes } : {}),
     baseRefOid: pr.baseRefOid ?? undefined,
     headRefOid: pr.headRefOid ?? undefined,
     statusCheckRollup: statusCheckRollup ?? [],

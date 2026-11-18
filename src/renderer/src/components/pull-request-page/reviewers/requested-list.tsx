@@ -2,7 +2,7 @@ import React from 'react'
 import { LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
+import { PRReviewerRow } from '@/components/github/pr-reviewer-row'
 import { useTranslate } from '@/i18n/use-translate'
 import type { getGitHubPRReviewerRows } from '../../../../../shared/github/pull-requests/pr-reviewer-display'
 
@@ -44,19 +44,7 @@ export function ReviewerRequestedList({
       {reviewers.map((reviewer) => {
         const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
         return (
-          <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
-            <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-medium text-foreground">
-                {reviewer.login}
-              </div>
-              {reviewer.name ? (
-                <div className="truncate text-[11px] text-muted-foreground">{reviewer.name}</div>
-              ) : null}
-            </div>
-            <span className="shrink-0 text-[11px] text-muted-foreground">
-              {reviewer.stateLabel}
-            </span>
+          <PRReviewerRow key={reviewer.login} reviewer={reviewer}>
             {canRemoveReviewer ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -83,7 +71,7 @@ export function ReviewerRequestedList({
                 </TooltipContent>
               </Tooltip>
             ) : null}
-          </div>
+          </PRReviewerRow>
         )
       })}
     </div>

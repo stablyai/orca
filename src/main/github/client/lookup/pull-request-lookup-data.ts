@@ -34,6 +34,10 @@ export type PullRequestLookupData = {
   isDraft?: boolean
   mergeable: string
   reviewDecision?: PRReviewDecision | null
+  reviewRequests?: unknown[]
+  /** GitHub's total, including requests it returns unnamed (null nodes) or past the first page. */
+  reviewRequestCount?: number
+  latestReviews?: unknown[]
   autoMergeRequest?: unknown
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null

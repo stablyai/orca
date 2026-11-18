@@ -1,4 +1,5 @@
 import type {
+  GitHubPRTeamReviewRequest,
   PRMergeableState,
   PRReviewDecision
 } from '../../../../shared/github/pull-requests/pull-request-types'
@@ -144,6 +145,31 @@ export function latestReviewsFromUnknown(
     })
   }
   return reviews
+}
+
+/** Team requests carry a slug, not a login, so `usersFromUnknown` drops them. */
+export function teamReviewRequestsFromUnknown(value: unknown): GitHubPRTeamReviewRequest[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const teams: GitHubPRTeamReviewRequest[] = []
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue
+    }
+    const nested = 'requestedReviewer' in entry ? entry.requestedReviewer : undefined
+    const reviewer = typeof nested === 'object' && nested !== null ? nested : entry
+    if (!('__typename' in reviewer) || reviewer.__typename !== 'Team' || !('slug' in reviewer)) {
+      continue
+    }
+    const slug = typeof reviewer.slug === 'string' ? reviewer.slug.trim() : ''
+    if (!slug) {
+      continue
+    }
+    const name = 'name' in reviewer && typeof reviewer.name === 'string' ? reviewer.name : null
+    teams.push({ slug, name })
+  }
+  return teams
 }
 
 export function numberFromUnknown(value: unknown): number | undefined {

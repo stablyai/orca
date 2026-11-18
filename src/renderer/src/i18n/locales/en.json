@@ -15628,6 +15628,23 @@
                 "finished": "Finished {{time}}",
                 "notLatestCommitDetail": "Ran on commit {{sha}}, not the latest commit",
                 "notLatestCommit": "Earlier commit"
+              },
+              "reviews": {
+                "noReviewers": "No reviewers requested",
+                "approvedCount_one": "{{count}} approved",
+                "approvedCount_other": "{{count}} approved",
+                "changesRequestedCount_one": "{{count}} requested changes",
+                "changesRequestedCount_other": "{{count}} requested changes",
+                "requestedCount_one": "{{count}} requested",
+                "requestedCount_other": "{{count}} requested",
+                "commentedCount_one": "{{count}} commented",
+                "commentedCount_other": "{{count}} commented",
+                "reviewerCount_one": "{{count}} reviewer",
+                "reviewerCount_other": "{{count}} reviewers",
+                "unnamedRequestCount_one": "{{count}} more requested reviewer",
+                "unnamedRequestCount_other": "{{count}} more requested reviewers",
+                "onlyUnnamedRequestCount_one": "{{count}} requested reviewer GitHub does not name",
+                "onlyUnnamedRequestCount_other": "{{count}} requested reviewers GitHub does not name"
               }
             }
           },

@@ -206,3 +206,29 @@ it.each([
     })
   }
 )
+
+it('keeps PR metadata and other reviewer data when one review field fails', async () => {
+  const teamRequest = { requestedReviewer: { __typename: 'Team', slug: 'acme/owners', name: null } }
+  exec.mockResolvedValueOnce(
+    response({ ...fields, reviewRequests: { nodes: [teamRequest] }, latestReviews: null }, [
+      { type: 'FORBIDDEN', path: ['repository', 'pullRequest', 'latestReviews'] }
+    ])
+  )
+  const data = await readPullRequestSidebarQuery(repository, 42, options)
+  expect(data).toMatchObject({ title: fields.title, reviewRequests: [teamRequest] })
+  expect(data).not.toHaveProperty('latestReviews')
+})
+
+it('treats a cut-off latest reviews page as unknown', async () => {
+  const approval = { state: 'APPROVED', author: { login: 'sam-ops', avatarUrl: '' } }
+  exec.mockResolvedValueOnce(
+    response({
+      ...fields,
+      reviewRequests: { totalCount: 0, nodes: [] },
+      latestReviews: { totalCount: 26, nodes: Array.from({ length: 25 }, () => approval) }
+    })
+  )
+  const data = await readPullRequestSidebarQuery(repository, 42, options)
+  expect(data).toMatchObject({ title: fields.title, reviewRequests: [] })
+  expect(data).not.toHaveProperty('latestReviews')
+})
