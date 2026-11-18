@@ -1,8 +1,11 @@
 import { z } from 'zod'
-import { CONNECTOR_SOURCES, type ConnectorSource } from '../../shared/external-conversation-link'
+import {
+  CONNECTOR_SOURCES,
+  type ConnectorSource
+} from '../../shared/connectors/external-conversation-link'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
-import { hashCanonical } from '../runtime/rpc/orchestration-mutation-receipt'
+import { hashCanonical } from '../runtime/rpc/orchestration/mutations/orchestration-mutation-receipt'
 import { refused, type ConversationKey, type Delivery } from './external-conversation-types'
 
 export type DeliveryReceiptDb = OrchestrationDb
@@ -47,12 +50,7 @@ export class DeliveryReceipts {
       payloadHash: hashCanonical(payload)
     }
     const flightKey = JSON.stringify([identity.callerFingerprint, identity.requestId])
-    const db = this.db()
-    if (!this.leftoversSettled) {
-      // Settle old pending rows as unknown; deleting them could repeat effects they already wrote.
-      db.settlePendingMutationReceipts(CONNECTOR_FINGERPRINTS, JSON.stringify(LOST))
-      this.leftoversSettled = true
-    }
+    const db = this.settledDb()
     if (
       !db.getMutationReceipt(identity.callerFingerprint, identity.requestId) &&
       db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) >=
@@ -97,5 +95,31 @@ export class DeliveryReceipts {
     }
     delivery.then(forget, forget)
     return delivery
+  }
+
+  /** Read-only: what a received delivery came to, or null when nothing was recorded (refusals and answers leave none). */
+  recorded(key: ConversationKey, deliveryId: string): Promise<Delivery | null> {
+    const requestId = JSON.stringify([key.externalId, deliveryId])
+    const fingerprint = callerFingerprint(key.source)
+    const running = this.inFlight.get(JSON.stringify([fingerprint, requestId]))
+    if (running) {
+      return running
+    }
+    const row = this.settledDb().getMutationReceipt(fingerprint, requestId)
+    if (row?.state !== 'completed') {
+      return Promise.resolve(null)
+    }
+    const recorded = RecordedDelivery.safeParse(JSON.parse(row.receipt ?? 'null'))
+    return Promise.resolve(recorded.success ? recorded.data : LOST)
+  }
+
+  private settledDb(): DeliveryReceiptDb {
+    const db = this.db()
+    if (!this.leftoversSettled) {
+      // Settle old pending rows as unknown; deleting them could repeat effects they already wrote.
+      db.settlePendingMutationReceipts(CONNECTOR_FINGERPRINTS, JSON.stringify(LOST))
+      this.leftoversSettled = true
+    }
+    return db
   }
 }

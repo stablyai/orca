@@ -1,13 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { writeEncryptedCredential } from '../integration-credential-file'
-import { readCredentialFileProtection } from '../credential-file-protection'
-import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import { writeEncryptedCredential } from '../credentials/integration-credential-file'
+import { readCredentialFileProtection } from '../credentials/credential-file-protection'
+import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-at-rest-protection'
 import type { JiraSite, JiraSiteSelection } from '../../shared/jira/jira-types'
-import { createIntegrationStateFileCache } from '../integration-state-file-cache'
+import { createIntegrationStateFileCache } from '../credentials/integration-state-file-cache'
 import { isJiraGatewayBaseUrl } from './gateway-base-url'
-import { createIntegrationTokenFileCache } from '../integration-token-file-cache'
+import { resolveJiraAuthType } from './site-identity'
+import { createIntegrationTokenFileCache } from '../credentials/integration-token-file-cache'
 
 export type JiraSiteFile = {
   version: 1
@@ -86,7 +87,12 @@ function normalizeSite(input: unknown): JiraSite | null {
   if (record.apiBaseUrl !== undefined && !isJiraGatewayBaseUrl(record.apiBaseUrl)) {
     return null
   }
-  if (record.authType !== 'server' && !record.email && !isJiraGatewayBaseUrl(record.apiBaseUrl)) {
+  // An emailless server record is a PAT site; coercing it to Cloud would drop it and orphan its token.
+  const authType =
+    record.authType === 'server' && !record.email
+      ? 'server'
+      : resolveJiraAuthType(record.siteUrl, record.authType)
+  if (authType !== 'server' && !record.email && !isJiraGatewayBaseUrl(record.apiBaseUrl)) {
     return null
   }
   return {
@@ -95,9 +101,8 @@ function normalizeSite(input: unknown): JiraSite | null {
     email: record.email,
     displayName: record.displayName,
     accountId: record.accountId,
-    // Sites saved before self-hosted support have no authType; they are Cloud.
-    authType: record.authType === 'server' ? 'server' : 'cloud',
-    ...(record.authType !== 'server' && isJiraGatewayBaseUrl(record.apiBaseUrl)
+    authType,
+    ...(authType !== 'server' && isJiraGatewayBaseUrl(record.apiBaseUrl)
       ? { apiBaseUrl: record.apiBaseUrl }
       : {})
   }

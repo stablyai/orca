@@ -1,19 +1,22 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { ExternalLink } from 'lucide-react'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageGitLabTodoList({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const { primaryRepo, gitlabTodos, gitlabTodosLoading } = model
   return (
     <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
       <div className="flex-none grid grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        <span>{translate('auto.components.TaskPage.8396825a14', 'Action')}</span>
-        <span>{translate('auto.components.TaskPage.16cba35bee', 'Title')}</span>
-        <span>{translate('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
-        <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+        <span>{t('auto.components.TaskPage.8396825a14', 'Action')}</span>
+        <span>{t('auto.components.TaskPage.16cba35bee', 'Title')}</span>
+        <span>{t('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
+        <span>{t('auto.components.TaskPage.f362667d55', 'Updated')}</span>
         <span />
       </div>
       <div
@@ -45,11 +48,8 @@ export function TaskPageGitLabTodoList({
         {!gitlabTodosLoading && gitlabTodos.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {primaryRepo
-              ? translate(
-                  'auto.components.TaskPage.d591aac6ae',
-                  'No pending todos. You’re all caught up!'
-                )
-              : translate(
+              ? t('auto.components.TaskPage.d591aac6ae', 'No pending todos. You’re all caught up!')
+              : t(
                   'auto.components.TaskPage.03da966159',
                   'Select a project so we can authenticate to GitLab.'
                 )}
@@ -61,21 +61,21 @@ export function TaskPageGitLabTodoList({
               role="button"
               tabIndex={0}
               key={todo.id}
-              onClick={() => void window.api.shell.openUrl(todo.targetUrl)}
+              onClick={(event) => openAppHttpLink(todo.targetUrl, { event })}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
-                  void window.api.shell.openUrl(todo.targetUrl)
+                  openAppHttpLink(todo.targetUrl)
                 }
               }}
               className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] hover:bg-muted/50"
               title={
                 todo.targetType === 'MergeRequest'
-                  ? translate('auto.components.TaskPage.a0544fb653', 'MR !{{value0}}', {
+                  ? t('auto.components.TaskPage.a0544fb653', 'MR !{{value0}}', {
                       value0: todo.targetIid ?? ''
                     })
                   : todo.targetType === 'Issue'
-                    ? translate('auto.components.TaskPage.e9b6955dcd', 'Issue #{{value0}}', {
+                    ? t('auto.components.TaskPage.e9b6955dcd', 'Issue #{{value0}}', {
                         value0: todo.targetIid ?? ''
                       })
                     : todo.targetType
@@ -90,7 +90,7 @@ export function TaskPageGitLabTodoList({
                 {todo.projectPath}
               </span>
               <span className="text-xs text-muted-foreground">
-                {todo.updatedAt ? new Date(todo.updatedAt).toLocaleDateString() : ''}
+                {todo.updatedAt ? new Date(todo.updatedAt).toLocaleDateString(intlLocale) : ''}
               </span>
               <span className="flex justify-end">
                 <ExternalLink className="size-3.5 text-muted-foreground" />

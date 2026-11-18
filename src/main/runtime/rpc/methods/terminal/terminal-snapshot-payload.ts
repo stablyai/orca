@@ -23,6 +23,10 @@ export function buildSnapshotFrameMeta(options: SnapshotFrameOptions): Record<st
     ...(typeof options.seq === 'number' && options.terminalOwner
       ? { terminalOwner: options.terminalOwner }
       : {}),
+    // Clients judge live-agent reattach modes by this image's own title, not a separately published one.
+    ...(typeof options.seq === 'number' && options.lastTitle
+      ? { lastTitle: options.lastTitle }
+      : {}),
     // Consumers do not recheck terminalOwner; ungated alternateScreen changes mouse-reset selection on live TUI reattach.
     ...(typeof options.seq === 'number' &&
     options.terminalOwner &&

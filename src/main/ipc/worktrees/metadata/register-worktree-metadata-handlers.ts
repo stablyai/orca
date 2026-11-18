@@ -1,27 +1,29 @@
 import { ipcMain } from 'electron'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { stripOrcaProvenanceMetaUpdates } from '../../../worktree-removal-safety'
+import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
+import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/metadata/display-name-provenance'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { notifyWorktreesChanged } from '../../worktree-remote'
-import { parseWorktreeId } from '../../worktree-logic'
+import { notifyWorktreesChanged } from '../worktree-remote'
+import { parseWorktreeId } from '../paths/worktree-logic'
 import {
   writeWorktreeSortOrder,
   type WorktreeSortOrderRequest
 } from '../../../persistence/worktree-sort-order-write'
-import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/branch-rename-failure-output'
+import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/first-work/branch-rename-failure-output'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
-import { isRemovedFolderWorkspaceInstance } from '../../../folder-workspace-meta-presence'
+import { isRemovedFolderWorkspaceInstance } from '../../../workspaces/catalog/folder-workspace-meta-presence'
 import { resolveWorktreeMetaOwner } from '../../../persistence/host-qualified-worktree-meta'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
   isWslMoveSourceHost,
   isWslMoveWorkspaceBlocked,
   shouldDropWslMoveProjectUpdate,
   wslMoveProjectRefForWorkspace
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime } = context
@@ -32,7 +34,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       args: {
         worktreeId: string
         executionHostId?: string
-        updates: Partial<WorktreeMeta>
+        updates: Partial<WorktreeMeta> & DiffCommentBaseMutation
       }
     ) => {
       const executionHostId =
@@ -85,10 +87,11 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
   )
 
   ipcMain.handle('worktrees:listLineage', async () => {
-    await runtime.hydrateInferredWorktreeLineage()
     return {
       lineage: store.getAllWorktreeLineage(),
-      workspaceLineage: store.getAllWorkspaceLineage()
+      workspaceLineage: store.getAllWorkspaceLineage(),
+      crossStoreLineage: store.getAllCrossStoreWorkspaceLineage(),
+      installationId: await runtime.readStoreInstallationId()
     }
   })
 
@@ -104,7 +107,10 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
               : undefined
       })
       notifyWorktreesChanged(mainWindow, parseWorktreeId(args.worktreeId).repoId)
-      return store.getWorktreeLineage(args.worktreeId) ?? null
+      return {
+        lineage: store.getWorktreeLineage(args.worktreeId) ?? null,
+        workspaceLineage: store.getWorkspaceLineage(worktreeWorkspaceKey(args.worktreeId)) ?? null
+      }
     }
   )
 

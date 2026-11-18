@@ -1,5 +1,8 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { DirectSshAuthority } from '../../../../../../shared/ssh-types'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import type { DirectSshAuthority } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { AppState } from '../../../types'
 
 export function directSshAuthorityIsComplete(

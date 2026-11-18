@@ -19,6 +19,7 @@ export function useImmediateMutation() {
         onSuccess?: (result: T) => void
         onRevert?: () => void
         onError?: (error: string) => void
+        formatError?: (result: { error?: unknown; errorCode?: unknown }) => string
       }
     ) => {
       if (pendingRef.current.has(key)) {
@@ -28,10 +29,11 @@ export function useImmediateMutation() {
       opts.onOptimistic?.()
       try {
         const result = await opts.mutate()
-        const asResult = result as { ok?: boolean; error?: string }
-        if (asResult && asResult.ok === false) {
+        if (result && typeof result === 'object' && 'ok' in result && result.ok === false) {
+          const error = 'error' in result && typeof result.error === 'string' ? result.error : ''
+          const errorCode = 'errorCode' in result ? result.errorCode : undefined
           opts.onRevert?.()
-          opts.onError?.(asResult.error ?? 'Update failed')
+          opts.onError?.(opts.formatError?.({ error, errorCode }) || error || 'Update failed')
         } else {
           opts.onSuccess?.(result)
         }

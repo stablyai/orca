@@ -1,6 +1,10 @@
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { useCallback } from 'react'
 import type React from 'react'
-import { getWorktreeSidebarDragAutoscroll } from '../../worktree-sidebar-drag-autoscroll'
+import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { getPointerDropStatusTarget } from './status-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { WorktreeDragRuntime } from './use-runtime'
@@ -48,7 +52,9 @@ export function useWorktreeNativeDragAutoscroll(args: {
       })
       if (autoscroll) {
         markScrollMovement()
+        supersedeVirtualizedScrollAnchorRestore(container, autoscroll.scrollTop)
         container.scrollTop = autoscroll.scrollTop
+        requestVirtualizedScrollAnchorRecord(container)
         if (!session.refreshWorktreeDragSession()) {
           clearWorktreeDrag()
           return
@@ -64,7 +70,7 @@ export function useWorktreeNativeDragAutoscroll(args: {
             ? ctx.computeWorktreeStatusDrop({
                 pointerY: point.clientY,
                 status: target.status,
-                draggedIds: dragSession.reorderDraggedIds
+                draggedKeys: dragSession.reorderDraggedKeys
               })
             : null
           if (statusDrop) {

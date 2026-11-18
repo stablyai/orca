@@ -2,13 +2,14 @@ import type {
   ArtifactListItem,
   ArtifactPublishResult,
   ArtifactWriteRequest
-} from '../../shared/artifacts'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+} from '../../shared/artifacts/artifacts'
+import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import {
   artifactRequest,
   type ArtifactWriteBody,
   artifactWriteBody
 } from './artifact-cloud-request'
+import type { ArtifactRateLimitReplay } from './artifact-cloud-auth-context'
 import {
   type ArtifactCreateIntent,
   getArtifactCreateIntent,
@@ -53,6 +54,7 @@ type ArtifactPublishAuthContext = {
   profileId: string
   scope: ArtifactShareScope
   assertCurrent: () => void
+  rateLimitReplay: ArtifactRateLimitReplay
 }
 
 function artifactOperationQueueKey(
@@ -188,7 +190,8 @@ export class ArtifactPublisher {
       const item = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
         method: 'PUT',
         editToken: record.editToken,
-        body: artifactWriteBody(request)
+        body: artifactWriteBody(request),
+        rateLimitReplay: auth.rateLimitReplay
       })
       auth.assertCurrent()
       refreshArtifactShareRecordExpiration(
@@ -227,7 +230,8 @@ export class ArtifactPublisher {
       response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
         method: 'POST',
         body: intent.body,
-        idempotencyKey: intent.idempotencyKey
+        idempotencyKey: intent.idempotencyKey,
+        rateLimitReplay: auth.rateLimitReplay
       })
     } catch (error) {
       // A replay may outlive its server receipt, so never abandon a possibly committed artifact.

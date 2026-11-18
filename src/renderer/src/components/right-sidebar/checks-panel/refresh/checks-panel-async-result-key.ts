@@ -1,0 +1,35 @@
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../../shared/github/repositories/repository-identity'
+import { githubRepoIdentityKey } from '../../../../../../shared/github/repositories/repository-identity-key'
+
+function normalizedPRRepoIdentity(prRepo?: GitHubOwnerRepo | null): string {
+  return prRepo ? githubRepoIdentityKey(prRepo) : 'none'
+}
+
+export function checksPanelAsyncResultKey(
+  repoId: string,
+  branch: string,
+  prNumber: number | null,
+  prRepo?: GitHubOwnerRepo | null,
+  headSha?: string | null
+): string {
+  return `${repoId}::${branch}::${normalizedPRRepoIdentity(prRepo)}::${prNumber ?? 'none'}::${
+    headSha ?? 'none'
+  }`
+}
+
+export function checksPanelHostedReviewAsyncResultKey(
+  repoId: string,
+  branch: string,
+  provider: string,
+  reviewNumber: number | null,
+  headSha?: string | null
+): string {
+  return `${repoId}::${branch}::${provider}::${reviewNumber ?? 'none'}::${headSha ?? 'none'}`
+}
+
+export function shouldCommitChecksPanelAsyncResult(
+  currentKey: string,
+  requestKey: string
+): boolean {
+  return currentKey === requestKey
+}

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Plus, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../ui/button'
 import { Command, CommandGroup, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
@@ -227,7 +227,7 @@ export function AddressPicker({
     const query = now - previous.updatedAt > 700 ? event.key : previous.query + event.key
     typeaheadRef.current = { query, updatedAt: now }
     const repeatedKey = [...query].every((character) => character === query[0])
-    const prefix = (repeatedKey ? event.key : query).toLocaleLowerCase()
+    const prefix = (repeatedKey ? event.key : query).toLowerCase()
     const items = [
       ...options.map((option) => ({ command: `detected:${option.value}`, label: option.label })),
       ...displayedCustomOptions.map((option) => ({
@@ -238,7 +238,7 @@ export function AddressPicker({
     ]
     const currentIndex = items.findIndex((item) => item.command === commandValue)
     const nextItem = [...items.slice(currentIndex + 1), ...items.slice(0, currentIndex + 1)].find(
-      (item) => item.label.toLocaleLowerCase().startsWith(prefix)
+      (item) => item.label.toLowerCase().startsWith(prefix)
     )
     if (nextItem) {
       setCommandValue(nextItem.command)

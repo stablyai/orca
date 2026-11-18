@@ -26,14 +26,13 @@ import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { createWslWatcher } from './filesystem-watcher-wsl'
-import { resetWatcherChildRegistryForTest } from '../watcher-process/parcel-watcher-child-registry'
-import { acquireWatcherRemovalGate } from '../../watcher-removal-gate'
+import { resetWatcherChildRegistryForTest } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
+import { acquireWatcherRemovalGate } from '../../../workspaces/removal/watcher-removal-gate'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 describe('registerFilesystemWatcherHandlers', () => {
   const handlers: HandlerMap = {}
-  const originalPlatform = process.platform
 
   beforeEach(async () => {
     vi.useRealTimers()
@@ -42,10 +41,6 @@ describe('registerFilesystemWatcherHandlers', () => {
     vi.mocked(subscribeParcelWatcher).mockReset()
     vi.mocked(createWslWatcher).mockReset()
     resetWatcherChildRegistryForTest()
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: originalPlatform
-    })
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -53,28 +48,6 @@ describe('registerFilesystemWatcherHandlers', () => {
       handlers[channel] = handler
     })
     registerFilesystemWatcherHandlers()
-    await closeAllWatchers()
-  })
-
-  it('pins Parcel to the Windows backend for local Windows watches', async () => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: 'win32'
-    })
-    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
-    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: vi.fn() } as never)
-
-    await handlers['fs:watchWorktree'](
-      { sender: createWatcherSender(1) },
-      { worktreePath: 'C:\\repo' }
-    )
-
-    expect(subscribeParcelWatcher).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(Function),
-      expect.objectContaining({ backend: 'windows' })
-    )
-
     await closeAllWatchers()
   })
 

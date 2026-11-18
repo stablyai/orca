@@ -1,7 +1,7 @@
 import process from 'node:process'
-import { startDaemon, type DaemonHandle } from '../../../src/main/daemon/daemon-main'
-import { createPtySubprocess } from '../../../src/main/daemon/pty-subprocess'
-import { createDaemonFileLog } from '../../../src/main/daemon/daemon-file-log'
+import { startDaemon, type DaemonHandle } from '../../../src/main/daemon/server/daemon-main'
+import { createPtySubprocess } from '../../../src/main/daemon/pty-subprocess/pty-subprocess'
+import { createDaemonFileLog } from '../../../src/main/daemon/observability/daemon-file-log'
 
 type FixtureArgs = {
   protocolVersion: number

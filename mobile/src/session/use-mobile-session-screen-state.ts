@@ -1,33 +1,36 @@
+import { DEFAULT_TERMINAL_FONT_STYLE } from '../terminal/preferences/terminal-font-style'
 import { useState, useRef, useMemo } from 'react'
-import { Animated, type ScrollView } from 'react-native'
-import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
-import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
+import { useTerminalSplitLayout } from '../terminal/session/pane-layout/use-terminal-split-layout'
+import { createLiveInputCapture } from '../terminal/session/input-controls/live-input-capture'
+import { Animated } from 'react-native'
+import type { MobileAnimatedValue } from '../platform/animated-handles'
+import { DEFAULT_LINK_OPEN_MODE, type MobileLinkOpenMode } from '../storage/preferences'
+import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/webview/terminal-webview-contract'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
   getVisibleTerminalAccessoryKeys
-} from '../terminal/terminal-accessory-layout'
-import type { CustomKey } from '../terminal/terminal-custom-keys'
-import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import { useTerminalLiveInputModePreference } from './use-terminal-live-input-mode-preference'
-import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
-import { useWorktreeSessionTabsLoaded } from './use-initial-session-terminal-autocreate'
-import { createMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
-import type { DiffComment } from '../../../src/shared/diff-comment-types'
+} from '../terminal/key-input/terminal-accessory-layout'
+import type { CustomKey } from '../terminal/key-input/terminal-custom-keys'
+import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
+import { useWorktreeSessionTabsLoaded } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
+import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
+import type { DiffComment } from '../../../src/shared/file-review/diff-comment-types'
+import type { DiffNotesDelivery } from '../source-control/review/review-notes/mobile-review-comment-state'
 import type {
-  DiffNotesDelivery,
   DirtyMarkdownDraft,
   FileDocState,
-  MarkdownDocState,
-  MobileDisplayMode,
-  MobileNewTabAgentLoadState,
-  MobileSessionTab,
-  Terminal
-} from './mobile-session-route-types'
-import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-action-targets'
+  MarkdownDocState
+} from '../files/session-documents/session-document-state'
+import type { MobileDisplayMode } from '../terminal/session/mobile-terminal-model'
+import type { TerminalRecord as Terminal } from '../terminal/session/inventory/mobile-terminal-records'
+import type { MobileSessionTab } from './tabs/mobile-session-tabs'
+import { useMobileSessionTabActionTargets } from './tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
+import type { MobileSessionTextSizeSheetKind } from './MobileSessionTextSizeSheet'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
-  const { worktreeId, hostId, initialCreateWarning } = scope
+  const { worktreeId, initialCreateWarning } = scope
+  const terminalSplitLayout = useTerminalSplitLayout()
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
@@ -36,32 +39,17 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const appliedSessionTabsRevisionRef = useRef(0)
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
-  const [input, setInput] = useState('')
   const [terminalTextScale, setTerminalTextScale] = useState(1)
+  const [terminalFontStyle, setTerminalFontStyle] = useState(DEFAULT_TERMINAL_FONT_STYLE)
   const terminalTextScaleRevisionRef = useRef(0)
-  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
-  const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
-    useState<MobileTerminalLinkOpenMode>('orca-browser')
-  const [liveInputCapture, setLiveInputCapture] = useState('')
-  const {
-    clearTerminalLiveInputDefault,
-    defaultTerminalHandlesToLiveInput,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
-    pruneTerminalHandlesFromLiveInput,
-    toggleTerminalLiveInput
-  } = useTerminalLiveInputModePreference({ hostId, worktreeId })
+  const [linkOpenMode, setLinkOpenMode] = useState<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
+  const [liveInputCapture] = useState(createLiveInputCapture)
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
   const activeSessionTabIdRef = useRef<string | null>(null)
   // Preserve an explicit phone tab pick while a host snapshot is transiently incomplete.
   const selectedSessionTabIdRef = useRef<string | null>(null)
-  const tabStripRef = useRef<ScrollView>(null)
-  const tabStripOffsetRef = useRef(0)
-  const tabStripViewportWidthRef = useRef(0)
-  const tabStripContentWidthRef = useRef(0)
-  const tabLayoutsRef = useRef<Map<string, { x: number; width: number }>>(new Map())
   const [markdownDocs, setMarkdownDocs] = useState<Map<string, MarkdownDocState>>(new Map())
   const markdownDocsRef = useRef<Map<string, MarkdownDocState>>(new Map())
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
@@ -81,11 +69,10 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
   const [showQuickCommands, setShowQuickCommands] = useState(false)
-  const [createTabAgentLoadState, setCreateTabAgentLoadState] =
-    useState<MobileNewTabAgentLoadState>('idle')
-  const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
+  const [showTerminalLayout, setShowTerminalLayout] = useState(false)
+  const [textSizeSheet, setTextSizeSheet] = useState<MobileSessionTextSizeSheetKind | null>(null)
   const sessionTabActionTargets = useMobileSessionTabActionTargets()
   const [discardMarkdownTarget, setDiscardMarkdownTarget] = useState<Extract<
     MobileSessionTab,
@@ -94,6 +81,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  const [directionPadEnabled, setDirectionPadEnabled] = useState(true)
+  const [smartRailEnabled, setSmartRailEnabled] = useState(false)
   const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
     getDefaultTerminalAccessoryBuiltInIds
   )
@@ -103,8 +92,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
   )
-  // Expo edge-to-edge keeps window size on IME open; lift input from keyboard height without resizing the desktop PTY.
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
   const [terminalKeyboardMetrics, setTerminalKeyboardMetrics] = useState<
     Map<string, TerminalKeyboardAvoidanceMetrics>
@@ -116,10 +103,11 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
   const [dictationEnabled, setDictationEnabled] = useState(true)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const toastOpacityRef = useRef(new Animated.Value(0))
+  const toastOpacityRef = useRef<MobileAnimatedValue>(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const toastSeqRef = useRef(0)
   return {
+    ...terminalSplitLayout,
     terminals,
     setTerminals,
     terminalsRef,
@@ -131,23 +119,15 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     closedTabTombstonesRef,
     terminalsLoaded,
     setTerminalsLoaded,
-    input,
-    setInput,
     terminalTextScale,
     setTerminalTextScale,
     terminalTextScaleRevisionRef,
-    autocompleteEnabled,
-    setAutocompleteEnabled,
-    terminalLinkOpenMode,
-    setTerminalLinkOpenMode,
+    terminalFontStyle,
+    setTerminalFontStyle,
+    linkOpenMode,
+    setLinkOpenMode,
     liveInputCapture,
-    setLiveInputCapture,
-    clearTerminalLiveInputDefault,
-    defaultTerminalHandlesToLiveInput,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
-    pruneTerminalHandlesFromLiveInput,
-    toggleTerminalLiveInput,
+    setLiveInputCapture: liveInputCapture.set,
     activeHandle,
     setActiveHandle,
     coveredStreamRevision,
@@ -156,11 +136,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setActiveSessionTabId,
     activeSessionTabIdRef,
     selectedSessionTabIdRef,
-    tabStripRef,
-    tabStripOffsetRef,
-    tabStripViewportWidthRef,
-    tabStripContentWidthRef,
-    tabLayoutsRef,
     markdownDocs,
     setMarkdownDocs,
     markdownDocsRef,
@@ -188,14 +163,14 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateTabDrawer,
     showQuickCommands,
     setShowQuickCommands,
-    createTabAgentLoadState,
-    setCreateTabAgentLoadState,
-    createTabAgentOptions,
-    setCreateTabAgentOptions,
     showCreateBrowserModal,
     setShowCreateBrowserModal,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
+    showTerminalLayout,
+    setShowTerminalLayout,
+    textSizeSheet,
+    setTextSizeSheet,
     ...sessionTabActionTargets,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
@@ -205,6 +180,10 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setRenameTarget,
     customKeys,
     setCustomKeys,
+    directionPadEnabled,
+    setDirectionPadEnabled,
+    smartRailEnabled,
+    setSmartRailEnabled,
     visibleBuiltInIds,
     setVisibleBuiltInIds,
     showCustomKeyModal,
@@ -212,8 +191,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     deleteKeyTarget,
     setDeleteKeyTarget,
     visibleBuiltInAccessoryKeys,
-    keyboardHeight,
-    setKeyboardHeight,
     terminalModes,
     setTerminalModes,
     terminalKeyboardMetrics,

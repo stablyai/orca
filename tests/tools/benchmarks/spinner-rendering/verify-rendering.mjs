@@ -6,6 +6,10 @@ async function waitForPhase(page) {
     .waitForFunction(() =>
       [...document.querySelectorAll('[data-agent-spinner]')].every((element) => {
         const animations = element.getAnimations({ subtree: true })
+        // Offscreen rings must hold no animation; onscreen ones run on the shared phase.
+        if (element.hasAttribute('data-animation-offscreen')) {
+          return animations.length === 0
+        }
         return (
           animations.length === 1 &&
           animations[0].startTime === 0 &&
@@ -53,6 +57,9 @@ export async function verifyRendering(app, page, outputDir) {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await waitForPhase(page)
   await page.evaluate(() => window.spinnerBenchmark.render({ count: 200, offset: 5000 }))
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-agent-spinner][data-animation-offscreen]').length === 200
+  )
   await waitForPhase(page)
   await page.evaluate(() => {
     document.querySelector('#scroller').scrollTop = 5000
@@ -104,6 +111,7 @@ export async function verifyRendering(app, page, outputDir) {
   )
   return {
     pixelComparisons,
+    offscreenPause: true,
     iterationEvents,
     phases: true,
     reducedMotion: true,

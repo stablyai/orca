@@ -1,34 +1,34 @@
-import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-history/opencode/transcript-opencode'
+import { isENOENT } from '../filesystem/local-file-io/filesystem-path-containment'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
-import { errorMessage } from '../ai-vault/session-scanner-values'
+} from '../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
+import { errorMessage } from '../../shared/errors/error-message'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { openTranscriptReadStream } from './wsl-transcript-fs-access'
-import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
-import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
-} from './transcript-line-decoders'
-import { decodeTranscriptStream } from './transcript-stream-lines'
+import { openTranscriptReadStream } from './transcript-filesystem/wsl-transcript-fs-access'
+import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
+import { decodeClaudeChatTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
+import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
+import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
+import { decodeTranscriptStream } from './transcript-streaming/transcript-stream-lines'
 
 export type ReadTranscriptResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
       sourceEmpty?: boolean
+      forkTipItemIds?: string[]
     }
   // notFound is retryable: the agent may not have flushed its transcript yet.
   | { error: string; notFound?: true }
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   filePath?: string
+  sourceOrder?: boolean
 }
 
 /** Read the full transcript with no message cap; skip malformed/unknown records using the tailer’s decoders. */
@@ -58,16 +58,28 @@ export async function readNativeChatTranscript(
   try {
     const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
     if (transcriptAgent === 'claude') {
-      return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
+      return {
+        messages: await readTranscript(
+          filePath,
+          decodeClaudeChatTranscriptLine,
+          options.sourceOrder
+        )
+      }
     }
     if (transcriptAgent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeCodexTranscriptLine, options.sourceOrder)
+      }
     }
     if (transcriptAgent === 'grok') {
-      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeGrokTranscriptLine, options.sourceOrder)
+      }
     }
     if (transcriptAgent === 'omp') {
-      return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeOmpTranscriptLine, options.sourceOrder)
+      }
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
@@ -81,9 +93,18 @@ export async function readNativeChatTranscript(
 
 async function readTranscript(
   filePath: string,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  sourceOrder = false
 ): Promise<NativeChatMessage[]> {
   const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')
-  const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)
+  const { messages } = await decodeTranscriptStream(
+    stream,
+    filePath,
+    0,
+    decode,
+    true,
+    Infinity,
+    sourceOrder
+  )
   return messages
 }

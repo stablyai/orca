@@ -39,9 +39,6 @@ node tests/tools/daemon-relocation-spike/spike.mjs \
   --work-dir <scratch-dir> \
   [--tier full|no-gpu|minimal] \
   [--keep-work-dir]
-
-# Offline logic validation (any OS, no build, no launch):
-node tests/tools/daemon-relocation-spike/spike.mjs --selftest
 ```
 
 Exit code is `0` only when the run **PASSES**: daemon ready, PTY echo
@@ -109,7 +106,7 @@ though re-adding it is the more robust choice.
 ## The handshake / client
 
 `ndjson-client.mjs` is a small standalone NDJSON client (no electron/src
-imports) that mirrors `src/main/daemon/daemon-server.ts`:
+imports) that mirrors `src/main/daemon/server/daemon-server.ts`:
 
 1. Read the token the server writes to the token file after it begins listening.
 2. Open a **control** socket, send `hello {role:'control'}`, await
@@ -120,7 +117,7 @@ imports) that mirrors `src/main/daemon/daemon-server.ts`:
    read `data` events on the stream socket until the nonce appears **alone at
    line start** (executed output, distinct from the echoed input line).
 
-`PROTOCOL_VERSION` is read at runtime from `src/main/daemon/types.ts` so the
+`PROTOCOL_VERSION` is read at runtime from `src/main/daemon/protocol/daemon-rpc-contract.ts` so the
 client never drifts from the daemon.
 
 ## The handle probe
@@ -138,8 +135,7 @@ handles those by construction (they are copied, so nothing opens the originals).
 ## What remains unverified until CI runs it
 
 This session has **no build**, so the launch path is unproven. Verified here:
-`node --check` on every `.mjs`, a green `--selftest`, and clean
-`pnpm exec oxlint`. Open questions the real CI run must answer:
+`node --check` on every `.mjs` and clean `pnpm exec oxlint`. Open questions the real CI run must answer:
 
 - Whether `TIER_MINIMAL` (no top-level DLLs) boots `Orca.exe` as node at all, or
   whether run-as-node still needs `ffmpeg.dll` / others — this is the core
