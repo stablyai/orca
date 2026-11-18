@@ -60,10 +60,12 @@ export class CodexAccountHistoryPasses {
     if (
       shared &&
       !options.fromRetry &&
+      this.latest.get(key)?.shared !== false &&
       (this.busyRetries.has(key) || this.queuedRetries.has(key))
     ) {
-      // Found busy: its retry looks again within five minutes. A launch doesn't pay for a probe
-      // (a PowerShell start on Windows) or wait behind other homes for one.
+      // Found busy: its retry looks again within five minutes (unless an unshare queued since then
+      // would run last). A launch doesn't pay for a probe (a PowerShell start on Windows) or wait
+      // behind other homes for one.
       return Promise.resolve()
     }
     const previous = this.latest.get(key)
