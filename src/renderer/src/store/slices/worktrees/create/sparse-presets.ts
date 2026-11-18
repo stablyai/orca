@@ -9,7 +9,6 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
-import { findRepoForHost } from '../../../repos/repo-host-identity'
 import {
   listRuntimeSparsePresets,
   removeRuntimeSparsePreset,
@@ -103,10 +102,10 @@ export function omitSparsePresetsForRepos(
   return result
 }
 
-// Same-id twins on several hosts share one bare-id bucket, so they keep this app's store as before.
+// Same-id twins share one bare-id bucket, so they keep this app's store as before.
 function repoHostId(state: Pick<AppState, 'repos'>, repoId: string): ExecutionHostId {
-  const repo = findRepoForHost(state.repos, repoId)
-  return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+  const rows = state.repos.filter((repo) => repo.id === repoId)
+  return rows.length === 1 ? getRepoExecutionHostId(rows[0]) : LOCAL_EXECUTION_HOST_ID
 }
 
 export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePresetsSlice> = (
