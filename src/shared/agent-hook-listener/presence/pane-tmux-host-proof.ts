@@ -2,6 +2,7 @@ import type { AgentProcessIdentity } from '../../agent-status/process/agent-proc
 import type { ProcessTableRow } from '../../process-observation/tables/process-table-snapshot'
 import {
   MAX_ANCESTRY_DEPTH,
+  agentOf,
   collectRows,
   isTmuxServer,
   type HookPaneProcessIo
@@ -37,7 +38,7 @@ export async function readPaneTmuxHost(
   if (!client) {
     return false
   }
-  // Without a process, only a pane holding nothing but the client and its shells proves it.
+  // Without a process, a pane whose own agent sits beside the client (a stopped job) proves nothing.
   if (!request.process) {
     const clientChain = new Set<number>()
     for (let row: ProcessTableRow | undefined = client; row && !clientChain.has(row.pid);) {
@@ -46,7 +47,11 @@ export async function readPaneTmuxHost(
       row = rows.find((candidate) => candidate.pid === parent)
     }
     return rows.every(
-      (row) => row.tty !== rootRow.tty || clientChain.has(row.pid) || row.pgid === rootRow.tpgid
+      (row) =>
+        row.tty !== rootRow.tty ||
+        clientChain.has(row.pid) ||
+        row.pgid === rootRow.tpgid ||
+        agentOf(row.command) === undefined
     )
   }
   // Only a complete ancestry outside the pane proves it; a missing row proves nothing.

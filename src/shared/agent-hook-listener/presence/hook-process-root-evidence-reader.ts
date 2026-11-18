@@ -24,10 +24,11 @@ export function createHookProcessReadSlots(): PrioritySemaphore {
 /** Each leaf read holds a slot only while it runs; an expired attempt's queued reads give up. */
 export function hookProcessReadGate(
   slots: PrioritySemaphore,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  priority = 0
 ): ProcessReadGate {
   return async (read) => {
-    const release = await slots.acquire(0, signal)
+    const release = await slots.acquire(priority, signal)
     try {
       return await read()
     } finally {

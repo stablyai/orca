@@ -10,13 +10,19 @@ import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-l
 import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusRowMutation extends AgentHookServerStatusApplication {
+  /** When the user last submitted a line in each pane; a resumed CLI's startup ends there. */
+  protected readonly lastSubmittedAtByPaneKey = new Map<string, number>()
+
   protected preserveAcceptedTurn(
     previous: EnrichedAgentHookEventPayload | undefined,
     incoming: AgentHookEventPayload,
     before: EnrichedAgentHookEventPayload | undefined,
     origin: AgentStatusObservationOrigin
   ): EnrichedAgentHookEventPayload | null | undefined {
-    const resumed = previous && resumedAcceptedTurn(previous, incoming, origin)
+    const submittedAt = previous && this.lastSubmittedAtByPaneKey.get(previous.paneKey)
+    const startupOpen =
+      submittedAt === undefined || submittedAt < (previous?.observation?.observedAt ?? 0)
+    const resumed = previous && resumedAcceptedTurn(previous, incoming, origin, startupOpen)
     if (!resumed) {
       return null
     }

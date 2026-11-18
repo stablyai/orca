@@ -219,9 +219,11 @@ it('proves a tmux-hosted pane only from a complete process picture', async () =>
   runningPane(4050, CLIENT, ...TMUX)
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(true)
   await expect(readPaneTmuxHost(io, agent)).resolves.toBe(true)
-  // The pane's own suspended agent stays behind an unrelated tmux client.
+  // The pane's own suspended agent stays behind an unrelated tmux client; other jobs don't matter.
   runningPane(4050, CLIENT, [4060, 101, 4060, 'claude', 'T'], ...TMUX)
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
+  runningPane(4050, CLIENT, [4070, 101, 4070, 'sleep 9999'], ...TMUX)
+  await expect(readPaneTmuxHost(io, pane)).resolves.toBe(true)
   // An agent whose ancestry cannot be read is not proven to live outside the pane.
   runningPane(4050, CLIENT, [4043, 4042, 4043, 'claude', 'S+', 'ttys011'])
   await expect(readPaneTmuxHost(io, agent)).resolves.toBe(false)

@@ -62,6 +62,9 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerQues
   observeClaudeTerminalEvidence(paneKey: string, evidence: ClaudeTerminalEvidence): void {
     if (evidence.kind === 'input') {
       this.programStatusFacets.noteInput(paneKey)
+      if (/[\r\n]/.test(evidence.data)) {
+        this.lastSubmittedAtByPaneKey.set(paneKey, Date.now())
+      }
     }
     this.claudeTerminalInterrupts.observe(paneKey, evidence)
   }

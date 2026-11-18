@@ -8,14 +8,16 @@ import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/ident
 export function resumedAcceptedTurn(
   previous: EnrichedAgentHookEventPayload,
   incoming: AgentHookEventPayload,
-  origin: AgentStatusObservationOrigin
+  origin: AgentStatusObservationOrigin,
+  /** No user submission since the launch: terminal work is still the CLI's own startup. */
+  startupOpen = true
 ): EnrichedAgentHookEventPayload | null {
   const continuesTurn =
     (incoming.payload.agentType === 'claude' || previous.observation?.origin === 'launch') &&
     (incoming.payload.sessionBoundary === true ||
       (origin === 'osc' && previous.observation?.origin === 'launch')) &&
     (incoming.payload.state === 'done' ||
-      (origin === 'osc' && incoming.payload.state === 'working')) &&
+      (origin === 'osc' && incoming.payload.state === 'working' && startupOpen)) &&
     incoming.toolAgentId === undefined &&
     previous.payload.state === 'done' &&
     previous.payload.sessionBoundary !== true &&

@@ -253,6 +253,26 @@ it.each(['retained', 'evicted'] as const)(
   }
 )
 
+it('shows hookless work the user submits after a resumed agent starts', async () => {
+  const working = `\x1b]7501;app=claude-code:state=working\x1b\\`
+  server.setHookRootEvidenceReader(async () => ({ verdict: 'root' }))
+  await agentHook('claude', 'UserPromptSubmit', 4001)
+  await agentHook('claude', 'Stop', 4001)
+  await sleepPane('claude', 'pty-1', 4001)
+  server.retireSleepingPaneOnSpawn(PANE, {
+    agentType: 'claude',
+    providerSession: { key: 'session_id', id: 'claude-session' }
+  })
+  // The resumed CLI's own startup work is not a new turn.
+  ingestProgramStatusOsc(server, working)
+  expect(read()).toMatchObject({ state: 'done' })
+  vi.setSystemTime(Date.now() + 1_000)
+  // A hookless command such as /compact is.
+  server.observeClaudeTerminalEvidence(PANE, { kind: 'input', data: '/compact\r' })
+  ingestProgramStatusOsc(server, working)
+  expect(read()).toMatchObject({ state: 'working' })
+})
+
 it.each(['claude', 'codex'] as const)(
   'keeps a %s that never had a turn through sleep',
   async (agent) => {

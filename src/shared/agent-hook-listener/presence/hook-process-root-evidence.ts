@@ -83,7 +83,7 @@ const MAX_TERMINAL_ROWS = 256
 
 type Role = 'agent' | 'launcher' | 'other' | 'unknown'
 
-function agentOf(command: string): string | undefined {
+export function agentOf(command: string): string | undefined {
   const recognized = recognizeAgentProcessFromCommandLine(command, { includeHeadlessOneShot: true })
   if (recognized) {
     return recognized.agent
