@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { deserialize } from 'node:v8'
 import type { Worker } from 'node:worker_threads'
+import { unrefTimer } from '../../shared/timers/unref-timer'
 import type {
   UtilityWorkerFailure,
   UtilityWorkerPort,
@@ -8,6 +9,9 @@ import type {
   UtilityWorkerPortRequest,
   UtilityWorkerSpawn
 } from './utility-worker-host-protocol'
+
+/** Fallback when a dead host's port never reports close; each reply still draining restarts it. */
+const DRAIN_MS = 5_000
 
 function restoreFailure(failure: UtilityWorkerFailure): Error {
   const error: NodeJS.ErrnoException = new Error(failure.message)
@@ -33,6 +37,8 @@ export class HostedWorker extends EventEmitter {
   private readonly exited = Promise.withResolvers<number>()
   /** Posts a worker hasn't answered yet, replayed if it moves in-process. */
   private unheardPosts: unknown[] = []
+  /** The host's process exited; replies it sent first are still on the port until it closes. */
+  private draining?: { error: Error; code: number; timer: ReturnType<typeof setTimeout> }
   /** Loaded (or answered): a death now may be real work dying, never a reason to move in-process. */
   heard = false
   terminating = false
@@ -50,7 +56,9 @@ export class HostedWorker extends EventEmitter {
     port.on('message', ({ data }) => this.receive(data))
     // A host that dies takes the port's other end with it, often before main hears of its exit.
     port.on('close', () => {
-      if (!this.local && this.exitCode === undefined) {
+      if (this.draining) {
+        this.failDrained()
+      } else if (!this.local && this.exitCode === undefined) {
         this.supervisor.portLost()
         this.fail(new Error(`${hostName} stopped`), 1)
       }
@@ -115,6 +123,25 @@ export class HostedWorker extends EventEmitter {
     this.finish(code)
   }
 
+  /** Fails once the port has delivered what the dead host already sent, so finished work isn't lost. */
+  failAfterDrain(error: Error, code: number): void {
+    if (this.local || this.exitCode !== undefined || this.draining) {
+      return
+    }
+    const timer = setTimeout(() => this.failDrained(), DRAIN_MS)
+    unrefTimer(timer)
+    this.draining = { error, code, timer }
+  }
+
+  private failDrained(): void {
+    const draining = this.draining
+    if (draining) {
+      this.draining = undefined
+      clearTimeout(draining.timer)
+      this.fail(draining.error, draining.code)
+    }
+  }
+
   private send(request: UtilityWorkerPortRequest): void {
     this.port.postMessage(request)
   }
@@ -123,6 +150,7 @@ export class HostedWorker extends EventEmitter {
     if (this.local || this.exitCode !== undefined) {
       return
     }
+    this.draining?.timer.refresh()
     // Dying unasked before loading: the host decides whether it could not load or ran out of memory.
     if (!this.heard && !this.terminating && (event.type === 'error' || event.type === 'exit')) {
       this.supervisor.startFailed(event.type === 'error' ? restoreFailure(event.error) : undefined)
@@ -179,6 +207,8 @@ export class HostedWorker extends EventEmitter {
     }
     this.exitCode = code
     this.chunks = []
+    clearTimeout(this.draining?.timer)
+    this.draining = undefined
     if (!this.local) {
       this.port.close()
     }

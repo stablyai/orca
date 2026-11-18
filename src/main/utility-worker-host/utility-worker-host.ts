@@ -17,12 +17,13 @@ import {
   recordUtilityWorkerHeapPressure,
   utilityWorkerHeapData
 } from './utility-worker-heap-report'
-import type {
-  HostedWorkerThread,
-  UtilityWorkerHeapReport,
-  UtilityWorkerHostEvent,
-  UtilityWorkerHostRequest,
-  UtilityWorkerSpawn
+import {
+  UtilityWorkerHostPausedError,
+  type HostedWorkerThread,
+  type UtilityWorkerHeapReport,
+  type UtilityWorkerHostEvent,
+  type UtilityWorkerHostRequest,
+  type UtilityWorkerSpawn
 } from './utility-worker-host-protocol'
 
 /** A host that cannot start in time loses its workers to in-process threads. */
@@ -51,6 +52,10 @@ type Host = {
   /** The owner's context, taken at the first port close, before any worker fails. */
   exitContext?: CrashReportBreadcrumbData
   heap?: UtilityWorkerHeapReport
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
 }
 
 /** A child still launching has no PID to kill yet; kill it once it has one. */
@@ -132,7 +137,14 @@ export class UtilityWorkerHost {
     host.idleTimer = undefined
     const request: UtilityWorkerHostRequest = { type: 'spawn', id, ...spawn }
     if (host.ready) {
-      host.child.postMessage(request, [port1])
+      try {
+        host.child.postMessage(request, [port1])
+      } catch (error) {
+        // Uncloneable workerData throws here, as a node Worker's constructor would.
+        port1.close()
+        worker.finish(1)
+        throw error
+      }
     } else {
       host.queued.push({ request, port: port1 })
     }
@@ -189,7 +201,13 @@ export class UtilityWorkerHost {
     host.ready = true
     this.retryMs = 0
     for (const { request, port } of host.queued.splice(0)) {
-      host.child.postMessage(request, [port])
+      try {
+        host.child.postMessage(request, [port])
+      } catch (error) {
+        // One spawn that can't be sent must not strand the ones queued behind it.
+        port.close()
+        host.workers.get(request.id)?.fail(asError(error), 1)
+      }
     }
   }
 
@@ -212,9 +230,13 @@ export class UtilityWorkerHost {
     error: NodeJS.ErrnoException | undefined
   ): void {
     host.workers.delete(worker.id)
+    const paused = this.pauseMessage
     if (error?.code && RESOURCE_START_FAILURES.has(error.code)) {
       this.recordCrash()
       worker.fail(error, 1)
+    } else if (paused !== null) {
+      // Paused work never moves into main, which shares the V8 cage the host keeps it out of.
+      worker.fail(new UtilityWorkerHostPausedError(paused), 1)
     } else {
       this.neverHost.add(worker.spawn.filename)
       recordDurableCrashBreadcrumb('utility_worker_host_unavailable', {
@@ -233,7 +255,7 @@ export class UtilityWorkerHost {
     try {
       worker.adopt(this.spawnInProcess(worker.spawn))
     } catch (error) {
-      worker.fail(error instanceof Error ? error : new Error(String(error)), 1)
+      worker.fail(asError(error), 1)
     }
   }
 
@@ -309,7 +331,7 @@ export class UtilityWorkerHost {
     this.countLoss(host)
     const error = new Error(`${this.serviceName} exited (${code})`)
     for (const worker of workers) {
-      worker.fail(error, code)
+      worker.failAfterDrain(error, code)
     }
   }
 

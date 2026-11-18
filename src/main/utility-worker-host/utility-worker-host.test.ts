@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { serialize } from 'node:v8'
 import { type MessagePort, Worker } from 'node:worker_threads'
 import { build } from 'esbuild'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -141,6 +142,18 @@ function silentUtilityProcess(): EventEmitter & { postMessage(): void; kill(): v
     }
   })
   queueMicrotask(() => child.emit('exit', 1))
+  return child
+}
+
+/** A ready host that does nothing on its own; the test speaks for it on the ports it receives. */
+function scriptedUtilityProcess(): EventEmitter & { ports: { raw: MessagePort }[] } {
+  const child = Object.assign(new EventEmitter(), {
+    stderr: null,
+    ports: [] as { raw: MessagePort }[],
+    postMessage: (_data: unknown, ports: { raw: MessagePort }[] = []) => child.ports.push(...ports),
+    kill: () => true
+  })
+  queueMicrotask(() => child.emit('message', { type: 'ready' }))
   return child
 }
 
@@ -356,5 +369,19 @@ describe('UtilityWorkerHost', () => {
       heapReportWorkers: 0,
       w0_role: 'orca-journal-sql-reader'
     })
+  })
+
+  it('delivers a reply the host sent just before its process exited', async () => {
+    let child: ReturnType<typeof scriptedUtilityProcess> | undefined
+    fork.mockImplementation(() => (child = scriptedUtilityProcess()))
+    const worker = newHost().spawn({ filename: echoEntry, name: 'orca-claude-rewind-transcript' })
+    worker.on('error', () => undefined)
+    await vi.waitFor(() => expect(child?.ports).toHaveLength(1))
+    const replied = nextMessage(worker)
+    const port = child!.ports[0]!.raw
+    port.postMessage({ type: 'message', bytes: serialize({ result: 'copied' }), more: false })
+    child!.emit('exit', 9)
+    port.close()
+    expect(await replied).toEqual({ result: 'copied' })
   })
 })
