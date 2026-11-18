@@ -19552,8 +19552,6 @@
       },
       "turnDiff": {
         "partial": "Kısmi diff",
-        "changedFiles_other": "Değiştirilen {{count}} dosya",
-        "changedFiles_one": "Değiştirilen {{count}} dosya",
         "hide": "Gizle",
         "hidden": "Orca artık tur farklarını göstermeyecek"
       },

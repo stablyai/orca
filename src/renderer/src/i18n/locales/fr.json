@@ -19722,9 +19722,6 @@
       },
       "turnDiff": {
         "partial": "Différence partielle",
-        "changedFiles_one": "{{count}} fichier modifié",
-        "changedFiles_other": "{{count}} fichiers modifiés",
-        "changedFiles_many": "{{count}} fichiers modifiés",
         "hide": "Masquer",
         "hidden": "Orca n’affichera plus les différences des tours"
       },

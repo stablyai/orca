@@ -20044,7 +20044,6 @@
       },
       "turnDiff": {
         "partial": "部分差异",
-        "changedFiles_other": "{{count}} 个已更改的文件",
         "hide": "隐藏",
         "hidden": "Orca 将不再显示每轮更改",
         "showMoreFiles": "再显示 {{count}} 个文件"
