@@ -267,6 +267,9 @@ export class StructuredAgentSessionClientDelivery {
   readStatusSummary = (sessionId: string): AgentSessionStatusSummary | undefined =>
     this.statusFeed.readPublished(sessionId)
 
+  /** A live chat's current work as of its last status publish; sync, for bot readers. */
+  readPublishedWork = (sessionId: string) => this.statusFeed.readPublishedWork(sessionId)
+
   subscribeTurnCompletions = (subscriber: TurnCompletionSubscriber): (() => void) =>
     this.turnCompletionFeed.subscribe(subscriber)
 

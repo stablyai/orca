@@ -57,7 +57,7 @@ export class AgentSessionSubscribers {
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
-  subscriberCountForTests(sessionId: string): number {
+  subscriberCount(sessionId: string): number {
     return this.bySession.get(sessionId)?.size ?? 0
   }
 

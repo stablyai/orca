@@ -144,6 +144,9 @@ it('indexes an in-place append to a quiet transcript at the scheduled sweep duri
   await nextCycle()
   await writeBacklog(20)
   await appendFile(path, `${claudeLines(['appendedneedle'], SESSION_ID, 2).join('\n')}\n`)
+  // Linux's coarse mtime clock can tie the append with the backlog; reads go newest first, so date it later.
+  const appendedAt = new Date(4_102_444_800_000)
+  await utimes(path, appendedAt, appendedAt)
 
   for (let cycle = 0; cycle < 7; cycle += 1) {
     await nextCycle()

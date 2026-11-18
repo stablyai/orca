@@ -31,6 +31,11 @@ export function getWorkspaceTokenPath(workspaceId: string): string {
   return join(getWorkspaceTokenDir(), `${Buffer.from(workspaceId).toString('base64url')}.enc`)
 }
 
+// The login Connect Linear hands this Mac, next to the workspace's API key.
+export function getWorkspaceLoginPath(workspaceId: string): string {
+  return join(getWorkspaceTokenDir(), `${Buffer.from(workspaceId).toString('base64url')}.login.enc`)
+}
+
 export function ensureOrcaDir(): void {
   const dir = getOrcaDir()
   if (!existsSync(dir)) {
