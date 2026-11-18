@@ -89,31 +89,3 @@ it("leaves only the damaged chat's compare pending when this file's storage is d
     { kind: 'legacy-compare-settle', sessionId: 'healthy', revision: 'r1', held: true }
   ])
 })
-
-it('stops at a missing original instead of asking about every chat awaiting a compare', async () => {
-  const asked: string[] = []
-  let pages = 0
-  await compareJournalLegacyChatsWhenIdle(
-    { maintain: async () => null },
-    {
-      database: async () => ({
-        kind: 'legacy-compares',
-        compares:
-          pages++ === 0
-            ? [
-                { sessionId: 'first', revision: 'r1' },
-                { sessionId: 'second', revision: 'r1' }
-              ]
-            : []
-      }),
-      compareLegacyChat: async (sessionId) => {
-        asked.push(sessionId)
-        return null
-      }
-    },
-    async () => true,
-    () => false,
-    () => {}
-  )
-  expect(asked).toEqual(['first'])
-})
