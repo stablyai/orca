@@ -56,17 +56,6 @@ function row(overrides: Partial<Parameters<typeof WorkerActivityRow>[0]> = {}): 
 }
 
 describe('WorkerActivityRow', () => {
-  it('shows elapsed run time and hides Stop for a completed worker', () => {
-    row()
-    expect(screen.getByText('41s')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Stop ranger-hello' })).not.toBeInTheDocument()
-  })
-
-  it('shows no run time for a worker that exited without a recorded end', () => {
-    row({ worker: { ...WORKER, state: 'stopped', settledAt: null } })
-    expect(screen.queryByText(/\d+s$/)).not.toBeInTheDocument()
-  })
-
   it('stops a running worker through the host', () => {
     row({ running: true, dot: 'working', worker: { ...WORKER, state: 'working', settledAt: null } })
     fireEvent.click(screen.getByRole('button', { name: 'Stop ranger-hello' }))

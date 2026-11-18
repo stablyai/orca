@@ -68,7 +68,7 @@ describe('BotNameInlineEdit', () => {
     fireEvent.change(field, { target: { value: 'Release bot' } })
     await press(field, 'Escape')
     expect(update).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Rename Bot builder' })).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Rename Bot builder' }))
   })
 
   it('an empty name is refused and the saved name stays', async () => {
@@ -117,11 +117,5 @@ describe('BotNameInlineEdit', () => {
     next.focus()
     await act(async () => finish({ ...bot, name: 'Release bot' }))
     expect(document.activeElement).toBe(next)
-  })
-
-  it('Escape puts focus back on the name', async () => {
-    const field = edit(vi.fn(async () => bot))
-    await press(field, 'Escape')
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Rename Bot builder' }))
   })
 })
