@@ -301,6 +301,10 @@ export function runProcess(
       }
     })
     child.once('close', (code, signal) => {
+      // A launch its host lost before running it closes too; the abandonment rejection owns that run.
+      if (abandoned) {
+        return
+      }
       deferredClose = { code, signal }
       if (nativeGroupTermination) {
         nativeGroupTermination.close()
