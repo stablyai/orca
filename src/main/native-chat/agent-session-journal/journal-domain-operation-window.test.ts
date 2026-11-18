@@ -222,3 +222,30 @@ it("holds a Claude turn's opener, kept under its echo's alias, sent turns before
   const { snapshot } = await reads.operationWindow({ turnIds: ['queued-turn'] })
   expect(snapshot.items.map((item) => item.itemId)).toContain('orca:queued')
 })
+
+it('carries a tool row too large for one reply with its output cut, keeping its size and digest', async () => {
+  const { f, reads } = await chat(1)
+  const output = 'x'.repeat(33 * 1024 * 1024)
+  await f.run({
+    kind: 'item',
+    identity: identity('huge-read'),
+    options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+    body: {
+      kind: 'tool-call',
+      name: 'Read',
+      input: {},
+      state: 'completed',
+      output: { head: output, byteLength: 34_603_008, digest: 'whole', truncated: false }
+    }
+  })
+  const { snapshot } = await reads.operationWindow({ afterSequence: 0 })
+  const tool = snapshot.items.find((item) => item.body.kind === 'tool-call')
+  expect(tool?.body).toMatchObject({
+    output: {
+      head: 'x'.repeat(16 * 1024),
+      byteLength: 34_603_008,
+      digest: 'whole',
+      truncated: true
+    }
+  })
+})
