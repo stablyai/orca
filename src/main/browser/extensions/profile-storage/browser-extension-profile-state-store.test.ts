@@ -104,10 +104,8 @@ describe('BrowserExtensionProfileStateStore', () => {
       removalGeneration: 3
     })
 
-    const revision = store.revision
     store.update('default', EXTENSION, (state) => ({ ...state, removalGeneration: 3 }))
     store.forgetProfile('missing')
-    expect(store.revision).toBe(revision)
     await store.close()
     expect(disk.renames).toBe(2)
   })

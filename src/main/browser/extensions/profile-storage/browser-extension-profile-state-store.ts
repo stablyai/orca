@@ -88,12 +88,7 @@ export class BrowserExtensionProfileStateStore {
     change: (state: BrowserExtensionProfileState) => BrowserExtensionProfileState
   ): BrowserExtensionProfileState {
     const file = this.load()
-    const existing = file[profileId]?.[extensionId]
     const next = change(this.read(profileId, extensionId))
-    // Compared as saved; a missing record is still stored, since its presence is state too.
-    if (existing && JSON.stringify(existing) === JSON.stringify(next)) {
-      return existing
-    }
     file[profileId] = { ...file[profileId], [extensionId]: next }
     this.schedulePersist()
     return next

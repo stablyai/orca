@@ -50,6 +50,8 @@ export class CoalescingFileWriter<T> {
     if (this.gaveUp) {
       return Promise.resolve(false)
     }
+    // Someone is waiting: retry now instead of after the backoff.
+    this.wake?.()
     return new Promise((settle) => this.waiters.push({ generation: this.generation, settle }))
   }
 
