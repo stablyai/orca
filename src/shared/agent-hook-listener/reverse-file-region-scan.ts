@@ -55,7 +55,9 @@ export function scanFileRegionsBackward<T>(
 /** The async twin, for callers on the event loop: same regions, same budget, same visit order. */
 export async function scanFileRegionsBackwardAsync<T>(
   filePath: string,
-  limits: { chunkBytes: number; maxScanBytes: number },
+  /** `floor`: an earlier scan already searched the whole lines before this byte; stop there, but
+   *  finish a line that crosses it. */
+  limits: { chunkBytes: number; maxScanBytes: number; floor?: number },
   visit: (region: Buffer, regionPosition: number) => T | undefined,
   /** Checked before each read; a superseded scan stops instead of reading on. */
   keepReading: () => boolean = () => true,
@@ -69,7 +71,14 @@ export async function scanFileRegionsBackwardAsync<T>(
     const carryChunks: Buffer[] = []
     let bytesRead = 0
     let scanEnd = size
-    while (scanEnd > 0 && bytesRead < limits.maxScanBytes && keepReading()) {
+    const floor = limits.floor ?? 0
+    const carriedLineEnd = () => carryChunks.reduce((end, chunk) => end + chunk.length, scanEnd)
+    while (
+      scanEnd > 0 &&
+      (scanEnd > floor || carriedLineEnd() > floor) &&
+      bytesRead < limits.maxScanBytes &&
+      keepReading()
+    ) {
       const chunkSize = Math.min(scanEnd, limits.chunkBytes, limits.maxScanBytes - bytesRead)
       const position = scanEnd - chunkSize
       const buffer = Buffer.alloc(chunkSize)

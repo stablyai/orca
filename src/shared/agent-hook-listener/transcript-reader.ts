@@ -56,13 +56,13 @@ export function readLastTextFromTranscriptOnce(
 export function readLastAssistantFromTranscriptAsync(
   transcriptPath: string,
   keepReading?: () => boolean,
-  /** A retry passes the bytes appended since its last scan plus one chunk for the line it cut. */
-  maxScanBytes = TRANSCRIPT_MAX_SCAN_BYTES,
+  /** A retry passes the size its last scan saw: only lines reaching past it are searched again. */
+  floor?: number,
   onError?: () => void
 ): Promise<string | undefined> {
   return scanFileRegionsBackwardAsync(
     transcriptPath,
-    { chunkBytes: TRANSCRIPT_CHUNK_BYTES, maxScanBytes },
+    { chunkBytes: TRANSCRIPT_CHUNK_BYTES, maxScanBytes: TRANSCRIPT_MAX_SCAN_BYTES, floor },
     (region) =>
       findLastExtractedTranscriptLineText(region.toString('utf8'), extractAssistantTextFromLine),
     keepReading,
