@@ -20,10 +20,8 @@ import {
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-launch/installation/managed-runtime-install'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
-import {
-  nativeChatPreferenceFor,
-  type NativeChatDefaultSettings
-} from '../../../../../src/shared/agent-launch/choices/structured-native-chat-launch-route'
+import type { NativeChatDefaultSettings } from '../../../../../src/shared/agent-launch/choices/structured-native-chat-launch-route'
+import { hostStartsAgentAsChat } from '../../../session/agent-launch/new-tab-agent-surface'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import {
   registeredAgentChatInstallable,
@@ -82,7 +80,7 @@ export function resolveMobileSourceControlLaunchAgent(
     !context.repo?.connectionId &&
     (recipe === null || resolveSourceControlActionRequestedSurface(recipe, agent) !== 'terminal') &&
     ((recipe !== null && resolveSourceControlActionPreferredSurface(recipe, agent) === 'chat') ||
-      nativeChatPreferenceFor(settings?.nativeChatDefaults, agent)) &&
+      hostStartsAgentAsChat(settings?.nativeChatDefaults, agent)) &&
     registeredAgentChatInstallable(chatHost.registeredAgents, agent, chatHost.hostCapabilities)
   const enabledDetected = filterEnabledTuiAgents(detectedAgents, settings?.disabledTuiAgents)
   // No pre-launch dialog can show a substitution; fail an unavailable saved agent instead of silently swapping it.
