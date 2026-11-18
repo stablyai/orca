@@ -14,7 +14,7 @@ Accounts are optional: without any, Orca uses your normal Codex login (**System 
 
 ## Import an existing home
 
-In the provider's account settings, use the home-import control and select the account's home directory, not an individual credential file. Orca copies the login into a new managed account home and activates the imported account on that host. The source directory stays unchanged.
+In the provider's account settings, use the home-import control and select the account's home directory, not an individual credential file. Orca copies the login into a new managed account home and activates the imported account on that host. The source credentials stay unchanged. If the source is already an Orca-managed home, normal configuration sync may refresh its `config.toml`.
 
 Enable **Import session history** if you also want its existing conversations copied. Imported history remains private to that account. Native host history import supports Codex and Claude. Claude home import is available only on the host. Credential-only WSL Codex imports are available through the CLI. Links inside history entries being copied are rejected rather than followed.
 
