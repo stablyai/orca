@@ -40,6 +40,8 @@ import {
   terminalPhaseInTurn
 } from '../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { reportWorkerStopsAcrossRestart } from '../orchestration/workers/turn-stops/restart-worker-stop-report'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { WorktreeRowsChanges } from '../client/events/worktree-rows-change-events'
 import {
@@ -120,6 +122,39 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId),
     markApprovalReported: (approvalId) => this.terminalWorkerApprovals.markReported(approvalId)
   })
+
+  private restartWorkerStopReport: Promise<void> | null = null
+
+  /** Once per start, after restored terminal authority: tell coordinators about workers that
+   *  stopped while Orca was down, or that this start did not continue. */
+  reportWorkerStopsAcrossRestartOnce(): Promise<void> {
+    this.restartWorkerStopReport ??= (async () => {
+      // Continued chats are working again, and replayed hooks have been probed once.
+      await Promise.all([
+        this.structuredAgentSessionLaunchContinuation.done,
+        agentHookServer.whenRestoredOwnersChecked()
+      ])
+      const db = this.getExistingOrchestrationDb()
+      if (!db) {
+        return
+      }
+      const host = getStructuredAgentSessionHost()
+      await reportWorkerStopsAcrossRestart({
+        db,
+        reportDeps: this.workerTurnStopReportDeps,
+        reportRestingPane: (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
+        chats: host
+          ? {
+              open: (sessionId) => host.revealSession(sessionId).catch(() => null),
+              status: (sessionId) => host.readStatusSummary(sessionId)
+            }
+          : null
+      })
+    })().catch((error: unknown) => {
+      console.warn('[orchestration] reporting workers stopped across a restart failed', error)
+    })
+    return this.restartWorkerStopReport
+  }
 
   private readonly externalConversations = installExternalConversations(this.store, this)
 

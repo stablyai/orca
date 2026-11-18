@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { structuredAgentSessionWorkingAtStop } from '../termination/structured-agent-session-working-at-teardown'
+import { crashCutResumeMarker } from './structured-agent-session-crash-cut-marker'
 
 type WorkingAtStopInput = Parameters<typeof structuredAgentSessionWorkingAtStop>[0]
 
@@ -15,6 +16,12 @@ export type StructuredAgentSessionRestartWitnesses = {
   beforeStop: (sessionId: string) => void
   stopped: (sessionId: string) => void
   record: () => Promise<void>
+  /** After a crash: open each chat the dead run held (which settles it) and record what it cut. */
+  recordCrashCuts: (
+    sessionIds: readonly string[],
+    crash: { runtime: string; since: number },
+    open: (sessionId: string) => Promise<{ readable: boolean }>
+  ) => Promise<number>
   /** Explicit actions supersede unwritten witnesses only for readable agents in their audience. */
   clear: (audience?: (agent: string) => boolean) => void
 }
@@ -53,6 +60,27 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
       }
     }
   }
+  const crashCutOf = async (
+    sessionId: string,
+    crash: { runtime: string; since: number },
+    open: (sessionId: string) => Promise<{ readable: boolean }>
+  ): Promise<AgentSessionResumeMarker | null> => {
+    const readable = (await open(sessionId)).readable
+    const journal = deps.sessions.get(sessionId)?.journal
+    const record = deps.getRecord(sessionId)
+    if (!readable || !journal || !record) {
+      return null
+    }
+    const { items, cursor } = await journal.reads.continuationContext()
+    return crashCutResumeMarker({
+      sessionId,
+      items,
+      cursor,
+      record,
+      crashedRuntime: crash.runtime,
+      settledSince: crash.since
+    })
+  }
   return {
     begin: (next) => {
       clear()
@@ -88,6 +116,21 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
       await deps.enqueue(async () => {
         await deps.capsule?.record([...confirmed.values()], deps.now())
       })
+    },
+    recordCrashCuts: async (sessionIds, crash, open) => {
+      const markers: AgentSessionResumeMarker[] = []
+      for (const sessionId of sessionIds) {
+        // A chat that cannot be read keeps no offer; its worker is reported as stopped instead.
+        const marker = await crashCutOf(sessionId, crash, open).catch(() => null)
+        if (marker) {
+          markers.push(marker)
+        }
+      }
+      // One write for every chat the crash cut.
+      if (markers.length > 0) {
+        await deps.enqueue(async () => deps.capsule?.record(markers, deps.now()))
+      }
+      return markers.length
     },
     clear
   }

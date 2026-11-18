@@ -4,10 +4,18 @@ import type { LegacyWorkerTerminalRecoveryResult } from './structured-sessions/r
 import { RuntimeWorkspaceSessionFlush } from '../../workspaces/session-hosts/runtime-workspace-session-flush'
 import { StartupWorkerAuthorityRestore } from './startup-worker-authority-restore'
 import type { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport as StructuredSessionStartup } from '../../session-tabs/chat/structured-session-create-support'
+import {
+  StructuredAgentSessionLaunchContinuationOnce,
+  structuredAgentSessionLaunchContinuationDeps
+} from '../../agent-session/lifecycle/structured-agent-session-launch-continuation'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
   readonly startupWorkerAuthority = new StartupWorkerAuthorityRestore()
+  /** Settles once this start has continued (or offered) what the last run cut off. */
+  readonly structuredAgentSessionLaunchContinuation =
+    new StructuredAgentSessionLaunchContinuationOnce()
   abstract prepareStructuredAgentSessionStartupRestoration(
     ...args: Parameters<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
   ): ReturnType<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
@@ -36,6 +44,13 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       await this.prepareStructuredAgentSessionStartupRestoration().catch((error: unknown) => {
         console.warn('[orchestration] chat worker restart reconcile failed', error)
       })
+      // Off the startup path: continuations start providers and wait for their answers.
+      this.structuredAgentSessionLaunchContinuation.start(
+        structuredAgentSessionLaunchContinuationDeps(
+          getStructuredAgentSessionHost(),
+          () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true
+        )
+      )
       if (!this.canRecoverPersistentLocalPtysFn()) {
         return
       }

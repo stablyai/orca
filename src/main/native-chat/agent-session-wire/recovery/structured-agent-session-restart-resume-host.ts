@@ -30,7 +30,6 @@ import type { StructuredAgentSessionRestartResume } from './structured-agent-ses
 import {
   continuationDeps,
   startStructuredAgentSessionContinuation,
-  type StructuredAgentSessionContinuationHost,
   type StructuredAgentSessionContinuationOutcome
 } from './structured-agent-session-restart-continuation'
 import { restartContinuationId } from './structured-agent-session-restart-continuation-envelope'
@@ -39,13 +38,15 @@ import {
   createStructuredAgentSessionRestartOfferWithdrawal,
   type StructuredAgentSessionRestartOfferSession
 } from './structured-agent-session-restart-offer-withdrawal'
-import type { StructuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
+import {
+  restartContinuationHost,
+  type StructuredAgentSessionRestartResumeSurfaces
+} from './structured-agent-session-restart-resume-wiring'
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
 import {
   remainingRestartRows,
   unstartedRestartRefusals
 } from './structured-agent-session-restart-action-result'
-import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 
 type LiveSession = StructuredAgentSessionRestartOfferSession
@@ -79,14 +80,15 @@ export function createStructuredAgentSessionRestartResume(
     enqueue: enqueueRecoveryOperation
   })
   const newerOrca = createNewerOrcaChats(() => deps.journalDatabase.readOnly)
-  const { derive, deriveAtSend } = createStructuredAgentSessionRestartCandidateReaders({
-    sessions,
-    getRecord: deps.store.getRecord,
-    adapter: deps.adapter,
-    agents: deps.agents,
-    movedOn: withdrawal.movedOn,
-    savedByNewerOrca: newerOrca.has
-  })
+  const { derive, deriveAtSend, deriveAutomatic } =
+    createStructuredAgentSessionRestartCandidateReaders({
+      sessions,
+      getRecord: deps.store.getRecord,
+      adapter: deps.adapter,
+      agents: deps.agents,
+      movedOn: withdrawal.movedOn,
+      savedByNewerOrca: newerOrca.has
+    })
   const failures = createStructuredAgentSessionRestartFailureLedger({
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
     getRecord: deps.store.getConversation,
@@ -123,17 +125,7 @@ export function createStructuredAgentSessionRestartResume(
   const listFailures = async (audience?: StructuredAgentSessionRestartAudience) =>
     restartRowsFor(await failures.list(), audience)
 
-  const continuationHost: StructuredAgentSessionContinuationHost = {
-    ...surfaces,
-    logger: deps.logger,
-    sessions,
-    conversationFence: (sessionId) =>
-      deps.store.getRecord(sessionId)
-        ? structuredAgentSessionConversationFence(deps.store, sessionId)
-        : null,
-    stillResumable: async (marker) =>
-      (await deriveAtSend([marker], 'may-be-held')).candidates.length === 1
-  }
+  const continuationHost = restartContinuationHost(deps, sessions, surfaces, deriveAtSend)
 
   /** Reserve then continue under the shared host-wide startup limit. */
   const run = async (
@@ -141,14 +133,15 @@ export function createStructuredAgentSessionRestartResume(
     owner: string,
     audience: StructuredAgentSessionRestartAudience | undefined,
     continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>,
-    progress: ReturnType<typeof createRestartResumeProgress>
+    progress: ReturnType<typeof createRestartResumeProgress>,
+    automatic: boolean
   ) => {
     // Supersede captured witnesses; the mutation lane drains any publication already in flight.
     witnesses.clear(audience)
     const markers = await readActionMarkers(sessionIds)
     await revealMarkers(markers)
     const requested = new Set(sessionIds ?? markers.map((marker) => marker.sessionId))
-    const derived = await derive(markers, 'may-be-held')
+    const derived = await (automatic ? deriveAutomatic : derive)(markers, 'may-be-held')
     retireSuperseded(derived.superseded)
     const eligible = restartRowsFor(derived.candidates, audience).filter((candidate) =>
       requested.has(candidate.sessionId)
@@ -219,7 +212,8 @@ export function createStructuredAgentSessionRestartResume(
   const continueAfterRestart: StructuredAgentSessionRestartResume['continueAfterRestart'] = async (
     sessionIds,
     owner,
-    audience
+    audience,
+    options
   ) => {
     const progress = createRestartResumeProgress(sessions, surfaces.publishStatus)
     try {
@@ -258,7 +252,8 @@ export function createStructuredAgentSessionRestartResume(
             })
           )
         },
-        progress
+        progress,
+        options?.automatic === true
       )
       await Promise.all(verdicts)
       const resumed = action?.outcomes ?? []
@@ -293,6 +288,8 @@ export function createStructuredAgentSessionRestartResume(
   }
 
   return {
+    adoptCrashCuts: (sessionIds, runtime, since) =>
+      witnesses.recordCrashCuts(sessionIds, { runtime, since }, surfaces.revealSession),
     beginTeardown: witnesses.begin,
     captureBeforeStop: witnesses.beforeStop,
     confirmStopped: witnesses.stopped,

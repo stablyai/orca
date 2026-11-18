@@ -1,0 +1,161 @@
+// After a crash, settlement already wrote what the dead run left: the cut turn, its cancelled prompts
+// and its lost live work. Read those facts back into the offer a quit would have recorded.
+
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type {
+  AgentJournalItemBody,
+  AgentJournalRenderItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LENGTH,
+  AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS,
+  AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS,
+  type AgentSessionRestartPrompt,
+  type AgentSessionRestartTask
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { isStructuredAgentSessionCommandTurn } from '../../../../shared/agent-session/requests/structured-agent-session-command-entry'
+import { orcaStopCauseOfRow } from '../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
+import {
+  isBackgroundTaskBlock,
+  isSubagentBlock,
+  isSubagentGroupBlock
+} from '../../../../shared/native-chat/native-chat-types'
+
+/** One offer per crashed run: the same run re-derives the same witness on every start. */
+export function crashCutTeardownId(runtime: string): string {
+  return `crash:${runtime}`
+}
+
+function label(text: string | undefined): string {
+  const trimmed = text?.trim() ?? ''
+  return trimmed.length > AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LENGTH
+    ? `${trimmed.slice(0, AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LENGTH - 1)}…`
+    : trimmed
+}
+
+function inTurn(item: AgentJournalRenderItem, turnItemId: string): boolean {
+  return item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turnItemId
+}
+
+/** Prompts the settlement cancelled: the person was being asked when Orca went away. */
+function cancelledPrompts(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string
+): AgentSessionRestartPrompt[] {
+  return items
+    .filter((item) => inTurn(item, turnItemId))
+    .flatMap(({ body }): AgentSessionRestartPrompt[] =>
+      body.kind === 'approval' && body.resolution.state === 'cancelled'
+        ? [{ kind: 'approval', label: label(body.displayName ?? body.title) }]
+        : body.kind === 'question' && body.resolution.state === 'cancelled'
+          ? [{ kind: 'question', label: label(body.question) }]
+          : []
+    )
+    .slice(0, AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS)
+}
+
+/** Live work the settlement marked lost, including a background task the turn left running. */
+function lostTasks(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string
+): AgentSessionRestartTask[] {
+  return items
+    .filter((item) => inTurn(item, turnItemId))
+    .flatMap(({ body }): AgentSessionRestartTask[] =>
+      body.kind !== 'message'
+        ? []
+        : body.blocks.flatMap((block): AgentSessionRestartTask[] => {
+            if (isBackgroundTaskBlock(block)) {
+              return block.state === 'unverifiable'
+                ? [{ kind: block.kind, label: label(block.label) }]
+                : []
+            }
+            if (isSubagentBlock(block)) {
+              return block.state === 'unverifiable'
+                ? [{ kind: 'agent', label: label(block.label) }]
+                : []
+            }
+            return isSubagentGroupBlock(block)
+              ? block.agents
+                  .filter((agent) => agent.state === 'unverifiable')
+                  .map((agent) => ({ kind: 'agent' as const, label: label(agent.label) }))
+              : []
+          })
+    )
+    .slice(0, AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS)
+}
+
+/** The offer for a chat whose run crashed, or null when this start's settlement cut nothing to carry on. */
+export function crashCutResumeMarker(input: {
+  sessionId: string
+  items: readonly AgentJournalRenderItem[]
+  cursor: AgentJournalCursor
+  record: Pick<AgentSessionRecord, 'providerHandleChain' | 'providerContextBoundary'>
+  crashedRuntime: string
+  /** Only what settlement wrote since then counts: an older crash's rows were offered by its start. */
+  settledSince: number
+}): AgentSessionResumeMarker | null {
+  const { items } = input
+  const settled = items.filter(
+    (item) => item.recovered === true && (item.recoveredAt ?? -1) >= input.settledSince
+  )
+  const bodies = new Map<string, AgentJournalItemBody>(
+    items.map((item) => [item.itemId, item.body])
+  )
+  const turnIndex = items.findLastIndex((item) => {
+    const turn = readAgentJournalTurn(item.body)
+    return (
+      turn !== null &&
+      isRootAgentJournalItem(item) &&
+      !isStructuredAgentSessionCommandTurn(turn, (id) => bodies.get(id))
+    )
+  })
+  const turnItem = items[turnIndex]
+  const turn = readAgentJournalTurn(turnItem?.body)
+  const head = agentSessionProviderHandleChainHead(input.record.providerHandleChain)
+  // A request after the newest turn means the chat moved on.
+  if (
+    !turnItem ||
+    !turn ||
+    !head ||
+    settled.length === 0 ||
+    items
+      .slice(turnIndex + 1)
+      .some((item) => item.body.kind === 'message' && item.body.role === 'user')
+  ) {
+    return null
+  }
+  const prompts = cancelledPrompts(settled, turnItem.itemId)
+  const tasks = lostTasks(settled, turnItem.itemId)
+  const leadCut =
+    settled.some((item) => orcaStopCauseOfRow(item) === 'crash') ||
+    (settled.includes(turnItem) && (turn.state === 'interrupted' || turn.state === 'unverifiable'))
+  // A finished turn with nothing left running was not interrupted.
+  if (!leadCut && tasks.length === 0) {
+    return null
+  }
+  return {
+    sessionId: input.sessionId,
+    work: { kind: 'turn', id: turn.turnId },
+    latestUserItemId: turn.userItemId ?? null,
+    recordedAt: Math.max(...settled.map((item) => item.recoveredAt ?? 0)),
+    trigger: 'crash',
+    teardownId: crashCutTeardownId(input.crashedRuntime),
+    journalCursor: input.cursor,
+    ...(input.record.providerContextBoundary
+      ? { contextClearOperationId: input.record.providerContextBoundary.operationId }
+      : {}),
+    providerHandleRoot: agentSessionProviderHandleRoot(head.handle),
+    activity: {
+      state: prompts.length > 0 ? 'blocked' : leadCut ? 'working' : 'done',
+      prompts,
+      tasks
+    }
+  }
+}

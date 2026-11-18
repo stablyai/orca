@@ -16,6 +16,12 @@ import type { AgentJournalCursor } from '../../journal/agent-session-journal-ide
  *  and the surface that offers the resume says so. */
 export const AGENT_SESSION_RESUME_TRIGGERS = ['quit', 'update'] as const
 export type AgentSessionResumeTrigger = (typeof AGENT_SESSION_RESUME_TRIGGERS)[number]
+/** An offer's cause: a teardown trigger, or a crash read back from the journal at the next start. */
+export const AGENT_SESSION_RESUME_MARKER_TRIGGERS = [
+  ...AGENT_SESSION_RESUME_TRIGGERS,
+  'crash'
+] as const
+export type AgentSessionResumeMarkerTrigger = (typeof AGENT_SESSION_RESUME_MARKER_TRIGGERS)[number]
 
 /** How an acted-on offer ended without the agent carrying on. `refused` is a definite no from the
  *  host or provider; `unconfirmed` means the continuation may have gone out and nothing proved it. */
@@ -38,7 +44,7 @@ export type AgentSessionResumeMarker = {
   latestUserItemId?: string | null
   /** Execution host's clock at teardown. */
   recordedAt: number
-  trigger: AgentSessionResumeTrigger
+  trigger: AgentSessionResumeMarkerTrigger
   /** Compare provider identity roots: Claude close advances the leaf after teardown, so full-key checks would refuse every resume. A changed root is a fork. */
   providerHandleRoot: string
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
@@ -78,7 +84,7 @@ const agentSessionResumeMarkerSchema = z.object({
   work: agentSessionResumeWorkSchema,
   latestUserItemId: markerField.nullable().optional(),
   recordedAt: z.number().int().nonnegative(),
-  trigger: z.enum(AGENT_SESSION_RESUME_TRIGGERS),
+  trigger: z.enum(AGENT_SESSION_RESUME_MARKER_TRIGGERS),
   providerHandleRoot: markerField,
   teardownId: markerField,
   contextClearOperationId: markerField.optional().catch(undefined),

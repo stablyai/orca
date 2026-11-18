@@ -61,6 +61,21 @@ export async function readRestartHostOffer(target: RuntimeClientTarget): Promise
   }
 }
 
+/** Waits for the host's own continuation at launch. `unsupported`: an older host leaves it to this client. */
+export async function awaitRestartHostLaunchContinuation(
+  target: RuntimeClientTarget
+): Promise<'settled' | 'unsupported'> {
+  try {
+    await callStructuredAgentSession(target, 'agentSession.restartLaunchSettled')
+    return 'settled'
+  } catch (error) {
+    // Any other failure still comes from a host that continues on its own; continuing here too would repeat it.
+    return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
+      ? 'unsupported'
+      : 'settled'
+  }
+}
+
 export async function dismissRestartHostOffer(
   target: RuntimeClientTarget,
   sessionIds?: readonly string[]

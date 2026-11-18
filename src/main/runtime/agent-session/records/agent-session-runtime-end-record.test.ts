@@ -24,6 +24,7 @@ vi.mock('../../../filesystem/durable-file-write', async (importOriginal) => {
 import {
   beginAgentSessionRuntimeRecord,
   readAgentSessionRuntimeEnds,
+  readPreviousAgentSessionRuntime,
   recordAgentSessionRuntimeEnd
 } from './agent-session-runtime-end-record'
 import {
@@ -108,6 +109,20 @@ describe('what a runtime records about itself', () => {
     writes.fail = true
     recordAgentSessionRuntimeEnd('quit', 2)
     expect(readAgentSessionRuntimeEnds(directory)?.has(RUNTIME_A)).toBe(false)
+  })
+})
+
+describe('the run before this one', () => {
+  it('is the latest other start, with how it ended', () => {
+    const RUNTIME_C = '0000000c-0000-4000-8000-000000000000'
+    beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
+    recordAgentSessionRuntimeEnd('quit', 2)
+    beginAgentSessionRuntimeRecord(directory, RUNTIME_B, 3)
+    beginAgentSessionRuntimeRecord(directory, RUNTIME_C, 4)
+    expect(readPreviousAgentSessionRuntime(directory, RUNTIME_C)).toEqual({
+      runtime: RUNTIME_B,
+      end: 'crash'
+    })
   })
 })
 

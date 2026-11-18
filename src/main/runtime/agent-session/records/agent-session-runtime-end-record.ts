@@ -108,6 +108,13 @@ function readTrigger(value: unknown): AgentSessionResumeTrigger | undefined {
 }
 
 function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCause | undefined {
+  return readRecordedRun(path, runtime)?.end
+}
+
+function readRecordedRun(
+  path: string,
+  runtime: string
+): { startedAt: number; end?: AgentSessionOrcaStopCause } | undefined {
   try {
     const parsed: unknown = JSON.parse(
       readNodeFileSyncWithinLimit(path, MAX_RUNTIME_RECORD_BYTES).buffer.toString('utf8')
@@ -122,16 +129,47 @@ function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCau
     ) {
       return undefined
     }
+    const startedAt = parsed.startedAt
     if (!('end' in parsed) || parsed.end === undefined) {
-      return 'crash'
+      return { startedAt, end: 'crash' }
     }
     const end = parsed.end
-    return readTrigger(
+    const trigger = readTrigger(
       typeof end === 'object' && end !== null && 'trigger' in end ? end.trigger : undefined
     )
+    return trigger ? { startedAt, end: trigger } : { startedAt }
   } catch {
     return undefined
   }
+}
+
+/** The run before this one: the latest recorded start other than this runtime's own. */
+export function readPreviousAgentSessionRuntime(
+  stateDirectory: string,
+  current: string
+): { runtime: string; end?: AgentSessionOrcaStopCause } | null {
+  const directory = join(stateDirectory, RUNTIMES_DIRECTORY)
+  let names: string[]
+  try {
+    names = readdirSync(directory)
+  } catch {
+    return null
+  }
+  let previous: { runtime: string; startedAt: number; end?: AgentSessionOrcaStopCause } | null =
+    null
+  for (const name of names) {
+    const runtime = RECORD_FILE.exec(name)?.[1]
+    const run = runtime ? readRecordedRun(join(directory, name), runtime) : undefined
+    if (
+      runtime &&
+      runtime !== current &&
+      run &&
+      (!previous || run.startedAt > previous.startedAt)
+    ) {
+      previous = { runtime, ...run }
+    }
+  }
+  return previous && { runtime: previous.runtime, ...(previous.end ? { end: previous.end } : {}) }
 }
 
 /** Missing/unreadable runtime records give no cause; null means the directory itself could not be listed. */

@@ -11,6 +11,8 @@ import {
   structuredAgentSessionResumableSet,
   type StructuredAgentSessionResumableSet
 } from './structured-agent-session-restart-resume-set'
+import { restartActivityWaitsOnPerson } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
+import { restartAutoContinuationAllowed } from './structured-agent-session-restart-loop-cap'
 
 export type StructuredAgentSessionRestartJournalSource = { journal: AgentSessionJournal }
 
@@ -45,19 +47,39 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
     })
 }
 
-/** Listing skips newer chats; pre-send must retain them so refused sends preserve their offers. */
+/** Listing skips newer chats; pre-send must retain them so refused sends preserve their offers.
+ *  Orca continues on its own only what no person is being asked about, and never in a loop. */
 export function createStructuredAgentSessionRestartCandidateReaders(
   deps: Parameters<typeof createStructuredAgentSessionRestartCandidateReader>[0]
 ): {
   derive: StructuredAgentSessionRestartCandidateReader
   deriveAtSend: StructuredAgentSessionRestartCandidateReader
+  deriveAutomatic: StructuredAgentSessionRestartCandidateReader
 } {
+  const derive = createStructuredAgentSessionRestartCandidateReader(deps)
   return {
-    derive: createStructuredAgentSessionRestartCandidateReader(deps),
+    derive,
     deriveAtSend: createStructuredAgentSessionRestartCandidateReader({
       ...deps,
       savedByNewerOrca: () => false
-    })
+    }),
+    deriveAutomatic: async (markers, leaseState) => {
+      const derived = await derive(markers, leaseState)
+      const bySession = new Map(markers.map((marker) => [marker.sessionId, marker]))
+      const candidates: typeof derived.candidates = []
+      for (const candidate of derived.candidates) {
+        const marker = bySession.get(candidate.sessionId)
+        const journal = deps.sessions.get(candidate.sessionId)?.journal
+        if (!marker || !journal || restartActivityWaitsOnPerson(candidate.activity)) {
+          continue
+        }
+        const context = await journal.reads.continuationContext()
+        if (restartAutoContinuationAllowed(marker, context, Date.now())) {
+          candidates.push(candidate)
+        }
+      }
+      return { ...derived, candidates }
+    }
   }
 }
 

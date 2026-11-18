@@ -9,6 +9,7 @@ import {
   structuredCallerFor
 } from '../creation/structured-agent-session-gate'
 import {
+  RestartLaunchSettledParams,
   RestartResumableParams,
   RestartResumeParams
 } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
@@ -68,6 +69,16 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
         structuredCallerFor(ctx).callerKey,
         structuredAgentsReadBy(ctx, host.knownAgentIds())
       )
+    }
+  }),
+  defineMethod({
+    // The runtime continues what a restart cut off; clients wait for it before offering the rest.
+    name: 'agentSession.restartLaunchSettled',
+    permission: 'workspace',
+    params: RestartLaunchSettledParams,
+    handler: async (_params, ctx) => {
+      const { continued } = await ctx.runtime.structuredAgentSessionLaunchContinuation.done
+      return { continuedSessionIds: [...continued] }
     }
   }),
   defineMethod({

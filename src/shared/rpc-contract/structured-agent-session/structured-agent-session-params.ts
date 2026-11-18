@@ -305,6 +305,9 @@ export const RestartResumeParams = z
   .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
   .strict()
 
+/** Waits for this start's own continuation of what the last run cut off. */
+export const RestartLaunchSettledParams = z.object({}).strict()
+
 export const HistoryParams = z
   .object({
     sessionId: SessionId,

@@ -6,6 +6,7 @@ import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-d
 import { launchResumeSessionIds } from '../tree/native-chat-resume-on-restart-grouping'
 import { useEffect, useSyncExternalStore } from 'react'
 import { createNativeChatRestartStore } from './native-chat-restart-runtime-store'
+import { awaitRestartHostLaunchContinuation } from './native-chat-restart-host-offer'
 
 export const localNativeChatRestartStore = createNativeChatRestartStore({ kind: 'local' })
 export const {
@@ -56,11 +57,14 @@ let launch: Promise<void> | undefined
 export async function loadNativeChatLaunchOffer(
   store: Pick<
     NativeChatRestartStore,
-    'readNativeChatRestartOffer' | 'continueNativeChatRestartOffer'
-  >
+    'readNativeChatRestartOffer' | 'continueNativeChatRestartOffer' | 'target'
+  >,
+  awaitHostContinuation = awaitRestartHostLaunchContinuation
 ): Promise<void> {
   // The preference belongs to this launch's request; later saves cannot dispatch another.
   const autoResume = useAppStore.getState().settings?.nativeChatResumeWorkOnRestart === true
+  // A host that continues on its own has done so by now; what it left needs the person.
+  const hostContinued = (await awaitHostContinuation(store.target)) === 'settled'
   let read = await store.readNativeChatRestartOffer()
   // Host startup can race the renderer. Retry only failed reads, never a confirmed empty result,
   // so a transient startup gap does not strand a durable offer or add steady-state polling.
@@ -76,7 +80,7 @@ export async function loadNativeChatLaunchOffer(
   if (offered.length === 0) {
     return
   }
-  if (!autoResume) {
+  if (!autoResume || hostContinued) {
     requestNativeChatResumeOnRestartDialog()
     return
   }

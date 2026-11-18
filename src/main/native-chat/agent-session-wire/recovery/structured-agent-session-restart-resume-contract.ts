@@ -20,11 +20,19 @@ export type StructuredAgentSessionRestartResume = {
   listFailures: (
     audience?: StructuredAgentSessionRestartAudience
   ) => Promise<StructuredAgentSessionResumeFailure[]>
-  /** Unnamed actions continue visible offers; named actions may also retry selected failures. */
+  /** Record the offers a crashed run left, read from its settled chats; returns how many. */
+  adoptCrashCuts: (
+    sessionIds: readonly string[],
+    crashedRuntime: string,
+    settledSince: number
+  ) => Promise<number>
+  /** Unnamed actions continue visible offers; named actions may also retry selected failures.
+   *  `automatic` skips chats waiting on a person and chats continued too often already. */
   continueAfterRestart: (
     sessionIds: readonly string[] | undefined,
     owner: string,
-    audience?: StructuredAgentSessionRestartAudience
+    audience?: StructuredAgentSessionRestartAudience,
+    options?: { automatic?: boolean }
   ) => Promise<{
     resumed: StructuredAgentSessionResumeOutcome[]
     continued: StructuredAgentSessionContinuationOutcome[]

@@ -65,6 +65,23 @@ export class TerminalWorkerTurnStops {
     this.news.observe(change)
   }
 
+  /** A pane restored at rest: its stop came while Orca was down, so no live edge announced it. */
+  reportRestingPane(paneKey: string): Promise<void> {
+    const row = this.deps.readHookRow(paneKey)
+    const resolved = row && row.state !== 'working' ? this.resolve(paneKey) : null
+    if (!row || !resolved) {
+      return Promise.resolve()
+    }
+    const dispatchId = workerTurnStopDispatchId(resolved.target)
+    return this.report({
+      paneKey,
+      worktreeId: row.worktreeId ?? '',
+      row,
+      dispatchId,
+      mailTaken: readCoordinatorMailCount(resolved.db, dispatchId)
+    })
+  }
+
   private async report(stop: PreparedStop): Promise<void> {
     const stopped = this.stillStopped(stop)
     if (!stopped) {
