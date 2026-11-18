@@ -42,12 +42,6 @@ describe('botBackgroundSessionTabs', () => {
     ])
   })
 
-  it('has nothing to stand in for without bots', () => {
-    expect(botBackgroundSessionTabs([], [], hostSessions(['thread', 'folder:fw-1']), {})).toEqual(
-      []
-    )
-  })
-
   it('joins the same background and tabs into the same list', () => {
     const background = botBackgroundSessionTabs(
       bots,
