@@ -3,8 +3,8 @@ import {
   commentMarkdownAllowedTagNames,
   commentMarkdownUrlTransform,
   commentMarkdownFileUriUrlTransform
-} from '../../sidebar/comment-markdown-sanitize'
-import { isGitHubUserAttachmentUrl } from '../../sidebar/github-user-attachment-url'
+} from '../../comment-markdown/comment-markdown-sanitize'
+import { isGitHubUserAttachmentUrl } from '../../comment-markdown/github-user-attachment-url'
 import {
   NativeChatMarkdownImageOrigins,
   type NativeChatDocumentImageOrigin
@@ -15,12 +15,12 @@ import {
   markdownBlockContent,
   splitMarkdownTopLevelBlocks,
   type MarkdownBlock
-} from '../../sidebar/markdown-top-level-blocks'
-import { htmlRendersAsText } from '../../sidebar/comment-markdown-unknown-html-as-text'
+} from '../../comment-markdown/markdown-top-level-blocks'
+import { htmlRendersAsText } from '../../comment-markdown/comment-markdown-unknown-html-as-text'
 import {
   NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER,
   withoutPendingNativeChatVisualDirectiveTail
-} from '../../../../../shared/native-chat/native-chat-visual-directive'
+} from '../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { remarkNativeChatHtmlTokenOrigins } from './native-chat-markdown-html-source-map'
 
 export type NativeChatDocumentImage = {

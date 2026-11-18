@@ -1,6 +1,6 @@
 import rehypeRaw from 'rehype-raw'
 import type { Pluggable } from 'unified'
-import type { CommentMarkdownBlockPreparer } from '../../sidebar/CommentMarkdown'
+import type { CommentMarkdownBlockPreparer } from '../../comment-markdown/CommentMarkdown'
 import { NativeChatMarkdownImageOrigins } from './native-chat-markdown-image-origins'
 import { prepareNativeChatMarkdown } from './native-chat-markdown-source-map'
 import { NativeChatMarkdownImageOriginContext } from './native-chat-markdown-image-origin-context'

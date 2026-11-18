@@ -8,9 +8,9 @@ import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat
 import {
   nativeChatNoticeBlock,
   nativeChatNoticeLook
-} from '../../../../../../shared/native-chat/native-chat-notice'
-import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/agent-message-display-text'
-import { nativeChatWorkRunEntries } from '../../../../../../shared/native-chat/native-chat-work-run'
+} from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
+import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
+import { nativeChatWorkRunEntries } from '../../../../../../shared/native-chat/transcript/folding/native-chat-work-run'
 import { nativeChatAskRunBlocks } from '../../../../../../shared/native-chat/input/questions/native-chat-ask-row'
 import { countToolCalls } from '../../../../../../shared/native-chat/tools/native-chat-tool-summary'
 import { nativeChatToolRunViewedImageEntries } from '../../../../../../shared/native-chat/tools/native-chat-tool-viewed-images'

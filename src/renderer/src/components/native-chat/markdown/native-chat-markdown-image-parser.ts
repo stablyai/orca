@@ -7,10 +7,10 @@ import { nativeChatVisualRemarkPlugins } from '../media/visuals/native-chat-visu
 import {
   commentMarkdownAllowedTagNames,
   commentMarkdownSanitizeSchema
-} from '../../sidebar/comment-markdown-sanitize'
-import { remarkUnknownHtmlAsText } from '../../sidebar/comment-markdown-unknown-html-as-text'
-import { commentMarkdownRemarkPlugins } from '../../sidebar/comment-markdown-remark-plugins'
-import { remarkChatMath } from '../../sidebar/chat-markdown-math'
+} from '../../comment-markdown/comment-markdown-sanitize'
+import { remarkUnknownHtmlAsText } from '../../comment-markdown/comment-markdown-unknown-html-as-text'
+import { commentMarkdownRemarkPlugins } from '../../comment-markdown/comment-markdown-remark-plugins'
+import { remarkChatMath } from '../../comment-markdown/chat-markdown-math'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 import { remarkNativeChatHtmlTokenOrigins } from './native-chat-markdown-html-source-map'
 import {

@@ -10,7 +10,7 @@ import {
 } from './native-chat-markdown-image-origins'
 import { nativeChatMarkdownImageParser } from './native-chat-markdown-image-parser'
 import { authoredMarkdown } from './native-chat-markdown-source-map'
-import { rehypeWordFade } from '../../sidebar/comment-markdown-word-fade'
+import { rehypeWordFade } from '../../comment-markdown/comment-markdown-word-fade'
 
 describe('native-chat document image occurrences', () => {
   it.each([

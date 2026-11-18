@@ -3,7 +3,7 @@ import type { Data, Processor } from 'unified'
 import type { RemendCopyPiece } from 'remend'
 import type { VFile } from 'vfile'
 import { copyMappedMarkdown, type MappedMarkdown } from './native-chat-markdown-source-map'
-import type { HtmlRewriteObserver } from '../../sidebar/comment-markdown-unknown-html-as-text'
+import type { HtmlRewriteObserver } from '../../comment-markdown/comment-markdown-unknown-html-as-text'
 
 declare module 'mdast' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Parsed node metadata uses declaration merging.
