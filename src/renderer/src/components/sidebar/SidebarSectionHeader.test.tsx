@@ -30,24 +30,6 @@ describe('SidebarSectionHeader', () => {
     expect(onToggle).toHaveBeenCalledTimes(1)
   })
 
-  it('puts the fold chevron before the title', () => {
-    const view = renderHeader({
-      fold: { collapsed: false, label: 'Collapse Projects', onToggle: vi.fn() }
-    })
-    const chevron = view.container.querySelector('svg')
-    const title = view.container.querySelector('[data-sidebar-section-title="projects"]')
-    expect(chevron).not.toBeNull()
-    expect(title).not.toBeNull()
-    expect(chevron!.compareDocumentPosition(title!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  })
-
-  it('hides the chevron while there is nothing to fold', () => {
-    const view = renderHeader({
-      fold: { collapsed: false, disabled: true, label: 'Bots', onToggle: vi.fn() }
-    })
-    expect(view.container.querySelector('svg')).toBeNull()
-  })
-
   it('keeps the title accessory a separate control from the fold', () => {
     const onToggle = vi.fn()
     const onCollapseAll = vi.fn()

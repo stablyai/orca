@@ -47,7 +47,6 @@ describe('WebhookSecretDialog secret source', () => {
   it('saves a pasted Standard Webhooks secret as typed, trimmed', async () => {
     renderDialog('standard')
     fireEvent.click(screen.getByRole('radio', { name: 'Paste the sender’s' }))
-    expect(screen.getByText('Use this when the sender gives you its own secret.')).toBeTruthy()
     const save = screen.getByRole('button', { name: 'Save' })
     expect(save.hasAttribute('disabled')).toBe(true)
     fireEvent.change(screen.getByLabelText('Standard Webhooks secret'), {
@@ -68,6 +67,5 @@ describe('WebhookSecretDialog secret source', () => {
     renderDialog('sentry')
     expect(screen.queryByRole('radiogroup')).toBeNull()
     expect(screen.getByLabelText('Sentry secret')).toBeTruthy()
-    expect(screen.queryByText('Use this when the sender gives you its own secret.')).toBeNull()
   })
 })

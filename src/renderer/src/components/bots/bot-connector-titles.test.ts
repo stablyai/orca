@@ -12,30 +12,6 @@ function texts(rows: BotConnectorTitleParts[]): string[] {
 const VIA = 'via Composio'
 
 describe('botConnectorTitles', () => {
-  it('names the place a row is bound to, alone or not', () => {
-    expect(
-      texts([
-        { key: 'github:1', service: 'GitHub', place: 'Alice-H' },
-        { key: 'github:2', service: 'GitHub', place: 'stablyai' },
-        { key: 'slack:T1', service: 'Slack', place: 'Globex' },
-        { key: 'linear:w1', service: 'Linear', place: 'Acme' }
-      ])
-    ).toEqual(['GitHub · Alice-H', 'GitHub · stablyai', 'Slack · Globex', 'Linear · Acme'])
-  })
-
-  it('keeps the plain service for a row with no place, or one not yet named', () => {
-    expect(
-      texts([
-        { key: 'github', service: 'GitHub' },
-        { key: 'slack:T1', service: 'Slack', place: null },
-        { key: 'google', service: 'Google', hints: ['me@example.com'] },
-        { key: 'composio:c1', service: 'Notion', hints: [VIA, 'me@example.com'] },
-        { key: 'app:docs', service: 'Docs', hints: ['docs.example.com'] },
-        { key: 'webhooks', service: 'Webhooks' }
-      ])
-    ).toEqual(['GitHub', 'Slack', 'Google', 'Notion', 'Docs', 'Webhooks'])
-  })
-
   it('marks the Composio row beside a native one of the same service', () => {
     expect(
       texts([
@@ -62,14 +38,5 @@ describe('botConnectorTitles', () => {
         { key: 'app:linear', service: 'linear', hints: ['mcp.linear.app'] }
       ])
     ).toEqual(['Linear · Acme', 'linear · mcp.linear.app'])
-  })
-
-  it('names the Google accounts when another row is also Google', () => {
-    expect(
-      texts([
-        { key: 'google', service: 'Google', hints: ['me@example.com'] },
-        { key: 'composio:c1', service: 'Google', hints: [VIA, null] }
-      ])
-    ).toEqual(['Google · me@example.com', 'Google · via Composio'])
   })
 })

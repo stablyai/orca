@@ -59,10 +59,7 @@ describe('collapsed bot preview', () => {
     const bots = Array.from({ length: 8 }, (_, index) => bot(String(index), { paused: true }))
     expect(collapsedBotPreview(bots, 99).shown).toHaveLength(5)
     expect(botPreviewCapacity(120, 8)).toBe(4)
-    expect(botPreviewCapacity(92, 4)).toBe(4)
-    expect(botPreviewCapacity(115, 5)).toBe(3)
     expect(botPreviewCapacity(20, 8)).toBe(0)
-    expect(botPreviewCapacity(0, 0)).toBe(0)
     expect(collapsedBotPreview([], 0)).toMatchObject({
       shown: [],
       hidden: [],

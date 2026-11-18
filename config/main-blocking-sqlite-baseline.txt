@@ -35,6 +35,7 @@
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 32 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
 18 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
+5 src/main/native-chat/agent-session-journal/database/journal-retire-pending.ts # worker-only: retired-epoch pending table, triggers and settle, run on the journal SQL worker
 5 src/main/native-chat/agent-session-journal/database/journal-text-tail-schema.ts
 12 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 18 src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts
@@ -114,4 +115,4 @@
 4 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
 24 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 5 src/main/sqlite/sync-database.ts
-14 src/main/sqlite/versioned-cache-database.ts
+13 src/main/sqlite/versioned-cache-database.ts

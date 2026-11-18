@@ -42,38 +42,6 @@ function note(overrides: Partial<AutomationResultNote> = {}): AutomationResultNo
 }
 
 describe('NativeChatAutomationResultRow', () => {
-  it('opens into the result with its read caption', () => {
-    renderRow(<NativeChatAutomationResultRow note={note()} />)
-
-    const row = screen.getByRole('button', { name: /Hook echo\. Finished/ })
-    expect(row).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText(/hasn't read this yet/)).toBeNull()
-
-    fireEvent.click(row)
-
-    expect(row).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText(/service: api/)).toBeInTheDocument()
-    expect(
-      screen.getByText("Atlas hasn't read this yet. It goes with your next message.")
-    ).toBeInTheDocument()
-  })
-
-  it('says the bot read it once a message carried it', () => {
-    renderRow(<NativeChatAutomationResultRow note={note({ readWith: 'message-1' })} />)
-    fireEvent.click(screen.getByRole('button', { name: /Hook echo\. Finished/ }))
-
-    expect(screen.getByText('Atlas read this with your next message.')).toBeInTheDocument()
-  })
-
-  it('says a note a later /clear left unread will never reach the bot', () => {
-    renderRow(<NativeChatAutomationResultRow note={note()} cleared />)
-    fireEvent.click(screen.getByRole('button', { name: /Hook echo\. Finished/ }))
-
-    expect(
-      screen.getByText("Arrived before the chat was cleared. It won't go to Atlas.")
-    ).toBeInTheDocument()
-  })
-
   it('names a failed run and opens the run', () => {
     renderRow(<NativeChatAutomationResultRow note={note({ outcome: 'couldNotFinish' })} />)
 

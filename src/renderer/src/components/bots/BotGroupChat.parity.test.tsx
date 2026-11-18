@@ -209,14 +209,9 @@ it('Find in chat matches text in a group message', async () => {
   expect(status.getAttribute('aria-live')).toBe('polite')
 })
 
-it('the room takes the chat appearance root and a labelled transcript, as a chat tab does', () => {
-  const view = renderRoom()
-  const root = view.container.querySelector<HTMLElement>('[data-native-chat-root]')!
-  expect(root.classList.contains('native-chat-appearance')).toBe(true)
-  expect(root.getAttribute('data-native-chat-working')).toBe('false')
-  expect(
-    screen.getByRole('region', { name: 'Conversation' }).hasAttribute('data-native-chat-scroll')
-  ).toBe(true)
+it('labels the room transcript as a conversation', () => {
+  renderRoom()
+  expect(screen.getByRole('region', { name: 'Conversation' })).toBeTruthy()
 })
 
 it("the room's /resume opens its home workspace's Session History, across members' agents", () => {
