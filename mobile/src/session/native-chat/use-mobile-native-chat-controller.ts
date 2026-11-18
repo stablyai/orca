@@ -302,6 +302,7 @@ export function useMobileNativeChatController(args: {
       : null,
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
     nativeChatMcpPanel: activeChatStructured ? structuredNativeChat.mcpPanel : null,
+    nativeChatAccountUsage: activeChatStructured ? structuredNativeChat.accountUsage : null,
     nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
     handleNativeChatSend: activeChatStructured ? structuredSend.send : handleNativeChatSend,

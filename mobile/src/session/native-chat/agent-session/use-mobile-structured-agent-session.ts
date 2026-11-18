@@ -24,6 +24,7 @@ import { useMobileStructuredStopPress } from '../composer/delivery/use-mobile-st
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-execution'
 import { useMobileStructuredPromptResponses } from '../input/prompts/use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
+import { useMobileStructuredAccountUsage } from '../usage/use-mobile-structured-account-usage'
 import { useHostModelCatalogCache } from '../input/session-options/mobile-host-model-catalog-query'
 import { useMobileStructuredCommandController } from '../composer/commands/use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from '../input/session-options/use-mobile-structured-session-option-stamp'
@@ -104,7 +105,7 @@ export function useMobileStructuredAgentSession(
     unloadedTurnRevisions: state.unloadedTurnRevisions,
     hostSupport
   })
-  const { contextUsageSupport, ...optionFields } = options
+  const { contextUsageSupport, accountUsageReported, ...optionFields } = options
 
   const { status, epoch } = state
   const linked = useMemo(
@@ -301,6 +302,7 @@ export function useMobileStructuredAgentSession(
     ),
     threadGoal: goal.threadGoal,
     mcpPanel: mcp.mcpPanel,
+    accountUsage: useMobileStructuredAccountUsage(args, accountUsageReported),
     rewind,
     usageLimit,
     unresolvedFailureRows
