@@ -50,7 +50,9 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
   callback: CaptureCallback,
   launch: () => T
 ): T {
-  const encoding = options.encoding === null ? 'buffer' : (options.encoding ?? 'utf8')
+  const requested = options.encoding === null ? 'buffer' : (options.encoding ?? 'utf8')
+  // Git asks for 'utf-8'; one spelling lets a failure reuse its decoded stderr.
+  const encoding = requested.toLowerCase() === 'utf-8' ? 'utf8' : requested
   if (encoding !== 'buffer' && !Buffer.isEncoding(encoding)) {
     throw new TypeError(`Unsupported output encoding: ${encoding}`)
   }
