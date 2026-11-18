@@ -194,9 +194,11 @@ export function runWatchdog(
     stallMs: config.stallMs,
     onStallDetected: (durationMs) => {
       const startedAt = Date.now() - durationMs
-      if (!suspendedSince(recentPower, startedAt)) {
-        observe('heartbeat-stall', durationMs, startedAt, { tier: 'stall', capture: JS_ONLY })
+      if (suspendedSince(recentPower, startedAt)) {
+        return false
       }
+      observe('heartbeat-stall', durationMs, startedAt, { tier: 'stall', capture: JS_ONLY })
+      return true
     },
     onHangDetected: (durationMs) => {
       const stall = activeStallId ? find(activeStallId) : undefined

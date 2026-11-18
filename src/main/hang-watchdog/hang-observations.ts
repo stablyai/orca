@@ -256,10 +256,10 @@ export function retainHangObservation(
     return { ...collection, observations }
   }
   const candidates = [...collection.observations, record]
-  // The new record is always kept: an episode still being captured must have a row to publish into.
+  // An episode still being captured must keep a row to publish into.
   const anchors = new Set(
     [
-      record,
+      record.kind === 'heartbeat-stall' && !record.selfRecovered ? record : undefined,
       candidates.find(isHangTierObservation),
       candidates.find((item) => item.kind === 'watchdog-gap' && !item.initialSleepAssociated)
     ].filter((item): item is HangObservation => !!item)

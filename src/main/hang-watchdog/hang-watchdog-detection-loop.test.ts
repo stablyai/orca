@@ -153,4 +153,58 @@ describe('createHangWatchdogDetectionLoop', () => {
     loop.recordHeartbeat()
     expect(onHangResolved).not.toHaveBeenCalled()
   })
+
+  it('ends a stall woken before the overdue tick without reporting the sleep as stall time', () => {
+    let now = 0
+    const onHangResolved = vi.fn()
+    const onStallEndedBySleep = vi.fn()
+    const loop = createHangWatchdogDetectionLoop({
+      timeoutMs: TIMEOUT_MS,
+      checkIntervalMs: CHECK_INTERVAL_MS,
+      stallMs: 8_000,
+      now: () => now,
+      onHangDetected: vi.fn(),
+      onHangResolved,
+      onStallDetected: () => true,
+      onStallEndedBySleep
+    })
+    loop.recordHeartbeat()
+    now += 5_000
+    loop.tick()
+    now += 5_000
+    loop.tick()
+    now += 3_600_000
+    loop.recordHeartbeat()
+    expect(onStallEndedBySleep).toHaveBeenCalledTimes(1)
+    expect(onHangResolved).not.toHaveBeenCalled()
+  })
+
+  it('restarts the stall clock when a detected silence was a suspend, so a stall after wake is still seen', () => {
+    let now = 0
+    const stalls: number[] = []
+    let suspended = true
+    const loop = createHangWatchdogDetectionLoop({
+      timeoutMs: TIMEOUT_MS,
+      checkIntervalMs: CHECK_INTERVAL_MS,
+      stallMs: 8_000,
+      now: () => now,
+      onHangDetected: vi.fn(),
+      onHangResolved: vi.fn(),
+      onStallDetected: (ms) => {
+        stalls.push(ms)
+        const accepted = !suspended
+        suspended = false
+        return accepted
+      }
+    })
+    loop.recordHeartbeat()
+    loop.tick()
+    now += 10_000
+    loop.tick()
+    for (let i = 0; i < 2; i++) {
+      now += 5_000
+      loop.tick()
+    }
+    expect(stalls).toEqual([10_000, 10_000])
+  })
 })

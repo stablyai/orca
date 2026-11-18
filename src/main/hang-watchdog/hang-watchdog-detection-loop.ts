@@ -5,7 +5,8 @@ export type HangWatchdogDetectionLoopConfig = {
   stallMs?: number
   now: () => number
   onHangDetected: (unresponsiveMs: number) => void
-  onStallDetected?: (unresponsiveMs: number) => void
+  /** Returns false when the silence was the machine's (a suspend), which restarts the stall clock. */
+  onStallDetected?: (unresponsiveMs: number) => boolean
   /** Heartbeats resumed after a detected stall or hang — the main thread was stalled, not deadlocked. */
   onHangResolved: (unresponsiveMs: number) => void
   /** Heartbeats resumed after a stall no tick saw; its evidence can only be gathered afterwards. */
@@ -33,7 +34,11 @@ export function createHangWatchdogDetectionLoop(
     recordHeartbeat: () => {
       const now = config.now()
       const silentMs = now - lastHeartbeatAt
-      if (detected) {
+      if (detected === 'stall' && now - lastTickAt > sleepGapMs) {
+        // Woke before the overdue tick: the silence since detection includes the sleep.
+        detected = null
+        config.onStallEndedBySleep?.()
+      } else if (detected) {
         detected = null
         config.onHangResolved(silentMs)
       } else if (stallMs !== null && silentMs > stallMs && now - lastTickAt <= sleepGapMs) {
@@ -70,7 +75,10 @@ export function createHangWatchdogDetectionLoop(
         config.onHangDetected(unresponsiveMs)
       } else if (!detected && stallMs !== null && unresponsiveMs > stallMs) {
         detected = 'stall'
-        config.onStallDetected?.(unresponsiveMs)
+        if (config.onStallDetected?.(unresponsiveMs) === false) {
+          detected = null
+          lastHeartbeatAt = now
+        }
       }
     }
   }
