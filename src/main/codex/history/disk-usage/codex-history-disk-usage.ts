@@ -56,20 +56,37 @@ function getQueue(): NonNullable<typeof queue> {
   return queue
 }
 
+// One shared, capped wait per stopping worker; once it outlasts the cap, reads fail fast until the worker exits.
+let retirementWait: Promise<boolean> | null = null
+
+function previousWalkStopped(signal: AbortSignal): Promise<boolean> {
+  const workers = getQueue()
+  if (!workers.isRetiring) {
+    retirementWait = null
+    return Promise.resolve(true)
+  }
+  if (signal.aborted) {
+    return Promise.resolve(false)
+  }
+  retirementWait ??= withTimeoutResult(workers.retired(), RETIREMENT_WAIT_MS).then((result) => {
+    if (result.ok) {
+      retirementWait = null
+    }
+    return result.ok
+  })
+  const abandoned = new Promise<boolean>((resolve) =>
+    signal.addEventListener('abort', () => resolve(false), { once: true })
+  )
+  return Promise.race([retirementWait, abandoned])
+}
+
 async function measure(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
   signal: AbortSignal
 ): Promise<CodexHistoryDiskUsage> {
   const { homes, accounts } = await listHostCodexRolloutHomeSources(settings)
   // A walk stopped by a release or deletion ends its worker; wait for it so this one can start.
-  const stopped = new Promise<void>((resolve) =>
-    signal.addEventListener('abort', () => resolve(), { once: true })
-  )
-  const retired = await withTimeoutResult(
-    Promise.race([getQueue().retired(), stopped]),
-    RETIREMENT_WAIT_MS
-  )
-  if (!retired.ok) {
+  if (!(await previousWalkStopped(signal))) {
     throw new Error('the previous Codex history walk has not stopped')
   }
   const response = await getQueue().dispatch(
