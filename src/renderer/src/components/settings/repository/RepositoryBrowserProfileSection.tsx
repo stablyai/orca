@@ -6,7 +6,7 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { getBrowserProfileHostId } from '@/store/slices/browser/hosts/browser-host-state'
 import {
   Select,

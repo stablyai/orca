@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../../shared/file-access/cross-platform-path'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
-import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../construction/test-context/runtime-store-partial-fixture'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectRepoLocalMetadata: vi.fn().mockResolvedValue({})

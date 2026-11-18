@@ -4,7 +4,7 @@ import type {
   BrowserDownloadProgressEvent
 } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserDownloadState } from './browser-download-progress'
-import { emitBrowserRemoteDownloadToast } from '../browser-download-destination-toast'
+import { emitBrowserRemoteDownloadToast } from './browser-download-destination-toast'
 
 export function useBrowserPageDownloadEvents({
   browserTabId,

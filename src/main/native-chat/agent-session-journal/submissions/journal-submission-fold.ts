@@ -1,4 +1,4 @@
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
+import { orchestrationMailNotice } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,

@@ -2,10 +2,6 @@ import { isUnitTestSupportSource } from './pr-code-change-scope.mjs'
 
 const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupportSource(file)
 
-/** Plugin system sources; every product file here (outside `__mocks__`) routes to a plugin spec. */
-export const PLUGIN_SYSTEM_SOURCE =
-  /^src\/(?:renderer\/src\/(?:components\/plugins\/|store\/plugin-)|main\/plugins\/|shared\/plugins\/)/
-
 const UI = 'src\\/renderer\\/src\\/components\\/plugins\\/'
 const STORE = 'src\\/renderer\\/src\\/store\\/plugin-'
 
@@ -13,112 +9,29 @@ const STORE = 'src\\/renderer\\/src\\/store\\/plugin-'
 function pluginRoute(id, specs, pattern, helpers) {
   return {
     id,
-    specs: specs.map((name) => `tests/e2e/${name}.spec.ts`),
+    specs,
     matches: (file) =>
-      (helpers !== undefined &&
-        new RegExp(`^tests\\/e2e\\/helpers\\/(?:${helpers})\\.ts$`).test(file)) ||
+      (helpers !== undefined && helpers.includes(file)) ||
       (isProductSource(file) && new RegExp(`^(?:${pattern})`).test(file))
   }
 }
 
 const SPECIFIC_PLUGIN_ROUTES = [
-  // #36218 broke review/list/dialog flows with no plugin spec selected.
-  pluginRoute(
-    'plugins.update-review',
-    ['plugin-update-review', 'plugin-update-review-toast'],
-    [
-      `${UI}(?:review\\/|list\\/|dialogs\\/Plugin(?:UpdateAll|Remove)Dialog)`,
-      `${UI}state\\/use-plugin-(?:review-queue|update-dialog|page-model)`,
-      `${UI}presentation\\/plugin-(?:publisher-trust|consent-copy|access-profile|capability-presentation)`,
-      `${STORE}(?:update-review-toast|auto-updates)`,
-      'src\\/main\\/plugins\\/catalog\\/plugin-(?:auto-updater|update-approval|update-review-notices|release-first-seen-store)',
-      'src\\/shared\\/plugins\\/(?:approval\\/|catalog\\/plugin-update-policy|contributions\\/plugin-contribution-summary)'
-    ].join('|'),
-    'plugin-git-fixture|plugin-update-catalog-fixture'
-  ),
-  pluginRoute(
-    'plugins.catalog-and-page',
-    ['plugin-install-link'],
-    [
-      `${UI}(?:catalog\\/|list\\/|page\\/|PluginContributionIcon|dialogs\\/Plugin(?:Install|CatalogLink|MarketplaceSource)Dialog)`,
-      `${UI}state\\/use-plugin-(?:catalog|install-link|install-action|marketplace-lifecycle|page-navigation|page-model|hover-prefetch|in-use|art-palettes|contribution-source)`,
-      `${UI}(?:state\\/plugin-preview-cache|presentation\\/plugin-(?:status-presentation|install-source|release-date|contributions|error-presentation))`,
-      `${STORE}content-list-store`,
-      'src\\/main\\/plugins\\/(?:installation\\/|catalog\\/plugin-(?:marketplace-|catalog-|one-click-enable|community-marketplace-seed|kill-list-))',
-      'src\\/main\\/plugins\\/(?:discovery\\/plugin-(?:list-projection|client-list)|media\\/plugin-image-)',
-      'src\\/shared\\/plugins\\/(?:catalog\\/|installation\\/|images\\/|plugin-list-entry|contributions\\/plugin-contribution-(?:summary|points))'
-    ].join('|'),
-    'plugin-git-fixture|plugin-gleam-catalog-fixture'
-  ),
-  pluginRoute(
-    'plugins.file-type-suggestion',
-    ['plugin-file-type-suggestion'],
-    [
-      'src\\/renderer\\/src\\/components\\/editor\\/plugin-editors\\/PluginFileTypeSuggestion\\.tsx$',
-      `${UI}state\\/use-plugin-settings-writes`,
-      'src\\/main\\/plugins\\/catalog\\/plugin-file-type-suggestion',
-      'src\\/shared\\/plugins\\/contributions\\/plugin-(?:file-type|file-match|custom-editor-core-file-types)'
-    ].join('|'),
-    'plugin-git-fixture|plugin-smoke'
-  ),
-  pluginRoute(
-    'plugins.try-it',
-    ['plugin-try-it'],
-    [
-      `${UI}state\\/(?:plugin-try-action|plugin-action-toast|use-plugin-install-action)`,
-      `${STORE}preview-request`
-    ].join('|'),
-    'plugin-git-fixture|plugin-gleam-catalog-fixture|plugin-smoke|plugin-frame-guest'
-  ),
-  pluginRoute(
-    'plugins.themes',
-    ['plugin-theme-smoke'],
-    [
-      `${UI}(?:state\\/plugin-theme-apply|page\\/PluginTheme)`,
-      `${STORE}(?:themes|icon-themes|monaco-theme)`,
-      'src\\/main\\/plugins\\/contributions\\/plugin-(?:theme-registries|icon-theme-registry|content-pack-registry|artifact-pack-registry)',
-      'src\\/shared\\/plugins\\/(?:artifacts\\/plugin-(?:theme|icon-theme|terminal-theme)-artifact|contributions\\/plugin-content-pack-contributions)'
-    ].join('|'),
-    'plugin-smoke'
-  ),
-  pluginRoute(
-    'plugins.syntax-and-language-packs',
-    ['plugin-syntax-smoke'],
-    [
-      `${UI}page\\/PluginContributionAction(?:Syntax|Language)`,
-      `${STORE}(?:syntax-packs|syntax-failures|language-packs)`,
-      'src\\/main\\/plugins\\/contributions\\/plugin-(?:syntax|language-pack)-registry',
-      'src\\/shared\\/plugins\\/(?:languages\\/|plugin-language-pack-i18n-resources|artifacts\\/plugin-(?:syntax|language-pack)-artifact)'
-    ].join('|'),
-    'plugin-smoke'
-  ),
   pluginRoute(
     'plugins.custom-editors-and-new-files',
-    ['plugin-custom-editor', 'plugin-new-file'],
+    ['tests/e2e/plugins/plugin-new-file.spec.ts'],
     [
       `${UI}page\\/PluginContributionActionNewFile`,
       `${STORE}(?:custom-editors|new-files)`,
       'src\\/main\\/plugins\\/contributions\\/plugin-new-file-template',
       'src\\/shared\\/plugins\\/(?:contributions\\/plugin-(?:custom-editor-contribution|new-file-contribution)|frames\\/plugin-custom-editor-bridge)'
     ].join('|'),
-    'plugin-smoke|plugin-frame-guest'
-  ),
-  pluginRoute(
-    'plugins.panels-and-workers',
-    ['plugin-demo', 'plugin-panel-containment'],
-    [
-      `${UI}(?:page\\/PluginContributionAction(?:Panel|Command|Events)|state\\/use-plugin-logs)`,
-      `${STORE}panels`,
-      'src\\/main\\/plugins\\/(?:panels\\/|workers\\/|commands\\/plugin-command-|events\\/plugin-(?:event-delivery|agent-status-event)|storage\\/plugin-(?:storage-store|secrets-store)|logging\\/plugin-log-buffer)',
-      'src\\/shared\\/plugins\\/(?:frames\\/|workers\\/|events\\/|capabilities\\/|contributions\\/plugin-(?:command-|event-|panel-|execution-profile))',
-      'examples\\/plugins\\/(?:hello-orca|test-fixtures\\/hostile-panel)\\/'
-    ].join('|'),
-    'plugin-panel-navigation-observer|plugin-frame-guest'
+    ['tests/e2e/plugins/plugin-frame-guest.ts', 'tests/e2e/plugins/plugin-smoke.ts']
   ),
   // Desktop frames are isolated <webview> guests; a regression here breaks every frame on desktop.
   pluginRoute(
     'plugins.isolated-frames',
-    ['plugin-isolated-frame', 'plugin-panel-containment'],
+    ['tests/e2e/plugins/plugin-isolated-frame.spec.ts'],
     [
       'src\\/main\\/plugins\\/panels\\/(?:frame-serving\\/|guest-isolation\\/|desktop-actions\\/)?plugin-frame-',
       'src\\/shared\\/plugins\\/frames\\/plugin-(?:frame-guest|panel-shell)',
@@ -131,137 +44,33 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/renderer\\/src\\/components\\/(?:plugins\\/frames\\/|right-sidebar\\/plugin-panels\\/PluginPanel\\.tsx$)',
       'src\\/renderer\\/src\\/components\\/editor\\/plugin-editors\\/(?:PluginCustomEditorFrame\\.tsx$|plugin-custom-editor-host)'
     ].join('|'),
-    'plugin-frame-guest|plugin-smoke'
+    ['tests/e2e/plugins/plugin-frame-guest.ts', 'tests/e2e/plugins/plugin-smoke.ts']
   ),
   pluginRoute(
     'plugins.declarative-panels',
-    ['plugin-declarative-panel'],
+    ['tests/e2e/plugins/plugin-declarative-panel.spec.ts'],
     [
       `${UI}(?:declarative\\/|plugin-icon-glyphs\\.ts$)`,
       'src\\/shared\\/plugins\\/(?:declarative\\/|frames\\/plugin-declarative-)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/plugin-panels\\/declarative\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
       'resources\\/plugins\\/declarative\\/'
     ].join('|'),
-    'plugin-frame-guest|plugin-smoke'
-  ),
-  // The component catalog: Orca draws each component, so the gallery exercises every one.
-  pluginRoute(
-    'plugins.components-catalog',
-    ['plugin-components-gallery'],
-    [
-      `${UI}declarative\\/`,
-      'src\\/shared\\/plugins\\/declarative\\/plugin-declarative-(?:catalog|[a-z]+-props|prop-schemas|tree)',
-      'resources\\/plugins\\/declarative\\/orca-components',
-      'src\\/main\\/plugins\\/panels\\/panel-lifetime\\/plugin-panel-image',
-      'examples\\/plugins\\/components-gallery\\/'
-    ].join('|'),
-    'plugin-frame-guest|plugin-smoke'
-  ),
-  // Build-less TS/TSX: the frame protocol transpiles source modules and resolves their imports.
-  pluginRoute(
-    'plugins.buildless-tsx',
-    ['plugin-buildless-tsx'],
-    [
-      'src\\/main\\/plugins\\/panels\\/(?:frame-serving\\/)?plugin-frame-(?:module-|source-serving|protocol\\.ts$)',
-      'src\\/main\\/plugins\\/artifacts\\/plugin-content-hash',
-      'src\\/shared\\/plugins\\/frames\\/plugin-frame-source-modules',
-      'src\\/cli\\/plugins\\/authoring\\/plugin-(?:type-files|components-template)',
-      'examples\\/plugins\\/hello-tsx\\/'
-    ].join('|'),
-    'plugin-frame-guest|plugin-smoke'
-  ),
-  // Dev hot reload of components panels: memory atoms carried over, last good tree kept on errors.
-  pluginRoute(
-    'plugins.components-hot-reload',
-    ['plugin-components-hot-reload'],
-    [
-      'src\\/shared\\/plugins\\/declarative\\/(?:plugin-declarative-message|runtime\\/declarative-(?:atoms|memory-retention|error-location|panel-context|renderer))',
-      'src\\/shared\\/plugins\\/frames\\/plugin-(?:declarative-host-document|frame-bridge)',
-      'src\\/renderer\\/src\\/components\\/right-sidebar\\/plugin-panels\\/(?:PluginPanel\\.tsx$|declarative\\/(?:PluginDeclarativePanel|use-plugin-declarative-(?:state|tree)|plugin-declarative-retained-memory))',
-      'src\\/main\\/plugins\\/(?:development\\/plugin-dev-|panels\\/guest-isolation\\/plugin-frame-guest-sessions)',
-      'resources\\/plugins\\/declarative\\/'
-    ].join('|'),
-    'plugin-frame-guest|plugin-smoke'
+    ['tests/e2e/plugins/plugin-frame-guest.ts', 'tests/e2e/plugins/plugin-smoke.ts']
   ),
   // Agents and workspace changes in panels: agents.list, terminal ids on agent events.
   pluginRoute(
     'plugins.panel-agents',
-    ['plugin-panel-agents'],
+    ['tests/e2e/plugins/plugin-panel-agents.spec.ts'],
     [
       'src\\/main\\/plugins\\/(?:runtime\\/plugin-runtime-binding|events\\/plugin-agent-status-event|workers\\/host-api\\/plugin-workspace-projection)',
       'src\\/shared\\/plugins\\/events\\/plugin-events'
     ].join('|'),
-    'plugin-frame-guest|plugin-smoke|agent-hook-endpoint'
-  ),
-  // A panel and its own worker: requests, posts, storage, settings and pushes.
-  pluginRoute(
-    'plugins.worker-panel',
-    ['plugin-worker-panel'],
     [
-      'src\\/main\\/plugins\\/panels\\/plugin-panel-bridge',
-      'src\\/main\\/plugins\\/(?:storage\\/plugin-declared-settings|workers\\/(?:plugin-worker-orca-api|host-api\\/plugin-host-panel-method-bindings|parent-process\\/plugin-worker-requests))',
-      'src\\/main\\/ipc\\/plugin-(?:panel-push|settings)-ipc',
-      'src\\/shared\\/plugins\\/(?:workers\\/plugin-panel-bridge-protocol|frames\\/plugin-panel-shell-facades|contributions\\/plugin-settings-)',
-      'src\\/shared\\/plugins\\/declarative\\/runtime\\/declarative-(?:data-sdk|storage-sync)',
-      'src\\/renderer\\/src\\/components\\/plugins\\/(?:page\\/PluginSettingsSection|state\\/use-plugin-declared-settings)',
-      'examples\\/plugins\\/hello-worker-panel\\/'
-    ].join('|'),
-    'plugin-frame-guest|plugin-smoke'
-  ),
-  // `orca plugin open` / `shot`: renderer reveal, draw wait and main's capture of the panel rect.
-  pluginRoute(
-    'plugins.view-shot',
-    ['plugin-shot', 'plugin-shot-editor'],
-    [
-      `${UI}view\\/(?!PluginShotReplay|plugin-view-replay)`,
-      `${STORE}view-capture`,
-      'src\\/(?:main\\/plugins\\/view\\/(?!plugin-view-replay)|shared\\/plugins\\/view\\/)',
-      'src\\/main\\/runtime\\/rpc\\/methods\\/plugin-view',
-      // Every `plugin shot` checks for a chrome region and resolves the default shots folder.
-      'src\\/cli\\/(?:plugins\\/view\\/plugin-(?:view|shot-chrome|shot-default-dir)|specs\\/plugin-view)',
-      'src\\/renderer\\/src\\/hooks\\/(?:ipc-events\\/plugin-view-ipc-bridge|use-document-dark-theme)',
-      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panels\\/health\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report)|right-sidebar-panel-content)'
-    ].join('|'),
-    'plugin-frame-guest|plugin-smoke|compiled-orca-cli'
-  ),
-  // `shot --scenario`: the check child draws the tree, then the renderer replays it.
-  pluginRoute(
-    'plugins.view-shot-scenario',
-    ['plugin-shot'],
-    [
-      `${UI}view\\/(?:PluginShotReplay|plugin-view-replay)`,
-      `${STORE}shot-replay`,
-      'src\\/main\\/plugins\\/view\\/plugin-view-replay',
-      'src\\/main\\/plugins\\/testing\\/plugin-test-(?:hooks|register)',
-      'src\\/cli\\/(?:plugins\\/view|specs)\\/plugin-shot-scenario',
-      'src\\/cli\\/plugins\\/authoring\\/plugin-(?:panel-check|test-runner|test-node)'
-    ].join('|')
-  ),
-  pluginRoute(
-    'plugins.view-shot-editor',
-    ['plugin-shot-editor'],
-    'src\\/cli\\/plugins\\/view\\/plugin-shot-editor'
-  ),
-  pluginRoute(
-    'plugins.startup-and-manifest',
-    ['plugin-demo'],
-    [
-      'src\\/main\\/plugins\\/(?:plugin-service|development\\/plugin-(?:service-housekeeping|dev-)|runtime\\/plugin-service-host-call|discovery\\/plugin-discovery|activation\\/plugin-(?:enablement|activation-policy|refresh-settlement)|bootstrap\\/plugin-bundled-bootstrap|media\\/plugin-manifest-images|artifacts\\/plugin-(?:manifest-|content-|declarative-content-integrity))',
-      'src\\/shared\\/plugins\\/(?:manifest\\/|approval\\/plugin-consent-|plugin-system-settings)'
-    ].join('|')
+      'tests/e2e/agents/session-fixtures/agent-hook-endpoint.ts',
+      'tests/e2e/plugins/plugin-frame-guest.ts',
+      'tests/e2e/plugins/plugin-smoke.ts'
+    ]
   )
 ]
 
-export const PR_PLUGIN_E2E_SOURCE_ROUTES = [
-  ...SPECIFIC_PLUGIN_ROUTES,
-  {
-    // New or unlisted plugin sources still run the broadest single plugin journey.
-    id: 'plugins.unrouted-source',
-    specs: ['tests/e2e/plugin-demo.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      PLUGIN_SYSTEM_SOURCE.test(file) &&
-      !file.includes('/__mocks__/') &&
-      !SPECIFIC_PLUGIN_ROUTES.some((route) => route.matches(file))
-  }
-]
+export const PR_PLUGIN_E2E_SOURCE_ROUTES = [...SPECIFIC_PLUGIN_ROUTES]

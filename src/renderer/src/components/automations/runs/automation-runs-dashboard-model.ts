@@ -3,7 +3,7 @@ import type {
   AutomationRunStatus
 } from '../../../../../shared/automations/history/automation-run'
 import type { AutomationRunWorkspaceRecord } from './automation-run-view-state'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { AutomationActionNotice } from '../hosts/automation-row-action-dispatch'
 import type { AutomationListRow } from '../listing/automation-list-row-identity'
 

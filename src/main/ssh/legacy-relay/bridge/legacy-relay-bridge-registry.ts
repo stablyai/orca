@@ -7,7 +7,7 @@ import type {
   LegacyRelayBridgeAttachResult,
   LegacyRelayBridgeCloseResult,
   LegacyRelayBridgedPane
-} from '../../../../shared/legacy-relay-bridge-contract'
+} from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { SshPendingPtyKill } from '../../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'

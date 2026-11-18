@@ -45,7 +45,7 @@ export const menuItemVariants = cva(
         // Dropdown rows carry the extra states its consumers set: search default, nested context
         // menu, aria-disabled, current, and the shared agent menu's 36px `launch` row.
         dropdown:
-          'data-[search-default]:bg-black/8 dark:data-[search-default]:bg-white/14 data-[context-menu-open]:bg-black/8 dark:data-[context-menu-open]:bg-white/14 aria-disabled:opacity-40 data-[current=true]:bg-accent data-[current=true]:data-[disabled]:opacity-100 data-[variant=launch]:min-h-9 data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:py-1.5 data-[variant=launch]:text-[13px] data-[variant=launch]:leading-4 data-[variant=launch]:font-medium',
+          'data-[search-default]:bg-black/8 dark:data-[search-default]:bg-white/14 data-[context-menu-open]:bg-black/8 dark:data-[context-menu-open]:bg-white/14 aria-disabled:opacity-40 data-[current=true]:bg-accent data-[current=true]:data-[disabled]:opacity-100 data-[variant=launch]:min-h-9 data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:py-1.5 data-[variant=launch]:text-[13px] data-[variant=launch]:leading-4 data-[variant=launch]:font-medium data-[variant=sortable]:gap-2 data-[variant=sortable]:py-[3px] data-[variant=sortable]:pr-1.5 data-[variant=sortable]:pl-1 data-[variant=sortable]:data-[dragging]:relative data-[variant=sortable]:data-[dragging]:z-10 data-[variant=sortable]:data-[dragging]:bg-popover data-[variant=sortable]:data-[dragging]:shadow-floating',
         context: ''
       }
     },
@@ -79,6 +79,8 @@ export const menuSubTriggerVariants = cva(['px-2.5', ROW_BASE, 'data-[inset]:pl-
       default: `${ROW_FOCUS} data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14`,
       'launch-row':
         'gap-0 rounded-[7px] p-0 text-xs leading-5 font-medium focus:bg-accent focus:text-accent-foreground focus-within:bg-accent focus-within:text-accent-foreground data-[search-default]:bg-accent data-[search-default]:text-accent-foreground has-[[data-context-menu-open]]:bg-accent has-[[data-context-menu-open]]:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
+      // A row of icon buttons that opens its submenu on hover; the active icon carries the highlight.
+      'icon-row': 'gap-0.5 rounded-[9px] p-0 outline-hidden',
       'header-chip':
         'h-[22px] max-w-[9.5rem] min-w-0 gap-1 rounded-md px-1.5 py-0 text-2xs font-medium text-muted-foreground hover:bg-black/8 hover:text-foreground focus:bg-black/8 focus:text-foreground data-[state=open]:bg-black/8 data-[state=open]:text-foreground dark:hover:bg-white/14 dark:focus:bg-white/14 dark:data-[state=open]:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
     },

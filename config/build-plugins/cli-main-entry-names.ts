@@ -30,5 +30,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'persistence/profile-state/recovery/profile-state-recovery-command',
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
-  'startup/network-compatibility/http1-compatibility-marker'
+  'startup/network-compatibility/http1-compatibility-marker',
+  // The CLI's own app environment, so main-process hook removers can resolve profile paths.
+  'backend/node-service-environment'
 ] as const

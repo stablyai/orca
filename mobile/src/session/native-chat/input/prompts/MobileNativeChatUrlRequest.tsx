@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { readApprovalUrl } from '../../../../../../src/shared/agent-session/agent-session-approval-subject'
+import { readApprovalUrl } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-subject'
 import type {
   AgentJournalApprovalItem,
   AgentJournalUrlApprovalSubject

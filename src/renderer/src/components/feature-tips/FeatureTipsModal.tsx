@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
-import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,

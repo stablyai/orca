@@ -4,7 +4,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/
 import {
   EMPTY_DASHBOARD_SNAPSHOT,
   type DashboardSnapshot
-} from '../../../../../shared/dashboard-snapshot'
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { patchDashboardSnapshotFromAgentStatus } from './dashboard-agent-status-patch'
 
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 250

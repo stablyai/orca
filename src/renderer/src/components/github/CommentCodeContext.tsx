@@ -12,7 +12,7 @@ import {
   resolveCommentCodeContextExpansionState,
   updateCommentCodeContextExpansionState,
   type CommentCodeContextLineUpdate
-} from '@/components/comment-code-context-state'
+} from '@/components/github/comment-code-context-state'
 import { getPrCommentCodeContext } from '@/components/github/pr-comment-code-context'
 import { getPRFileContentsRenderLimit } from '@/components/github/pr-file-diff-mapping'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'

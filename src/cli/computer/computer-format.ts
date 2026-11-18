@@ -8,7 +8,7 @@ import type {
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerSnapshotResult
-} from '../../shared/computer-use-runtime-types'
+} from '../../shared/computer/computer-use-runtime-types'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export function formatGetAppState(result: ComputerSnapshotResult): string {

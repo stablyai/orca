@@ -17,14 +17,14 @@ import {
   Workflow
 } from 'lucide-react-native'
 import type { AgentChildRowModel } from '../../../../../../src/shared/agent-status/presentation/agent-child-row-model'
-import type { AgentSessionBackgroundTask } from '../../../../../../src/shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from '../../../../../../src/shared/agent-session/background-tasks/agent-session-background-task-wire'
 import { sayMobileBackgroundTask as say } from './mobile-background-task-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import {
   backgroundTasksHeaderContent,
   backgroundTasksHeaderText,
   NARROW_BACKGROUND_TASKS_STRIP_REM
-} from '../../../../../../src/shared/background-task-header-content'
+} from '../../../../../../src/shared/agent-status/presentation/background-tasks/background-task-header-content'
 import {
   backgroundTaskGroupLabel,
   backgroundTaskRowMeta,
@@ -32,7 +32,7 @@ import {
   backgroundTasksStripTicks,
   buildBackgroundTaskGroups,
   buildBackgroundTaskGroupsFromViews
-} from '../../../../../../src/shared/background-task-roster'
+} from '../../../../../../src/shared/agent-status/presentation/background-tasks/background-task-roster'
 import { AGENT_WORKING_COLOR, AgentStateDot } from '../../../../agents/presentation/AgentStateDot'
 import { useNow } from '../../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'

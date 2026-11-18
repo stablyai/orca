@@ -3,7 +3,7 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../shared/agent-session/structured-agent-session-reducer'
+} from '../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { toolUse, toolResult } from '../../claude/structured/claude-foreground-task-test-support'
 import { HOST_TEST_SESSION as SESSION } from './host/testing/structured-agent-session-host-test-data.test-fixture'
 import { fixture } from './host/testing/structured-agent-session-claude-stop-contract.test-fixture'

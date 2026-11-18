@@ -3,7 +3,7 @@ import { cn } from '@/lib/class-names'
 import {
   CommentMarkdownAsync,
   preloadCommentMarkdown
-} from '@/components/sidebar/comment-markdown-lazy'
+} from '@/components/comment-markdown/comment-markdown-lazy'
 import { useTranslate } from '@/i18n/use-translate'
 
 type DashboardAgentRowMessageProps = {

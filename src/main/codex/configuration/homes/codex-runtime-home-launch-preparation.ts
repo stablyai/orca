@@ -1,7 +1,7 @@
 import type { CodexHomeLaunchContext } from '../../../ipc/pty/host-env/types'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { codexHookService } from '../../hooks/installation/hook-service'
 import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'

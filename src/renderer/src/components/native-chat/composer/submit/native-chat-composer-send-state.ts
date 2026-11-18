@@ -21,6 +21,8 @@ export type NativeChatComposerSendState = {
   alternateSend: NativeChatFollowUpBehavior | undefined
   /** Cmd/Ctrl+Enter on an empty composer sends the head queued card now: into the running turn, or with none running (a paused queue after Stop), as its own. */
   chordSteersHead: boolean
+  /** The agent's guess at the next prompt, shown in place of the placeholder of an empty, idle composer. */
+  promptSuggestion: string | undefined
 }
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
@@ -41,6 +43,7 @@ export function nativeChatComposerSendState(
           | 'sendFollowUp'
           | 'optionSnapshot'
           | 'mcpPanel'
+          | 'promptSuggestion'
         >
       | undefined
     editSession: { canSave: boolean } | undefined
@@ -102,6 +105,18 @@ export function nativeChatComposerSendState(
     alternateSend,
     // Never where the chord queues, or a second press would steer the card the first one just queued.
     chordSteersHead:
-      input.messageDelivery && !input.editSession && (alternateSend === 'steer' || !input.isWorking)
+      input.messageDelivery &&
+      !input.editSession &&
+      (alternateSend === 'steer' || !input.isWorking),
+    promptSuggestion:
+      input.draft === '' &&
+      input.imageAttachments.length === 0 &&
+      !input.isWorking &&
+      !input.disabled &&
+      transport?.sendOut !== true &&
+      !input.editSession &&
+      input.goalMode !== true
+        ? (transport?.promptSuggestion?.text ?? undefined)
+        : undefined
   }
 }

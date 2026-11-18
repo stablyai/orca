@@ -1,27 +1,27 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Activity, Bot, ChevronDown, CircleHelp, SquareTerminal, Workflow } from 'lucide-react'
-import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentChildRowContext,
   AgentChildRowModel
 } from '../../../../../../shared/agent-status/presentation/agent-child-row-model'
 import type { AgentChildWorkView } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { AgentChildRowContent } from '@/components/AgentChildRowContent'
-import { agentChildRowName } from '@/components/agent-child-row-text'
+import { AgentChildRowContent } from '@/components/agent/status/AgentChildRowContent'
+import { agentChildRowName } from '@/components/agent/status/agent-child-row-text'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import {
   backgroundTasksHeaderText,
   NARROW_BACKGROUND_TASKS_STRIP_REM
-} from '../../../../../../shared/background-task-header-content'
+} from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-header-content'
 import {
   backgroundTaskRowMeta,
   backgroundTaskRowStopId,
   backgroundTasksStripTicks,
   type BackgroundTaskGroup
-} from '../../../../../../shared/background-task-roster'
+} from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-roster'
 import { backgroundTasksHeaderContent } from './background-task-header-content'
 import {
   backgroundTaskGroupLabel,

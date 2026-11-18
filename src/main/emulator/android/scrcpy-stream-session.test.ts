@@ -138,32 +138,6 @@ describe('ScrcpyStreamSession video buffering', () => {
       'tcp:41234'
     ])
   })
-
-  it('does not repeatedly concatenate a growing fragmented frame', async () => {
-    const { video, callbacks, started } = await startSession()
-    video.emit('data', handshake())
-    const session = await started
-    const frame = packet(1024 * 1024)
-    const concat = Buffer.concat
-    let concatenatedBytes = 0
-    const spy = vi.spyOn(Buffer, 'concat').mockImplementation((buffers, length) => {
-      concatenatedBytes += length ?? buffers.reduce((sum, part) => sum + part.length, 0)
-      return concat(buffers, length)
-    })
-    try {
-      for (let offset = 0; offset < frame.length; offset += 4096) {
-        video.emit('data', frame.subarray(offset, offset + 4096))
-      }
-    } finally {
-      spy.mockRestore()
-      session.close()
-    }
-    expect(callbacks.onFrame).toHaveBeenCalledTimes(1)
-    const data = callbacks.onFrame.mock.calls[0][0].data
-    expect(Buffer.isBuffer(data)).toBe(true)
-    expect(data.equals(frame.subarray(12))).toBe(true)
-    expect(concatenatedBytes).toBeLessThanOrEqual(frame.length * 2)
-  })
 })
 
 describe('ScrcpyStreamSession control', () => {

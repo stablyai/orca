@@ -1,5 +1,5 @@
-import { routeNativeChatHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
-import type { NativeChatHrefRoute } from '../../../../../../shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
+import type { NativeChatHrefRoute } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { WINDOWS_DRIVE_PATH_PREFIX } from '../../../../../../shared/file-links/file-uri-path'
 import { normalizeAbsolutePath } from '../../../../../../shared/file-links/file-link-path-normalization'
 import {
