@@ -26,6 +26,7 @@ import { readJournalSqlStatusState } from './journal-sql-status-state'
 import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
 import { readJournalSqlQueue } from './journal-sql-queued-messages'
 import { readJournalDomainItems } from './journal-sql-item-reads'
+import { readJournalDomainAcpHistory } from './journal-domain-acp-history'
 
 export type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read-types'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read-types'
@@ -100,6 +101,8 @@ function read(
     case 'fork-marker-group':
     case 'projected-stop-notes':
       return readJournalDomainPublication(scope, operation)
+    case 'acp-history':
+      return { kind: 'acp-history', history: readJournalDomainAcpHistory(scope, operation) }
     case 'generation':
       return { kind: 'generation', generation: readJournalGeneration(scope, operation.input) }
     case 'work':

@@ -11,6 +11,7 @@ import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-re
 import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type { JournalAcpHistory, JournalAcpHistoryRead } from './journal-domain-acp-history'
 import type { BotMemorySources } from '../../../shared/bots/bot-memory-source'
 import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
@@ -64,6 +65,8 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   /** The newest accepted send whose provider id or opener row is this row. */
   acceptedSendOfRow(itemId: string | null): Promise<AgentJournalSubmission | null>
   historySourceItems(clientMessageIds: readonly string[]): Promise<AgentJournalRenderItem[]>
+  /** ACP catch-up's turn facts and placements, never saved bodies. */
+  acpHistory(read: Omit<JournalAcpHistoryRead, 'kind'>): Promise<JournalAcpHistory>
   hasProviderTurn(nativeId: string, sinceFence?: number): Promise<boolean>
   savedItemIds(itemIds: readonly string[]): Promise<string[]>
   forkMarkerGroup(
@@ -173,6 +176,7 @@ export function journalSqlReads(
       }
       return items
     },
+    acpHistory: async (input) => (await read({ kind: 'acp-history', ...input })).history,
     hasProviderTurn: async (namespace, sinceFence) =>
       (
         await read({
