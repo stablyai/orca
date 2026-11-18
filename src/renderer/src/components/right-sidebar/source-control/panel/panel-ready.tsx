@@ -5,6 +5,7 @@ import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { ZotzPrChecksSection } from '../../../zotz/source-control/ZotzPrChecksSection'
 
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { model, worktreePath } = props
@@ -116,6 +117,14 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
             handleOpenComment={handleOpenComment}
           />
         )}
+
+        {activeWorktreeId && hostedReview ? (
+          <ZotzPrChecksSection
+            key={`${activeWorktreeId}:${hostedReview.number}`}
+            worktreeId={activeWorktreeId}
+            review={hostedReview}
+          />
+        ) : null}
 
         <div
           ref={setFileListScrollElement}

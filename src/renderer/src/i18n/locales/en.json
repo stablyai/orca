@@ -25970,6 +25970,21 @@
       "switchFailed": "The project folder cannot switch to that branch",
       "useWorktree": "Use a worktree instead",
       "stayOnBranch": "Stay on {{branch}}"
+    },
+    "prChecks": {
+      "title": "Pull request",
+      "openPr": "Open the pull request",
+      "loading": "Loading checks…",
+      "none": "No checks on this pull request",
+      "failed": "{{count}} failed",
+      "running": "{{count}} running",
+      "passed": "{{count}} passed",
+      "more": "+{{count}} more",
+      "autofix": "Autofix",
+      "fix": "Fix errors",
+      "sent": "Sent the failing checks to the conversation",
+      "launched": "No agent here: opened one to fix the checks",
+      "sendFailed": "Could not send the failing checks"
     }
   }
 }

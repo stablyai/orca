@@ -24344,6 +24344,21 @@
       "switchFailed": "La carpeta del proyecto no puede cambiar a esa rama",
       "useWorktree": "Usar un worktree",
       "stayOnBranch": "Quedarme en {{branch}}"
+    },
+    "prChecks": {
+      "title": "Pull request",
+      "openPr": "Abrir el pull request",
+      "loading": "Cargando checks…",
+      "none": "Este pull request no tiene checks",
+      "failed": "{{count}} fallaron",
+      "running": "{{count}} corriendo",
+      "passed": "{{count}} pasaron",
+      "more": "+{{count}} más",
+      "autofix": "Autofix",
+      "fix": "Arreglar errores",
+      "sent": "Se mandaron los checks fallidos a la conversación",
+      "launched": "No había agente: se abrió uno para arreglar los checks",
+      "sendFailed": "No se pudieron mandar los checks fallidos"
     }
   }
 }
