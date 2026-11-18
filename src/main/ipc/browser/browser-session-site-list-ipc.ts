@@ -83,7 +83,7 @@ async function applyEdit(
   profileLabel: string,
   entries: string[]
 ): Promise<BrowserSiteListSetResult> {
-  if (!ensureBrowserProfileSiteListsLoaded()) {
+  if (!(await ensureBrowserProfileSiteListsLoaded())) {
     return { ok: false, reason: 'save-failed' }
   }
   const added = wideningAgainstCurrent(profileId, entries)
@@ -96,7 +96,7 @@ async function applyEdit(
   if (!browserSessionRegistry.getProfile(profileId)) {
     return { ok: false, reason: 'unavailable' }
   }
-  return saveBrowserProfileSiteList(profileId, entries)
+  return (await saveBrowserProfileSiteList(profileId, entries))
     ? { ok: true, hosts: entries }
     : { ok: false, reason: 'save-failed' }
 }
@@ -108,10 +108,10 @@ export function registerBrowserSessionSiteListHandlers(): void {
 
   ipcMain.handle(
     'browser:session:getAllowedHosts',
-    (event, args: { profileId: string }): string[] | null =>
+    async (event, args: { profileId: string }): Promise<string[] | null> =>
       isTrustedBrowserRenderer(event.sender) &&
       browserSessionRegistry.getProfile(args.profileId) &&
-      ensureBrowserProfileSiteListsLoaded()
+      (await ensureBrowserProfileSiteListsLoaded())
         ? getBrowserProfileSiteListEntries(args.profileId)
         : null
   )

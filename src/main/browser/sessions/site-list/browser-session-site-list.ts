@@ -21,6 +21,15 @@ export function setBrowserProfileSiteList(profileId: string, entries: readonly s
   }
 }
 
+export function seedBrowserProfileSiteLists<
+  T extends { allowedHostsByProfileId: Record<string, string[]> }
+>(meta: T): T {
+  for (const [profileId, entries] of Object.entries(meta.allowedHostsByProfileId)) {
+    setBrowserProfileSiteList(profileId, entries)
+  }
+  return meta
+}
+
 export function getBrowserProfileSiteListEntries(profileId: string): string[] {
   return [...(listsByProfileId.get(profileId)?.entries ?? [])]
 }

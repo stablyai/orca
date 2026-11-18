@@ -12,19 +12,31 @@ type Listener = (
   callback: (response: Electron.CallbackResponse) => void
 ) => void
 
+// Only webRequest is exercised; the guard never touches the rest of a Session.
+function isSession(value: { webRequest: unknown }): value is Electron.Session {
+  return typeof value.webRequest === 'object'
+}
+
 describe('browser profile site list in the request guard', () => {
   it('cancels hosts outside the list, reports a blocked main frame, and lets an empty list through', () => {
     let listener: Listener | null = null
-    const session = {
+    const fakeSession = {
       webRequest: { onBeforeRequest: (next: Listener) => (listener = next) }
-    } as unknown as Electron.Session
+    }
+    if (!isSession(fakeSession)) {
+      throw new Error('unreachable')
+    }
+    const session = fakeSession
     bindBrowserSessionToSiteListProfile(session, 'profile-a')
     new BrowserCertificateRequestGuard({ onBlockedMainFrame: vi.fn() }).installSession(session)
     const onBlocked = vi.fn()
     watchDecisionBlockedMainFrames(7, onBlocked)
-    const send = (url: string, resourceType = 'xhr'): unknown => {
+    const send = (
+      url: string,
+      resourceType: Electron.OnBeforeRequestListenerDetails['resourceType'] = 'xhr'
+    ): unknown => {
       const callback = vi.fn()
-      listener?.({ url, resourceType, webContentsId: 7 } as never, callback)
+      listener?.({ url, resourceType, webContentsId: 7 }, callback)
       return callback.mock.calls[0]?.[0]
     }
 

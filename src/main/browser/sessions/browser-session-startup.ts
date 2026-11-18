@@ -13,7 +13,6 @@ import {
   configureBrowserSessionCookieSnapshots,
   restoreBrowserSessionCookies
 } from '../cookies/session-restore/browser-session-cookie-restore'
-import { loadBrowserProfileSiteLists } from './site-list/browser-profile-site-list-store'
 import { awaitBrowserSessionProxies } from './proxy/browser-session-proxy'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
@@ -55,8 +54,6 @@ export function initializeBrowserSessionsForApp(
 
   // Replay cookies before Chromium opens the live DB via session.fromPartition.
   browserSessionRegistry.applyPendingCookieImport()
-  // Site lists must be live before any session binds to its profile.
-  loadBrowserProfileSiteLists()
   browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
   initialized = true
 }

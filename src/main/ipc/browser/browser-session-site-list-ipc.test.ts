@@ -36,19 +36,21 @@ vi.mock('../../browser/sessions/profiles/browser-session-registry', () => ({
   }
 }))
 
-import { loadBrowserProfileSiteLists } from '../../browser/sessions/site-list/browser-profile-site-list-store'
 import { setBrowserProfileSiteList } from '../../browser/sessions/site-list/browser-session-site-list'
 import { registerBrowserSessionSiteListHandlers } from './browser-session-site-list-ipc'
 
 const metaPath = (): string => join(state.dir, 'browser-session-meta.json')
 const setHosts = async (hosts: string[], profileId = 'p1'): Promise<unknown> =>
   handlers.get('browser:session:setAllowedHosts')!({ sender: {} }, { profileId, hosts })
-const getHosts = (profileId = 'p1'): unknown =>
+const getHosts = async (profileId = 'p1'): Promise<unknown> =>
   handlers.get('browser:session:getAllowedHosts')!({ sender: {} }, { profileId })
 
+// Mirrors startup: the lists are in memory and on disk.
 function startWithLists(lists: Record<string, string[]>): void {
   writeFileSync(metaPath(), JSON.stringify({ allowedHostsByProfileId: lists }))
-  loadBrowserProfileSiteLists()
+  for (const [profileId, entries] of Object.entries(lists)) {
+    setBrowserProfileSiteList(profileId, entries)
+  }
 }
 
 beforeEach(() => {
@@ -70,7 +72,7 @@ describe('browser profile site list IPC', () => {
     state.trusted = false
 
     expect(await setHosts([])).toEqual({ ok: false, reason: 'unavailable' })
-    expect(getHosts()).toBeNull()
+    expect(await getHosts()).toBeNull()
     expect(readFileSync(metaPath(), 'utf-8')).toBe(before)
   })
 
@@ -82,7 +84,7 @@ describe('browser profile site list IPC', () => {
 
     showMessageBox.mockResolvedValueOnce({ response: 1 })
     expect(await setHosts(['a.com', 'c.com'])).toEqual({ ok: false, reason: 'cancelled' })
-    expect(getHosts()).toEqual(['a.com'])
+    expect(await getHosts()).toEqual(['a.com'])
 
     showMessageBox.mockResolvedValueOnce({ response: 0 })
     expect(await setHosts(['a.com', 'c.com'])).toEqual({ ok: true, hosts: ['a.com', 'c.com'] })
@@ -94,19 +96,18 @@ describe('browser profile site list IPC', () => {
 
   it('keeps enforcing the old list when the write fails', async () => {
     startWithLists({ p1: ['a.com'] })
-    mkdirSync(`${metaPath()}.tmp`)
+    mkdirSync(`${metaPath()}.site-list.tmp`)
     showMessageBox.mockResolvedValue({ response: 0 })
 
     expect(await setHosts(['a.com', 'b.com'])).toEqual({ ok: false, reason: 'save-failed' })
-    expect(getHosts()).toEqual(['a.com'])
+    expect(await getHosts()).toEqual(['a.com'])
   })
 
   it('never rewrites a saved file it could not read', async () => {
     writeFileSync(metaPath(), '{not json')
-    expect(loadBrowserProfileSiteLists()).toBe(false)
 
     expect(await setHosts(['a.com'])).toEqual({ ok: false, reason: 'save-failed' })
-    expect(getHosts()).toBeNull()
+    expect(await getHosts()).toBeNull()
     expect(readFileSync(metaPath(), 'utf-8')).toBe('{not json')
   })
 })

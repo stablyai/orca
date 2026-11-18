@@ -1,43 +1,46 @@
 import { browserSessionRegistry } from '../profiles/browser-session-registry'
 import {
-  persistBrowserSessionMeta,
-  readBrowserSessionMeta
+  readBrowserSessionMetaAsync,
+  updateBrowserSessionMetaAsync
 } from '../profiles/browser-session-meta-store'
-import { setBrowserProfileSiteList } from './browser-session-site-list'
+import { seedBrowserProfileSiteLists, setBrowserProfileSiteList } from './browser-session-site-list'
 
-const metadataPath = (): string => browserSessionRegistry.metadataPath
-const readMeta = (): ReturnType<typeof readBrowserSessionMeta> =>
-  readBrowserSessionMeta(metadataPath, browserSessionRegistry.defaultPartition)
+let seeded = false
 
-let loaded = false
-
-// Unreadable file: nothing is enforced and edits are refused, so it is never rewritten.
-export function loadBrowserProfileSiteLists(): boolean {
-  const meta = readMeta() ?? readMeta()
-  loaded = meta !== null
-  for (const [profileId, entries] of Object.entries(meta?.allowedHostsByProfileId ?? {})) {
-    setBrowserProfileSiteList(profileId, entries)
-  }
-  return loaded
-}
-
-export function ensureBrowserProfileSiteListsLoaded(): boolean {
-  return loaded || loadBrowserProfileSiteLists()
-}
-
-export function saveBrowserProfileSiteList(profileId: string, entries: string[]): boolean {
-  const meta = readMeta()
+// Startup seeds the in-memory lists with the rest of the metadata. Here the file is read again: an
+// unreadable file means edits are refused (it is never rewritten), and a first good read fills in
+// lists that startup could not load.
+export async function ensureBrowserProfileSiteListsLoaded(): Promise<boolean> {
+  const meta = await readBrowserSessionMetaAsync(
+    browserSessionRegistry.metadataPath,
+    browserSessionRegistry.defaultPartition
+  )
   if (!meta) {
     return false
   }
-  const lists = { ...meta.allowedHostsByProfileId }
-  delete lists[profileId]
-  if (entries.length > 0) {
-    lists[profileId] = entries
+  if (!seeded) {
+    seeded = true
+    seedBrowserProfileSiteLists(meta)
   }
-  const saved = persistBrowserSessionMeta(metadataPath, browserSessionRegistry.defaultPartition, {
-    allowedHostsByProfileId: lists
-  })
+  return true
+}
+
+export async function saveBrowserProfileSiteList(
+  profileId: string,
+  entries: string[]
+): Promise<boolean> {
+  const saved = await updateBrowserSessionMetaAsync(
+    browserSessionRegistry.metadataPath,
+    browserSessionRegistry.defaultPartition,
+    (meta) => {
+      const lists = { ...meta.allowedHostsByProfileId }
+      delete lists[profileId]
+      if (entries.length > 0) {
+        lists[profileId] = entries
+      }
+      return { allowedHostsByProfileId: lists }
+    }
+  )
   if (saved) {
     setBrowserProfileSiteList(profileId, entries)
   }

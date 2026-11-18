@@ -5,11 +5,28 @@ import {
   MAX_BROWSER_SITE_LIST_ENTRIES,
   normalizeBrowserSiteListEntries
 } from '../../../../../../shared/browser/profiles/browser-profile-site-list'
+import type { BrowserSiteListSetResult } from '../../../../../../shared/browser/profiles/browser-profile-site-list'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { Textarea } from '../../../ui/textarea'
 import { useTranslate } from '@/i18n/use-translate'
+
+// Null when the request itself failed. Kept outside the component: React Compiler cannot compile try/finally.
+async function requestSiteListSave(
+  profileId: string,
+  hosts: string[],
+  setSaving: (saving: boolean) => void
+): Promise<BrowserSiteListSetResult | null> {
+  setSaving(true)
+  try {
+    return await window.api.browser.sessionSetAllowedHosts({ profileId, hosts })
+  } catch {
+    return null
+  } finally {
+    setSaving(false)
+  }
+}
 
 export function BrowserProfileSiteList({
   profiles
@@ -65,23 +82,13 @@ export function BrowserProfileSiteList({
     if (!parsed.ok) {
       return
     }
-    setSaving(true)
-    try {
-      const result = await window.api.browser.sessionSetAllowedHosts({
-        profileId,
-        hosts: parsed.entries
-      })
-      if (result.ok) {
-        setSaved(result.hosts)
-        setText(result.hosts.join('\n'))
-        toast.success(t('browser.siteList.saved', 'Site list saved.'))
-      } else if (result.reason !== 'cancelled') {
-        toast.error(t('browser.siteList.saveFailed', 'Could not save the site list.'))
-      }
-    } catch {
+    const result = await requestSiteListSave(profileId, parsed.entries, setSaving)
+    if (result?.ok) {
+      setSaved(result.hosts)
+      setText(result.hosts.join('\n'))
+      toast.success(t('browser.siteList.saved', 'Site list saved.'))
+    } else if (result?.reason !== 'cancelled') {
       toast.error(t('browser.siteList.saveFailed', 'Could not save the site list.'))
-    } finally {
-      setSaving(false)
     }
   }
 

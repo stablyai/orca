@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { normalizeBrowserSiteListEntry } from '../../../../shared/browser/profiles/browser-profile-site-list'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
@@ -78,50 +79,47 @@ function emptyBrowserSessionMeta(): BrowserSessionMeta {
   }
 }
 
-/** Null when the file exists but is unreadable; a missing file reads as empty. */
-export function readBrowserSessionMeta(
-  resolveMetadataPath: () => string,
-  defaultPartition: string
-): BrowserSessionMeta | null {
-  try {
-    const path = resolveMetadataPath()
-    const raw = readFileSync(path, 'utf-8')
-    const data = JSON.parse(raw)
-    const legacyPendingCookieDbPath =
-      typeof data?.pendingCookieDbPath === 'string' ? data.pendingCookieDbPath : null
-    const pendingCookieImports: Record<string, PendingBrowserCookieImport> = {}
-    if (data && typeof data.pendingCookieImports === 'object' && data.pendingCookieImports) {
-      for (const [partition, entry] of Object.entries(data.pendingCookieImports)) {
-        if (
-          typeof entry === 'string' ||
-          (entry &&
-            typeof entry === 'object' &&
-            typeof (entry as { format?: unknown }).format === 'string' &&
-            typeof (entry as { path?: unknown }).path === 'string')
-        ) {
-          pendingCookieImports[partition] = entry as PendingBrowserCookieImport
-        }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+}
+
+// Same looseness as before this check existed: any stored object counts as a source.
+function isProfileSource(value: unknown): value is NonNullable<BrowserSessionProfile['source']> {
+  return isRecord(value)
+}
+
+function parseBrowserSessionMeta(data: unknown, defaultPartition: string): BrowserSessionMeta {
+  const record: Record<string, unknown> = isRecord(data) ? data : {}
+  const legacyPendingCookieDbPath =
+    typeof record.pendingCookieDbPath === 'string' ? record.pendingCookieDbPath : null
+  const pendingCookieImports: Record<string, PendingBrowserCookieImport> = {}
+  const rawImports = record.pendingCookieImports
+  if (rawImports && typeof rawImports === 'object') {
+    for (const [partition, entry] of Object.entries(rawImports)) {
+      if (
+        typeof entry === 'string' ||
+        (entry &&
+          typeof entry === 'object' &&
+          'format' in entry &&
+          typeof entry.format === 'string' &&
+          'path' in entry &&
+          typeof entry.path === 'string')
+      ) {
+        pendingCookieImports[partition] = entry
       }
     }
-    if (legacyPendingCookieDbPath && !pendingCookieImports[defaultPartition]) {
-      pendingCookieImports[defaultPartition] = legacyPendingCookieDbPath
-    }
-    const meta: BrowserSessionMeta = {
-      defaultSource: data?.defaultSource ?? null,
-      pendingCookieDbPath: legacyPendingCookieDbPath,
-      pendingCookieImports,
-      profiles: Array.isArray(data?.profiles) ? data.profiles : [],
-      enabledExtensionIdsByProfileId: parseEnabledExtensionIds(
-        data?.enabledExtensionIdsByProfileId
-      ),
-      pinnedExtensionIdsByProfileId: parseEnabledExtensionIds(data?.pinnedExtensionIdsByProfileId),
-      allowedHostsByProfileId: parseAllowedHosts(data?.allowedHostsByProfileId)
-    }
-    // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
-    enabledExtensionIdsByPath.set(path, copyIdLists(meta.enabledExtensionIdsByProfileId))
-    return meta
-  } catch (error) {
-    return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? emptyBrowserSessionMeta() : null
+  }
+  if (legacyPendingCookieDbPath && !pendingCookieImports[defaultPartition]) {
+    pendingCookieImports[defaultPartition] = legacyPendingCookieDbPath
+  }
+  return {
+    defaultSource: isProfileSource(record.defaultSource) ? record.defaultSource : null,
+    pendingCookieDbPath: legacyPendingCookieDbPath,
+    pendingCookieImports,
+    profiles: Array.isArray(record.profiles) ? record.profiles : [],
+    enabledExtensionIdsByProfileId: parseEnabledExtensionIds(record.enabledExtensionIdsByProfileId),
+    pinnedExtensionIdsByProfileId: parseEnabledExtensionIds(record.pinnedExtensionIdsByProfileId),
+    allowedHostsByProfileId: parseAllowedHosts(record.allowedHostsByProfileId)
   }
 }
 
@@ -130,7 +128,31 @@ export function loadBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string
 ): BrowserSessionMeta {
-  return readBrowserSessionMeta(resolveMetadataPath, defaultPartition) ?? emptyBrowserSessionMeta()
+  try {
+    const path = resolveMetadataPath()
+    const meta = parseBrowserSessionMeta(JSON.parse(readFileSync(path, 'utf-8')), defaultPartition)
+    // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
+    enabledExtensionIdsByPath.set(path, copyIdLists(meta.enabledExtensionIdsByProfileId))
+    return meta
+  } catch {
+    return emptyBrowserSessionMeta()
+  }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
+/** Null when the file exists but is unreadable; a missing file reads as empty. */
+export async function readBrowserSessionMetaAsync(
+  path: string,
+  defaultPartition: string
+): Promise<BrowserSessionMeta | null> {
+  try {
+    return parseBrowserSessionMeta(JSON.parse(await readFile(path, 'utf-8')), defaultPartition)
+  } catch (error) {
+    return isMissingFileError(error) ? emptyBrowserSessionMeta() : null
+  }
 }
 
 /**
@@ -150,7 +172,7 @@ export function persistBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string,
   updates: Partial<BrowserSessionMeta>
-): boolean {
+): void {
   try {
     const existing = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
     const tmpPath = `${resolveMetadataPath()}.tmp`
@@ -159,9 +181,50 @@ export function persistBrowserSessionMeta(
     renameSync(tmpPath, resolveMetadataPath())
     // After the rename: the read above cached the contents this write replaced.
     enabledExtensionIdsByPath.delete(resolveMetadataPath())
-    return true
+  } catch {}
+}
+
+const MAX_ASYNC_WRITE_ATTEMPTS = 3
+
+/**
+ * Off-main-thread read-modify-write of the metadata file. False when the file is unreadable (it is
+ * never rewritten then) or the write fails. Why the re-read before the rename: the registry's own
+ * persistBrowserSessionMeta is synchronous and could land between our read and our rename; if the
+ * file changed meanwhile we start over from it instead of replacing its update.
+ */
+export async function updateBrowserSessionMetaAsync(
+  path: string,
+  defaultPartition: string,
+  update: (meta: BrowserSessionMeta) => Partial<BrowserSessionMeta>
+): Promise<boolean> {
+  const tmpPath = `${path}.site-list.tmp`
+  try {
+    for (let attempt = 0; attempt < MAX_ASYNC_WRITE_ATTEMPTS; attempt++) {
+      const before = await readBrowserSessionMetaFile(path)
+      const existing = await readBrowserSessionMetaAsync(path, defaultPartition)
+      if (!existing) {
+        return false
+      }
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(tmpPath, JSON.stringify({ ...existing, ...update(existing) }))
+      if ((await readBrowserSessionMetaFile(path)) !== before) {
+        continue
+      }
+      await rename(tmpPath, path)
+      enabledExtensionIdsByPath.delete(path)
+      return true
+    }
   } catch {
-    return false
+    // Fall through: the caller reports a failed save and keeps the old list.
+  }
+  return false
+}
+
+async function readBrowserSessionMetaFile(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, 'utf-8')
+  } catch {
+    return null
   }
 }
 

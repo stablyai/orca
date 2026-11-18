@@ -24,6 +24,7 @@ import {
   persistBrowserSessionMeta,
   type BrowserSessionMeta
 } from './browser-session-meta-store'
+import { seedBrowserProfileSiteLists } from '../site-list/browser-session-site-list'
 import { installBrowserSessionPartitionPolicies } from '../partition-policies/browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
 import { inspectRetiredBrowserSessionProfileUserAgentModes } from '../../identity/mode/browser-retired-profile-identity-inspection'
@@ -112,7 +113,8 @@ class BrowserSessionRegistry {
 
   // Restore profiles and their policies before any webview loads.
   initializeBrowserSessionsFromPersistedState(): void {
-    const meta = this.loadPersistedMeta()
+    // Site lists go live before any session binds to its profile.
+    const meta = seedBrowserProfileSiteLists(this.loadPersistedMeta())
     const migration = inspectRetiredBrowserSessionProfileUserAgentModes(
       meta.profiles,
       this.activeOrcaProfileId

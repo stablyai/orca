@@ -171,9 +171,7 @@ export function BrowserSessionCookiesSection({
         ))}
       </div>
       {selectedHostId === LOCAL_EXECUTION_HOST_ID ? (
-        <BrowserProfileSiteList
-          profiles={[shownDefaultProfile, ...nonDefaultProfiles]}
-        />
+        <BrowserProfileSiteList profiles={[shownDefaultProfile, ...nonDefaultProfiles]} />
       ) : null}
       <div className="flex items-center justify-between gap-3 pt-3">
         <div className="min-w-0 space-y-0.5">
