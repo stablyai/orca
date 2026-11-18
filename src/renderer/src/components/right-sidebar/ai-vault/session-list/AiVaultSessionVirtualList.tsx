@@ -30,10 +30,8 @@ import {
 import type { AiVaultResumeInChatEligibility } from '../session-actions/ai-vault-session-resume-in-chat'
 import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
-import {
-  resolveAiVaultSessionRowChatActions,
-  type AiVaultSessionRowChatActions
-} from '../session-actions/ai-vault-session-chat-action'
+import type { AiVaultSessionRowChatActions } from '../session-actions/ai-vault-session-chat-action'
+import { aiVaultSessionRowChat } from '../session-actions/ai-vault-session-row-chat'
 import {
   resumeAiVaultSessionHere,
   type AiVaultResumeHere
@@ -223,6 +221,16 @@ export function AiVaultSessionVirtualList({
     })
   }, [])
 
+  const { rowActions, openConversation } = aiVaultSessionRowChat({
+    getOriginalPaneTarget,
+    isStructuredSessionOpen,
+    getSessionResumeState,
+    getSessionResumeInChat,
+    searchHits,
+    onResume,
+    onJumpToOriginalPane,
+    onResumeInNewChat
+  })
   // Keep a synchronous single-flight latch while resume opens its destination so repeated picks cannot start duplicate resumes.
   const pickInFlight = useRef(false)
   const pickHere = (session: AiVaultSession): boolean => {
@@ -232,14 +240,7 @@ export function AiVaultSessionVirtualList({
     if (pickInFlight.current) {
       return true
     }
-    const actions = resolveAiVaultSessionRowChatActions({
-      session,
-      originalPaneTarget: getOriginalPaneTarget(session),
-      structuredSessionOpen: isStructuredSessionOpen(session),
-      resumeState: getSessionResumeState(session),
-      resumeInChat: getSessionResumeInChat(session),
-      searchHit: searchHits?.get(session.id)
-    })
+    const actions = rowActions(session)
     if (resumeHere.alongside) {
       return pickAlongside(session, actions, resumeHere)
     }
@@ -287,29 +288,6 @@ export function AiVaultSessionVirtualList({
       setExpandedSessionIds((current) => new Set(current).add(session.id))
       virtualizer.scrollToIndex(index)
     }
-  }
-  function openConversation(session: AiVaultSession): boolean {
-    if (session.structuredSession) {
-      onResume(session, session.structuredSession.workspaceId)
-      return true
-    }
-    const actions = resolveAiVaultSessionRowChatActions({
-      session,
-      originalPaneTarget: getOriginalPaneTarget(session),
-      structuredSessionOpen: isStructuredSessionOpen(session),
-      resumeState: getSessionResumeState(session),
-      resumeInChat: getSessionResumeInChat(session),
-      searchHit: searchHits?.get(session.id)
-    })
-    if (actions.canJumpToOriginalPane) {
-      onJumpToOriginalPane(session)
-      return true
-    }
-    if (actions.resumeInNewChatWorkspaceId) {
-      onResumeInNewChat(session, actions.resumeInNewChatWorkspaceId)
-      return true
-    }
-    return false
   }
   const selectRow = useLatestHandler(selection.select)
   const pickSession = useLatestHandler((session: AiVaultSession) => {
