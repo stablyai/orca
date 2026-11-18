@@ -11,7 +11,8 @@ import {
 } from '../../../orchestration/mutations/orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
-import { resolveReplyRecipient } from './recipient-routing'
+import { botAnswerPayload } from './bot-request-outcome'
+import { resolveCheckedReplyRecipient } from './reply-follow-up'
 import { replyAccess } from './reply-access'
 import { replyToRemoteRunHome } from '../../../../orchestration/legacy-remote/reply-remote'
 import { replyOverPeerMail } from './peer-mail-reply'
@@ -22,6 +23,7 @@ import {
   reportFollowUpAction
 } from '../../../../orchestration/workers/reports/report-follow-up-action'
 import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
+import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
@@ -153,22 +155,22 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
         { effectsApplied: false, followUp }
       )
     }
-    const recipient = resolveReplyRecipient({
-      runtime,
-      db,
-      originalFrom: original.from_handle,
-      originalRunId: original.run_id,
+    const recipient = resolveCheckedReplyRecipient(runtime, db, original, {
+      from: params.from,
+      caller: sessionCallerOf(orchestrationCaller),
       terminalRecipient
     })
-    db.markAsRead([original.id])
     const reply = db.insertMessage({
       from: params.from ?? original.to_handle,
       to: recipient.to,
       subject: `Re: ${original.subject}`,
       body: params.body,
       threadId: original.thread_id ?? original.id,
-      runId: recipient.runId
+      runId: recipient.runId,
+      // Refuses a second answer to a bot request, before the original is marked read.
+      payload: botAnswerPayload(db, original)
     })
+    db.markAsRead([original.id])
 
     const receipt = {
       message: exposeMessage(reply),

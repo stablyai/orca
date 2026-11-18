@@ -19,6 +19,10 @@ const droppedSinceHiddenPtys = new Map<
 let nextHiddenDropEpisode = 1
 // Runtime spawns have no view to re-mark them after reload; retain their mark until visible mount or teardown.
 const runtimeOwnedHiddenRendererPtys = new Set<string>()
+// A pane's own hidden claim outranks its visible report; only its release may reveal the PTY.
+const rendererClaimedHiddenPtys = new Set<string>()
+// A visible report already sent this episode's 'unhide'; the pane's follow-up release must not resend it mid-restore.
+const visibleReportUnhideEpisodes = new Map<string, number>()
 
 // Hidden bytes never reach the renderer, so its agent-exit watch learns about output only from this throttled notice.
 const HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS = 5_000
@@ -76,6 +80,29 @@ export function markRuntimeOwnedHiddenRendererPty(id: string): void {
 
 export function isRuntimeOwnedHiddenRendererPty(id: string): boolean {
   return runtimeOwnedHiddenRendererPtys.has(id)
+}
+
+export function setRendererHiddenClaim(id: string, hidden: boolean): void {
+  if (hidden) {
+    rendererClaimedHiddenPtys.add(id)
+  } else {
+    rendererClaimedHiddenPtys.delete(id)
+  }
+}
+
+/** A visible view reveals a runtime mark unless its renderer still claims the PTY hidden. */
+export function shouldVisibleViewRevealHiddenRendererPty(id: string): boolean {
+  return runtimeOwnedHiddenRendererPtys.has(id) && !rendererClaimedHiddenPtys.has(id)
+}
+
+export function recordVisibleReportUnhideEpisode(id: string, episode: number): void {
+  visibleReportUnhideEpisodes.set(id, episode)
+}
+
+export function takeVisibleReportUnhideEpisode(id: string): number | undefined {
+  const episode = visibleReportUnhideEpisodes.get(id)
+  visibleReportUnhideEpisodes.delete(id)
+  return episode
 }
 
 /** Include hidden PTYs in diagnostics even when all bytes were dropped before send accounting. */
@@ -155,6 +182,8 @@ export function resetRendererScopedHiddenPtyDeliveryState(): void {
   hiddenRendererPtys.clear()
   lastHiddenOutputActivityNoticeAt.clear()
   deliveryInterestRendererPtys.clear()
+  rendererClaimedHiddenPtys.clear()
+  visibleReportUnhideEpisodes.clear()
   for (const id of runtimeOwnedHiddenRendererPtys) {
     hiddenRendererPtys.add(id)
   }
@@ -164,6 +193,8 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   hiddenRendererPtys.delete(id)
   lastHiddenOutputActivityNoticeAt.delete(id)
   runtimeOwnedHiddenRendererPtys.delete(id)
+  rendererClaimedHiddenPtys.delete(id)
+  visibleReportUnhideEpisodes.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
   clearPtyEscapeBoundary(id)
@@ -193,6 +224,8 @@ export function resetHiddenRendererPtyDeliveryDebugCounters(): void {
 export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   hiddenRendererPtys.clear()
   runtimeOwnedHiddenRendererPtys.clear()
+  rendererClaimedHiddenPtys.clear()
+  visibleReportUnhideEpisodes.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
   _resetPtyEscapeBoundaryForTest()

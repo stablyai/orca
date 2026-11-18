@@ -53,7 +53,11 @@ export class UtilityWorkerHost {
   constructor(
     private readonly serviceName: string,
     private readonly entryPath: () => string,
-    private readonly spawnInProcess: (spawn: UtilityWorkerSpawn) => Worker
+    private readonly spawnInProcess: (spawn: UtilityWorkerSpawn) => Worker,
+    /** The owner's account of what this host's workers were doing, for the exit breadcrumb. */
+    private readonly exitContext?: (
+      workers: readonly HostedWorkerThread[]
+    ) => CrashReportBreadcrumbData
   ) {
     app.once('will-quit', () => {
       quitting = true
@@ -225,6 +229,8 @@ export class UtilityWorkerHost {
         data[`w${index}_lastReply`] = worker.lastReplyType
         data[`w${index}_receivedMB`] = Math.round(worker.receivedBytes / 2 ** 20)
       })
+      // Before the workers fail, which ends what their owners were waiting on.
+      Object.assign(data, this.exitContext?.(workers))
       recordDurableCrashBreadcrumb('utility_worker_host_exited', data)
     }
     const error = new Error(`${this.serviceName} exited (${code})`)

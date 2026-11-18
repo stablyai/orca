@@ -5,7 +5,10 @@ import type { ChatMailAdmitFacts } from '../delivery-hold/mailbox-delivery-hold'
 import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
+import type {
+  StructuredMailboxPointerHost,
+  StructuredMailOwner
+} from './structured-mailbox-pointer-host-contract'
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
@@ -93,8 +96,12 @@ async function observeMailSend(
   }
 }
 
-export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
+export function createStructuredMailboxPointerHost(
+  owner?: StructuredMailOwner
+): StructuredMailboxPointerHost {
   return {
+    narrowBatch: owner?.narrowBatch,
+    mailHeld: owner?.mailHeld,
     async observeMail(attempt) {
       const host = getStructuredAgentSessionHost()
       try {
@@ -210,6 +217,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
               if (!input.stillOwed()) {
                 throw new StructuredMailObsoleteError()
               }
+              owner?.beforeSend(input)
             }
           }
         })

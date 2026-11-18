@@ -1,7 +1,4 @@
-import {
-  recordHiddenPendingPtyDataDrop,
-  shouldDropHiddenRendererPtyData
-} from './pty-hidden-delivery-gate'
+import { shouldDropHiddenRendererPtyData } from './pty-hidden-delivery-gate'
 import { advanceEscapeBoundary } from './pty-escape-boundary'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import { activeRendererPtys } from './visibility-state'
@@ -13,12 +10,8 @@ import {
 } from './constants'
 import { makeDroppedOutputPayload } from './pending'
 import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
-import {
-  makePtyDataPayload,
-  sendModelRestoreNeededMarker,
-  sendPtyDataToRenderer,
-  sendPtyHiddenOutputActivity
-} from './payload'
+import { makePtyDataPayload, sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
+import { dropHiddenPendingPtyData } from './hidden-transition'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import type { PtyIpcSession } from '../session'
 
@@ -114,11 +107,8 @@ export function flushPendingData(session: PtyIpcSession): void {
         session.pendingData.remove(selection)
         session.pendingOverflowMarkedPtys.delete(id)
         session.updateProducerFlowControl(id)
-        const drop = recordHiddenPendingPtyDataDrop(id, pending)
+        const drop = dropHiddenPendingPtyData(session, id, pending)
         warnIfDroppingHiddenBytesForVisiblePty(session, id, pending.data.length)
-        if (drop.shouldEmitActivityNotice) {
-          sendPtyHiddenOutputActivity(session, id)
-        }
         if (drop.shouldEmitRestoreMarker) {
           sendModelRestoreNeededMarker(
             session,

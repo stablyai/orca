@@ -1,5 +1,6 @@
 import { useNativeChatPickerContext } from './use-native-chat-picker-context'
 import {
+  applyNativeChatMention as applyMention,
   writeNativeChatComposerText,
   type NativeChatComposerInput
 } from '../editor/native-chat-composer-input'
@@ -19,7 +20,6 @@ import type { AgentType } from '../../../../../../shared/agent-status/contracts/
 import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 
 import {
-  applyMentionSuggestion,
   deriveComposerAutocomplete,
   editReplacesTriggerToken,
   isSkillPickerTriggered,
@@ -51,7 +51,9 @@ export type NativeChatPickerState = {
   /** The draft still leads with the skill the user picked from the menu. */
   isPickedSkill: (draft: string) => boolean
   completeItem: (item: NativeChatPickerItem) => void
-  completeMention: (path: string) => void
+  /** `token` replaces the file-reference form, e.g. a room's `@Name`; with `from`, it replaces
+   *  `from` to the caret wherever the menu is (a bot's chats filter on text with spaces). */
+  completeMention: (path: string, token?: string, from?: number) => void
   dismiss: (triggerKey: string) => void
   handleDraftOrCaretChange: (value: string, caret: number) => void
   /** Arrow-key highlight moves; a catalog refresh keeps the row they land on until the next edit. */
@@ -232,12 +234,12 @@ export function useNativeChatPickerState(args: {
   )
 
   const completeMention = useCallback(
-    (path: string) => {
-      if (!disabledRef.current && autocomplete.mode === 'mention') {
-        commitCompletion(applyMentionSuggestion(...liveDraft(), path))
+    (path: string, token?: string, from?: number) => {
+      if (!disabledRef.current && (from !== undefined || autocomplete.mode === 'mention')) {
+        commitCompletion(applyMention(textareaRef.current, ...liveDraft(), path, token, from))
       }
     },
-    [autocomplete, commitCompletion, liveDraft]
+    [autocomplete, commitCompletion, liveDraft, textareaRef]
   )
 
   const handleDraftOrCaretChange = useCallback(

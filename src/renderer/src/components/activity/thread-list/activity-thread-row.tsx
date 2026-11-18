@@ -145,6 +145,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               showMarkdownStatus ? (
                 <CommentMarkdown
                   content={statusLine}
+                  singleTildeStrikethrough={false}
                   className={cn(
                     'min-w-0 break-words text-[13px] leading-5 text-foreground/80',
                     compactMode ? 'line-clamp-2' : 'line-clamp-3',

@@ -60,7 +60,13 @@ vi.mock('lucide-react-native', () =>
       'Square',
       'X',
       'Check',
-      'CircleHelp'
+      'CircleHelp',
+      // The automation mark's icon table is read when its module loads.
+      'Clock',
+      'Hourglass',
+      'Play',
+      'Webhook',
+      'Zap'
     ].map((x) => [x, x])
   )
 )

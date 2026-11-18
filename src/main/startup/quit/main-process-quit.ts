@@ -7,6 +7,7 @@ import { killAllPty } from '../../ipc/pty/provider/kill-all'
 import * as daemon from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import { botToolRelay } from '../../bots/tool-relay/bot-tool-relay'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../../agent-hooks/installation/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../../runtime/agent-session/installation/structured-agent-session-runtime'
@@ -32,7 +33,7 @@ import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { cancelHistoryGc } from '../../pty/history/terminal-history-gc'
 import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
-import { desktopConnectorCloud } from '../cloud-startup/main-process-connector-startup'
+import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { isDevParentShutdownRequested } from '../configure-process'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
@@ -61,8 +62,7 @@ function installBeforeQuitHandler(): void {
     }
     state.isQuitting = true
     flushUnsavedCloudSessions()
-    state.desktopRelayService?.fenceAndCloseNow()
-    desktopConnectorCloud()?.fence()
+    fenceMainProcessCloudOnQuit()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
     state.unsubscribeAgentAwakeStatusChanges = null
@@ -154,6 +154,7 @@ function installWillQuitHandler(): void {
     state.uninstallRepoMaintenanceIdleGate = null
     // Chat teardown reads background work afterward; clearing status loses subagent/command-only resume offers.
     agentHookServer.stop({ keepStatus: true })
+    botToolRelay.close()
     // Windows bare hook paths lack POSIX ORCA_PANE_KEY guards, so remove Grok hooks on quit; bound cleanup because GROK_HOME can be a stalled network mount.
     const grokHookCleanup =
       process.platform === 'win32'

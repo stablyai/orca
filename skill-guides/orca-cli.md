@@ -393,9 +393,13 @@ Search rules:
 
 This guide covers worktrees, terminals, and handoffs on its own. At a gate below, run `ORCA skills get orca-cli --reference references/<file>.md` and read only that document; `--references` lists the names. If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full` once instead: it returns this guide plus every reference this CLI build serves on this host, so read only the named one. If `--full` is rejected too, the CLI predates bundled references: use `ORCA <command> --help`, keep the rules above, and do not guess flags.
 
-| Action gate                                                                                                     | Reference                        |
-| --------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries | `references/browser.md`          |
-| Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
-| Creating, loading, installing, updating, approving, or publishing an Orca plugin, or adding a plugin catalog    | `references/plugins.md`          |
-| Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |
+| Action gate                                                                                                                  | Reference                        |
+| ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries              | `references/browser.md`          |
+| Creating, editing, running, or inspecting scheduled automations                                                              | `references/automations.md`      |
+| Running as a bot: which command reaches Slack, Linear or GitHub, finds a place, starts an automation or hands over a webhook | `references/bots.md`             |
+| Running as a bot that uses or sets up an app through Composio, or starts on its events                                       | `references/composio.md`         |
+| Running as a bot that is setting up Google for its owner: paths, step checks, misses, recovery                               | `references/google-setup.md`     |
+| Running as a bot made to take over a bot from another app (OpenClaw, Hermes, OpenBot, an export): what to read, the plan     | `references/bot-import.md`       |
+| Creating, loading, installing, updating, approving, or publishing an Orca plugin, or adding a plugin catalog                 | `references/plugins.md`          |
+| Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                                      | invoke the `orca-emulator` skill |
