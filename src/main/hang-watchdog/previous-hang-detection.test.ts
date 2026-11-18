@@ -104,6 +104,66 @@ describe('previous hang detection', () => {
     expect(reportPreviousHangDetection(dir)).toBeNull()
   })
 
+  it('keeps the hang marker and its telemetry for hangs only while later short stalls arrive', () => {
+    const hang: HangObservation = {
+      ...gap,
+      id: '789:300:1',
+      kind: 'heartbeat-stall',
+      detectedAt: 300,
+      durationMs: 46_000,
+      selfRecovered: true,
+      tier: 'hang'
+    }
+    let collection = retainHangObservation(emptyHangObservations(), hang)
+    for (let index = 0; index < 4; index++) {
+      collection = retainHangObservation(collection, {
+        ...hang,
+        id: `789:${400 + index}:${index + 2}`,
+        detectedAt: 400 + index,
+        durationMs: 9_000,
+        tier: 'stall'
+      })
+    }
+    writeHangDetectionMarker(hangDetectionMarkerPath(dir), collection)
+    preservePreviousHangDetection(dir)
+    const records: { attributes: Record<string, unknown> }[] = []
+    setActiveSink({
+      push: (record) => records.push(record as { attributes: Record<string, unknown> }),
+      flush() {},
+      close() {}
+    })
+    expect(reportPreviousHangDetection(dir)).toEqual({
+      detectedAt: 300,
+      parentPid: 789,
+      unresponsiveMs: 46_000,
+      selfRecovered: true
+    })
+    expect(records.map((record) => record.attributes['breadcrumb.name'])).toEqual([
+      'main_thread_hang_detected',
+      'main_thread_stall_detected',
+      'main_thread_stall_detected',
+      'main_thread_stall_detected'
+    ])
+  })
+
+  it('reads a stall-only previous run as no hang', () => {
+    const stall: HangObservation = {
+      ...gap,
+      id: '789:300:1',
+      kind: 'heartbeat-stall',
+      durationMs: 13_000,
+      selfRecovered: true,
+      tier: 'stall'
+    }
+    writeHangDetectionMarker(
+      hangDetectionMarkerPath(dir),
+      retainHangObservation(emptyHangObservations(), stall)
+    )
+    preservePreviousHangDetection(dir)
+    setActiveSink({ push() {}, flush() {}, close() {} })
+    expect(reportPreviousHangDetection(dir)).toBeNull()
+  })
+
   it('retains a pending note when a launch ends before sink installation', () => {
     const markerPath = hangDetectionMarkerPath(dir)
     writeHangDetectionMarker(markerPath, marker)

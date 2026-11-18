@@ -1,4 +1,7 @@
 import {
+  isHangTierObservation,
+  mergeHangTierFields,
+  parseHangTierFields,
   MACHINE_FIELDS,
   SNAPSHOT_FIELDS,
   type HangPowerReceipt,
@@ -13,7 +16,7 @@ import {
   parseNativeHangCapture
 } from './hang-capture-codec'
 import { parseHangWorkerSends } from './hang-worker-sends'
-export { MACHINE_FIELDS, SNAPSHOT_FIELDS } from './hang-observation-schema'
+export { isHangTierObservation, MACHINE_FIELDS, SNAPSHOT_FIELDS } from './hang-observation-schema'
 export type {
   HangSnapshot,
   HangMachineSnapshot,
@@ -149,7 +152,8 @@ function parseObservation(value: unknown): HangObservation | null {
           }
         }
       : {}),
-    ...(workerSends ? { workerSends } : {})
+    ...(workerSends ? { workerSends } : {}),
+    ...parseHangTierFields(data)
   }
 }
 
@@ -196,7 +200,10 @@ export function asHangObservations(value: unknown): HangObservationCollection | 
   }
 }
 function priority(record: HangObservation): number {
-  return record.kind === 'heartbeat-stall' ? 3 : record.initialSleepAssociated ? 1 : 2
+  if (record.kind === 'heartbeat-stall') {
+    return isHangTierObservation(record) ? 4 : 2
+  }
+  return record.initialSleepAssociated ? 1 : 3
 }
 export function retainHangObservation(
   collection: HangObservationCollection,
@@ -239,6 +246,7 @@ export function retainHangObservation(
           }
         : old.native,
       powerEvents: [...receipts.values()].slice(-4),
+      ...mergeHangTierFields(old, record),
       watchdogGap:
         old.watchdogGap && old.watchdogGap.durationMs > (record.watchdogGap?.durationMs ?? -1)
           ? old.watchdogGap
@@ -249,7 +257,7 @@ export function retainHangObservation(
   const candidates = [...collection.observations, record]
   const anchors = new Set(
     [
-      candidates.find((item) => item.kind === 'heartbeat-stall'),
+      candidates.find(isHangTierObservation),
       candidates.find((item) => item.kind === 'watchdog-gap' && !item.initialSleepAssociated)
     ].filter((item): item is HangObservation => !!item)
   )
@@ -282,7 +290,8 @@ export function mergeHangObservations(
 export function latestHangMarker(
   collection: HangObservationCollection
 ): HangDetectionMarker | null {
-  const record = collection.observations.findLast((item) => item.kind === 'heartbeat-stall')
+  // Short stalls are breadcrumbs only; the hang marker (and its telemetry) keeps meaning >= timeout.
+  const record = collection.observations.findLast(isHangTierObservation)
   return record
     ? {
         detectedAt: record.detectedAt,

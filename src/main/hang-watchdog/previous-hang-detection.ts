@@ -15,6 +15,7 @@ import {
 import {
   asHangObservations,
   emptyHangObservations,
+  isHangTierObservation,
   latestHangMarker,
   mergeHangObservations,
   type HangObservation
@@ -78,6 +79,10 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
       record.durationMs
     details.detectedUnresponsiveMs = record.durationMs
     details.selfRecovered = record.selfRecovered
+    details.tier = isHangTierObservation(record) ? 'hang' : 'stall'
+    if (record.escalatedAt !== undefined) {
+      details.escalatedAfterDetectionMs = Math.max(0, record.escalatedAt - record.detectedAt)
+    }
   } else {
     details.watchdogGapMs = record.durationMs
     details.preGapCpuDeltaUs = null
@@ -154,7 +159,11 @@ export function reportPreviousHangDetection(userDataPath: string): HangDetection
   }
   for (const record of collection.observations) {
     recordDurableCrashBreadcrumb(
-      record.kind === 'heartbeat-stall' ? 'main_thread_hang_detected' : 'main_thread_watchdog_gap',
+      record.kind === 'watchdog-gap'
+        ? 'main_thread_watchdog_gap'
+        : isHangTierObservation(record)
+          ? 'main_thread_hang_detected'
+          : 'main_thread_stall_detected',
       observationDetails(record, collection.omitted)
     )
   }
