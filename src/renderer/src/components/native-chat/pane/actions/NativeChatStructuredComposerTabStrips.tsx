@@ -33,6 +33,7 @@ export function NativeChatStructuredComposerTabStrips(props: {
         <NativeChatMcpTray
           sessionId={props.transport.sessionId}
           target={props.target}
+          opens={mcpPanel.opens}
           onClose={() => {
             mcpPanel.close()
             props.focusComposer()

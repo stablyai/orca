@@ -6,7 +6,7 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session/failu
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionOrcaStopCause } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-orca-stop'
-import type { AgentSessionTabTable } from '../agent-session-tab-table'
+import type { AgentSessionTabTable } from './agent-session-tab-table'
 
 export type RetiredAgentSessionClaimKey = { keyId: string; retiredAt: number }
 

@@ -1,5 +1,5 @@
 import { refreshLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import { useRef } from 'react'
 import { z } from 'zod'
@@ -16,7 +16,7 @@ import {
 } from '../../../../shared/rpc-contract/personal-project-order-params'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 
 const beta: Repo = {
   id: 'beta',

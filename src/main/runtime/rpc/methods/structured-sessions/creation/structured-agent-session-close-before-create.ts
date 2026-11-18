@@ -9,7 +9,7 @@ import type { RpcContext } from '../../../core'
 import {
   type StructuredSessionSurface,
   closeCapturedStructuredSession
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 
 // Per-launch ids prevent cross-create matches; cap entries whose create never arrives.
 const MAX_CLOSED_BEFORE_CREATE = 256

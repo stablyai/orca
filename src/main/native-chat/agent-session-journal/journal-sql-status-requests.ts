@@ -8,7 +8,7 @@ import {
 import {
   commandTurnsByBody,
   isStructuredAgentSessionCommandRow
-} from '../../../shared/agent-session/structured-agent-session-command-entry'
+} from '../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,

@@ -8,7 +8,7 @@ import type {
 import type {
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
-} from '../../../../../shared/agent-session/structured-agent-session-create'
+} from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'

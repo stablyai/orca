@@ -5,10 +5,10 @@ import { expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { create } from 'zustand'
 import type { AppState } from '@/store/types'
-import { withAgentStatusOwnership } from '@/store/slices/agent-status/agent-status-ownership-boundary'
+import { withAgentStatusOwnership } from '@/store/slices/agent-status/status-ownership/agent-status-ownership-boundary'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useTerminalPaneTabState } from '../controller/use-terminal-pane-tab-state'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 

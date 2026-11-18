@@ -157,6 +157,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   return {
     createTabAgentLoadState: createTabAgents.loadState,
     createTabAgentOptions: createTabAgents.options,
+    createTabAgentSurfaceChoice: createTabAgents.surfaceChoice,
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,
     attachImage,

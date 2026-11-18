@@ -17,13 +17,23 @@ import {
   type JournalDomainMaintenance,
   type JournalDomainMaintenanceResult
 } from './journal-domain-maintenance'
+import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
 import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
 import {
   discardJournalDomainImportPage,
   type JournalDomainImportDiscard
 } from './journal-domain-import-discard'
+import { discardForgottenJournalChatPage } from './journal-forgotten-chats'
 import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
+
+/** Operations the background pass runs a bounded page at a time. */
+export type JournalPagedMaintenanceKind =
+  | 'event-tail-prune'
+  | 'domain-retired-prune'
+  | 'page-reclaim'
+  | 'chat-discard'
+  | 'stored-output-compaction'
 
 export type JournalSqlMaintenance =
   | { kind: 'records-install' }
@@ -32,6 +42,7 @@ export type JournalSqlMaintenance =
   | { kind: 'outline-cache'; cache: JournalOutlineCache }
   | { kind: 'projection-state'; sessionId: string }
   | { kind: 'import-discard'; sessionId: string }
+  | { kind: 'chat-discard'; sessionId: string }
   | {
       kind: 'import-page'
       target: Pick<JournalDomainImportHeader, 'sessionId' | 'epoch'>
@@ -50,6 +61,7 @@ export type JournalSqlMaintenanceResult =
   | JournalSqlEventTailResult
   | JournalDomainMaintenanceResult
   | JournalDomainImportDiscard
+  | ReturnType<typeof discardForgottenJournalChatPage>
   | boolean
   | string
   | null
@@ -80,6 +92,8 @@ export function applyJournalSqlMaintenance(
       return journalDomainImportState(db, operation.sessionId)
     case 'import-discard':
       return discardJournalDomainImportPage(db, operation.sessionId)
+    case 'chat-discard':
+      return discardForgottenJournalChatPage(db, operation.sessionId)
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':
@@ -94,5 +108,7 @@ export function applyJournalSqlMaintenance(
       return completeJournalDomainCompaction(db, operation.now)
     case 'event-tail-prune':
       return pruneJournalSqlEventTail(db, operation.now)
+    case 'stored-output-compaction':
+      return compactJournalStoredOutputPage(db)
   }
 }

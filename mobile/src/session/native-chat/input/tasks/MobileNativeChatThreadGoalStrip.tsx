@@ -4,7 +4,7 @@ import { ChevronDown, Goal, Pause, Play, Trash2 } from 'lucide-react-native'
 import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalOfferedStatusChange
-} from '../../../../../../src/shared/agent-session/agent-session-thread-goal'
+} from '../../../../../../src/shared/agent-session/thread-goals/agent-session-thread-goal'
 import {
   agentSessionThreadGoalStatusLabel,
   formatAgentSessionThreadGoalElapsed,

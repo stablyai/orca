@@ -155,14 +155,17 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.registration.add(target))
   }
 
-  async addAccountWithDeviceCode(
-    channel: HostAccountSignInChannel
+  /** Adds a host account, or re-authenticates `accountId`, through a device code opened on another device. */
+  async signInWithDeviceCode(
+    channel: HostAccountSignInChannel,
+    accountId?: string
   ): Promise<CodexRateLimitAccountsState> {
     this.supersedePendingLogin()
+    const login = (home: string): Promise<void> => this.runCodexLogin(home, channel)
     return this.serializeMutation(() =>
-      this.registration.add({ runtime: 'host' }, (managedHomePath) =>
-        this.runCodexLogin(managedHomePath, channel)
-      )
+      accountId
+        ? this.registration.reauthenticate(accountId, undefined, login)
+        : this.registration.add({ runtime: 'host' }, login)
     )
   }
 

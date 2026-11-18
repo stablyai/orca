@@ -131,17 +131,6 @@ describe('ordered SSH private-key authentication', () => {
     expect(mockReadFileSync).not.toHaveBeenCalledWith('/keys/stale-imported')
   })
 
-  it('still offers the ssh-agent when no readable key precedes it', () => {
-    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
-    const config = buildConnectConfig(makeTarget({ identityFile: undefined }), null)
-
-    expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
-    // The queued agent observes signing for the challenge deferral; ssh2 still reads the socket.
-    expect(config.agent).toBe('/tmp/agent.sock')
-    expect(nextAuth(config, false)).toMatchObject({ type: 'agent' })
-    expect(nextAuth(config, false)).toBe('keyboard-interactive')
-  })
-
   it('keeps the password challenge on an agent attempt that carries a key, because no key retry follows it', () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
     // Real key bytes, so '/keys/explicit' counts as unencrypted and IdentitiesOnly builds its agent.

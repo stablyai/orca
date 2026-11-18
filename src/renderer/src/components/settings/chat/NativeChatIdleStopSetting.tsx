@@ -5,7 +5,7 @@ import {
   NATIVE_CHAT_IDLE_STOP_MINUTE_CHOICES,
   NATIVE_CHAT_IDLE_STOP_NEVER,
   nativeChatIdleStopMinutes
-} from '../../../../../shared/native-chat/native-chat-idle-stop'
+} from '../../../../../shared/native-chat/settings/native-chat-idle-stop'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatMinutesDuration } from '@/i18n/ui-intl-formatters'

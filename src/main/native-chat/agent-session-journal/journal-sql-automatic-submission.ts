@@ -1,5 +1,5 @@
 import type { JournalSendAdmissionResult } from './journal-send-admission'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import { copyJournalCurrentWorkAuthority } from './journal-observer-read'
 import type {
   JournalAutomaticSelection,

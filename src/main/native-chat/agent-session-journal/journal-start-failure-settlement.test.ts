@@ -6,7 +6,7 @@ import { agentSessionFailureFact } from '../../../shared/agent-session/failures/
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { recordStructuredAgentSessionStartFailure } from '../agent-session-wire/startup/structured-agent-session-start-failure-row'
-import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
+import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/installation/structured-agent-session-journal-open'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import type { AgentSessionJournal } from './journal-store'
 import { SqlAgentSessionJournal } from './journal-sql-store'

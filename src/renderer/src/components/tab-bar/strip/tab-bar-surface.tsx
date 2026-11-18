@@ -6,7 +6,6 @@ import type { Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
@@ -25,6 +24,7 @@ import type { TabBarItemProjection } from '../model/use-tab-bar-item-projection'
 import type { TabBarItemActions } from '../model/use-tab-bar-item-actions'
 import { renderTabBarItems } from '../model/tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from '../create-menu/tab-bar-static-create-menu'
+import { NewTabMenuContent } from '../menu-fit/NewTabMenuContent'
 import ClientHostedBrowserTabRows from '../browser-tabs/ClientHostedBrowserTabRows'
 import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
@@ -228,7 +228,7 @@ export function renderTabBarSurface(
             <Plus className="w-3.5 h-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
+        <NewTabMenuContent
           align="start"
           sideOffset={6}
           className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
@@ -246,6 +246,12 @@ export function renderTabBarSurface(
                 terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
+                excludedTabId={
+                  activeClientHostedBrowserRowId === null
+                    ? (orderedItems.find((item) => item.id === itemProjection.activeVisibleTabId)
+                        ?.unifiedTabId ?? null)
+                    : null
+                }
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}
                 onLaunchAgentOption={launchAgentFromNewTabEntry}
@@ -292,7 +298,7 @@ export function renderTabBarSurface(
               />
             </>
           ) : null}
-        </DropdownMenuContent>
+        </NewTabMenuContent>
       </DropdownMenu>
     </div>
   )

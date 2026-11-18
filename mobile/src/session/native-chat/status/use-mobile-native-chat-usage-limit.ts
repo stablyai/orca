@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import {
   latestNativeChatUsageLimitCut,
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
-} from '../../../../../src/shared/native-chat/native-chat-usage-limit-cut'
+} from '../../../../../src/shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import {
   nativeChatUsageLimitAutoContinueKind,
   usageLimitContinueAtForCut,
   usageLimitContinueStateForCut,
   type NativeChatUsageLimitAutoContinueKind
-} from '../../../../../src/shared/native-chat/native-chat-usage-limit-auto-continue'
+} from '../../../../../src/shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission

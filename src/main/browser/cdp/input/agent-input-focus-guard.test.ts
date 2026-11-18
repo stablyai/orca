@@ -66,8 +66,34 @@ describe('guardPaneFocusForAgentInput', () => {
     await Promise.resolve()
 
     expect(settled).toBe('pending')
-    await vi.advanceTimersByTimeAsync(150)
+    await vi.advanceTimersByTimeAsync(2000)
     expect(settled).toBe('refused')
+  })
+  it('lets the input through when a busy pane answers a second late', async () => {
+    vi.useFakeTimers()
+    const { sent, renderer } = fakeRenderer(7, false)
+
+    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1')
+    await vi.advanceTimersByTimeAsync(1000)
+    const [listener] = ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []
+    listener({ sender: { id: 7 } }, { token: sent[0].data.token })
+
+    await expect(guarded).resolves.toBeTypeOf('function')
+    expect(sent.map(({ data }) => data.active)).toEqual([true])
+  })
+  it('names the timeout phase when the pane never answers', async () => {
+    vi.useFakeTimers()
+    const { sent, renderer } = fakeRenderer(7, false)
+
+    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1')
+    const refusal = expect(guarded).rejects.toMatchObject({
+      code: 'browser_focus_guard_unavailable',
+      data: { phase: 'no_pane_answer' }
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+
+    await refusal
+    expect(sent.map(({ data }) => data.active)).toEqual([true, false])
   })
   it('refuses the input at once and ends the guard while the user composes', async () => {
     const { sent, renderer } = fakeRenderer(7, false)

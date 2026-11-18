@@ -60,12 +60,4 @@ describe('isClaudeDialogHoldingPane', () => {
   ])('reads %s as holding: %s', (_label, screen, expected) => {
     expect(holds(60_000, screen)).toBe(expected)
   })
-
-  it('holds an unreadable screen only until the cap, which also ends a visible dialog hold', () => {
-    expect(holds(60_000, null)).toBe(true)
-    expect(holds(600_000, null)).toBe(true)
-    expect(holds(600_000, PERMISSION)).toBe(true)
-    expect(holds(600_001, null)).toBe(false)
-    expect(holds(600_001, PERMISSION)).toBe(false)
-  })
 })

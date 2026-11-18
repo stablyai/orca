@@ -49,7 +49,9 @@ import {
   isRepoHidden,
   withoutHiddenFilterRepoIds
 } from '../../../../src/shared/project/catalog/hidden-projects'
-import { filterWorktrees } from './workspace-row-filtering'
+import { filterWorktrees, isPhoneRowInHiddenProject } from './workspace-row-filtering'
+import { buildSectionRepoMap } from './section-repo-map'
+import { keepHiddenRowsBelowFolders } from '../../../../src/shared/sidebar-list/folders/folder-workspace-occurrences'
 import {
   placeInProjectGroupTree,
   planProjectGroupTree,
@@ -62,25 +64,6 @@ export {
   NO_PROJECT_SECTION_CATALOG,
   type ProjectSectionCatalog
 } from '../project-sections/project-section-catalog'
-
-export function buildSectionRepoMap(
-  catalogRepos: readonly SectionRepo[],
-  worktrees: readonly Worktree[]
-): Map<string, SectionRepo> {
-  const repoMap = new Map(catalogRepos.map((repo) => [repo.id, repo]))
-  for (const w of worktrees) {
-    if (!repoMap.has(w.repoId)) {
-      repoMap.set(w.repoId, {
-        id: w.repoId,
-        displayName: w.repo || translate('common.unknown', 'Unknown'),
-        // Why: labels key on host + path, so a shared '' would let one stand-in rename another.
-        path: w.repoId,
-        executionHostId: w.hostId
-      })
-    }
-  }
-  return repoMap
-}
 
 // A section before lineage expansion: host rows only, no per-row view yet.
 type PlannedSection = Omit<Section, 'data'> & { data: Worktree[] }
@@ -127,14 +110,29 @@ export function buildMobileWorkspacePlan(
     closed: translate('worktree.workspaceListSections.closed', 'Closed')
   }
   const hiddenProjects = indexHiddenProjects(projectCatalog.repos, LOCAL_EXECUTION_HOST_ID)
-  const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId, hiddenProjects)
   const listedFilterIds = withoutHiddenFilterRepoIds(filters.filterRepoIds, hiddenProjects)
-  const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
     worktrees,
     lineageStores,
     listedFilterIds
   )
+  const filtered = filterWorktrees(
+    worktrees,
+    filters,
+    search,
+    repoHostIdByRepoId,
+    hiddenProjects,
+    childrenByParentIdentity
+  )
+  const isHiddenRow = (w: Worktree) =>
+    isPhoneRowInHiddenProject(w, repoHostIdByRepoId, hiddenProjects)
+  const sorted = keepHiddenRowsBelowFolders({
+    rows: sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees)),
+    folderRows: filtered.filter((w) => w.workspaceKind === 'folder-workspace'),
+    childrenByParentIdentity,
+    identityOf: getWorktreeRowIdentity,
+    isHidden: isHiddenRow
+  })
   const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)
   let groupTreePlacements = new Map<string, GroupTreePlacement>()
@@ -163,7 +161,8 @@ export function buildMobileWorkspacePlan(
           canonicalGroupWorktrees,
           projectCatalog.projectGroups,
           (w) => displayRootByIdentity.get(getWorktreeRowIdentity(w)) ?? w,
-          childrenByParentIdentity
+          childrenByParentIdentity,
+          isHiddenRow
         )
         const representedRepoIds = new Set(worktrees.map((w) => w.repoId))
         const query = search.trim().toLowerCase()
@@ -177,7 +176,7 @@ export function buildMobileWorkspacePlan(
           )
           .map((repo) => repo.id)
         const projectSections = buildProjectSections({
-          items: canonicalGroupWorktrees.filter((w) => !folderLane.folders.has(w)),
+          items: folderLane.projectRows,
           repoIdOf: (w) => w.repoId,
           repoOfItem: (w) =>
             projectCatalog.repos.find(
