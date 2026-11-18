@@ -147,6 +147,7 @@ export function shouldProbeEffectiveUpstreamStatus(
   if (!upstreamName) {
     return true
   }
-  const parsed = splitRemoteBranchName(upstreamName)
+  // Git status prints remotes/origin/main when a local branch or tag is named origin/main.
+  const parsed = splitRemoteBranchName(upstreamName.replace(/^remotes\//, ''))
   return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
 }

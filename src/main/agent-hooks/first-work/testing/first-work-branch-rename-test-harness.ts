@@ -24,7 +24,7 @@ export function gitResponder(opts: {
   return async (args: string[]) => {
     if (args[0] === 'rev-parse' && args.some((arg) => arg.includes('@{u}'))) {
       if (opts.hasUpstream) {
-        return { stdout: 'origin/x\n', stderr: '' }
+        return { stdout: 'refs/remotes/origin/x\norigin/x\n', stderr: '' }
       }
       throw noUpstreamError
     }
