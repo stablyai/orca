@@ -27,6 +27,12 @@ export type ZotzNodeSetupStep = {
   url?: string
 }
 
+/** Live state sent while setup runs; `output` is the shell-style log the user can read. */
+export type ZotzNodeSetupProgress = {
+  steps: ZotzNodeSetupStep[]
+  output: string[]
+}
+
 export type ZotzNodeSetupResult = {
   steps: ZotzNodeSetupStep[]
   tailscaleIp: string | null

@@ -24184,7 +24184,7 @@
     "machineMode": {
       "autostartRemoveFailed": "No se pudo quitar la tarea de inicio de sesión: {{detail}}",
       "autostartRemoved": "Zotz ya no arranca al iniciar sesión.",
-      "pairedDevicesKeepAccess": "Los equipos y teléfonos emparejados pueden seguir conectándose hasta que los revoques en Ajustes → Servidores remotos de Orca.",
+      "pairedDevicesKeepAccess": "Los equipos y teléfonos emparejados pueden seguir conectándose hasta que los revoques en Ajustes → Servidores remotos de Zotz.",
       "back": "Atrás",
       "change": "Cambiar",
       "description": "Puedes cambiarlo después en Ajustes → General.",
@@ -24210,7 +24210,9 @@
         "declined": "Se rechazó el permiso de administrador.",
         "devBuild": "Se omite en builds de desarrollo.",
         "installing": "Instalando Tailscale…",
-        "waitingForLogin": "Esperando a que inicies sesión en Tailscale…"
+        "waitingForLogin": "Esperando a que inicies sesión en Tailscale…",
+        "waitingForAdmin": "Acepta el permiso de administrador de Windows. Puede estar detrás de la ventana de Zotz.",
+        "installingSsh": "Instalando OpenSSH Server con Windows Update. Suele tardar de 5 a 15 minutos."
       },
       "done": "Listo",
       "link": {
@@ -24239,7 +24241,25 @@
         "tailscale": "Tailscale conectado",
         "windowsUpdate": "Sin reinicios automáticos con sesión iniciada"
       },
-      "title": "Configurar esta computadora como servidor remoto"
+      "title": "Configurar esta computadora como servidor remoto",
+      "hint": {
+        "tailscale": "Revisando que Tailscale esté instalado y con sesión; su dirección será el enlace de acceso.",
+        "power": "Quitando la suspensión y la hibernación con corriente, y que cerrar la tapa no haga nada.",
+        "windowsUpdate": "Configurando horas activas para que Windows Update nunca reinicie la computadora con tu sesión iniciada.",
+        "ssh": "Activando el servidor SSH solo con llave. Windows lo descarga la primera vez, así que puede tardar; no cierres Zotz.",
+        "firewall": "Abriendo los puertos de Zotz y SSH solo a los equipos de tu red de Tailscale.",
+        "autostart": "Registrando una tarea que abre Zotz al iniciar sesión y lo reinicia si se detiene.",
+        "keepAwake": "Manteniendo la computadora despierta mientras Zotz corre.",
+        "networkExposure": "Abriendo el servidor de Zotz a conexiones remotas en tu dirección de Tailscale.",
+        "autologon": "El inicio de sesión automático se configura a mano con Sysinternals Autologon."
+      },
+      "progress": {
+        "finished": "Configuración terminada",
+        "finishedWithErrors": "Terminó con errores",
+        "step": "Paso {{current}} de {{total}}: {{title}}",
+        "preparing": "Preparando…",
+        "output": "Salida de la configuración"
+      }
     }
   }
 }

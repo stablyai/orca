@@ -1,4 +1,7 @@
-import type { ZotzNodeSetupStep } from '../../../../shared/zotz/zotz-node-setup-contract'
+import type {
+  ZotzNodeSetupProgress,
+  ZotzNodeSetupStep
+} from '../../../../shared/zotz/zotz-node-setup-contract'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import ZotzMachineModeWizard from './ZotzMachineModeWizard'
 
@@ -23,11 +26,47 @@ const FINISHED_STEPS: ZotzNodeSetupStep[] = [
 const QR_PLACEHOLDER =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
-function stubServerSetup(): void {
+const RUNNING_PROGRESS: ZotzNodeSetupProgress = {
+  steps: [
+    { id: 'tailscale', status: 'done', detail: '100.88.1.2' },
+    { id: 'power', status: 'done', detail: 'AC: sleep never, hibernate never, lid does nothing' },
+    { id: 'windowsUpdate', status: 'done' },
+    {
+      id: 'ssh',
+      status: 'running',
+      detail: 'installing OpenSSH Server (this can take a few minutes)'
+    },
+    { id: 'firewall', status: 'pending' },
+    { id: 'autostart', status: 'pending' },
+    { id: 'keepAwake', status: 'pending' },
+    { id: 'networkExposure', status: 'pending' },
+    { id: 'autologon', status: 'pending' }
+  ],
+  output: [
+    '== tailscale ==',
+    'tailscale -> done: 100.88.1.2',
+    'Waiting for administrator permission (UAC)…',
+    '== power ==',
+    'power -> done: AC: sleep never, hibernate never, lid does nothing',
+    '== windowsUpdate ==',
+    'windowsUpdate -> done: active hours 6:00-0:00, no auto-restart while signed in',
+    '== ssh ==',
+    'installing OpenSSH Server (this can take a few minutes)'
+  ]
+}
+
+function stubServerSetup(running = false): void {
   window.api.zotzNode = {
     autoShowFirstRun: false,
-    onSetupProgress: () => () => {},
-    runServerSetup: async () => ({ steps: FINISHED_STEPS, tailscaleIp: '100.88.1.2' }),
+    onSetupProgress: (callback) => {
+      if (running) {
+        setTimeout(() => callback(RUNNING_PROGRESS), 0)
+      }
+      return () => {}
+    },
+    runServerSetup: running
+      ? () => new Promise(() => {})
+      : async () => ({ steps: FINISHED_STEPS, tailscaleIp: '100.88.1.2' }),
     removeAutostart: async () => ({ ok: true, removed: false, detail: '' })
   }
   window.api.mobile = {
@@ -53,9 +92,10 @@ function stubServerSetup(): void {
   }
 }
 
-function clickButton(label: string): void {
+// Labels in English and Spanish, since fixtures render in the machine's language.
+function clickButton(...labels: string[]): void {
   const button = [...document.querySelectorAll('button')].find((candidate) =>
-    candidate.textContent?.includes(label)
+    labels.some((label) => candidate.textContent?.includes(label))
   )
   button?.click()
 }
@@ -67,15 +107,29 @@ export const choose = defineFixture({
   render: () => <ZotzMachineModeWizard onClose={() => {}} onKeepOpen={() => {}} />
 })
 
+export const serverRunning = defineFixture({
+  width: 720,
+  store: { updateSettings: async () => {}, updateSettingsOrThrow: async () => {} },
+  setup: () => stubServerSetup(true),
+  render: () => <ZotzMachineModeWizard onClose={() => {}} onKeepOpen={() => {}} />,
+  interact: async () => {
+    clickButton('Remote server', 'Servidor remoto')
+    await settle()
+    clickButton('Set up server', 'Configurar servidor')
+    await settle()
+    await settle()
+  }
+})
+
 export const serverFinished = defineFixture({
   width: 720,
   store: { updateSettings: async () => {}, updateSettingsOrThrow: async () => {} },
-  setup: stubServerSetup,
+  setup: () => stubServerSetup(),
   render: () => <ZotzMachineModeWizard onClose={() => {}} onKeepOpen={() => {}} />,
   interact: async () => {
-    clickButton('Remote server')
+    clickButton('Remote server', 'Servidor remoto')
     await settle()
-    clickButton('Set up server')
+    clickButton('Set up server', 'Configurar servidor')
     await settle()
     await settle()
   }
