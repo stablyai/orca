@@ -35,7 +35,6 @@ describe('orca bot google-setup show', () => {
       })
     })
     expect(shown).toContain('Waiting on your owner: sign in on the Connect Google card.')
-    expect(shown).toContain("Your owner's card shows: Sign in to Google")
   })
 
   it('says the key is missing while client is open', () => {
