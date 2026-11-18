@@ -251,7 +251,9 @@ export class RuntimeTerminalIdlePolls {
   ): Promise<void> {
     const { ptyId } = sample
     // Why paint first: before the command paints anything, no foreground answer can make it ready.
+    // Why idle only: the answer feeds the paint gate, which cannot turn a permission or working title ready.
     if (
+      (entry.pty.lastAgentStatus ?? 'idle') !== 'idle' ||
       entry.foregroundPollInFlight ||
       this.deps.getPaneAgent(ptyId) !== null ||
       !sample.isQuiet('closed') ||
