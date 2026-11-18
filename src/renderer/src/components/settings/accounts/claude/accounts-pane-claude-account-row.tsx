@@ -24,6 +24,7 @@ import {
 } from './claude-sign-in-link-menu'
 import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
 import { getObservedAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
+import { getClaudeAccountAddedAsHint } from '@/lib/provider-accounts/claude-account-label'
 
 export function renderClaudeAccountRow(
   account: ClaudeRateLimitAccountsState['accounts'][number],
@@ -123,6 +124,7 @@ export function renderClaudeAccountRow(
                     t('accounts.claude.signInRequired', 'Sign in again to use this account')
                   ]
                 : [
+                    getClaudeAccountAddedAsHint(account),
                     account.organizationName,
                     plan,
                     namedEmail,
