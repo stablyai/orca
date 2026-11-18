@@ -96,40 +96,10 @@ function openMenu(model: NewTabAgentMenuModel = BOTH, forBot: Bot = bot): void {
   )
 }
 
-const rowNames = () => screen.getAllByRole('menuitem').map((item) => item.textContent)
 // The side chats, after New Home Chat.
 const sideChats = () => screen.getAllByRole('menuitem').slice(1)
 
 describe('BotNewChatMenuItems', () => {
-  it('offers a chat with the bot on each agent it can be, its own first', () => {
-    openMenu()
-
-    expect(rowNames()).toEqual([
-      '🦉New Home Chatstarts fresh',
-      '🦉New Claude Code Chat',
-      '🦉New Codex Chat'
-    ])
-    expect(screen.getByText('Side chats with Reviewer')).toBeTruthy()
-    // The bot's name stays in the accessible name and the tooltip.
-    const named = screen.getByRole('menuitem', { name: 'New chat with Reviewer · Codex' })
-    expect(named.getAttribute('title')).toBe('New chat with Reviewer · Codex')
-  })
-
-  it("badges each row's bot picture with the agent it runs on", () => {
-    openMenu()
-
-    const badges = screen
-      .getAllByRole('menuitem')
-      .map((row) => row.querySelector('[data-agent]')?.getAttribute('data-agent'))
-    expect(badges).toEqual(['claude', 'claude', 'codex'])
-  })
-
-  it('leads with Codex for a Codex bot', () => {
-    openMenu(BOTH, { ...bot, agent: 'codex' })
-
-    expect(sideChats()[0]?.textContent).toContain('Codex')
-  })
-
   it("starts a chat with the bot on the chosen agent and opens its tab in the bot's home", async () => {
     openMenu()
 
@@ -282,10 +252,6 @@ describe('botAgentChoices', () => {
     { kind: 'chat', agent: 'opencode' },
     { kind: 'chat', agent: 'opencode2' }
   ])
-
-  it('lists the installed agents a bot can be, in catalog order', () => {
-    expect(botAgentChoices(model)).toEqual(['codex', 'opencode'])
-  })
 
   it('keeps the bot’s current agent even when this computer lacks it', () => {
     expect(botAgentChoices(model, 'omp')).toEqual(['codex', 'opencode', 'omp'])

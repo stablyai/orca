@@ -14905,10 +14905,8 @@
             "f61af83316": "New Folder",
             "37c875d827": "New File",
             "b3e288bf41": "Failed to download '{{value0}}'.",
-            "f729bcd97d": "Failed to download folder '{{value0}}'.",
             "1a3df04ae1": "Open",
             "bce4d4e44f": "Downloaded '{{value0}}'",
-            "a4029c996b": "Downloaded folder '{{value0}}'",
             "e26010014a": "Ignored by .gitignore",
             "a06551beee": "Enter",
             "66a29dde82": "Copy Relative Path",
@@ -24771,7 +24769,6 @@
       "lastReading": "{{reading}} · Read {{time}}",
       "noReading": "Usage unknown: not read yet",
       "chatSeparate": "Separate from your agy terminal account.",
-      "chatAccount": "Chat account",
       "chatBadgeSigningIn": "Signing in",
       "chatBadgeSignedIn": "Signed in",
       "chatBadgeSignedOut": "Not signed in",
@@ -24786,8 +24783,6 @@
       "enterpriseFieldsShort": "Enter a project and location.",
       "chatUseMethod": "Sign in again to use {{method}}",
       "signInEllipsis": "Sign in…",
-      "terminalInfoWindows": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.",
-      "terminalInfo": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.",
       "loadFailed": "Couldn't load agy accounts",
       "loading": "Loading accounts…",
       "notSignedIn": "Not signed in",
@@ -24798,7 +24793,15 @@
       "noEmailNotSaved": "agy didn't report an email · not saved",
       "saveShort": "Save",
       "readAt": "Read {{time}}",
-      "active": "Active"
+      "active": "Active",
+      "account": "Account",
+      "runtime": "Runtime",
+      "chatTitle": "Antigravity Chat",
+      "chatDescription": "Signs in through your browser, so Chat works without agy installed.",
+      "terminalTitle": "agy in the terminal",
+      "terminalDescriptionWindows": "Uses agy's own saved accounts. Switching applies to the host default agy credential.",
+      "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
+      "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -25090,9 +25093,7 @@
     "updateFailed": "Failed to update project field"
   },
   "mediaPreview": {
-    "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec.",
-    "openFailed": "Could not open this file in the default app.",
-    "openDefault": "Open in Default App"
+    "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec."
   },
   "workspace": {
     "branchChoice": {
@@ -29026,6 +29027,15 @@
       "copyHowToAsk": "Copy {{text}}",
       "forOnHost": "for {{name}} on {{host}}",
       "for": "for {{name}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Continues at {{time}}",
+      "hitLimit": "Hit limit · resets {{time}}",
+      "continuesTip": "Continues automatically at {{time}}",
+      "hitTip": "{{agent}} hit its usage limit · resets {{time}}",
+      "continuesShort": "Continues {{time}}",
+      "hitShort": "Hit limit",
+      "stoppedCount": "{{count}} stopped"
     }
   },
   "plugins": {
@@ -29324,5 +29334,10 @@
     "statusOne": "CLI update",
     "statusCount": "{{count}} CLI updates",
     "statusTooltip": "Newer agent CLI versions are out"
+  },
+  "backgroundWorkerPaused": {
+    "title": "Some background work paused after crashing repeatedly",
+    "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
+    "retry": "Retry"
   }
 }

@@ -1,8 +1,8 @@
 import type { Worker } from 'node:worker_threads'
 import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
+import { sampleUtilityWorkerHeaps } from './utility-worker-heap-sampler'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { setWorkerLargeSendLog } from '../worker-threads/worker-send-ledger'
-import { sampleUtilityWorkerHeaps } from './utility-worker-heap-sampler'
 import {
   UTILITY_WORKER_RELAY_EXPIRED,
   UTILITY_WORKER_RELAY_HOLD_LIMIT_MS,
@@ -12,13 +12,21 @@ import {
   UTILITY_WORKER_MESSAGE_CHUNK_BYTES,
   type UtilityWorkerFailure,
   type UtilityWorkerHostEvent,
-  type UtilityWorkerHostRequest
+  type UtilityWorkerHostRequest,
+  type UtilityWorkerPort,
+  type UtilityWorkerPortEvent,
+  type UtilityWorkerPortRequest
 } from './utility-worker-host-protocol'
 
 installFatalSignalListenerGuard()
 
+type WorkerPort = UtilityWorkerPort<UtilityWorkerPortRequest>
+
 type UtilityParentPort = {
-  on(event: 'message', listener: (event: { data: UtilityWorkerHostRequest }) => void): unknown
+  on(
+    event: 'message',
+    listener: (event: { data: UtilityWorkerHostRequest; ports: WorkerPort[] }) => void
+  ): unknown
   postMessage(message: UtilityWorkerHostEvent): void
 }
 // Electron types it as always set, but only a utility process has one.
@@ -26,10 +34,13 @@ const parent: UtilityParentPort | undefined = process.parentPort
 if (!parent) {
   throw new Error('The worker host must run as an Electron utility process')
 }
-const port = parent
+
+const LOADED = 'orca-hosted-worker-loaded'
+const control = parent
 const workers = new Map<number, Worker>()
+const ports = new Map<number, WorkerPort>()
 const heaps = sampleUtilityWorkerHeaps(workers, (report) =>
-  port.postMessage({ type: 'heap', report })
+  control.postMessage({ type: 'heap', report })
 )
 
 function failure(error: unknown): UtilityWorkerFailure {
@@ -56,10 +67,15 @@ Object.defineProperty(parentPort, 'postMessage', {
     post(bytes, owned ? [bytes.buffer] : [])
   }
 })
-require(${JSON.stringify(filename)})`
+require(${JSON.stringify(filename)})
+post(${JSON.stringify(LOADED)})`
 }
 
 function relay(id: number, bytes: Uint8Array, seq?: number): void {
+  const port = ports.get(id)
+  if (!port) {
+    return
+  }
   for (let start = 0; start < bytes.byteLength; start += UTILITY_WORKER_MESSAGE_CHUNK_BYTES) {
     const end = Math.min(start + UTILITY_WORKER_MESSAGE_CHUNK_BYTES, bytes.byteLength)
     const view = bytes.subarray(start, end)
@@ -69,68 +85,93 @@ function relay(id: number, bytes: Uint8Array, seq?: number): void {
         ? view
         : new Uint8Array(view)
     const more = end < bytes.byteLength
-    port.postMessage({
-      type: 'message',
-      id,
-      bytes: chunk,
-      more,
-      ...(seq === undefined ? {} : { seq })
-    })
+    send(port, { type: 'message', bytes: chunk, more, ...(seq === undefined ? {} : { seq }) })
   }
 }
 
 const budget = new UtilityWorkerRelayBudget(relay, (id) => {
   const message = `worker reply waited ${UTILITY_WORKER_RELAY_HOLD_LIMIT_MS / 1000} s for main to consume earlier replies`
-  port.postMessage({ type: 'error', id, error: { name: UTILITY_WORKER_RELAY_EXPIRED, message } })
+  const port = ports.get(id)
+  if (port) {
+    send(port, { type: 'error', error: { name: UTILITY_WORKER_RELAY_EXPIRED, message } })
+  }
   void workers.get(id)?.terminate()
 })
 
-port.on('message', ({ data: request }) => {
-  if (request.type === 'spawn') {
-    const { id } = request
-    try {
-      if (request.largeSendLog) {
-        setWorkerLargeSendLog(request.largeSendLog)
-      }
-      const worker = spawnWorkerThread(hostedEntrySource(request.filename), {
-        eval: true,
-        name: request.name,
-        workerData: request.workerData,
-        execArgv: []
-      })
-      workers.set(id, worker)
-      heaps.workersChanged()
-      worker.on('message', (bytes: Uint8Array) => budget.offer(id, bytes))
-      worker.on('error', (error) =>
-        budget.after(id, () => port.postMessage({ type: 'error', id, error: failure(error) }))
-      )
-      worker.once('exit', (code) => {
-        workers.delete(id)
-        heaps.workersChanged()
-        budget.after(id, () => {
-          budget.forget(id)
-          port.postMessage({ type: 'exit', id, code })
-        })
-      })
-    } catch (error) {
-      port.postMessage({ type: 'error', id, error: failure(error) })
-      port.postMessage({ type: 'exit', id, code: 1 })
+function send(port: WorkerPort, event: UtilityWorkerPortEvent): void {
+  port.postMessage(event)
+}
+
+function host(
+  request: Extract<UtilityWorkerHostRequest, { type: 'spawn' }>,
+  port: WorkerPort
+): void {
+  let worker: ReturnType<typeof spawnWorkerThread>
+  try {
+    if (request.largeSendLog) {
+      setWorkerLargeSendLog(request.largeSendLog)
     }
+    worker = spawnWorkerThread(hostedEntrySource(request.filename), {
+      eval: true,
+      name: request.name,
+      workerData: request.workerData,
+      execArgv: []
+    })
+  } catch (error) {
+    send(port, { type: 'error', error: failure(error) })
+    send(port, { type: 'exit', code: 1 })
     return
   }
-  if (request.type === 'budget') {
-    budget.setLimit(request.bytes)
+  const { id } = request
+  ports.set(id, port)
+  // Everything but replies waits behind this worker's own held replies, never another worker's.
+  worker.on('message', (bytes: Uint8Array | typeof LOADED) =>
+    bytes === LOADED
+      ? budget.after(id, () => send(port, { type: 'loaded' }))
+      : budget.offer(id, bytes)
+  )
+  workers.set(id, worker)
+  heaps.workersChanged()
+  worker.on('error', (error) =>
+    budget.after(id, () => send(port, { type: 'error', error: failure(error) }))
+  )
+  // The consumer closes the port once it reads this, so the frame is never cut off.
+  worker.once('exit', (code) => {
+    workers.delete(id)
+    heaps.workersChanged()
+    budget.after(id, () => {
+      budget.forget(id)
+      ports.delete(id)
+      send(port, { type: 'exit', code })
+    })
+  })
+  port.on('message', ({ data }) => {
+    if (data.type === 'post') {
+      worker.postMessage(data.message)
+    } else {
+      void worker.terminate()
+    }
+  })
+  // The consumer is gone (main retired it or itself died); nothing can read this worker's replies.
+  port.on('close', () => {
+    budget.release(id)
+    void worker.terminate()
+  })
+  port.start()
+}
+
+parent.on('message', ({ data, ports: transferred }) => {
+  if (data.type === 'budget') {
+    budget.setLimit(data.bytes)
     return
   }
-  if (request.type === 'ack') {
-    budget.ack(request.seq)
+  if (data.type === 'ack') {
+    budget.ack(data.seq)
     return
   }
-  const worker = workers.get(request.id)
-  if (request.type === 'post') {
-    worker?.postMessage(request.message)
-  } else {
-    void worker?.terminate()
+  const port = transferred[0]
+  if (port) {
+    host(data, port)
   }
 })
-port.postMessage({ type: 'ready' })
+parent.postMessage({ type: 'ready' })

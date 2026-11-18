@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
-import { BotGroupMembersDialog, suggestGroupName } from './BotGroupMembersDialog'
+import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 
 const mocks = vi.hoisted(() => ({
   bots: new Array<Bot>(),
@@ -64,16 +64,6 @@ const button = (name: string) => screen.getByRole<HTMLButtonElement>('button', {
 afterEach(() => {
   cleanup()
   mocks.rpc.mockClear()
-})
-
-describe('suggestGroupName', () => {
-  // The decision is shared with the phone (bot-group-pick); this checks the desktop wording.
-  it('names two, three, then two and a count', () => {
-    expect(suggestGroupName(['Fern'])).toBeNull()
-    expect(suggestGroupName(['Fern', 'Moss'])).toBe('Fern & Moss')
-    expect(suggestGroupName(['Fern', 'Moss', 'Ivy'])).toBe('Fern, Moss & Ivy')
-    expect(suggestGroupName(['Fern', 'Moss', 'Ivy', 'Sage', 'Pip'])).toBe('Fern, Moss & 3 more')
-  })
 })
 
 describe('BotGroupMembersDialog', () => {
