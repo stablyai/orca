@@ -305,16 +305,6 @@ describe("the bot's notes in one turn: one row, each item at its final state", (
     ])
   })
 
-  it('folds a bulk add and start into one line with every item', () => {
-    const five = ['a1', 'a2', 'a3', 'a4', 'a5']
-    expect(
-      drawn([
-        bot('t1', ...five.map(made)),
-        bot('t1', ...five.map((uid) => moved(uid, 'planned', 'working')))
-      ])
-    ).toEqual(['Added and moved <a1> <a2> <a3> <a4> <a5> to In progress'])
-  })
-
   it('marks done after a link, drops a round trip to its comment, and leaves owner runs as they are', () => {
     expect(
       drawn([

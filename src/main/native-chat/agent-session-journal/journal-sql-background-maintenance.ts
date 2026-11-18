@@ -28,7 +28,7 @@ export class JournalSqlBackgroundMaintenance {
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
     private readonly readers: Pick<JournalSqlReaderPool, 'database'>,
-    private readonly conversions: Pick<JournalSqlConversions, 'ensure'>,
+    private readonly conversions: Pick<JournalSqlConversions, 'ensure' | 'compareLegacyChats'>,
     private readonly activity: JournalSqlActivity,
     private readonly onError: (error: unknown, sessionId?: string) => void,
     private readonly onTick?: () => void
@@ -114,6 +114,7 @@ export class JournalSqlBackgroundMaintenance {
       if (this.discover) {
         this.discover = false
         try {
+          await this.conversions.compareLegacyChats(() => this.boundary())
           await this.convertSavedChats()
         } catch (error) {
           this.report(error)

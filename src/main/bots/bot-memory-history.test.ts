@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { HELD_BOT_RULES } from './bot-turn-rules.test-fixture'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { addBotMemoryFact, botMemoryChange } from '../../shared/bot-memory-lines'
 import { createBotMemoryHistory } from './bot-memory-history'
@@ -32,11 +32,23 @@ function bot(memory: string, start = Date.UTC(2026, 10, 6)) {
   }
   const stored = new Map<string, string>()
   let now = start
+  // A deliberately slow disk, so every history read and write lands a few turns later.
+  const slow = async (): Promise<void> => {
+    for (let turn = 0; turn < 5; turn++) {
+      await Promise.resolve()
+    }
+  }
   const io = {
-    read: (botId: string) => stored.get(botId) ?? null,
-    write: (botId: string, text: string | null) =>
-      void (text === null ? stored.delete(botId) : stored.set(botId, text)),
-    bots: () => [...stored.keys()]
+    read: async (botId: string) => {
+      const text = stored.get(botId) ?? null
+      await slow()
+      return text
+    },
+    write: async (botId: string, text: string | null) => {
+      await slow()
+      void (text === null ? stored.delete(botId) : stored.set(botId, text))
+    },
+    bots: async () => [...stored.keys()]
   }
   const history = createBotMemoryHistory(io, () => now)
   const record = createBotMemoryRecord(fs, history)
@@ -47,8 +59,11 @@ function bot(memory: string, start = Date.UTC(2026, 10, 6)) {
     read: () => files.get(MEMORY) ?? '',
     write: (text: string) => files.set(MEMORY, text),
     remove: () => files.delete(MEMORY),
-    /** The history file as stored. */
-    stored: (botId = 'bot-1') => stored.get(botId),
+    /** The history file as stored, once queued writes land. */
+    stored: async (botId = 'bot-1') => {
+      await history.settled()
+      return stored.get(botId)
+    },
     history,
     /** The same history as a restarted host opens it. */
     reopened: () => createBotMemoryHistory(io, () => now),
@@ -94,7 +109,7 @@ describe("a bot's memory history", () => {
     write('# Memory\n- 2026-11-06 releases go out Tuesdays\n')
     await turnEnded()
 
-    const [kept, added] = rows()
+    const [kept, added] = await rows()
     expect(kept.by).toEqual({ kind: 'kept', sessionId: 'chat' })
     expect(kept.change.added.map(({ line }) => line)).toEqual(['- 2026-11-01 owner fact'])
     expect(added.by).toEqual({ kind: 'chat', sessionId: 'chat', source: null })
@@ -106,7 +121,7 @@ describe("a bot's memory history", () => {
     expect(read()).toBe(OLD)
     await turnEnded()
     expect(read()).toBe(OLD)
-    expect(rows()[0].by).toEqual({ kind: 'undo', of: added.id })
+    expect((await rows())[0].by).toEqual({ kind: 'undo', of: added.id })
   })
 
   it("undoes the owner's rewording, putting the old words back where they were", async () => {
@@ -114,11 +129,11 @@ describe("a bot's memory history", () => {
     await record.change('bot-1', FOLDER, { kind: 'owner' }, (file) =>
       botMemoryChange(file, file.replace('deploys at noon', 'deploys at 1pm'))
     )
-    expect(rows()[0].change.removed.map(({ line }) => line)).toEqual([
+    expect((await rows())[0].change.removed.map(({ line }) => line)).toEqual([
       '- 2026-11-02 deploys at noon'
     ])
 
-    expect(await undo(rows()[0].id)).toBe(true)
+    expect(await undo((await rows())[0].id)).toBe(true)
     expect(read()).toBe(`${OLD}- 2026-11-02 deploys at noon\n`)
   })
 
@@ -130,7 +145,7 @@ describe("a bot's memory history", () => {
         addBotMemoryFact(file, 'deploy key ghp_abcdefghijklmnopqrstuvwxyz0123', '2026-11-06')
       )
     )
-    const [row] = rows()
+    const [row] = await rows()
     expect(row.undoable).toBe(false)
     expect(JSON.stringify(row)).not.toContain('ghp_')
     await expect(undo(row.id)).rejects.toThrow('can’t be undone')
@@ -140,22 +155,22 @@ describe("a bot's memory history", () => {
     const { later, record, rows } = bot(OLD)
     await record.forget('bot-1', FOLDER, 'owner fact', { kind: 'owner' })
     later(90 * DAY)
-    expect(rows()).toHaveLength(1)
+    expect(await rows()).toHaveLength(1)
     later(1)
-    expect(rows()).toEqual([])
+    expect(await rows()).toEqual([])
   })
 
   it('leaves an edit alone once its new words were changed again or forgotten', async () => {
     const reworded = bot('# Memory\n- releases on Monday\n')
     await reworded.reword('Monday', 'Tuesday')
     await reworded.reword('Tuesday', 'Wednesday')
-    expect(await reworded.undo(reworded.rows()[1].id)).toBe(false)
+    expect(await reworded.undo((await reworded.rows())[1].id)).toBe(false)
     expect(reworded.read()).toBe('# Memory\n- releases on Wednesday\n')
 
     const forgotten = bot('# Memory\n- releases on Monday\n')
     await forgotten.reword('Monday', 'Tuesday')
     await forgotten.forget('releases on Tuesday')
-    expect(await forgotten.undo(forgotten.rows()[1].id)).toBe(false)
+    expect(await forgotten.undo((await forgotten.rows())[1].id)).toBe(false)
     expect(forgotten.read()).toBe('# Memory\n')
   })
 
@@ -167,8 +182,8 @@ describe("a bot's memory history", () => {
     write(`${OLD}- 2026-11-06 deploys run nightly\n`)
     await turnEnded('Automation deploy ghp_abcdefghijklmnopqrstuvwxyz0123')
 
-    expect(stored()).not.toMatch(/hunter2|ghp_/)
-    expect(rows()[1].undoable).toBe(false)
+    expect(await stored()).not.toMatch(/hunter2|ghp_/)
+    expect((await rows())[1].undoable).toBe(false)
   })
 
   it('records a Forget of a fact a chat had just written over, and can undo it', async () => {
@@ -178,21 +193,198 @@ describe("a bot's memory history", () => {
     await turnEnded()
     expect(read()).toBe('# Memory\n')
 
-    expect(rows()[0].change.removed.map(({ line }) => line)).toEqual(['- 2026-11-01 owner fact'])
-    expect(await undo(rows()[0].id)).toBe(true)
+    expect((await rows())[0].change.removed.map(({ line }) => line)).toEqual([
+      '- 2026-11-01 owner fact'
+    ])
+    expect(await undo((await rows())[0].id)).toBe(true)
     expect(read()).toBe(OLD)
   })
 
   it("deletes rows past 90 days from disk, and every bot's on a host's first use", async () => {
     const { forget, history, later, reopened, stored } = bot(OLD)
     await forget('owner fact')
-    history.append('bot-2', { kind: 'owner' }, botMemoryChange('', '- another fact\n'))
+    await history.append('bot-2', { kind: 'owner' }, botMemoryChange('', '- another fact\n'))
     later(91 * DAY)
 
-    expect(history.list('bot-1')).toEqual([])
-    expect(stored('bot-1')).toBeUndefined()
-    reopened().list('bot-3')
-    expect(stored('bot-2')).toBeUndefined()
+    expect(await history.list('bot-1')).toEqual([])
+    expect(await stored('bot-1')).toBeUndefined()
+    const restarted = reopened()
+    await restarted.list('bot-3')
+    await restarted.settled()
+    expect(await stored('bot-2')).toBeUndefined()
+  })
+
+  it('keeps two edits made at once, in order, through a restart', async () => {
+    const { history, reopened } = bot(OLD)
+    const first = history.append('bot-1', { kind: 'owner' }, botMemoryChange('', '- first\n'))
+    const second = history.append('bot-1', { kind: 'owner' }, botMemoryChange('', '- second\n'))
+    await Promise.all([first, second])
+
+    const rows = await reopened().list('bot-1')
+    expect(rows.map((row) => row.change.added.map(({ line }) => line))).toEqual([
+      ['- second'],
+      ['- first']
+    ])
+  })
+
+  it.each([20, 200])(
+    'writes %i edits made behind a stalled disk in one batch, newest first',
+    async (edits) => {
+      const stored = new Map<string, string>()
+      let release = (): void => {}
+      const stalled = new Promise<void>((resolve) => (release = resolve))
+      let writes = 0
+      const io = {
+        read: async (botId: string) => stored.get(botId) ?? null,
+        write: async (botId: string, text: string | null) => {
+          writes += 1
+          await stalled
+          void (text === null ? stored.delete(botId) : stored.set(botId, text))
+        },
+        bots: async () => [...stored.keys()]
+      }
+      const history = createBotMemoryHistory(io)
+      const edit = (index: number) =>
+        history.append('bot-1', { kind: 'owner' }, botMemoryChange('', `- fact ${index}\n`))
+      const first = edit(0)
+      await vi.waitFor(() => expect(writes).toBe(1))
+      const appended = [first, ...Array.from({ length: edits - 1 }, (_, index) => edit(index + 1))]
+      release()
+      await Promise.all(appended)
+
+      expect(writes).toBe(2)
+      const rows = await createBotMemoryHistory(io).list('bot-1')
+      expect(rows.map((row) => row.change.added[0]?.line)).toEqual(
+        Array.from({ length: edits }, (_, index) => `- fact ${edits - 1 - index}`)
+      )
+    }
+  )
+
+  it.each([10, 100])(
+    'keeps one write and one read waiting behind a stalled disk over %i edits and reads',
+    async (rounds) => {
+      const stored = new Map<string, string>()
+      let release = (): void => {}
+      const stalled = new Promise<void>((resolve) => (release = resolve))
+      let writes = 0
+      let reads = 0
+      const io = {
+        read: async (botId: string) => {
+          reads += 1
+          return stored.get(botId) ?? null
+        },
+        write: async (botId: string, text: string | null) => {
+          writes += 1
+          await stalled
+          void (text === null ? stored.delete(botId) : stored.set(botId, text))
+        },
+        bots: async () => []
+      }
+      const history = createBotMemoryHistory(io)
+      const edit = (index: number) =>
+        history.append('bot-1', { kind: 'owner' }, botMemoryChange('', `- fact ${index}\n`))
+      const first = edit(0)
+      await vi.waitFor(() => expect(writes).toBe(1))
+      const work: Promise<unknown>[] = [first]
+      const lists: Promise<{ change: { added: { line: string }[] } }[]>[] = []
+      for (let index = 1; index <= rounds; index++) {
+        work.push(edit(index))
+        lists.push(history.list('bot-1'))
+      }
+      release()
+      await Promise.all([...work, ...lists])
+
+      expect({ writes, reads }).toEqual({ writes: 2, reads: 3 })
+      const newestFirst = Array.from(
+        { length: rounds + 1 },
+        (_, index) => `- fact ${rounds - index}`
+      )
+      expect((await lists.at(-1))?.map((row) => row.change.added[0]?.line)).toEqual(newestFirst)
+      const restarted = await createBotMemoryHistory(io).list('bot-1')
+      expect(restarted.map((row) => row.change.added[0]?.line)).toEqual(newestFirst)
+    }
+  )
+
+  it('keeps an edit made right after a bot is removed, and shows nothing of it to a read after', async () => {
+    const stored = new Map<string, string>()
+    let release = (): void => {}
+    const stalled = new Promise<void>((resolve) => (release = resolve))
+    let writes = 0
+    const io = {
+      read: async (botId: string) => stored.get(botId) ?? null,
+      write: async (botId: string, text: string | null) => {
+        writes += 1
+        await stalled
+        void (text === null ? stored.delete(botId) : stored.set(botId, text))
+      },
+      bots: async () => []
+    }
+    const history = createBotMemoryHistory(io)
+    const edit = (fact: string) =>
+      history.append('bot-1', { kind: 'owner' }, botMemoryChange('', `- ${fact}\n`))
+    const first = edit('before')
+    await vi.waitFor(() => expect(writes).toBe(1))
+    const queued = [edit('queued'), history.removed('bot-1')]
+    const after = edit('after')
+    const read = history.list('bot-1')
+    release()
+    await Promise.all([first, ...queued, after])
+
+    expect((await read).map((row) => row.change.added[0]?.line)).toEqual(['- after'])
+  })
+
+  it('says a row was undone from memory once the bot was read, whatever the disk is doing', async () => {
+    const stored = new Map<string, string>()
+    let stall = false
+    const never = new Promise<never>(() => {})
+    const io = {
+      read: async (botId: string) => (stall ? await never : (stored.get(botId) ?? null)),
+      write: async (botId: string, text: string | null) =>
+        void (text === null ? stored.delete(botId) : stored.set(botId, text)),
+      bots: async () => []
+    }
+    const history = createBotMemoryHistory(io)
+    await history.append('bot-1', { kind: 'owner' }, botMemoryChange('', '- tidied\n'))
+    expect(history.undoneKnown('bot-1', 'any')).toBeUndefined()
+    const [tidied] = await history.list('bot-1')
+    stall = true
+    void history.append('bot-1', { kind: 'undo', of: tidied.id }, botMemoryChange('- tidied\n', ''))
+
+    expect(history.undoneKnown('bot-1', tidied.id)).toBe(true)
+    expect(history.undoneKnown('bot-1', 'another-row')).toBe(false)
+  })
+
+  it('tells only the latest of everyone asking while its disk is stalled', async () => {
+    let release = (): void => {}
+    const stalled = new Promise<void>((resolve) => (release = resolve))
+    const io = {
+      read: async () => {
+        await stalled
+        return null
+      },
+      write: async () => {},
+      bots: async () => []
+    }
+    const history = createBotMemoryHistory(io)
+    const told: number[] = []
+    for (let ask = 0; ask < 100; ask++) {
+      history.whenUndoneKnown('bot-1', () => told.push(ask))
+    }
+    release()
+    await vi.waitFor(() => expect(told).toEqual([99]))
+
+    expect(history.undoneKnown('bot-1', 'any')).toBe(false)
+  })
+
+  it('forgets what was undone when the bot is removed', async () => {
+    const { history, forget } = bot(OLD)
+    await forget('owner fact')
+    const [forgot] = await history.list('bot-1')
+    await history.append('bot-1', { kind: 'undo', of: forgot.id }, botMemoryChange('', '- x\n'))
+    expect(history.undoneKnown('bot-1', forgot.id)).toBe(true)
+
+    await history.removed('bot-1')
+    expect(history.undoneKnown('bot-1', forgot.id)).toBeUndefined()
   })
 
   it('creates MEMORY.md for a change when the file is missing', async () => {
@@ -202,13 +394,15 @@ describe("a bot's memory history", () => {
       botMemoryChange(file, addBotMemoryFact(file, 'a new fact', '2026-11-06'))
     )
     expect(read()).toBe('- 2026-11-06 a new fact\n')
-    expect(rows()[0].change.added.map(({ line }) => line)).toEqual(['- 2026-11-06 a new fact'])
+    expect((await rows())[0].change.added.map(({ line }) => line)).toEqual([
+      '- 2026-11-06 a new fact'
+    ])
   })
 
   it('counts changes queued ahead of an Undo as later ones', async () => {
     const { forget, read, record, rows, undo } = bot(OLD)
     await forget('owner fact')
-    const first = rows()[0].id
+    const first = (await rows())[0].id
     const adding = record.change('bot-1', FOLDER, { kind: 'owner' }, (file) =>
       botMemoryChange(file, addBotMemoryFact(file, 'owner fact', '2026-11-06'))
     )

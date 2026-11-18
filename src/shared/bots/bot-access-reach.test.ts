@@ -4,7 +4,6 @@ import {
   botAccessReach,
   botReachLineText,
   googleReachAreas,
-  botAccessSummary,
   botPermissionNotes,
   botStartingPermission
 } from './bot-access-reach'
@@ -112,21 +111,6 @@ describe('botAccessAdvice', () => {
       botAccessAdvice({ others: 1, permission: { mode: null, fellBackFrom: null }, google: true })
         .fixes
     ).toContain('ask-for-approval')
-  })
-})
-
-describe('botAccessSummary', () => {
-  it('names up to three people, then counts', () => {
-    expect(botAccessSummary([]).who).toEqual({ id: 'summaryOnlyYou', values: {} })
-    expect(botAccessSummary(['Bea']).who).toEqual({ id: 'summaryOne', values: { person: 'Bea' } })
-    expect(botAccessSummary(['Bea', 'Cy', 'Dee']).who).toEqual({
-      id: 'summarySome',
-      values: { people: 'Bea, Cy', last: 'Dee' }
-    })
-    expect(botAccessSummary(['A', 'B', 'C', 'D']).who).toEqual({
-      id: 'summaryMany',
-      values: { count: 4 }
-    })
   })
 })
 

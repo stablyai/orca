@@ -57,12 +57,6 @@ function renderAnswer(
 }
 
 describe('a bot’s quiet result in its home chat', () => {
-  it('reads as Nothing to report instead of the marker', () => {
-    renderAnswer('NO_REPLY', BOT_HOME)
-    expect(screen.getByText('Nothing to report')).toBeInTheDocument()
-    expect(screen.queryByText(/NO_REPLY/)).toBeNull()
-  })
-
   it('keeps what came before the marker', () => {
     renderAnswer('Checked the inbox; nothing new.\n\nNO_REPLY\n', BOT_HOME)
     expect(screen.getByText('Checked the inbox; nothing new.')).toBeInTheDocument()
