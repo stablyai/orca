@@ -234,6 +234,8 @@ export function listSettledWorkerTerminalsStillOwned(
           AND res.ownership_state = 'owned' AND res.release_state = 'not_requested'
           AND res.process_incarnation IS NOT NULL AND res.updated_at < ?
           AND res.terminal_handle NOT LIKE 'structworker\\_%' ESCAPE '\\'
+          -- Only minted ptyId:<uuid> identities can be judged; legacy fences never leave this list.
+          AND res.process_incarnation LIKE '%:________-____-____-____-____________'
         ORDER BY res.rowid LIMIT ?`
     )
     .all(afterRowid, updatedBefore, limit) as (WorkerTerminalResourceRow & { row_id: number })[]

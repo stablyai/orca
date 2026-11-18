@@ -7,7 +7,8 @@ import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestratio
 import type { OrchestrationDb } from '../../db/orchestration-db'
 
 const PAGE_ROWS = 50
-const CLOCK_STEP_MS = 1_000
+// The two clocks drift apart by milliseconds over a sweep; more than this is a step.
+const CLOCK_STEP_MS = 50
 
 const activeSweeps = new WeakMap<WorkerTerminalReleaseRuntime, Promise<void>>()
 
