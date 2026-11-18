@@ -157,6 +157,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
       processIncarnation: 'runtime:pty:1',
       worktreeId: 'repo::worktree',
       setupState: 'not_applicable',
+      terminalOwnership: 'created',
       effects: []
     })
     d.markWorkerDispatchReady(started.dispatch.id)
