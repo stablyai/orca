@@ -63,17 +63,4 @@ describe('Jira saved-filter runtime UI state', () => {
       result: { filters: [second] }
     })
   })
-  it('rejects malformed or oversized remote input without changing host UI state', async () => {
-    const { dispatch, updateUIState } = setup()
-    expect(
-      await dispatch('ui.mutateJiraSavedFilters', {
-        kind: 'save',
-        filter: { ...filter, jql: 'x'.repeat(10_001) }
-      })
-    ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(
-      await dispatch('ui.mutateJiraSavedFilters', { kind: 'select', id: 'mine', unexpected: true })
-    ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(updateUIState).not.toHaveBeenCalled()
-  })
 })

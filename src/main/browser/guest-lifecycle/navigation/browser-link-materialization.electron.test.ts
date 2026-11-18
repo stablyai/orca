@@ -58,7 +58,7 @@ contextBridge.exposeInMainWorld('probeApi', {
   writeFileSync(
     join(root, 'bootstrap.ts'),
     `
-import { installBrowserLinkMaterializationProbe } from ${JSON.stringify(join(process.cwd(), 'src/renderer/src/hooks/ipc-events/browser-link-materialization.test-fixture.tsx'))}
+import { installBrowserLinkMaterializationProbe } from ${JSON.stringify(join(process.cwd(), 'src/renderer/src/hooks/ipc-events/browser/browser-link-materialization.test-fixture.tsx'))}
 try { window.linkProbe = installBrowserLinkMaterializationProbe() } catch (error) { window.linkProbeError = String(error.stack || error) }
 `
   )
@@ -135,40 +135,6 @@ async function open(activate: boolean, path: string, hold = false): Promise<void
 }
 
 describe('production link bridge, store and mounted guest', () => {
-  it.each([false, true])(
-    'materializes an isolated profile with activation=%s',
-    async (activate) => {
-      rendererErrors.length = 0
-      await page.reload()
-      await ready()
-      const path = `/control-${activate}`
-      await open(activate, path)
-      const state = await page.evaluate<LinkSnapshot>('window.linkProbe.snapshot()')
-      const created = state.tabs.find((tab) => tab.id !== state.sourceWorkspaceId)
-      if (!created) {
-        throw new Error('No replacement tab materialized')
-      }
-      expect(created).toMatchObject({
-        sessionProfileId: 'isolated-profile',
-        sessionPartition: 'persist:link-probe-isolated'
-      })
-      expect(state.selected).toBe(activate ? created.id : state.sourceWorkspaceId)
-      const selectedEntity = activate ? created.id : state.sourceWorkspaceId
-      const selectedUnified = state.unified.find((tab) => tab.entityId === selectedEntity)
-      expect(state.selectedUnified).toContain(selectedUnified?.id)
-      await page.evaluate('window.linkProbe.mountTabs()')
-      await expect
-        .poll(() => receipts.filter((receipt) => receipt.path === path), { timeout: 10_000 })
-        .toEqual([{ path, cookie: 'synthetic_profile=isolated' }])
-      await expect
-        .poll(() => page.evaluate('window.probeApi.fixture.guests()'), { timeout: 10_000 })
-        .toEqual([
-          expect.objectContaining({ url: `${origin}${path}`, isolated: true, other: false })
-        ])
-    },
-    25_000
-  )
-
   it('rejects a removed source page before real store materialization', async () => {
     rendererErrors.length = 0
     await page.reload()

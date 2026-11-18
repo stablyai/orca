@@ -37,7 +37,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
-import { trackWorktreeCardStyleChanged } from '../../worktree-card-style-telemetry'
+import { trackWorktreeCardStyleChanged } from '../../workspace-card/template/worktree-card-style-telemetry'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean

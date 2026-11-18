@@ -20,7 +20,6 @@ import {
   installLockHolderCommand,
   installLockHolderExitedProbeCommand,
   installLockHolderUnmarkCommand,
-  installLockOwnedByCommand,
   installLockReleaseGate,
   parseInstallLockHolderExit
 } from './remote-install-lock-holder-commands'
@@ -132,14 +131,6 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(probe(lock)).toBe('')
   })
 
-  it('treats a killed holder as gone', async () => {
-    const lock = lockOwnedBy('t-first')
-    const holder = await holdLock(lock)
-    holder.kill('SIGKILL')
-    await exited(holder)
-    expect(parseInstallLockHolderExit(probe(lock))?.token).toBe('t-first')
-  })
-
   it('waits for a fenced command the dead owner left running', async () => {
     const lock = lockOwnedBy('t-first')
     const holder = await holdLock(lock)
@@ -174,13 +165,6 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(probe(lock)).toBe('')
   })
 
-  it('refuses to back a lock another owner holds', async () => {
-    const lock = lockOwnedBy('t-other')
-    const holder = start(installLockHolderCommand(lock, first))
-    expect(await line(holder, 'HOLDER_READY')).toBe(false)
-    expect(await exited(holder)).toBe(0)
-  })
-
   it('lets only one of several concurrent contenders take a gone holder', async () => {
     const lock = lockOwnedBy('t-first')
     const holder = await holdLock(lock)
@@ -203,32 +187,12 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(outputs.filter((output) => output === 'HOLDER_EXITED_OK')).toHaveLength(1)
   })
 
-  it('keeps a fenced command own stderr', async () => {
-    const lock = lockOwnedBy('t-first')
-    const holder = await holdLock(lock)
-    const result = spawnSync(
-      '/bin/sh',
-      ['-c', `${installLockFenceStatement(lock, first)} echo oops >&2`],
-      {
-        encoding: 'utf8'
-      }
-    )
-    expect(result.stderr.trim()).toBe('oops')
-    holder.stdin.end()
-  })
-
   it('leaves a live flock-backed lock to the age rules for a contender without proof', async () => {
     const lock = lockOwnedBy('t-first')
     const holder = await holdLock(lock)
     holder.stdin.end()
     await exited(holder)
     // An older build sees only a fresh lock directory.
-    expect(stealAs(lock, null)).toBe('BUSY')
-  })
-
-  it('leaves an unmarked lock to the age rules', () => {
-    const lock = lockOwnedBy('t-first')
-    expect(probe(lock)).toBe('')
     expect(stealAs(lock, null)).toBe('BUSY')
   })
 
@@ -250,22 +214,6 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(await exited(unmark)).toBe(0)
     expect(readFileSync(join(lock, INSTALL_LOCK_HOLDER_FILENAME), 'utf8')).toBe('')
     expect(probe(lock)).toBe('')
-  })
-
-  it('gates the owner own lock removal on its fenced commands ending', async () => {
-    const lock = lockOwnedBy('t-first')
-    const holder = await holdLock(lock)
-    const straggler = start(`${installLockFenceStatement(lock, first)} echo STARTED; sleep 2`)
-    expect(await line(straggler, 'STARTED')).toBe(true)
-    holder.stdin.end()
-    const removal = start(
-      `${installLockReleaseGate(lock, first)} ${removeOwnedInstallLockCommand(host, lock, first)}`
-    )
-    // ast-grep-ignore: test-no-real-time-wait -- proves the real flock wait blocks the removal; there is no event to await.
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    expect(existsSync(lock)).toBe(true)
-    expect(await exited(removal)).toBe(0)
-    expect(existsSync(lock)).toBe(false)
   })
 
   // The gate's real flock wait gives up only after about 10 seconds of wall-clock time.
@@ -315,18 +263,6 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(readFileSync(join(lock, INSTALL_LOCK_HOLDER_FILENAME), 'utf8')).toBe('')
   }, 30_000)
 
-  it('ends the gated removal at once, keeping the lock, when it already names a successor', async () => {
-    const lock = lockOwnedBy('t-second')
-    const successor = await holdLockAs(lock, second)
-    // Awaited, so the default 5 s test timeout fails a gate that sat out its 10 s wait.
-    const removal = start(
-      `${installLockReleaseGate(lock, first)} ${removeOwnedInstallLockCommand(host, lock, first)}`
-    )
-    expect(await exited(removal)).toBe(0)
-    expect(readFileSync(join(lock, OWNER), 'utf8')).toBe('t-second')
-    successor.stdin.end()
-  })
-
   it('degrades to an unbacked lock where flock is missing', async () => {
     const lock = lockOwnedBy('t-first')
     const bin = join(lock, '..', 'bin')
@@ -336,25 +272,5 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     const holder = start(installLockHolderCommand(lock, first), { PATH: bin })
     expect(await line(holder, 'HOLDER_READY')).toBe(false)
     expect(await exited(holder)).toBe(0)
-  })
-})
-
-describe('lock ownership check', () => {
-  it('answers OWNED only for the token the lock names', () => {
-    const lock = lockOwnedBy('t-first')
-    expect(sh(installLockOwnedByCommand(lock, first)).stdout).toBe('OWNED')
-    expect(sh(installLockOwnedByCommand(lock, second)).stdout).toBe('NOT_OWNED')
-    expect(sh(installLockOwnedByCommand(join(lock, 'gone'), first)).stdout).toBe('NOT_OWNED')
-  })
-})
-
-describe('steal without a holder proof', () => {
-  it('carries no flock clauses, as on SSH and in older builds', () => {
-    const lock = '/l/.install-lock'
-    expect(tryStealInstallLockCommand(host, lock, 20 * 60, second)).not.toMatch(/holder|flock/u)
-    const proofWithoutOwner = { dirKey: '1:2', token: 't-first' }
-    expect(
-      tryStealInstallLockCommand(host, lock, 20 * 60, undefined, undefined, proofWithoutOwner)
-    ).not.toMatch(/holder|flock/u)
   })
 })

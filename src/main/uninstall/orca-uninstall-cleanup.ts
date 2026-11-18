@@ -32,7 +32,7 @@ import {
 } from './orca-uninstall-background-processes'
 import { orcaUninstallErrorText as errorText } from './orca-uninstall-error-text'
 
-/** What the desktop app and `orca uninstall` each supply; the cleanup itself is shared. */
+/** What the desktop app supplies to the cleanup. */
 export type OrcaUninstallHost = {
   platform: NodeJS.Platform
   homeDir: string
@@ -52,7 +52,6 @@ export type OrcaUninstallHost = {
   stopTerminalDaemon: () => Promise<void>
 }
 
-export const ORCA_UNINSTALL_MANUAL_COMMAND = 'orca uninstall'
 const PLUGIN_AGENTS: ReadonlySet<string> = new Set(['opencode', 'pi', 'omp', 'prime-agent'])
 
 function isOrcaOwnedCli(status: CliInstallStatus | null): status is CliInstallStatus {
@@ -243,24 +242,19 @@ async function runSshHosts(
       results.push(entry)
       continue
     }
-    if (!entry.connected) {
-      results.push({
-        ...entry,
-        state: 'needs-user',
-        detail: 'Not connected.',
-        manualCommand: ORCA_UNINSTALL_MANUAL_COMMAND
-      })
+    // A Retry targets the host, so try it even if it was offline when the plan was built.
+    if (!entry.connected && only === null) {
+      results.push({ ...entry, state: 'needs-user', detail: 'Not connected.' })
       continue
     }
     try {
       await host.removeHostHooks(entry.hostId)
-      results.push({ ...entry, state: 'removed', detail: null, manualCommand: null })
+      results.push({ ...entry, connected: true, state: 'removed', detail: null })
     } catch (error) {
       results.push({
         ...entry,
-        state: 'error',
-        detail: errorText(error),
-        manualCommand: ORCA_UNINSTALL_MANUAL_COMMAND
+        state: entry.connected ? 'error' : 'needs-user',
+        detail: errorText(error)
       })
     }
   }

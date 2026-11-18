@@ -67,7 +67,13 @@ vi.mock('../../repositories/github-api-repository-remote-probe', async (importOr
 )
 
 import { getPRForBranch } from './get-pr-for-branch'
+import { getPRForBranchOutcome } from './pr-for-branch-outcome'
+import {
+  candidateReadRequest,
+  refreshKey
+} from '../../pull-requests/refresh/pr-refresh-candidate-policy'
 import { resetPRForBranchMocks } from '../client-test-harness'
+import { isGitHubHostAuthenticated } from '../../repositories/github-enterprise-repository'
 
 const {
   ghExecFileAsyncMock,
@@ -79,6 +85,88 @@ const {
 describe('getPRForBranch', () => {
   beforeEach(() => {
     resetPRForBranchMocks(clientMocks)
+    vi.mocked(isGitHubHostAuthenticated).mockResolvedValue(true)
+  })
+
+  it.each([
+    ['https://github.com/upstream-owner/widgets/pull/588', 'upstream-owner'],
+    ['https://www.github.com/upstream-owner/widgets/pull/588', 'upstream-owner'],
+    // An unverifiable host keeps git-remote discovery rather than failing the read.
+    ['https://ghe.example.com/upstream-owner/widgets/pull/588', 'fork-owner'],
+    // A link naming another number, or no saved link, keeps git-remote discovery.
+    ['https://github.com/upstream-owner/widgets/pull/589', 'fork-owner'],
+    [undefined, 'fork-owner']
+  ])('reads saved PR link %s from a fork checkout in %s', async (linkedPRUrl, readOwner) => {
+    vi.mocked(isGitHubHostAuthenticated).mockResolvedValue(false)
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [{ owner: 'fork-owner', repo: 'widgets', host: 'github.com' }],
+      headRepo: { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
+    })
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const owner = args.find((arg) => arg.startsWith('owner='))?.slice('owner='.length)
+      if (!args.includes('graphql') || !owner) {
+        throw new Error('GraphQL: Could not resolve to a PullRequest with the number of 588.')
+      }
+      return {
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                number: 588,
+                title: 'Contribution',
+                state: 'OPEN',
+                url: `https://github.com/${owner}/widgets/pull/588`,
+                updatedAt: '2026-11-17T00:00:00Z',
+                isDraft: false,
+                mergeable: 'MERGEABLE',
+                reviewDecision: null,
+                mergeStateStatus: 'CLEAN',
+                autoMergeRequest: null,
+                baseRefName: 'main',
+                headRefName: 'feature/contribution',
+                baseRefOid: 'base-oid',
+                headRefOid: 'head-oid',
+                headRepositoryOwner: { login: 'fork-owner' },
+                headRepository: { name: 'widgets' },
+                commits: { nodes: [] }
+              }
+            }
+          }
+        })
+      }
+    })
+
+    const outcome = await getPRForBranchOutcome(
+      ...candidateReadRequest(
+        {
+          repoId: 'widgets',
+          repoKind: 'git',
+          repoPath: '/fork-checkout',
+          cacheKey: 'widgets::feature/contribution',
+          branch: 'feature/contribution',
+          currentHeadOid: 'head-oid',
+          linkedPRNumber: 588,
+          ...(linkedPRUrl ? { linkedPRUrl } : {})
+        },
+        'manual',
+        { userRefresh: true }
+      )
+    )
+
+    expect(outcome).toMatchObject({
+      kind: 'found',
+      pr: { number: 588, prRepo: { owner: readOwner, repo: 'widgets', host: 'github.com' } }
+    })
+  })
+
+  it('keeps separate read keys for the same PR number in a fork and its parent', () => {
+    const request = { repoPath: '/fork-checkout', branch: 'feature', linkedPRNumber: 588 }
+
+    expect(
+      refreshKey({ ...request, linkedPRUrl: 'https://github.com/upstream-owner/widgets/pull/588' })
+    ).not.toBe(
+      refreshKey({ ...request, linkedPRUrl: 'https://github.com/fork-owner/widgets/pull/588' })
+    )
   })
 
   it('uses the tracked upstream remote owner for fork branch lookup', async () => {

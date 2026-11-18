@@ -20,6 +20,7 @@ jobs:
         run: |
           node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-sync-fs-ratchet.mjs
           node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-api-ratchet.mjs
+          node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs
       # The PR preflight runs spawn separately, so the discovery runner intentionally excludes it.
       - name: Enforce synchronous launches
         if: '!cancelled()'

@@ -19,6 +19,10 @@
       "useReset": "使用重置额度",
       "pairingInvalidMessage": "请将此手机与桌面重新配对，以查看其账户",
       "weeklyWindow": "7天"
+    },
+    "claude": {
+      "usageSignInLabel": "重新登录",
+      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认"
     }
   },
   "agentHistory": {
@@ -188,7 +192,6 @@
     },
     "stream": {
       "updateApp": "请更新 Orca 应用，以便在这里串流浏览器标签页",
-      "updateDesktop": "请更新桌面端 Orca，以便在手机上串流浏览器标签页",
       "checking": "正在检查桌面是否支持浏览器串流",
       "pageUnavailable": "浏览器页面暂不可用",
       "timedOut": "浏览器串流超时"
@@ -431,6 +434,7 @@
       "otherDevice": "其他设备"
     },
     "sessionOptionCopy": {
+      "none": "无",
       "availableAfterSessionStarts": "会话开始后可用",
       "chooseInAgentPicker": "在智能体选择器中选择…",
       "effort": "推理强度",
@@ -770,6 +774,10 @@
       "mark": "分支 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分支：{{name}}"
+    },
+    "selectionQuote": {
+      "action": "引用",
+      "hint": "将所选文本作为引用添加到消息中"
     }
   },
   "common": {
@@ -781,8 +789,8 @@
     },
     "offline": {
       "waitingFor": "正在等待 {{host}}",
-      "waiting": "正在等待桌面",
-      "message": "请确认你的电脑处于唤醒状态，且 Orca 正在运行",
+      "waiting": "正在等待主机",
+      "message": "请确认主机处于唤醒状态，且 Orca 正在运行",
       "reconnect": "重新连接"
     },
     "noMatch": {
@@ -807,7 +815,9 @@
     "retry": "重试",
     "save": "保存",
     "settings": "设置",
-    "unknown": "未知"
+    "unknown": "未知",
+    "waitingForHost": "正在等待主机…",
+    "connectingToHost": "正在连接主机…"
   },
   "components": {
     "accountsSnapshot": {
@@ -817,7 +827,7 @@
       "copyFailed": "无法复制",
       "copyPrompt": "复制提示",
       "statusUnreadable": "无法读取此主机的状态。正在重试…",
-      "updateRequired": "请先更新电脑上的 Orca，才能从手机启动智能体"
+      "updateRequired": "请先更新此主机上的 Orca，才能从手机启动智能体"
     },
     "agentSpinner": {
       "monitoring": "监控后台任务",
@@ -967,7 +977,7 @@
       "terminalLabel": "{{title}} ({{id}})",
       "unsentNotes_one": "{{count}} 条未发送的备注",
       "unsentNotes_other": "{{count}} 条未发送的备注",
-      "updateRequired": "请更新电脑上的 Orca"
+      "updateRequired": "请更新此主机上的 Orca"
     },
     "diffReviewFileSummary": {
       "changed": "已更改",
@@ -1041,7 +1051,7 @@
       "connectHint": "请在 Orca 桌面端的“设置 → 集成”中添加 Jira 站点，然后再次检查",
       "connectOnDesktop": "在桌面端连接 Jira",
       "credentialUnreadable": "Jira 凭据已保存，但无法读取：{{credentialError}}",
-      "updateDesktop": "更新 Orca 桌面端"
+      "updateDesktop": "更新此主机上的 Orca"
     },
     "markdownBlocks": {
       "copyCode": "复制代码",
@@ -1112,23 +1122,23 @@
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主机列表",
-      "desktopTooOldBody": "已配对的桌面应用版本过旧，无法与当前的 Orca Mobile 兼容。请更新电脑上的 Orca，然后重新连接此主机",
+      "desktopTooOldBody": "此主机上的 Orca 版本过旧，无法与当前的 Orca Mobile 兼容。请更新此主机上的 Orca，然后重新连接",
       "getVersion": "获取 Orca {{version}}",
-      "mobileTooOldAppStore": "此桌面需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
-      "mobileTooOldGooglePlay": "此桌面需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
-      "mobileTooOldGitHubReleases": "此桌面需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机",
+      "mobileTooOldAppStore": "此主机需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
+      "mobileTooOldGooglePlay": "此主机需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
+      "mobileTooOldGitHubReleases": "此主机需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机",
       "openAppStore": "打开 App Store",
       "openGooglePlay": "打开 Google Play",
       "openGitHubReleases": "打开 GitHub Releases",
       "refreshRecoveryNote": "如果仍显示此消息，请移除此主机并重新配对",
-      "refreshWorkspaceBody": "此主机的工作区缓存版本低于桌面要求。请重新连接此主机，下载当前版本",
+      "refreshWorkspaceBody": "此主机的工作区缓存版本低于主机要求。请重新连接此主机，下载当前版本",
       "refreshWorkspaceTitle": "刷新移动端工作区",
-      "updateDesktopTitle": "更新电脑上的 Orca",
+      "updateDesktopTitle": "更新此主机上的 Orca",
       "updateMobileTitle": "更新 Orca Mobile",
       "updateRecoveryNote": "已经更新？请返回“主机”并刷新连接。如果仍显示此消息，请移除此主机并重新配对",
-      "workspaceNeedsUpdateAppStore": "此桌面的移动端工作区需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
-      "workspaceNeedsUpdateGooglePlay": "此桌面的移动端工作区需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
-      "workspaceNeedsUpdateGitHubReleases": "此桌面的移动端工作区需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机"
+      "workspaceNeedsUpdateAppStore": "此主机的移动端工作区需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
+      "workspaceNeedsUpdateGooglePlay": "此主机的移动端工作区需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
+      "workspaceNeedsUpdateGitHubReleases": "此主机的移动端工作区需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机"
     },
     "richMarkdownEditor": {
       "imageUrl": "图像 URL",
@@ -1596,7 +1606,6 @@
     "fileExplorerPanel": {
       "backToSession": "返回会话",
       "closeFiles": "关闭文件",
-      "connecting": "正在连接桌面…",
       "emptyState": "未找到文件",
       "filterPlaceholder": "筛选文件",
       "noMatchesHint": "只会搜索你已打开过的文件夹",
@@ -1604,8 +1613,7 @@
       "loading": "正在加载文件…",
       "loadFailed": "无法加载文件",
       "title": "文件",
-      "truncatedList": "{{worktreeLabel}} - 仅显示前 5000 项",
-      "waiting": "等待桌面…"
+      "truncatedList": "{{worktreeLabel}} - 仅显示前 5000 项"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 在移动端不可用",
@@ -1637,8 +1645,7 @@
     "fileMediaPreview": {
       "downloading": "正在下载：{{bytes}} / {{total}}",
       "loadFailed": "无法加载媒体",
-      "loading": "正在加载媒体…",
-      "waiting": "等待桌面…"
+      "loading": "正在加载媒体…"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "无法验证 SSH 连接。请重新连接主机后重试"
@@ -1677,8 +1684,7 @@
       "saveArtifact": "保存终端产物",
       "saveFailed": "无法保存文件",
       "stay": "留在此页",
-      "title": "预览",
-      "waiting": "等待桌面…"
+      "title": "预览"
     },
     "filePreviewSourceText": {
       "previewLabel": "文件预览",
@@ -1932,7 +1938,7 @@
       "localWindows": "本地 Windows",
       "projectOrder": "项目排序",
       "projects": "项目",
-      "savingToDesktop": "正在保存到桌面",
+      "savingToDesktop": "正在保存到主机",
       "show": "显示",
       "showProperties": "显示属性",
       "sortBy": "排序方式",
@@ -1940,7 +1946,7 @@
       "done": "完成",
       "reset": "重置",
       "thisComputer": "本机",
-      "waitingForDesktop": "仍在等待桌面响应",
+      "waitingForDesktop": "仍在等待主机响应",
       "workspaceOptions": "工作区选项"
     },
     "hostBottomBar": {
@@ -2521,7 +2527,7 @@
       "committedDiffUnavailable": "已提交的差异不可用",
       "commitLoadFailed": "无法加载此提交",
       "commitDiffUnavailable": "提交差异不可用",
-      "desktopUpdateRequired": "请更新 Orca 桌面端，以便在手机上评审更改",
+      "desktopUpdateRequired": "请更新此主机上的 Orca，以便在手机上评审更改",
       "diffLoadFailed": "无法加载差异",
       "reviewNotesLoadFailed": "无法加载评审笔记"
     },
@@ -2790,7 +2796,7 @@
       "emptyPrompt": "此操作保存的提示词为空。请在电脑上更新“源代码控制 AI”设置",
       "loadFailed": "无法加载可用的智能体",
       "promptNotSent": "智能体已启动，但提示词未发送",
-      "updateRequired": "请更新电脑上的 Orca，以便从手机启动智能体"
+      "updateRequired": "请先更新此主机上的 Orca，才能从手机启动智能体"
     },
     "prSidebarState": {
       "loadFailed": "无法加载 PR"
@@ -2881,7 +2887,6 @@
     },
     "sheets": {
       "browser": "浏览器",
-      "browserUpdateRequired": "使用移动端浏览器串流需更新桌面应用",
       "chat": "聊天",
       "copyAllAndLeave": "全部复制并离开",
       "copyDraftsFailed": "无法复制草稿",
@@ -2978,7 +2983,6 @@
       "browserCommandFailed": "浏览器命令执行失败",
       "browserCreateFailed": "创建浏览器失败",
       "browserUnavailable": "浏览器页面暂不可用",
-      "browserUpdateRequired": "需更新桌面端才能使用移动端浏览器串流",
       "invalidUrl": "请输入有效的 URL",
       "noteCreateFailed": "创建 Markdown 笔记失败",
       "untitledNoteCreateFailed": "无法创建无标题 Markdown 笔记"
@@ -2989,27 +2993,22 @@
       "noteAdded": "笔记已添加",
       "notesCopied": "笔记已复制",
       "saveNoteFailed": "保存笔记失败",
-      "saveNotesFailed": "保存评审笔记失败",
-      "waitingForDesktop": "等待桌面…"
+      "saveNotesFailed": "保存评审笔记失败"
     },
     "useDiffReviewCommentActions": {
       "saveFailed": "保存评审失败",
-      "saveStateFailed": "保存评审状态失败",
-      "waitingForDesktop": "等待桌面连接…"
+      "saveStateFailed": "保存评审状态失败"
     },
     "useDiffReviewController": {
       "loadFailed": "无法加载评审",
       "commitMissing": "请更新 Orca 应用，以便在这里打开提交中的文件",
-      "missingWorktree": "缺少工作树",
-      "waitingForDesktop": "等待桌面连接…"
+      "missingWorktree": "缺少工作树"
     },
     "useDiffReviewDiffLoading": {
-      "loadFailed": "无法加载差异",
-      "waitingForDesktop": "等待桌面连接…"
+      "loadFailed": "无法加载差异"
     },
     "useDiffReviewGitActions": {
-      "actionFailed": "源代码控制操作失败",
-      "waitingForDesktop": "等待桌面连接…"
+      "actionFailed": "源代码控制操作失败"
     },
     "useDiffReviewInteractions": {
       "openFailed": "无法在会话中打开"
@@ -3023,8 +3022,7 @@
       "notesSentWithWarning": "评审笔记已发送。{{warning}}",
       "promptNotSent": "智能体已启动，但笔记未发送。请使用“复制备注”复制后粘贴",
       "sendFailed": "发送笔记失败",
-      "startingAgent": "正在启动智能体…",
-      "waitingForDesktop": "等待桌面连接…"
+      "startingAgent": "正在启动智能体…"
     },
     "useImageAttachment": {
       "attachFailed": "添加附件失败",
@@ -3063,8 +3061,7 @@
       "presetsUnavailable": "智能体预设不可用"
     },
     "usePrAiTriage": {
-      "launchFailed": "启动智能体失败",
-      "waitingForDesktop": "等待桌面…"
+      "launchFailed": "启动智能体失败"
     },
     "usePrCommentActions": {
       "actionFailed": "评论操作失败"
@@ -3132,6 +3129,7 @@
       "conversationCleared": "此对话已被清除",
       "goalsUnsupported": "此智能体不支持目标",
       "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+      "savedInOtherFolder": "此对话保存在另一个文件夹中",
       "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
       "historyUnusable": "无法加载此聊天",
       "hostReconciling": "Orca 重启后仍在检查此聊天",
@@ -3266,9 +3264,6 @@
       "openInBrowser": "在系统浏览器中打开",
       "copyLink": "复制链接"
     },
-    "useDiffReviewGitHub": {
-      "waitingForDesktop": "正在等待桌面…"
-    },
     "usePrTextAction": {
       "updateFailed": "无法更新 PR"
     },
@@ -3396,7 +3391,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "无法加载通知投递设置。请重新打开此页面重试",
       "saveFailed": "无法保存通知投递设置。请重试",
-      "updateDesktopHint": "配对已更新的桌面，即可在此手机上接收通知"
+      "updateDesktopHint": "配对已更新的主机，即可在此手机上接收通知"
     },
     "notificationDisplayTest": {
       "accepted": "Orca 推送服务已接受请求。请查看通知",
@@ -3486,8 +3481,7 @@
   },
   "sourceControl": {
     "actionSheetRunners": {
-      "noBaseBranch": "没有可作为变基目标的基础分支",
-      "waitingForDesktop": "正在等待桌面…"
+      "noBaseBranch": "没有可作为变基目标的基础分支"
     },
     "actions": {
       "checkingReviewStatus": "正在检查评审状态",
@@ -3659,8 +3653,7 @@
       "noCommits": "暂无提交",
       "loading": "正在加载提交…",
       "noFileChanges": "无文件更改",
-      "retryFiles": "重试加载提交文件",
-      "waitingForDesktop": "正在等待桌面…"
+      "retryFiles": "重试加载提交文件"
     },
     "gitStatus": {
       "conflicts": "冲突",
@@ -3728,10 +3721,8 @@
       "pullRequest": "PR"
     },
     "loaders": {
-      "connectingToDesktop": "正在连接桌面…",
       "loadFailed": "无法加载源代码控制",
-      "updateDesktop": "请更新 Orca 桌面端，以在手机上使用源代码控制",
-      "waitingForDesktop": "正在等待桌面…"
+      "updateDesktop": "请更新此主机上的 Orca，以在手机上使用源代码控制"
     },
     "modals": {
       "currentBranch": "当前",
@@ -3951,8 +3942,7 @@
       "windowsBatchUnsafeArguments": "{{label}} 通过 Windows 批处理脚本运行，该脚本无法将多行提示词作为参数接收。请在设置中指定智能体的可执行文件，或使用不含 {prompt} 的自定义命令，让 Orca 通过 stdin 发送提示词"
     },
     "useMobileCommitFailureRecovery": {
-      "launchFailed": "启动智能体失败",
-      "waitingForDesktop": "正在等待桌面…"
+      "launchFailed": "启动智能体失败"
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "生成提交信息失败"
@@ -3963,8 +3953,7 @@
     "useMobileGitRequests": {
       "actionFailed": "源代码控制操作失败",
       "branchUnavailable": "无法获取分支状态",
-      "commitFailed": "提交失败",
-      "waitingForDesktop": "正在等待桌面…"
+      "commitFailed": "提交失败"
     },
     "conflictActions": {
       "resolveFile": "{{action}}：{{path}}",
@@ -4145,15 +4134,7 @@
       "confirmGitHubRebase": "变基并合并 PR #{{number}}？",
       "confirmGitLabMerge": "要将合并请求 #{{number}} 合并吗？",
       "confirmGitLabSquash": "要将合并请求 #{{number}} 的提交压缩后合并吗？",
-      "confirmGitLabRebase": "要将合并请求 #{{number}} 变基后合并吗？",
-      "merged": "已合并",
-      "closed": "已关闭",
-      "conflicts": "有冲突",
-      "behind": "落后",
-      "blocked": "已阻止",
-      "checksPending": "检查待完成",
-      "ableToMerge": "可以合并",
-      "unknown": "未知"
+      "confirmGitLabRebase": "要将合并请求 #{{number}} 变基后合并吗？"
     },
     "itemActions": {
       "changeStatus": "更改状态",
@@ -4255,8 +4236,8 @@
       "connectLinearMessage": "直接在“任务”中浏览并开始处理分配给您的 Linear 议题",
       "connectLinearTitle": "连接您的 Linear 账户",
       "jiraStatusFailed": "读取 Jira 状态失败",
-      "updateDesktopMessage": "此移动端“任务”视图需要更高版本的桌面端运行时",
-      "updateDesktopTitle": "更新 Orca 桌面端"
+      "updateDesktopMessage": "此移动端“任务”视图需要此主机上更高版本的 Orca",
+      "updateDesktopTitle": "更新此主机上的 Orca"
     },
     "options": {
       "all": "全部",
@@ -4534,7 +4515,6 @@
       "title": "任务"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL，例如 project = ABC AND statusCategory != Done",
       "projectPlaceholder": "搜索项目视图…",
       "providerPlaceholder": "搜索 {{provider}} 任务…"
     },
@@ -4986,6 +4966,200 @@
               "cc71e252ba": "每{{day}} {{time}}"
             }
           }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "搜索议题或输入 JQL，例如 project = ABC",
+        "jiraTextMatchesNotice": "正在显示文本匹配结果，Jira 无法将此搜索作为 JQL 运行"
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "已取消"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "已合并",
+              "4f976d3450": "已关闭",
+              "1f8eb81c0e": "需要批准",
+              "c606463dc2": "要求更改",
+              "7e8bbe3cd7": "冲突",
+              "b169f943e1": "准备好后合并",
+              "autoMergeOn": "自动合并已开启",
+              "039c072f94": "在后面",
+              "bf5e4c6c92": "已阻塞",
+              "87fa36ac83": "检查失败",
+              "4e2507176b": "检查待处理",
+              "def355ff38": "可以合并",
+              "f958920f3a": "检查中"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "合并",
+                  "88d044c42f": "已关闭",
+                  "96b05e374c": "冲突",
+                  "5105b0e584": "需要批准",
+                  "893a999c8c": "已请求更改",
+                  "01ab632a21": "未解决的讨论串",
+                  "bf628700f6": "检查必须通过",
+                  "65c847ad1e": "检查待处理",
+                  "382c70faeb": "落后",
+                  "195917574e": "检查中",
+                  "4ecc0d90ee": "已阻止",
+                  "49ac4fec10": "检查失败",
+                  "04a3015a12": "可以合并"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira 无法执行此 JQL 查询。请检查语法后重试"
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "{{server}} 无用量数据",
+            "remoteOwnerNotConfigured": "未在 {{server}} 上配置",
+            "claudeUnknownOnHost": "无法从 {{server}} 获取 Claude 用量，可能未在那里登录，或使用的是 API 密钥计费",
+            "remoteOwnerSignInSavedHere": "其登录信息仅保存在此电脑上",
+            "f8b8dbed85": "用量不可用",
+            "e2c6a4f917": "运行 Grok 以刷新",
+            "f90b3d7a16": "运行 Kimi 以刷新",
+            "0d8d7cfe15": "等待 Claude 会话",
+            "claude": {
+              "waiting": {
+                "label": "运行 Claude 时更新",
+                "message": "Claude 用量将在下次运行 Claude 时更新"
+              }
+            },
+            "1804cd8c3f": "正在刷新登录",
+            "bf2e739f18": "登录不可用",
+            "f8f0f9d8cc": "网络问题",
+            "minimax": {
+              "expired": {
+                "label": "登录已过期",
+                "apiKey": "MiniMax API 密钥已过期，请在设置中更换",
+                "cookie": "MiniMax 会话 Cookie 已过期，请在设置中更换"
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "登录已过期",
+                "message": "请在运行 Orca 的电脑上的终端中运行 cursor-agent login，然后重新刷新用量"
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "无订阅"
+              }
+            },
+            "7ad719c4bf": "受限",
+            "e740f92596": "刷新失败",
+            "2c35eca8d4": "无法获取使用情况",
+            "d1b7f509ac": "在运行 Orca 的电脑上的终端中运行 grok，并等待其启动，如有提示，请完成登录，然后重试用量检查，您无需发送聊天消息",
+            "a37e8c15d4": "在运行 Orca 的电脑上的终端中运行 kimi，等待其启动，然后重试用量检查",
+            "3d3c9c0c1f": "实时 Claude 终端轮换凭据后，Claude 用量会刷新",
+            "42fdd4da1d": "正在刷新 Claude 登录，代理会话可能仍处于登录状态",
+            "c06c1d215d": "由于网络请求失败，无法刷新 Claude 用量",
+            "cabdc2a9e0": "无法读取 Claude 登录凭据",
+            "a7517cccb6": "Claude 用量目前不可用",
+            "8418ec448d": "{{value0}} 用量无法刷新，代理会话可能仍处于登录状态"
+          }
+        }
+      }
+    },
+    "lib": {
+      "rateLimits": {
+        "errors": {
+          "sessionCookieNotConfigured": "未配置会话 Cookie",
+          "opencodeNoAuthCookie": "未找到认证 Cookie — 请从 opencode.ai DevTools 粘贴完整 Cookie 请求头",
+          "opencodeNoWorkspaceId": "未找到工作区 ID — 请在设置中填写工作区 ID 覆盖",
+          "opencodeNoWorkspaceIdShort": "未找到工作区 ID",
+          "workspacesFetchFailed": "工作区列表获取失败 ({{status}})",
+          "usagePageFetchFailed": "用量页面获取失败 ({{status}})",
+          "couldNotParseUsagePage": "无法从页面解析用量数据",
+          "couldNotParseUsageAnyWorkspace": "无法从任何可用工作区解析用量数据",
+          "minimaxCookieNotConfigured": "未配置 MiniMax 会话 Cookie",
+          "minimaxSessionExpired": "MiniMax 会话已过期，请在设置中更换 MiniMax Cookie",
+          "minimaxAuthCookieMissing": "未找到 MiniMax 认证 Cookie — 请粘贴包含 _token 的 Cookie 请求头",
+          "minimaxModelUsageMissing": "未找到所选模型的 MiniMax 用量数据",
+          "minimaxCookieDecryptFailed": "无法解密 MiniMax 会话 Cookie",
+          "kimiNotSignedIn": "未登录 Kimi Code",
+          "kimiCredentialsInvalid": "Kimi 凭据文件无效",
+          "kimiCredentialsMissingToken": "Kimi 凭据文件缺少访问令牌",
+          "kimiQuotaWindowsMissing": "Kimi 用量响应未包含配额窗口",
+          "wslKimiHomeUnavailable": "WSL Kimi 主目录不可用({{distro}})",
+          "kimiSessionExpired": "Kimi 会话已过期 — 请在 {{where}} 运行 kimi，然后重试用量",
+          "kimiUsageUnauthorizedHttp": "Kimi 用量请求未授权 (HTTP {{status}})",
+          "kimiUsageFailedHttp": "Kimi 用量请求失败 (HTTP {{status}})",
+          "grokNotSignedIn": "未登录 Grok — 请运行 grok login",
+          "grokAuthInvalid": "Grok 认证文件无效",
+          "grokAuthUnreadable": "无法读取 Grok 认证文件",
+          "grokSignInExpired": "Grok 登录已过期 — 请在运行 Orca 的电脑上运行 grok，如有提示请完成登录，无需发送聊天消息",
+          "grokBillingConfigMissing": "Grok 账单响应未包含配置",
+          "grokBillingUsageMissing": "Grok 账单响应未包含额度用量",
+          "grokUsageUnauthorizedHttp": "Grok 用量请求未授权 (HTTP {{status}})",
+          "grokUsageFailedHttp": "Grok 用量请求失败 (HTTP {{status}})",
+          "geminiOauthDisabled": "设置中已禁用 Gemini CLI OAuth",
+          "geminiCredentialsNotFound": "未找到 Gemini CLI 凭据",
+          "geminiProjectIdNotFound": "未找到 Gemini 项目 ID",
+          "tokenRefreshFailed": "Token 刷新失败",
+          "codexNotSignedIn": "Codex 未登录",
+          "codexHomeUnavailable": "Codex 主目录不可用",
+          "wslCodexHomeUnavailable": "WSL Codex 主目录不可用({{distro}})",
+          "codexRebuildingIndex": "Codex 正在重建会话索引，恢复完成后将刷新用量",
+          "chatgptAuthRequired": "需要 ChatGPT 认证才能读取速率限制",
+          "claudeRateLimited": "Claude 用量当前已达速率限制",
+          "claudeUsageUnavailable": "Claude 用量当前不可用",
+          "claudeOauthTokenUnavailable": "Claude OAuth 访问令牌不可用",
+          "claudeKeychainUnavailable": "无法读取 Claude Keychain 凭据",
+          "claudePlanUsageUnavailable": "此 Claude CLI 会话无法获取套餐用量",
+          "waitingForClaudeSession": "正在等待 Claude 会话",
+          "wslClaudeConfigUnavailable": "WSL Claude 配置不可用({{distro}})",
+          "noCredentials": "无凭据",
+          "fetchAborted": "速率限制获取已中止",
+          "failedToLoadUsage": "无法加载用量数据",
+          "ptyUsageTimeout": "PTY 超时 — /usage 面板未渲染",
+          "cliExitedBeforeUsage": "CLI 在 /usage 渲染前退出",
+          "cliExitedBeforeStatus": "CLI 在状态可用前退出",
+          "quotaFetchFailed": "配额获取失败 ({{status}})",
+          "geminiProjectIdLoadFailed": "加载 Gemini 项目 ID 失败 (HTTP {{status}})",
+          "geminiProjectIdMissingInResponse": "API 响应中未找到 Gemini 项目 ID",
+          "minimaxUsageFetchFailed": "MiniMax 用量获取失败 ({{status}})",
+          "minimaxReturnedError": "MiniMax 返回错误",
+          "minimaxInvalidUsageResponse": "MiniMax 用量响应无效",
+          "minimaxUnknownUsageError": "未知 MiniMax 用量错误",
+          "kimiCredentialsUnreadable": "无法读取 Kimi 凭据",
+          "kimiUsageRequestFailed": "Kimi 用量请求失败",
+          "grokUsageRequestFailed": "Grok 用量请求失败",
+          "rpcTimeout": "RPC 超时",
+          "rpcFailed": "RPC 失败",
+          "signInWithChatgpt": "请使用 ChatGPT 登录",
+          "codexCliNotFound": "未找到 Codex CLI",
+          "codexCliCannotRun": "已找到 Codex CLI 但无法运行 — Node.js 可能不在 PATH 中",
+          "rpcProcessExited": "RPC 进程意外退出",
+          "ptyTimeout": "PTY 超时",
+          "failedToParseCliOutput": "解析 CLI 输出失败",
+          "codexSignInCheckTimeout": "检查 Codex 登录状态超时",
+          "codexSignInStatusUnavailable": "Codex 登录状态不可用",
+          "codexResetFailedHttp": "Codex 重置失败：HTTP {{status}}",
+          "codexResetUnknownOutcome": "未知 Codex 重置结果",
+          "codexResetIdempotencyRequired": "需要 Codex 重置幂等键",
+          "noSubscriptionApiKeyBilling": "无订阅套餐 — API key 计费",
+          "claudeWaitingCredentialRotate": "Claude 用量刷新正在等待实时 Claude 终端轮换凭据",
+          "unknown": "未知错误",
+          "opencodeInvalidWorkspaceId": "工作区 ID 格式无效"
         }
       }
     }

@@ -1,19 +1,25 @@
-import type { AgentSessionTurnActivity } from '../../../../../shared/agent-session/agent-session-wire'
+export const MAX_RETAINED_SESSIONS = 512
 
-export const MAX_RETAINED_SESSION_ACTIVITIES = 512
-
-export function rememberSessionActivity(
-  activities: Map<string, AgentSessionTurnActivity>,
+/** Keeps each session's latest ephemeral value, dropping the least recently set past the cap. */
+export function rememberLatestPerSession<T>(
+  bySession: Map<string, T>,
   sessionId: string,
-  activity: AgentSessionTurnActivity
+  value: T | null | undefined
 ): void {
-  activities.delete(sessionId)
-  activities.set(sessionId, activity)
-  while (activities.size > MAX_RETAINED_SESSION_ACTIVITIES) {
-    const oldest = activities.keys().next()
+  // Absent leaves the session's value alone; null forgets it.
+  if (value === undefined) {
+    return
+  }
+  bySession.delete(sessionId)
+  if (value === null) {
+    return
+  }
+  bySession.set(sessionId, value)
+  while (bySession.size > MAX_RETAINED_SESSIONS) {
+    const oldest = bySession.keys().next()
     if (oldest.done || oldest.value === sessionId) {
       break
     }
-    activities.delete(oldest.value)
+    bySession.delete(oldest.value)
   }
 }
