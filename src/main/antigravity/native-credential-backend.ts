@@ -17,7 +17,9 @@ import {
 import {
   createAntigravityFileCredentialBackend,
   isAntigravityContainerOrWslHost,
-  isAntigravityFileStorageHost
+  isAntigravityContainerOrWslHostAsync,
+  isAntigravityFileStorageHost,
+  isAntigravityFileStorageHostAsync
 } from './native-file-credentials'
 export {
   createAntigravityFileCredentialBackend,
@@ -41,8 +43,8 @@ export async function antigravityUsesFileCredentialAuthority(
   env: NodeJS.ProcessEnv = process.env
 ): Promise<boolean> {
   if (
-    isAntigravityFileStorageHost(env) ||
-    (process.platform === 'linux' && isAntigravityContainerOrWslHost())
+    (await isAntigravityFileStorageHostAsync(env)) ||
+    (process.platform === 'linux' && (await isAntigravityContainerOrWslHostAsync()))
   ) {
     return true
   }

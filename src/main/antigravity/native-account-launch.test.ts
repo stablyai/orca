@@ -43,7 +43,8 @@ vi.mock('./native-file-credentials', async (importActual) => {
   const actual = await importActual<typeof NativeFileCredentials>()
   return {
     ...actual,
-    isAntigravityContainerOrWslHost: () => mocks.isContainerOrWsl()
+    isAntigravityContainerOrWslHost: () => mocks.isContainerOrWsl(),
+    isAntigravityContainerOrWslHostAsync: async () => mocks.isContainerOrWsl()
   }
 })
 
