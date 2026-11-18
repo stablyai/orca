@@ -4,7 +4,10 @@ import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscriptio
 import type { RpcContext } from '../../core'
 import { WORKSPACE_CLEANUP_RUNNER_METHODS } from './workspace-cleanup-runner-methods'
 
-const walks = vi.hoisted(() => [] as { signal: AbortSignal; finish: () => void }[])
+const walks = vi.hoisted(() => {
+  const started: { signal: AbortSignal; finish: () => void }[] = []
+  return started
+})
 
 vi.mock('../../../../codex/history/disk-usage/codex-history-disk-usage', async () => {
   const { createCodexHistoryDiskUsageReader } =
@@ -37,6 +40,7 @@ const readSize = WORKSPACE_CLEANUP_RUNNER_METHODS.find(
 
 function read(connectionId: string, consumerId: string): Promise<unknown> {
   const ctx: RpcContext = { runtime, connectionId }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: find() widens the handler to every method's params; this one takes { consumerId }.
   return Promise.resolve(readSize.handler({ consumerId } as never, ctx))
 }
 
