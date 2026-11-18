@@ -18,7 +18,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { JournalTransactionalDatabase } from './database/journal-host-database'
 import type { JournalSqlDatabase } from './database/journal-sql-database'

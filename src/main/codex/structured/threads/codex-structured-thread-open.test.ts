@@ -57,6 +57,66 @@ describe('openCodexThread', () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
+  it('unarchives a thread archived in Codex and reopens that same thread', async () => {
+    let archived = true
+    const request = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'thread/unarchive') {
+        archived = false
+        return {}
+      }
+      if (method === 'thread/resume' && archived) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          `session ${String(params?.threadId)} is archived. Run \`codex unarchive ${String(params?.threadId)}\` to unarchive it first.`
+        )
+      }
+      return { thread: { id: params?.threadId ?? 'thread-new' } }
+    })
+
+    await expect(
+      openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId: 'thread-archived', supersedeIfUnsaved: true },
+        2_000
+      )
+    ).resolves.toMatchObject({ threadId: 'thread-archived' })
+    expect(request.mock.calls.map(([method]) => method)).toEqual([
+      'thread/resume',
+      'thread/unarchive',
+      'thread/resume'
+    ])
+    expect(request.mock.calls[1]?.[1]).toEqual({ threadId: 'thread-archived' })
+  })
+
+  it('never replaces an archived thread whose saved conversation is gone after unarchiving', async () => {
+    const request = vi.fn(async (method: string) => {
+      if (method === 'thread/resume' && request.mock.calls.length === 1) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'session thread-a is archived.'
+        )
+      }
+      if (method === 'thread/resume') {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'no rollout found for thread id thread-a'
+        )
+      }
+      return method === 'thread/unarchive' ? {} : { thread: { id: 'thread-new' } }
+    })
+    const error = await openCodexThread(
+      connectionFor(request),
+      { cwd: '/workspace', resumeThreadId: 'thread-a', supersedeIfUnsaved: true },
+      2_000
+    ).catch((error: unknown) => error)
+
+    expect(providerStartupFailureFact(error)).toMatchObject({ kind: 'savedConversationMissing' })
+    expect(request.mock.calls.map(([method]) => method)).not.toContain('thread/start')
+  })
+
   describe('a thread Codex never saved', () => {
     const noRollout = (threadId: string, code = -32600) =>
       new CodexAppServerRequestError(

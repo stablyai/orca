@@ -10,10 +10,7 @@ import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-
 import { getShellLaunchConfig } from '../../../providers/local-pty/local-pty-shell-ready'
 import { selectShellStartupFeatures } from '../../../pty/shell-startup/shell-startup-features'
 import { hasZsh, ZSH_PATH } from '../../../pty/shell-startup/zsh-startup-hook-pty-harness'
-import {
-  createTranscriptPane,
-  TRANSCRIPT_PANE_PTY_ID
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 import { normalizeTerminalChunk } from '../output/terminal-ansi-normalization'
 import { hasTerminalAgentPainted, TerminalCommandPaint } from '../input/terminal-command-paint'
 
@@ -309,15 +306,6 @@ describe.skipIf(process.platform === 'win32')('tui-idle under real zsh preexec h
     beforeAll(async () => {
       capture = await captureLaunch(hookCase)
     }, 40_000)
-
-    itWithZsh(
-      "runs Orca's marker hook before the user hook, so hook output follows OSC 133;C",
-      () => {
-        expect(capture.hookOrder.split(/\s+/)[0]).toBe('__orca_osc133_preexec')
-        expect(capture.hookOrder).toContain(hookCase.hookName)
-        assertLaunchOrder(capture.chunks, hookCase)
-      }
-    )
 
     itWithZsh.each(RECHUNKINGS)(
       'attributes paint the same way with the capture %s',

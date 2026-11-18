@@ -2,6 +2,7 @@ import { readTestHostJournal } from '../../../agent-session-journal/journal-obse
 import { openTestChats } from './structured-agent-session-open-test-chats.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { setStructuredAgentSessionHost } from '../structured-agent-session-registry'
 import {
@@ -131,3 +132,57 @@ describe('a turn its gone agent left running', () => {
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })
 })
+
+it('omits crash-stale running state after failed exit settlement', async () => {
+  await exitWithUnwrittenSettlement(2, 'kill-delivered')
+  const result = await rig.host.reads.agentReadPage(SESSION, 20)
+  expect(result).toEqual({
+    entries: [{ kind: 'message', role: 'user', text: 'hello' }],
+    limited: false
+  })
+  expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+})
+
+it.each(['idle eviction', 'restart'] as const)(
+  'keeps a finished turn done after %s releases its owner',
+  async (release) => {
+    await foundRestTestChat(rig)
+    const events = rig.adapter.acquire.mock.calls.at(-1)?.[0].events
+    const turn = {
+      provider: 'codex',
+      threadId: REST_TEST_THREAD,
+      turnId: 'done',
+      ordinal: 50
+    } as const
+    const scope = { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    events?.appendItem(turn, { kind: 'turn', turnId: 'done', state: 'running' }, scope)
+    events?.appendItem(
+      { ...turn, ordinal: 51 },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'FINISHED' }] },
+      { turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(turn) } }
+    )
+    events?.appendItem(
+      turn,
+      { kind: 'turn', turnId: 'done', state: 'completed', outcome: 'success' },
+      scope
+    )
+    await rig.host.flushStreamedEvents(SESSION)
+    if (release === 'restart') {
+      await rig.restart()
+      setStructuredAgentSessionHost(rig.host)
+    } else {
+      rig.clock.now += IDLE_MS + 1
+      await sweepOnce(rig.host)
+      expect(rig.store.getRecord(SESSION)?.lease.deathEvidence).toBeDefined()
+    }
+    expect(await rig.host.reads.agentReadPage(SESSION, 20)).toEqual({
+      entries: [
+        { kind: 'message', role: 'user', text: 'hello' },
+        { kind: 'message', role: 'assistant', text: 'FINISHED' }
+      ],
+      limited: false,
+      state: 'done'
+    })
+    expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+  }
+)

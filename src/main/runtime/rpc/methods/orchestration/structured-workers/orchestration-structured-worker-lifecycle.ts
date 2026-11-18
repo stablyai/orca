@@ -36,7 +36,7 @@ import { releaseStructuredWorkerSession } from './orchestration-structured-worke
 import {
   closeStructuredAgentSessionChild,
   type StructuredSessionSurfaceRuntime
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import {
   chatAssigneeJournal,
   type StructuredJournalSource

@@ -44,7 +44,7 @@ import '../../right-sidebar/ai-vault/scanning/ai-vault-session-refresh'
 import { claimAiVaultForcedRescan } from '../../right-sidebar/ai-vault/scanning/ai-vault-forced-rescan-budget'
 import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

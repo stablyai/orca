@@ -1,3 +1,4 @@
+import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { shutdownRoutedDegradedSession } from './daemon-routed-session-shutdown'
 import { terminateResolvedDaemonSession } from '../../server/daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
@@ -308,7 +309,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return listProviderSessionIds(this.sessionProviders, target)
   }
 
-  fanoutCurrentDaemonSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
+  fanoutCurrentDaemonSyntheticExits(
+    code: number,
+    exit: { replacedByRestart?: true; cause?: TerminalExitCause } = {}
+  ): void {
     for (const id of this.getSessionIdsRoutedTo('current-daemon')) {
       this.ownerRecovery.forgetRoute(id)
       // Restart also kills listed sessions the adapter never tracked as active.

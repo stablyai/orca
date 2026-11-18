@@ -96,6 +96,10 @@ const {
   buildMacShipItScheduling
 } = require('./scripts/desktop-distribution/macos/macos-shipit-scheduling.cjs')
 
+const {
+  buildMacNativeAddon
+} = require('./scripts/desktop-distribution/macos/build-macos-native-addon.cjs')
+
 // Dev channels need release bundle ID/signature/notarization so Squirrel.Mac accepts updates and macOS retains app identity.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
 const isMacDaily = process.env.ORCA_MAC_DAILY === '1'
@@ -367,9 +371,7 @@ module.exports = {
     'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
     'out/main/skills/bundled-skill-install/bundled-skill-installation.js',
     'out/main/startup/network-compatibility/http1-compatibility-marker.js',
-    // `orca uninstall` runs the app's cleanup in the CLI process.
-    'out/main/uninstall/orca-{install-identity,uninstall-cleanup}.js',
-    'out/main/cli/cli-installer.js',
+    // `orca agent hooks` gives main hook code an app environment in the CLI process.
     'out/main/backend/node-service-environment.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
@@ -459,6 +461,13 @@ module.exports = {
       const architecture = macSliceArch(context.arch, 'local-build compatibility')
       const schedulingAddon = buildMacShipItScheduling(resourcesDir, architecture)
       await signMacStandaloneHelper(schedulingAddon, 'ShipIt scheduling', context.packager)
+      const menuDeadKeyAddon = buildMacNativeAddon(
+        resourcesDir,
+        architecture,
+        'macos-menu-dead-key',
+        'orca_menu_dead_key.node'
+      )
+      await signMacStandaloneHelper(menuDeadKeyAddon, 'Menu dead-key guard', context.packager)
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {

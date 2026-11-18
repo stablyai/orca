@@ -1,5 +1,5 @@
 import type { JSONContent } from '@tiptap/react'
-import { splitImageReferences } from '../../../../shared/native-chat/native-chat-image-reference'
+import { splitImageReferences } from '../../../../shared/native-chat/attachments/native-chat-image-reference'
 import { IMAGE_REFERENCE_NODE } from './composer/editor/native-chat-prompt-document-text'
 
 function textWithoutImageTokens(text: string): string {

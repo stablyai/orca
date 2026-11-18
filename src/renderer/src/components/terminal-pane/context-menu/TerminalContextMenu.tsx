@@ -31,13 +31,13 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 import {
   formatOptionalPrimaryShortcutLabel,
   formatPrimaryShortcutLabel
-} from '@/hooks/useShortcutLabel'
+} from '@/lib/keyboard/useShortcutLabel'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentSessionContinuationMenuItem } from '../../agent-session-continuation/AgentSessionContinuationMenuItem'
 import { AgentSessionContextCopyMenuItem } from '../clipboard/AgentSessionContextCopyMenuItem'
 import { ClearPaneTitleMenuItem } from '../titles/ClearPaneTitleMenuItem'
-import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
+import type { TerminalQuickCommandMenuHost } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from '../quick-commands/TerminalQuickCommandsSubmenu'
 import { AddToChatSubmenu } from '../../native-chat/selection-quotes/AddToChatMenu'
 import type { TerminalPaneAgentIdCopy } from './terminal-pane-context-menu-types'

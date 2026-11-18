@@ -1,4 +1,4 @@
-import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+import { useGitHubTaskItems } from '@/lib/work-items/github/useGitHubTaskItems'
 import { useRef, useState } from 'react'
 import type { RepoSlug } from '../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'

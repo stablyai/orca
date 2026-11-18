@@ -1,6 +1,6 @@
 // Derive hold labels on the client; the wire carries queue state, not presentation wording.
 
-import { agentMessageDisplayText } from '../agent-message-display-text'
+import { agentMessageDisplayText } from './messages/agent-message-display-text'
 import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact,
@@ -15,20 +15,23 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import { pendingPromptsAllUnanswerableHere } from '../agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../requests/prompts/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from '../../native-chat/native-chat-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuePause
 } from '../requests/agent-session-queued-message-wire'
-import { readAgentMessageSource, type AgentMessageSource } from '../agent-session-message-source'
+import {
+  readAgentMessageSource,
+  type AgentMessageSource
+} from '../journal/agent-session-message-source'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
   type NativeChatImageLabelCopy
-} from '../../native-chat/native-chat-image-label'
+} from '../../native-chat/attachments/native-chat-image-label'
 
 export type QueuedMessageCardHold =
   /** Plainly queued, also behind an open question: the question already says the agent waits. */
@@ -73,16 +76,39 @@ export function queuedMessageCardImages(
   return images.length > 0 ? { images } : {}
 }
 
+type QueuedMessageCardSession = {
+  queuePaused?: boolean
+  agentWorking?: boolean
+  /** Draw a steer on its way into the running turn as the person's message, not as a card. */
+  steersInTranscript?: true
+}
+
+/** A person's steer the running turn will take in: never a card where the transcript draws it. */
+export function queuedMessageSteersIn(
+  message: AgentSessionQueuedMessage,
+  session: Pick<QueuedMessageCardSession, 'queuePaused' | 'agentWorking'>
+): boolean {
+  return (
+    message.steers === true &&
+    message.state === 'waiting' &&
+    !message.paused &&
+    session.agentWorking === true &&
+    !session.queuePaused
+  )
+}
+
 /** Hide waiting cards after live submission hand-off to avoid catch-up duplicates; rejected hand-offs restore cards, and returned cards never hide. */
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[],
-  session: { queuePaused?: boolean; agentWorking?: boolean }
+  session: QueuedMessageCardSession
 ): QueuedMessageCard[] {
   const handedOff = handedOffQueuedMessageIds(
     submissions.filter((submission) => submission.dispatchState !== 'rejected')
   )
-  const ordered = [...(queuedMessages ?? [])].sort((left, right) => left.position - right.position)
+  const ordered = [...(queuedMessages ?? [])]
+    .filter((message) => !session.steersInTranscript || !queuedMessageSteersIn(message, session))
+    .sort((left, right) => left.position - right.position)
   // Establish semantic membership before handoff filtering, including during catch-up.
   const cards = ordered.map((message) => {
     const resumeEligible = message.state === 'waiting' && !message.paused

@@ -182,6 +182,8 @@ export type RuntimeApi = {
   wsl: {
     isAvailable: () => Promise<boolean>
     listDistros: () => Promise<string[]>
+    /** The `\\wsl.localhost\<distro>` spelling of a path on a drive mapped to a distro share; else null. */
+    resolveMappedDrivePath: (path: string) => Promise<string | null>
   }
   pwsh: {
     isAvailable: () => Promise<boolean>

@@ -4,13 +4,13 @@ import {
   resolveAgentMessageSender,
   type AgentSenderResolution
 } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
-import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { sameAgentIdentity } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import {
   agentMessageSavedKind,
   agentMessageSenderCanOpen
-} from '../../../../../../shared/agent-session/agent-message-presentation'
+} from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import {
   readAgentMessageSenderRow,
   type SenderLocation

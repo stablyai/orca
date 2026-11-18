@@ -1,7 +1,6 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 
 import {
-  type AiVaultAgent,
   type AiVaultListResult,
   isAiVaultSessionResumableContent
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -27,7 +26,6 @@ export type NativeChatCliForkSubject = Extract<TabSessionHistorySubject, { kind:
 export type NativeChatCliForkPreparation = {
   session: AiVaultResumeCommandSession
   copied: boolean
-  sourceAgent?: AiVaultAgent
 }
 
 function sourceChatChangedError(): Error {
@@ -143,5 +141,5 @@ export async function prepareNativeChatCliFork(
       )
     )
   }
-  return { ...(await prepareAiVaultSessionForFork(row, request)), sourceAgent: row.agent }
+  return prepareAiVaultSessionForFork(row, request)
 }

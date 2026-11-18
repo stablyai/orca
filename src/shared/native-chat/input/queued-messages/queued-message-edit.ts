@@ -13,7 +13,10 @@ import {
   MAX_BLOCKS,
   MAX_PROMPT_BYTES
 } from '../../../rpc-contract/structured-agent-session/structured-agent-session-message-params'
-import { imageReferenceInsertion, withoutImageReference } from '../../native-chat-image-reference'
+import {
+  imageReferenceInsertion,
+  withoutImageReference
+} from '../../attachments/native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences,

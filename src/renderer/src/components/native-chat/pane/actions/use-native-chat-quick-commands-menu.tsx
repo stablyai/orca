@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
-import { useVisibleTerminalQuickCommandHosts } from '@/hooks/use-visible-terminal-quick-command-hosts'
+import { useTerminalQuickCommandHosts } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
+import { useVisibleTerminalQuickCommandHosts } from '@/lib/terminal/quick-commands/use-visible-terminal-quick-command-hosts'
 import { useAppStore } from '@/store/index'
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'

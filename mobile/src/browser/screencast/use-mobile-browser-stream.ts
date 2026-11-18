@@ -172,11 +172,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
           translate('browser.stream.updateApp', 'Update the Orca app to stream browser tabs here.')
         )
       } else if (screencastSupported === false) {
+        // Every host new enough to pair streams when it has a browser window, so a refusal means it has none.
         setError(
-          translate(
-            'browser.stream.updateDesktop',
-            'Update desktop Orca to stream browser tabs on mobile.'
-          )
+          translate('browser.stream.hostCannotStream', "This host can't stream browser tabs here.")
         )
       } else if (screencastSupported === null) {
         setError(
