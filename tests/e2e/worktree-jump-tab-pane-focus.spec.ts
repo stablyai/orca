@@ -1,15 +1,15 @@
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
-import { waitForSessionReady } from './helpers/store'
+import { expect, type Page } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { waitForSessionReady } from './desktop/renderer-probes/store'
+import { waitForActivePanePtyId } from './terminal/input/terminal'
 import {
   splitActiveTerminalPane,
-  waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForPaneCount
-} from './helpers/terminal'
+} from './terminal/layout/terminal-pane-operations'
 
 test.use({ seedTestRepo: false })
 

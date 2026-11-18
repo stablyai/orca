@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
+import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'

@@ -1,7 +1,9 @@
-import { expect, test } from './helpers/orca-app'
-import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
-import { showActivePaneAsNativeChat } from './helpers/native-chat-view'
-import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/terminal'
+import { expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { ensureTerminalVisible, waitForSessionReady } from './desktop/renderer-probes/store'
+import { showActivePaneAsNativeChat } from './agents/session-fixtures/native-chat-view'
+import { waitForActivePanePtyId } from './terminal/input/terminal'
+import { waitForActiveTerminalManager } from './terminal/layout/terminal-pane-operations'
 
 test('Cmd+J reselecting the active terminal chat returns editing keys to its composer', async ({
   orcaPage,

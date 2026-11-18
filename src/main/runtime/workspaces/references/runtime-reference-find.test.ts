@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseWorkspaceReferenceUrl } from '../../../../shared/workspace-attachments/workspace-reference-identity'
 import { findWorkspaceReferences, type ReferenceAgentCandidate } from './runtime-reference-find'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 function workspace(id: string, urls: string[], hostId: ExecutionHostId = 'local') {
   return {

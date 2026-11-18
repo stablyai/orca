@@ -1,16 +1,9 @@
 import { isColdRestoreStartup, paneResumeRecord } from '../startup/pane-resume-record'
 import { releaseDeferredCwdFence } from './fresh-spawn-start'
+import { skipPaneResumeOwnedElsewhere } from '../startup/pane-resume-owned-elsewhere'
 import { isMainResumedSleepPaneCurrent, mainResumedSleepPane } from './main-resumed-sleep-pane'
 import { useAppStore } from '@/store/index'
-import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentSessionRecord
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { stablePaneHasLivePty } from '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
 import {
   clearPaneSpawnDeferral,
   getPaneSpawnDeferral,
@@ -29,54 +22,10 @@ import { releaseHiddenAgentResumeHold } from './hidden-agent-resume-deferral'
 import { startPaneThroughMainThenAttach } from './main-pane-start-request'
 import type { FreshSpawnOptions, PendingStartupCommand } from '../startup/fresh-spawn-types'
 
-const SESSION_RUNNING_ELSEWHERE_NOTICE =
-  '\r\n\x1b[2mThis agent session is already running in another tab.\x1b[0m\r\n'
-
 type DeferredSpawn = {
   reason: SpawnDeferralReason
   startupOverride: PendingStartupCommand | null | undefined
   options: FreshSpawnOptions
-}
-
-function providerSessionLiveInAnotherPane(resume: SleepingAgentSessionRecord): boolean {
-  const state = useAppStore.getState()
-  return Object.values(state.agentStatusByPaneKey).some((entry) => {
-    const pane = entry.paneKey === resume.paneKey ? null : parsePaneKey(entry.paneKey)
-    return (
-      pane !== null &&
-      entry.agentType === resume.agent &&
-      agentProviderSessionsEqual(resume.agent, entry.providerSession, resume.providerSession) &&
-      stablePaneHasLivePty(
-        pane.tabId,
-        pane.leafId,
-        state.ptyIdsByTabId,
-        state.terminalLayoutsByTabId[pane.tabId]
-      )
-    )
-  })
-}
-
-function providerSessionQueuedInAnotherTab(
-  resume: SleepingAgentSessionRecord,
-  ownTabId: string
-): boolean {
-  const state = useAppStore.getState()
-  const sameSession = (
-    agent: string | undefined,
-    providerSession: AgentProviderSessionMetadata | undefined
-  ): boolean =>
-    agent === resume.agent &&
-    agentProviderSessionsEqual(resume.agent, providerSession, resume.providerSession)
-  return (
-    Object.entries(state.pendingStartupByTabId).some(
-      ([tabId, startup]) =>
-        tabId !== ownTabId && sameSession(startup.launchAgent, startup.resumeProviderSession)
-    ) ||
-    Object.entries(state.automaticAgentResumeClaimsByTabId).some(
-      ([tabId, claim]) =>
-        tabId !== ownTabId && sameSession(claim.launchAgent, claim.providerSession)
-    )
-  )
 }
 
 /** Adds "Resume automatic restores" once the pane's host proves it can clear the pause. */
@@ -157,17 +106,8 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
     }
     session.deferredSpawn = null
     cancelDeferredRestoreRetry(session.cacheKey)
-    const resume = paneResumeRecord(session, deferred.startupOverride)
-    if (
-      resume &&
-      (providerSessionLiveInAnotherPane(resume) ||
-        providerSessionQueuedInAnotherTab(resume, session.deps.tabId))
-    ) {
+    if (skipPaneResumeOwnedElsewhere(session, deferred.startupOverride)) {
       clearPaneSpawnDeferral(session.cacheKey)
-      // Why no spawn: the session runs or is starting elsewhere, and a second `--resume` forks it.
-      writeTerminalOutput(session.pane.terminal, SESSION_RUNNING_ELSEWHERE_NOTICE, {
-        foreground: session.deps.isVisibleRef.current === true
-      })
       return Promise.resolve(null)
     }
     // Retain session ownership until PTY binding so activation cannot resume it in another tab mid-spawn.

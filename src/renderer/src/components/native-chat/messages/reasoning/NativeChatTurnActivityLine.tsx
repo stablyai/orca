@@ -2,18 +2,18 @@ import { useId } from 'react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import type { NativeChatLiveLine } from '../../../../../../shared/native-chat/transcript/native-chat-live-line'
-import { nativeChatReasoningDisclosureKey } from '../../../../../../shared/native-chat/transcript/native-chat-reasoning-row'
+import type { NativeChatLiveLine } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-live-line'
+import { nativeChatReasoningDisclosureKey } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import {
   describeNativeChatActiveTurnLabel,
   type NativeChatActiveTurnLabel
-} from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import {
   NativeChatReasoningBody,
   NativeChatReasoningChevron
 } from './NativeChatReasoningDisclosure'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 // Literal keys with literal fallbacks: a dynamic key registers no catalog reference.
 function statusLabel(

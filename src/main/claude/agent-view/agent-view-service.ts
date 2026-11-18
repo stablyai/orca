@@ -1,15 +1,17 @@
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { getAgentLaunchExecutableName } from '../../../shared/agent-launch/startup/agent-command-line-intent'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { listClaudeProfileHomesAsync } from '../../claude-accounts/profiles/claude-profile-homes'
-import { resolveLoginShellEnvironment } from '../../startup/login-shell-environment'
+import { resolveLoginShellEnvironment } from '../../startup/shell-environment/login-shell-environment'
 import { reconcileClaudeAgentViewConfig } from './agent-view-config'
 import { ensureClaudeAgentViewPluginAsync } from './agent-view-plugin'
+import { getManagedAgentHookTarget } from '../../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
+import { detectLocalManagedAgentCliPresence } from '../../agent-hooks/installation/local-agent-cli-presence'
 
 type NavigationSettings = Partial<
   Pick<
@@ -18,6 +20,7 @@ type NavigationSettings = Partial<
     | 'agentStatusHooksEnabled'
     | 'disabledTuiAgents'
     | 'agentDefaultEnv'
+    | 'agentCmdOverrides'
   >
 >
 
@@ -26,6 +29,19 @@ type ServiceDeps = {
   ensurePlugin: typeof ensureClaudeAgentViewPluginAsync
   listProfiles: typeof listClaudeProfileHomesAsync
   loginEnv: typeof resolveLoginShellEnvironment
+  claudeOnPath: (settings: NavigationSettings) => Promise<boolean>
+}
+
+// Same presence rule as the managed Claude hooks: no Claude CLI, no writes to its config (#43445).
+async function isClaudeOnPath(settings: NavigationSettings): Promise<boolean> {
+  const target = getManagedAgentHookTarget('claude')
+  if (!target) {
+    return false
+  }
+  const presence = await detectLocalManagedAgentCliPresence([target], settings, {
+    shouldHydrateShellPath: getAppEnvironment().isPackaged()
+  })
+  return presence.claude?.state === 'found'
 }
 
 export class ClaudeAgentViewService {
@@ -33,6 +49,7 @@ export class ClaudeAgentViewService {
   private key?: string
   private generation = 0
   private enabled = false
+  private writesConfig = false
   private pluginRoot?: string
   private readonly configs = new Set<string>()
   private defaultConfig = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
@@ -43,7 +60,8 @@ export class ClaudeAgentViewService {
       reconcileConfig: reconcileClaudeAgentViewConfig,
       ensurePlugin: ensureClaudeAgentViewPluginAsync,
       listProfiles: listClaudeProfileHomesAsync,
-      loginEnv: resolveLoginShellEnvironment
+      loginEnv: resolveLoginShellEnvironment,
+      claudeOnPath: isClaudeOnPath
     }
   ) {}
 
@@ -62,6 +80,11 @@ export class ClaudeAgentViewService {
     const generation = ++this.generation
     return this.enqueue(async () => {
       const env = enabled ? await this.deps.loginEnv() : process.env
+      // Without Claude, leave its config untouched: neither add the binding nor remove one.
+      const writesConfig = !enabled || (await this.deps.claudeOnPath(settings).catch(() => false))
+      if (generation === this.generation) {
+        this.writesConfig = writesConfig
+      }
       const cachedEnv = enabled ? undefined : await this.deps.loginEnv({ cachedOnly: true })
       this.defaultConfig =
         env.CLAUDE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
@@ -75,7 +98,7 @@ export class ClaudeAgentViewService {
           this.configs.add(resolve(dir))
         }
       }
-      for (const dir of this.configs) {
+      for (const dir of writesConfig ? this.configs : []) {
         await this.deps.reconcileConfig(join(dir, 'settings.json'), enabled)
       }
       const root = enabled ? await this.deps.ensurePlugin(this.userDataPath) : undefined
@@ -91,7 +114,11 @@ export class ClaudeAgentViewService {
       return this.tail
     }
     this.configs.add(dir)
-    return this.enqueue(() => this.deps.reconcileConfig(join(dir, 'settings.json'), this.enabled))
+    return this.enqueue(async () => {
+      if (this.writesConfig) {
+        await this.deps.reconcileConfig(join(dir, 'settings.json'), this.enabled)
+      }
+    })
   }
 
   ready(): Promise<void> {

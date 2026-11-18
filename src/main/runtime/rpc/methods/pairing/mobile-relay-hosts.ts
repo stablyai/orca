@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { resolveWorktreeCatalogSnapshot } from '../../worktree-catalog-snapshot'
+import { resolveWorktreeCatalogSnapshot } from '../../workspace-client-views/worktree-catalog-snapshot'
 import {
   MOBILE_RELAY_HOST_WORKTREES_METHOD,
   MOBILE_RELAY_HOSTS_LIST_METHOD,
@@ -11,7 +11,7 @@ export const MOBILE_RELAY_HOSTS_METHODS = [
     name: MOBILE_RELAY_HOSTS_LIST_METHOD,
     permission: 'workspace',
     params: null,
-    handler: (_params, ctx) => ctx.mobileRelayHosts?.list() ?? { hosts: [] }
+    handler: async (_params, ctx) => (await ctx.mobileRelayHosts?.list()) ?? { hosts: [] }
   }),
   defineMethod({
     name: MOBILE_RELAY_HOST_WORKTREES_METHOD,

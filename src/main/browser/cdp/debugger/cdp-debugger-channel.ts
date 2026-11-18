@@ -5,6 +5,7 @@ import type { CdpClientResponseWriter } from '../transport/cdp-client-response-w
 import type { CdpSyntheticSessionRegistry } from '../transport/cdp-synthetic-session-registry'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 import { isOrcaFrameSessionTraffic } from '../input/guest-frame-input-sessions'
+import type { CapturePaintHold } from './guest-paint-hold'
 
 export class CdpDebuggerChannel {
   private nativeDebugger: WebContents['debugger'] | null = null
@@ -12,14 +13,19 @@ export class CdpDebuggerChannel {
   private debuggerDetachHandler: ((...args: unknown[]) => void) | null = null
   private debuggerLease: ElectronDebuggerLease | null = null
   private attached = false
+  private screencastPaintRelease: (() => void) | null = null
 
   constructor(
     private readonly webContents: WebContents,
     private readonly responder: CdpClientResponseWriter,
     private readonly sessions: CdpSyntheticSessionRegistry,
     private readonly getClient: () => WebSocket | null,
-    private readonly onDetached: () => void
-  ) {}
+    private readonly onDetached: () => void,
+    private readonly holdPaint: CapturePaintHold
+  ) {
+    // A detached session cannot stop or consume its screencast, so stop painting for it.
+    sessions.onScreencastSessionDetached(() => this.releaseScreencastPaint())
+  }
 
   async attachDebugger(): Promise<void> {
     if (this.attached) {
@@ -52,7 +58,7 @@ export class CdpDebuggerChannel {
       }
       // Electron uses an empty root session ID; agent-browser expects its attachToTarget ID.
       const msg: Record<string, unknown> = { method, params }
-      msg.sessionId = sessionId || this.sessions.primarySessionId
+      msg.sessionId = sessionId || this.sessions.rootEventSessionId(method)
       this.responder.send(msg, client)
     }
     this.debuggerDetachHandler = () => {
@@ -120,16 +126,46 @@ export class CdpDebuggerChannel {
       return
     }
     const sessionId = this.sessions.resolveDebuggerSessionId(msgSessionId)
+    let screencastHold: (() => void) | null = null
     try {
+      screencastHold = this.trackScreencast(method, msgSessionId)
       this.sendDebuggerCommand(method, params, sessionId)
         .then((result) => {
           this.responder.sendResult(clientId, result, client)
         })
         .catch((err: Error) => {
+          this.releaseFailedStartHold(screencastHold)
           this.responder.sendError(clientId, err.message, client)
         })
     } catch (err) {
+      this.releaseFailedStartHold(screencastHold)
       this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
     }
+  }
+
+  releaseScreencastPaint(): void {
+    const release = this.screencastPaintRelease
+    this.screencastPaintRelease = null
+    release?.()
+  }
+
+  private releaseFailedStartHold(hold: (() => void) | null): void {
+    if (hold && hold === this.screencastPaintRelease) {
+      this.releaseScreencastPaint()
+    }
+  }
+
+  /** Returns the paint hold this start acquired, so only a failed first start releases it. */
+  private trackScreencast(method: string, msgSessionId?: string): (() => void) | null {
+    if (method === 'Page.startScreencast') {
+      this.sessions.routeScreencastEventsTo(msgSessionId)
+      if (!this.screencastPaintRelease) {
+        this.screencastPaintRelease = this.holdPaint()
+        return this.screencastPaintRelease
+      }
+    } else if (method === 'Page.stopScreencast') {
+      this.releaseScreencastPaint()
+    }
+    return null
   }
 }

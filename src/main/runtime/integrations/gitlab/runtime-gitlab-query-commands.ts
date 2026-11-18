@@ -3,8 +3,8 @@ import type {
   GitLabProjectRef,
   GitLabWorkItem,
   MRListState
-} from '../../../../shared/gitlab-types'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/gitlab/gitlab-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { diagnoseAuth, getRateLimit } from '../../../gitlab/requests/gitlab-auth-and-rate-limit'
 import {
   getWorkItemByProjectRef,
@@ -24,7 +24,7 @@ import {
   type GitLabIssueListState
 } from '../../../gitlab/requests/gitlab-preload-args'
 import { getWorkItemDetails } from '../../../gitlab/work-items/work-item-details'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 

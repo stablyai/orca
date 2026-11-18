@@ -2,12 +2,13 @@ import { useCallback, useState } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import { useMediaPicker } from '../../platform/media-picker'
+import { useMediaPicker } from '../../platform/media-picking/media-picker'
 import {
   ImageLibraryPermissionError,
   type MobileImageSource
-} from '../../platform/media-picker-contract'
+} from '../../platform/media-picking/media-picker-contract'
 import { attachMobileImageToTerminal } from './mobile-image-attachment'
+import { fitMobileAgentImage } from './mobile-agent-image-fit'
 
 type CurrentRef<T> = {
   readonly current: T
@@ -68,6 +69,7 @@ export function useMobileImageAttachment({
           getConnectionId: getActiveWorktreeConnectionId,
           pickImage: picker.pickImage,
           onUploadStart: () => setIsAttaching(true),
+          fitImage: fitMobileAgentImage,
           beforeTerminalSend
         })
         if (sent) {

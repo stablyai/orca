@@ -6,8 +6,8 @@ import {
   CHECK_ICON,
   checkPresentationKey
 } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
-import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { CheckDetailsLoadState } from '@/components/github/github-checks-tab-state'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { getCheckDetailsKey, getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { ChecksTabCheckDetails } from './checks-tab-check-details'
 import { useTranslate } from '@/i18n/use-translate'

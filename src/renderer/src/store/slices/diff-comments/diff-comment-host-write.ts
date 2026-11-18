@@ -1,16 +1,17 @@
-import type { DiffComment } from '../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import type { DiffCommentOwner } from './diff-comment-owner'
 import { toRuntimeWorktreeSelector } from '../../../runtime/rpc/targets/runtime-worktree-selector'
 import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
-/** Writes a workspace's whole review-note list to the host that owns it. */
+/** Writes a workspace's whole review-note list to the host that owns it; the base is the list it was edited from. */
 export async function writeDiffCommentsToHost(
   owner: DiffCommentOwner,
-  diffComments: DiffComment[]
+  diffComments: DiffComment[],
+  diffCommentsBase: DiffComment[] | undefined
 ): Promise<void> {
   const worktreeId = owner.worktreeId
   const scope = parseWorkspaceKey(worktreeId)
@@ -47,7 +48,8 @@ export async function writeDiffCommentsToHost(
     const meta = await window.api.worktrees.updateMeta({
       worktreeId,
       executionHostId: at,
-      updates: { diffComments }
+      // Why base: the host applies only this edit, so notes another device added meanwhile survive.
+      updates: { diffComments, ...(diffCommentsBase ? { diffCommentsBase } : {}) }
     })
     // Why: main answers null when it refuses or drops the write; reporting success would lose the notes.
     if (!meta) {
@@ -58,7 +60,11 @@ export async function writeDiffCommentsToHost(
   await callRuntimeRpc(
     { kind: 'environment', environmentId: endpoint.environmentId },
     'worktree.set',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), diffComments },
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      diffComments,
+      ...(diffCommentsBase ? { diffCommentsBase } : {})
+    },
     { timeoutMs: 15_000 }
   )
 }

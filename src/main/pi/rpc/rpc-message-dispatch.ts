@@ -4,7 +4,7 @@ import {
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { ClaudeDispatchContentError } from '../../claude/structured/claude-structured-dispatch-content'
+import { ClaudeDispatchContentError } from '../../claude/structured/dispatch/claude-structured-dispatch-content'
 import { JsonlRpcResponseError } from '../../jsonl-rpc/peer-reply'
 import type {
   AgentSessionDispatchOutcome,
@@ -35,7 +35,7 @@ export async function dispatchPiRpcMessage(
 ): Promise<AgentSessionDispatchOutcome> {
   let prompt
   try {
-    prompt = await preparePiRpcPrompt(input.body)
+    prompt = await preparePiRpcPrompt(input.body, session.shrinksImages)
   } catch (error) {
     logger.warn('Pi prompt could not be prepared', {
       scope: 'pi-prompt',

@@ -6,7 +6,7 @@ import {
   type WslMoveCutover
 } from '../../../../shared/wsl-move/wsl-move-cutover'
 import { isRecord } from '../../../../shared/orcad-migration/orcad-migration-manifest-fields'
-import { assertOrcadMigrationManifestDigest } from '../../../orcad/orcad-migration-manifest-digest'
+import { assertOrcadMigrationManifestDigest } from '../../../orcad/migration/orcad-migration-manifest-digest'
 import {
   createMigrationJournalDirectory,
   orderMigrationJournalChain
@@ -136,7 +136,9 @@ function assertWslMoveUpdate(
 ): void {
   if (
     next.manifestSha256 !== existing.manifestSha256 ||
-    next.supersedesMigrationId !== existing.supersedesMigrationId
+    next.supersedesMigrationId !== existing.supersedesMigrationId ||
+    // Recovery maps the moved paths with these, so they never change after `prepared`.
+    JSON.stringify(next.mappedDrives) !== JSON.stringify(existing.mappedDrives)
   ) {
     throw new Error('wsl_move_binding_changed')
   }

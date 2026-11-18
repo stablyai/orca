@@ -12,7 +12,7 @@ SELECTORS = {
     "scroll": (r"list|scroll|document|web", r"\blist\b|\bbenchelectron\b"),
 }
 TASKS = {
-    "targeted_type": [("type", "field")],
+    "targeted_type": [("type_into", "field")],
     "type_submit": [("click", "field"), ("type", "field"), ("return", "field")],
     "replace_submit": [("click", "field"), ("ctrl_a", "field"), ("type", "field"), ("return", "field")],
     "choose_and_click": [("choose", "color"), ("click", "button")],

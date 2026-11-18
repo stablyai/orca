@@ -1,16 +1,13 @@
 import { persistFreshPaneBinding } from './fresh-pane-binding'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Store } from '../../../persistence/loading-store/store'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type {
-  IPtyProvider,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { getPtySshConnectionId } from '../provider/registry'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'

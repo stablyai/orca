@@ -1,6 +1,6 @@
 import { codexRolloutItem } from '../../../codex/history/rollouts/codex-rollout-item-projection'
-import { timestampIso } from '../../session-scanner-accumulator'
-import { asRecord } from '../../session-scanner-record-value'
+import { timestampIso } from '../../parsing/session-scanner-accumulator'
+import { asRecord } from '../../parsing/session-record-fields'
 import type { SessionAccumulator } from '../../session-scanner-types'
 import { transcriptMessagesFromContent } from '../../transcripts/session-transcript-message-content'
 

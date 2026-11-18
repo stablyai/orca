@@ -44,6 +44,8 @@ export const WorkerApprovalPayloadSchema = z.object({
   }),
   /** The decisions Orca can apply to this prompt now; empty once it is closed. */
   allowedActions: z.array(WorkerApprovalDecisionSchema),
+  /** The worker's agent lets only a person allow it: Orca refuses an agent's allow. */
+  personOnly: z.literal(true).optional(),
   /** When the agent decides on its own, read from its screen; only while that countdown is shown. */
   expiresAt: z.string().optional(),
   outcome: WorkerApprovalOutcomeSchema.optional()

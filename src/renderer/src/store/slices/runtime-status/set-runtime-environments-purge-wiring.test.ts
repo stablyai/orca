@@ -1,7 +1,7 @@
 /** Exercise optional-chained purge wiring (#8881): pure reducer tests cannot catch a missing/renamed call. */
 import { describe, it, expect, vi } from 'vitest'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 vi.mock('sonner', () => ({
@@ -21,7 +21,7 @@ globalThis.window = { api: {} }
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../repos/repo.test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')
 

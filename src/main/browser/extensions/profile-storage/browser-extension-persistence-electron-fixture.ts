@@ -1,18 +1,18 @@
 import { app, BaseWindow, BrowserWindow, protocol, session } from 'electron'
 import { renameSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
-import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
+import { initializeBrowserProcessUserAgent } from '../../identity/browser-process-user-agent'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../api-runtime/browser-extension-api-scheme'
-import {
-  attachBrowserExtensionsToProfileSession,
-  whenBrowserExtensionSessionsLoaded
-} from '../profile-sessions/browser-extension-session-loader'
+import { attachBrowserExtensionsToProfileSession } from '../profile-sessions/browser-extension-session-loader'
+import { holdWebviewFirstLoadForExtensions } from '../profile-sessions/browser-extension-page-start'
 import { addUnpackedBrowserExtension } from '../browser-extension-management'
+import { closeBrowserExtensionProfileDocumentStores } from './browser-extension-profile-document-store'
 import { buildBrowserExtensionPageContextMenu } from '../context-menus/browser-extension-context-menu-host'
 import { recordActiveBrowserPage } from '../tabs-and-windows/browser-extension-tab-model'
 import { trackBrowserExtensionMainWindow } from '../tabs-and-windows/browser-extension-window-model'
@@ -35,6 +35,8 @@ const fixtureExtensionDirectory = extensionDirectory
 
 // Orca's preflight registers this before ready; the worker shim calls main through it.
 protocol.registerSchemesAsPrivileged([BROWSER_EXTENSION_API_CUSTOM_SCHEME])
+// Orca sets this before ready; the tab's guest policies read it as its first load starts.
+initializeBrowserProcessUserAgent('clean')
 
 const presentationCalls: string[] = []
 for (const method of ['show', 'showInactive', 'focus', 'moveTop'] as const) {
@@ -81,9 +83,13 @@ function capture(message: string): void {
       status[key] =
         key === 'commands' ? [...(Array.isArray(status[key]) ? status[key] : []), value] : value
       writeStatus()
-      // Why quit, not exit: will-quit flushes the extension state the second launch replays.
+      // Why quit, not exit: will-quit flushes the extension state the second launch replays; sync
+      // storage saves last, as Orca's quit does.
       if (key === 'setup' && phase === 'first') {
-        setTimeout(() => app.quit(), 300)
+        setTimeout(
+          () => void closeBrowserExtensionProfileDocumentStores().then(() => app.quit()),
+          300
+        )
       }
     }
   }
@@ -96,6 +102,11 @@ async function openTab(url: string): Promise<Electron.WebContents> {
     webPreferences: { contextIsolation: true, sandbox: true, webviewTag: true }
   })
   trackBrowserExtensionMainWindow(host)
+  // What Orca's main window does when a tab attaches in a browser profile.
+  host.webContents.on('will-attach-webview', (_event, _webPreferences, params) => {
+    browserSessionRegistry.attachExtensions('default')
+    holdWebviewFirstLoadForExtensions(host.webContents, 'default', params)
+  })
   const attached = new Promise<Electron.WebContents>((resolve) => {
     host.webContents.once('did-attach-webview', (_event, guest) => {
       guest.on('console-message', (details) => capture(details.message))
@@ -140,12 +151,7 @@ async function run(): Promise<void> {
     return
   }
 
-  // Second launch: what a restart does, then the first page load.
-  attachBrowserExtensionsToProfileSession(
-    profile,
-    browserSessionRegistry.getEnabledExtensionIds(profile.id)
-  )
-  await whenBrowserExtensionSessionsLoaded(5_000)
+  // Second launch: the profile's extensions start with its first page, which must still get them.
   const guest = await openTab(pageUrl)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only the fields given here.
   const params = {

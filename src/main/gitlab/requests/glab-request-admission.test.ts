@@ -18,7 +18,7 @@ vi.mock('../../git/command-runner/hosted-cli/glab-exec-file', async (importOrigi
   glabExecFileAsync: glabExecFileAsyncMock
 }))
 
-vi.mock('../../github/local-git-config-signature', () => ({
+vi.mock('../../github/repositories/local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 import { _resetProjectRefCache, getProjectRef } from '../projects/gitlab-project-ref-resolution'

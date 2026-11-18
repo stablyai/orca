@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
-import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/codex-auth-errors'
+import { stripAnsiEscapeSequences } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/agent-accounts/codex/codex-auth-errors'
 import {
   HOST_ACCOUNT_SIGN_IN_FAILURE_COPY,
   HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES,
@@ -10,7 +10,7 @@ import {
   type HostAccountSignInChannel,
   type HostAccountSignInProvider,
   type HostAccountSignInStatus
-} from '../../../../shared/host-account-sign-in-types'
+} from '../../../../shared/agent-accounts/host-account-sign-in-types'
 
 // Keep long polls inside typical RPC deadlines.
 const WAIT_MS = 20_000
@@ -27,11 +27,14 @@ const LOGIN_CANCELLED_MESSAGES = new Set([
 
 export type HostAccountSignInRunner = (
   provider: HostAccountSignInProvider,
-  channel: HostAccountSignInChannel
+  channel: HostAccountSignInChannel,
+  accountId: string | undefined
 ) => Promise<Pick<HostAccountSignInStatus, 'claude' | 'codex'>>
 
 type Flow = {
   owner: string
+  /** The saved account this flow re-authenticates; undefined adds a new one. */
+  accountId: string | undefined
   status: HostAccountSignInStatus
   ended: AbortController
   stop: 'cancelled' | 'silent' | null
@@ -55,15 +58,26 @@ export class HostAccountSignInFlows {
     private readonly platform: NodeJS.Platform = process.platform
   ) {}
 
-  start(owner: string, provider: HostAccountSignInProvider): HostAccountSignInStatus {
+  start(
+    owner: string,
+    provider: HostAccountSignInProvider,
+    accountId?: string
+  ): HostAccountSignInStatus {
     if (this.platform === 'win32') {
       throw new Error(
-        'Adding accounts from another device is not available on Windows hosts yet. Run `orca account add` in a terminal on that host.'
+        accountId
+          ? 'Signing in again from another device is not available on Windows hosts yet. Sign in again on that host.'
+          : 'Adding accounts from another device is not available on Windows hosts yet. Run `orca account add` in a terminal on that host.'
       )
     }
     const current = this.active
     if (current) {
-      if (current.owner === owner && current.status.provider === provider && !current.stop) {
+      if (
+        current.owner === owner &&
+        current.status.provider === provider &&
+        current.accountId === accountId &&
+        !current.stop
+      ) {
         this.touch(current)
         return current.status
       }
@@ -78,6 +92,7 @@ export class HostAccountSignInFlows {
     code.promise.catch(() => {})
     const flow: Flow = {
       owner,
+      accountId,
       status: { flowId: randomUUID(), provider, revision: 1, phase: 'starting' },
       ended: new AbortController(),
       stop: null,
@@ -109,7 +124,7 @@ export class HostAccountSignInFlows {
       nextCode: () => flow.code.promise
     }
     try {
-      const result = await this.run(flow.status.provider, channel)
+      const result = await this.run(flow.status.provider, channel, flow.accountId)
       this.update(flow, { phase: 'signedIn', prompt: undefined, ...result })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

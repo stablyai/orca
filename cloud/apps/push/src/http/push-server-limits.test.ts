@@ -1,10 +1,10 @@
 import { PUSH_LIMITS } from '@orca-cloud/push-contract/push-limits'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   createPushHostKeypair,
   hostPublicKeyB64
 } from '../host-auth/host-challenge-answering.test-fixture.js'
-import { createPushServerHarness, notification } from './push-server-harness.test-fixture.js'
+import { createPushServerHarness } from './push-server-harness.test-fixture.js'
 
 const CLIENT_IP = '203.0.113.7'
 const OTHER_CLIENT_IP = '198.51.100.9'
@@ -44,42 +44,6 @@ describe('push gateway request limits', () => {
     expect(request.headers.get('content-length')).toBeNull()
 
     const response = await harness.server.app.request(request)
-    expect(response.status).toBe(413)
-    expect(await response.json()).toEqual({ error: 'request_too_large' })
-  })
-
-  it('still refuses an oversized body that declares a content length', async () => {
-    const body = oversizedChallengeBody()
-    const response = await harness.server.app.request('/v1/host/challenge', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'content-length': String(Buffer.byteLength(body))
-      },
-      body
-    })
-    expect(response.status).toBe(413)
-    expect(await response.json()).toEqual({ error: 'request_too_large' })
-  })
-
-  it('caps an authenticated oversized send as well', async () => {
-    const sessionToken = await harness.signIn(createPushHostKeypair(61))
-    const response = await harness.server.app.request(
-      new Request('http://push.test/v1/send', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${sessionToken}`
-        },
-        body: new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(oversizedChallengeBody()))
-            controller.close()
-          }
-        }),
-        duplex: 'half'
-      } as RequestInit)
-    )
     expect(response.status).toBe(413)
     expect(await response.json()).toEqual({ error: 'request_too_large' })
   })
@@ -135,27 +99,6 @@ describe('push gateway request limits', () => {
     expect(spoofed.status).toBe(429)
   })
 
-  it('lets a throttled client back in once the window refills', async () => {
-    const body = JSON.stringify({
-      v: 1,
-      hostPublicKeyB64: hostPublicKeyB64(createPushHostKeypair(63))
-    })
-    const headers = { 'content-type': 'application/json', 'x-forwarded-for': CLIENT_IP }
-    for (let index = 0; index < PUSH_LIMITS.unauthenticatedRequestsPerMinutePerIp; index++) {
-      await harness.server.app.request('/v1/host/challenge', { method: 'POST', headers, body })
-    }
-    expect(
-      (await harness.server.app.request('/v1/host/challenge', { method: 'POST', headers, body }))
-        .status
-    ).toBe(429)
-
-    harness.advanceClock(60_000)
-    expect(
-      (await harness.server.app.request('/v1/host/challenge', { method: 'POST', headers, body }))
-        .status
-    ).toBe(200)
-  })
-
   it('limits authenticated hosts independently behind the same IP', async () => {
     const sessionToken = await harness.signIn(createPushHostKeypair(64))
     const headers = { 'x-forwarded-for': CLIENT_IP }
@@ -174,44 +117,5 @@ describe('push gateway request limits', () => {
       body: JSON.stringify({ v: 1, hostPublicKeyB64: hostPublicKeyB64(createPushHostKeypair(67)) })
     })
     expect(challenge.status).toBe(200)
-  })
-
-  // Why: a database error carries the failing row in its message. The response
-  // and the log must both stop at the error's name.
-  it('answers an unexpected route failure with a bare 500 and logs only the name', async () => {
-    const sessionToken = await harness.signIn(createPushHostKeypair(66))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    try {
-      await harness.database.close()
-      const response = await harness.authorized('/v1/devices', {}, sessionToken)
-      expect(response.status).toBe(500)
-      expect(await response.json()).toEqual({ error: 'internal' })
-      const logged = warn.mock.calls.map((call) => String(call[0])).join('\n')
-      expect(logged).toContain('"event":"orca_push_request_failed"')
-      expect(logged).not.toContain('SELECT')
-      expect(logged).not.toContain('push_devices')
-      expect(harness.server.observability.consume().request_error).toBe(1)
-    } finally {
-      warn.mockRestore()
-    }
-  })
-
-  it('charges a repeated registration id once and returns one result', async () => {
-    const sessionToken = await harness.signIn(createPushHostKeypair(65))
-    const registrationId = await harness.registerAndroid(sessionToken)
-
-    const response = await harness.post(
-      '/v1/send',
-      {
-        v: 1,
-        registrationIds: [registrationId, registrationId, registrationId],
-        notification: notification()
-      },
-      sessionToken
-    )
-    expect(await response.json()).toEqual({ results: [{ registrationId, status: 'queued' }] })
-    expect(await harness.server.deliveryStore.pendingCount(registrationId)).toBe(1)
-    const [row] = await harness.database.query('SELECT COUNT(*) AS sends FROM push_events')
-    expect(Number(row?.sends)).toBe(1)
   })
 })

@@ -9,7 +9,7 @@ import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './pairing/network/network-expo
 import { createOwnerPairingOffer } from './pairing/pairing-offer-requests'
 import type { PairingOffersRpcContext } from '../core'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
   pairingUnavailable,

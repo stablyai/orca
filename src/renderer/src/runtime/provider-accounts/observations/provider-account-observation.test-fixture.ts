@@ -10,8 +10,8 @@ import {
   RuntimeAccountController,
   type RuntimeAccountServices
 } from '../../../../../main/runtime/agent-session/environment/runtime-account-controller'
-import { createEmptyRateLimitState } from '../../../../../shared/rate-limit-state-factory'
-import type { RateLimitState } from '../../../../../shared/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
+import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { ProviderAccountsSnapshot } from './runtime-provider-accounts-client'
 
 export function accountHost() {

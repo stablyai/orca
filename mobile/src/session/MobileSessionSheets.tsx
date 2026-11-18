@@ -1,24 +1,26 @@
 import { Platform } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
-import { useClipboardWriter } from '../platform/clipboard'
-import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
-import { MobileSessionTerminalLayoutSheet } from '../terminal/session/MobileSessionTerminalLayoutSheet'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
+import { Copy, FileText, RefreshCw } from 'lucide-react-native'
+import { MobileSessionTerminalLayoutSheet } from '../terminal/session/pane-layout/MobileSessionTerminalLayoutSheet'
 import { QuickCommandsSheet } from '../terminal/quick-commands/QuickCommandsSheet'
-import { triggerSuccess, triggerError } from '../platform/haptics'
-import { ActionSheetModal } from '../components/ActionSheetModal'
-import { TextInputModal } from '../components/TextInputModal'
-import { MobileTerminalRenameModal } from '../terminal/session/MobileTerminalRenameModal'
-import { ConfirmModal } from '../components/ConfirmModal'
-import { CustomKeyModal } from '../components/CustomKeyModal'
-import { MobileDictationSetupSheet } from '../components/MobileDictationSetupSheet'
+import { triggerSuccess, triggerError } from '../platform/haptics/haptics'
+import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
+import { TextInputModal } from '../components/sheets/TextInputModal'
+import { MobileTerminalRenameModal } from '../terminal/session/tab-actions/MobileTerminalRenameModal'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
+import { CustomKeyModal } from '../terminal/shortcuts/settings/CustomKeyModal'
+import { MobileDictationSetupSheet } from '../dictation/setup/MobileDictationSetupSheet'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './tabs/MobileBrowserTabActionSheet'
-import { getMobileTerminalActionSheetActions } from '../terminal/session/mobile-terminal-action-sheet-actions'
-import { isTerminalPhoneDisplayMode } from '../terminal/session/terminal-phone-display-mode'
+import { getMobileTerminalActionSheetActions } from '../terminal/session/tab-actions/mobile-terminal-action-sheet-actions'
+import { isTerminalPhoneDisplayMode } from '../terminal/session/pane-layout/terminal-phone-display-mode'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
+import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
+import { MobileSessionTextSizeSheet } from './MobileSessionTextSizeSheet'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
@@ -90,7 +92,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     bulkCloseActions,
     bulkCloseConfirm,
     closeWithBulkActions,
-    createTabAgentActions,
+    createTabAgentStatusRow,
+    createTabAgentOptions,
+    createTabAgentSurfaceChoice,
     sendDiffNotesAgentActions
   } = controller
   const clipboard = useClipboardWriter()
@@ -102,6 +106,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         visible={showTerminalLayout}
         onClose={() => setShowTerminalLayout(false)}
       />
+      <MobileSessionTextSizeSheet controller={controller} />
       <QuickCommandsSheet
         visible={showQuickCommands && quickCommandsSupported === true}
         onClose={() => setShowQuickCommands(false)}
@@ -115,61 +120,36 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         agentPromptMaxLength={controller.quickCommandAgentPromptMaxLength}
         onLaunch={launchQuickCommand}
       />
-      <ActionSheetModal
+      <MobileNewTabSheet
         visible={showCreateTabDrawer}
-        title={t('session.sheets.newTab', 'New Tab')}
-        actions={[
-          ...createTabAgentActions,
-          {
-            id: 'terminal',
-            label: t('session.sheets.terminal', 'Terminal'),
-            icon: SquareTerminal,
-            onPress: () => {
-              setShowCreateTabDrawer(false)
-              void handleCreateTerminal()
-            }
-          },
-          // Why: browser/markdown creation resolve a real worktree on the host
-          // (browser.tabCreate, files.createFile); the floating sentinel is
-          // terminal-only over RPC, so those options hide there.
-          ...(isFloatingWorkspaceRoute
-            ? []
-            : [
-                {
-                  id: 'browser',
-                  label: t('session.sheets.browser', 'Browser'),
-                  icon: Globe,
-                  closeBeforePress: true,
-                  onPress: () => {
-                    if (browserScreencastSupported !== true) {
-                      showToast(
-                        t(
-                          'session.sheets.browserUpdateRequired',
-                          'Desktop update required for mobile browser streaming'
-                        ),
-                        1600
-                      )
-                      return
-                    }
-                    setShowCreateBrowserModal(true)
-                  }
-                },
-                ...(onPairedHost
-                  ? [
-                      {
-                        id: 'markdownNote',
-                        label: t('session.sheets.markdownNote', 'Markdown Note'),
-                        icon: FileText,
-                        onPress: () => {
-                          setShowCreateTabDrawer(false)
-                          void handleCreateMarkdownNote()
-                        }
-                      }
-                    ]
-                  : [])
-              ])
-        ]}
+        workspaceName={worktreeName}
+        agentOptions={createTabAgentOptions}
+        surfaceChoice={createTabAgentSurfaceChoice}
+        agentStatusRow={createTabAgentStatusRow}
+        // Why: browser/markdown creation resolve a real worktree on the host
+        // (browser.tabCreate, files.createFile); the floating sentinel is
+        // terminal-only over RPC, so those options hide there.
+        canCreateBrowser={!isFloatingWorkspaceRoute}
+        canCreateMarkdownNote={!isFloatingWorkspaceRoute && onPairedHost}
         onClose={() => setShowCreateTabDrawer(false)}
+        onCreateAgent={(agent, nativeChatDefault) =>
+          void handleCreateTerminal(agent, undefined, nativeChatDefault)
+        }
+        onCreateTerminal={() => void handleCreateTerminal()}
+        onCreateBrowser={() => {
+          if (browserScreencastSupported !== true) {
+            showToast(
+              t(
+                'session.sheets.browserStreamingUnavailable',
+                "This host can't stream browser tabs"
+              ),
+              1600
+            )
+            return
+          }
+          setShowCreateBrowserModal(true)
+        }}
+        onCreateMarkdownNote={() => void handleCreateMarkdownNote()}
       />
       <ActionSheetModal
         visible={pendingDiffNotesDelivery !== null}

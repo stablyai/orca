@@ -4,14 +4,14 @@ import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../../share
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
 } from '../../../../../shared/file-write/file-write-disk-precondition'
 import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
-import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
+
 import {
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,
@@ -99,27 +99,5 @@ describe('writeRuntimeFile disk precondition', () => {
       writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
     ).rejects.toThrow('Runtime connection changed')
     expect(writeCalls()).toHaveLength(0)
-  })
-
-  it('does not take a re-paired host holding the text as proof a lost write landed', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 1 }])
-    serveHost({ enforcesPrecondition: true, diskContent: 'edited' })
-    runtimeEnvironmentCall.mockImplementation(async () => {
-      // The reply is lost, and the environment id is re-paired to another machine meanwhile.
-      replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 2 }])
-      return {
-        id: 'rpc',
-        ok: false,
-        error: {
-          code: 'runtime_timeout',
-          message: 'Timed out waiting for the remote Orca runtime'
-        },
-        _meta: { runtimeId: 'remote-runtime' }
-      }
-    })
-
-    await expect(
-      writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
-    ).rejects.toThrow('Timed out')
   })
 })

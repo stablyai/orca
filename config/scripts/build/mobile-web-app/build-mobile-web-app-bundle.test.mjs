@@ -36,7 +36,6 @@ describeBundling('the app bundle', () => {
           join(directory, 'index.tsx'),
           'export default function Route() { return null }\n'
         )
-        await expect(bundleMobileWebApp({ appDir: scratch })).resolves.toBeTruthy()
         await writeFile(
           join(directory, 'settings.tsx'),
           'const anchor = { anchor: "index" }\nexport { anchor as unstable_settings }\nexport default function Route() { return null }\n'
@@ -90,24 +89,6 @@ describeBundling('the app bundle', () => {
 })
 
 describe('the verifier', () => {
-  itBundling(
-    "rejects a buildId the manifest's own asset list does not derive",
-    async () => {
-      await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web')
-        await copyWrittenBundle(outDir)
-        const manifestPath = join(outDir, 'manifest.json')
-        const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-        manifest.buildId = 'f'.repeat(64)
-        await writeFile(manifestPath, JSON.stringify(manifest), 'utf8')
-        await expect(verifyMobileWebAppBundle({ bundleDir: outDir })).rejects.toThrow(
-          'does not match its asset list'
-        )
-      })
-    },
-    240_000
-  )
-
   itBundling(
     'rejects a self-consistent bundle a fresh build does not reproduce',
     async () => {

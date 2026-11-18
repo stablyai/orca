@@ -1,15 +1,15 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import os from 'node:os'
-import { getAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment, type AppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import type {
   AppMemory,
   MemorySnapshot,
   SessionMemory,
   UsageValues,
   WorktreeMemory
-} from '../../shared/process-stats-types'
-import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
+} from '../../shared/diagnostics/process-stats-types'
+import { ORPHAN_WORKTREE_ID } from '../../shared/terminal/pty/orphan-worktree-id'
 import { listRegisteredPtys } from './pty-registry'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
 import { collectHostMemory } from './host-memory'

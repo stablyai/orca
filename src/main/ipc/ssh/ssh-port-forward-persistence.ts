@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { SavedPortForward } from '../../../shared/ssh-types'
+import type { SavedPortForward } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { connectionManager, portForwardManager } from './ssh-ipc-context'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'

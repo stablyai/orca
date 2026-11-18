@@ -4,9 +4,9 @@ import type {
   PtyInventoryRefreshOptions,
   RuntimePtyController
 } from './runtime-pty-controller-contract'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { registerBoundPty } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { registerBoundPty } from '../layout/bind-first-pane.test-fixture'
 
 export const WORKTREE = 'repo::/tmp/inventory-admission'
 export const PTY = `${WORKTREE}@@shell`

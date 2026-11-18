@@ -1,7 +1,7 @@
 import {
   createAiVaultScanCancelledError,
   abandonRemoteSessionScanOnCancel
-} from '../../ai-vault/ai-vault-scan-cancellation'
+} from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import {
   SessionSearchWorkerClient,
   SessionSearchOperationError

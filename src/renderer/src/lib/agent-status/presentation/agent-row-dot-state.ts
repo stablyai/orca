@@ -1,4 +1,4 @@
-import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import type { AgentChildRowModel } from '../../../../../shared/agent-status/presentation/agent-child-row-model'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type {

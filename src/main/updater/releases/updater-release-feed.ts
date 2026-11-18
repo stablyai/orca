@@ -5,7 +5,7 @@ import {
 } from './updater-prerelease-feed'
 import { getReleaseDownloadUrl } from './updater-release-readiness'
 import { toDelayedUpdate } from './updater-release-delay'
-import { updateDelayDaysToMs } from '../../../shared/update-delay'
+import { updateDelayDaysToMs } from '../../../shared/updater/update-delay'
 import { isMissingUpdateManifestFailure, isPrereleaseVersion } from './updater-fallback'
 import type { CheckFailureSource } from '../lifecycle/updater-state'
 import type { UpdateCheckVariant } from '../lifecycle/updater-types'

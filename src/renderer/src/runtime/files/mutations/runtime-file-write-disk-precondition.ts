@@ -23,7 +23,7 @@ import {
   callRuntimeFileMutationWithCapabilities,
   isRuntimeConnectionChangedError
 } from './runtime-file-mutation-rpc'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { readRuntimeFileContent } from '../reads/runtime-file-read-client'
 import {
   captureRuntimeEnvironmentRequestRevision,

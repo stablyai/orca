@@ -1,23 +1,25 @@
 import { useMemo } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type {
   WorkspaceGroupBy,
   WorkspaceSortBy
 } from '../../../src/shared/workspace-view/workspace-view-options'
 import {
-  buildSectionRepoMap,
   buildMobileWorkspacePlan,
-  type FilterState,
-  type ProjectSectionCatalog,
-  type Section,
-  type SectionRepo,
-  type Worktree
-} from './workspace-list-sections'
-import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
-import type { WorktreeHostContextOf } from './worktree-host-context-labels'
-import type { MobileLineageStores } from './mobile-workspace-lineage'
+  type ProjectSectionCatalog
+} from './workspace-list/workspace-list-sections'
+import { buildSectionRepoMap } from './workspace-list/section-repo-map'
+import type {
+  FilterState,
+  Section,
+  SectionRepo,
+  Worktree
+} from './workspace-list/workspace-list-types'
+import { buildFilterRepos, type WorkspaceSectionRepo } from './repositories/workspace-filter-repos'
+import type { WorktreeHostContextOf } from './row-presentation/worktree-host-context-labels'
+import type { MobileLineageStores } from './agent-lineage/mobile-workspace-lineage'
 
 export function useWorkspaceSections(args: {
   displayWorktrees: Worktree[]

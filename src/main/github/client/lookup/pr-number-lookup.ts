@@ -1,7 +1,12 @@
-import { classifyPRRefreshError } from '../../pr-refresh-error-classification'
-import { ghExecFileAsync } from '../../gh-utils'
-import type { OwnerRepo, ghRepoExecOptions } from '../../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
+import { classifyPRRefreshError } from '../../pull-requests/refresh/pr-refresh-error-classification'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import type {
+  GitHubRepositoryIdentity as OwnerRepo,
+  GitHubRepositoryIdentity as GitHubApiRepository
+} from '../../../../shared/github/repositories/repository-identity'
+import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+
 import {
   isNoPullRequestError,
   isNotFoundGhError,
@@ -17,8 +22,8 @@ import {
 } from './pull-request-lookup-data'
 import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
 import { isGitObjectId, isUsableRestStackMetadata } from './rest-stack-metadata-validation'
-import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { revalidateGitHubRestJson } from '../../api/github-rest-revalidation'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
 import {
   readSharedPullRequestSidebarQuery,

@@ -1,5 +1,6 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
-import type { SessionTitlePublisher } from '../session-tabs/session-title-publisher'
+import * as savedChatOpen from '../agent-session/records/local-agent-session-record-store-startup-open'
+import type { SessionTitlePublisher } from '../session-tabs/publication/session-title-publisher'
 import { randomUUID } from 'node:crypto'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -16,12 +17,12 @@ import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalFocus,
   RuntimeTerminalResolvePane,
   RuntimeWorktreeTerminalSleepResult
-} from '../../../shared/runtime-terminal-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle
@@ -71,12 +72,27 @@ import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender
 
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
+export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
+
+export type MobileSessionTabSubscription = {
+  listener: (
+    snapshot: RuntimeMobileSessionTabsResult,
+    changeSequence: number,
+    delivery?: 'reconciliation'
+  ) => void
+  clientNavigationId?: string
+  clientKind?: 'mobile' | 'runtime'
+  observation?: 'caller'
+  acceptsWorktree?: (worktree: string) => boolean
+}
+
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
   protected getLeafKey(tabId: string, leafId: string): string {
     return `${tabId}::${leafId}`
   }
 
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
+  protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract terminalHandleAccess(): TerminalHandleAccess
   protected readonly runtimeId = randomUUID()
 
@@ -137,6 +153,18 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
 
+  protected structuredAgentSessionStartupOpen?: savedChatOpen.AgentSessionRecordStoreStartupOpen
+
+  /** Starts the saved-chat open early; the next startup restoration consumes this attempt. */
+  beginStructuredAgentSessionStartupOpen(
+    maintenanceAfter: Promise<void>,
+    open?: savedChatOpen.AgentSessionRecordStoreStartupOpen
+  ): void {
+    const legacyTabIds = this.legacyStructuredSessionTabIds
+    this.structuredAgentSessionStartupOpen =
+      open ?? savedChatOpen.startLocalAgentSessionRecordStoreOpen(legacyTabIds, maintenanceAfter)
+  }
+
   protected mobileSessionTabsChangeSequence = 0
 
   protected sessionTabsInventoryPublicationEpoch: number | null = null
@@ -151,6 +179,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   )
 
   // Main touches advance stored versions; compare renderer resends against the last accepted renderer stamp.
+  // Its occupant and inventory let a later frame name that inventory instead of resending every row.
   protected acceptedRendererMobileSnapshotByWorktree = new Map<
     string,
     {
@@ -159,7 +188,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       rendererTabCount: number
       rendererTabIdentityKeys: ReadonlySet<string>
       titlePublisher?: SessionTitlePublisher
-    }
+    } & Pick<RuntimeMobileSessionTabsSnapshot, 'worktreeInstanceId' | 'browserPageInventory'>
   >()
 
   // Recreated path ids need occupant fences against pre-delete renderer frames.
@@ -217,11 +246,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     }
   >()
 
-  protected mobileSessionTabListeners = new Set<{
-    listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void
-    clientNavigationId?: string
-    clientKind?: 'mobile' | 'runtime'
-  }>()
+  protected mobileSessionTabListeners = new Set<MobileSessionTabSubscription>()
 
   protected pendingMobileSessionTabsChangeSequenceByWorktree = new Map<string, number>()
 
@@ -231,7 +256,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   // The candidate receipt owns its exit evidence until publication or cancellation.
   protected pendingPtyRegistrationIncarnations = new Map<string, PtyRegistrationClaim>()
 
-  readonly intentionalPtyStops = new TerminalIntentionalStops()
+  readonly intentionalPtyStops = new TerminalIntentionalStops((...s) => this.onPtyStopSettled(...s))
 
   readonly terminalRunFacts = new TerminalRunFactsRegister()
 
@@ -329,7 +354,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
-    getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId)
+    getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
+    isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId)
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({

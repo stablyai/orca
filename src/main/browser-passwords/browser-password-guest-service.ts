@@ -15,7 +15,7 @@ import {
   type BrowserPasswordGuestEnable,
   type BrowserPasswordGuestFieldFocused,
   type BrowserPasswordSuggestion
-} from '../../shared/browser-passwords-types'
+} from '../../shared/browser/passwords/browser-passwords-types'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { BrowserPasswordLoginTracker } from './browser-password-login-tracker'
 import { toBrowserPasswordOrigin } from './browser-password-origin'

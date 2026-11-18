@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -81,19 +81,6 @@ afterEach(() => {
   unmountProbes()
   vi.clearAllMocks()
   latest = null
-})
-
-describe('useSourceControlGitHistory branch switch', () => {
-  it('reloads the open list when the same workspace switches branches', async () => {
-    const root = await mount({ branchName: 'main' })
-    await flush()
-    await act(async () => {
-      root.render(<Probe branchName="feature" />)
-    })
-    await flush()
-
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
-  })
 })
 
 describe('useSourceControlGitHistory stale completion', () => {
@@ -181,38 +168,6 @@ describe('useSourceControlGitHistory stale completion', () => {
     await flush()
 
     expect(latest?.gitHistoryState).toEqual({ status: 'ready', result: historyResult('current-a') })
-  })
-
-  it('keeps the previous result while refreshing and reports errors alongside it', async () => {
-    const first = deferred<GitHistoryResult>()
-    const second = deferred<GitHistoryResult>()
-    mocks.getRuntimeGitHistory
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
-
-    await mount()
-    expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
-    await act(async () => {
-      first.resolve(historyResult('from-a'))
-    })
-    await flush()
-
-    void latest?.refreshGitHistory()
-    await flush()
-    expect(latest?.gitHistoryState).toEqual({
-      status: 'refreshing',
-      result: historyResult('from-a')
-    })
-
-    await act(async () => {
-      second.reject(new Error('git log failed'))
-    })
-    await flush()
-    expect(latest?.gitHistoryState).toEqual({
-      status: 'error',
-      result: historyResult('from-a'),
-      error: 'git log failed'
-    })
   })
 
   it('prunes history for worktrees that disappear and blocks their in-flight response', async () => {

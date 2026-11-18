@@ -4,10 +4,14 @@ import type { NativeChatStructuredComposerTransport } from '../../composer/submi
 import type { StructuredAgentSessionThreadGoal } from '../../session/goals/use-structured-agent-session-thread-goal'
 import type { NativeChatImageRuntimeContext } from '../../media/images/native-chat-image-runtime-context'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
+import { NativeChatMcpTray } from '../../mcp/NativeChatMcpTray'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
-/** The strips on the composer's top edge: the thread goal, then a temporary worker's lifetime. */
+/** The strips on the composer's top edge: the thread goal, a temporary worker's lifetime, then `/mcp`'s tray. */
 export function NativeChatStructuredComposerTabStrips(props: {
   tabId: string
+  target: RuntimeClientTarget
+  focusComposer: () => void
   runtimeContext: NativeChatImageRuntimeContext
   threadGoal: StructuredAgentSessionThreadGoal | null | undefined
   transport: NativeChatStructuredComposerTransport
@@ -16,6 +20,7 @@ export function NativeChatStructuredComposerTabStrips(props: {
   turnId: string | null
   workingStartedAt: number | null | undefined
 }): React.JSX.Element {
+  const mcpPanel = props.transport.mcpPanel
   return (
     <>
       <NativeChatStructuredGoalStrip {...props} sessionId={props.transport.sessionId} />
@@ -24,6 +29,17 @@ export function NativeChatStructuredComposerTabStrips(props: {
         transport={props.transport}
         isVisible={props.isVisible}
       />
+      {mcpPanel?.isOpen ? (
+        <NativeChatMcpTray
+          sessionId={props.transport.sessionId}
+          target={props.target}
+          opens={mcpPanel.opens}
+          onClose={() => {
+            mcpPanel.close()
+            props.focusComposer()
+          }}
+        />
+      ) : null}
     </>
   )
 }
@@ -58,6 +74,7 @@ function NativeChatStructuredGoalStrip(props: {
       }
       pending={threadGoal.pending}
       hostChanges={threadGoal.hostChanges}
+      agentResumes={threadGoal.agentResumes}
       sendUnavailable={transport.sendOut === true || props.isWorking}
       startsHeld={startsHeld}
       isVisible={props.isVisible}
@@ -70,7 +87,7 @@ function NativeChatStructuredGoalStrip(props: {
         if (startsHeld && startsTurn) {
           return
         }
-        if (change.kind === 'clear' && !threadGoal.hostChanges) {
+        if (!threadGoal.hostChanges) {
           transport.onSubmitted?.()
         }
         void threadGoal.change(change)

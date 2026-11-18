@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import {
   resolveClaudeGlobalConfigFile,
   updateClaudeGlobalConfig
-} from '../../../claude/claude-folder-trust-file'
+} from '../../../claude/configuration/claude-folder-trust-file'
 import { publishFileWithoutOverwrite } from '../../../filesystem/atomic-file-publication'
 import { CLAUDE_PROFILE_HISTORY_DIRS, mergeClaudeProfileDirectory } from './claude-profile-history'
 import { readClaudeProfileObject, resolveClaudeDefaultHome } from '../claude-profile-paths'

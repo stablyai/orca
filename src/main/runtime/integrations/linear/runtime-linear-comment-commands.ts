@@ -10,6 +10,7 @@ import { getCommentByUuidForAgent as getLinearCommentByUuidForAgent } from '../.
 import { isLinearUuid } from '../../../../shared/linear/uuid'
 import { LinearWriteFailure } from '../../../linear/issues/linear-issue-write-support'
 import { linearError } from '../../../linear/issues/context/linear-access-errors'
+import { linearNotConnectedError } from '../../../linear/issues/context/linear-not-connected-error'
 import type { LinearAgentAccessError } from '../../../linear/issues/context/linear-access-errors'
 import type {
   LinearCommentAddRequest,
@@ -243,7 +244,7 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
     }
     const workspaces = getConnectedWorkspaces()
     if (workspaces.length === 0) {
-      throw linearError('linear_not_connected', 'Linear is not connected.')
+      throw linearNotConnectedError()
     }
     const selected = resolveWorkspaceSelector(params, workspaces)
     const missing = this.linearCommentNotFound(params.commentId)

@@ -1,5 +1,8 @@
 import type { AppState } from '../../../types'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   collectRemovedHostTwinState,
@@ -9,7 +12,7 @@ import {
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { buildActiveSurfacePatch } from '../../tabs/tabs-surface'
 import { collectSurfacePurgeDoomedIds } from './worktree-purge-doomed-ids'
-import { collectPtyIdsForTab } from '../../../terminals/terminal-tab-retirement'
+import { collectPtyIdsForTab } from '../../../terminals/retirement/terminal-tab-retirement'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import {
