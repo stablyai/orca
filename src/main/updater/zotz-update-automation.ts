@@ -1,4 +1,5 @@
 import type { UpdateStatus } from '../../shared/update-status-types'
+import { isZotzManualMacInstall } from './zotz-mac-manual-install'
 
 /** A server node installs only after this long with no agent working (docs/zotz/UPDATES-SPEC.md §5.4). */
 export const ZOTZ_SERVER_IDLE_INSTALL_MS = 10 * 60_000
@@ -15,9 +16,13 @@ type ZotzUpdateActions = {
   install: () => void
 }
 
-// Unsigned macOS builds cannot install updates and deb/rpm installs are the package manager's job.
+// Ad-hoc signed macOS builds cannot install updates and deb/rpm installs are the package manager's job.
 function canInstallDownloadedUpdates(): boolean {
-  return process.platform === 'win32' || Boolean(process.env.APPIMAGE)
+  return (
+    process.platform === 'win32' ||
+    Boolean(process.env.APPIMAGE) ||
+    (process.platform === 'darwin' && !isZotzManualMacInstall())
+  )
 }
 
 let deps: ZotzUpdateAutomationDeps | null = null

@@ -4,7 +4,10 @@ import type * as UpdaterModule from './updater-service'
 import { loadUpdaterModule, warmUpdaterModule } from './testing/updater-test-module-loader'
 import { updaterMainWindow } from './testing/updater-test-main-window'
 import type { UpdateStatus } from '../../shared/update-status-types'
-import { _setZotzMacSelfUpdateForTests } from './zotz-mac-manual-install'
+import {
+  _setZotzMacSelfUpdateForTests,
+  hasStableMacSigningIdentity
+} from './zotz-mac-manual-install'
 
 const { autoUpdaterMock, fetchNewerReleaseTagsMock, moduleFactories, resetUpdaterMocks } =
   await vi.hoisted(async () =>
@@ -31,6 +34,16 @@ vi.mock('./releases/updater-release-readiness', async (importOriginal) => ({
 }))
 vi.mock('../local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('../local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
+// The test host's own node binary may carry a Developer ID; answer as the published ad-hoc build.
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  runProcess: vi.fn(async () => ({
+    code: 0,
+    stdout: '',
+    stderr: 'Signature=adhoc',
+    timedOut: false
+  }))
+}))
 
 warmUpdaterModule()
 
@@ -89,5 +102,29 @@ describe('Zotz unsigned macOS installs', () => {
     updater.downloadUpdate()
     await vi.advanceTimersByTimeAsync(0)
     expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe('hasStableMacSigningIdentity', () => {
+  // Real `codesign -dvv` output of the published ad-hoc Zotz 1.4.21401.
+  const adHoc = [
+    'Executable=/Applications/Zotz.app/Contents/MacOS/Zotz',
+    'Identifier=dev.hugorodriguez.zotz',
+    'CodeDirectory v=20400 size=463 flags=0x2(adhoc) hashes=9+2 location=embedded',
+    'Signature=adhoc',
+    'TeamIdentifier=not set'
+  ].join('\n')
+  const selfSigned = [
+    'Executable=/Applications/Zotz.app/Contents/MacOS/Zotz',
+    'Identifier=dev.hugorodriguez.zotz',
+    'Signature size=1649',
+    'Authority=Zotz Release Signing',
+    'TeamIdentifier=not set'
+  ].join('\n')
+
+  it('lets Squirrel.Mac install only when a certificate pins the identity', () => {
+    expect(hasStableMacSigningIdentity(selfSigned, 0)).toBe(true)
+    expect(hasStableMacSigningIdentity(adHoc, 0)).toBe(false)
+    expect(hasStableMacSigningIdentity('Zotz: code object is not signed at all', 1)).toBe(false)
   })
 })

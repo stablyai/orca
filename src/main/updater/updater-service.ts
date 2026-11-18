@@ -15,6 +15,7 @@ import { UpdaterSetup, type UpdaterSetupOptions } from './lifecycle/updater-setu
 import type { UpdateInstallMode } from './lifecycle/updater-state'
 import { isZotzUpdaterEnabled, showZotzUpdatesDisabledNotice } from './zotz-updater-policy'
 import { registerZotzUpdateActions } from './zotz-update-automation'
+import { probeZotzMacSigningIdentity } from './zotz-mac-manual-install'
 
 const updater = new UpdaterSetup()
 registerZotzUpdateActions({ download: () => downloadUpdate(), install: () => quitAndInstall() })
@@ -119,6 +120,7 @@ export function setupAutoUpdater(
   if (!isZotzUpdaterEnabled()) {
     return
   }
+  void probeZotzMacSigningIdentity()
   updater.setupAutoUpdater(mainWindow, opts)
 }
 
