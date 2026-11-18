@@ -132,7 +132,11 @@ export async function classifyBundledSkillPath(
         : source.releasedDigests.includes(skillDigest)
           ? 'released'
           : null
-  if (fileClass && entries.length === 1) {
+  // A replaced SKILL.md not yet settled may hold an edit, so it keeps the whole folder the user's.
+  const unsettled = listing.some(
+    (entry) => entry.kind === 'file' && bundledSkillFileSiblingKind(entry.name) === 'old'
+  )
+  if (fileClass && entries.length === 1 && !unsettled) {
     return classified(fileClass, observed)
   }
   const unshipped =

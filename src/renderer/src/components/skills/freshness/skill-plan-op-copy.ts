@@ -152,7 +152,7 @@ export function skillOutcomeText(outcome: BundledSkillOutcome, t: Translate = tr
       return outcome.ops.some(isBundledSkillFileInUse)
         ? t(
             'auto.components.skills.skillPlanOpCopy.fileInUse',
-            'Needs attention · SKILL.md is in use or read-only. Close it, then update again.'
+            'Needs attention · SKILL.md is in use or read-only. Close the program using it or clear read-only, then update again.'
           )
         : t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
   }

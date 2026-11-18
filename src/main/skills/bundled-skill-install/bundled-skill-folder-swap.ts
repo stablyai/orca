@@ -146,8 +146,11 @@ export async function updateBundledSkillFile(
     await filesystem.rename(staged, target)
     return old
   } catch (error) {
+    // A rename that reported failure but committed leaves no stage; then the old link is the only
+    // copy of a racing edit, so it stays for the next plan to settle.
+    const committed = (await filesystem.stat(staged))?.kind === 'missing'
     await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
-    if (old) {
+    if (old && !committed) {
       await removeBundledSkillSibling(filesystem, old).catch(() => undefined)
     }
     throw error

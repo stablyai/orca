@@ -325,4 +325,43 @@ describe('the disk changing under a plan', () => {
     expect(await readFile(backup, 'utf8')).toBe('raced\n')
     expect(await snapshot(home.shared)).toBe(`dir[SKILL.md]:${NEW_TEXT}`)
   })
+
+  it('keeps an edit when a rename reports failure after it committed', async () => {
+    const home = await makeSkillHome()
+    const input = await npxShared(home)
+    const plan = await previewBundledSkillInstall(input)
+    const oldName = async () =>
+      (await readdir(home.shared)).find((name) => name.includes('.orca-old-')) ?? ''
+    const filesystem: BundledSkillFilesystem = {
+      ...nativeBundledSkillFilesystem,
+      rename: async (source, target) => {
+        await nativeBundledSkillFilesystem.rename(source, target)
+        await writeFile(join(home.shared, await oldName()), 'raced\n')
+        throw Object.assign(new Error('lost reply'), { code: 'EIO' })
+      }
+    }
+    await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
+    expect(sharedOp(await previewBundledSkillInstall(input))).toEqual({
+      kind: 'keep',
+      cleanup: ['backup']
+    })
+    await previewAndInstall(input)
+    const backups = join(home.home, '.agents', '.orca-skill-backups')
+    const [kept] = await readdir(backups)
+    expect(await readFile(join(backups, kept, 'SKILL.md'), 'utf8')).toBe('raced\n')
+  })
+
+  it('backs up an older build’s old copy holding an unsettled replaced SKILL.md', async () => {
+    const home = await makeSkillHome()
+    const input = await npxShared(home)
+    const legacy = join(dirname(home.shared), `.${NAME}.orca-old-1`)
+    await writeCopy(legacy, OLD_TEXT, {
+      '.SKILL.md.orca-old-0b8f4a52-6c1e-4d7a-9f3b-2a5c8e1d7f60': 'mine\n'
+    })
+    expect(sharedOp(await previewBundledSkillInstall(input))).toEqual({
+      kind: 'update',
+      cleanup: ['backup']
+    })
+  })
 })
