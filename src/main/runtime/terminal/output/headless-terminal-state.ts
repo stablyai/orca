@@ -163,6 +163,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     this.providerSnapshotPreferredPtys.add(ptyId)
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
+    state.awaitingContextSeed = true
     this.headlessTerminals.set(ptyId, state)
     const generation = this.getPtyLifecycleGeneration(ptyId)
     let seedTimedOut = false
@@ -208,9 +209,9 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         seeded = true
       })
       .then(() => {
-        if (seeded && this.headlessTerminals.get(ptyId) === state) {
-          this.providerSnapshotPreferredPtys.delete(ptyId)
-          // Observers parked on the unseeded model check the seeded screen once.
+        state.awaitingContextSeed = false
+        // Observers parked on the blank model check it once it shows something: the seed, or live output since.
+        if ((seeded || state.outputSequence > 0) && this.headlessTerminals.get(ptyId) === state) {
           this.observeHeadlessChunk(ptyId, state, '', Date.now())
         }
       })
@@ -218,6 +219,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         // Best-effort: live bytes already chain behind this replacement state.
       })
       .finally(() => {
+        state.awaitingContextSeed = false
         // An unseeded model stays partial, so readers keep preferring the provider; a retry also dropped the bytes its predecessor held.
         if (
           this.headlessTerminals.get(ptyId) === state &&

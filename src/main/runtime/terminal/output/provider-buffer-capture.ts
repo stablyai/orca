@@ -217,8 +217,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     await state.writeChain
+    // The same model can turn untrusted while the read waited: a gap keeps it rather than replacing it.
     if (
-      this.headlessTerminals.get(ptyId) !== state ||
+      this.readWholeScreenModel(ptyId) !== state ||
       this.getPtyLifecycleGeneration(ptyId) !== generation
     ) {
       return { lines: [] }

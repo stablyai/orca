@@ -180,6 +180,8 @@ export type RuntimeHeadlessTerminal = {
   rendererSeedEscapeTail?: string
   /** Set after dropped output: the model still parses and answers queries, but its screen is untrusted until rebuilt. */
   gapReseed?: GapRecovery
+  /** A model replaced for an execution-context correction, until its provider seed settles: its screen is blank. */
+  awaitingContextSeed?: boolean
   /** When the last dropped-output capture started, carried across attempts to pace them. */
   gapReseedLastCaptureAt?: number
   /** Seeded screen-only after dropped output, so history comes from the provider. */
