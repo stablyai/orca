@@ -134,6 +134,7 @@ export function MobileNativeChatComposer({
       }
     },
     refuseCommand: editSession?.refuseCommand ?? orca.refusesPick,
+    onPickOrcaCommand: editSession ? undefined : orca.onPickCommand,
     editing: editSession !== undefined,
     goalMode: goal.menu,
     agent,

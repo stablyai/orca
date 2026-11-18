@@ -3,7 +3,10 @@ import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/c
 import { translate } from '../../../../i18n/mobile-i18n'
 import { MobileNativeChatForkContext } from '../../history/use-mobile-native-chat-fork'
 import { MobileNativeChatAccountUsageSheet } from '../../usage/MobileNativeChatAccountUsageSheet'
-import { readMobileNativeChatSkillOrigin } from '../drafts/mobile-native-chat-draft-store'
+import {
+  forgetMobileNativeChatSkillOrigin,
+  readMobileNativeChatSkillOrigin
+} from '../drafts/mobile-native-chat-draft-store'
 import {
   isMobileDesktopOnlyCommand,
   mobileDesktopOnlyCommandNotice,
@@ -106,6 +109,7 @@ export function useMobileNativeChatOrcaCommands(input: {
   return {
     catalog,
     consume,
+    onPickCommand: (token: string): void => forgetMobileNativeChatSkillOrigin(sendSurfaceId, token),
     /** A picked desktop-only row inserts nothing and says why, as Send does. */
     refusesPick: (token: string): boolean =>
       isMobileDesktopOnlyCommand(name(token), catalog) && notice(mobileDesktopOnlyCommandNotice()),
