@@ -261,7 +261,7 @@ export function NativeChatAutomationCurrentDetails({
                 .finally(() => setSaving(false))
             }}
           >
-            {t('bots.waits.cancel', 'Cancel')}
+            {t('components.native-chat.automationSaved.remove', 'Remove')}
           </Button>
         ) : null}
         <Switch

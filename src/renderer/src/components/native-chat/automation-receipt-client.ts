@@ -123,6 +123,70 @@ export async function readAutomationReceipt(
   return result
 }
 
+export async function openCardAutomation(
+  owner: NativeChatVisualOwner | null,
+  itemId: string | undefined,
+  saved: NonNullable<NativeChatMessage['automationSaved']>,
+  shortened: boolean,
+  signal: AbortSignal
+): Promise<'opened' | 'unavailable' | 'stale'> {
+  if (signal.aborted) {
+    return 'stale'
+  }
+  if (!owner) {
+    return 'unavailable'
+  }
+  const source = shortened ? null : captureAutomationReceiptSource(owner, itemId, saved)
+  if (!source) {
+    return 'unavailable'
+  }
+  const initial = useAppStore.getState()
+  const activeView = initial.activeView
+  const activeWorkspace = initial.activeWorktreeId
+  const activeGroup = initial.activeGroupIdByWorktree[owner.worktreeId]
+  const sourceGroup =
+    initial.unifiedTabsByWorktree[owner.worktreeId]?.find((tab) => tab.id === owner.tabId)
+      ?.groupId ?? activeGroup
+  const activeTab = initial.groupsByWorktree[owner.worktreeId]?.find(
+    (group) => group.id === sourceGroup
+  )?.activeTabId
+  const sameView = (): boolean => {
+    const state = useAppStore.getState()
+    return (
+      state.activeView === activeView &&
+      state.activeWorktreeId === activeWorkspace &&
+      state.activeGroupIdByWorktree[owner.worktreeId] === activeGroup &&
+      state.groupsByWorktree[owner.worktreeId]?.find((group) => group.id === sourceGroup)
+        ?.activeTabId === activeTab
+    )
+  }
+  let current = true
+  // Leaving and returning is a new view generation, even if its final IDs match.
+  const unsubscribe = useAppStore.subscribe(() => {
+    current &&= sameView()
+  })
+  signal.addEventListener('abort', unsubscribe, { once: true })
+  const accepts = (): boolean => current && !signal.aborted && sameView()
+  try {
+    const result = await readAutomationReceipt(source)
+    if (!accepts()) {
+      return 'stale'
+    }
+    return result.status === 'ready' &&
+      openReceiptAutomation(source, result.automation, result.owner, null)
+      ? 'opened'
+      : 'unavailable'
+  } catch (error) {
+    if (!accepts()) {
+      return 'stale'
+    }
+    throw error
+  } finally {
+    signal.removeEventListener('abort', unsubscribe)
+    unsubscribe()
+  }
+}
+
 export async function readReceiptRuns(
   source: AutomationReceiptSource,
   id: string,
@@ -156,9 +220,15 @@ export async function deleteReceiptAutomation(
   source: AutomationReceiptSource,
   automation: Automation,
   owner: AutomationOwnerPrecondition
-): Promise<void> {
-  await call(source, 'automation.delete', { id: automation.id, expectedOwner: owner })
-  acknowledgeAutomationDefinition(source.target, automation.id)
+): Promise<boolean> {
+  const result = await call<{ removed: boolean; id: string }>(source, 'automation.delete', {
+    id: automation.id,
+    expectedOwner: owner
+  })
+  if (result.removed) {
+    acknowledgeAutomationDefinition(source.target, automation.id)
+  }
+  return result.removed
 }
 
 export async function runReceiptAutomation(

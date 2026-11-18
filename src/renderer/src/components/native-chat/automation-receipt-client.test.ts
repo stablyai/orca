@@ -4,27 +4,42 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-re
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   captureAutomationReceiptSource,
+  deleteReceiptAutomation,
+  openCardAutomation,
   openReceiptAutomation,
   readAutomationReceipt
 } from './automation-receipt-client'
 
 const fixture = vi.hoisted(() => {
-  const state: { navigation: unknown; status: Map<string, unknown>; reply: unknown } = {
-    navigation: null,
-    status: new Map(),
-    reply: {}
+  const state = {
+    navigation: null as unknown,
+    status: new Map<string, unknown>(),
+    reply: {} as unknown,
+    listeners: new Set<() => void>(),
+    view: {
+      activeView: 'terminal',
+      activeWorktreeId: 'project-Y',
+      activeGroupIdByWorktree: { 'project-Y': 'chat-group' },
+      groupsByWorktree: { 'project-Y': [{ id: 'chat-group', activeTabId: 'chat-tab' }] },
+      unifiedTabsByWorktree: { 'project-Y': [{ id: 'chat-tab', groupId: 'chat-group' }] }
+    }
   }
   return state
 })
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
+      ...fixture.view,
       runtimeStatusByEnvironmentId: fixture.status,
       setPendingAutomationRunNavigation: (next: unknown) => {
         fixture.navigation = next
       },
       openAutomationsPage: () => {}
-    })
+    }),
+    subscribe: (listener: () => void) => {
+      fixture.listeners.add(listener)
+      return () => fixture.listeners.delete(listener)
+    }
   }
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
@@ -60,6 +75,10 @@ const owner = { selector: { kind: 'self' as const } }
 
 afterEach(() => {
   fixture.navigation = null
+  fixture.view.activeView = 'terminal'
+  fixture.view.activeWorktreeId = 'project-Y'
+  fixture.view.groupsByWorktree = { 'project-Y': [{ id: 'chat-group', activeTabId: 'chat-tab' }] }
+  fixture.listeners.clear()
   fixture.status.clear()
   replaceRuntimeEnvironmentRevisions([])
 })
@@ -155,3 +174,117 @@ it('refuses creation/bot mismatches, re-pairing, restarts and unsupported nested
   expect(openReceiptAutomation(source, automation, owner, null)).toBe(false)
   expect(fixture.navigation).toBeNull()
 })
+
+it.each(['local', 'paired'] as const)(
+  'does not navigate after leaving and returning during a delayed %s receipt read',
+  async (host) => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'E', createdAt: 1, pairingRevision: 7 }])
+    fixture.status.set('E', { status: { runtimeId: 'W' } })
+    const reply = Promise.withResolvers<unknown>()
+    fixture.reply = reply.promise
+    const opening = openCardAutomation(
+      {
+        target: host === 'local' ? { kind: 'local' } : { kind: 'environment', environmentId: 'E' },
+        sessionId: 'chat-on-W',
+        worktreeId: 'project-Y',
+        tabId: 'chat-tab'
+      },
+      'receipt',
+      saved,
+      false,
+      new AbortController().signal
+    )
+    fixture.view.activeView = 'automations'
+    fixture.listeners.forEach((listener) => listener())
+    fixture.view.activeView = 'terminal'
+    fixture.listeners.forEach((listener) => listener())
+    reply.resolve({ status: 'ready', automation, owner })
+    expect(await opening).toBe('stale')
+    expect(fixture.navigation).toBeNull()
+  }
+)
+
+it('does not navigate a late response after its receipt view is disposed', async () => {
+  const reply = Promise.withResolvers<unknown>()
+  fixture.reply = reply.promise
+  const lifetime = new AbortController()
+  const opening = openCardAutomation(
+    {
+      target: { kind: 'local' },
+      sessionId: 'chat-on-W',
+      worktreeId: 'project-Y',
+      tabId: 'chat-tab'
+    },
+    'receipt',
+    saved,
+    false,
+    lifetime.signal
+  )
+  lifetime.abort()
+  reply.resolve({ status: 'ready', automation, owner })
+  expect(await opening).toBe('stale')
+  expect(fixture.navigation).toBeNull()
+})
+
+it('returns an unremoved definition result without claiming a successful deletion', async () => {
+  const source = captureAutomationReceiptSource(
+    { target: { kind: 'local' }, sessionId: 'chat-on-W', worktreeId: 'project-Y' },
+    'receipt',
+    saved
+  )!
+  fixture.reply = { id: 'collision', removed: false }
+  expect(await deleteReceiptAutomation(source, automation, owner)).toBe(false)
+})
+
+it('opens a receipt while its original view and host remain current', async () => {
+  fixture.reply = { status: 'ready', automation, owner }
+  expect(
+    await openCardAutomation(
+      {
+        target: { kind: 'local' },
+        sessionId: 'chat-on-W',
+        worktreeId: 'project-Y',
+        tabId: 'chat-tab'
+      },
+      'receipt',
+      saved,
+      false,
+      new AbortController().signal
+    )
+  ).toBe('opened')
+  expect(fixture.navigation).toMatchObject({ automationId: 'collision', hostId: 'local' })
+})
+
+it.each(['workspace', 'tab'] as const)(
+  'fences delayed Open after a transient %s change',
+  async (part) => {
+    const reply = Promise.withResolvers<unknown>()
+    fixture.reply = reply.promise
+    const opening = openCardAutomation(
+      {
+        target: { kind: 'local' },
+        sessionId: 'chat-on-W',
+        worktreeId: 'project-Y',
+        tabId: 'chat-tab'
+      },
+      'receipt',
+      saved,
+      false,
+      new AbortController().signal
+    )
+    if (part === 'workspace') {
+      fixture.view.activeWorktreeId = 'project-Z'
+    } else {
+      fixture.view.groupsByWorktree = {
+        'project-Y': [{ id: 'chat-group', activeTabId: 'other-tab' }]
+      }
+    }
+    fixture.listeners.forEach((listener) => listener())
+    fixture.view.activeWorktreeId = 'project-Y'
+    fixture.view.groupsByWorktree = { 'project-Y': [{ id: 'chat-group', activeTabId: 'chat-tab' }] }
+    fixture.listeners.forEach((listener) => listener())
+    reply.resolve({ status: 'ready', automation, owner })
+    expect(await opening).toBe('stale')
+    expect(fixture.navigation).toBeNull()
+  }
+)

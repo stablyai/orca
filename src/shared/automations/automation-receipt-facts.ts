@@ -34,6 +34,7 @@ const facts = z.union([
       z.object({ kind: z.literal('effective-at-save'), iana: z.string().min(1).max(128) }),
       z.object({ kind: z.literal('not-recorded') })
     ]),
+    // Coverage describes extras, not completeness of legacy or shortened base starts.
     triggerExtras: z.object({
       coverage: z.enum(['complete', 'partial']),
       items: z.array(triggerExtra).max(20)

@@ -25,7 +25,7 @@ export type AutomationCardDetails = (
       runs: AutomationRun[] | null
       effectiveZone?: string
     }
-) & { acknowledgement?: 'cancelled' | 'deleted' }
+) & { acknowledgement?: 'deleted' }
 
 type Transport = {
   current: () => boolean
@@ -36,7 +36,7 @@ type Transport = {
     owner: AutomationOwnerPrecondition,
     enabled: boolean
   ) => Promise<Automation>
-  remove: (automation: Automation, owner: AutomationOwnerPrecondition) => Promise<void>
+  remove: (automation: Automation, owner: AutomationOwnerPrecondition) => Promise<boolean>
   run: (automation: Automation, owner: AutomationOwnerPrecondition) => Promise<void>
   webhookKey?: (hookId: string) => Promise<WebhookKey>
 }
@@ -64,7 +64,7 @@ export class AutomationCardDetailsController {
   private bindingGeneration = 0
   private bindingValid = true
   private mutating = false
-  private acknowledgement: 'cancelled' | 'deleted' | undefined
+  private acknowledgement: 'deleted' | undefined
 
   constructor(private readonly transport: Transport | null) {}
 
@@ -184,13 +184,17 @@ export class AutomationCardDetailsController {
     const binding = this.bindingGeneration
     this.mutating = true
     try {
-      await this.transport!.remove(automation, owner)
+      const removed = await this.transport!.remove(automation, owner)
       if (this.disposed || binding !== this.bindingGeneration || !this.transport!.current()) {
         return
       }
+      if (!removed) {
+        throw new Error('Automation was not removed. Reopen the receipt to check its state.')
+      }
       this.mutationGeneration++
       this.readGeneration++
-      this.acknowledgement = automation.once ? 'cancelled' : 'deleted'
+      // Definition removal does not establish the outcome of an already admitted run.
+      this.acknowledgement = 'deleted'
       this.publish({ status: 'loading' })
     } finally {
       this.mutating = false

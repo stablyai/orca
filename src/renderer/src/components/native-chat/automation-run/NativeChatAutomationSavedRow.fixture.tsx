@@ -53,6 +53,44 @@ const scenarios = {
     on: [{ id: 'g', source: 'github', event: 'comment', subject: 'acme/website#482' }]
   },
   paused: { ...base, id: 'paused', name: 'Weekly summary', enabled: false, rrule: '0 15 * * 5' },
+  pausedChanged: {
+    ...base,
+    id: 'paused-changed',
+    name: 'Saved Friday briefing',
+    enabled: false,
+    rrule: '0 15 * * 5'
+  },
+  pausedMissing: {
+    ...base,
+    id: 'paused-missing',
+    name: 'Saved Friday briefing',
+    enabled: false,
+    rrule: '0 15 * * 5'
+  },
+  multipleStarts: {
+    ...base,
+    id: 'multiple-starts',
+    name: 'Saved start alternatives',
+    ...EVENT_ONLY_SCHEDULE,
+    on: [
+      { id: 'personal', source: 'gmail', event: 'new_email', account: 'personal@example.test' },
+      {
+        id: 'team',
+        source: 'calendar',
+        event: 'starting_soon',
+        account: 'team@example.test',
+        minutesBefore: 30
+      },
+      {
+        id: 'slack',
+        source: 'slack',
+        event: 'message',
+        in: ['slack:T1:C1'],
+        names: { 'slack:T1:C1': '#incidents' },
+        textContains: 'urgent'
+      }
+    ]
+  },
   failed: {
     ...base,
     id: 'failed',
@@ -86,11 +124,19 @@ function stubHost(scenario: Scenario): void {
         return {
           ok: true,
           result:
-            scenario === 'missing'
+            scenario === 'missing' || scenario === 'pausedMissing'
               ? { status: 'missing' }
               : {
                   status: 'ready',
-                  automation,
+                  automation:
+                    scenario === 'pausedChanged'
+                      ? {
+                          ...automation,
+                          name: 'Current weekday briefing',
+                          enabled: true,
+                          rrule: '0 8 * * 1-5'
+                        }
+                      : automation,
                   owner: { selector: { kind: 'self' } },
                   effectiveZone: ZONE
                 }
@@ -160,7 +206,7 @@ function receiptFixture(scenario: Scenario, width: number): ComponentFixture {
     width,
     setup: () => stubHost(scenario),
     render: () => <Receipt scenario={scenario} />,
-    ...(scenario === 'failed' || scenario === 'missing'
+    ...(scenario === 'failed' || scenario === 'missing' || scenario === 'pausedMissing'
       ? {
           interact: async (frame: HTMLElement) => {
             frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
@@ -186,3 +232,10 @@ export const missingWide = receiptFixture('missing', 640)
 export const missingNarrow = receiptFixture('missing', 380)
 export const longNameWide = receiptFixture('longName', 640)
 export const longNameNarrow = receiptFixture('longName', 380)
+
+export const pausedChangedWide = receiptFixture('pausedChanged', 640)
+export const pausedChangedNarrow = receiptFixture('pausedChanged', 380)
+export const pausedMissingWide = receiptFixture('pausedMissing', 640)
+export const pausedMissingNarrow = receiptFixture('pausedMissing', 380)
+export const multipleStartsWide = receiptFixture('multipleStarts', 640)
+export const multipleStartsNarrow = receiptFixture('multipleStarts', 380)

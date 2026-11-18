@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CalendarClock, ChevronDown, ChevronUp, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
@@ -21,11 +21,7 @@ import { NativeChatAutomationCardDetails } from '../NativeChatAutomationCardDeta
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { requestNativeChatComposerFocus } from '../composer/focus/native-chat-composer-focus-intent'
 import { automationReceiptSummary } from '../automation-receipt-copy'
-import {
-  captureAutomationReceiptSource,
-  openReceiptAutomation,
-  readAutomationReceipt
-} from '../automation-receipt-client'
+import { openCardAutomation } from '../automation-receipt-client'
 
 const AUTOMATION_CARD_DISCLOSURE = 'automation-card:'
 type AutomationSaved = NonNullable<NativeChatMessage['automationSaved']>
@@ -38,23 +34,6 @@ function draftChangeInChat(owner: NativeChatVisualOwner, name: string): void {
       { name }
     )
   })
-}
-
-async function openCardAutomation(
-  owner: NativeChatVisualOwner | null,
-  itemId: string | undefined,
-  saved: AutomationSaved,
-  shortened: boolean
-): Promise<boolean> {
-  const source = shortened ? null : captureAutomationReceiptSource(owner, itemId, saved)
-  if (!source) {
-    return false
-  }
-  const result = await readAutomationReceipt(source)
-  return (
-    result.status === 'ready' &&
-    openReceiptAutomation(source, result.automation, result.owner, null)
-  )
 }
 
 /** A saved receipt. Only an intentional disclosure or Open acquires current data. */
@@ -79,22 +58,37 @@ export function NativeChatAutomationSavedRow({
     AUTOMATION_CARD_DISCLOSURE
   )
   const toggle = useRef<HTMLButtonElement>(null)
+  const pendingOpen = useRef<AbortController | null>(null)
+  useEffect(() => () => pendingOpen.current?.abort(), [])
   const [opening, setOpening] = useState(false)
   const Icon = hasAutomationSchedule(automation) ? CalendarClock : Zap
   const Chevron = open ? ChevronUp : ChevronDown
   const openFull = (): void => {
+    pendingOpen.current?.abort()
+    const lifetime = new AbortController()
+    pendingOpen.current = lifetime
     setOpening(true)
-    void openCardAutomation(owner, disclosureId, saved, shortened)
+    void openCardAutomation(owner, disclosureId, saved, shortened, lifetime.signal)
       .then((opened) => {
-        if (!opened) {
+        if (!lifetime.signal.aborted && opened === 'unavailable') {
           setOpen(true)
         }
       })
       .catch((error: unknown) => {
+        if (lifetime.signal.aborted) {
+          return
+        }
         toast.error(botErrorMessage(error))
         setOpen(true)
       })
-      .finally(() => setOpening(false))
+      .finally(() => {
+        if (pendingOpen.current === lifetime) {
+          pendingOpen.current = null
+          if (!lifetime.signal.aborted) {
+            setOpening(false)
+          }
+        }
+      })
   }
   return (
     <div

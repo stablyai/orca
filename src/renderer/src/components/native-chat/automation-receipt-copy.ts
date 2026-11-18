@@ -85,7 +85,7 @@ function scheduleLabel(schedule: AutomationScheduleDescriptor): string {
   )
 }
 
-function startLabel(start: AutomationReceiptStart): string {
+export function receiptStartLabel(start: AutomationReceiptStart): string {
   if (start.kind === 'unknown') {
     return translate(
       'components.native-chat.automationSaved.triggerNotRecorded',
@@ -143,7 +143,7 @@ export function automationReceiptTriggerSummary(saved: Saved, shortened = false)
       { count: starts.length }
     )
   }
-  const labels = starts.map(startLabel)
+  const labels = starts.map(receiptStartLabel)
   const description =
     saved.automation.once && starts.length > 1
       ? translate(

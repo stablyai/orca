@@ -8,8 +8,8 @@ import type { NativeChatMessage } from '../../../../shared/native-chat/native-ch
 import type { NativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 import { captureAutomationReceiptSource, openReceiptAutomation } from './automation-receipt-client'
 import { readAutomationReceiptFacts } from '../../../../shared/automations/automation-receipt-facts'
-import { automationReceiptStarts } from '../../../../shared/automations/automation-receipt-summary'
-import { receiptInstant, receiptZoneName } from './automation-receipt-copy'
+import { automationReceiptStartDetails } from '../../../../shared/automations/automation-receipt-summary'
+import { receiptInstant, receiptStartLabel, receiptZoneName } from './automation-receipt-copy'
 import { NativeChatAutomationCurrentDetails } from './NativeChatAutomationCurrentDetails'
 
 /** An opened automation card: its live settings, newest runs and actions, read from its host. */
@@ -42,13 +42,13 @@ export function NativeChatAutomationCardDetails({
       ? facts.zone.iana
       : null
   const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const savedScopes = automationReceiptStarts(
+  const savedScopes = automationReceiptStartDetails(
     saved.automation,
     saved.receiptFacts,
     shortened
-  ).flatMap((start) => {
+  ).map(({ start, showLabel }, index) => {
     if (start.kind !== 'event') {
-      return []
+      return { id: `${start.kind}:${index}`, text: receiptStartLabel(start) }
     }
     const conditions =
       start.extra?.additionalConditions === 'present'
@@ -75,37 +75,32 @@ export function NativeChatAutomationCardDetails({
           ? t('components.native-chat.automationSaved.primaryCalendar', 'Primary calendar')
           : t('components.native-chat.automationSaved.otherCalendar', 'A saved calendar')
         : null
-    return [
-      {
-        id: start.trigger.id,
-        text: [account, calendar, conditions].filter(Boolean).join(' · ')
-      }
-    ]
+    return {
+      id: `${start.trigger.id}:${index}`,
+      text: [showLabel ? receiptStartLabel(start) : null, account, calendar, conditions]
+        .filter(Boolean)
+        .join(' · ')
+    }
   })
   const note =
-    details.acknowledgement === 'cancelled'
-      ? t('components.native-chat.automationSaved.cancelAcknowledged', 'Wait cancelled')
-      : details.acknowledgement === 'deleted'
-        ? t('components.native-chat.automationSaved.deleteAcknowledged', 'Automation deleted')
-        : details.status === 'missing'
-          ? saved.automation.once
-            ? t(
-                'components.native-chat.automationSaved.waitMissing',
-                'This wait no longer exists. Its outcome wasn’t recorded here.'
-              )
-            : t(
-                'components.native-chat.automationSaved.definitionMissing',
-                'This automation wasn’t found. The reason is unknown.'
-              )
-          : details.status === 'unverified' || details.status === 'mismatch'
-            ? t(
-                'components.native-chat.automationSaved.originUnknown',
-                'Saved receipt only. Its original automation could not be verified on this host.'
-              )
-            : t(
-                'components.native-chat.automationSaved.loadFailed',
-                'Couldn’t read this automation'
-              )
+    details.acknowledgement === 'deleted'
+      ? t('components.native-chat.automationSaved.deleteAcknowledged', 'Automation deleted')
+      : details.status === 'missing'
+        ? saved.automation.once
+          ? t(
+              'components.native-chat.automationSaved.waitMissing',
+              'This wait no longer exists. Its outcome wasn’t recorded here.'
+            )
+          : t(
+              'components.native-chat.automationSaved.definitionMissing',
+              'This automation wasn’t found. The reason is unknown.'
+            )
+        : details.status === 'unverified' || details.status === 'mismatch'
+          ? t(
+              'components.native-chat.automationSaved.originUnknown',
+              'Saved receipt only. Its original automation could not be verified on this host.'
+            )
+          : t('components.native-chat.automationSaved.loadFailed', 'Couldn’t read this automation')
   return (
     <div className="@container mt-3 border-t border-border pt-3">
       {timestamp !== null ? (

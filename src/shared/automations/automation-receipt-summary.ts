@@ -12,7 +12,7 @@ export type AutomationReceiptStart =
   | { kind: 'deadline'; at: number }
   | { kind: 'unknown' }
 
-/** Describe the saved alternatives only; missing projection evidence never means no conditions. */
+/** Lists retained base starts; extra coverage does not prove original-start completeness. */
 export function automationReceiptStarts(
   automation: BotAutomationFacts,
   value: unknown,
@@ -39,7 +39,10 @@ export function automationReceiptStarts(
     const google = part.trigger.source === 'gmail' || part.trigger.source === 'calendar'
     return {
       ...part,
-      extra: extra && (!google || extra.google?.kind === part.trigger.source) ? extra : null
+      extra:
+        extra && (google ? extra.google?.kind === part.trigger.source : !extra.google)
+          ? extra
+          : null
     }
   })
   if (automation.once?.by !== undefined) {
@@ -52,4 +55,19 @@ export function automationReceiptStarts(
     starts.push({ kind: 'deadline', at: automation.once.by })
   }
   return starts.length ? starts : [{ kind: 'unknown' }]
+}
+
+export function automationReceiptStartDetails(
+  automation: BotAutomationFacts,
+  value: unknown,
+  shortened = false
+): { start: AutomationReceiptStart; showLabel: boolean }[] {
+  const starts = automationReceiptStarts(automation, value, shortened)
+  const showLabel =
+    !automation.enabled ||
+    starts.length > 2 ||
+    starts.filter((start) => start.kind === 'event').length > 1
+  return starts
+    .filter((start) => showLabel || start.kind === 'event')
+    .map((start) => ({ start, showLabel }))
 }

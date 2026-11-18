@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { makeAutomation } from '@/components/automations/automations-page-fixtures'
+import { makeAutomation, makeRun } from '@/components/automations/automations-page-fixtures'
 import type { AutomationReceiptRead } from '../../../../shared/automations/automation-receipt-read'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { WebhookKey } from '../../../../shared/rpc-contract/webhooks-params'
@@ -7,6 +7,12 @@ import { AutomationCardDetailsController } from './automation-card-details-contr
 import { deleteAutomationForTarget } from '@/components/automations/hosts/automation-host-client'
 import { subscribeAutomationDefinitionAcknowledgements } from '@/components/automations/events/automation-definition-acknowledgements'
 
+vi.mock('@/components/automations/hosts/automation-capability-probe', () => ({
+  prepareAutomationLaunchSetup: () => {}
+}))
+vi.mock('@/store', () => ({
+  useAppStore: { getState: () => ({ runtimeStatusByEnvironmentId: new Map() }) }
+}))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: async () => ({}) }))
 afterEach(() => vi.useRealTimers())
 
@@ -27,7 +33,7 @@ const deferred = <T>() => Promise.withResolvers<T>()
 function rig() {
   let read: () => Promise<AutomationReceiptRead> = async () => present
   let runs: () => Promise<AutomationRun[]> = async () => []
-  let remove: () => Promise<void> = async () => {}
+  let remove: () => Promise<boolean> = async () => true
   let current = true
   let key: () => Promise<WebhookKey> = async () => ({
     key: 'secret',
@@ -138,11 +144,11 @@ it('fences a pre-Cancel reply and preserves the acknowledgement across a post-ac
   await controller.remove()
   old.resolve(present)
   await r0
-  expect(controller.getSnapshot()).toEqual({ status: 'loading', acknowledgement: 'cancelled' })
+  expect(controller.getSnapshot()).toEqual({ status: 'loading', acknowledgement: 'deleted' })
   const missing = settled(controller, 'missing')
   reconcile.resolve({ status: 'missing' })
   await missing
-  expect(controller.getSnapshot()).toEqual({ status: 'missing', acknowledgement: 'cancelled' })
+  expect(controller.getSnapshot()).toEqual({ status: 'missing', acknowledgement: 'deleted' })
 })
 
 it('does not revive a deleted definition from late history when reconciliation fails', async () => {
@@ -167,11 +173,11 @@ it('does not revive a deleted definition from late history when reconciliation f
 it('rejects an in-flight acknowledgement after its owner binding is retired', async () => {
   const { controller, remove, retire } = rig()
   await controller.reload()
-  const ack = deferred<void>()
+  const ack = deferred<boolean>()
   remove(() => ack.promise)
   const cancel = controller.remove()
   retire()
-  ack.resolve()
+  ack.resolve(true)
   await cancel
   expect(controller.getSnapshot()).toEqual({ status: 'unverified' })
 })
@@ -210,3 +216,24 @@ it('fences pre-ack reads through the shared delete caller, independent of a wall
     controller.dispose()
   }
 })
+
+it('does not acknowledge removal when the host reports that no definition was removed', async () => {
+  const { controller, remove } = rig()
+  await controller.reload()
+  remove(async () => false)
+  await expect(controller.remove()).rejects.toThrow()
+  expect(controller.getSnapshot()).not.toHaveProperty('acknowledgement')
+})
+
+it.each([false, true])(
+  'acknowledges only definition removal with an already admitted run: %s',
+  async (admitted) => {
+    const { controller, read, runs } = rig()
+    runs(async () => (admitted ? [makeRun({ automationId: 'a', status: 'dispatched' })] : []))
+    await controller.reload()
+    read(async () => ({ status: 'missing' }))
+    await controller.remove()
+    await settled(controller, 'missing')
+    expect(controller.getSnapshot()).toEqual({ status: 'missing', acknowledgement: 'deleted' })
+  }
+)
