@@ -191,7 +191,16 @@ export class JournalSqlDatabase {
 
   async sessionEpoch(sessionId: string): Promise<string | null> {
     this.assertOpen()
-    return this.readEpoch(sessionId)
+    const result = await this.readers.database({ kind: 'epoch', sessionId })
+    if (result.kind !== 'epoch') {
+      throw new Error('journal reader returned no epoch')
+    }
+    return result.epoch
+  }
+
+  /** In the chat's lane: a fork install moves the physical epoch that later opens must target. */
+  rememberSessionEpoch(sessionId: string, epoch: string): void {
+    this.conversions.rememberReady(sessionId, epoch)
   }
 
   ensureSessionEpoch(sessionId: string): Promise<string | null> {
@@ -309,14 +318,6 @@ export class JournalSqlDatabase {
       throw error
     })
     return this.closing
-  }
-
-  private async readEpoch(sessionId: string): Promise<string | null> {
-    const result = await this.readers.database({ kind: 'epoch', sessionId })
-    if (result.kind !== 'epoch') {
-      throw new Error('journal reader returned no epoch')
-    }
-    return result.epoch
   }
 
   private assertOpen(): void {
