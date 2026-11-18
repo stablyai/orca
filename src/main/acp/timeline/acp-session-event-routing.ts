@@ -32,6 +32,10 @@ export function routeAcpSessionEvent(
           asReattachHistory(event.kind === 'known' ? event.notification : event.raw),
           at
         )
-      : translator.sessionEvent(event, at)
+      : translator.notification(
+          'session/update',
+          event.kind === 'known' ? event.notification : event.raw,
+          at
+        )
   )
 }

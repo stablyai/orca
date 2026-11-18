@@ -32,6 +32,8 @@ export type ProviderTimelineTurnEnd =
       completedAt?: number
       outcome?: AgentJournalTurnLifecycle['outcome']
       durationMs?: number
+      /** The provider's own name for this turn, reported with its end. */
+      providerTurnId?: string
     }
   | { state: 'unverifiable' }
 
@@ -55,7 +57,8 @@ export function endedProviderTimelineTurn(
     ...(end.outcome !== undefined ? { outcome: end.outcome } : {}),
     ...opened,
     ...(end.completedAt !== undefined ? { completedAt: end.completedAt } : {}),
-    ...(end.durationMs !== undefined ? { durationMs: end.durationMs } : {})
+    ...(end.durationMs !== undefined ? { durationMs: end.durationMs } : {}),
+    ...(end.providerTurnId !== undefined ? { providerTurnId: end.providerTurnId } : {})
   }
 }
 

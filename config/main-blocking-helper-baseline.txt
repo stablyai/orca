@@ -5,6 +5,7 @@
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
 3 src/main/acp/conversation-copy/acp-conversation-copy.ts
 5 src/main/acp/launch/acp-launch-command.ts
+1 src/main/acp/launch/acp-launch-registry.ts
 2 src/main/acp/launch/acp-private-temp.ts
 1 src/main/acp/launch/acp-structured-launch-resolution.ts
 1 src/main/acp/process/acp-agent-connection.ts
@@ -457,6 +458,7 @@
 1 src/main/daemon/transport/stream/daemon-stream-data-batcher.ts
 2 src/main/daemon/transport/stream/daemon-stream-droppable-membership.ts
 1 src/main/daemon/transport/stream/daemon-stream-keep-tail-drop.ts
+3 src/main/devin/devin-transcript-import.ts
 6 src/main/devin/hook-service.ts
 2 src/main/diagnostics/main-thread-churn-probe.ts
 6 src/main/droid/hook-service.ts

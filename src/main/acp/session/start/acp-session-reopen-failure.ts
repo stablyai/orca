@@ -27,22 +27,27 @@ export const ACP_REOPEN_FAILED = 'ACP agent could not reopen its saved session; 
 export async function acpReopenTakeover(
   error: unknown,
   resume: NonNullable<AcpStructuredLaunch['resume']>,
-  start: { over: boolean; now: number; warn: (fields: { scope: string; error: unknown }) => void }
+  start: { over: boolean; now: number; warn: (fields: { scope: string; error: unknown }) => void },
+  dialect: Pick<AcpDialect, 'sessionInUse' | 'sessionLost'> = {}
 ): Promise<Pick<AgentSessionProviderHandleLink, 'supersedesKey' | 'replaces'>> {
   if (temporaryAcpProviderAnswer(error)) {
     // Restore already spent its retry budget; an explicit retry gets a fresh flight.
     throw new AgentSessionStartFailure(error, 'never')
   }
-  // A replacement session cannot resolve sign-in failure, a missed deadline or an abandoned start;
-  // its own answer would replace the failure the user must see.
-  if (error instanceof AcpAuthRequiredError || providerRequestTimeoutOf(error) || start.over) {
+  // A replacement session cannot resolve sign-in failure, a locked session, a missed deadline or
+  // an abandoned start; its own answer would replace the failure the user must see.
+  if (
+    error instanceof AcpAuthRequiredError ||
+    (error instanceof AcpAgentError && dialect.sessionInUse?.(error, resume.sessionId) === true) ||
+    providerRequestTimeoutOf(error) ||
+    start.over
+  ) {
     throw error
   }
-  if (
-    error instanceof AcpRpcError &&
-    error.code === ACP_RESOURCE_NOT_FOUND &&
-    (await resume.mayBeUnsaved())
-  ) {
+  const notFound =
+    (error instanceof AcpRpcError && error.code === ACP_RESOURCE_NOT_FOUND) ||
+    (error instanceof AcpAgentError && dialect.sessionLost?.(error, resume.sessionId) === true)
+  if (notFound && (await resume.mayBeUnsaved())) {
     return { supersedesKey: resume.key }
   }
   start.warn({ scope: 'acp-restore-failed', error })

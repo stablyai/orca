@@ -41,7 +41,7 @@ export class ManagedDataAccountService {
   private readonly profileRemoval: ManagedDataAccountProfileRemoval
 
   constructor(
-    private readonly root: string,
+    readonly root: string,
     removeDirectory?: (directory: string) => void | Promise<void>
   ) {
     this.profileRemoval = new ManagedDataAccountProfileRemoval(
