@@ -101,6 +101,22 @@ async function readAdoptedTranscript(
   return prepared.items
 }
 
+export async function readPendingAdoptedTranscript(
+  params: AgentSessionAttachParams,
+  attached: AttachedJournal,
+  prepared: JournalReplacementItem[] | null,
+  signal: AbortSignal,
+  adapter?: Pick<StructuredAgentSessionAdapter, 'readConversationHistory'>
+): Promise<JournalReplacementItem[] | null> {
+  if (prepared || params.fork || !params.adopt || attached.journal.cursor().sequence > 1) {
+    return prepared
+  }
+  throwIfSignalAborted(signal)
+  const items = await readAdoptedTranscript(params, signal, adapter)
+  throwIfSignalAborted(signal)
+  return items
+}
+
 // Import before publication so visible history agrees with resumed provider context.
 export async function importAdoptedTranscript(
   params: AgentSessionAttachParams,
@@ -110,7 +126,6 @@ export async function importAdoptedTranscript(
   options: {
     uncommittedCreate?: true
     store?: AgentSessionRecordStore
-    adapter?: Pick<StructuredAgentSessionAdapter, 'readConversationHistory'>
   } = {}
 ): Promise<JournalForkInstall | undefined> {
   if (params.fork) {
@@ -159,46 +174,20 @@ export async function importAdoptedTranscript(
     }
     return
   }
-  // Failed import must not close the conversation-owned journal.
-  await applyAdoptedTranscript(params, attached, record, prepared, options.store, options.adapter)
-  return undefined
-}
-
-async function applyAdoptedTranscript(
-  params: AgentSessionAttachParams,
-  attached: AttachedJournal,
-  record: AgentSessionRecord,
-  prepared: JournalReplacementItem[] | null,
-  store?: AgentSessionRecordStore,
-  adapter?: Pick<StructuredAgentSessionAdapter, 'readConversationHistory'>
-): Promise<void> {
-  const adopt = params.adopt
   // Preserve durable writes after the initial epoch row.
-  if (!adopt || attached.journal.cursor().sequence > 1) {
+  if (!params.adopt || attached.journal.cursor().sequence > 1) {
     return
   }
-  if (prepared) {
-    await attached.journal.write(
-      {
-        kind: 'epoch-replace',
-        reason: 'legacy_import',
-        fence: record.lease.runtimeFence,
-        items: prepared
-      },
-      undefined
-    )
-    return
-  }
-  if (!adopt.transcriptPath) {
-    throw agentSessionRefusalError('agent_session_identity_required', {
-      reason: 'transcriptNotFound'
-    })
-  }
-  const read = await readAdoptedTranscript(params, undefined, adapter)
-  if (!read?.length) {
+  if (!prepared) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptUnreadable'
     })
   }
-  await applyAdoptedTranscript(params, attached, record, read, store, adapter)
+  await attached.journal.write({
+    kind: 'epoch-replace',
+    reason: 'legacy_import',
+    fence: record.lease.runtimeFence,
+    items: prepared
+  })
+  return undefined
 }

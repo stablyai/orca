@@ -1,6 +1,9 @@
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
-import { normalizeSourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import {
+  DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
+  normalizeSourceControlActionRecipe
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   renderConversationNamePrompt,
   sanitizeGeneratedConversationName
@@ -84,7 +87,11 @@ export function structuredChatNamingDeps(
           record.provider === 'antigravity' ||
           record.provider === 'trae')
       ) {
-        if (record.provider === 'trae') {
+        if (
+          record.provider === 'trae' &&
+          recipe.commandInputTemplate ===
+            DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.conversationName
+        ) {
           const generateName =
             getStructuredAgentSessionHost()?.deps.adapter.generateConversationName
           const name =

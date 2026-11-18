@@ -9,9 +9,20 @@ let delayedStartReply = null
 let modelBackendVariant = 'max'
 let modeReplyFailed = false
 let replaceTurnOnGoalRead = false
+let goal = null
+let goalPauseFailed = false
 const send = (frame) => process.stdout.write(`${JSON.stringify(frame)}\n`)
 const reply = (id, result) => send({ id, result })
 const notify = (method, params) => send({ method, params: { threadId, ...params } })
+const queue = (queuedTurnId, state, position = null) =>
+  notify('queue/status', {
+    turnId: queuedTurnId,
+    state,
+    position,
+    operation: null,
+    modelQuotaLowPriority: false,
+    message: null
+  })
 const complete = (text, status = 'completed') => {
   notify('item/agentMessage/delta', { turnId, itemId: `answer-${turnId}`, delta: text })
   notify('item/completed', {
@@ -80,7 +91,15 @@ createInterface({ input: process.stdin })
         turnId = `turn-${++serial}`
         notify('turn/started', { turn: { id: turnId, status: 'inProgress', items: [] } })
       }
-      reply(id, { goal: null })
+      reply(id, { goal })
+    } else if (method === 'thread/goal/set') {
+      if (params.status === 'paused' && !goalPauseFailed) {
+        goalPauseFailed = true
+        send({ id, error: { code: -32000, message: 'Goal pause was rejected' } })
+        return
+      }
+      goal = { ...goal, ...params }
+      reply(id, { goal })
     } else if (method === 'thread/contextUsage') {
       reply(id, { snapshot: null, contextWindowUsage: null })
     } else if (method === 'thread/backgroundTerminals/list') {
@@ -114,24 +133,14 @@ createInterface({ input: process.stdin })
       turnId = `turn-${++serial}`
       const text = params.input[0].text
       if (text === 'model-queue-history') {
-        notify('queue/status', {
-          turnId: 'past-turn',
-          state: 'queued',
-          position: 99,
-          operation: null,
-          modelQuotaLowPriority: false,
-          message: null
-        })
+        queue('past-turn', 'queued', 99)
       }
       if (text.startsWith('model-queue')) {
-        notify('queue/status', {
+        queue(
           turnId,
-          state: 'queued',
-          operation: null,
-          modelQuotaLowPriority: false,
-          position: text === 'model-queue-unknown' ? null : text === 'model-queue-zero' ? 0 : 12,
-          message: null
-        })
+          'queued',
+          text === 'model-queue-unknown' ? null : text === 'model-queue-zero' ? 0 : 12
+        )
       }
       if (text === 'model-queue-before-ack') {
         delayedStartReply = id
@@ -144,14 +153,7 @@ createInterface({ input: process.stdin })
         item: { id: params.userMessageId, type: 'userMessage', content: params.input }
       })
       if (text.startsWith('model-queue')) {
-        notify('queue/status', {
-          turnId: 'other-turn',
-          state: 'ready',
-          position: null,
-          operation: null,
-          modelQuotaLowPriority: false,
-          message: null
-        })
+        queue('other-turn', 'ready')
         return
       }
       if (text === 'context-mode') {
@@ -164,6 +166,9 @@ createInterface({ input: process.stdin })
         complete(JSON.stringify({ effort: params.effort ?? null }))
       } else if (text === 'cancel-next-turn-race') {
         replaceTurnOnGoalRead = true
+      } else if (text === 'goal-pause-retry') {
+        goal = { objective: 'Keep working', status: 'active' }
+        complete('Goal is active')
       } else if (text === 'mode-retry') {
         modeReplyFailed = false
         notify('mode/changeRequested', {

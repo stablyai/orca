@@ -21,7 +21,6 @@ import type { AgentSessionAccountHome } from '../../../../shared/agent-session/l
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,
-  attachJournal,
   classifyStoreFailure,
   reserveRequestFor,
   type AgentSessionAttachAuthority,
@@ -38,10 +37,8 @@ import type { StructuredAgentSessionEventSink } from '../journal-ingress/structu
 import { resolveAgentSessionReplayOutcome } from '../operations/structured-agent-session-replay-outcome'
 import { captureAttachedHydration } from './structured-agent-session-attach-hydration'
 import { acquireOwner } from './structured-agent-session-acquisition'
-import {
-  importAdoptedTranscript,
-  prepareAdoptedTranscript
-} from './structured-agent-session-adopted-import'
+import { prepareAdoptedTranscript } from './structured-agent-session-adopted-import'
+import { attachSessionJournalHistory } from './structured-agent-session-attach-history'
 import {
   withAgentSessionCreatePhase,
   type AgentSessionCreatePhaseRecorder
@@ -148,7 +145,7 @@ export async function performAttach(
   const lock = input.lock ?? heldStructuredAgentSessionAttachLock(input.acquireSignal)
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
-    : await prepareAdoptedTranscript(params, lock.signal, input.adapter)
+    : await lock.wait(prepareAdoptedTranscript(params, lock.signal, input.adapter))
   if (!preparedTranscript.ok) {
     return preparedTranscript
   }
@@ -259,19 +256,13 @@ export async function performAttach(
 
   let attached: AttachedJournal
   try {
-    const acquired = record
-    attached = await lock.commit(async () => {
-      await input.beforeJournalOpen?.()
-      const journal = await attachJournal({
-        record: acquired,
-        openConversation: input.openConversation
-      })
-      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items, {
-        store,
-        adapter: input.adapter
-      })
-      await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
-      return journal
+    attached = await attachSessionJournalHistory({
+      flow: input,
+      record,
+      lock,
+      prepared: preparedTranscript.items,
+      owner,
+      onAttached: (journal) => input.onAttached(journal, acquisitionGeneration, owner, accountHome)
     })
     await lock.wait(input.beforePublish?.(owner) ?? Promise.resolve())
     const recordOutcome = () =>
@@ -284,6 +275,17 @@ export async function performAttach(
       input.onPublish ? input.onPublish(attached, recordOutcome) : recordOutcome()
     )
   } catch (error) {
+    const current = store.getRecord(sessionId)
+    if (current && current.lease.runtimeFence !== record.lease.runtimeFence) {
+      return {
+        ok: false,
+        refusal: refuse(
+          'agent_session_ownership_unknown',
+          { reason: 'leaseMoved' },
+          'The session owner changed while its history was being prepared.'
+        )
+      }
+    }
     return settlePostAcquisitionAttachFailure(input, record, error)
   }
 

@@ -264,6 +264,28 @@ it('keeps the replacement turn running while cancellation waits for goal state',
   })
 })
 
+it('reports cancellation when a goal-only pause succeeds after a rejected attempt', async () => {
+  session = createSession()
+  await session.open(new AbortController().signal)
+  await dispatchTraexMessage(session, {
+    sessionId: 'trae-controls',
+    fence: 1,
+    clientMessageId: 'goal-pause-retry',
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'goal-pause-retry' }] }
+  })
+  await expect.poll(async () => (await journal.reads.newestTurn())?.state).toBe('completed')
+  const result = await cancelTraexTurn(session, { sessionId: 'trae-controls', fence: 1 })
+  expect(result).toMatchObject({
+    cancelled: true,
+    stop: { pause: 'acknowledged', interrupt: 'not-needed' }
+  })
+  expect(
+    await session.connection.request('thread/goal/get', { threadId: session.threadId })
+  ).toMatchObject({
+    goal: { status: 'paused' }
+  })
+})
+
 it('offers a fresh mode approval after its response is rejected', async () => {
   session = createSession()
   await session.open(new AbortController().signal)

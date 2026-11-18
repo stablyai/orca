@@ -56,7 +56,7 @@ export async function cancelTraexTurn(
     await pause()
   }
   return {
-    cancelled,
+    cancelled: cancelled || paused,
     ...(journalTurn ? { turnId: journalTurn } : {}),
     stop: facts,
     ...(turnMayOpen ? { refusal: { turnMayOpen: true as const } } : {})

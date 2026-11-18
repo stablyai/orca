@@ -11,12 +11,14 @@ import {
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import {
   attachFingerprintFields,
+  reserveRequestFor,
   type AgentSessionAttachParams
 } from '../../acquisition/structured-agent-session-attach'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
-import { importAdoptedTranscript } from '../../acquisition/structured-agent-session-adopted-import'
-import { agentSessionRecordFixture } from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { performAttach } from '../../acquisition/structured-agent-session-attach-flow'
+import type { StructuredAgentSessionAttachLock } from '../../acquisition/structured-agent-session-attach-lock'
+import { TRAEX_STRUCTURED_AGENT } from '../../../../traex/traex-agent-definition'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
@@ -201,79 +203,157 @@ describe('adopting a provider conversation on create', () => {
   })
 })
 
-it('uses the native history reader when retrying an unimported Trae conversation', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-adopt-native-retry-'))
-  const transcriptPath = join(root, 'native-history.jsonl')
-  await writeFile(transcriptPath, '{}\n')
-  const params = attachParams(transcriptPath, {
-    provider: 'trae',
-    agent: 'trae',
-    accountHome: { variable: 'HOME', path: '/home/user' },
-    adopt: {
-      transcriptPath,
-      providerHandle: { transport: 'traex-app-server', agent: 'trae', nativeId: THREAD }
-    }
-  })
-  const journal = await AgentSessionJournal.open({
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'trae',
-      providerHandle: params.adopt!.providerHandle
-    },
-    database: await openTestAgentSessionDatabase(root)
-  })
-  try {
-    const base = agentSessionRecordFixture()
-    const record = {
-      ...base,
-      sessionId: SESSION,
+it.each(['cancelled', 'completed'] as const)(
+  'prepares %s native history outside the attach commit',
+  async (outcome) => {
+    root = await mkdtemp(join(tmpdir(), 'orca-adopt-native-cancel-'))
+    const transcriptPath = join(root, 'native-history.jsonl')
+    await writeFile(transcriptPath, '{}\n')
+    const params = attachParams(transcriptPath, {
       provider: 'trae',
-      location: params.location,
-      accountHome: params.accountHome,
-      lease: { ...base.lease, sessionId: SESSION },
-      providerHandleChain: base.providerHandleChain.map((link) => ({
-        ...link,
-        handle: params.adopt!.providerHandle
-      }))
+      agent: 'trae',
+      accountHome: { variable: 'TRAECLI_HOME', path: root },
+      envelope: {
+        sessionId: SESSION,
+        clientOperationId: OPERATION,
+        expectedRuntimeFence: null,
+        payloadFingerprint: ''
+      },
+      adopt: {
+        transcriptPath,
+        providerHandle: { transport: 'traex-app-server', agent: 'trae', nativeId: THREAD }
+      }
+    })
+    store = await openTestAgentSessionRecordStore(root)
+    const authority = {
+      spawnToken: 'spawn-owner',
+      claimKeyId: 'key-1',
+      handoffOperationId: null,
+      probe: { outcome: 'reservation-unused' as const }
     }
-    await importAdoptedTranscript(
-      params,
-      { journal, unconfirmedClientMessageIds: [] },
-      record,
-      null,
-      {
-        adapter: {
-          readConversationHistory: async () => ({
-            sourceEmpty: false,
-            items: [
-              {
-                identity: {
-                  provider: 'legacy',
-                  agent: 'trae',
-                  sessionId: SESSION,
-                  recordId: 'restored-user'
-                },
-                body: {
-                  kind: 'message',
-                  role: 'user',
-                  blocks: [{ type: 'text', text: 'Restored native conversation' }]
-                },
-                ownerFence: 0
-              }
-            ]
-          })
+    const reserved = await store.reserveOwner(
+      reserveRequestFor({
+        sessionId: SESSION,
+        params,
+        authority,
+        callerKey: 'client-1',
+        fingerprint: params.envelope.payloadFingerprint,
+        now: NOW
+      })
+    )
+    const fence = reserved.record.lease.runtimeFence
+    await store.commitProcessIdentity({
+      sessionId: SESSION,
+      fence,
+      process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken: 'spawn-owner' },
+      now: NOW
+    })
+    await store.proveOwner({ sessionId: SESSION, fence, now: NOW })
+    const journal = await AgentSessionJournal.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'trae',
+        providerHandle: params.adopt!.providerHandle
+      },
+      database: await openTestAgentSessionDatabase(root)
+    })
+    const controller = new AbortController()
+    const entered = Promise.withResolvers<void>()
+    const history =
+      Promise.withResolvers<
+        Awaited<ReturnType<NonNullable<StructuredAgentSessionAdapter['readConversationHistory']>>>
+      >()
+    let inCommit = false
+    const lock: StructuredAgentSessionAttachLock = {
+      signal: controller.signal,
+      wait: (work) => work,
+      commit: async (step) => {
+        controller.signal.throwIfAborted()
+        inCommit = true
+        try {
+          return await step()
+        } finally {
+          inCommit = false
         }
       }
-    )
-    expect(
-      (await readTestJournalItems(journal)).find((row) => row.body.kind === 'message')?.body
-    ).toMatchObject({
-      role: 'user',
-      blocks: [{ type: 'text', text: 'Restored native conversation' }]
-    })
-  } finally {
-    await journal.close()
+    }
+    try {
+      const attaching = performAttach({
+        store,
+        adapter: {
+          ...adapter(),
+          supportsLocation: () => true,
+          readConversationHistory: async ({ signal }) => {
+            entered.resolve()
+            if (inCommit) {
+              throw new Error('Provider history read held the attach commit')
+            }
+            if (signal !== controller.signal) {
+              throw new Error('Provider history read did not receive attach cancellation')
+            }
+            signal.addEventListener('abort', () => history.reject(signal.reason), { once: true })
+            return history.promise
+          }
+        },
+        agents: { definition: () => TRAEX_STRUCTURED_AGENT },
+        logger: createStructuredAgentSessionLogger(),
+        authority,
+        callerKey: 'client-1',
+        params,
+        now: () => NOW,
+        lock,
+        openConversation: async () => journal,
+        onAttached: () => {}
+      })
+      const settled = attaching.then(
+        (value) => value,
+        (error: unknown) => error
+      )
+      await Promise.race([
+        entered.promise,
+        settled.then((outcome) => {
+          throw outcome instanceof Error
+            ? outcome
+            : new Error(
+                `Attach ended before native history preparation: ${JSON.stringify(outcome)}`
+              )
+        })
+      ])
+      if (outcome === 'cancelled') {
+        controller.abort(new Error('Caller cancelled history preparation'))
+        await expect(attaching).rejects.toThrow('Caller cancelled history preparation')
+      } else {
+        history.resolve({
+          sourceEmpty: false,
+          items: [
+            {
+              identity: {
+                provider: 'legacy',
+                agent: 'trae',
+                sessionId: SESSION,
+                recordId: 'restored-user'
+              },
+              body: {
+                kind: 'message',
+                role: 'user',
+                blocks: [{ type: 'text', text: 'Restored conversation' }]
+              },
+              ownerFence: 0
+            }
+          ]
+        })
+        expect(await attaching).toMatchObject({ ok: true })
+        expect(
+          (await readTestJournalItems(journal)).find((row) => row.body.kind === 'message')?.body
+        ).toMatchObject({
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Restored conversation' }]
+        })
+      }
+    } finally {
+      await journal.close()
+    }
   }
-})
+)
