@@ -23,8 +23,11 @@ export function journalDomainClientFormColumns(alias = 'item'): string {
     `CASE WHEN ${current} THEN COALESCE(${alias}.wire_json,${alias}.payload_json)
       ELSE ${alias}.payload_json END`,
     'client_json',
-    `CASE WHEN ${current} THEN COALESCE(octet_length(${alias}.wire_json),octet_length(${alias}.payload_json))
-      ELSE octet_length(${alias}.payload_json) END`
+    {
+      bytes: `CASE WHEN ${current} THEN COALESCE(octet_length(${alias}.wire_json),octet_length(${alias}.payload_json))
+        ELSE octet_length(${alias}.payload_json) END`,
+      shortenColumn: `${alias}.payload_json`
+    }
   )},
     CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
       THEN COALESCE(${alias}.wire_bytes,octet_length(${alias}.payload_json)) END AS client_bytes,
@@ -106,7 +109,7 @@ export function readJournalDomainItemDetail(
   itemId: string
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT wire_version,${boundedStoredJsonSql(DETAIL_JSON, 'detail_json', DETAIL_BYTES)} FROM journal_items
+    .prepare(`SELECT wire_version,${boundedStoredJsonSql(DETAIL_JSON, 'detail_json', { bytes: DETAIL_BYTES, shortenColumn: 'payload_json' })} FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(target.sessionId, target.epoch, itemId)
   if (!row) {
