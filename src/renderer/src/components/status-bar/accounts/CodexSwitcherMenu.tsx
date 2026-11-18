@@ -28,7 +28,7 @@ export function CodexSwitcherMenu({
   triggerContent
 }: {
   codex: ProviderRateLimits
-  ownerUsage?: OwnerUsageRateLimits
+  ownerUsage: OwnerUsageRateLimits
   compact: boolean
   iconOnly: boolean
   asSubmenu?: boolean
@@ -37,7 +37,6 @@ export function CodexSwitcherMenu({
   const t = useTranslate()
   const {
     activeTarget,
-    activeUsage,
     canRedeemReset,
     confirmedResetAccountId,
     handleConfirmReset,
@@ -120,10 +119,8 @@ export function CodexSwitcherMenu({
     active: boolean,
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
-    if (active && activeUsage) {
-      return (
-        <AccountUsageGauge limits={activeUsage} isFetching={activeUsage.status === 'fetching'} />
-      )
+    if (active) {
+      return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
@@ -146,10 +143,8 @@ export function CodexSwitcherMenu({
       )}
       variant="account"
       accountLabel={
-        activeUsage
-          ? (activeTarget?.label ??
-            t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
-          : undefined
+        activeTarget?.label ??
+        t('auto.components.status.bar.StatusBar.c676918adc', 'System default')
       }
       panelFooter={
         resetCreditCount !== null ? (
@@ -206,12 +201,13 @@ export function CodexSwitcherMenu({
       <AccountSwitchSection
         heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
         targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={activeUsage !== null}
+        panelShowsActiveAccount
         onOpenSettings={() => {
           openSettingsTarget({
             pane: 'accounts',
             repoId: null,
-            sectionId: 'accounts-codex'
+            sectionId: 'accounts-codex',
+            hostScope: ownerUsage.owner.target
           })
           openSettingsPage()
         }}

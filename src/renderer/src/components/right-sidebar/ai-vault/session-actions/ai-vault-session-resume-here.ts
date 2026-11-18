@@ -1,6 +1,8 @@
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { useAppStore } from '@/store/index'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import { botGroupRoomOfRow } from '@/lib/bot-group-room-history'
 import {
   activateAiVaultStructuredSession,
   structuredSessionOpenFeedback,
@@ -35,6 +37,8 @@ export type AiVaultResumeHere = {
   workspaceId: string
   /** The chat's agent; another agent's conversation can't continue in it. */
   agent?: AiVaultAgent
+  /** A room's picker: nothing takes its place; a pick opens in its own tab as its own agent. */
+  alongside?: boolean
   /** Picking the chat's own conversation only closes the picker; a no-op once it has closed. */
   dismiss: () => void
   confirm: ConfirmationDialogContextValue
@@ -56,6 +60,11 @@ export function resumeAiVaultSessionHere(args: {
   let current = (): boolean => true
   const here = { ...args.here, current: () => current() }
   const structured = session.structuredSession
+  // A group room never replaces this chat; it opens in its own tab.
+  if (structured && botGroupRoomOfRow(readBotGroups(), session)) {
+    here.dismiss()
+    return activateAiVaultStructuredSession(session).then(() => undefined)
+  }
   if (structured && structured.sessionId === findChatTab(here)?.entityId) {
     here.dismiss()
     return Promise.resolve()

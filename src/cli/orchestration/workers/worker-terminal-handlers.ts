@@ -1,7 +1,8 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printResult } from '../../output/command-result-output'
 import { printOrchestrationResult } from '../agent-view'
-import { remoteHost, WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
+import { remoteHost, WORKER_LIST_VIEW } from './worker-agent-views'
+import type { WorkerListResult } from './worker-view-results'
 import {
   formatHelperStops,
   WORKER_RELEASE_VIEW,
@@ -71,12 +72,11 @@ function approvalAnswerHandler(decision: 'allow' | 'deny'): CommandHandler {
       fields: (value) => ({
         approvalId: value.approvalId,
         [decision === 'allow' ? 'allowed' : 'denied']: value.option,
-        reason:
-          decision === 'allow'
-            ? reason
-            : value.reasonMessageId
-              ? `sent to the worker as message ${value.reasonMessageId}`
-              : undefined
+        reason: value.reasonMessageId
+          ? `sent to the worker as message ${value.reasonMessageId}`
+          : decision === 'allow'
+            ? 'not sent to the worker'
+            : undefined
       })
     })
   }

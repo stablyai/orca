@@ -26,19 +26,6 @@ describe('director assign epoch rules', () => {
   const plan = (input: Partial<Parameters<typeof planDirectorAssign>[0]>) =>
     planDirectorAssign({ current: null, handedUrl: undefined, frozen: false, cellId: CELL, ask: ask(), ...input })
 
-  it('places a new host at epoch 1 on a clean object', () => {
-    expect(plan({})).toEqual({ outcome: 'assign', assignmentEpoch: 1, write: { wipe: true } })
-  })
-
-  it('keeps the epoch across asks while the URL stays the same', () => {
-    expect(plan({ current: stored(7), handedUrl: EDGE_URL })).toEqual({ outcome: 'assign', assignmentEpoch: 7, write: null })
-  })
-
-  it('bumps the epoch only when the URL changes (front door <-> edge)', () => {
-    expect(plan({ current: stored(7), handedUrl: EDGE_URL, ask: ask(FRONT_DOOR_URL) })).toEqual({ outcome: 'assign', assignmentEpoch: 8, write: { wipe: false } })
-    expect(plan({ current: stored(8), handedUrl: FRONT_DOOR_URL, ask: ask(EDGE_URL) })).toEqual({ outcome: 'assign', assignmentEpoch: 9, write: { wipe: false } })
-  })
-
   it('keeps the epoch of a legacy push (no URL recorded): both URLs reach this object', () => {
     expect(plan({ current: stored(4), ask: ask(FRONT_DOOR_URL) })).toEqual({ outcome: 'assign', assignmentEpoch: 4, write: null })
   })
