@@ -208,7 +208,7 @@ export function journalSqlReads(
       (await read({ kind: 'message-options', clientMessageId })).options,
     continuationContext: async () => (await read({ kind: 'continuation-context' })).context,
     continuationChunk: async (chunk) =>
-      (await read({ kind: 'continuation-chunk', read: chunk })).text,
+      (await read({ kind: 'continuation-chunk', read: chunk })).bytes,
     latestPrompt: async () => (await read({ kind: 'latest-prompt' })).prompt,
     restartProgress: async (cursor) => (await read({ kind: 'restart-progress', cursor })).progress,
     outgrownChild: async (input) => (await read({ kind: 'outgrown-child', input })).child,

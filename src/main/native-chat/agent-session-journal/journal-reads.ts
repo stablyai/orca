@@ -45,7 +45,7 @@ export type JournalNamedTurn = {
 
 export type JournalMessageOptions = { ordinaryMessage: boolean; runningTurn: boolean }
 
-/** A tool output or patch whose head stops at `items[index]`; the rest is read in chunks. */
+/** A tool output or patch at `items[index]` whose head is an excerpt; the whole text is read in chunks. */
 export type JournalContinuedPayload = {
   index: number
   itemId: string
@@ -63,7 +63,7 @@ export type JournalContinuationContext = {
 }
 
 export type JournalContinuationChunkRead = Omit<JournalContinuedPayload, 'index'> & {
-  /** 1-based SQLite character offset. */
+  /** 1-based byte offset into the stored UTF-8 text. */
   offset: number
 }
 
@@ -110,8 +110,8 @@ export type AgentSessionJournalReads = {
   namedTurn(turnId: string): Promise<JournalNamedTurn>
   messageOptions(clientMessageId: string): Promise<JournalMessageOptions>
   continuationContext(): Promise<JournalContinuationContext>
-  /** Null once the item is gone or revised; an empty string past the end. */
-  continuationChunk(read: JournalContinuationChunkRead): Promise<string | null>
+  /** Null once the item is gone or revised; empty past the end. */
+  continuationChunk(read: JournalContinuationChunkRead): Promise<Uint8Array | null>
   /** The newest presented root user prompt, excluding commands, as restart offers preview it. */
   latestPrompt(): Promise<string>
   restartProgress(cursor: AgentJournalCursor): Promise<JournalRestartProgress>

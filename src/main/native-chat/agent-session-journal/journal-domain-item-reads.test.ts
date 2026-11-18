@@ -9,10 +9,7 @@ import type {
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { readJournalDomainItems, type JournalDomainItemRead } from './journal-sql-item-reads'
-import {
-  JOURNAL_CONTINUED_CHUNK_CHARS,
-  JOURNAL_CONTINUED_FIRST_OFFSET
-} from './journal-sql-continuation-context'
+import { JOURNAL_CONTINUED_CHUNK_BYTES } from './journal-sql-continuation-context'
 
 import { runJournalTransaction } from './database/journal-database'
 import {
@@ -285,42 +282,44 @@ it('exports visible rows and sends after the newest clear across bounded query p
   expect(context.submissions.map((entry) => entry.clientMessageId)).toEqual(['after', 'rejected'])
 })
 
-it('exports a large tool output as its head plus character chunks that rejoin it exactly', () => {
+it('exports a large tool output as an excerpt plus byte chunks that rejoin it exactly', () => {
   const { seed, read } = chat()
-  // Astral characters count once in SQLite and twice in JavaScript, so offsets stay in SQLite's units.
-  const output = '😀é-abc\n'.repeat(1_000_000)
+  // Text slicing in SQLite stops at NUL; byte slicing must carry everything after it.
+  const output = `start ${'😀é-abc\n'.repeat(3_100_000)}\u0000after NUL end`
   seed(
     row('tool', 1, {
       kind: 'tool-call',
       name: 'Read',
       input: {},
       state: 'completed',
-      output: { head: output, byteLength: 13_000_000, digest: 'd', truncated: false }
+      output: { head: output, byteLength: 34_100_020, digest: 'd', truncated: false }
     })
   )
 
   const context = read({ kind: 'continuation-context' }).context
   expect(context.continued).toEqual([{ index: 0, itemId: 'tool', revision: 1, field: 'output' }])
-  const head = (context.items[0].body as { output: { head: string } }).output.head
-  expect(head).toBe(output.slice(0, head.length))
-  expect(head.length).toBeLessThan(64 * 1024)
-  let text = head
-  for (let offset = JOURNAL_CONTINUED_FIRST_OFFSET; ; offset += JOURNAL_CONTINUED_CHUNK_CHARS) {
-    const chunk = read({
+  const excerpt = (context.items[0].body as { output: { head: string } }).output.head
+  expect(excerpt.startsWith('start 😀é-abc')).toBe(true)
+  expect(excerpt.endsWith('after NUL end')).toBe(true)
+  expect(excerpt.length).toBeLessThan(64 * 1024)
+  const chunks: Uint8Array[] = []
+  for (let offset = 1; ; offset += JOURNAL_CONTINUED_CHUNK_BYTES) {
+    const bytes = read({
       kind: 'continuation-chunk',
       read: { itemId: 'tool', revision: 1, field: 'output', offset }
-    }).text
-    if (!chunk) {
+    }).bytes
+    if (!bytes?.length) {
       break
     }
-    text += chunk
+    chunks.push(bytes)
   }
-  expect(text).toBe(output)
+  expect(chunks.length).toBe(2)
+  expect(Buffer.concat(chunks).equals(Buffer.from(output, 'utf8'))).toBe(true)
   expect(
     read({
       kind: 'continuation-chunk',
-      read: { itemId: 'tool', revision: 2, field: 'output', offset: JOURNAL_CONTINUED_FIRST_OFFSET }
-    }).text
+      read: { itemId: 'tool', revision: 2, field: 'output', offset: 1 }
+    }).bytes
   ).toBeNull()
 })
 

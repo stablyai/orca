@@ -78,7 +78,7 @@ export type JournalSqlItemReadResult =
   | { kind: 'named-turn'; turn: JournalNamedTurn }
   | { kind: 'message-options'; options: JournalMessageOptions }
   | { kind: 'continuation-context'; context: JournalContinuationContext }
-  | { kind: 'continuation-chunk'; text: string | null }
+  | { kind: 'continuation-chunk'; bytes: Uint8Array | null }
   | JournalSqlLifecycleReadResult
 
 export type JournalDomainItemRead = Exclude<JournalSqlItemRead, JournalSqlLifecycleRead>

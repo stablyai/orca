@@ -14,21 +14,32 @@ import type { SqliteBindings, SqliteRow } from '../../sqlite/sqlite-statement'
 import { readJournalStoredRow } from './journal-stored-output-rows'
 
 const PAGE = 256
-// Rows under this size carry their whole text; larger tool outputs and patches continue in chunks.
-const CONTINUED_ROW_BYTES = 1024 * 1024
-const CONTINUED_HEAD_CHARS = 16 * 1024
-export const JOURNAL_CONTINUED_CHUNK_CHARS = 4 * 1024 * 1024
-const CONTINUED_FIELDS = ['output', 'patch'] as const
+// Rows under this size carry their whole text; a larger tool output or patch streams in byte chunks.
+const CONTINUED_ROW_BYTES = 64 * 1024
+const CONTINUED_TEXT_BYTES = 32 * 1024
+// Byte slices pass NUL; a character cut at either edge only blurs the summary's excerpt.
+const EXCERPT_BYTES = 8 * 1024
+// One extraction per chunk re-reads the stored row, so chunks stay large but well under a reply.
+export const JOURNAL_CONTINUED_CHUNK_BYTES = 32 * 1024 * 1024
 
-/** Cut in SQLite, so neither the reader nor main holds a large head; marks which field continues. */
+/**
+ * Built in SQLite, so neither the reader nor main holds a large text: a continued field keeps only
+ * its start and end as an excerpt for the short hand-off summary, and is marked continued. The
+ * subquery isn't flattened, so each text is extracted once.
+ */
 const EXPORT_PAYLOAD = `CASE WHEN octet_length(payload_json)<=${CONTINUED_ROW_BYTES} THEN payload_json
-  ELSE (SELECT CASE ${CONTINUED_FIELDS.map(
-    (field) => `WHEN json_type(p,'$.body.${field}.head')='text'
-      AND length(json_extract(p,'$.body.${field}.head'))>${CONTINUED_HEAD_CHARS}
+  ELSE (SELECT CASE ${(['output', 'patch'] as const)
+    .map(
+      (field) => `WHEN octet_length(${field})>${CONTINUED_TEXT_BYTES}
       THEN json_set(p,'$.body.${field}.head',
-        substr(json_extract(p,'$.body.${field}.head'),1,${CONTINUED_HEAD_CHARS}),
+        CAST(substr(CAST(${field} AS BLOB),1,${EXCERPT_BYTES}) AS TEXT)||char(10)||'…'||char(10)||
+          CAST(substr(CAST(${field} AS BLOB),-${EXCERPT_BYTES}) AS TEXT),
         '$.body.${field}.continued',json('true'))`
-  ).join(' ')} ELSE p END FROM (SELECT payload_json AS p)) END`
+    )
+    .join(' ')} ELSE p END
+    FROM (SELECT payload_json AS p,
+      json_extract(payload_json,'$.body.output.head') AS output,
+      json_extract(payload_json,'$.body.patch.head') AS patch LIMIT 1)) END`
 
 /** The logical cursor of the ready head that owns this epoch; an unready or retired head has none. */
 export function journalDomainContextHead(
@@ -112,29 +123,31 @@ function takeContinuedField(item: AgentJournalRenderItem): JournalContinuedPaylo
   return body.kind === 'diff' ? 'patch' : 'output'
 }
 
-/** The next part of a continued head, or null once its item is gone or revised. */
+/** Stored UTF-8 bytes of a continued text from `offset` (1-based); null once it is gone or revised. */
 export function readJournalDomainContinuationChunk(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
   read: JournalContinuationChunkRead
-): { kind: 'continuation-chunk'; text: string | null } {
+): { kind: 'continuation-chunk'; bytes: Uint8Array | null } {
+  // Blob slicing counts bytes and passes NUL, which text slicing stops at.
   const row = db
-    .prepare(`SELECT revision, substr(json_extract(payload_json,?),?,?) AS text
+    .prepare(`SELECT revision, substr(CAST(json_extract(payload_json,?) AS BLOB),?,?) AS bytes
       FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(
       `$.body.${read.field}.head`,
       read.offset,
-      JOURNAL_CONTINUED_CHUNK_CHARS,
+      JOURNAL_CONTINUED_CHUNK_BYTES,
       target.sessionId,
       target.epoch,
       read.itemId
     )
-  const current = row && Number(row.revision) === read.revision && typeof row.text === 'string'
-  return { kind: 'continuation-chunk', text: current ? String(row.text) : null }
+  const bytes = row?.bytes
+  return {
+    kind: 'continuation-chunk',
+    bytes:
+      row && Number(row.revision) === read.revision && bytes instanceof Uint8Array ? bytes : null
+  }
 }
-
-/** Where the continued text starts, in SQLite characters, since JavaScript counts UTF-16 units. */
-export const JOURNAL_CONTINUED_FIRST_OFFSET = CONTINUED_HEAD_CHARS + 1
 
 /** The keyset after a full page; empty once a short page proves nothing follows. */
 function nextPage(rows: readonly SqliteRow[], columns: readonly string[]): SqliteBindings {

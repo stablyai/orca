@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { projectSavedChatContextItems } from '../../conversation-context/agent-session-saved-prompt-text'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../../shared/agent-session/agent-session-wire'
@@ -10,14 +9,13 @@ import { toLinuxPath } from '../../../../shared/file-access/wsl-paths'
 import { writeAgentSessionContextSnapshot } from '../../conversation-context/agent-session-context-snapshots'
 import type {
   AgentSessionJournalReads,
-  JournalContinuationContext
+  JournalContinuedPayload
 } from '../../agent-session-journal/journal-reads'
+import { JOURNAL_CONTINUED_CHUNK_BYTES } from '../../agent-session-journal/journal-sql-continuation-context'
 import {
-  JOURNAL_CONTINUED_CHUNK_CHARS,
-  JOURNAL_CONTINUED_FIRST_OFFSET
-} from '../../agent-session-journal/journal-sql-continuation-context'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+  ContinuedTranscriptMarkers,
+  decodeStoredText
+} from '../../conversation-context/agent-session-continued-transcript'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -52,24 +50,25 @@ export function continuationContextReader(
     ) {
       return { status: 'superseded' }
     }
-    // A large tool output or patch arrives as its head; a marker places the rest, streamed in chunks.
-    const marker = `\u0000orca-continued:${randomUUID()}:`
-    const markedItems = [...context.items]
+    // A large tool output or patch arrives as an excerpt; its whole text streams into the file.
+    const markers = new ContinuedTranscriptMarkers()
+    const items = [...context.items]
     context.continued.forEach((part, index) => {
-      markedItems[part.index] = withHeadSuffix(markedItems[part.index], `${marker}${index}\u0000`)
+      items[part.index] = markers.mark(items[part.index], index)
     })
     const messages = projectStructuredAgentSessionMessages(
-      markedItems,
+      items,
       [],
       context.submissions,
       projectSavedChatContextItems
     )
-    const markers = new RegExp(`${marker}(\\d+)\u0000`, 'g')
+    const continued = context.continued.length > 0
     const capturedText = buildAgentSessionHandoffContext(
-      context.continued.length ? withoutMarkers(messages, markers) : messages
+      continued ? markers.excerpts(messages) : messages
     )
-    const text = messages.map(formatWorkerTranscriptMessage).join('\n\n')
-    if (!text.trim()) {
+    const formatted = messages.map(formatWorkerTranscriptMessage)
+    const text = continued ? '' : formatted.join('\n\n')
+    if (!continued && !text.trim()) {
       return { status: 'current', capturedText: '' }
     }
     let path: string
@@ -78,8 +77,10 @@ export function continuationContextReader(
       path = await writeAgentSessionContextSnapshot(
         deps.journalDatabase.stateDirectory,
         input.sessionId,
-        context.continued.length
-          ? splicedTranscript(text, markers, context, session.journal.reads)
+        continued
+          ? markers.transcript(formatted, (index) =>
+              decodeStoredText(storedChunks(session.journal.reads, context.continued[index]))
+            )
           : text
       )
     } catch (error) {
@@ -98,51 +99,19 @@ export function continuationContextReader(
 
 class ContinuedPayloadSuperseded extends Error {}
 
-function withHeadSuffix(item: AgentJournalRenderItem, suffix: string): AgentJournalRenderItem {
-  const { body } = item
-  if (body.kind === 'diff') {
-    return { ...item, body: { ...body, patch: { ...body.patch, head: body.patch.head + suffix } } }
-  }
-  if (body.kind === 'tool-call' && body.output) {
-    return {
-      ...item,
-      body: { ...body, output: { ...body.output, head: body.output.head + suffix } }
+/** One chunk at a time; a revised or removed item supersedes the whole snapshot. */
+async function* storedChunks(
+  reads: Pick<AgentSessionJournalReads, 'continuationChunk'>,
+  { itemId, revision, field }: JournalContinuedPayload
+): AsyncGenerator<Uint8Array> {
+  for (let offset = 1; ; offset += JOURNAL_CONTINUED_CHUNK_BYTES) {
+    const bytes = await reads.continuationChunk({ itemId, revision, field, offset })
+    if (bytes === null) {
+      throw new ContinuedPayloadSuperseded()
     }
-  }
-  return item
-}
-
-function withoutMarkers(messages: NativeChatMessage[], markers: RegExp): NativeChatMessage[] {
-  return messages.map((message) => ({
-    ...message,
-    blocks: message.blocks.map((block) =>
-      block.type === 'tool-result' ? { ...block, output: block.output.replace(markers, '') } : block
-    )
-  }))
-}
-
-/** Holds one chunk at a time; a revised or removed item supersedes the whole snapshot. */
-async function* splicedTranscript(
-  text: string,
-  markers: RegExp,
-  context: JournalContinuationContext,
-  reads: Pick<AgentSessionJournalReads, 'continuationChunk'>
-): AsyncGenerator<string> {
-  let end = 0
-  for (const match of text.matchAll(markers)) {
-    yield text.slice(end, match.index)
-    const { itemId, revision, field } = context.continued[Number(match[1])]
-    for (let offset = JOURNAL_CONTINUED_FIRST_OFFSET; ; offset += JOURNAL_CONTINUED_CHUNK_CHARS) {
-      const chunk = await reads.continuationChunk({ itemId, revision, field, offset })
-      if (chunk === null) {
-        throw new ContinuedPayloadSuperseded()
-      }
-      if (!chunk) {
-        break
-      }
-      yield chunk
+    if (bytes.length === 0) {
+      return
     }
-    end = match.index + match[0].length
+    yield bytes
   }
-  yield text.slice(end)
 }
