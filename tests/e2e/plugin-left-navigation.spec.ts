@@ -1,10 +1,12 @@
 import { join } from 'node:path'
-import { expect, test } from './desktop/electron-fixtures/orca-app'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { expect } from '@stablyai/playwright-test'
 import { disablePluginSystem, enableDevPlugins } from './plugins/plugin-smoke'
 
 test('left-navigation panels open a main page, support history and revoke mounted content', async ({
   orcaPage
 }) => {
+  await orcaPage.setViewportSize({ width: 1280, height: 800 })
   const pluginRoot = join(process.cwd(), 'examples/plugins/left-navigation')
   const frame = orcaPage.frameLocator('iframe[title="MRs"]')
   const iframe = orcaPage.locator('iframe[title="MRs"]')
