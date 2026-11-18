@@ -78,13 +78,12 @@ class BrowserSessionRegistry {
   }
 
   private resetDefaultProfile(): void {
-    const persisted = this.loadPersistedSource()
     this.profiles.set('default', {
       id: 'default',
       scope: 'default',
       partition: this.defaultPartition,
       label: 'Default',
-      source: persisted
+      source: this.loadPersistedSource()
     })
   }
 
