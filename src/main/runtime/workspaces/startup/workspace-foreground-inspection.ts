@@ -10,6 +10,8 @@ import {
   type LaunchedAgentHost
 } from '../../terminal/wait/launched-agent-foreground'
 import { reattachedRestTitleAgent } from '../../terminal/wait/reattached-rest-title'
+import { AdoptedRootDiscovery } from '../../terminal/wait/adopted-root-discovery'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWithListManagedWorktrees {
   launchedAgentTerminalIdentity(ptyId: string): unknown {
@@ -61,24 +63,29 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     return true
   }
 
-  private readRestTitleForeground(
+  private readonly adoptedRoots = new AdoptedRootDiscovery((ptyIds) =>
+    this.ptyController?.listProcesses?.(LOCAL_EXECUTION_HOST_ID, { ptyIds, targetOwnerOnly: true })
+  )
+
+  private async readRestTitleForeground(
     pty: RuntimePtyWorktreeRecord | undefined,
     ptyId: string,
     agent: TuiAgent
   ): Promise<LaunchedAgentForeground> {
-    const root = pty?.adoptedRootProcess
-    // Why the discovered root on an old local owner: its launched-agent read lists every session to
-    // find one root PID. Before discovery stores it (attach can come first), that read still runs.
-    if (
-      pty &&
-      root &&
-      root.incarnationId === pty.incarnationId &&
-      !pty.connectionId &&
-      !this.ptyController?.supportsForegroundObservation?.(ptyId)
-    ) {
-      return readAdoptedRootAgentForeground(this.ptyController, root.pid, ptyId, agent)
+    if (!pty || pty.connectionId || this.ptyController?.supportsForegroundObservation?.(ptyId)) {
+      return readExactAgentForeground(this, this.ptyController, ptyId, agent)
     }
-    return readExactAgentForeground(this, this.ptyController, ptyId, agent)
+    // Why the root on an old local owner: its launched-agent read lists every session per pane.
+    let root = pty.adoptedRootProcess
+    if (!root || root.incarnationId !== pty.incarnationId) {
+      // Attach can come before discovery stores it; one shared lookup serves the whole sweep.
+      root = await this.adoptedRoots.find(ptyId)
+      if (!root || this.ptysById.get(ptyId) !== pty || root.incarnationId !== pty.incarnationId) {
+        return 'unknown'
+      }
+      pty.adoptedRootProcess = root
+    }
+    return readAdoptedRootAgentForeground(this.ptyController, root.pid, ptyId, agent)
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */

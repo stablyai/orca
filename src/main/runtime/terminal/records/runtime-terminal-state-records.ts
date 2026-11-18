@@ -1,3 +1,4 @@
+import type { AdoptedRootProcess } from '../wait/adopted-root-discovery'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
@@ -144,7 +145,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
   commandPaint?: TerminalCommandPaint
   /** The root PID reattach discovery listed for this incarnation: an old owner's only terminal anchor. */
-  adoptedRootProcess?: { incarnationId: string | null; pid: number } | null
+  adoptedRootProcess?: AdoptedRootProcess | null
 }
 
 export type RuntimePtyTabCloseAuthority = {
