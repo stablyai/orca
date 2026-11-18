@@ -16,12 +16,14 @@ export function useNativeChatComposerInterrupt(
     /** A prompt card owns the input: Escape must not reach the agent as Deny. */
     inert?: boolean
     cancelPendingSends: () => void
+    /** Escape cancels these after their draft was cleared, so it needs the same confirmation. */
+    hasPendingSends: () => boolean
     isWorking: boolean
     onStop?: () => void
     resolveTarget: () => NativeChatResolvedTarget | null
   }
 ): { interrupt: () => void; confirmEscape: (repeated?: boolean) => void } {
-  const { inert, cancelPendingSends, isWorking, onStop, resolveTarget } = args
+  const { inert, cancelPendingSends, hasPendingSends, isWorking, onStop, resolveTarget } = args
   const t = useTranslate()
   const noticeId = useId()
   const pending = useRef<{ scopeKey: string; draft: string; at: number } | null>(null)
@@ -50,7 +52,7 @@ export function useNativeChatComposerInterrupt(
       if (inert || repeated) {
         return
       }
-      if (isWorking) {
+      if (isWorking || hasPendingSends()) {
         const now = Date.now()
         const first = pending.current
         const elapsed = first ? now - first.at : -1
@@ -71,7 +73,7 @@ export function useNativeChatComposerInterrupt(
       }
       interrupt()
     },
-    [scopeKey, draft, inert, isWorking, interrupt, noticeId, t]
+    [scopeKey, draft, inert, isWorking, hasPendingSends, interrupt, noticeId, t]
   )
   return { interrupt, confirmEscape }
 }

@@ -93,7 +93,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       source: recallSource,
       inputRef: textareaRef
     })
-    const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
+    const { cancelPendingSends, hasPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,
       targetPtyId,
       onOptimisticSendCanceled,
@@ -312,6 +312,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const { interrupt, confirmEscape } = useNativeChatComposerInterrupt(draftScopeKey, draft, {
       inert: inputOwnedByCard,
       cancelPendingSends,
+      hasPendingSends,
       isWorking,
       onStop,
       resolveTarget

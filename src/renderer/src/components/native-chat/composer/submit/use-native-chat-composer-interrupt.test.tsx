@@ -8,7 +8,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function setup() {
+function setup(overrides: { isWorking?: boolean; hasPendingSends?: () => boolean } = {}) {
   vi.useFakeTimers()
   const stop = vi.fn()
   const cancel = vi.fn()
@@ -19,7 +19,9 @@ function setup() {
     isWorking: true,
     onStop: stop,
     cancelPendingSends: cancel,
-    resolveTarget: () => null
+    hasPendingSends: () => false,
+    resolveTarget: () => null,
+    ...overrides
   }
   return {
     ...renderHook((input) => useNativeChatComposerInterrupt(input.scopeKey, input.draft, input), {
@@ -40,6 +42,14 @@ it('keeps the turn and pending sends on first Escape and autorepeat, stopping on
   expect(stop).not.toHaveBeenCalled()
   act(() => result.current.confirmEscape())
   expect(stop).toHaveBeenCalledTimes(1)
+  expect(cancel).toHaveBeenCalledTimes(1)
+})
+
+it('confirms before cancelling a send still waiting for its Enter while idle', () => {
+  const { result, cancel } = setup({ isWorking: false, hasPendingSends: () => true })
+  act(() => result.current.confirmEscape())
+  expect(cancel).not.toHaveBeenCalled()
+  act(() => result.current.confirmEscape())
   expect(cancel).toHaveBeenCalledTimes(1)
 })
 
