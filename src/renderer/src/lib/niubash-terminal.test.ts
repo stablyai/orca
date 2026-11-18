@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { buildWindowsShellMenuEntries } from '../components/tab-bar/tab-bar-windows-shell-options'
-import { readWindowsTerminalCapabilities } from './windows-terminal-capability-read'
+import { buildWindowsShellMenuEntries } from '../components/tab-bar/create-menu/tab-bar-windows-shell-options'
+import { readWindowsTerminalCapabilities } from '../runtime/hosts/capabilities/windows-terminal-capability-read'
 
 afterEach(() => vi.unstubAllGlobals())
 

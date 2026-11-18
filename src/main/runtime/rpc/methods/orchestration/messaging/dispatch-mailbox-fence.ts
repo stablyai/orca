@@ -1,4 +1,4 @@
-import type { DispatchContextRow } from '../../../../orchestration/types'
+import type { DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
 

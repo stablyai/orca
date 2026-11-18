@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 /** A link's source, captured before async path resolution. */
 export type EditorOpenLinkIntent = {
@@ -6,7 +6,7 @@ export type EditorOpenLinkIntent = {
   sourceTabId: string
   /** The source tab's owning host at capture; null when the tab carries none. */
   hostId: ExecutionHostId | null
-  /** Set only for "Open in this group"; otherwise follow the source tab's current group. */
+  /** Set only for "Open in new tab"; otherwise follow the source tab's current group. */
   targetGroupId?: string
 }
 

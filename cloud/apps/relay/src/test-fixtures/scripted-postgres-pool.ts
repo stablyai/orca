@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { PostgresDatabase } from '../database.js'
+import { PostgresDatabase } from '../database/database.js'
 
 export class ScriptedPoolClient extends EventEmitter {
   readonly statements: string[] = []

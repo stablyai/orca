@@ -1,4 +1,4 @@
-import { isTerminalWaitWhitespace } from '../terminal-wait-tail-window'
+import { isTerminalWaitWhitespace } from '../terminal/wait/terminal-wait-tail-window'
 
 /** agy 1.2.7 adds edit mode to the caret row; accept it without admitting >-prefixed menu choices. */
 function isComposerLine(value: string): boolean {

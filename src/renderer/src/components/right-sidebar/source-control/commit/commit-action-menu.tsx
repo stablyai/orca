@@ -3,9 +3,9 @@ import { ChevronDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import type { PrimaryAction } from '../../source-control-primary-action'
-import { PrimaryActionTooltip } from '../../source-control-primary-action-tooltip'
+import { cn } from '@/lib/class-names'
+import type { PrimaryAction } from '../review/source-control-primary-action-types'
+import { PrimaryActionTooltip } from '../review/source-control-primary-action-tooltip'
 
 export function CommitActionMenu({
   showComposer,
@@ -31,10 +31,10 @@ export function CommitActionMenu({
 }): React.JSX.Element {
   return (
     // Keep action and chevron together so edit/commit/push stays in one vertical band.
-    <div className={cn('flex items-stretch gap-1', showComposer && 'mt-1')}>
-      <div className="flex flex-1 items-stretch">
+    <div className={cn('flex min-w-0 items-stretch gap-1', showComposer && 'mt-1')}>
+      <div className="flex min-w-0 flex-1 items-stretch">
         <PrimaryActionTooltip action={primaryAction} side="top">
-          <span className="flex flex-1">
+          <span className="flex min-w-0 flex-1" tabIndex={primaryAction.disabled ? 0 : undefined}>
             <Button
               type="button"
               variant="outline"
@@ -48,7 +48,7 @@ export function CommitActionMenu({
               ) : PrimaryIcon ? (
                 <PrimaryIcon className="size-3.5" aria-hidden="true" />
               ) : null}
-              {primaryAction.label}
+              <span className="truncate">{primaryAction.label}</span>
             </Button>
           </span>
         </PrimaryActionTooltip>

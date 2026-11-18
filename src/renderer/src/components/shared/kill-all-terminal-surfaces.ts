@@ -1,15 +1,14 @@
-import { useAppStore, type AppState } from '@/store'
-import {
-  closeTerminalTab,
-  type PrecomputedTerminalCloseState
-} from '../terminal/terminal-tab-actions'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { closeTerminalTab } from '../terminal/tab-lifecycle/terminal-tab-actions'
+import type { PrecomputedTerminalCloseState } from '../terminal/tab-lifecycle/terminal-close-target'
 import {
   buildTerminalTabRetirementPlans,
   type TerminalTabRetirementPlan,
   type TerminalTabRetirementState
-} from '@/store/slices/terminal-tab-retirement'
-import { reserveTerminalRetirementTeardowns } from '@/store/slices/terminal-retirement-teardown-reservation'
-import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
+} from '@/store/terminals/retirement/terminal-tab-retirement'
+import { reserveTerminalRetirementTeardowns } from '@/store/terminals/retirement/terminal-retirement-teardown-reservation'
+import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/resources/inventory/daemon-session-inventory-invalidation'
 
 const CLOSE_BATCH_SIZE = 2
 
@@ -17,6 +16,7 @@ type DaemonKillAllResult = {
   killedCount: number
   remainingCount: number
   killedSessionIds?: string[]
+  listingIncomplete?: boolean
 }
 
 export type KillAllTerminalSurfaceState = TerminalTabRetirementState &
@@ -47,6 +47,8 @@ type KillAllTerminalSurfaceDependencies = {
   closeSurface: (
     tabId: string,
     options: {
+      /** Kill-all is the user's own command (daemon actions, quit and stop all). */
+      reason: 'user'
       force: true
       localPtyTeardownOwnedExternally: true
       precomputedRetirementPlan: TerminalTabRetirementPlan
@@ -225,6 +227,7 @@ export async function runKillAllTerminalSurfaces(
       let closeFailed = false
       try {
         deps.closeSurface(targetId, {
+          reason: 'user',
           force: true,
           localPtyTeardownOwnedExternally: true,
           precomputedRetirementPlan: retirementPlan,

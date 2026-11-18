@@ -33,6 +33,7 @@ internal fun mobileWebShellOfferableUrl(url: String?): String? {
 }
 
 /** Refuse subframes and document-URL navigations; only gestured foreign URLs reach the host opener.
+ * Chromium never asks about http(s) or about: subframes, so sealed srcdoc frames load without a verdict here.
  * Android loadUrl bypasses this callback, so isShellLoad is always false; redirects do reach it.
  * Do not trust hasGesture to permit loads: human requests may lack it and subframes can target top without it.
  * isFromSubframe/isDownload mirror iOS; Chromium omits source frames and routes downloads to our no-op listener.

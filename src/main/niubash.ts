@@ -44,6 +44,13 @@ export function resolveNiubashPath(options: NiubashPathOptions = {}): string | n
   return null
 }
 
+/** Profile shell for Niubash: null when niu is not on PATH. */
+export function resolveNiubashProfileShell(shell: string): string | null {
+  if (!isNiubashShell(shell)) {
+    return null
+  }
+  return win32.isAbsolute(shell) ? shell : resolveNiubashPath()
+}
 export function resolveNiubashShellPath(shell: string): string {
   if (!isNiubashShell(shell) || win32.isAbsolute(shell) || posix.isAbsolute(shell)) {
     return shell

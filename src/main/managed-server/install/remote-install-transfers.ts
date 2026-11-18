@@ -1,16 +1,19 @@
 import type { RemoteInstallTransport } from './remote-install-transport'
-import type { SftpNamespacePathMapping } from '../../ssh/sftp-namespace-resolution'
-import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import type { SftpNamespacePathMapping } from '../../ssh/file-transfer/sftp/sftp-namespace-resolution'
+import {
+  isWindowsRemoteHost,
+  type RemoteHostPlatform
+} from '../../ssh/remote-host/ssh-remote-platform'
 import {
   uploadDirectoryViaExecStdin,
   writeStringViaExecStdin
-} from '../../ssh/ssh-exec-stdin-file-transfer'
+} from '../../ssh/file-transfer/ssh-exec-stdin-file-transfer'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import {
   describeSandboxedSftpFailure,
   isSandboxedSftpNamespaceError
-} from '../../ssh/sftp-stream-late-error'
-import { isSftpHandshakeCorruption } from '../../ssh/sftp-handshake-corruption'
+} from '../../ssh/file-transfer/sftp/sftp-stream-late-error'
+import { isSftpHandshakeCorruption } from '../../ssh/file-transfer/sftp/sftp-handshake-corruption'
 import { explainRemoteInstallWriteFailure, localTreeBytes } from './remote-install-out-of-space'
 
 type RemoteInstallTransferOptions = {

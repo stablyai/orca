@@ -119,7 +119,7 @@ jobs:
       - name: Build Windows installer (unsigned)
         if: steps.cache-installer.outputs.cache-hit != 'true'
         run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
           pnpm run build:desktop
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
 

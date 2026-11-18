@@ -1,4 +1,4 @@
-import type { LegacyMailReceiptRow } from '../../types'
+import type { LegacyMailReceiptRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 
 const ACCOUNT_SETTINGS = {
@@ -12,7 +12,7 @@ const ACCOUNT_SETTINGS = {
 
 /** Account changes invalidate probe answers even when the account path stays the same. */
 export function expireAgentModelCatalogFailuresForSettings(
-  store: Pick<AgentModelCatalogStore, 'expireFailures'>,
+  store: Pick<AgentModelCatalogStore, 'expireScopes'>,
   updates: Partial<GlobalSettings>
 ): void {
   const agents = new Set(
@@ -21,11 +21,25 @@ export function expireAgentModelCatalogFailuresForSettings(
       .map(([, agent]) => agent)
   )
   for (const agent of agents) {
-    store.expireFailures(agent)
+    store.expireScopes(agent)
   }
 }
 
-type AgentLaunchSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>>
+// The settings that pick the binary and environment an agent's probe and chats launch with.
+type AgentLaunchSettings = Partial<
+  Pick<
+    GlobalSettings,
+    | 'agentCmdOverrides'
+    | 'agentDefaultEnv'
+    | 'agentDefaultArgs'
+    | 'nativeChatInheritShellEnvironment'
+    | 'nativeChatShellEnvironmentVariables'
+    | 'terminalWindowsShell'
+    | 'terminalWindowsPowerShellImplementation'
+    | 'httpProxyUrl'
+    | 'httpProxyBypassRules'
+  >
+>
 
 function launchKeys(settings: AgentLaunchSettings): Map<string, string> {
   const commands = new Map<string, string | undefined>(
@@ -35,9 +49,16 @@ function launchKeys(settings: AgentLaunchSettings): Map<string, string> {
     Object.entries(settings.agentDefaultEnv ?? {})
   )
   const keys = new Map<string, string>()
-  for (const agent of new Set([...commands.keys(), ...envs.keys()])) {
-    const env = Object.entries(envs.get(agent) ?? {}).sort(([a], [b]) => a.localeCompare(b))
-    keys.set(agent, JSON.stringify([commands.get(agent) ?? null, env]))
+  for (const agent of new Set([
+    ...commands.keys(),
+    ...envs.keys(),
+    ...Object.keys(settings.agentDefaultArgs ?? {})
+  ])) {
+    const env = Object.entries(envs.get(agent) ?? {}).sort(([a], [b]) => a.localeCompare(b, 'en'))
+    keys.set(
+      agent,
+      JSON.stringify([commands.get(agent) ?? null, env, settings.agentDefaultArgs?.[agent]])
+    )
   }
   return keys
 }
@@ -53,24 +74,27 @@ export function agentsWithChangedLaunchSettings(
   )
 }
 
-/** Account changes expire failures; command/environment changes also expire saved listings. */
+/** Account and launch-setting changes retain display while requiring rediscovery. */
 export function createAgentModelCatalogSettingsExpiry(
-  store: Pick<AgentModelCatalogStore, 'expireFailures' | 'expireAgent'>,
+  store: Pick<AgentModelCatalogStore, 'expireScopes' | 'expireAgent' | 'expireLaunchScopes'>,
   initial: AgentLaunchSettings
 ): (updates: Partial<GlobalSettings>, settings: AgentLaunchSettings) => void {
-  let launch: AgentLaunchSettings = {
-    agentCmdOverrides: initial.agentCmdOverrides,
-    agentDefaultEnv: initial.agentDefaultEnv
-  }
+  let launch = initial
   return (updates, settings) => {
     expireAgentModelCatalogFailuresForSettings(store, updates)
-    if (!('agentCmdOverrides' in updates) && !('agentDefaultEnv' in updates)) {
-      return
+    const environment = (value: AgentLaunchSettings): string =>
+      JSON.stringify([
+        value.nativeChatInheritShellEnvironment,
+        value.nativeChatShellEnvironmentVariables,
+        value.terminalWindowsShell,
+        value.terminalWindowsPowerShellImplementation,
+        value.httpProxyUrl,
+        value.httpProxyBypassRules
+      ])
+    if (environment(launch) !== environment(settings)) {
+      store.expireLaunchScopes()
     }
-    const next = {
-      agentCmdOverrides: settings.agentCmdOverrides,
-      agentDefaultEnv: settings.agentDefaultEnv
-    }
+    const next = settings
     for (const agent of agentsWithChangedLaunchSettings(launch, next)) {
       store.expireAgent(agent)
     }

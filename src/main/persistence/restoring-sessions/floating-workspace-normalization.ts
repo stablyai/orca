@@ -1,18 +1,9 @@
 import { realpathSync, statSync } from 'node:fs'
-import { isAbsolute, join, resolve, sep } from 'node:path'
-
-export function expandFloatingWorkspaceHomePath(input: string, home: string): string {
-  if (input === '~') {
-    return home
-  }
-  if (input.startsWith(`~${sep}`) || (process.platform === 'win32' && input.startsWith('~/'))) {
-    return join(home, input.slice(2))
-  }
-  return input
-}
+import { isAbsolute, resolve } from 'node:path'
+import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
 
 export function resolveFloatingWorkspacePath(input: string, home: string): string {
-  const expanded = expandFloatingWorkspaceHomePath(input, home)
+  const expanded = expandLeadingHomePath(input, home)
   return isAbsolute(expanded) ? resolve(expanded) : resolve(home, expanded)
 }
 
@@ -25,11 +16,25 @@ export function canonicalizePersistedFloatingWorkspaceDirectory(
     return null
   }
   try {
-    const canonicalPath = resolve(realpathSync(resolveFloatingWorkspacePath(trimmed, home)))
+    // Native: the on-disk spelling, as file authorization's realpath returns it on case-insensitive disks.
+    const canonicalPath = resolve(realpathSync.native(resolveFloatingWorkspacePath(trimmed, home)))
     return statSync(canonicalPath).isDirectory() ? canonicalPath : null
   } catch {
     return null
   }
+}
+
+/** Store a trusted cwd in its canonical spelling so file authorization can match it without I/O. */
+export function canonicalTrustedFloatingTerminalCwd(
+  cwd: string,
+  trustedCwds: readonly string[],
+  home: string
+): string {
+  if (cwd.trim() === '~') {
+    return cwd
+  }
+  const canonicalCwd = canonicalizePersistedFloatingWorkspaceDirectory(cwd, home)
+  return canonicalCwd && trustedCwds.includes(canonicalCwd) ? canonicalCwd : cwd
 }
 
 export function normalizeFloatingWorkspaceTrustedCwds(
@@ -51,8 +56,9 @@ export function normalizeFloatingWorkspaceTrustedCwds(
       changed = true
       continue
     }
-    const canonicalPath = canonicalizePersistedFloatingWorkspaceDirectory(trimmedTrustedCwd, home)
-    const normalizedPath = canonicalPath ?? resolveFloatingWorkspacePath(trimmedTrustedCwd, home)
+    // Spelling only, never through links: the approval-time realpath is the trusted root's identity,
+    // so a trusted folder later swapped for a link must not re-point its trust at the link's target.
+    const normalizedPath = resolveFloatingWorkspacePath(trimmedTrustedCwd, home)
     if (!normalizedPath) {
       changed = true
       continue

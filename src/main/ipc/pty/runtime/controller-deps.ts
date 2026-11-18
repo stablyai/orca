@@ -1,20 +1,20 @@
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { Store } from '../../../persistence'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/terminal-startup-cwd'
+import type { Store } from '../../../persistence/loading-store/store'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/shell/launch/terminal-startup-cwd'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
   GetSelectedCodexHomePath,
   PrepareClaudeAuth,
   PrepareCodexSessionResume
 } from '../host-env/types'
-import type { StablePaneOwner } from '../pane/stable-owner'
+
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { finishPtyShutdown } from '../provider/liveness'
 import type { ResolvedPtyHost } from '../provider/registry'
-import type { PtySpawnCodexResumeDeps } from '../spawn-host-env'
+import type { PtySpawnCodexResumeDeps } from '../host-env/spawn-host-env'
 
 export type PtyRuntimeControllerDeps = PtySpawnCodexResumeDeps & {
   runtime?: OrcaRuntimeService
@@ -24,12 +24,16 @@ export type PtyRuntimeControllerDeps = PtySpawnCodexResumeDeps & {
   getLocalPtyProviderStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
   assertWorkspaceAcceptsNewPty: (
     worktreeId: string | undefined,
-    sessionId?: string
+    sessionId?: string,
+    cwd?: string,
+    passiveWslRestore?: boolean,
+    connectionId?: string | null
   ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,
     cwd: string | undefined,
-    missingDirFallback?: TerminalStartupCwdMissingDirFallback
+    missingDirFallback?: TerminalStartupCwdMissingDirFallback,
+    connectionId?: string | null
   ) => string | undefined
   requestSerializedBuffer: (
     ptyId: string,
@@ -65,5 +69,3 @@ export type PtyRuntimeControllerDeps = PtySpawnCodexResumeDeps & {
   transitionSpawnHiddenRendererPtyDeliveryState?: (id: string, hidden: boolean) => void
   syncPtyBackgroundedDelivery?: (id: string, caller: string) => void
 }
-
-export type { StablePaneOwner }

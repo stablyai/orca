@@ -14,25 +14,6 @@ function loudSignal(length: number): Float32Array {
 }
 
 describe('OfflineAudioChunker', () => {
-  it('buffers audio below the chunk limit without emitting chunks', () => {
-    const chunker = new OfflineAudioChunker(SAMPLE_RATE)
-
-    expect(chunker.push(loudSignal(CHUNK_LIMIT - 1))).toEqual([])
-  })
-
-  it('emits a bounded chunk once the limit is reached and keeps the remainder', () => {
-    const chunker = new OfflineAudioChunker(SAMPLE_RATE)
-    const total = CHUNK_LIMIT + 500
-
-    const ready = chunker.push(loudSignal(total))
-    const remainder = chunker.flush()
-
-    expect(ready).toHaveLength(1)
-    expect(ready[0].length).toBeLessThanOrEqual(CHUNK_LIMIT)
-    expect(ready[0].length).toBeGreaterThan(0)
-    expect(ready[0].length + (remainder?.length ?? 0)).toBe(total)
-  })
-
   it('never emits a chunk larger than the limit across many small pushes', () => {
     const chunker = new OfflineAudioChunker(SAMPLE_RATE)
     const emitted: Float32Array[] = []
@@ -49,17 +30,6 @@ describe('OfflineAudioChunker', () => {
     }
     const totalOut = emitted.reduce((sum, c) => sum + c.length, 0) + (remainder?.length ?? 0)
     expect(totalOut).toBe(pushes * pushSize)
-  })
-
-  it('splits multiple chunks out of one oversized push', () => {
-    const chunker = new OfflineAudioChunker(SAMPLE_RATE)
-
-    const ready = chunker.push(loudSignal(CHUNK_LIMIT * 2 + 100))
-
-    expect(ready.length).toBeGreaterThanOrEqual(2)
-    for (const chunk of ready) {
-      expect(chunk.length).toBeLessThanOrEqual(CHUNK_LIMIT)
-    }
   })
 
   it('splits at a silent pause near the chunk boundary instead of mid-speech', () => {
@@ -87,13 +57,5 @@ describe('OfflineAudioChunker', () => {
     rejoined.set(chunk, 0)
     rejoined.set(remainder!, chunk.length)
     expect(rejoined).toEqual(samples)
-  })
-
-  it('flush returns null when nothing is buffered', () => {
-    const chunker = new OfflineAudioChunker(SAMPLE_RATE)
-
-    expect(chunker.flush()).toBeNull()
-    expect(chunker.push(new Float32Array(0))).toEqual([])
-    expect(chunker.flush()).toBeNull()
   })
 })

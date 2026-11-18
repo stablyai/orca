@@ -1,4 +1,4 @@
-import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
+import type { DelegatedMobileDeviceSyncParams } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { syncDelegatedPhoneGrants, type DelegatedPhoneGrants } from './delegated-phone-grants'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 

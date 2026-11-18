@@ -4,10 +4,10 @@ import {
   canonicalizeWindowsShellOverride,
   resolveWindowsShellStartupFamily,
   resolveLocalWindowsAgentStartupShell
-} from './windows-terminal-shell'
-import { isShellProcess } from './shell-process-detection'
-import { TerminalCreateParams } from './rpc-contract/terminal-unary-params'
-import { resolveSetupRunnerCommand } from './setup-runner-command'
+} from './shell/launch/windows-terminal-shell'
+import { isShellProcess } from './agent-status/process/shell-process-detection'
+import { TerminalCreateParams } from './rpc-contract/terminal/terminal-unary-params'
+import { resolveSetupRunnerCommand } from './agent-launch/startup/setup-runner-command'
 
 describe('Niubash shell contracts', () => {
   it.each(['niu', 'NIU.EXE', 'C:\\Niu Shell\\niu.exe', '/usr/local/bin/niu'])(

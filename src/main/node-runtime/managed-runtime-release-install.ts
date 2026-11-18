@@ -4,14 +4,22 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, mkdir, rename, rm, statfs } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { ManagedRuntimeOperation } from '../../shared/managed-runtime-install'
+import {
+  excerptAgentFailureOutput,
+  sanitizeAgentFailureDetail,
+  stripAnsiControlSequences
+} from '../../shared/source-control/ai/generation/commit-message-agent-output'
+import type { ManagedRuntimeOperation } from '../../shared/agent-launch/installation/managed-runtime-install'
 import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
+import { redactString } from '../../shared/observability/redactor'
 import {
   resolveInstalledRuntimeRelease,
+  ManagedRuntimeStartError,
   RUNTIME_RELEASE_RECEIPT,
   writeRuntimeReleaseReceipt,
   type ManagedRuntime,
-  type ManagedRuntimePin
+  type ManagedRuntimePin,
+  type ManagedRuntimeStartFailure
 } from './managed-runtime-release'
 import { verifyFileSha256 } from './pinned-runtime-materializer'
 import { extractPinnedZipMembers } from './pinned-zip-members'
@@ -67,7 +75,11 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   const space = await statfs(root).catch((error: unknown) => {
     console.warn(`[managed-runtime] ${agent} free space unknown; not checked:`, error)
   })
-  const needed = pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
+  // A single-file release is renamed into place, so it never needs room for two copies.
+  const needed =
+    pin.format === 'file'
+      ? pin.archiveBytes
+      : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
   if (space && space.bavail * space.bsize < needed + FREE_SPACE_MARGIN_BYTES) {
     const megabytes = Math.ceil((needed + FREE_SPACE_MARGIN_BYTES) / 1024 ** 2)
     throw new Error(`${label} needs ${megabytes} MB of free disk space to install.`)
@@ -103,7 +115,9 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       throw new Error(downloadFailureMessage(label, error), { cause: error })
     })
     publish({ phase: 'extracting', downloadedBytes: pin.archiveBytes })
-    await extractPinnedZipMembers(archive, release, pin.members, label, signal)
+    await (pin.format === 'file'
+      ? rename(archive, join(release, onlyMember(pin).path))
+      : extractPinnedZipMembers(archive, release, pin.members, label, signal))
     publish({ phase: 'verifying' })
     await verifyMembers(release, pin, label, signal)
     await validate(input, release)
@@ -117,6 +131,16 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   } finally {
     await rm(staging, { recursive: true, force: true })
   }
+}
+
+function onlyMember(pin: ManagedRuntimePin): ManagedRuntimePin['members'][number] {
+  const [member, ...rest] = pin.members
+  if (!member || rest.length > 0 || member.path.includes('/')) {
+    throw new Error(
+      `A single-file release needs exactly one top-level member, not ${pin.members.length}.`
+    )
+  }
+  return member
 }
 
 export function installFailureText(label: string, error: unknown, deadline: AbortSignal): string {
@@ -138,11 +162,32 @@ async function validate(input: RuntimeReleaseInstall, folder: string): Promise<v
   await runtime.validate?.(folder, pin, signal).catch((error: unknown) => {
     signal.throwIfAborted()
     console.warn(`[managed-runtime] ${input.agent} did not start from ${folder}:`, error)
+    const observed = error instanceof ManagedRuntimeStartError ? error.failure : null
     throw new Error(
-      `${runtime.label} couldn't start on this host, so it wasn't installed. This host may not support it.`,
+      `${runtime.label} couldn't start on this host, so it wasn't installed. This host may not support it.${observed ? ` ${startFailureText(observed)}` : ''}`,
       { cause: error }
     )
   })
+}
+
+function startFailureText(failure: ManagedRuntimeStartFailure): string {
+  switch (failure.kind) {
+    case 'timeout':
+      return `It timed out after ${Math.round(failure.timeoutMs / 1000)} seconds.`
+    case 'version': {
+      const answered = sanitizeAgentFailureDetail(
+        redactString(stripAnsiControlSequences(failure.answered))
+      )
+      return `It answered as version ${answered ?? 'unknown'}, expected ${failure.expected}.`
+    }
+    case 'exit': {
+      const { code, signal } = failure.exit
+      const status = code !== null ? `code ${code}` : `signal ${signal ?? 'unknown'}`
+      const stderr = redactString(stripAnsiControlSequences(failure.stderr))
+      const detail = sanitizeAgentFailureDetail(excerptAgentFailureOutput('', stderr))
+      return detail ? `It exited with ${status}: ${detail}` : `It exited with ${status}.`
+    }
+  }
 }
 
 async function verifyMembers(

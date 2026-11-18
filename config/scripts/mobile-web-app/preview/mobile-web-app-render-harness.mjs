@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
-import { contentTypeForExtension } from '../../mobile-web-bundle-manifest.mjs'
+import { contentTypeForExtension } from '../../build/mobile-web-app/mobile-web-bundle-manifest.mjs'
 import { fileURLToPath } from 'node:url'
 
 export const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
@@ -37,6 +37,58 @@ export async function readShellCsp() {
   return parseCspDirectives(source, 'listOf(', ').joinToString')
 }
 
+function readFrameDocument(source, pattern, indent) {
+  const match = pattern.exec(source)
+  if (!match) {
+    throw new Error('could not parse the chat visual frame document')
+  }
+  return match[1]
+    .split('\n')
+    .map((line) => line.replace(indent, ''))
+    .join('\n')
+}
+
+// Read the shipped chat visual frame (policy and fixed document); the iOS copy must match Kotlin's.
+export async function readChatVisualFrame() {
+  const shellDir = join(projectDir, 'mobile/modules/orca-mobile-web-shell')
+  const [kotlin, swift] = await Promise.all([
+    readFile(
+      join(
+        shellDir,
+        'android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellChatVisualFrame.kt'
+      ),
+      'utf8'
+    ),
+    readFile(join(shellDir, 'ios/MobileWebShellChatVisualFrame.swift'), 'utf8')
+  ])
+  const frame = {
+    csp: parseCspDirectives(
+      kotlin.slice(kotlin.indexOf('MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_CSP = listOf(')),
+      'listOf(',
+      ').joinToString'
+    ),
+    document: readFrameDocument(
+      kotlin,
+      /MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_DOCUMENT = """\n([\s\S]*?)\n""".trimIndent\(\)/,
+      /^ {2}/
+    )
+  }
+  const swiftCsp = parseCspDirectives(
+    swift.slice(swift.indexOf('static let csp = [')),
+    '[',
+    '].joined'
+  )
+  const swiftDocument = readFrameDocument(
+    swift,
+    /static let document = Data\("""\n([\s\S]*?)\n {4}""".utf8\)/,
+    /^ {4}/
+  )
+  if (swiftCsp !== frame.csp || swiftDocument !== frame.document) {
+    throw new Error('the iOS and Android chat visual frames differ')
+  }
+  return frame
+}
+
 // Read literal document headers from Kotlin; CSP constant stays readShellCsp’s job. Throw if none found or browser defaults could masquerade as shell guarantees.
 export async function readShellDocumentHeaders() {
   const source = await readFile(
@@ -65,7 +117,7 @@ export async function readShellDocumentHeaders() {
 export async function readBridgeProtocolVersion() {
   // Read declaring module rather than envelope reexport so source splits cannot silently change reader target.
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/protocol/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_PROTOCOL_VERSION = (\d+)/.exec(source)
@@ -79,8 +131,8 @@ export async function readBridgeProtocolVersion() {
 export async function readBridgeWindowCaps() {
   const sources = await Promise.all(
     [
-      'src/shared/mobile-bridge-frame-bytes.ts',
-      'mobile/src/mobile-web-shell/bridge-host-subscriptions.ts'
+      'src/shared/mobile-bridge/mobile-bridge-frame-bytes.ts',
+      'mobile/src/mobile-web-shell/host-streams/bridge-host-subscriptions.ts'
     ].map((path) => readFile(join(projectDir, path), 'utf8'))
   )
   const source = sources.join('\n')
@@ -104,7 +156,7 @@ export async function readBridgeWindowCaps() {
 // Read upload base64 chunk cap/product from source; copied resize budget could pass after upload path changes.
 export async function readClipboardImageUploadChunkBase64Chars() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/session/mobile-clipboard-image-upload-chunk.ts'),
+    join(projectDir, 'mobile/src/files/attachments/mobile-clipboard-image-upload-chunk.ts'),
     'utf8'
   )
   const match = /MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = ([0-9*\s]+)/.exec(source)
@@ -120,7 +172,7 @@ export async function readClipboardImageUploadChunkBase64Chars() {
 // Read shipped screencast JPEG quality; copied value would certify budget for an encoder configuration no product uses.
 export async function readBrowserFrameQuality() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/browser/browser-screencast-request-parameters.ts'),
+    join(projectDir, 'mobile/src/browser/screencast/browser-screencast-request-parameters.ts'),
     'utf8'
   )
   const match = /BROWSER_FRAME_QUALITY = (\d+)/.exec(source)
@@ -133,7 +185,10 @@ export async function readBrowserFrameQuality() {
 // Read page client-identity placeholder from declaration so rig cannot silently retain stale copy.
 export async function readBridgePageClientIdentity() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.ts'),
+    join(
+      projectDir,
+      'mobile/src/mobile-web-shell/bridge/client-state/bridge-page-client-identity.ts'
+    ),
     'utf8'
   )
   const read = (name) => {
@@ -148,7 +203,7 @@ export async function readBridgePageClientIdentity() {
 
 export async function readBridgeFaultGrant() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/protocol/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_FAULT_GRANT = '([a-zA-Z]+)'/.exec(source)
@@ -160,7 +215,7 @@ export async function readBridgeFaultGrant() {
 
 export async function readBridgePagePainted() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-painted.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/page-lifecycle/bridge-page-painted.ts'),
     'utf8'
   )
   const match = /BRIDGE_PAGE_PAINTED = '([a-zA-Z]+)'/.exec(source)
@@ -173,11 +228,11 @@ export async function readBridgePagePainted() {
 // Read claim/back/pop names from source; observing pop distinguishes sheet close from whole-screen navigation.
 export async function readBridgeBackNames() {
   const lane = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-back.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/page-lifecycle/bridge-page-back.ts'),
     'utf8'
   )
   const fields = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/protocol/bridge-frame-fields.ts'),
     'utf8'
   )
   const claim = /BRIDGE_BACK_CLAIM_NOTIFY = '([a-z-]+)'/.exec(lane)
@@ -208,7 +263,8 @@ export function installShellDouble({
   streams = [],
   windowCaps = null,
   safeAreaInsets = null,
-  ownsHostArea = false
+  ownsHostArea = false,
+  colorScheme = null
 }) {
   // Capture boundary faults so blank route reports own error instead of timing out.
   globalThis.__orcaRenderCheckFaults = []
@@ -216,6 +272,7 @@ export function installShellDouble({
   globalThis.__orcaRenderCheckNotifies = []
   // Keep full request verbs/geometry to assert gesture’s actual host effect.
   globalThis.__orcaRenderCheckRequests = []
+  globalThis.__orcaRenderCheckSetReplies = (patch) => Object.assign(replies, patch)
   // Record wantsBinary on accepted subscriptions; absent request cannot be inferred from absent frames.
   globalThis.__orcaRenderCheckSubscribes = []
   // Count host-cap frame drops so page can prove stream survives rejected frame.
@@ -234,6 +291,7 @@ export function installShellDouble({
   const initFrame = (patch = {}) => ({
     v: version,
     type: 'init',
+    ...(colorScheme ? { colorScheme } : {}),
     sessionId,
     buildId,
     connection: {
@@ -483,60 +541,6 @@ export function installPageErrorSentinel() {
   }
   globalThis.__orcaSentinel = sentinel
   window.onerror = sentinel
-}
-
-// Tag scheduled work with current terminal container; firing after that element leaves DOM proves callback leaked into replacement.
-// Use actual DOM lifetime, not test mount counter (React schedules independently); retain all schedules to prove work existed before asserting none leaked.
-export function installSchedulerRecorder() {
-  globalThis.__orcaScheduler = { watching: false, scheduled: [], leaked: [], heldFrames: 0 }
-  const state = globalThis.__orcaScheduler
-  const requestFrame = globalThis.requestAnimationFrame.bind(globalThis)
-  const cancelFrame = globalThis.cancelAnimationFrame.bind(globalThis)
-  const heldFrames = new Map()
-  let nextHeldFrame = -2
-  globalThis.__orcaReleaseFrames = () => {
-    state.holdFramesFrom = null
-    for (const callback of heldFrames.values()) {
-      requestFrame(callback)
-    }
-    heldFrames.clear()
-    state.heldFrames = 0
-  }
-  globalThis.cancelAnimationFrame = (id) => {
-    if (heldFrames.delete(id)) {
-      state.heldFrames--
-    } else {
-      cancelFrame(id)
-    }
-  }
-  const wrap = (schedule, kind) =>
-    function (callback, ...rest) {
-      if (!state.watching || typeof callback !== 'function') {
-        return schedule(callback, ...rest)
-      }
-      const caller = ((new Error('scheduled').stack ?? '').split('\n')[2] ?? '').trim()
-      const container = document.getElementById('terminal-container')
-      // Track fired separately: cancelled and pending callbacks can both remain unfired.
-      const entry = { kind, caller, owned: container !== null, fired: false }
-      state.scheduled.push(entry)
-      const recorded = (...args) => {
-        entry.fired = true
-        if (container !== null && !container.isConnected) {
-          state.leaked.push(`${kind} from ${caller}`)
-        }
-        return callback(...args)
-      }
-      if (kind === 'frame' && state.holdFramesFrom && caller.includes(state.holdFramesFrom)) {
-        const id = nextHeldFrame--
-        heldFrames.set(id, recorded)
-        state.heldFrames++
-        return id
-      }
-      return schedule(recorded, ...rest)
-    }
-  globalThis.requestAnimationFrame = wrap(requestFrame, 'frame')
-  globalThis.setTimeout = wrap(globalThis.setTimeout.bind(globalThis), 'timer')
-  globalThis.setInterval = wrap(globalThis.setInterval.bind(globalThis), 'interval')
 }
 
 // Install before bundle so boot-time refusal counts too.

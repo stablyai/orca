@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import { keybindingMatchesAction } from '../../../../../shared/keybindings'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 

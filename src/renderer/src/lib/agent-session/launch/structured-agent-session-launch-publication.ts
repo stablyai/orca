@@ -1,13 +1,15 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
-  getPersistedStructuredAgentLaunchRecord,
+  deleteStructuredAgentLaunchRecord,
+  readStructuredAgentLaunchRecord
+} from './structured-agent-session-launch-persistence'
+import { hasStructuredAgentSessionLaunchCancellationTombstone } from './structured-agent-session-launch-registry'
+import {
   getStructuredLaunchStateBySessionId,
-  hasStructuredAgentSessionLaunchCancellationTombstone,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
-import { forgetUnlistedCreatedChat } from '../../structured-agent-session-unlisted-created-chats'
+} from './structured-agent-session-launch-state-store'
+import { forgetUnlistedCreatedChat } from './pane/structured-agent-session-unlisted-created-chats'
 
 function confirmStructuredLaunchFirstMessagePublication(
   worktreeId: string,
@@ -31,8 +33,11 @@ export function markStructuredAgentSessionLaunchPublished(
 ): boolean {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state) {
-    const persisted = getPersistedStructuredAgentLaunchRecord(sessionId)
+    const persisted = readStructuredAgentLaunchRecord(sessionId)
     if (persisted?.executionHostId !== executionHostId) {
+      return false
+    }
+    if (persisted.explicitLaunchOptions && persisted.createMessageSupport !== true) {
       return false
     }
     if (persisted.firstMessage) {
@@ -40,7 +45,7 @@ export function markStructuredAgentSessionLaunchPublished(
       return false
     }
     deleteStructuredAgentLaunchRecord(sessionId)
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(sessionId)
     return true
   }
   if (
@@ -58,6 +63,9 @@ export function markStructuredAgentSessionLaunchPublished(
   if (state.callers.outcome === 'pending') {
     return true
   }
+  if (state.intent.explicitLaunchOptions && state.intent.createMessageSupport !== true) {
+    return false
+  }
   if (state.intent.params.firstMessage) {
     confirmStructuredLaunchFirstMessagePublication(worktreeId, sessionId)
     return false
@@ -65,7 +73,7 @@ export function markStructuredAgentSessionLaunchPublished(
   state.callers.outcome = 'published'
   deleteStructuredAgentLaunchRecord(sessionId)
   state.callers.onSettled()
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
   return true
 }
 

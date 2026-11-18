@@ -1,5 +1,8 @@
-import type { TerminalPaneLayoutNode, TerminalTab } from '../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type {
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 export const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => ({
   id: 'tab1',

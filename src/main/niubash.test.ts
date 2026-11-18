@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveNiubashPath, resolveNiubashShellPath } from './niubash'
-import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
-import { shellPathProbe, SHELL_PATH_DELIMITER } from './startup/shell-path-probe'
-import { resolveSetupRunnerShell } from './worktree-runner-script'
+import { resolveWindowsShellLaunchArgs } from './providers/shell-launch/windows/shell-args'
+import { shellPathProbe, SHELL_PATH_DELIMITER } from './startup/shell-environment/shell-path-probe'
+import { resolveSetupRunnerShell } from './workspace-hooks/worktree-runner-script'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -57,7 +57,8 @@ describe('Niubash terminal launch', () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' })
     expect(shellPathProbe('D:\\Niu Shell\\niu.exe')).toEqual({
       args: ['-ic', `printf '%s' '${SHELL_PATH_DELIMITER}' "$PATH" '${SHELL_PATH_DELIMITER}'`],
-      pathDelimiter: ';'
+      pathDelimiter: ';',
+      detached: false
     })
     expect(shellPathProbe('bash.exe').args[1]).toContain('cygpath -wp')
   })

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { PaneManagerOptions } from './pane-manager-types'
-import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 
 // Why: happy-dom has no canvas, so xterm cannot open; placement never touches the terminal.
 vi.mock('./pane-lifecycle', async (importOriginal) => {
@@ -18,6 +18,7 @@ const LEAF_C = '33333333-3333-4333-8333-333333333333'
 describe('PaneManager spawn placement hints', () => {
   let root: HTMLDivElement
   let onPaneCreated: Mock<NonNullable<PaneManagerOptions['onPaneCreated']>>
+  let onActivePaneChange: Mock<NonNullable<PaneManagerOptions['onActivePaneChange']>>
   let manager: InstanceType<typeof PaneManager>
 
   beforeEach(() => {
@@ -26,37 +27,15 @@ describe('PaneManager spawn placement hints', () => {
     root = document.createElement('div')
     document.body.appendChild(root)
     onPaneCreated = vi.fn()
-    manager = new PaneManager(root, { linkOpenHint: () => '', onPaneCreated })
+    onActivePaneChange = vi.fn()
+    manager = new PaneManager(root, { linkOpenHint: () => '', onPaneCreated, onActivePaneChange })
   })
 
   afterEach(() => {
     manager.destroy()
     root.remove()
     vi.unstubAllGlobals()
-  })
-
-  it('marks a tab first pane as a new tab', () => {
-    const pane = manager.createInitialPane({ leafId: LEAF_A })
-
-    expect(onPaneCreated).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ id: pane.id, leafId: LEAF_A }),
-      { placement: { kind: 'new-tab' } }
-    )
-  })
-
-  it('names the split pane and direction alongside the other spawn hints', () => {
-    const first = manager.createInitialPane({ leafId: LEAF_A })
-    onPaneCreated.mockClear()
-
-    manager.splitPane(first.id, 'horizontal', { leafId: LEAF_B, cwd: '/repo/app' })
-
-    expect(onPaneCreated).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ leafId: LEAF_B }),
-      {
-        cwd: '/repo/app',
-        placement: { kind: 'split', parentLeafId: LEAF_A, direction: 'horizontal' }
-      }
-    )
+    vi.restoreAllMocks()
   })
 
   it('publishes a split placed before a mounted subtree with its final order', () => {

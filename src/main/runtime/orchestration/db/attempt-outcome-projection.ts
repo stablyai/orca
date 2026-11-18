@@ -1,12 +1,12 @@
 import type {
   AttemptFreshness,
-  AttemptLivenessObservation,
   AttemptObservationFact,
   AttemptObservationFacet,
   AttemptOutcomeProjection,
   AttemptProjectedOutcome,
   AttemptWorkerReport
 } from './attempt-observation-types'
+import type { PtyLivenessVerdict as AttemptLivenessObservation } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 
 const DEFAULT_FRESH_AFTER_MS = 60_000
 const FUTURE_TOLERANCE_MS = 5_000

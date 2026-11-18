@@ -20,6 +20,14 @@ export function scheduleDocumentFrame(
   return id
 }
 
+export function cancelDocumentFrame(scope: TerminalDocumentScope, id: number) {
+  cancelAnimationFrame(id)
+  const at = scope.scheduledFrames.indexOf(id)
+  if (at !== -1) {
+    scope.scheduledFrames.splice(at, 1)
+  }
+}
+
 export function cancelDocumentFrames(scope: TerminalDocumentScope) {
   scope.framesStopped = true
   for (const id of scope.scheduledFrames) {

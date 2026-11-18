@@ -26,8 +26,21 @@ export function normalizedToDevicePixels(
   }
 }
 
-// Android KeyEvent KEYCODE_* values, including the common aliases agents use.
+// Android KeyEvent KEYCODE_* values, including the common aliases agents use, plus the
+// editing keys the emulator pane's keyboard sends.
 const BUTTON_KEYCODES: Record<string, number> = {
+  enter: 66,
+  tab: 61,
+  backspace: 67,
+  forward_delete: 112,
+  dpad_up: 19,
+  dpad_down: 20,
+  dpad_left: 21,
+  dpad_right: 22,
+  move_home: 122,
+  move_end: 123,
+  page_up: 92,
+  page_down: 93,
   home: 3,
   back: 4,
   recents: 187,
