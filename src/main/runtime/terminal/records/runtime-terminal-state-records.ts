@@ -242,4 +242,6 @@ export type GapRecovery = {
   journalChars: number
   /** Gaps seen so far; a repaint that a gap overtook cannot be trusted. */
   gaps: number
+  /** An execution-context correction deferred until the rebuilt screen is trusted. */
+  contextChangePending?: boolean
 }

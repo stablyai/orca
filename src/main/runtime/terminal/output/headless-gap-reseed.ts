@@ -12,10 +12,7 @@ import {
   stopGapJournal
 } from './gap-recovery-journal'
 import { resetFreebuffTerminalStatusAfterGap } from './freebuff-terminal-status'
-import {
-  moveCodexNoticeTrackers,
-  resetCodexNoticeTrackersAfterGap
-} from './codex-notice-terminal-status'
+import { resetCodexNoticeTrackersAfterGap } from './codex-notice-terminal-status'
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
@@ -53,7 +50,12 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
         await state.emulator.write('\x18')
         // Here, in stream order: chunks queued before the gap finished their carries already.
-        this.resetObserversAfterGap(ptyId, state)
+        resetFreebuffTerminalStatusAfterGap(
+          state.emulator,
+          this.terminalSpawnCommandsByPtyId.get(ptyId),
+          this.ptysById.get(ptyId)?.launchAgent
+        )
+        resetCodexNoticeTrackersAfterGap(state.emulator)
         // The dropped bytes are behind this model now; a snapshot at the gap end needs nothing newer.
         state.outputSequence = Math.max(state.outputSequence, gapEnd)
       })
@@ -65,29 +67,17 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     this.startGapRecovery(ptyId, state)
   }
 
-  /** Execution-context correction replaces the model; the replacement is no more trustworthy than the gap left it. */
+  /** Execution-context correction mid-recovery waits for the rebuild: swapping the model then would strand its observers. */
   protected override replaceHeadlessTerminalAfterExecutionContextChange(
     ptyId: string,
     retryLateSeed = true
   ): void {
-    const previous = this.headlessTerminals.get(ptyId)
-    const recovering = previous?.gapReseed !== undefined
-    super.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, retryLateSeed)
-    const replacement = this.headlessTerminals.get(ptyId)
-    if (recovering && previous && replacement) {
-      moveCodexNoticeTrackers(previous.emulator, replacement.emulator)
-      this.resetObserversAfterGap(ptyId, replacement)
-      this.startGapRecovery(ptyId, replacement)
+    const recovery = this.headlessTerminals.get(ptyId)?.gapReseed
+    if (recovery) {
+      recovery.contextChangePending = true
+      return
     }
-  }
-
-  private resetObserversAfterGap(ptyId: string, state: RuntimeHeadlessTerminal): void {
-    resetFreebuffTerminalStatusAfterGap(
-      state.emulator,
-      this.terminalSpawnCommandsByPtyId.get(ptyId),
-      this.ptysById.get(ptyId)?.launchAgent
-    )
-    resetCodexNoticeTrackersAfterGap(state.emulator)
+    super.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, retryLateSeed)
   }
 
   private startGapRecovery(ptyId: string, state: RuntimeHeadlessTerminal): void {
@@ -244,12 +234,21 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   }
 
   private finishGapRecovery(ptyId: string, state: RuntimeHeadlessTerminal): void {
+    const contextChangePending = state.gapReseed?.contextChangePending === true
     state.gapReseed = undefined
     state.historyFromProvider = true
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
     // No new text: observers confirm candidates that arrived while untrusted, with their own arrival times.
     this.observeHeadlessChunk(ptyId, state, '', Date.now())
+    if (contextChangePending) {
+      // After this chain step, so the replacement does not wait on the step that schedules it.
+      setTimeout(() => {
+        if (this.headlessTerminals.get(ptyId) === state) {
+          this.replaceHeadlessTerminalAfterExecutionContextChange(ptyId)
+        }
+      }, 0).unref?.()
+    }
   }
 
   /** A retired model's recovery leaves the capture line at once instead of holding it until a slot frees. */
