@@ -5,7 +5,7 @@ import { createInterface } from 'node:readline'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
-import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
+import { DirectoryLinkError, lstatIfPresent } from '../../../filesystem/merged-directory-link'
 
 export const WRITER_LOCKS = 'thread-writer-locks'
 export const COORDINATION_LOCK = '.coordination.lock'
@@ -171,7 +171,12 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
       stillHeld,
       releaseFirst: async () => {
         child.stdin.write('first\n')
-        return (await nextLine()) === 'released'
+        // Before any move starts, so killing one that never acknowledges loses nothing.
+        const ack = setTimeout(() => child.kill(), PROBE_TIMEOUT_MS)
+        ack.unref?.()
+        const released = (await nextLine()) === 'released' && stillHeld()
+        clearTimeout(ack)
+        return released
       },
       release: stop
     }
@@ -222,25 +227,18 @@ export async function moveIdleThreadLockFolder(
     if (await hasThreadLockConflict(accountHome, storeHome)) {
       return 'busy'
     }
-    if (process.platform === 'win32') {
-      // Windows never renames a folder with a file open inside, the held coordination file
-      // included. Once it's let go, a Codex opening any file there fails the rename instead.
-      if (!(await hold.releaseFirst())) {
-        return 'busy'
-      }
-      try {
-        await move()
-      } catch (error) {
-        if (isOpenFileError(error)) {
-          return 'busy'
-        }
-        throw error
-      }
-    } else {
-      if (!hold.stillHeld()) {
-        return 'busy'
-      }
+    // Windows never renames a folder with a file open inside, the held coordination file
+    // included. Once it's let go, a Codex opening any file there fails the rename instead.
+    if (process.platform === 'win32' ? !(await hold.releaseFirst()) : !hold.stillHeld()) {
+      return 'busy'
+    }
+    try {
       await move()
+    } catch (error) {
+      if (isStartingCodexError(error)) {
+        return 'busy'
+      }
+      throw error
     }
     return 'moved'
   } finally {
@@ -248,9 +246,13 @@ export async function moveIdleThreadLockFolder(
   }
 }
 
-function isOpenFileError(error: unknown): boolean {
+// A Codex that started meanwhile: a file it opened (Windows) or the folder it recreated mid-swap.
+function isStartingCodexError(error: unknown): boolean {
+  if (error instanceof DirectoryLinkError) {
+    return error.code === 'link-failed'
+  }
   const code = (error as NodeJS.ErrnoException | null)?.code
-  return code === 'EPERM' || code === 'EACCES' || code === 'EBUSY'
+  return process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')
 }
 
 // A thread lock only guards a writer while some process holds it: Codex leaves the file behind
