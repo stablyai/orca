@@ -5,7 +5,13 @@ import { isResumableTuiAgent } from '../agent-session-resume'
 
 type CompletedTurnStatus = Pick<
   AgentStatusEntry,
-  'state' | 'interrupted' | 'mainAgent' | 'agentType' | 'providerSession' | 'subagents' | 'orchestration'
+  | 'state'
+  | 'interrupted'
+  | 'mainAgent'
+  | 'agentType'
+  | 'providerSession'
+  | 'subagents'
+  | 'orchestration'
 >
 
 // Why: provider done hooks can fire mid-Dispatch; only runtime-confirmed settlement makes a stop safe.

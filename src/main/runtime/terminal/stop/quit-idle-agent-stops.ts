@@ -14,6 +14,8 @@ function inputMayHoldDraft(status: AgentStatusIpcPayload, inputAt: number | null
 }
 
 export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithWorktreeSleepResumeRecording {
+  protected abstract ptyShowsComposerDraft(ptyId: string): boolean
+
   /**
    * Stop this machine's agents that finished their turn and whose conversation the saved profile
    * can resume; mid-turn agents and plain shells keep running. Call only after the final profile
