@@ -29,6 +29,7 @@ import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
 import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
+import { GrokUsageMenu } from './usage/GrokUsageMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { ProviderSegment, UsageOverflowChip, isUsageUrgent } from './usage/StatusBarProviderSegment'
 import {
@@ -256,6 +257,9 @@ export function StatusBarSurface({
                             onManageAccounts={() => handleOpenProviderAccounts('antigravity')}
                           />
                         )
+                      }
+                      if (p.provider === 'grok') {
+                        return <GrokUsageMenu grok={p} compact={compact} triggerContent={rowNode} />
                       }
                       if (p.provider === 'codex') {
                         return (

@@ -11,6 +11,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
+import { GROK_TOP_UP_URL } from '../../../../../../shared/agent-usage/grok-top-up-url'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
 export function GrokAccountsSection(): React.JSX.Element {
@@ -79,16 +80,28 @@ export function GrokAccountsSection(): React.JSX.Element {
           'Shows weekly credit usage from your Grok CLI sign-in (session file ~/.grok/auth.json).'
         )}
         action={
-          <a
-            href={GROK_CLI_DOCS_URL}
-            target="_blank"
-            onClick={openAppHttpLinkFromAnchor}
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            {t('auto.components.settings.GrokAccountsSection.0d8e77bc40', 'Grok CLI docs')}
-            <ExternalLink className="size-3" />
-          </a>
+          <span className="flex items-center gap-3">
+            <a
+              href={GROK_TOP_UP_URL}
+              target="_blank"
+              onClick={openAppHttpLinkFromAnchor}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              {t('auto.components.settings.GrokAccountsSection.topUp', 'Top up on grok.com')}
+              <ExternalLink className="size-3" />
+            </a>
+            <a
+              href={GROK_CLI_DOCS_URL}
+              target="_blank"
+              onClick={openAppHttpLinkFromAnchor}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              {t('auto.components.settings.GrokAccountsSection.0d8e77bc40', 'Grok CLI docs')}
+              <ExternalLink className="size-3" />
+            </a>
+          </span>
         }
       >
         <div className="flex items-start gap-3 py-3">
