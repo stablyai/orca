@@ -109,6 +109,7 @@ export type RuntimeStore = {
   deleteAutomation?: Store['deleteAutomation']
   getSparsePresets?: Store['getSparsePresets']
   saveSparsePreset?: Store['saveSparsePreset']
+  removeSparsePreset?: Store['removeSparsePreset']
   getMobileClientTabSelections?: Store['getMobileClientTabSelections']
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
   getSettings(): {

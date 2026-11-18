@@ -6,6 +6,11 @@ import {
   useMobileAppearancePreference,
   type MobileAppearancePreference
 } from '../theme/mobile-appearance'
+import type { UsagePercentageDisplay } from '../../../src/shared/agent-usage/display/usage-percentage-display'
+import {
+  setUsagePercentageDisplay,
+  useUsagePercentageDisplay
+} from '../accounts/usage/usage-percentage-display-preference'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsScreen, SettingsSection } from './settings-screen-frame'
@@ -19,11 +24,19 @@ function appearanceOptions(t: Translate): { value: MobileAppearancePreference; l
   ]
 }
 
+function usageDisplayOptions(t: Translate): { value: UsagePercentageDisplay; label: string }[] {
+  return [
+    { value: 'used', label: t('settings.appearance.usage.used', 'Used') },
+    { value: 'remaining', label: t('settings.appearance.usage.remaining', 'Remaining') }
+  ]
+}
+
 export default function AppearanceSettingsScreen() {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const router = useRouter()
   const preference = useMobileAppearancePreference()
+  const usageDisplay = useUsagePercentageDisplay()
 
   return (
     <SettingsScreen
@@ -47,6 +60,24 @@ export default function AppearanceSettingsScreen() {
             onPress={() => {
               void setMobileAppearancePreference(value).catch(() => {})
             }}
+          />
+        ))}
+      </SettingsSection>
+
+      <SettingsSection
+        radioGroup
+        title={t('settings.appearance.usage.heading', 'USAGE PERCENTAGES')}
+        footer={t(
+          'settings.appearance.usage.description',
+          'Usage bars on Home and Accounts show how much of each limit is used or left. Saved on this phone.'
+        )}
+      >
+        {usageDisplayOptions(t).map(({ value, label }) => (
+          <ListRow
+            key={value}
+            title={label}
+            selected={usageDisplay === value}
+            onPress={() => setUsagePercentageDisplay(value)}
           />
         ))}
       </SettingsSection>

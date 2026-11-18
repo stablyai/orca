@@ -17,7 +17,7 @@ import { findPage } from '../../../store/slices/browser/pages/browser-page-recor
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
-} from '@/components/browser-pane/host-guest/retention/browser-automation-visibility'
+} from '@/components/browser-pane/host-guest/retention/browser-automation-visibility-store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/lifecycle/browser-page-window-close'
 import { setBrowserPageAgentViewportSize } from '@/components/browser-pane/host-guest/viewport/browser-page-viewport'

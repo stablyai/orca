@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { getTaskProjectPickerGroups } from '../task-page-default-repo-selection'
+import { getTaskProjectPickerGroups } from '../../../../../shared/work-items/task-repo-selection'
 import TaskProjectSourceCombobox from './task-project-source-combobox'
 
 afterEach(cleanup)

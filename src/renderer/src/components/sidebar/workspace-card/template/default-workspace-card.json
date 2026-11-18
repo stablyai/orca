@@ -84,12 +84,17 @@
                 {
                   "el": "Row",
                   "when": "vars.titleIndicators || vars.newStyle",
-                  "props": { "push": true, "keep": true, "align": "center", "gap": "md" },
+                  "props": { "push": true, "keep": true, "align": "center", "gap": "sm" },
                   "children": [
                     {
                       "el": "Row",
                       "when": "vars.titleIndicators",
-                      "props": { "keep": true, "align": "center", "gap": "sm", "inset": "end" },
+                      "props": {
+                        "keep": true,
+                        "align": "center",
+                        "gap": "sm",
+                        "inset": "=vars.newStyle ? 'hair' : 'end'"
+                      },
                       "children": [{ "el": "Indicators" }]
                     },
                     {

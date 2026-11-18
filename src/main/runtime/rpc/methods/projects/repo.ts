@@ -32,6 +32,7 @@ import {
   RepoSearchRefs,
   RepoSetBaseRef,
   RepoSetHidden,
+  RepoSparsePresetRemove,
   RepoSparsePresetSave,
   RepoUpdate
 } from '../../../../../shared/rpc-contract/projects/repo-params'
@@ -74,6 +75,15 @@ export const REPO_METHODS = [
         directories: params.directories
       })
     })
+  }),
+  defineMethod({
+    name: 'repo.removeSparsePreset',
+    permission: 'workspace',
+    params: RepoSparsePresetRemove,
+    handler: async (params, { runtime }) => {
+      await runtime.removeSparsePreset(params.repo, params.presetId)
+      return { removed: true }
+    }
   }),
   defineMethod({
     name: 'repo.add',

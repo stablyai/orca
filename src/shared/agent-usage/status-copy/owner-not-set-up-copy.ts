@@ -1,11 +1,10 @@
-import type { OwnerNotSetUpPlaceholder } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { translate } from '@/i18n/i18n'
-import type { Translate } from '@/i18n/use-translate'
+import type { OwnerNotSetUpPlaceholder } from '../rate-limits/rate-limit-types'
+import type { UsageCopyTranslate } from './usage-copy-translate'
 
 function translateOwnerNotSetUpLabel(
   placeholder: OwnerNotSetUpPlaceholder,
   server: string,
-  t: Translate = translate
+  t: UsageCopyTranslate
 ): string {
   return placeholder.kind === 'claude-unknown'
     ? t('auto.components.status.bar.tooltip.claudeNoUsageFromHost', 'No usage from {{server}}', {
@@ -20,7 +19,7 @@ function translateOwnerNotSetUpLabel(
 
 export function getOwnerNotSetUpLabel(
   placeholder: OwnerNotSetUpPlaceholder,
-  t?: Translate
+  t: UsageCopyTranslate
 ): string {
   return translateOwnerNotSetUpLabel(placeholder, placeholder.ownerLabel, t)
 }
@@ -31,7 +30,7 @@ const HOST_SLOT = '\u0000'
 /** The label split around the host name, so only the name truncates wherever the locale puts it. */
 export function getOwnerNotSetUpLabelParts(
   placeholder: OwnerNotSetUpPlaceholder,
-  t?: Translate
+  t: UsageCopyTranslate
 ): {
   before: string
   host: string
@@ -51,7 +50,7 @@ export function getOwnerNotSetUpLabelParts(
 
 export function getOwnerNotSetUpNote(
   placeholder: OwnerNotSetUpPlaceholder,
-  t: Translate = translate
+  t: UsageCopyTranslate
 ): string | null {
   if (placeholder.kind === 'claude-unknown') {
     return t(
@@ -70,7 +69,7 @@ export function getOwnerNotSetUpNote(
 
 export function describeOwnerNotSetUp(
   placeholder: OwnerNotSetUpPlaceholder,
-  t?: Translate
+  t: UsageCopyTranslate
 ): string {
   const note = getOwnerNotSetUpNote(placeholder, t)
   // Why: Claude's note already names the host, so it stands alone.

@@ -94,7 +94,7 @@
 1 src/main/automations/launch/automation-run-setup-skip.ts
 2 src/main/automations/runtime-automation-service.ts
 5 src/main/backend/backend-entry.ts
-12 src/main/backend/core-runtime-activation.ts
+11 src/main/backend/core-runtime-activation.ts
 2 src/main/backend/core-runtime.ts
 4 src/main/bitbucket/client.ts
 5 src/main/bitbucket/credential-connection.ts
@@ -250,7 +250,7 @@
 19 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-config-compatibility.ts
 3 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
-9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts
+11 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts # Codex launch prep from #43365 already merged; unblocks main, async follow-up owed
 9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-launch.ts
 8 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
 1 src/main/codex-accounts/runtime-home/runtime-home-service-paths.ts
@@ -1181,7 +1181,7 @@
 1 src/main/runtime/files/staged-file-saves.ts
 2 src/main/runtime/files/watch/file-watches.ts
 16 src/main/runtime/host-instance-identity.ts
-7 src/main/runtime/hosts/platform-probe/host-descriptor.ts
+3 src/main/runtime/hosts/platform-probe/host-descriptor.ts
 3 src/main/runtime/hosts/runtime-status.ts
 1 src/main/runtime/integrations/git/runtime-git-command-target.ts
 3 src/main/runtime/integrations/git/runtime-git-generation-commands.ts
@@ -1243,9 +1243,7 @@
 1 src/main/runtime/orchestration/federation/remote-owned/remote-owned-calls.ts
 2 src/main/runtime/orchestration/federation/remote-owned/remote-owned-route.ts
 5 src/main/runtime/orchestration/federation/remote-owned/remote-owned-start.ts
-1 src/main/runtime/orchestration/legacy-remote-home/federated-worker-child-parent.ts
 15 src/main/runtime/orchestration/legacy-remote-home/federated-worker-start-reconcile.ts
-1 src/main/runtime/orchestration/legacy-remote-home/federated-worker-start.ts
 1 src/main/runtime/orchestration/legacy-remote-home/legacy-remote-home-db-methods.ts
 5 src/main/runtime/orchestration/legacy-remote/federated-dispatch-observation-fence.ts
 2 src/main/runtime/orchestration/legacy-remote/legacy-remote-db-methods.ts
@@ -1276,7 +1274,7 @@
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-mail-reconciliation.ts
 1 src/main/runtime/rpc/methods/orchestration/runs/runs.ts
 1 src/main/runtime/rpc/methods/terminal/session-terminal-scrollback.ts
-2 src/main/runtime/rpc/methods/workspaces/worktree.ts
+1 src/main/runtime/rpc/methods/workspaces/worktree.ts
 5 src/main/runtime/rpc/server/network-source-policy-store.ts
 11 src/main/runtime/rpc/server/pairing/device-registry-disk-merge.ts
 2 src/main/runtime/rpc/server/pairing/device-registry-file-read.ts
@@ -1323,7 +1321,6 @@
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
-1 src/main/runtime/workspaces/process-listing/workspace-process-listing.ts
 1 src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
@@ -1407,7 +1404,7 @@
 1 src/main/startup/main-process-preflight-failure.ts
 25 src/main/startup/main-process-preflight.ts
 15 src/main/startup/main-process-ready-foundation.ts
-8 src/main/startup/main-process-ready-runtime.ts
+7 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts
