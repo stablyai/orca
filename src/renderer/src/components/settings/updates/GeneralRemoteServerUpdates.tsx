@@ -28,8 +28,13 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   ).length
   const manual = entries.filter((entry) => entry.phase === 'manual').length
   const offline = entries.filter((entry) => entry.phase === 'offline').length
+  // A newer server is current on its own updater, but this app is the one behind.
+  const newer = entries.filter(
+    (entry) => entry.phase === 'current' && entry.newerThanClientVersion
+  ).length
   const current = entries.filter(
-    (entry) => entry.phase === 'current' || entry.phase === 'updated'
+    (entry) =>
+      (entry.phase === 'current' && !entry.newerThanClientVersion) || entry.phase === 'updated'
   ).length
   const summary = [
     entries.length === 1
@@ -51,6 +56,13 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
           'auto.components.settings.GeneralRemoteServerUpdates.currentCount',
           '{{value0}} up to date',
           { value0: current }
+        )
+      : null,
+    newer > 0
+      ? t(
+          'auto.components.settings.GeneralRemoteServerUpdates.newerCount',
+          '{{value0}} newer than this app',
+          { value0: newer }
         )
       : null,
     manual > 0

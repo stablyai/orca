@@ -122,6 +122,18 @@ export function getRuntimeServerVersionText(
     : null
 }
 
+/** Updating the server can't fix this skew; only updating this app can. */
+export function getRuntimeServerNewerThanAppText(
+  entry: RemoteServerUpdateEntry | undefined,
+  t: Translate = translate
+): string | null {
+  return entry?.newerThanClientVersion
+    ? t('auto.components.settings.serverList.newerThanApp', 'Newer than this app (v{{version}})', {
+        version: entry.newerThanClientVersion
+      })
+    : null
+}
+
 export function getRuntimeServerAvailableUpdateText(
   entry: RemoteServerUpdateEntry | undefined,
   t: Translate = translate

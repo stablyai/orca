@@ -49,6 +49,8 @@ export type RemoteServerUpdateEntry = {
   error: string | null
   /** This desktop updates it over SSH, not through the host's own updater. */
   managedOverSsh?: boolean
+  /** This app's version when the server runs a newer one; updating the server can't close that gap. */
+  newerThanClientVersion?: string | null
 }
 
 export type RemoteServerUpdateTransport = {
@@ -127,9 +129,11 @@ export async function inspectRemoteServerUpdate(
   const support = status.remoteUpdateSupport ?? null
   const versionComparable =
     currentVersion !== null && isValidAppVersion(currentVersion) && isValidAppVersion(clientVersion)
-  const outdated = versionComparable && compareAppVersions(currentVersion, clientVersion) < 0
+  const comparison = versionComparable ? compareAppVersions(currentVersion, clientVersion) : 0
+  const outdated = comparison < 0
   const statusFields = {
     currentVersion,
+    newerThanClientVersion: comparison > 0 ? clientVersion : null,
     runtimeId: status.runtimeId,
     liveTabCount: status.liveTabCount,
     liveLeafCount: status.liveLeafCount,
