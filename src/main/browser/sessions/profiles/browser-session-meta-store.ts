@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { normalizeBrowserSiteListEntry } from '../../../../shared/browser/profiles/browser-profile-site-list'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
@@ -200,14 +200,17 @@ export async function updateBrowserSessionMetaAsync(
   const tmpPath = `${path}.site-list.tmp`
   try {
     for (let attempt = 0; attempt < MAX_ASYNC_WRITE_ATTEMPTS; attempt++) {
-      const before = await readBrowserSessionMetaFile(path)
-      const existing = await readBrowserSessionMetaAsync(path, defaultPartition)
-      if (!existing) {
+      const raw = await readBrowserSessionMetaText(path)
+      if (raw === undefined) {
         return false
       }
+      const existing =
+        raw === null
+          ? emptyBrowserSessionMeta()
+          : parseBrowserSessionMeta(JSON.parse(raw), defaultPartition)
       await mkdir(dirname(path), { recursive: true })
       await writeFile(tmpPath, JSON.stringify({ ...existing, ...update(existing) }))
-      if ((await readBrowserSessionMetaFile(path)) !== before) {
+      if ((await readBrowserSessionMetaText(path)) !== raw) {
         continue
       }
       await rename(tmpPath, path)
@@ -217,14 +220,17 @@ export async function updateBrowserSessionMetaAsync(
   } catch {
     // Fall through: the caller reports a failed save and keeps the old list.
   }
+  // Reached after a failure or exhausted retries; a successful rename returned above.
+  await rm(tmpPath, { force: true }).catch(() => {})
   return false
 }
 
-async function readBrowserSessionMetaFile(path: string): Promise<string | null> {
+/** Null when the file is missing, undefined when it exists but cannot be read. */
+async function readBrowserSessionMetaText(path: string): Promise<string | null | undefined> {
   try {
     return await readFile(path, 'utf-8')
-  } catch {
-    return null
+  } catch (error) {
+    return isMissingFileError(error) ? null : undefined
   }
 }
 
