@@ -44,8 +44,17 @@ export function limitJournalReaderReply<T extends { type: string }>(
   return {
     type: 'failed',
     id: reply.id,
-    error: journalSqlFailure(new Error(`journal read reply (${reply.type}) exceeds ${limit} bytes`))
+    error: journalSqlFailure(
+      new Error(`${REPLY_LIMIT_FAILURE} (${reply.type}) exceeds ${limit} bytes`)
+    )
   }
+}
+
+const REPLY_LIMIT_FAILURE = 'journal read reply'
+
+/** A chat whose rows can't fit one reply fails the same way at every retry. */
+export function isJournalReaderReplyLimitFailure(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith(`${REPLY_LIMIT_FAILURE} (`)
 }
 
 function isRecordSetReply(reply: unknown): boolean {

@@ -3,6 +3,7 @@ import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares'
 import { isJournalSqlSourceContentFailure } from './journal-sql-failure'
+import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
 
 type Conversion = { promotion: AbortController; result: Promise<string | null> }
 
@@ -79,9 +80,12 @@ export class JournalSqlConversions {
     return result
   }
 
-  /** A copy whose original content can't convert is left to an open, never to a quit's rejection. */
+  /** A copy whose original content can't convert or fit a reply is left to an open, never to a quit's rejection. */
   private noteCopyFailure(sessionId: string, error: unknown): void {
-    if (this.closed || !isJournalSqlSourceContentFailure(error)) {
+    if (
+      this.closed ||
+      !(isJournalSqlSourceContentFailure(error) || isJournalReaderReplyLimitFailure(error))
+    ) {
       return
     }
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 500)
