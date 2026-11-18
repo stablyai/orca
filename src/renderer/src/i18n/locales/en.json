@@ -5920,7 +5920,7 @@
             "showUsed": "Show used usage"
           },
           "grok": {
-            "topUp": "Top up on grok.com"
+            "openBilling": "Open Grok billing"
           }
         }
       },
@@ -12740,7 +12740,7 @@
           "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed.",
           "0bb18642b7": "Usage",
           "a8f4139350": "Grok reported no usage percentage for this account.",
-          "topUp": "Top up on grok.com"
+          "openBilling": "Grok billing"
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",

@@ -11,7 +11,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
-import { GROK_TOP_UP_URL } from '../../../../../../shared/agent-usage/grok-top-up-url'
+import { openGrokBillingPage } from '@/components/status-bar/usage/grok-billing-page'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
 export function GrokAccountsSection(): React.JSX.Element {
@@ -81,16 +81,14 @@ export function GrokAccountsSection(): React.JSX.Element {
         )}
         action={
           <span className="flex items-center gap-3">
-            <a
-              href={GROK_TOP_UP_URL}
-              target="_blank"
-              onClick={openAppHttpLinkFromAnchor}
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={openGrokBillingPage}
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             >
-              {t('auto.components.settings.GrokAccountsSection.topUp', 'Top up on grok.com')}
+              {t('auto.components.settings.GrokAccountsSection.openBilling', 'Grok billing')}
               <ExternalLink className="size-3" />
-            </a>
+            </button>
             <a
               href={GROK_CLI_DOCS_URL}
               target="_blank"
