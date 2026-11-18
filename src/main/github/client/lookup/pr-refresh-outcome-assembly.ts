@@ -43,6 +43,7 @@ export function assemblePRRefreshFoundOutcome(args: {
     headDivergedFromMergedPRAtOid,
     conflictSummary
   } = args
+  const mergeMethodSettings = stackMergeMetadata?.mergeMethodSettings ?? data.mergeMethodSettings
   const checksSummary = summarizePRCheckRollup(data.statusCheckRollup)
   const checksReadComplete = data.checksUnavailable === false
   const checkResult = classifyPRCheckRollupResult(data.statusCheckRollup, checksReadComplete)
@@ -71,11 +72,7 @@ export function assemblePRRefreshFoundOutcome(args: {
               : data.mergeQueueRequired
           }
         : {}),
-      ...((stackMergeMetadata?.mergeMethodSettings ?? data.mergeMethodSettings) !== undefined
-        ? {
-            mergeMethodSettings: stackMergeMetadata?.mergeMethodSettings ?? data.mergeMethodSettings
-          }
-        : {}),
+      ...(mergeMethodSettings ? { mergeMethodSettings } : {}),
       ...(data.mergeStateStatus !== undefined ? { mergeStateStatus: data.mergeStateStatus } : {}),
       ...(stack ? { stack } : {}),
       headSha: data.headRefOid,
