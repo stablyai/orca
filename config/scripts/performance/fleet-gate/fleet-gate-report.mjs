@@ -57,7 +57,9 @@ export function compareRuns(runs, scenarios) {
           .filter((value) => typeof value === 'number' && Number.isFinite(value))
       const oldValues = values('old')
       const newValues = values('new')
-      if (oldValues.length === 0 || newValues.length === 0) {
+      const scheduled = (arm) => runs.filter((run) => run.arm === arm).length
+      // Every scheduled run must have a sample: a dropped NEW run could be the regressed one.
+      if (oldValues.length < scheduled('old') || newValues.length < scheduled('new')) {
         rows.push({ scenario, metric, old: null, new: null, verdict: 'n/a' })
         continue
       }

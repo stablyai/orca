@@ -18,20 +18,32 @@ export async function startVirtualDisplay() {
   if (!xvfb) {
     return null
   }
-  let number = 140 + Math.floor(Math.random() * 400)
-  while (fs.existsSync(`/tmp/.X11-unix/X${number}`) || fs.existsSync(`/tmp/.X${number}-lock`)) {
-    number += 1
-  }
-  const child = spawn(xvfb, [`:${number}`, '-screen', '0', '1600x1000x24', '-nolisten', 'tcp'], {
-    stdio: 'ignore'
-  })
-  const deadline = Date.now() + 10_000
-  while (!fs.existsSync(`/tmp/.X11-unix/X${number}`)) {
-    if (Date.now() > deadline || child.exitCode !== null) {
-      child.kill('SIGKILL')
-      return null
+  // -displayfd: Xvfb picks a free display itself and reports it once ready, so two runs can't claim the same one.
+  const child = spawn(
+    xvfb,
+    ['-displayfd', '3', '-screen', '0', '1600x1000x24', '-nolisten', 'tcp'],
+    {
+      stdio: ['ignore', 'ignore', 'ignore', 'pipe']
     }
-    await new Promise((resolve) => setTimeout(resolve, 100))
+  )
+  const number = await new Promise((resolve) => {
+    let text = ''
+    const timer = setTimeout(() => resolve(null), 10_000)
+    child.stdio[3].on('data', (chunk) => {
+      text += String(chunk)
+      if (text.includes('\n')) {
+        clearTimeout(timer)
+        resolve(text.trim())
+      }
+    })
+    child.once('exit', () => {
+      clearTimeout(timer)
+      resolve(null)
+    })
+  })
+  if (!number || !/^\d+$/.test(number)) {
+    child.kill('SIGKILL')
+    return null
   }
   return { display: `:${number}`, stop: () => child.kill('SIGTERM') }
 }

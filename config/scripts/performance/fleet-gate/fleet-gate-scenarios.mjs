@@ -60,20 +60,24 @@ const TURN = [
 ]
 
 /** Real terminal panes (tab + its layout leaf), so hook statuses bind to tabs the way a running agent's do. */
-async function terminalPanes(page, count) {
-  return page.evaluate((limit) => {
-    const state = window.__store.getState()
-    const panes = []
-    for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree ?? {})) {
-      for (const tab of Array.isArray(tabs) ? tabs : []) {
-        const leafId = state.terminalLayoutsByTabId?.[tab.id]?.activeLeafId
-        if (leafId && panes.length < limit) {
-          panes.push({ worktreeId, paneKey: `${tab.id}:${leafId}` })
+async function terminalPanes(page, count, onePerWorkspace = false) {
+  return page.evaluate(
+    ({ limit, distinct }) => {
+      const state = window.__store.getState()
+      const panes = []
+      for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree ?? {})) {
+        for (const tab of Array.isArray(tabs) ? tabs : []) {
+          const leafId = state.terminalLayoutsByTabId?.[tab.id]?.activeLeafId
+          const taken = distinct && panes.some((pane) => pane.worktreeId === worktreeId)
+          if (leafId && !taken && panes.length < limit) {
+            panes.push({ worktreeId, paneKey: `${tab.id}:${leafId}` })
+          }
         }
       }
-    }
-    return panes
-  }, count)
+      return panes
+    },
+    { limit: count, distinct: onePerWorkspace }
+  )
 }
 
 async function postHook(endpoint, pane, payload) {
@@ -147,9 +151,16 @@ async function streamAgentStatus({ page, userDataDir, windowMs }) {
   if (!endpoint) {
     return { note: 'no agent hook endpoint', undriven: 'no agent hook endpoint' }
   }
-  const panes = (await terminalPanes(page, STREAM_PANES)).map((pane) => ({ ...pane, step: 0 }))
-  if (panes.length === 0) {
-    return { note: 'no terminal panes to stream into', undriven: 'no terminal panes' }
+  // One pane per workspace: the workload is statuses across ten workspaces, not ten tabs of one.
+  const panes = (await terminalPanes(page, STREAM_PANES, true)).map((pane) => ({
+    ...pane,
+    step: 0
+  }))
+  if (panes.length < STREAM_PANES) {
+    return {
+      note: `only ${String(panes.length)} workspaces with a terminal to stream into`,
+      undriven: `${String(panes.length)} of ${String(STREAM_PANES)} workspaces with a terminal`
+    }
   }
   const started = Date.now()
   const deadline = started + windowMs
@@ -207,15 +218,23 @@ async function typeIntoComposer({ page, windowMs }) {
       return null
     }
     visible.setAttribute('data-fleet-gate-input', '1')
-    return (
-      visible.tagName.toLowerCase() +
-      (visible.className ? `.${String(visible.className).split(' ')[0]}` : '')
-    )
+    return {
+      label:
+        visible.tagName.toLowerCase() +
+        (visible.className ? `.${String(visible.className).split(' ')[0]}` : ''),
+      terminal: visible.classList.contains('xterm-helper-textarea')
+    }
   })
   if (!target) {
     return { note: 'no visible input', undriven: 'no visible input' }
   }
+  const textLength = () =>
+    page.evaluate(() => {
+      const element = document.querySelector('[data-fleet-gate-input="1"]')
+      return (element?.value ?? element?.textContent ?? '').length
+    })
   await page.locator('[data-fleet-gate-input="1"]').first().focus()
+  const lengthBefore = await textLength()
   const deadline = Date.now() + windowMs
   let typed = 0
   while (Date.now() < deadline) {
@@ -223,12 +242,21 @@ async function typeIntoComposer({ page, windowMs }) {
     typed += 1
     await sleep(1_000 / TYPING_CHARS_PER_SECOND)
   }
+  const grew = (await textLength()) - lengthBefore
   // Leave the draft empty so the next window starts from the same state.
   for (let index = 0; index < typed; index += 1) {
     await page.keyboard.press('Backspace')
   }
-  // The renderer→main count is the receipt: keys that reach a terminal are written to its PTY.
-  return { note: `${typed} keys into ${target}`, needsInbound: true }
+  const enough = typed * (1 - MAX_MISSED_SHARE)
+  // Receipts: a terminal's keys reach main as pty:write (checked by the runner); a composer's land in its text.
+  return {
+    note: `${String(typed)} keys into ${target.label}`,
+    ptyWritesNeeded: target.terminal ? Math.ceil(enough) : 0,
+    undriven:
+      !target.terminal && grew < enough
+        ? `${String(grew)} of ${String(typed)} typed keys reached the input`
+        : null
+  }
 }
 
 // Same check as the workspace-switch paint benchmark: a full-window fixed layer above z 40 swallows card clicks.
@@ -336,7 +364,11 @@ async function switchWorkspaces({ page, windowMs }) {
     return Date.now()
   }
   while (Date.now() < deadline) {
-    const id = pair[switches % 2]
+    let id = pair[switches % 2]
+    // A click on the card that is already active proves nothing; aim at the other one.
+    if (id === (await page.evaluate(() => window.__store.getState().activeWorktreeId))) {
+      id = pair[(switches + 1) % 2]
+    }
     let landed = false
     let mark = Date.now()
     // Tips and notices appear after a delay, so check before every click, not just the first.

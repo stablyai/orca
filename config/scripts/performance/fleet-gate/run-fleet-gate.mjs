@@ -11,7 +11,8 @@ import { lockCacheEntryAsync, releaseHeldLocks } from './fleet-gate-cache-lock.m
 import { copyProfile, stopCopyDaemons } from './fleet-gate-copies.mjs'
 import { startVirtualDisplay } from './fleet-gate-display.mjs'
 import { waitForAppWindow } from './fleet-gate-app-ready.mjs'
-import { hotPathChanges } from './fleet-gate-hot-paths.mjs'
+import { parseArgs } from './fleet-gate-args.mjs'
+import { hotPathChanges, isHotPath } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
 import { burstRows, compareRuns, formatTable, windowMetrics } from './fleet-gate-report.mjs'
@@ -44,70 +45,6 @@ let launchesInFlight = 0
 let stopping = false
 // One close can take 30 s for the app plus a few seconds per daemon; a stop waits that long, then exits anyway.
 const STOP_BUDGET_MS = 60_000
-
-// Packaged builds don't expose the store the gate seeds, drives and probes through.
-function packagedAppUnsupported() {
-  throw new Error(
-    'packaged apps are not supported: pass the release tags (--old v1.4.262 --new <candidate>); the gate rebuilds them from source in e2e mode'
-  )
-}
-
-function parseArgs(argv) {
-  const options = {
-    old: null,
-    new: 'HEAD',
-    seed: process.env.ORCA_FLEET_SEED_DIR ?? null,
-    runs: 2,
-    settleMs: 120_000,
-    windowMs: 30_000,
-    idleWindowMs: 60_000,
-    scenarios: null,
-    force: false,
-    pathsOnly: false,
-    out: null
-  }
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index]
-    const value = () => {
-      index += 1
-      if (argv[index] === undefined) {
-        throw new Error(`${arg} needs a value`)
-      }
-      return argv[index]
-    }
-    const setters = {
-      '--old': () => (options.old = value()),
-      '--new': () => (options.new = value()),
-      '--seed': () => (options.seed = path.resolve(value())),
-      '--runs': () => (options.runs = Number(value())),
-      '--settle-ms': () => (options.settleMs = Number(value())),
-      '--window-ms': () => (options.windowMs = Number(value())),
-      '--idle-window-ms': () => (options.idleWindowMs = Number(value())),
-      '--scenarios': () => (options.scenarios = value().split(',').filter(Boolean)),
-      '--out': () => (options.out = path.resolve(value())),
-      '--force': () => (options.force = true),
-      '--paths-only': () => (options.pathsOnly = true),
-      '--old-app': packagedAppUnsupported,
-      '--new-app': packagedAppUnsupported,
-      '--': () => {}
-    }
-    if (!setters[arg]) {
-      throw new Error(`unknown argument ${arg}`)
-    }
-    setters[arg]()
-  }
-  if (options.scenarios?.length === 0) {
-    throw new Error('--scenarios names no scenario')
-  }
-  for (const name of options.scenarios ?? []) {
-    if (!SCENARIOS[name] && name !== 'burst') {
-      throw new Error(
-        `unknown scenario ${String(name)}; known: ${Object.keys(SCENARIOS).join(', ')}`
-      )
-    }
-  }
-  return options
-}
 
 // Hidden windows never paint, so clicks and screenshots stall; on Linux the copy gets its own Xvfb, never a real desktop.
 let virtualDisplay = null
@@ -282,7 +219,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     const second = await copy('restart')
     try {
       const before = countLaunches(stub.launchLog)
-      result.continuation = await continueAfterRestart(second.page)
+      result.continuation = await continueAfterRestart(second.page, result.midTurn.sessionIds)
       const expected = result.continuation.offered || BURST_CHATS
       result.continuationLaunched =
         (await waitForLaunches(stub.launchLog, before + expected)) - before
@@ -302,6 +239,16 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
   } finally {
     stopLoad()
     liveCleanups.delete(stopLoad)
+  }
+  for (const [phase, batch] of [
+    ['mid-turn', result.midTurn],
+    ['cold', result.cold]
+  ]) {
+    if (batch?.requested !== BURST_CHATS) {
+      result.incomplete.push(
+        `${phase} burst found ${String(batch?.requested)} of ${String(BURST_CHATS)} workspaces`
+      )
+    }
   }
   result.ownershipRefusals = countOwnershipRefusals(stderrOwnership, userDataDir)
   fs.rmSync(runDir, { recursive: true, force: true })
@@ -362,16 +309,8 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       result.incomplete.push('store notify loop not found: store pubs/wakeups not measured')
     }
     console.log(`[fleet-gate] ${label} up; settling ${options.settleMs / 1000}s`)
-    // Pinned again after settling: UI state may still have been loading the first time.
-    const pinCards = async () => {
-      const cards = await pinClassicWorktreeCards(page)
-      if (cards !== 'classic') {
-        result.incomplete.push(
-          `worktree cards not pinned to classic (${cards}): OLD and NEW would differ`
-        )
-      }
-    }
-    await pinCards()
+    // Pinned twice: UI state may still be loading the first time, so only the post-settle result counts.
+    await pinClassicWorktreeCards(page)
     const agents = await seedAgentStatuses({ page, userDataDir, count: AGENT_PANES })
     if (agents.panes === 0) {
       result.incomplete.push(`no idle agent statuses: ${JSON.stringify(agents)}`)
@@ -379,12 +318,19 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       result.notes.push(`agent statuses: ${JSON.stringify(agents)}`)
     }
     await new Promise((resolve) => setTimeout(resolve, options.settleMs))
-    await pinCards()
-    result.census = { ...(await readFleetCensus(page)), agentPanes: agents.panes }
-    if (options.minWorkspaces && !(result.census.workspaces >= options.minWorkspaces)) {
+    const cards = await pinClassicWorktreeCards(page)
+    if (cards !== 'classic') {
       result.incomplete.push(
-        `fleet loaded ${String(result.census.workspaces)} of ${String(options.minWorkspaces)} workspaces`
+        `worktree cards not pinned to classic (${cards}): OLD and NEW would differ`
       )
+    }
+    result.census = { ...(await readFleetCensus(page)), agentPanes: agents.panes }
+    for (const [field, expected] of Object.entries(options.fullFleet ?? {})) {
+      if (!(result.census[field] >= expected)) {
+        result.incomplete.push(
+          `fleet loaded ${String(result.census[field])} of ${String(expected)} ${field}`
+        )
+      }
     }
     await page.screenshot({ path: path.join(outDir, `${label}-${Date.now()}.png`) }).catch(() => {})
     for (const name of options.scenarios) {
@@ -398,8 +344,10 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       const rendererSnapshot = await renderer.snapshot()
       if (driven.undriven) {
         result.incomplete.push(`${name}: ${driven.undriven}`)
-      } else if (driven.needsInbound && main.in.n === 0) {
-        result.incomplete.push(`${name}: no input reached the main process`)
+      } else if ((main.inByChannel['pty:write']?.n ?? 0) < (driven.ptyWritesNeeded ?? 0)) {
+        result.incomplete.push(
+          `${name}: ${String(main.inByChannel['pty:write']?.n ?? 0)} of ${String(driven.ptyWritesNeeded)} typed keys reached the terminal`
+        )
       }
       result.windows[name] = {
         driven,
@@ -436,7 +384,8 @@ async function main() {
   const oldSha = options.old
     ? resolveCommit(repoRoot, options.old)
     : git(repoRoot, ['merge-base', 'origin/main', newSha])
-  const hot = hotPathChanges(oldSha, newSha, repoRoot)
+  // The two builds' trees, not merge-base semantics: release tags often sit on sibling branches.
+  const hot = hotPathChanges(oldSha, newSha, repoRoot, isHotPath, true)
   if (hot.length === 0 && !options.force) {
     console.log('skipped: no hot-path changes')
     return
@@ -479,7 +428,13 @@ async function main() {
             options: {
               ...options,
               scenarios: windowScenarios,
-              minWorkspaces: seed.receipt ? SEED_SHAPE.worktrees + SEED_SHAPE.folders : 0
+              fullFleet: seed.receipt
+                ? {
+                    workspaces: SEED_SHAPE.worktrees + SEED_SHAPE.folders,
+                    chatTabs: SEED_SHAPE.chats,
+                    terminalTabs: SEED_SHAPE.terminals
+                  }
+                : null
             },
             outDir,
             runDir: path.join(runsRoot, `${arm}-${runs.length}`)

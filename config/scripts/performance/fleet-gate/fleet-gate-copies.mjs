@@ -16,7 +16,8 @@ export function copyProfile(sourceDir, targetDir) {
         return false
       }
       const stat = fs.lstatSync(source, { throwIfNoEntry: false })
-      return Boolean(stat) && !stat.isSocket() && !stat.isFIFO()
+      // Symlinks are dropped: a copied link can point back into the seed (Chromium's Singleton* links are per-run anyway).
+      return Boolean(stat) && (stat.isFile() || stat.isDirectory())
     }
   })
 }
@@ -100,13 +101,25 @@ function descendantPids(rootPid) {
   return found
 }
 
-const alive = (pid) => {
+/** pid -> start time for every process, from one ps call. */
+function processStartTimes() {
+  const table = new Map()
   try {
-    process.kill(pid, 0)
-    return true
+    const out = execFileSync('ps', ['-eo', 'pid=,lstart='], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: { ...process.env, LC_ALL: 'C' }
+    })
+    for (const line of out.split('\n')) {
+      const match = /^\s*(\d+)\s+(.+)$/.exec(line)
+      if (match) {
+        table.set(Number(match[1]), match[2].trim())
+      }
+    }
   } catch {
-    return false
+    // No table: nothing counts as the same process, so nothing is escalated.
   }
+  return table
 }
 
 /**
@@ -116,6 +129,9 @@ const alive = (pid) => {
 export async function stopCopyDaemons(userDataDir) {
   for (const root of readDaemonPids(userDataDir)) {
     const pids = [...descendantPids(root), root]
+    // Start times now, so the SIGKILL below never reaches a process that reused one of these pids.
+    const startedAt = processStartTimes()
+    const same = (table) => (pid) => startedAt.has(pid) && table.get(pid) === startedAt.get(pid)
     for (const pid of pids.toReversed()) {
       try {
         process.kill(pid, 'SIGTERM')
@@ -124,10 +140,10 @@ export async function stopCopyDaemons(userDataDir) {
       }
     }
     const deadline = Date.now() + KILL_WAIT_MS
-    while (pids.some(alive) && Date.now() < deadline) {
+    while (pids.some(same(processStartTimes())) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    for (const pid of pids.filter(alive)) {
+    for (const pid of pids.filter(same(processStartTimes()))) {
       try {
         process.kill(pid, 'SIGKILL')
       } catch {

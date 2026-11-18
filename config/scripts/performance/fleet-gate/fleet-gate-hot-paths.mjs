@@ -60,8 +60,10 @@ export function isLaunchPath(file) {
   return LAUNCH_PATH_PREFIXES.some((prefix) => file === prefix || file.startsWith(prefix))
 }
 
-export function changedFiles(base, head, cwd) {
-  const output = execFileSync('git', ['diff', '--name-only', `${base}...${head}`], {
+/** endpoints: what differs between the two trees (two builds); otherwise what the head branch changed since base. */
+export function changedFiles(base, head, cwd, endpoints = false) {
+  const range = endpoints ? [base, head] : [`${base}...${head}`]
+  const output = execFileSync('git', ['diff', '--name-only', ...range], {
     cwd,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024
@@ -70,9 +72,9 @@ export function changedFiles(base, head, cwd) {
 }
 
 /** Fails open: a diff that can't be resolved counts as touching every hot path, so the gate runs. */
-export function hotPathChanges(base, head, cwd, filter = isHotPath) {
+export function hotPathChanges(base, head, cwd, filter = isHotPath, endpoints = false) {
   try {
-    return changedFiles(base, head, cwd).filter(filter)
+    return changedFiles(base, head, cwd, endpoints).filter(filter)
   } catch (error) {
     console.log(
       `hot-path filter couldn't diff ${base}...${head} (${String(error?.message ?? error).split('\n')[0]}); running the gate`

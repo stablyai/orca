@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { lockCacheEntry } from './fleet-gate-cache-lock.mjs'
+import { lockCacheEntry, tryLockCacheEntry } from './fleet-gate-cache-lock.mjs'
 
 export const CACHE_ROOT =
   process.env.ORCA_FLEET_GATE_CACHE ?? path.join(os.homedir(), '.cache', 'orca-fleet-gate')
@@ -22,12 +22,20 @@ export function resolveCommit(repoRoot, ref) {
     return local
   }
   const asTag = spawnSync('git', ['fetch', '--quiet', 'origin', 'tag', ref], { cwd: repoRoot })
-  const fetched =
-    asTag.status === 0
-      ? gitOptional(repoRoot, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
-      : spawnSync('git', ['fetch', '--quiet', 'origin', ref], { cwd: repoRoot }).status === 0
-        ? gitOptional(repoRoot, ['rev-parse', '--verify', '--quiet', 'FETCH_HEAD^{commit}'])
-        : ''
+  let fetched = ''
+  if (asTag.status === 0) {
+    fetched = gitOptional(repoRoot, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
+  } else {
+    // Into a ref of our own, not FETCH_HEAD, which another fetch in this checkout can overwrite meanwhile.
+    const scratch = `refs/fleet-gate/fetch-${String(process.pid)}-${String(Date.now())}`
+    if (
+      spawnSync('git', ['fetch', '--quiet', 'origin', `${ref}:${scratch}`], { cwd: repoRoot })
+        .status === 0
+    ) {
+      fetched = gitOptional(repoRoot, ['rev-parse', '--verify', '--quiet', `${scratch}^{commit}`])
+    }
+    spawnSync('git', ['update-ref', '-d', scratch], { cwd: repoRoot })
+  }
   if (!fetched) {
     throw new Error(`${ref} doesn't resolve locally or on origin`)
   }
@@ -109,7 +117,8 @@ const IN_USE_MS = 6 * 60 * 60 * 1000
 export function pruneCache(parentDir, markerName, keepCount, keep) {
   const entries = fs
     .readdirSync(parentDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    // Entry dirs are bare commit shas; skip lock, staging and tombstone dirs.
+    .filter((entry) => entry.isDirectory() && !entry.name.includes('.'))
     .map((entry) => path.join(parentDir, entry.name))
     .map((dir) => ({
       dir,
@@ -120,8 +129,23 @@ export function pruneCache(parentDir, markerName, keepCount, keep) {
     }))
     .sort((a, b) => b.mtime - a.mtime)
   for (const { dir, mtime } of entries.slice(keepCount)) {
-    if (!keep.has(dir) && Date.now() - mtime > IN_USE_MS) {
-      fs.rmSync(dir, { recursive: true, force: true })
+    if (keep.has(dir) || Date.now() - mtime <= IN_USE_MS) {
+      continue
+    }
+    // Delete only under the entry's own lock, after rechecking its age there: a run that takes the lock refreshes
+    // the marker first, so an entry claimed after the scan above is skipped here.
+    const unlock = tryLockCacheEntry(dir)
+    if (!unlock) {
+      continue
+    }
+    try {
+      const marker =
+        fs.statSync(path.join(dir, markerName), { throwIfNoEntry: false })?.mtimeMs ?? 0
+      if (Date.now() - marker > IN_USE_MS) {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    } finally {
+      unlock()
     }
   }
 }

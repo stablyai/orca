@@ -47,7 +47,8 @@ async function waitForLaunches(launchLog, expected, timeoutMs = LAUNCH_WAIT_MS) 
 export function startCpuLoad(repoRoot) {
   const worker = path.join(repoRoot, 'tests', 'tools', 'benchmarks', 'cpu-pressure-worker.mjs')
   const children = Array.from({ length: os.availableParallelism() }, () =>
-    spawn(process.execPath, [worker, '180000'], { stdio: 'ignore' })
+    // No fixed lifetime: the load lasts until the burst stops it (the worker's own default caps an orphan).
+    spawn(process.execPath, [worker], { stdio: 'ignore' })
   )
   return () => {
     for (const child of children) {
@@ -114,24 +115,35 @@ export async function createChatBurst(page, count, offset, prompt) {
             .call({ method: 'agentSession.create', params })
             .catch((error) => ({ ok: false, error: String(error?.message ?? error) }))
           return reply.ok && reply.result?.ok !== false
-            ? null
-            : JSON.stringify(reply.error ?? reply.result?.refusal ?? reply).slice(0, 200)
+            ? { sessionId }
+            : {
+                refusal: JSON.stringify(reply.error ?? reply.result?.refusal ?? reply).slice(0, 200)
+              }
         })
       )
-      return { requested: worktrees.length, refused: replies.filter(Boolean) }
+      return {
+        requested: worktrees.length,
+        sessionIds: replies.filter((reply) => reply.sessionId).map((reply) => reply.sessionId),
+        refused: replies.filter((reply) => reply.refusal).map((reply) => reply.refusal)
+      }
     },
     { total: count, skip: offset, text: prompt }
   )
 }
 
-/** Continues every restart offer in one call, as the dialog's Continue does, and tallies the outcomes. */
-export async function continueAfterRestart(page) {
-  return page.evaluate(async () => {
+/**
+ * Continues this burst's restart offers in one call, as the dialog's Continue does, and tallies the outcomes.
+ * Offers are matched to the burst's own session ids, so a profile's unrelated resumable session can't stand in.
+ */
+export async function continueAfterRestart(page, burstSessionIds) {
+  return page.evaluate(async (expected) => {
     const listed = await window.api.runtime.call({
       method: 'agentSession.restartResumable',
       params: {}
     })
-    const offered = listed.result?.sessions?.map((session) => session.sessionId) ?? []
+    const offered = (listed.result?.sessions?.map((session) => session.sessionId) ?? []).filter(
+      (sessionId) => expected.includes(sessionId)
+    )
     if (offered.length === 0) {
       return { offered: 0, outcomes: {}, problems: [] }
     }
@@ -155,7 +167,7 @@ export async function continueAfterRestart(page) {
       problems.push(`call: ${JSON.stringify(reply.error).slice(0, 160)}`)
     }
     return { offered: offered.length, outcomes, problems }
-  })
+  }, burstSessionIds)
 }
 
 /** Ownership refusals anywhere the copy logs them: its stderr and the trace logs under user data. */

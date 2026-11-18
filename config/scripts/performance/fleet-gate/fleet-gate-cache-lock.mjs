@@ -112,6 +112,15 @@ export async function lockCacheEntryAsync(entryDir) {
   }
 }
 
+/** Takes the lock only if it is free right now; never waits and never throws (a stale lock just means "skip"). */
+export function tryLockCacheEntry(entryDir) {
+  try {
+    return tryLock(entryDir)
+  } catch {
+    return null
+  }
+}
+
 /** For a stopping gate: process.exit skips the finally blocks that would release these. */
 export function releaseHeldLocks() {
   for (const release of held) {
