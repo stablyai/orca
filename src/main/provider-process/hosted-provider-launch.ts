@@ -171,13 +171,15 @@ export async function launchProviderOwner(
 ): Promise<void> {
   const deadline = performance.now() + HOSTED_START_BUDGET_MS
   const remainingMs = (): number => Math.max(0, deadline - performance.now())
+  // Checks still running past the budget must not report a verdict the direct launch has outlived.
+  const abandoned = (): boolean => owner.canceled || remainingMs() === 0
   // Connecting, signature and folder checks share the budget, so a slow host can't spend it all.
   const { client, identity } = await withProviderStartDeadline(
     (async () => {
       const client = await connectedHost(route)
       const identity =
         client && !owner.canceled
-          ? await inspectHostedIdentity(client, spec.cwd, () => owner.canceled, route.reportCwd)
+          ? await inspectHostedIdentity(client, spec.cwd, abandoned, route.reportCwd)
           : null
       return { client, identity }
     })(),

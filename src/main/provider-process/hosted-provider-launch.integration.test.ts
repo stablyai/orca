@@ -91,6 +91,8 @@ async function runChat(): Promise<{ closed: unknown[]; output: string }> {
     managed.child.once('close', (...args: unknown[]) => resolve(args))
   )
   await managed.child.ready
+  // Input ends only once the CLI runs: its owner allows a short grace after stdin closes.
+  await vi.waitFor(() => cliRuns(), { timeout: 10_000, interval: 20 })
   managed.child.stdin.end('chat reply')
   return { closed: await closed, output }
 }
