@@ -13,8 +13,9 @@ import {
 
 import type { GitHubProjectViewError } from '../../../../../shared/github/projects/project-result-types'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { ZOTZ_NEW_ISSUE_URL } from '../../../../../shared/zotz/zotz-app-identity'
 
-const ORCA_FEATURE_REQUEST_URL = 'https://github.com/stablyai/orca/issues/new'
+const ORCA_FEATURE_REQUEST_URL = ZOTZ_NEW_ISSUE_URL
 
 export function ProjectViewTabStrip({
   views,

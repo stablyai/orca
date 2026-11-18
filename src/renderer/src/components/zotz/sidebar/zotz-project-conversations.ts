@@ -54,7 +54,7 @@ function byRecentActivity(a: ZotzConversationRow, b: ZotzConversationRow): numbe
 
 export function buildZotzProjectSections(input: {
   repos: readonly Repo[]
-  worktreesForRepo: Readonly<Record<string, readonly Worktree[] | undefined>>
+  worktreesByRepoId: Readonly<Record<string, readonly Worktree[] | undefined>>
   workspacesWithAgents: ReadonlySet<string>
 }): ZotzProjectSection[] {
   const seen = new Set<string>()
@@ -64,7 +64,7 @@ export function buildZotzProjectSections(input: {
       continue
     }
     seen.add(repo.id)
-    const conversations = (input.worktreesForRepo[repo.id] ?? [])
+    const conversations = (input.worktreesByRepoId[repo.id] ?? [])
       .filter((worktree) => isZotzUserConversation(worktree, input.workspacesWithAgents))
       .map((worktree) => {
         const branch = branchLabel(worktree)

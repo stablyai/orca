@@ -20,6 +20,7 @@ import type { PluginKillListEntry } from '../../../shared/plugins/catalog/plugin
 import type { PluginImageCache } from '../media/plugin-image-cache'
 import { validateMarketplaceProvenance } from './plugin-marketplace-provenance'
 import { CommunityMarketplaceSeed } from './plugin-community-marketplace-seed'
+import { guardZotzPluginCatalogSeed } from '../../zotz/zotz-plugin-catalog-guard'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
 import {
   pluginMarketplaceListing,
@@ -128,7 +129,7 @@ export class PluginMarketplaceService {
   seedOfficialSource(): Promise<PluginMarketplaceSourceState> {
     this.officialSeedRequested = true
     if (!this.officialSeedPromise) {
-      const seed = this.performOfficialSeed()
+      const seed = guardZotzPluginCatalogSeed(() => this.performOfficialSeed())
       this.officialSeedPromise = seed
       void seed.catch(() => {
         if (this.officialSeedPromise === seed) {

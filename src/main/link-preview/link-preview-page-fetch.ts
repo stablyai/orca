@@ -2,11 +2,11 @@ import http from 'node:http'
 import https from 'node:https'
 import type { LookupFunction } from 'node:net'
 import { guardedLookup, linkPreviewTarget } from './link-preview-address-guard'
+import { ZOTZ_RELEASE_REPO } from '../../shared/zotz/zotz-app-identity'
 
 const MAX_REDIRECTS = 4
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
-const USER_AGENT =
-  'Mozilla/5.0 (compatible; OrcaLinkPreview/1.0; +https://github.com/stablyai/orca)'
+const USER_AGENT = `Mozilla/5.0 (compatible; ZotzLinkPreview/1.0; +https://github.com/${ZOTZ_RELEASE_REPO})`
 
 export type LinkPreviewResource = {
   /** The URL that answered, after redirects. */

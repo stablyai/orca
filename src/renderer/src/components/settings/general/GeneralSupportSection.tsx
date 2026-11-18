@@ -7,6 +7,7 @@ import { Label } from '../../ui/label'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
+import { isZotzCloudFeatureAllowed } from '../../../../../shared/zotz/zotz-network-policy'
 
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
 const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
@@ -31,9 +32,13 @@ export function GeneralSupportSection({
 }: GeneralSupportSectionProps): React.JSX.Element {
   const mountedRef = useMountedRef()
   // Keep gh-derived state local; use a same-size placeholder that collapses with its divider when the section is hidden.
-  const [starState, setStarState] = useState<SupportState>('loading')
+  const starAllowed = isZotzCloudFeatureAllowed('github-star')
+  const [starState, setStarState] = useState<SupportState>(starAllowed ? 'loading' : 'hidden')
 
   useEffect(() => {
+    if (!starAllowed) {
+      return
+    }
     let cancelled = false
     void window.api.gh.checkOrcaStarred().then((result) => {
       if (cancelled) {
@@ -48,7 +53,7 @@ export function GeneralSupportSection({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [starAllowed])
 
   const handleStarClick = async (): Promise<void> => {
     if (starState === 'web-fallback') {

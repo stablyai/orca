@@ -4,7 +4,7 @@ import { jiraGatewayBaseUrl } from './gateway-base-url'
 export async function resolveJiraGatewayBaseUrl(siteUrl: string): Promise<string> {
   const tenantInfoUrl = new URL('/_edge/tenant_info', siteUrl).toString()
   const response = await jiraFetch(tenantInfoUrl, {
-    headers: { Accept: 'application/json', 'User-Agent': 'Orca' }
+    headers: { Accept: 'application/json', 'User-Agent': 'Zotz' }
   })
   if (!response.ok) {
     await response.body?.cancel()

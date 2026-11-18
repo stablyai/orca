@@ -18,7 +18,6 @@ import { MANAGE_SESSIONS_SECTION_ID } from '../session-management/open-terminal-
 import { useAppStore } from '../../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function TerminalWindowsAdministratorSection(): React.JSX.Element {
   const t = useTranslate()
@@ -231,19 +230,7 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
               >
                 {t('settings.terminal.windows.manualAdministratorHelp', 'Manual instructions')}
               </Button>
-            ) : (
-              <Button
-                variant="link"
-                size="sm"
-                onClick={(event) =>
-                  openAppHttpLink('https://orca.dev/docs/terminal#windows-administrator-mode', {
-                    event
-                  })
-                }
-              >
-                {t('settings.terminal.windows.administratorDocumentation', 'Read the guide')}
-              </Button>
-            )}
+            ) : null}
             <DialogClose asChild>
               <Button variant="ghost" size="sm" ref={cancelRef} disabled={restarting}>
                 {showConfirmation

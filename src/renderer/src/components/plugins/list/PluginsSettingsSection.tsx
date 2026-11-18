@@ -17,6 +17,7 @@ import { PluginSettingsOverview } from './PluginSettingsOverview'
 import { PluginsAlphaNotice } from './PluginsAlphaNotice'
 import { PluginsSectionDescription } from './PluginsSectionDescription'
 import { getPluginsSectionPresentation } from '../../settings/plugins/plugins-search'
+import { ZotzOrcaPluginCatalogRow } from '../../zotz/ZotzOrcaPluginCatalogRow'
 import { SettingsSection } from '../../settings/section-layout/SettingsSection'
 import { usePluginLogs } from '../state/use-plugin-logs'
 import { usePluginMarketplaceLifecycle } from '../state/use-plugin-marketplace-lifecycle'
@@ -351,6 +352,7 @@ export function PluginsSettingsSection({
       }
     >
       {featureEnabled && page.openKey !== null ? null : <PluginsAlphaNotice />}
+      {featureEnabled && page.openKey === null ? <ZotzOrcaPluginCatalogRow /> : null}
       <PluginSettingsOverview
         featureEnabled={featureEnabled}
         settingsError={settingsError}

@@ -84,7 +84,7 @@ export function startCodexModelListDiscovery(stdin: Writable): CodexModelListDis
 
   const models = (async (): Promise<CommitMessageModel[] | null> => {
     await request('initialize', {
-      clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
+      clientInfo: { name: 'orca_desktop', title: 'Zotz', version: '0.0.0' }
     })
     write({ method: 'initialized' })
     const listing = await listCodexModelPages((params) => request('model/list', params))

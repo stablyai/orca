@@ -124,7 +124,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
     () =>
       buildZotzProjectSections({
         repos,
-        worktreesForRepo: worktreesByRepo,
+        worktreesByRepoId: worktreesByRepo,
         workspacesWithAgents: new Set([...statusByWorkspace.keys(), ...canceledWorkspaces])
       }),
     [repos, worktreesByRepo, statusByWorkspace, canceledWorkspaces]

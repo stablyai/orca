@@ -16,6 +16,7 @@ import { fillMonorepoReleaseImages } from './plugin-catalog-monorepo-images'
 import { readPluginGitCommit } from '../installation/plugin-git-repository'
 import { readPluginGitBatchBlobs, type PluginGitTreeEntry } from '../installation/plugin-git-tree'
 import type { PluginMarketplaceRegisteredSource } from './plugin-marketplace-store'
+import { assertZotzMarketplaceAllowed } from '../../zotz/zotz-plugin-catalog-guard'
 
 const MARKETPLACE_INDEX_MAX_BYTES = 16 * 1024 * 1024
 // Why its own cap: a catalog repository may hold far more than one plugin, and only its index is read.
@@ -34,6 +35,7 @@ export type PluginMarketplaceFetchResult = {
 export async function fetchPluginMarketplace(
   source: PluginMarketplaceRegisteredSource
 ): Promise<PluginMarketplaceFetchResult> {
+  assertZotzMarketplaceAllowed(source.source.url)
   const { commit, value } = await readPluginGitCommit(
     {
       url: source.source.url,

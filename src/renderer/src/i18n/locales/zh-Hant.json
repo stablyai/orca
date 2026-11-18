@@ -568,7 +568,6 @@
         "retainedTerminalPermissions": "如果新終端機仍使用先前的權限，請開啟「管理工作階段」並選擇「重新啟動常駐程式」。這會關閉本機終端機及其正在執行的命令。",
         "administratorRestartFailed": "Orca 無法重新啟動。請重試，或使用手動說明。",
         "manualAdministratorHelp": "手動說明",
-        "administratorDocumentation": "閱讀指南",
         "cancelAdministratorRestart": "取消",
         "closeAdministratorHelp": "關閉",
         "restartingAdministrator": "正在重新啟動…",
@@ -5209,7 +5208,6 @@
         "share": {
           "card": {
             "utils": {
-              "19f4b4dc75": "github.com/stablyai/orca",
               "d864fc5f98": "輸出",
               "5d66fdd7c2": "輸入",
               "7080aeaebb": "推理",
@@ -6187,10 +6185,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "重新啟動 Orca",
           "29c56f30ee": "檢查更新",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "變更日誌",
-          "cdc87f897e": "文件",
           "e565171a7c": "鍵盤快速鍵",
           "4cf5b868d7": "傳送回饋",
           "a428c25998": "設定",
@@ -6198,8 +6194,7 @@
           "4e8f5710d3": "無法重新啟動 Orca。",
           "5161eef55d": "正在重新啟動 Orca…",
           "f8a2c91d4e": "里程碑",
-          "b7e4d2a19c": "入門引導",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "入門引導"
         },
         "SidebarToolbar": {
           "87d0064026": "工作區看板已移到底部列",

@@ -1,4 +1,8 @@
 import { net } from 'electron'
+import {
+  isZotzCloudFeatureAllowed,
+  ZOTZ_CLOUD_DISABLED_MESSAGE
+} from '../../shared/zotz/zotz-network-policy'
 import { appendFeedbackImagesToFormData } from './feedback-image-attachments'
 import type {
   FeedbackImageAttachment,
@@ -38,6 +42,9 @@ export async function postFeedback(
   timeoutMs = FEEDBACK_REQUEST_TIMEOUT_MS,
   readResponse?: (response: Response) => Promise<void>
 ): Promise<Response> {
+  if (!isZotzCloudFeatureAllowed('feedback')) {
+    throw new Error(ZOTZ_CLOUD_DISABLED_MESSAGE)
+  }
   const controller = new AbortController()
   // Bound IPC even when the endpoint stays silent.
   const timeout = setTimeout(() => controller.abort(), timeoutMs)

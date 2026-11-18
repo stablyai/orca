@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import '../shared/zotz/zotz-env-aliases-install'
 import './runtime/app-launch/packaged-cli-interpreter'
 import {
   findCommandSpec,

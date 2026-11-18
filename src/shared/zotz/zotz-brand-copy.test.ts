@@ -24,6 +24,15 @@ describe('Zotz brand copy', () => {
     )
   })
 
+  it('keeps Orca inside paths and identifiers', () => {
+    expect(applyZotzBrandToCopy('Restart Orca after editing ~/Orca/config or C:\\Orca\\x.')).toBe(
+      'Restart Zotz after editing ~/Orca/config or C:\\Orca\\x.'
+    )
+    expect(applyZotzBrandToCopy('Paste this link in Orca: Settings → Remote Orca Servers.')).toBe(
+      'Paste this link in Zotz: Settings → Remote Zotz Servers.'
+    )
+  })
+
   it('renames the all-caps wordmark but keeps ORCA_* variable names', () => {
     expect(applyZotzBrandToCopy('ORCA')).toBe('ZOTZ')
     expect(applyZotzBrandToCopy('Restart Orca with ORCA_ALLOW_INSECURE_WEB_PAIRING=1.')).toBe(

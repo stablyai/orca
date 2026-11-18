@@ -14,6 +14,9 @@ const ORCA_WORD = /\b(?:Orca|ORCA)\b/g
 // The official Orca Mobile app keeps its name: Zotz pairs with it unchanged.
 const KEEPS_ORCA_AFTER = /^\s+[Mm]obile\b|^ app on this (?:device|phone)\b/
 const KEEPS_ORCA_BEFORE = /m[óo]vil(?:es)? (?:de|para) $/
+// CLI output carries paths and identifiers (C:\Orca\x, ~/Orca/x); renaming them would mislead.
+const PATH_SEGMENT_BEFORE = /[\\/~_-]$/
+const PATH_SEGMENT_AFTER = /^[\\/_-]/
 
 /** Rebrands visible copy without touching interpolated values, which are applied later. */
 export function applyZotzBrandToCopy(text: string): string {
@@ -26,6 +29,8 @@ export function applyZotzBrandToCopy(text: string): string {
     const keeps =
       KEEPS_ORCA_AFTER.test(after) ||
       KEEPS_ORCA_BEFORE.test(before) ||
+      PATH_SEGMENT_BEFORE.test(before) ||
+      PATH_SEGMENT_AFTER.test(after) ||
       (before.endsWith('app de ') && /^ en este (?:dispositivo|teléfono)/.test(after))
     return keeps ? match : match === 'ORCA' ? 'ZOTZ' : 'Zotz'
   })

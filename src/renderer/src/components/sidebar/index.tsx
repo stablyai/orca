@@ -26,6 +26,7 @@ import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
 import { WorktreeCardsUpdateNotice } from './WorktreeCardsUpdateNotice'
 import { isZotzConductorSidebar } from '../../../../shared/zotz/zotz-sidebar-layout'
+import { isZotzAutomatedLaunch } from '../zotz/zotz-machine-mode-wizard-event'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
@@ -183,7 +184,7 @@ function Sidebar({
           style={leftSidebarStyle}
           {...dropHandlers}
         >
-          {sidebarOpen && isZotzConductorSidebar(settings) ? (
+          {sidebarOpen && isZotzConductorSidebar(settings, isZotzAutomatedLaunch()) ? (
             <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
               <ZotzSidebarTopNav />
               <SeveredTerminalDaemonBanner />
@@ -199,7 +200,7 @@ function Sidebar({
               </div>
             </React.Suspense>
           ) : null}
-          {sidebarOpen && !isZotzConductorSidebar(settings) && (
+          {sidebarOpen && !isZotzConductorSidebar(settings, isZotzAutomatedLaunch()) && (
             <>
               <SidebarNav />
               <SidebarHeader

@@ -1,4 +1,5 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { isZotzCloudFeatureAllowed } from '../../../shared/zotz/zotz-network-policy'
 
 export type LandingStarState = 'loading' | 'starred' | 'not-starred' | 'web-fallback' | 'hidden'
 
@@ -7,9 +8,13 @@ export function useLandingOrcaStarState(): [
   LandingStarState,
   Dispatch<SetStateAction<LandingStarState>>
 ] {
-  const [state, setState] = useState<LandingStarState>('loading')
+  const starAllowed = isZotzCloudFeatureAllowed('github-star')
+  const [state, setState] = useState<LandingStarState>(starAllowed ? 'loading' : 'hidden')
 
   useEffect(() => {
+    if (!starAllowed) {
+      return
+    }
     let cancelled = false
     void window.api.gh.checkOrcaStarred().then((result) => {
       if (cancelled) {
@@ -24,7 +29,7 @@ export function useLandingOrcaStarState(): [
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [starAllowed])
 
   return [state, setState]
 }

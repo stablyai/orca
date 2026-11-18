@@ -51,6 +51,12 @@ function git(args: string[]): string {
 }
 
 // Prefer the explicit baseline override, then the newest stable desktop tag; missing baselines must fail rather than skip.
+// Zotz releases (five-digit patch, docs/zotz/UPDATES-SPEC.md §3) carry this tree's own test
+// fixtures; the wire baseline is the Orca release the fork is built on.
+function withoutZotzReleaseTags(tags: string[]): string[] {
+  return tags.filter((tag) => !/^v\d+\.\d+\.\d{5,}$/.test(tag))
+}
+
 export function resolveBaselineReleaseRef(): string {
   const override = process.env[BASELINE_REF_ENV]?.trim()
   if (override) {
@@ -58,7 +64,7 @@ export function resolveBaselineReleaseRef(): string {
   }
   let tags: string[]
   try {
-    tags = git(['tag', '--list', 'v[0-9]*']).split('\n').filter(Boolean)
+    tags = withoutZotzReleaseTags(git(['tag', '--list', 'v[0-9]*']).split('\n').filter(Boolean))
   } catch (error) {
     throw new Error(
       `Cross-version harness could not list git tags in ${REPO_ROOT}: ${String(error)}. ` +
@@ -78,7 +84,7 @@ export function resolveBaselineReleaseRef(): string {
 
 /** The newest `count` stable desktop releases, newest first: the ones a downgrade can reach. */
 export function resolveRecentStableReleaseRefs(count: number): string[] {
-  let tags = git(['tag', '--list', 'v[0-9]*']).split('\n').filter(Boolean)
+  let tags = withoutZotzReleaseTags(git(['tag', '--list', 'v[0-9]*']).split('\n').filter(Boolean))
   const recent: string[] = []
   while (recent.length < count) {
     const latest = selectLatestStableReleaseTag(tags)

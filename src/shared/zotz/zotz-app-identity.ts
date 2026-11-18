@@ -9,3 +9,4 @@ export const ZOTZ_PROTOCOL_SCHEME = 'zotz'
 // The in-app updater reads releases only from the fork (docs/zotz/UPDATES-SPEC.md).
 export const ZOTZ_RELEASE_REPO = 'HugoRodriguezDEV/zotz'
 export const ZOTZ_RELEASES_URL = `https://github.com/${ZOTZ_RELEASE_REPO}/releases`
+export const ZOTZ_NEW_ISSUE_URL = `https://github.com/${ZOTZ_RELEASE_REPO}/issues/new`

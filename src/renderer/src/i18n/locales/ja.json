@@ -86,7 +86,6 @@
       "windows": {
         "administratorApproval": "Windows が承認を求めます。普段お使いのアカウントを使用してください。",
         "administratorDialogScope": "これによりアプリ全体の権限が変更されます。SSH と WSL はそれぞれ独自の権限を保持します。",
-        "administratorDocumentation": "ガイドを読む",
         "administratorLabel": "管理者モード",
         "administratorPromptCancellation": "Windows のプロンプトをキャンセルすると、保持されているターミナルとともに Orca が再び開きます。SSH と WSL の権限はそれぞれのホストで管理されたままです。",
         "administratorRestartConsequences": "先に作業を保存してください。承認後、現在のローカルターミナルホスト上のターミナルと Agent が閉じられます。復元されたタブは新規管理者シェルを開きます。",
@@ -4719,7 +4718,6 @@
         "share": {
           "card": {
             "utils": {
-              "19f4b4dc75": "github.com/stablyai/orca",
               "d864fc5f98": "出力",
               "5d66fdd7c2": "入力",
               "7080aeaebb": "推論",
@@ -5667,10 +5665,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca を再起動",
           "29c56f30ee": "アップデートをチェックする",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "変更履歴",
-          "cdc87f897e": "ドキュメント",
           "e565171a7c": "キーボードショートカット",
           "4cf5b868d7": "フィードバックを送信する",
           "a428c25998": "設定",
@@ -5678,8 +5674,7 @@
           "4e8f5710d3": "Orca を再起動できませんでした。",
           "5161eef55d": "Orca を再起動しています…",
           "f8a2c91d4e": "マイルストーン",
-          "b7e4d2a19c": "オンボーディング",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "オンボーディング"
         },
         "SidebarToolbar": {
           "87d0064026": "ワークスペースボードは下部バーに移動しました",

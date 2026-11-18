@@ -63,7 +63,7 @@ export function buildInheritedLocalPtyEnvironment(
     ...mergeGitConfigEnvProtocol(inheritedEnv, explicitEnv),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
-    TERM_PROGRAM: 'Orca',
+    TERM_PROGRAM: 'Zotz',
     // TUIs gate features on version; plain-node/test launches lack the app version.
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
     // supports-hyperlinks rejects Orca by name despite xterm supporting OSC 8; force support.
