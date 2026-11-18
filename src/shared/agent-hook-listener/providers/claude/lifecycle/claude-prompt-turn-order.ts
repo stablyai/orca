@@ -53,11 +53,14 @@ function orderClaudeTurn(
 ): ClaudeTurnOrder | null {
   const passThrough = { eventName, opensTurn: false }
   // Child events share the lead's prompt_id but say nothing about the lead's turn order.
-  // Plugin-made tool calls can run after Stop and do not belong to the lead's turn order either.
+  // Plugin-made tool calls can run after Stop and do not belong to the lead's turn order either. A permission request
+  // always follows its call's PreToolUse, which already placed it; one without a tool_use_id may be a plugin call's.
   if (
     source !== 'claude' ||
     readFirstString(hookPayload, ['agent_id', 'agentId']) !== undefined ||
-    isClaudePluginToolCall(hookPayload)
+    isClaudePluginToolCall(hookPayload) ||
+    (eventName === 'PermissionRequest' &&
+      readFirstString(hookPayload, ['tool_use_id', 'toolUseId']) === undefined)
   ) {
     return passThrough
   }

@@ -134,6 +134,24 @@ describe('Claude prompt event arriving after its turn', () => {
     )
   })
 
+  it('never opens a lead turn for a plugin’s tool call or its permission request', () => {
+    const ls = { tool_name: 'Bash', tool_input: { command: 'ls' } }
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'hi' })
+    claude({ hook_event_name: 'Stop', prompt_id: FIRST })
+
+    expect(
+      event({
+        hook_event_name: 'PreToolUse',
+        prompt_id: SECOND,
+        tool_use_id: 'toolu_plugin_1',
+        ...ls
+      })?.opensTurn
+    ).toBeUndefined()
+    expect(
+      event({ hook_event_name: 'PermissionRequest', prompt_id: SECOND, ...ls })?.opensTurn
+    ).toBeUndefined()
+  })
+
   it('drops a prompt event from a conversation the pane already cleared', () => {
     claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'first' })
     claude({ hook_event_name: 'Stop', prompt_id: FIRST })
