@@ -21,6 +21,7 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
    *  never the pane's own process. */
   protected async releaseTmuxHostedCheckpoint(paneKey: string): Promise<void> {
     const read = this.readPaneTmuxHost
+    const probed = this.terminalPaneLifecycle?.readSavedRecord?.(paneKey)
     const identity = read && !this.getTmuxSelectedStatus(paneKey) && this.paneAgentIdentity(paneKey)
     if (
       !read ||
@@ -30,11 +31,12 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
       !identity.status.worktreeId ||
       !(await read({ paneKey, worktreeId: identity.status.worktreeId }).catch(() => false)) ||
       this.state.lastStatusByPaneKey.has(paneKey) ||
-      this.getTmuxSelectedStatus(paneKey)
+      this.getTmuxSelectedStatus(paneKey) ||
+      // A record saved during the probe is a newer conversation; it stays.
+      this.terminalPaneLifecycle?.readSavedRecord?.(paneKey) !== probed
     ) {
       return
     }
-    // The identity is the saved record as probed; a record saved during the probe stays.
     this.releaseSharedPaneConversation(paneKey, identity.status, identity.status.receivedAt)
   }
 

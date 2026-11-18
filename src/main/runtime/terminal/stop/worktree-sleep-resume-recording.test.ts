@@ -126,6 +126,10 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
           server.forgetAgentExit(PANE_KEY)
         }
       }
+      if (scenario === 'live' || scenario === 'working') {
+        // A running pane's saved live checkpoint is not proof it still owns that conversation.
+        expect(runtime.quitResumeRecordsFor(fixture.getSession())).toEqual([])
+      }
       try {
         await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
         const record = fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]

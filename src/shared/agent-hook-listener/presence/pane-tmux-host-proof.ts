@@ -1,3 +1,4 @@
+import { tokenizeCommandLine } from '../../agent-status/process/agent-command-line-entrypoint'
 import type { AgentProcessIdentity } from '../../agent-status/process/agent-process-presence'
 import {
   unreadableArgvName,
@@ -19,6 +20,32 @@ export type PaneTmuxHostReader = (request: {
   process?: AgentProcessIdentity
 }) => Promise<boolean>
 
+const TMUX_OPTIONS_WITH_VALUE = new Set(['-L', '-S', '-f', '-T'])
+const TMUX_ATTACHING_COMMANDS = new Set([
+  'attach',
+  'attach-session',
+  'a',
+  'at',
+  'new',
+  'new-session'
+])
+
+/** Only a client attached to a session shows that server's panes; `wait-for` or `-c` do not. */
+function isAttachingTmuxClient(row: ProcessTableRow): boolean {
+  if (!isTmuxServer(row)) {
+    return false
+  }
+  const args = tokenizeCommandLine(row.command).slice(1)
+  let index = 0
+  while (args[index]?.startsWith('-')) {
+    if (args[index] === '-c') {
+      return false
+    }
+    index += TMUX_OPTIONS_WITH_VALUE.has(args[index]) ? 2 : 1
+  }
+  return args[index] === undefined || TMUX_ATTACHING_COMMANDS.has(args[index])
+}
+
 export async function readPaneTmuxHost(
   io: Pick<HookPaneProcessIo, 'resolveRoot' | 'readProcesses' | 'readTerminal'>,
   request: Parameters<PaneTmuxHostReader>[0]
@@ -36,7 +63,7 @@ export async function readPaneTmuxHost(
     return false
   }
   const client = rows.find(
-    (row) => row.tty === rootRow.tty && row.pgid === rootRow.tpgid && isTmuxServer(row)
+    (row) => row.tty === rootRow.tty && row.pgid === rootRow.tpgid && isAttachingTmuxClient(row)
   )
   if (!client) {
     return false

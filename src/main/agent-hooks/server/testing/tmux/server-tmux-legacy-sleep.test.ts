@@ -227,6 +227,9 @@ it('proves a tmux-hosted pane only from a complete process picture', async () =>
   // An unreadable job might be the pane's own agent.
   runningPane(4050, CLIENT, [4080, 101, 4080, '(claude)', 'T'], ...TMUX)
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
+  // A foreground tmux command that attaches no session hosts nothing.
+  runningPane(4050, [4050, 101, 4050, 'tmux wait-for build-ready', 'S+'], ...TMUX)
+  await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
   // An agent whose ancestry cannot be read is not proven to live outside the pane.
   runningPane(4050, CLIENT, [4043, 4042, 4043, 'claude', 'S+', 'ttys011'])
   await expect(readPaneTmuxHost(io, agent)).resolves.toBe(false)
@@ -245,7 +248,8 @@ it('keeps a checkpoint saved while its tmux release was probing', async () => {
     updatedAt,
     origin: 'live'
   })
-  const replacement = record('replacement', NOW + 500)
+  // Saved after the probe began, with the same clock as the record it replaces.
+  const replacement = record('replacement', NOW)
   let saved: SleepingAgentSessionRecord | undefined = record('released', NOW)
   server.setHookRootEvidenceReader(
     (request) => readHookRootEvidence(request, io),

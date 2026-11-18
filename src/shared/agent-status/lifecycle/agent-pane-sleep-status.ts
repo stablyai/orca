@@ -5,13 +5,17 @@ import type { AgentStatusState } from '../contracts/agent-status-types'
 export function agentPaneSleepStatus<
   T extends { state: AgentStatusState; interrupted?: boolean; mainAgent?: AgentMainAgentStatus }
 >(status: T, at: number): T {
-  return status.state === 'done'
-    ? status
+  if (status.state === 'done') {
+    return status
+  }
+  // Only the main agent's own turn can be cancelled; a finished one keeps its verdict.
+  return status.mainAgent?.state === 'done'
+    ? { ...status, state: 'done' }
     : {
         ...status,
         state: 'done',
         interrupted: true,
-        ...(status.mainAgent && status.mainAgent.state !== 'done'
+        ...(status.mainAgent
           ? { mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: at } }
           : {})
       }
