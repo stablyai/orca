@@ -1,12 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../types'
 import { createUIStore } from './ui-slice-test-harness'
 
+const NOW = 1_800_000_000_000
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(NOW)
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('acknowledging agents', () => {
   it('keeps a recent stamp that covers every known turn; stamps a first or day-old acknowledgement', () => {
-    const now = Date.now()
-    const recent = now - 60_000
-    const dayOld = now - 25 * 60 * 60 * 1000
+    const recent = NOW - 60_000
+    const dayOld = NOW - 25 * 60 * 60 * 1000
     const store = createUIStore()
     store.setState({
       agentStatusByPaneKey: new Map(),
@@ -16,9 +25,10 @@ describe('acknowledging agents', () => {
 
     store.getState().acknowledgeAgents(['tab-1:leaf-1', 'tab-2:leaf-1', 'tab-3:leaf-1'])
 
-    const acknowledged = store.getState().acknowledgedAgentsByPaneKey
-    expect(acknowledged['tab-1:leaf-1']).toBe(recent)
-    expect(acknowledged['tab-2:leaf-1']).toBeGreaterThanOrEqual(now)
-    expect(acknowledged['tab-3:leaf-1']).toBeGreaterThanOrEqual(now)
+    expect(store.getState().acknowledgedAgentsByPaneKey).toEqual({
+      'tab-1:leaf-1': recent,
+      'tab-2:leaf-1': NOW,
+      'tab-3:leaf-1': NOW
+    })
   })
 })
