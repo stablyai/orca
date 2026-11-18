@@ -229,18 +229,13 @@ export async function removeArtifactCreateIntent(
   if (!(await intentExists(path))) {
     return
   }
-  let headKey: string | null
-  try {
-    headKey = await readIntentKey(path)
-  } catch {
-    // An I/O failure says nothing about whose intent this is; keep it, a replay dedupes.
-    return
-  }
   let matches = true
   try {
-    matches = (headKey ?? (await readIntent(path)).idempotencyKey) === expectedIdempotencyKey
+    const known = (await readIntentKey(path)) ?? (await readIntent(path)).idempotencyKey
+    matches = known === expectedIdempotencyKey
   } catch {
-    // Unreadable intents cannot be replayed and may be discarded after completion.
+    // Unreadable intents cannot be replayed and may be discarded after completion; only this
+    // single-instance app writes them, and its per-source queue orders create and removal.
   }
   if (matches) {
     await rm(path, { force: true })
