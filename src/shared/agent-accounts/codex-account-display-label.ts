@@ -41,10 +41,16 @@ export function getCodexAccountDisplayDetail(
 
 export function getCodexAccountDisplayLabel(
   account: CodexDisplayAccount,
-  accounts: readonly CodexDisplayAccount[]
+  accounts: readonly CodexDisplayAccount[],
+  format: 'parenthesized' | 'inline' = 'parenthesized'
 ): string {
   const detail = getCodexAccountDisplayDetail(account, accounts)
   const name = account.displayName?.trim()
+  if (format === 'inline') {
+    return [name && name !== account.email ? name : null, account.email, detail]
+      .filter(Boolean)
+      .join(' · ')
+  }
   if (name) {
     return `${name} (${detail ? `${account.email} · ${detail}` : account.email})`
   }
