@@ -20933,7 +20933,8 @@
           "line_one": "{{count}} 個のファイルの未保存の編集内容が破棄されます: {{files}}",
           "line_other": "{{count}} 個のファイルの未保存の編集内容が破棄されます: {{files}}"
         },
-        "ignoredFilesUnchecked": "無視されたファイルを完全には確認できませんでした"
+        "ignoredFilesUnchecked": "無視されたファイルを完全には確認できませんでした",
+        "ignoredFilesLost": "無視されたファイルが失われます: {{names}}"
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",
