@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { sortDirEntries } from '../../../../../../shared/file-name-sort'
+import { sortDirEntries } from '../../../../../../shared/file-listing/file-name-sort'
 import type { DirCache } from './file-explorer-types'
 import type { FileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {
@@ -7,7 +7,7 @@ import {
   readFileExplorerDirectory,
   type FileExplorerDirectoryListing
 } from './file-explorer-directory-listing'
-import { splitPathSegments } from '../../../../../../shared/cross-platform-path'
+import { splitPathSegments } from '../../../../../../shared/file-access/cross-platform-path'
 import { dirname } from '@/lib/path'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { describeFileExplorerReadError } from '../panel/file-explorer-read-error'

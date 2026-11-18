@@ -1,11 +1,11 @@
-import { SCHEMA_VERSION } from '../../shared/constants'
+import { SCHEMA_VERSION } from '../../shared/orca-profiles/constants'
 import {
   getLocalBuildCompatibilityError,
   type LocalBuildCompatibility
-} from '../../shared/local-build-compatibility'
-import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
-import { getDaemonProvider } from '../daemon/daemon-provider-state'
-import { getAllDaemonAdapters } from '../daemon/daemon-provider-routing'
+} from '../../shared/remote-runtime/orcad-distribution/local-build-compatibility'
+import { DegradedDaemonPtyProvider } from '../daemon/providers/routing/degraded-daemon-pty-provider'
+import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
+import { getAllDaemonAdapters } from '../daemon/providers/lifecycle/daemon-provider-routing'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
 

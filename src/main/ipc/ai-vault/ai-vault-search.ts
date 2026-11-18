@@ -24,8 +24,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseRoutableExecutionHostId,
   type ParsedExecutionHost
-} from '../../../shared/execution-host'
-import { redactStatusForTransport } from '../../../shared/ai-vault/search/ai-vault-search-transport'
+} from '../../../shared/execution-host/execution-host'
 import { clearSessionSearchInService } from '../../ai-vault/scan-service/session-scanner-service-spawn'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 import { getActiveRuntimeAiVaultHostInfosResult } from './ai-vault'
@@ -33,7 +32,7 @@ import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
 import {
   OPENS_EVERY_STRUCTURED_CHAT,
   searchWithStructuredOwners
-} from '../../ai-vault/structured-session-ownership'
+} from '../../ai-vault/structured-sessions/structured-session-ownership'
 
 export type RuntimeSessionSearchCall = (
   environmentId: string,
@@ -64,7 +63,7 @@ export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptio
     const request = AiVaultSearchRequestSchema.parse(raw)
     // Only the desktop fans out: a runtime or CLI caller would make it two hops.
     if (scopeSchema.parse(rawScope) === ALL_EXECUTION_HOSTS_SCOPE) {
-      return searchAllExecutionHosts(request, allExecutionHostLegs())
+      return searchAllExecutionHosts(request, await allExecutionHostLegs())
     }
     return searchByExecutionHostScope(request, requestedSearchScope(rawScope))
   })
@@ -150,12 +149,12 @@ async function searchLocalSessions(request: AiVaultSearchRequest): Promise<AiVau
 }
 
 /** One leg per list-visible host; broken enumeration loses only its own host class. */
-function allExecutionHostLegs(): SessionSearchHostLeg[] {
+async function allExecutionHostLegs(): Promise<SessionSearchHostLeg[]> {
   const localLeg: SessionSearchHostLeg = {
     executionHostId: LOCAL_EXECUTION_HOST_ID,
     search: searchLocalSessions
   }
-  const runtimeLegs = getActiveRuntimeAiVaultHostInfosResult().hostInfos.map((hostInfo) =>
+  const runtimeLegs = (await getActiveRuntimeAiVaultHostInfosResult()).hostInfos.map((hostInfo) =>
     remoteHostLeg({
       kind: 'runtime',
       id: hostInfo.executionHostId,
@@ -195,10 +194,7 @@ async function runtimeHostStatus(environmentId: string): Promise<AiVaultSearchSt
     return unavailableSessionSearchStatus()
   }
   try {
-    return redactStatusForTransport(
-      AiVaultSearchStatusSchema.parse(await call(environmentId, 'aiVault.searchStatus', {})),
-      'relay'
-    )
+    return AiVaultSearchStatusSchema.parse(await call(environmentId, 'aiVault.searchStatus', {}))
   } catch (error) {
     if (isUnknownSessionSearchMethod(error)) {
       throw new Error(HOST_TOO_OLD_MESSAGE)
@@ -214,9 +210,10 @@ function remoteSearchClient(
 ): ReturnType<typeof createSessionSearchClient> | null {
   if (host.kind === 'runtime' && call) {
     const { environmentId } = host
+    // This desktop is a trusted paired client: keep the resume fields its session list already has.
     return createSessionSearchClient(
       (method, params) => call(environmentId, method, params),
-      'relay'
+      'runtime'
     )
   }
   return null

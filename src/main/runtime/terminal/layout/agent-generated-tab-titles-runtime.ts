@@ -1,13 +1,13 @@
 import { OrcaRuntimeWithWorktreeSleepResumeRecording } from '../stop/worktree-sleep-resume-recording'
 import { AgentGeneratedTabTitles, type GeneratedTitleTarget } from './agent-generated-tab-titles'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { WindowLayoutCommand } from './runtime-layout-apply'
 
 export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntimeWithWorktreeSleepResumeRecording {
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
@@ -15,7 +15,7 @@ export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntime
   private readonly agentGeneratedTabTitles = new AgentGeneratedTabTitles({
     enabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,
     targetOf: (row) => this.generatedTitleTargetOf(row),
-    orchestrationByPaneKey: () => this.agentOrchestrationProjection.buildByPaneKey(),
+    orchestrationForPaneKey: (paneKey) => this.agentOrchestrationProjection.getForPaneKey(paneKey),
     apply: (command) => this.applyLayoutCommand(command)
   })
 

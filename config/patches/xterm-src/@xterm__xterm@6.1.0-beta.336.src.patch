@@ -79,6 +79,34 @@ index 873f7a55ecc2dd5f276ef09df79a652b7f41b990..193ab03c1d39c8ae535e972f816ecbab
      // Only support emoji IMEs when screen reader mode is disabled as the event must bubble up to
      // support reading out character input which can doubling up input characters
      // Based on these event traces: https://github.com/xtermjs/xterm.js/issues/3679
+diff --git a/src/browser/RenderDebouncer.ts b/src/browser/RenderDebouncer.ts
+index eeadbe01862f79c735cbfd1df8029e92ce2d2d24..af435957b0042d4577668c164228d6a12855a1ac 100644
+--- a/src/browser/RenderDebouncer.ts
++++ b/src/browser/RenderDebouncer.ts
+@@ -74,9 +74,20 @@ export class RenderDebouncer implements IRenderDebouncerWithCallback {
+   }
+ 
+   private _runRefreshCallbacks(): void {
+-    for (const callback of this._refreshCallbacks) {
+-      callback(0);
+-    }
++    // Callbacks queued while these run wait for the next frame, so a callback that re-queues
++    // itself can't keep this frame running forever
++    const callbacks = this._refreshCallbacks;
+     this._refreshCallbacks = [];
++    let next = 0;
++    try {
++      while (next < callbacks.length) {
++        callbacks[next++](0);
++      }
++    } finally {
++      // A throwing callback must not drop the ones after it
++      if (next < callbacks.length) {
++        this._refreshCallbacks = callbacks.slice(next).concat(this._refreshCallbacks);
++      }
++    }
+   }
+ }
 diff --git a/src/browser/Types.ts b/src/browser/Types.ts
 index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc07dc6b07f 100644
 --- a/src/browser/Types.ts
@@ -95,6 +123,76 @@ index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc0
  }
  
  export interface IBrowser {
+diff --git a/src/browser/Viewport.ts b/src/browser/Viewport.ts
+index 18c275ccbe583f48ccb5c5f66cd26d0bd8621e39..2dc0ef346d3ce07b3d0b5f03fd72c4f57d5d4b8c 100644
+--- a/src/browser/Viewport.ts
++++ b/src/browser/Viewport.ts
+@@ -14,6 +14,10 @@ import type { IScrollableElementChangeOptions } from './scrollable/scrollableEle
+ import { Emitter, EventUtils } from '../common/Event';
+ import { Scrollable, ScrollbarVisibility, type IScrollEvent } from './scrollable/scrollable';
+ 
++function hasMeasuredCellHeight(cellHeight: number): boolean {
++  return Number.isFinite(cellHeight) && cellHeight > 0;
++}
++
+ export class Viewport extends Disposable {
+ 
+   protected _onRequestScrollLines = this._register(new Emitter<number>());
+@@ -121,6 +125,11 @@ export class Viewport extends Disposable {
+   }
+ 
+   public scrollLines(disp: number): void {
++    // Without measured cells pixels can't express rows; move the buffer and let the next render sync
++    if (!hasMeasuredCellHeight(this._renderService.dimensions.css.cell.height)) {
++      this._onRequestScrollLines.fire(disp);
++      return;
++    }
+     const pos = this._scrollableElement.getScrollPosition();
+     this._scrollableElement.setScrollPosition({
+       reuseAnimation: true,
+@@ -129,6 +138,10 @@ export class Viewport extends Disposable {
+   }
+ 
+   public scrollToLine(line: number, disableSmoothScroll?: boolean): void {
++    if (!hasMeasuredCellHeight(this._renderService.dimensions.css.cell.height)) {
++      this._onRequestScrollLines.fire(line - this._bufferService.buffer.ydisp);
++      return;
++    }
+     if (disableSmoothScroll) {
+       this._latestYDisp = line;
+     }
+@@ -173,6 +186,14 @@ export class Viewport extends Disposable {
+     if (!this._renderService || this._isSyncing) {
+       return;
+     }
++    // A renderer without measured cells can't map rows to pixels; syncing now would read the
++    // scroll back as row 0/0 = NaN and poison ydisp, so wait for a render with real dimensions.
++    if (!hasMeasuredCellHeight(this._renderService.dimensions.css.cell.height)) {
++      // Forget the last synced row so the render-time sync rewrites the scrollbar for the current one
++      this._latestYDisp = undefined;
++      this._needsSyncOnRender = true;
++      return;
++    }
+     // Defer DOM scroll updates during synchronized output to prevent visible
+     // scroll position flickering while the canvas content is frozen.
+     if (this._coreService.decPrivateModes.synchronizedOutput) {
+@@ -208,8 +229,15 @@ export class Viewport extends Disposable {
+     if (this._isHandlingScroll || this._suppressOnScrollHandler) {
+       return;
+     }
++    const cellHeight = this._renderService.dimensions.css.cell.height;
++    if (!hasMeasuredCellHeight(cellHeight)) {
++      // The scrollbar moved without the buffer; put it back on the buffer's row at the next render
++      this._latestYDisp = undefined;
++      this._needsSyncOnRender = true;
++      return;
++    }
+     this._isHandlingScroll = true;
+-    const newRow = Math.round(e.scrollTop / this._renderService.dimensions.css.cell.height);
++    const newRow = Math.round(e.scrollTop / cellHeight);
+     const diff = newRow - this._bufferService.buffer.ydisp;
+     if (diff !== 0) {
+       this._latestYDisp = newRow;
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
 index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a1770c942abe 100644
 --- a/src/browser/input/CompositionHelper.ts
@@ -1308,6 +1406,85 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +    preedit.replaceChildren(...nodes);
    }
  }
+diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2522b89ae 100644
+--- a/src/browser/renderer/dom/DomRendererRowFactory.ts
++++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
+@@ -15,7 +15,7 @@ import { JoinedCellData } from '../../services/CharacterJoinerService';
+ import { treatGlyphAsBackgroundColor } from '../shared/RendererUtils';
+ import { AttributeData } from '../../../common/buffer/AttributeData';
+ import { WidthCache } from './WidthCache';
+-import { IColorContrastCache } from '../../Types';
++import { IColorContrastCache, ReadonlyColorSet } from '../../Types';
+ 
+ 
+ export const enum RowCss {
+@@ -34,6 +34,13 @@ export const enum RowCss {
+   CURSOR_STYLE_UNDERLINE_CLASS = 'xterm-cursor-underline'
+ }
+ 
++function isTranslucentDefaultBackground(colorMode: number, color: number, colors: ReadonlyColorSet): boolean {
++  if (colorMode === Attributes.CM_DEFAULT || (colors.background.rgba & 0xFF) === 0xFF) {
++    return false;
++  }
++  const rgb = colorMode === Attributes.CM_RGB ? color : colors.ansi[color].rgba >>> 8;
++  return rgb === colors.background.rgba >>> 8;
++}
+ 
+ export class DomRendererRowFactory {
+   private _workCell: CellData = new CellData();
+@@ -354,6 +361,13 @@ export class DomRendererRowFactory {
+         bgColorMode = temp2;
+       }
+ 
++      // Orca: a translucent terminal paints its backdrop once; an explicit background equal to the
++      // default background is that backdrop, not an opaque fill. The buffer keeps the original color.
++      if (!isInverse && this._optionsService.rawOptions.allowTransparency && isTranslucentDefaultBackground(bgColorMode, bg, colors)) {
++        bg = 0;
++        bgColorMode = Attributes.CM_DEFAULT;
++      }
++
+       // Apply any decoration foreground/background overrides, this must happen after inverse has
+       // been applied
+       let bgOverride: IColor | undefined;
+@@ -411,7 +425,7 @@ export class DomRendererRowFactory {
+           break;
+         case Attributes.CM_RGB:
+           resolvedBg = channels.toColor(bg >> 16, bg >> 8 & 0xFF, bg & 0xFF);
+-          this._addStyle(charElement, `background-color:#${(bg >>> 0).toString(16).padStart(6, '0')}`);
++          charElement.style.backgroundColor = `#${(bg >>> 0).toString(16).padStart(6, '0')}`;
+           break;
+         case Attributes.CM_DEFAULT:
+         default:
+@@ -448,7 +462,7 @@ export class DomRendererRowFactory {
+             (fg      ) & 0xFF
+           );
+           if (!this._applyMinimumContrast(charElement, resolvedBg, color, cell, bgOverride, fgOverride)) {
+-            this._addStyle(charElement, `color:#${fg.toString(16).padStart(6, '0')}`);
++            charElement.style.color = `#${fg.toString(16).padStart(6, '0')}`;
+           }
+           break;
+         case Attributes.CM_DEFAULT:
+@@ -513,7 +527,7 @@ export class DomRendererRowFactory {
+     }
+ 
+     if (adjustedColor) {
+-      this._addStyle(element, `color:${adjustedColor.css}`);
++      element.style.color = adjustedColor.css;
+       return true;
+     }
+ 
+@@ -527,10 +541,6 @@ export class DomRendererRowFactory {
+     return this._themeService.colors.contrastCache;
+   }
+ 
+-  private _addStyle(element: HTMLElement, style: string): void {
+-    element.setAttribute('style', `${element.getAttribute('style') || ''}${style};`);
+-  }
+-
+   private _isCellInSelection(x: number, y: number): boolean {
+     const start = this._selectionStart;
+     const end = this._selectionEnd;
 diff --git a/src/browser/renderer/dom/WidthCache.ts b/src/browser/renderer/dom/WidthCache.ts
 index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e35373864b822a4 100644
 --- a/src/browser/renderer/dom/WidthCache.ts
@@ -1493,3 +1670,18 @@ index b3ad14ee041fac933a7f90bf66fe7985eef4beed..a0a645c42b3c8a08a699b32a46def5ed
        this.lines.maxLength = newMaxLength;
      }
  
+diff --git a/src/common/services/BufferService.ts b/src/common/services/BufferService.ts
+index 3bd1f7e42df645b1a98af7feeb316784f06d754d..3ade1393a999fbea6794a511642c58e401fc962c 100644
+--- a/src/common/services/BufferService.ts
++++ b/src/common/services/BufferService.ts
+@@ -135,6 +135,10 @@ export class BufferService extends Disposable implements IBufferService {
+    * viewport originally.
+    */
+   public scrollLines(disp: number, suppressScrollEvent?: boolean): void {
++    // A NaN ydisp never compares equal to itself, so every later sync would scroll again forever
++    if (!Number.isFinite(disp)) {
++      return;
++    }
+     const buffer = this.buffer;
+     if (disp < 0) {
+       if (buffer.ydisp === 0) {

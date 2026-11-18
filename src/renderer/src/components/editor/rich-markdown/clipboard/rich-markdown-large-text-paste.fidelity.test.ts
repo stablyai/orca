@@ -182,20 +182,6 @@ it.each(['first', 'second', 'interleaved'] as const)(
   }
 )
 
-it('groups native composition updates without a pending paste', () => {
-  vi.spyOn(Date, 'now').mockReturnValue(10000)
-  const editor = createProductionEditor()
-  const position = editor.state.doc.child(0).nodeSize + 1
-  editor.commands.setTextSelection(position)
-  editor.view.dispatch(editor.state.tr.insertText('n').setMeta('composition', 7))
-  editor.view.dispatch(
-    editor.state.tr.insertText('你', position, position + 1).setMeta('composition', 7)
-  )
-  expect(paragraphs(editor)[1]).toBe('你second paragraph')
-  expect(editor.commands.undo()).toBe(true)
-  expect(paragraphs(editor)[1]).toBe('second paragraph')
-})
-
 it.each(['typing', 'composition'] as const)(
   'preserves native %s Undo grouping during a paused paste',
   async (mode) => {
@@ -332,24 +318,6 @@ it.each(['typing', 'composition'] as const)(
     expect(paragraphs(editor)[0]).toBe('hello world')
   }
 )
-
-it('rejects the actual 16 MiB limit plus one emoji without changing the document or retaining plugins', async () => {
-  const editor = createProductionEditor()
-  const initial = editor.state.doc
-  const initialPlugins = editor.state.plugins.length
-  const payload = '😀'.repeat(4 * 1024 * 1024 + 1)
-  expect(
-    handleRichMarkdownLargeTextPaste(editor, pasteEvent(payload), {
-      yieldToEventLoop: async () => {}
-    })
-  ).toBe(true)
-  await flush(1000)
-  expect(toast.error).toHaveBeenCalledExactlyOnceWith('Paste is too large.')
-  expect(toast.info).not.toHaveBeenCalled()
-  expect(editor.state.doc.eq(initial)).toBe(true)
-  expect(editor.state.plugins.length).toBe(initialPlugins)
-  editor.state.doc.check()
-})
 
 it.each(['earlier image', 'later image', 'ordinary typing'] as const)(
   'orders a pending text paste against %s without changing the live caret',

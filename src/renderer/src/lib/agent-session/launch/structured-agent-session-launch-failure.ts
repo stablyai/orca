@@ -10,9 +10,15 @@ import {
   readAgentSessionErrorRefusal,
   type AgentSessionWriteRefusal
 } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
-import { wslHostsAvailable } from '@/components/sidebar/use-wsl-hosts-enabled'
+import { wslHostsAvailable } from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
+import {
+  isWslHostChatOfferSettingUp,
+  readWslHostChatOffer,
+  wslHostChatOfferAction,
+  wslHostChatOfferText
+} from './structured-chat-wsl-host-offer'
 import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateSourceFailedError
@@ -24,6 +30,8 @@ export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
   causeText?: string
   /** The chat the refusal named as holding the conversation; null when it named none. */
   owner?: AgentSessionConversationOwner | null
+  /** The host's word for why it can't run the chat here (`wsl`, `remote`), when it gave one. */
+  hostReason?: string
 }
 
 /** A WSL distro added as a host runs chat itself, so point there once this desktop can add one. */
@@ -54,10 +62,32 @@ export function structuredChatUnavailableText(reason?: string): string {
           'components.native-chat.explicitChatSsh',
           'Chat is not available over SSH. Open the agent in a terminal instead.'
         )
-      : translate(
-          'components.native-chat.explicitChatUnavailable',
-          'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
-        )
+      : reason === 'windows'
+        ? translate(
+            'components.native-chat.explicitChatWindows',
+            "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
+          )
+        : translate(
+            'components.native-chat.explicitChatUnavailable',
+            'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
+          )
+}
+
+/** A toast's words for a declined chat, with the WSL host path for this workspace when it has one. */
+export function structuredChatUnavailableToast(
+  reason: string | undefined,
+  worktreeId: string | null | undefined
+): { description: string; action?: { label: string; onClick: () => void } } {
+  const offer = reason === 'wsl' ? readWslHostChatOffer(useAppStore.getState(), worktreeId) : null
+  if (!offer) {
+    return { description: structuredChatUnavailableText(reason) }
+  }
+  const { label, onClick } = wslHostChatOfferAction(
+    offer,
+    translate,
+    isWslHostChatOfferSettingUp(offer.distro)
+  )
+  return { description: wslHostChatOfferText(), action: { label, onClick } }
 }
 
 /** The host's refusal behind a failed launch; undefined when the failure carried none. */
@@ -73,7 +103,8 @@ export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure
     return {
       kind: 'refused',
       code: 'structured_agent_session_unsupported',
-      causeText: structuredChatUnavailableText(error.hostReason)
+      causeText: structuredChatUnavailableText(error.hostReason),
+      hostReason: error.hostReason
     }
   }
   const refusal = launchRefusal(error)

@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useAppStore } from '@/store/index'
-import { EMPTY_FORM, type EditingTarget } from '../../../settings/ssh/targets/ssh-target-draft'
+import { EMPTY_FORM, type EditingTarget } from '../../../ssh-host-form/ssh-target-draft'
 import {
   addRuntimeSshTarget,
   listRuntimeEditableSshTargets
-} from '@/runtime/runtime-ssh-target-management'
-import { refreshRuntimeEnvironmentSshTargetMetadata } from '@/runtime/runtime-environment-ssh-state'
+} from '@/runtime/hosts/ssh/runtime-ssh-target-management'
+import { refreshRuntimeEnvironmentSshTargetMetadata } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { saveNewSshHostFromForm } from './add-remote-host-ssh-actions'
 

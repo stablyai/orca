@@ -11,7 +11,7 @@ import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch/contr
 import type { RunningAgentLaunchPane } from '../../../agent-launch/agent-launch-pane-attachment'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { agentLaunchFailureCode } from '../../../runtime/rpc/methods/agent-launch-failure-code'
+import { agentLaunchFailureCode } from '../../../runtime/rpc/methods/agent-launch/agent-launch-failure-code'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export type PaneAgentLaunch = {
@@ -23,6 +23,7 @@ export type PaneAgentLaunch = {
   launchRuntime?: AgentLaunchRuntime
   /** After provider dispatch, a failure cannot prove that nothing ran. */
   dispatched: boolean
+  returnLaunchFailure?: boolean
   refuseIfClosed: () => void
 }
 
@@ -74,7 +75,7 @@ export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEn
           ...diagnosticFields(readTerminalStartFailure(end.error))
         }
   )
-  return new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
+  return launch.returnLaunchFailure ? toError(end.error) : new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
 }
 
 /** A pane closed during launch must stop any agent that may already have spawned. */

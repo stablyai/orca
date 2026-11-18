@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
-import { cn } from '@/lib/utils'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { cn } from '@/lib/class-names'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type WorktreeTitleRenameCommit = { kind: 'cancel' } | { kind: 'save'; displayName: string }
 
@@ -62,6 +63,7 @@ export function WorktreeTitleInlineRename({
   beginEditing = false,
   onBeginEditingConsumed
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
+  const t = useTranslate()
   const editingRef = useRef(false)
   const savingRef = useRef(false)
   const mountedRef = useRef(true)
@@ -275,7 +277,7 @@ export function WorktreeTitleInlineRename({
             style={{ font: 'inherit' }}
             disabled={saving}
             spellCheck={false}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c',
               'Rename workspace'
             )}
@@ -309,10 +311,7 @@ export function WorktreeTitleInlineRename({
           anchorRef={inputElementRef}
           open={emojiInput.open}
           commandValue={emojiInput.commandValue}
-          heading={translate(
-            'auto.components.new.workspace.SmartWorkspaceNameField.emoji',
-            'Emoji'
-          )}
+          heading={t('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
           suggestions={emojiInput.suggestions}
           onCommandValueChange={emojiInput.onCommandValueChange}
           onSelect={emojiInput.selectSuggestion}
@@ -347,7 +346,7 @@ export function WorktreeTitleInlineRename({
       {/* Why: visible text alone misses the unread state for assistive tech. */}
       {showUnreadEmphasis && (
         <span className="sr-only">
-          {translate('auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f', 'Unread:')}
+          {t('auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f', 'Unread:')}
         </span>
       )}
       {displayName}

@@ -1,13 +1,14 @@
-import { diffCommentOwnerKey } from '@/store/diff-comment-owner'
-import { useCallback } from 'react'
+import { diffCommentOwnerKey } from '@/store/slices/diff-comments/diff-comment-owner'
+import { cloneElement, isValidElement, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import {
   formatMarkdownReviewCardQuote,
   getMarkdownReviewCardQuote,
+  getMarkdownReviewHighlightedText,
   type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { DiffCommentCard } from '../../../diff-comments/DiffCommentCard'
 import {
   MarkdownPreviewAnnotationComposer,
@@ -73,13 +74,17 @@ export function useMarkdownPreviewAnnotationRenderers({
       const commentsForBlock = getMarkdownCommentsForRange(range)
 
       const handleSubmit = async (body: string): Promise<boolean> => {
+        const startLine = range.startLine === range.endLine ? undefined : range.startLine
+        const selectedText =
+          annotationQuote ??
+          getMarkdownReviewHighlightedText(content, { startLine, lineNumber: range.endLine })
         const result = await addDiffComment(commentOwner, {
           worktreeId: sourceWorktree.id,
           filePath: sourceRelativePath,
           source: 'markdown',
-          startLine: range.startLine === range.endLine ? undefined : range.startLine,
+          startLine,
           lineNumber: range.endLine,
-          ...(annotationQuote ? { selectedText: annotationQuote } : {}),
+          ...(selectedText ? { selectedText } : {}),
           body,
           side: 'modified'
         })
@@ -245,7 +250,14 @@ export function useMarkdownPreviewAnnotationRenderers({
         getMarkdownPreviewAnnotationQuote(rendered)
       )
       if (!controls) {
-        return rendered
+        // Without review controls there is no wrapper, so the block itself names its source lines;
+        // a component that doesn't forward them (a callout) falls back to path and text.
+        return isValidElement<Record<string, unknown>>(rendered)
+          ? cloneElement(rendered, {
+              'data-source-line': range.startLine,
+              'data-source-end-line': range.endLine
+            })
+          : rendered
       }
       const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
       return (
@@ -264,7 +276,20 @@ export function useMarkdownPreviewAnnotationRenderers({
     [getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick, renderAnnotationControls]
   )
 
-  return { renderAnnotationControls, wrapAnnotatedBlock }
+  return useMemo(
+    () => ({
+      renderAnnotationControls,
+      wrapAnnotatedBlock,
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick
+    }),
+    [
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick,
+      renderAnnotationControls,
+      wrapAnnotatedBlock
+    ]
+  )
 }
 
 export type MarkdownPreviewAnnotationRenderers = ReturnType<

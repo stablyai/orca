@@ -1,16 +1,21 @@
 import { ipcMain } from 'electron'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
+import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/metadata/display-name-provenance'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { notifyWorktreesChanged } from '../../worktree-remote'
-import { parseWorktreeId } from '../../worktree-logic'
+import {
+  isWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
+import { notifyWorktreesChanged } from '../worktree-remote'
+import { parseWorktreeId } from '../paths/worktree-logic'
 import {
   writeWorktreeSortOrder,
   type WorktreeSortOrderRequest
 } from '../../../persistence/worktree-sort-order-write'
-import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/branch-rename-failure-output'
+import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/first-work/branch-rename-failure-output'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import { isRemovedFolderWorkspaceInstance } from '../../../workspaces/catalog/folder-workspace-meta-presence'
 import { resolveWorktreeMetaOwner } from '../../../persistence/host-qualified-worktree-meta'
@@ -21,7 +26,7 @@ import {
   isWslMoveWorkspaceBlocked,
   shouldDropWslMoveProjectUpdate,
   wslMoveProjectRefForWorkspace
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime } = context
@@ -32,7 +37,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       args: {
         worktreeId: string
         executionHostId?: string
-        updates: Partial<WorktreeMeta>
+        updates: Partial<WorktreeMeta> & DiffCommentBaseMutation
       }
     ) => {
       const executionHostId =
@@ -85,26 +90,45 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
   )
 
   ipcMain.handle('worktrees:listLineage', async () => {
-    await runtime.hydrateInferredWorktreeLineage()
     return {
       lineage: store.getAllWorktreeLineage(),
-      workspaceLineage: store.getAllWorkspaceLineage()
+      workspaceLineage: store.getAllWorkspaceLineage(),
+      crossStoreLineage: store.getAllCrossStoreWorkspaceLineage(),
+      installationId: await runtime.readStoreInstallationId()
     }
   })
 
   ipcMain.handle(
     'worktrees:updateLineage',
-    async (_event, args: { worktreeId: string; parentWorktreeId?: string; noParent?: boolean }) => {
+    async (
+      _event,
+      args: {
+        worktreeId: string
+        parentWorktreeId?: string
+        noParent?: boolean
+        ifParentWorkspace?: string
+      }
+    ) => {
+      const condition =
+        typeof args.ifParentWorkspace === 'string'
+          ? { ifParentWorkspace: args.ifParentWorkspace }
+          : {}
       await runtime.updateManagedWorktreeMeta(args.worktreeId, {
         lineage:
           args.noParent === true
-            ? { noParent: true }
+            ? { noParent: true, ...condition }
             : args.parentWorktreeId
-              ? { parentWorktree: `id:${args.parentWorktreeId}` }
+              ? { parentWorktree: `id:${args.parentWorktreeId}`, ...condition }
               : undefined
       })
-      notifyWorktreesChanged(mainWindow, parseWorktreeId(args.worktreeId).repoId)
-      return store.getWorktreeLineage(args.worktreeId) ?? null
+      // A folder workspace has no repo; the runtime already announced its folder change.
+      if (!isWorkspaceKey(args.worktreeId)) {
+        notifyWorktreesChanged(mainWindow, parseWorktreeId(args.worktreeId).repoId)
+      }
+      return {
+        lineage: store.getWorktreeLineage(args.worktreeId) ?? null,
+        workspaceLineage: store.getWorkspaceLineage(worktreeWorkspaceKey(args.worktreeId)) ?? null
+      }
     }
   )
 

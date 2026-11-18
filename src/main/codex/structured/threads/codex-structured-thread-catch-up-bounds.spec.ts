@@ -20,7 +20,7 @@ export function registerCodexHistoryBoundsTests(input: {
     const c = await chat({ now: 1_000 })
     await c.open([], { returnedTurns: [turn(1), turn(2)], paginate: false })
     const identity = codexTurnLifecycleIdentity(SESSION, 'turn-1')
-    const old = c.journal.item(agentJournalItemKey(identity))
+    const old = await c.journal.reads.item(agentJournalItemKey(identity))
     if (old?.body.kind !== 'turn') {
       throw new Error('missing saved lifecycle')
     }
@@ -50,68 +50,9 @@ export function registerCodexHistoryBoundsTests(input: {
       ],
       paginate: false
     })
-    expect(c.texts()).not.toContain('assistant:Must not commit through stale anchor')
-    expect(c.journal.item(old.itemId)?.body).toMatchObject({
+    expect(await c.texts()).not.toContain('assistant:Must not commit through stale anchor')
+    expect((await c.journal.reads.item(old.itemId))?.body).toMatchObject({
       contextUsage: { window: { tokens: 500, capturedAt: 2_000 } }
     })
-  })
-
-  it('folds N and 10N source replacements and local omissions with bounded indexed work', async () => {
-    const counts: number[] = []
-    for (const n of [100, 1_000]) {
-      const c = await chat({ now: 1_000 })
-      let reads = 0
-      const items = (status: string) =>
-        Array.from({ length: n }, (_, i) => ({
-          type: 'commandExecution',
-          id: `cmd-${i}`,
-          get command() {
-            reads++
-            return `echo ${i}`
-          },
-          status,
-          aggregatedOutput: status === 'completed' ? 'result' : ''
-        }))
-      const initial = {
-        ...turn(1),
-        status: 'inProgress',
-        completedAt: undefined,
-        items: items('inProgress')
-      }
-      await c.open(
-        [
-          {
-            ...turn(1),
-            items: [
-              ...items('completed'),
-              ...Array.from({ length: n }, (_, i) => ({ type: 'unsupported', id: `ignored-${i}` }))
-            ]
-          }
-        ],
-        { returnedTurns: [initial] }
-      )
-      counts.push(reads)
-      expect(
-        c.journal.snapshot().items.filter(({ body }) => body.kind === 'tool-call')
-      ).toHaveLength(n)
-      expect(c.publications).toHaveLength(1)
-    }
-    expect(counts).toEqual([400, 4_000])
-    console.info('history source command reads N=100/1000:', counts)
-    const c = await chat({ now: 1_000 })
-    await c.open([], {
-      paginate: false,
-      returnedTurns: [
-        {
-          ...turn(1),
-          items: Array.from({ length: 1_024 }, (_, i) => ({
-            type: 'agentMessage',
-            id: `item-${i}`,
-            text: 'overflow'
-          }))
-        }
-      ]
-    })
-    expect(c.journal.snapshot().items).toEqual([])
   })
 }

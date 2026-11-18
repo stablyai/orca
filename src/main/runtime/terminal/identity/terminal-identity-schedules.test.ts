@@ -1,8 +1,9 @@
 import { expect, it } from 'vitest'
 import { identityFixture, identityGraph, LEAF, PANE } from '../query/terminal-identity.test-fixture'
-import { TEST_WORKTREE_ID } from '../../orca-runtime-test-fixtures.spec'
+import { TEST_WORKTREE_ID } from '../../construction/test-context/orca-runtime-test-fixtures.spec'
+import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
-it('retains pane-issued process identity across reload with exact first-match and SSH precedence in either context', () => {
+it('retains pane-issued process identity across reload with exact first-match and SSH precedence in either context', async () => {
   for (const captured of [false, true]) {
     const f = identityFixture()
     f.runtime.registerPty('retained-process', TEST_WORKTREE_ID, null, {
@@ -11,7 +12,7 @@ it('retains pane-issued process identity across reload with exact first-match an
       incarnationId: 'original'
     })
     f.runtime.attachWindow(1)
-    f.runtime.syncWindowGraph(1, identityGraph('retained-process'))
+    await f.runtime.syncWindowGraph(1, identityGraph('retained-process'))
     const handle = f.runtime.getTerminalHandleForPaneKey(PANE)!
     expect(handle).toMatch(/^term_/)
     expect(f.owner.handleByPtyId.has('retained-process')).toBe(false)
@@ -81,5 +82,62 @@ it('retains pane-issued process identity across reload with exact first-match an
         f.runtime.markRendererReloadCancelled(1, fence)
       }
     }
+  }
+})
+
+it('keeps the displayed leaf worker ahead of retained PTYs after a dispatch refresh', async () => {
+  const f = identityFixture()
+  const db = new OrchestrationDb(':memory:')
+  try {
+    f.add('retained', 'old-worker', PANE, false)
+    f.stamp('old-worker', 'retained')
+    f.runtime.registerPty('current', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-original',
+      leafId: LEAF,
+      incarnationId: 'current'
+    })
+    f.runtime.attachWindow(1)
+    await f.runtime.syncWindowGraph(1, identityGraph('current'))
+    const current = f.runtime.getTerminalHandleForPaneKey(PANE)!
+    const run = db.createRun({
+      objective: 'Displayed worker',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null
+    })
+    const retained = db.createDispatchContext({
+      taskId: db.createTask({ runId: run.id, spec: 'Old worker' }).id,
+      assigneeHandle: 'old-worker',
+      assigneePaneKey: 'tab-retained:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      creator: { kind: 'system' },
+      maxDepth: 99
+    })
+    const displayed = db.createDispatchContext({
+      taskId: db.createTask({ runId: run.id, spec: 'Current worker' }).id,
+      assigneeHandle: current,
+      assigneePaneKey: PANE,
+      creator: { kind: 'system' },
+      maxDepth: 99
+    })
+    db.db
+      .prepare('UPDATE dispatch_contexts SET assignee_pane_key = ? WHERE id = ?')
+      .run(PANE, retained.id)
+    f.runtime.setOrchestrationDb(db)
+    expect(
+      (await f.runtime.syncWindowGraph(1, identityGraph('current'))).agentOrchestrationByPaneKey?.[
+        PANE
+      ]?.dispatchId
+    ).toBe(displayed.id)
+    f.owner.source.setPtyConnected(f.owner.ptysById.get('current')!, false)
+    db.db.prepare('UPDATE dispatch_contexts SET failure_count = 1 WHERE id = ?').run(retained.id)
+    expect(
+      (await f.runtime.syncWindowGraph(1, identityGraph('current'))).agentOrchestrationByPaneKey?.[
+        PANE
+      ]?.dispatchId
+    ).toBe(displayed.id)
+    expect(f.runtime.getAgentStatusOrchestrationContextForPaneKey(PANE)?.dispatchId).toBe(
+      displayed.id
+    )
+  } finally {
+    db.close()
   }
 })

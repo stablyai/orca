@@ -7,21 +7,31 @@ import type {
   AgentJournalTurnLifecycleState
 } from '../journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
+import {
+  readAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../failures/agent-session-failure'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
+import { connectorMessageShownBlocks } from '../../connector-asker-prompt'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../lifecycle/agent-session-turn-record'
+} from '../lifecycle/records/agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
-import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/visuals/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
+  commandTurnsOf,
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandRow,
-  structuredAgentSessionCommandTurnItemIds
-} from '../structured-agent-session-command-entry'
+  type AgentJournalBodyLookup
+} from './structured-agent-session-command-entry'
 import type { NativeChatBlock } from '../../native-chat/native-chat-types'
+import { assistantProse } from './structured-agent-session-assistant-prose'
+import { tookOverPrompt } from '../../native-chat/took-over-notice'
+import { BOT_CREATED_STATUS_LABEL } from '../../bot-created-kickoff'
+import { isQuietBotResult } from '../../bot-quiet-result'
 
 export type StructuredAgentSessionLatestRequest = {
   kind: 'turn' | 'refused-send'
@@ -52,57 +62,73 @@ export function isStructuredAgentSessionNonRequestRow(
 /** Skip accepted/unanswered sends and nonfailures (withdrawal/restart/close); null when no request has a verdict. */
 export function latestStructuredAgentSessionRequest(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmission[],
+  /** With an indexed body read, only the turns this scan reaches are checked, not all history. */
+  bodyOf?: AgentJournalBodyLookup
 ): StructuredAgentSessionLatestRequest | null {
   const rejected = rejectedSubmissionsByItem(submissions)
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  const commandTurns = commandTurnsOf(items, bodyOf)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
-    // Commands retain the last real request’s verdict.
-    if (
-      !item ||
-      !isRootAgentJournalItem(item) ||
-      isStructuredAgentSessionNonRequestRow(item, commandTurns)
-    ) {
-      continue
-    }
-    if (
-      item.body.kind === 'message' &&
-      item.body.role === 'user' &&
-      item.turnScope?.kind === 'unknown'
-    ) {
-      return null
-    }
-    const turn = readAgentJournalTurn(item.body)
-    if (turn) {
-      return {
-        kind: 'turn',
-        id: turn.turnId,
-        turnState: turn.state,
-        outcome: readAgentJournalTurnOutcome(turn),
-        settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn),
-        ...(turn.userItemId === item.itemId && !steeredInto(submissions, item.itemId)
-          ? { selfStarted: true as const }
-          : {})
-      }
-    }
-    const submission = rejected.get(item.itemId)
-    // Rejection relocates a refused steer to the thread, but its turn remains the request.
-    if (
-      submission &&
-      submission.answeredInTurn?.via !== 'steer' &&
-      classifyDispatchRejection(submission).verdict === 'failure'
-    ) {
-      return {
-        kind: 'refused-send',
-        id: item.itemId,
-        turnState: null,
-        outcome: 'failure',
-        settledAt: submission.resolvedAt ?? submission.submittedAt
-      }
+    const request =
+      item &&
+      structuredAgentSessionRequestFromItem(
+        item,
+        rejected.get(item.itemId),
+        (turnItemId) => steeredInto(submissions, turnItemId),
+        commandTurns
+      )
+    if (request !== undefined) {
+      return request
     }
   }
   return null
+}
+
+/** Undefined skips a candidate; null is the unknown-user barrier that clears the verdict. */
+export function structuredAgentSessionRequestFromItem(
+  item: AgentJournalRenderItem,
+  rejected: AgentJournalSubmission | undefined,
+  steered: (turnItemId: string) => boolean,
+  commandTurns: Pick<ReadonlySet<string>, 'has'>
+): StructuredAgentSessionLatestRequest | null | undefined {
+  if (!isRootAgentJournalItem(item) || isStructuredAgentSessionNonRequestRow(item, commandTurns)) {
+    return undefined
+  }
+  if (
+    item.body.kind === 'message' &&
+    item.body.role === 'user' &&
+    item.turnScope?.kind === 'unknown'
+  ) {
+    return null
+  }
+  const turn = readAgentJournalTurn(item.body)
+  if (turn) {
+    return {
+      kind: 'turn',
+      id: turn.turnId,
+      turnState: turn.state,
+      outcome: readAgentJournalTurnOutcome(turn),
+      settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn),
+      ...(turn.userItemId === item.itemId && !steered(item.itemId)
+        ? { selfStarted: true as const }
+        : {})
+    }
+  }
+  if (
+    rejected?.dispatchState === 'rejected' &&
+    rejected.answeredInTurn?.via !== 'steer' &&
+    classifyDispatchRejection(rejected).verdict === 'failure'
+  ) {
+    return {
+      kind: 'refused-send',
+      id: item.itemId,
+      turnState: null,
+      outcome: 'failure',
+      settledAt: rejected.resolvedAt ?? rejected.submittedAt
+    }
+  }
+  return undefined
 }
 
 /** A user message steered into a turn the agent started makes it the user's turn too. */
@@ -168,7 +194,13 @@ export function latestStructuredAgentSessionPrompt(
   items: readonly AgentJournalRenderItem[]
 ): string {
   const body = latestStructuredAgentSessionUserItem(items)?.body
-  return body?.kind === 'message' ? messageProse(body.blocks) : ''
+  if (body?.kind !== 'message') {
+    return ''
+  }
+  // Orca's kickoff to a new bot is not the owner's words; a hand-over's goal is.
+  return body.origin === 'bot-created'
+    ? BOT_CREATED_STATUS_LABEL
+    : (tookOverPrompt(body) ?? messageProse(connectorMessageShownBlocks(body)))
 }
 
 export function latestStructuredAgentSessionUserItem(
@@ -188,11 +220,60 @@ export function latestStructuredAgentSessionUserItem(
   return null
 }
 
+/** Why the latest request failed, typed: its refused send's rejection, or its turn's failure row. */
+export function latestStructuredAgentSessionFailure(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[]
+): AgentSessionFailureFact | undefined {
+  const request = latestStructuredAgentSessionRequest(items, submissions)
+  if (request?.kind === 'refused-send') {
+    const submission = submissions.find(
+      (entry) =>
+        entry.dispatchState === 'rejected' &&
+        agentJournalSubmissionKey(entry.clientMessageId) === request.id
+    )
+    return readAgentSessionFailureFact(submission?.rejection)
+  }
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    const body = item?.body
+    if (!item || !isRootAgentJournalItem(item)) {
+      continue
+    }
+    if (body?.kind === 'message' && body.role === 'user') {
+      return undefined
+    }
+    // A retry in progress is not why the turn ended.
+    if (body?.kind === 'status' && body.failure && body.failure.kind !== 'providerRetrying') {
+      return readAgentSessionFailureFact(body.failure)
+    }
+  }
+  return undefined
+}
+
+/** Newest root-agent prose written inside one turn; empty when it wrote none, never an earlier turn's. */
+export function structuredAgentSessionTurnAssistantMessage(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string
+): string {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (item?.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turnItemId) {
+      const prose = rootAssistantProse(item)
+      if (prose.trim()) {
+        return prose
+      }
+    }
+  }
+  return ''
+}
+
 /** Newest root-agent prose in the latest user turn; skip child/tool-only output and clear at the user boundary. */
 export function latestStructuredAgentSessionAssistantMessage(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  bodyOf?: AgentJournalBodyLookup
 ): string {
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  const commandTurns = commandTurnsOf(items, bodyOf)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body
@@ -202,13 +283,44 @@ export function latestStructuredAgentSessionAssistantMessage(
     if (body?.kind === 'message' && body.role === 'user') {
       return ''
     }
-    if (body?.kind === 'message' && body.role === 'assistant') {
-      // Visual directives belong only in the transcript, not plain-text previews.
-      const prose = withoutNativeChatVisualDirectiveLines(messageProse(body.blocks))
-      if (prose.trim()) {
-        return prose
-      }
+    const prose = rootAssistantProse(item)
+    if (prose.trim()) {
+      return prose
     }
   }
   return ''
+}
+
+/** What a preview shows: the latest answer, or after a bot's quiet one, its newest answer that said something. */
+export function latestStructuredAgentSessionReportedMessage(
+  items: readonly AgentJournalRenderItem[],
+  bodyOf: AgentJournalBodyLookup | undefined,
+  /** Only a bot's quiet marker is no answer; any other agent's is its words. */
+  botSession: boolean
+): string {
+  const latest = latestStructuredAgentSessionAssistantMessage(items, bodyOf)
+  if (!botSession || !isQuietBotResult(latest)) {
+    return latest
+  }
+  const commandTurns = commandTurnsOf(items, bodyOf)
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (!item || isStructuredAgentSessionCommandRow(item, commandTurns)) {
+      continue
+    }
+    const prose = rootAssistantProse(item)
+    if (prose.trim() && !isQuietBotResult(prose)) {
+      return prose
+    }
+  }
+  return ''
+}
+
+/** A root agent message's prose, without visual directives, which belong only in the transcript;
+ *  empty for any other row. */
+function rootAssistantProse(item: AgentJournalRenderItem): string {
+  const { body } = item
+  return isRootAgentJournalItem(item) && body.kind === 'message' && body.role === 'assistant'
+    ? withoutNativeChatVisualDirectiveLines(assistantProse(body.blocks))
+    : ''
 }

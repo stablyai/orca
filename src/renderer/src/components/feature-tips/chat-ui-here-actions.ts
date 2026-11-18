@@ -1,17 +1,24 @@
 import { toast } from 'sonner'
-import type { AgentDefaultSurface } from '../../../../shared/native-chat/native-chat-appearance-settings'
-import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
+import type { AgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-providers'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents/agents-search'
+import { CHAT_LAUNCH_DEFAULT_SECTION_ID } from '../settings/chat/chat-launch-search'
+import { showKeptSurfaceNotice } from '../settings/agents/surfaces/kept-surface-notice'
 import {
   trackAgentDefaultSurfaceChanged,
   trackChatUiFeatureTipAction
 } from './feature-tip-telemetry'
 
+const KEPT_SURFACE_NOTICE_ID = 'feature-tip-kept-surface'
+
+/** `saved` leaves confirmation to the caller; `reported` means a notice named the agents kept on their own surface, or a later change superseded this one. */
+export type FeatureTipSurfaceResult = 'failed' | 'saved' | 'reported'
+
 export async function setAgentDefaultSurfaceFromFeatureTip(
-  surface: AgentDefaultSurface
-): Promise<boolean> {
+  surface: AgentDefaultSurface,
+  { confirmWithToast = true }: { confirmWithToast?: boolean } = {}
+): Promise<FeatureTipSurfaceResult> {
   const { settings, updateSettingsOrThrow } = useAppStore.getState()
   const fromSurface = normalizeAgentDefaultSurface(settings?.agentDefaultSurface)
   try {
@@ -27,30 +34,48 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
       source: 'launch_card',
       launch_tip_shown: true
     })
-    return true
+    const latest = useAppStore.getState().settings
+    // A later write superseded this one, so there is nothing to confirm.
+    if (!latest || normalizeAgentDefaultSurface(latest.agentDefaultSurface) !== surface) {
+      return 'reported'
+    }
+    // Agents set for themselves still open on the other surface; name them instead of the generic confirmation.
+    if (
+      showKeptSurfaceNotice({
+        id: KEPT_SURFACE_NOTICE_ID,
+        surface,
+        writer: { fallbackSettings: latest, updateSettings: updateSettingsOrThrow }
+      })
+    ) {
+      return 'reported'
+    }
+    if (surface === 'chat' && confirmWithToast) {
+      toast.success(
+        translate(
+          'featureTips.chatUiHere.switched',
+          'Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.'
+        )
+      )
+    }
+    return 'saved'
   } catch {
     toast.error(
       surface === 'chat'
         ? translate(
             'featureTips.chatUiHere.saveFailed',
-            'Could not turn on Chat UI. Choose Chat in Settings → Agents.'
+            'Could not turn on Chat UI. Turn it on in Settings → Chat UI.'
           )
         : translate(
             'featureTips.chatUiHere.terminalSaveFailed',
-            'Could not switch to terminal. Choose Terminal in Settings → Agents.'
+            'Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.'
           )
     )
-    return false
+    return 'failed'
   }
 }
 
 export function openChatUiFeatureTipSettings(): void {
   const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
-  openSettingsTarget({
-    pane: 'agents',
-    repoId: null,
-    hostScope: { kind: 'local' },
-    sectionId: AGENT_DEFAULT_SURFACE_SECTION_ID
-  })
+  openSettingsTarget({ pane: 'chat', repoId: null, sectionId: CHAT_LAUNCH_DEFAULT_SECTION_ID })
   openSettingsPage()
 }

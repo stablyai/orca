@@ -68,6 +68,8 @@
 .pane-divider::after {
   content: '';
   position: absolute;
+  /* The line extends into perpendicular dividers for the visual join; the parent divider owns those hits. */
+  pointer-events: none;
   border-radius: 1px;
   background: var(--orca-terminal-divider-color, transparent);
   transition: background 100ms ease;
@@ -147,7 +149,7 @@
   opacity: 0.4 !important;
 }
 
-.pane.pane-focus-rim-flash::before {
+.pane-focus-rim-flash::before {
   content: '';
   position: absolute;
   inset: 1px;
@@ -193,7 +195,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pane.pane-focus-rim-flash::before {
+  .pane-focus-rim-flash::before {
     animation: none;
   }
 }

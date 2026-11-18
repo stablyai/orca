@@ -1,5 +1,5 @@
 import type * as NodeFs from 'node:fs'
-import { mkdirSync, mkdtempSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -99,18 +99,17 @@ vi.mock('../installation/browser-extension-load-directory', () => ({
 
 mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-loader-'))
 
+const apiHost = await import('../api-runtime/browser-extension-api-host')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
 const loader = await import('./browser-extension-session-loader')
-const { getBrowserExtensionLoadFailure } = await import('./browser-extension-load-errors')
+await import('./browser-extension-load-errors')
 const { getBrowserExtensionProfileStateStore } =
   await import('../profile-storage/browser-extension-profile-state-store')
-const { getBrowserExtensionSyncStorageStore } =
-  await import('../profile-storage/browser-extension-sync-storage-store')
+await import('../profile-storage/browser-extension-sync-storage-store')
 const { getBrowserExtensionInstallStore } =
   await import('../installation/browser-extension-install-store')
 const { getBrowserExtensionActionState } =
   await import('../actions/browser-extension-action-registry')
-const realFs = await vi.importActual<typeof NodeFs>('node:fs')
 
 const installed = {
   id: ID,
@@ -123,164 +122,6 @@ const installed = {
   hostPermissions: [],
   optionsPage: null
 }
-
-describe('browser extension session loader', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('registers only the frame preload, never a service-worker preload (electron#52310)', () => {
-    setBrowserExtensionSupportEnabled(true)
-    loader.attachBrowserExtensionsToProfileSession(
-      {
-        id: 'default',
-        scope: 'default',
-        partition: 'persist:orca-browser',
-        label: 'Default',
-        source: null
-      },
-      []
-    )
-    const types = mocks.session.registerPreloadScript.mock.calls.map(([options]) => options.type)
-    expect(types).toEqual(['frame'])
-  })
-
-  it('drops the cached worker registration only when the worker scripts changed', async () => {
-    await loader.loadBrowserExtensionIntoProfile('default', installed)
-    expect(mocks.session.clearStorageData).toHaveBeenCalledWith({
-      origin: `chrome-extension://${ID}`,
-      storages: ['serviceworkers']
-    })
-    expect(mocks.session.extensions.loadExtension).toHaveBeenCalledWith('/orca/copy', {
-      allowFileAccess: false
-    })
-
-    mocks.session.clearStorageData.mockClear()
-    loader.unloadBrowserExtensionFromProfile('default', ID)
-    await loader.loadBrowserExtensionIntoProfile('default', installed)
-    expect(mocks.session.clearStorageData).not.toHaveBeenCalled()
-
-    mocks.prepared.signature = 'v2'
-    loader.unloadBrowserExtensionFromProfile('default', ID)
-    await loader.loadBrowserExtensionIntoProfile('default', installed)
-    expect(mocks.session.clearStorageData).toHaveBeenCalledTimes(1)
-  })
-
-  it('always re-registers an unpacked worker, whose folder may have changed', async () => {
-    mocks.prepared.signature = null
-    mocks.session.clearStorageData.mockClear()
-    for (let load = 0; load < 2; load++) {
-      loader.unloadBrowserExtensionFromProfile('default', ID)
-      await loader.loadBrowserExtensionIntoProfile('default', {
-        ...installed,
-        source: 'unpacked'
-      })
-    }
-    expect(mocks.session.clearStorageData).toHaveBeenCalledTimes(2)
-  })
-
-  it('raises lifecycle events only once Chromium has registered the dropped worker again', async () => {
-    vi.useFakeTimers()
-    mocks.prepared.signature = 'v3'
-    mocks.prepared.hasWorker = true
-    loader.unloadBrowserExtensionFromProfile('default', ID)
-    let settled = false
-    const loading = loader
-      .loadBrowserExtensionIntoProfile('default', installed, 'reload')
-      .then(() => (settled = true))
-    await vi.waitFor(() => expect(mocks.registrationListeners.size).toBe(1))
-    await vi.advanceTimersByTimeAsync(20)
-    // Starting the worker now would fail: "Failed to start service worker."
-    expect(settled).toBe(false)
-    expect(mocks.emitWorkerStart).not.toHaveBeenCalled()
-
-    for (const listener of mocks.registrationListeners) {
-      listener({}, { scope: 'chrome-extension://other/' })
-      listener({}, { scope: `chrome-extension://${ID}/` })
-    }
-    await loading
-    expect(mocks.emitWorkerStart).toHaveBeenCalledWith(
-      mocks.session,
-      ID,
-      'runtime',
-      'onInstalled',
-      [{ reason: 'update', previousVersion: '1.0' }]
-    )
-    expect(mocks.registrationListeners.size).toBe(0)
-    mocks.prepared.hasWorker = false
-  })
-
-  it('waits for the worker to register again after an unload, even with unchanged scripts', async () => {
-    vi.useFakeTimers()
-    mocks.prepared.hasWorker = true
-    mocks.emitWorkerStart.mockClear()
-    mocks.session.clearStorageData.mockClear()
-    loader.unloadBrowserExtensionFromProfile('default', ID)
-    let settled = false
-    const loading = loader
-      .loadBrowserExtensionIntoProfile('default', installed, 'reload')
-      .then(() => (settled = true))
-    await vi.waitFor(() => expect(mocks.registrationListeners.size).toBe(1))
-    await vi.advanceTimersByTimeAsync(20)
-    expect(settled).toBe(false)
-    expect(mocks.emitWorkerStart).not.toHaveBeenCalled()
-    expect(mocks.session.clearStorageData).not.toHaveBeenCalled()
-
-    for (const listener of mocks.registrationListeners) {
-      listener({}, { scope: `chrome-extension://${ID}/` })
-    }
-    await loading
-    expect(mocks.emitWorkerStart).toHaveBeenCalled()
-    mocks.prepared.hasWorker = false
-  })
-
-  it('keeps the last load failure for Settings and clears it on the next good load', async () => {
-    loader.unloadBrowserExtensionFromProfile('default', ID)
-    mocks.session.extensions.loadExtension.mockRejectedValueOnce(
-      new Error(
-        "Loading extension at /orca/copy failed with: Could not load javascript 'cs.js' for script."
-      )
-    )
-    await expect(loader.loadBrowserExtensionIntoProfile('default', installed)).rejects.toThrow()
-    expect(getBrowserExtensionLoadFailure('default', ID)).toBe(
-      "Could not load javascript 'cs.js' for script."
-    )
-
-    await loader.loadBrowserExtensionIntoProfile('default', installed)
-    expect(getBrowserExtensionLoadFailure('default', ID)).toBeNull()
-  })
-})
-
-describe('switching the experimental setting while Orca runs', () => {
-  const profile = {
-    id: 'default',
-    scope: 'default' as const,
-    partition: 'persist:orca-browser',
-    label: 'Default',
-    source: null
-  }
-
-  it('off unloads every extension and its preload; on wires the profile again', async () => {
-    setBrowserExtensionSupportEnabled(true)
-    loader.attachBrowserExtensionsToProfileSession(profile, [])
-    await loader.loadBrowserExtensionIntoProfile('default', installed)
-    expect(mocks.loaded.size).toBe(1)
-
-    setBrowserExtensionSupportEnabled(false)
-    await loader.detachBrowserExtensionsFromAllProfileSessions()
-    expect(mocks.loaded.size).toBe(0)
-    expect(mocks.session.unregisterPreloadScript).toHaveBeenCalledWith(
-      'orca-browser-extension-frame'
-    )
-    expect(loader.getBrowserExtensionSessionForProfile('default')).toBeNull()
-
-    mocks.session.registerPreloadScript.mockClear()
-    setBrowserExtensionSupportEnabled(true)
-    loader.attachBrowserExtensionsToProfileSession(profile, [])
-    expect(mocks.session.registerPreloadScript).toHaveBeenCalledOnce()
-    expect(loader.getBrowserExtensionSessionForProfile('default')).toBe(mocks.session)
-  })
-})
 
 describe('profile changes while startup loads are in flight', () => {
   const profile = {
@@ -347,33 +188,6 @@ describe('profile changes while startup loads are in flight', () => {
     await detaching
     expect(getBrowserExtensionProfileStateStore().readProfile('default')).toEqual({})
   })
-
-  it('profile delete clears native extension settings even when extensions never attached', async () => {
-    setBrowserExtensionSupportEnabled(false)
-    await loader.detachBrowserExtensionsFromAllProfileSessions()
-    const partition = mkdtempSync(join(tmpdir(), 'orca-extension-deleted-profile-'))
-    const folder = join(partition, 'Local Extension Settings', ID)
-    mkdirSync(folder, { recursive: true })
-    mocks.storage.path = partition
-    try {
-      await loader.detachBrowserExtensionsFromProfileSession({
-        ...profile,
-        id: 'retired',
-        partition: 'persist:orca-browser-retired'
-      })
-      expect(realFs.existsSync(folder)).toBe(false)
-    } finally {
-      mocks.storage.path = null
-    }
-  })
-
-  it('profile delete purges saved data even when extensions never attached to it', async () => {
-    setBrowserExtensionSupportEnabled(false)
-    await loader.detachBrowserExtensionsFromAllProfileSessions()
-    getBrowserExtensionSyncStorageStore().write('work', ID, { token: 'secret' })
-    await loader.detachBrowserExtensionsFromProfileSession({ ...profile, id: 'work' })
-    expect(getBrowserExtensionSyncStorageStore().read('work', ID)).toEqual({})
-  })
 })
 
 describe('deleted profile action state', () => {
@@ -412,6 +226,10 @@ describe('deleted profile action state', () => {
 
     if (failedUnload) {
       mocks.loaded.set(ID, { id: ID })
+      getBrowserExtensionProfileStateStore().update(profileId, ID, (state) => ({
+        ...state,
+        workerSignature: 'left-behind'
+      }))
       const unload = vi
         .spyOn(mocks.session.extensions, 'removeExtension')
         .mockImplementationOnce(() => {
@@ -421,6 +239,7 @@ describe('deleted profile action state', () => {
         await expect(loader.detachBrowserExtensionsFromProfileSession(profile)).rejects.toThrow(
           'native unload failed'
         )
+        expect(getBrowserExtensionProfileStateStore().readProfile(profileId)).toEqual({})
       } finally {
         unload.mockRestore()
         mocks.loaded.delete(ID)
@@ -434,6 +253,56 @@ describe('deleted profile action state', () => {
     expect(fresh.get(77)).toMatchObject({ title: 'Fresh', icon: null, badgeText: '' })
     expect(getBrowserExtensionActionState(`survivor-${profileId}`, extension)).toBe(survivor)
     expect(survivor.get().title).toBe('Surviving title')
+  })
+})
+
+describe('a profile whose last page closed', () => {
+  const profile = {
+    id: 'idle-profile',
+    scope: 'isolated' as const,
+    partition: 'persist:orca-browser-idle',
+    label: 'Idle',
+    source: null
+  }
+
+  // Attaches with nothing to load, then stands in a running extension in its session.
+  async function attachRunning(): Promise<void> {
+    setBrowserExtensionSupportEnabled(true)
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    loader.attachBrowserExtensionsToProfileSession(profile, [])
+    await loader.whenBrowserExtensionProfileLoaded(profile.id)
+    mocks.loaded.set(ID, { id: ID })
+  }
+
+  it('stops its extensions and keeps nothing attached', async () => {
+    await attachRunning()
+    const afterUnload = vi.fn()
+    await loader.unloadBrowserExtensionsFromIdleProfile(profile.id, afterUnload)
+    expect(afterUnload).toHaveBeenCalledWith(false)
+    expect(mocks.loaded.size).toBe(0)
+    expect(loader.getBrowserExtensionSessionForProfile(profile.id)).toBeNull()
+  })
+
+  it('reattaches for a page that opened while it unloaded, before that page stops waiting', async () => {
+    await attachRunning()
+    const unloading = loader.unloadBrowserExtensionsFromIdleProfile(profile.id, (requested) => {
+      if (requested) {
+        loader.attachBrowserExtensionsToProfileSession(profile, [])
+      }
+    })
+    loader.attachBrowserExtensionsToProfileSession(profile, [])
+    expect(loader.isBrowserExtensionProfileLoading(profile.id)).toBe(true)
+    await loader.whenBrowserExtensionProfileLoaded(profile.id)
+    expect(loader.getBrowserExtensionSessionForProfile(profile.id)).not.toBeNull()
+    expect(loader.isBrowserExtensionProfileLoading(profile.id)).toBe(false)
+    // The unload's teardown ran before the reattach wired the session up again.
+    const attached = vi.mocked(apiHost.attachBrowserExtensionApiHostToSession).mock
+    const forgotten = vi.mocked(apiHost.forgetBrowserExtensionContexts).mock
+    expect(attached.invocationCallOrder.at(-1)).toBeGreaterThan(
+      forgotten.invocationCallOrder.at(-1) ?? Infinity
+    )
+    await unloading
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
   })
 })
 

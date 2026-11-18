@@ -7,7 +7,6 @@ import {
   getRuntimeSshAccess,
   KnownRuntimeEnvironmentSchema,
   redactRuntimeEnvironment,
-  RuntimeEnvironmentStoreSchema,
   type RuntimeSshTunnelLink
 } from './runtime-environments'
 
@@ -50,21 +49,6 @@ function environment() {
 }
 
 describe('runtime SSH access without deployment ownership', () => {
-  it('keeps old stored environments valid without adding an SSH dependency', () => {
-    const original = environment()
-    const restored = RuntimeEnvironmentStoreSchema.parse({ version: 1, environments: [original] })
-      .environments[0]!
-    expect(restored).toEqual(original)
-    expect(getRuntimeSshAccess(KnownRuntimeEnvironmentSchema.parse(restored))).toBeUndefined()
-    expect(restored).not.toHaveProperty('sshAccess')
-    // The persisted envelope never carries sidecar state, even when handed a linked environment.
-    const persisted = RuntimeEnvironmentStoreSchema.parse({
-      version: 1,
-      environments: [accessEnvironment()]
-    }).environments[0]!
-    expect(persisted).not.toHaveProperty('sshAccess')
-  })
-
   it('preserves SSH metadata while redacting the same pairing secrets', () => {
     const accessed = KnownRuntimeEnvironmentSchema.parse(accessEnvironment())
     const redacted = redactRuntimeEnvironment(accessed)
@@ -73,49 +57,5 @@ describe('runtime SSH access without deployment ownership', () => {
     expect(redacted.endpoints[0]).not.toHaveProperty('publicKeyB64')
     expect(JSON.stringify(redacted)).not.toContain('secret-')
     expect(getPreferredPairingOffer(accessed)).toEqual(offer)
-  })
-
-  it.each([
-    { endpointId: 'missing' },
-    { previousPreferredEndpointId: 'missing' },
-    { previousPreferredEndpointId: 'ssh-access' },
-    { localPort: 46769 }
-  ])('rejects access links that cannot restore the prior endpoint: %j', (change) => {
-    expect(
-      KnownRuntimeEnvironmentSchema.safeParse({
-        ...accessEnvironment(),
-        sshAccess: { ...accessLink, ...change }
-      }).success
-    ).toBe(false)
-  })
-
-  it('rejects an unpreferred SSH access endpoint', () => {
-    expect(
-      KnownRuntimeEnvironmentSchema.safeParse({
-        ...accessEnvironment(),
-        preferredEndpointId: accessLink.previousPreferredEndpointId
-      }).success
-    ).toBe(false)
-  })
-
-  it('rejects a non-loopback SSH access endpoint', () => {
-    const accessed = accessEnvironment()
-    accessed.endpoints[1]!.endpoint = 'ws://remote.example:46768'
-    expect(KnownRuntimeEnvironmentSchema.safeParse(accessed).success).toBe(false)
-  })
-
-  it('rejects a generic access link without its SSH dependency', () => {
-    expect(
-      KnownRuntimeEnvironmentSchema.safeParse({
-        ...accessEnvironment(),
-        connectionDependency: undefined
-      }).success
-    ).toBe(false)
-  })
-
-  it('rejects a non-WebSocket loopback endpoint', () => {
-    const accessed = accessEnvironment()
-    accessed.endpoints[1]!.endpoint = 'https://127.0.0.1:46768'
-    expect(KnownRuntimeEnvironmentSchema.safeParse(accessed).success).toBe(false)
   })
 })

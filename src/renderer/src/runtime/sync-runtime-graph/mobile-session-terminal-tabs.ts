@@ -1,23 +1,23 @@
-import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout-serialization'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
+import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout/terminal-layout-normalization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   isNativeChatTabWideFallbackSafe,
   nativeChatLaunchAgentForLeaf
-} from '../../components/native-chat/native-chat-leaf-routing'
+} from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs } from './types'
-import { isClaudeManagementTitle } from '../../../../shared/agent-status/title/agent-title-core'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   mobileTerminalSurfaceId,
+  rendererTerminalBinding,
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId,
   isUnifiedTabActiveInActiveGroup
 } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
-import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
+import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 
 export function buildMobileTerminalSurfaceTabs(
   inputs: MobileSessionWorktreeInputs,
@@ -62,10 +62,13 @@ export function buildMobileTerminalSurfaceTabs(
 
   return leafIds.map((leafId) => {
     const numericPaneId = capture?.numericPaneIdByLeafId.get(leafId) ?? null
-    const ptyId =
-      numericPaneId === null
-        ? (savedPtyIdsByLeafId[leafId] ?? (leafIds.length === 1 ? terminal.ptyId : null))
-        : (capture?.ptyIdByNumericPaneId.get(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
+    const ptyId = rendererTerminalBinding(
+      numericPaneId,
+      numericPaneId === null ? null : capture?.ptyIdByNumericPaneId.get(numericPaneId),
+      savedPtyIdsByLeafId[leafId],
+      leafIds.length,
+      terminal.ptyId
+    )
     const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
     const paneTitle =
       numericPaneId !== null
@@ -85,10 +88,6 @@ export function buildMobileTerminalSurfaceTabs(
         )
       : (leafTitle ?? 'Terminal')
     const agentStatusTitle = leafTitle ?? (tabWideFallbackSafe ? terminal.title : '') ?? ''
-    const agentStatus =
-      paneKey && !isClaudeManagementTitle(agentStatusTitle)
-        ? inputs.agentStatusByPaneKey.get(paneKey)
-        : undefined
     const launchAgent = nativeChatLaunchAgentForLeaf({
       launchAgent: terminal.launchAgent,
       launchAgentLeafId,
@@ -109,8 +108,12 @@ export function buildMobileTerminalSurfaceTabs(
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),
-      ...(tabWideFallbackSafe && terminal.aiVaultTitle?.title.trim()
-        ? { aiVaultTitle: terminal.aiVaultTitle }
+      // This window's title sync owns the tab's session name; null tells paired desktops it has none.
+      ...(tabWideFallbackSafe
+        ? {
+            aiVaultTitle: terminal.aiVaultTitle?.title.trim() ? terminal.aiVaultTitle : null,
+            resolvesSessionTitle: true as const
+          }
         : {}),
       ...(tabWideFallbackSafe && inputs.generatedTitlesEnabled && terminal.generatedTitle?.trim()
         ? { generatedTitle: terminal.generatedTitle.trim() }
@@ -119,7 +122,7 @@ export function buildMobileTerminalSurfaceTabs(
       leafId,
       ptyId,
       ...(inputs.terminalTheme ? { terminalTheme: inputs.terminalTheme } : {}),
-      ...(agentStatus ? { agentStatus } : {}),
+      statusSuppressionTitle: agentStatusTitle,
       ...(launchAgent ? { launchAgent } : {}),
       ...(publishedLaunchDraft
         ? {

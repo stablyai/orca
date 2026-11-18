@@ -1,11 +1,7 @@
-import type { BrowserSnapshotRef } from '../../../../shared/runtime-browser-contracts'
+import type { CdpCommandSender } from '../debugger/cdp-command-sender'
+import type { BrowserSnapshotRef } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { walkTree, type AXNode, type SnapshotEntry } from './snapshot-ax-tree-walk'
 import { findCursorInteractiveElements } from './snapshot-cursor-interactive-elements'
-
-export type CdpCommandSender = (
-  method: string,
-  params?: Record<string, unknown>
-) => Promise<unknown>
 
 export type RefEntry = {
   backendDOMNodeId: number

@@ -1,19 +1,23 @@
-import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
+import type { AutomationsChangedPayload } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type {
   AutomationOwnerPrecondition,
   AutomationDestination,
   AutomationUpdatePreconditions
-} from '../../../../shared/automation-owner-precondition'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+} from '../../../../shared/automations/ownership/automation-owner-precondition'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type {
   RuntimeAutomationCreateInput,
   RuntimeAutomationUpdateInput
-} from '../../runtime-automation-controller'
+} from '../../integrations/automations/runtime-automation-run-context'
 import {
   automationChangePublications,
   type AutomationChangeSelector,
   type AutomationListResult
-} from '../../../../shared/automation-list-scope'
+} from '../../../../shared/automations/ownership/automation-list-scope'
+import type { AutomationService } from '../../../automations/automation-service'
+import type { RuntimeAutomationBatchUpdate } from '../../integrations/automations/runtime-automation-batch-update'
+import type { AutomationBatchUpdateResult } from '../../../persistence/scheduling-automations/automation-definition-update'
 import { OrcaRuntimeWithCrewOperations } from './crew-operations'
 
 export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntimeWithCrewOperations {
@@ -44,6 +48,13 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     )
   }
 
+  /** Bare reads, like the unscoped listAutomationRuns: no owner precondition to fence. */
+  listAutomationRunsByAutomation(automationIds: readonly string[]): Map<string, AutomationRun[]> {
+    return this.automation.withExternalProbePriority(() =>
+      this.automation.listRunsByAutomation(automationIds)
+    )
+  }
+
   listAutomationRunsPage(
     automationId?: string,
     expectedOwner?: AutomationOwnerPrecondition,
@@ -53,6 +64,20 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     return this.readAutomationRuns(automationId, expectedOwner, () =>
       this.automation.listRunsPage(automationId, limit, cursor)
     )
+  }
+
+  showAutomationRun(
+    automationId: string,
+    runId: string,
+    expectedOwner?: AutomationOwnerPrecondition
+  ): AutomationRun {
+    const run = this.readAutomationRuns(automationId, expectedOwner, () =>
+      this.automation.listRuns(automationId).find((entry) => entry.id === runId)
+    )
+    if (!run) {
+      throw new Error('Automation run not found.')
+    }
+    return run
   }
 
   showAutomation(id: string, expectedOwner?: AutomationOwnerPrecondition): Automation {
@@ -77,10 +102,11 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
 
   createAutomation(
     input: RuntimeAutomationCreateInput,
-    destination?: AutomationDestination
+    destination?: AutomationDestination,
+    beforeWrite?: () => void
   ): Promise<Automation> {
     return this.automation.withExternalProbePriority(() =>
-      this.automation.create(input, destination).then((automation) => {
+      this.automation.create(input, destination, beforeWrite).then((automation) => {
         const selector = this.automationChangeSelector(automation.id)
         this.publishAutomationDefinitionChange(selector, selector)
         return automation
@@ -98,6 +124,36 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
       return this.automation.update(id, updates, options).then((automation) => {
         this.publishAutomationDefinitionChange(source, this.automationChangeSelector(automation.id))
         return automation
+      })
+    })
+  }
+
+  /** Many updates with one write, and one change event per affected host instead of per row. */
+  updateAutomations(
+    entries: readonly RuntimeAutomationBatchUpdate[]
+  ): Promise<AutomationBatchUpdateResult[]> {
+    return this.automation.withExternalProbePriority(() => {
+      const sources = new Map(entries.map(({ id }) => [id, this.automationChangeSelector(id)]))
+      return this.automation.updateMany(entries).then((results) => {
+        const published = new Set<string>()
+        for (const result of results) {
+          if (!('automation' in result)) {
+            continue
+          }
+          const before = sources.get(result.id) ?? null
+          const after = this.automationChangeSelector(result.automation.id)
+          for (const selector of automationChangePublications(before, after)) {
+            const key = JSON.stringify(selector ?? null)
+            if (!published.has(key)) {
+              published.add(key)
+              this.notifyAutomationsChanged({
+                reason: 'definition',
+                ...(selector ? { selector } : {})
+              })
+            }
+          }
+        }
+        return results
       })
     })
   }
@@ -130,5 +186,13 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
 
   automationOwnerPrecondition(id: string): AutomationOwnerPrecondition | null {
     return this.automation.ownerPrecondition(id)
+  }
+
+  setAutomationService(service: AutomationService): void {
+    this.automation.setService(service)
+  }
+
+  releaseFinishedAutomationRunTerminals(): Promise<number> {
+    return this.automation.releaseFinishedRunTerminals()
   }
 }

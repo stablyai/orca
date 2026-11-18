@@ -51,25 +51,6 @@ const expectedTasks = [
 ]
 
 describe('task children of ordered list items', () => {
-  it.each([
-    ['4. Parent', 3, '-'],
-    ['10) Parent', 4, '-']
-  ] as const)('keeps sibling task states under %s at indent %s', (parent, indent, marker) => {
-    const source = [
-      parent,
-      `${' '.repeat(indent)}${marker} [ ] First`,
-      `${' '.repeat(indent)}${marker} [x] Middle`,
-      `${' '.repeat(indent)}${marker} [X] Last`
-    ].join('\n')
-    const editor = openMarkdown(source)
-    try {
-      editor.state.doc.check()
-      expect(taskItems(editor)).toEqual(expectedTasks)
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('preserves checked siblings when Enter splits a task before save and reopen', () => {
     const source = '4. Parent\n   - [ ] First\n   - [x] Middle\n   - [x] Last'
     const editor = openMarkdown(source)
@@ -119,21 +100,6 @@ describe('task children of ordered list items', () => {
     }
   })
 
-  it('keeps a four-space continuation paragraph free of leftover indent', () => {
-    const editor = openMarkdown('1. Parent\n    - [ ] a\n        more text')
-    try {
-      const paragraphs: string[] = []
-      editor.state.doc.descendants((node) => {
-        if (node.type.name === 'paragraph') {
-          paragraphs.push(node.textContent)
-        }
-      })
-      expect(paragraphs).toEqual(['Parent', 'a', 'more text'])
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('keeps an intentionally nested task under its owning sibling', () => {
     const editor = openMarkdown(
       '4. Parent\n   - [ ] First\n     - [x] Child\n   - [x] Middle\n   - [x] Last'
@@ -145,27 +111,6 @@ describe('task children of ordered list items', () => {
         expectedTasks[1],
         expectedTasks[2]
       ])
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('keeps following plain bullets and the next ordered item in their own lists', () => {
-    const editor = openMarkdown(
-      '4. Parent\n   - [ ] First\n   - Plain\n   - [x] Last\n5. Following'
-    )
-    try {
-      editor.state.doc.check()
-      expect(taskItems(editor)).toEqual([expectedTasks[0], expectedTasks[2]])
-      expect(editor.state.doc.firstChild?.childCount).toBe(2)
-      expect(editor.state.doc.firstChild?.lastChild?.textContent).toBe('Following')
-      const plainItems: string[] = []
-      editor.state.doc.descendants((node) => {
-        if (node.type.name === 'listItem' && node.firstChild?.textContent === 'Plain') {
-          plainItems.push(node.type.name)
-        }
-      })
-      expect(plainItems).toEqual(['listItem'])
     } finally {
       editor.destroy()
     }

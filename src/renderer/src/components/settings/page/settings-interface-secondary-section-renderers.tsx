@@ -6,15 +6,21 @@ import { NotificationsPane } from '../notifications/NotificationsPane'
 import { ShortcutsPane } from '../shortcuts/ShortcutsPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 
-export function renderAppearanceSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderAppearanceSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, interactions, navigation, view } = context
   return (
     <SettingsSection
       id="appearance"
-      title={translate('auto.components.settings.Settings.2b4474780a', 'Appearance')}
-      description={translate(
+      title={t('auto.components.settings.Settings.2b4474780a', 'Appearance')}
+      description={t(
         'auto.components.settings.Settings.6d1a27e193',
         'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
       )}
@@ -47,6 +53,7 @@ export type ChatSettingsRenderContext = {
     | 'sourceControlAiPromptDiscardSignal'
     | 'hasUnsavedChatPromptChanges'
     | 'showDesktopOnlySettings'
+    | 'settingsHostScope'
   >
   interactions: Pick<
     SettingsRenderContext['interactions'],
@@ -70,18 +77,22 @@ export function renderChatSettingsSection(context: ChatSettingsRenderContext): R
       hasUnsavedChatPromptChanges={model.hasUnsavedChatPromptChanges}
       searchEntries={navigation.getSectionSearchEntries('chat')}
       showDesktopOnlySettings={model.showDesktopOnlySettings}
+      hostScope={model.settingsHostScope}
       isMounted={view.isSectionMounted('chat')}
     />
   )
 }
 
-export function renderInputSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderInputSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, navigation } = context
   return (
     <SettingsSection
       id="input"
-      title={translate('auto.components.settings.Settings.d7a3e635b6', 'Input & Editing')}
-      description={translate(
+      title={t('auto.components.settings.Settings.f1fddf7764', 'Input & editing')}
+      description={t(
         'auto.components.settings.Settings.d0b7021d64',
         'Selection and editing behavior.'
       )}
@@ -93,14 +104,15 @@ export function renderInputSettingsSection(context: SettingsRenderContext): Reac
 }
 
 export function renderNotificationsSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="notifications"
-      title={translate('auto.components.settings.Settings.9907545fa3', 'Notifications')}
-      description={translate(
+      title={t('auto.components.settings.Settings.9907545fa3', 'Notifications')}
+      description={t(
         'auto.components.settings.Settings.7210ac09c4',
         'Native desktop notifications for agent activity and terminal events.'
       )}
@@ -113,13 +125,16 @@ export function renderNotificationsSettingsSection(
   ) : null
 }
 
-export function renderShortcutsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderShortcutsSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { navigation, view } = context
   return (
     <SettingsSection
       id="shortcuts"
-      title={translate('auto.components.settings.Settings.23bf7a1ad4', 'Shortcuts')}
-      description={translate(
+      title={t('auto.components.settings.Settings.23bf7a1ad4', 'Shortcuts')}
+      description={t(
         'auto.components.settings.Settings.a737a4bb22',
         'Keyboard shortcuts for common actions.'
       )}
@@ -134,19 +149,35 @@ export function renderShortcutsSettingsSection(context: SettingsRenderContext): 
   )
 }
 
-export function renderStatsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
-  const { navigation, view } = context
+export function renderStatsSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
+  const { model, navigation, view } = context
+  const hostTarget = model.settingsHostScope.target
+  const hostName =
+    hostTarget.kind === 'environment'
+      ? (model.runtimeEnvironments.find(
+          (environment) => environment.id === hostTarget.environmentId
+        )?.name ?? hostTarget.environmentId)
+      : null
   return (
     <SettingsSection
       id="stats"
-      title={translate('auto.components.settings.Settings.954a8f5aef', 'Stats & Usage')}
-      description={translate(
+      title={t('auto.components.settings.Settings.084f34826d', 'Stats & usage')}
+      description={t(
         'auto.components.settings.Settings.8acf3f22e0',
         'Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.'
       )}
       searchEntries={navigation.getSectionSearchEntries('stats')}
     >
-      {view.isSectionMounted('stats') ? <StatsPane /> : null}
+      {!view.isSectionMounted('stats') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : (
+        <SettingsGroup bodyClassName="py-4">
+          <StatsPane host={{ target: hostTarget, name: hostName }} />
+        </SettingsGroup>
+      )}
     </SettingsSection>
   )
 }

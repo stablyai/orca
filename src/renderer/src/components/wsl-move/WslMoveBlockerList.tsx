@@ -1,6 +1,6 @@
 import React from 'react'
 import { CircleAlert } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import type {
   WslMoveBlocker,
@@ -22,10 +22,11 @@ export function WslMoveBlockerList({
   blockers: WslMoveBlockerView[]
   onSkip?: (refs: WslMoveRowRef[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-2" data-testid="wsl-move-blockers">
       <div className="text-xs font-medium text-muted-foreground">
-        {translate('wslMove.blockers.title', 'Before these projects can move')}
+        {t('wslMove.blockers.title', 'Before these projects can move')}
       </div>
       <ul className="space-y-2">
         {blockers.map(({ blocker, projects }) => {
@@ -38,17 +39,17 @@ export function WslMoveBlockerList({
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="font-medium">
-                  {wslMoveBlockerTitle(blocker.kind, blocker.ids.length)}
+                  {wslMoveBlockerTitle(blocker.kind, blocker.ids.length, t)}
                 </div>
                 {projects.length > 0 ? (
                   <div className="text-xs text-muted-foreground">
-                    {translate('wslMove.blockers.inProjects', 'In {{names}}', {
+                    {t('wslMove.blockers.inProjects', 'In {{names}}', {
                       names: projects.map((project) => project.name).join(', ')
                     })}
                   </div>
                 ) : null}
                 <div className="text-xs text-muted-foreground">
-                  {wslMoveBlockerHint(blocker.kind)}
+                  {wslMoveBlockerHint(blocker.kind, t)}
                 </div>
                 {canSkip ? (
                   <Button
@@ -58,10 +59,10 @@ export function WslMoveBlockerList({
                     onClick={() => onSkip(projects)}
                   >
                     {projects.length === 1
-                      ? translate('wslMove.blockers.skipOne', 'Leave {{name}} out of this move', {
+                      ? t('wslMove.blockers.skipOne', 'Leave {{name}} out of this move', {
                           name: projects[0].name
                         })
-                      : translate(
+                      : t(
                           'wslMove.blockers.skipMany',
                           'Leave these {{n}} projects out of this move',
                           { n: projects.length }

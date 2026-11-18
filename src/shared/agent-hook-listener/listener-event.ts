@@ -68,6 +68,8 @@ export type AgentHookEventPayload = {
   stopHookActive?: true
   /** Provider turn identity folded into hostTurn; never stored or sent directly. */
   nativeTurnKey?: string
+  /** A live main-agent event that opens a provider turn by its new native id, ahead of the turn's prompt event. */
+  opensTurn?: true
   /** Saved host-private turn record; snapshot/IPC/relay allow-lists exclude it. */
   hostTurn?: HostTurnRecord
   /** Claude live work the child list does not show (a shell, a cron, an owed task notification); rejects false input-based interrupts. */
@@ -76,6 +78,8 @@ export type AgentHookEventPayload = {
   structuredHost?: StructuredHostStatus
   /** Rejoin moved pane rows by runtime terminal handle; never persist beyond its issuing runtime. */
   terminalHandle?: string
+  /** Full reply text this hook carried; main's ingest consumes it and never stores, relays or persists it. */
+  replyCandidate?: string
   /** Execution-host clock retained for age-preserving projection replay; never sent verbatim. */
   hostEvidenceObservedAt?: number
   payload: ParsedAgentStatusPayload

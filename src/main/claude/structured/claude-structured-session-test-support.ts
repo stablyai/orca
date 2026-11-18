@@ -1,6 +1,6 @@
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -9,17 +9,15 @@ import type {
 } from '../claude-stream-json-connection'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
-import type {
-  ClaudeStructuredSessionAdapterDeps,
-  ClaudeStructuredSessionEvent
-} from './claude-structured-session-state'
-import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './lifecycle/claude-structured-session-event'
+import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   type claudeInitialization,
   claudeInitializationScope,
   claudeStartupSettled
-} from './claude-structured-startup-settled-test-support'
+} from './startup/claude-structured-startup-settled-test-support'
 
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 
@@ -140,6 +138,7 @@ export function fakeClaude(
       initialization,
       pauseReading: () => {},
       resumeReading: () => {},
+      mcpServerStatus: async () => [],
       initializationResult: () => initialization.read(connection.calls),
       renameSession: async () => {},
       getContextUsage: async () => {
@@ -190,6 +189,10 @@ export function fakeClaude(
       stopTask: async (taskId) => {
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
         routed('stop_task', { taskId })
+      },
+      backgroundTask: async (toolUseId) => {
+        connection.calls.push({ subtype: 'background_tasks', params: { toolUseId } })
+        return (await routed('background_tasks', { toolUseId })) === true
       },
       send: async (message, beforeDispatch) => {
         await beforeDispatch?.()

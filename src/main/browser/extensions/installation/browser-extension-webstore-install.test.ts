@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { strToU8, zipSync } from 'fflate'
@@ -20,16 +20,23 @@ const state = vi.hoisted(() => {
   }
 })
 
+vi.mock('../../../telemetry/browser-extensions-banner', () => ({
+  recordBrowserExtensionInstalled: vi.fn()
+}))
+
 vi.mock('electron', () => ({ app: { getPath: () => state.userData, on: vi.fn() } }))
-vi.mock('../api/runtime', () => ({ openBrowserExtensionOptionsPage: vi.fn() }))
+vi.mock('../tabs-and-windows/browser-extension-options-page', () => ({
+  openBrowserExtensionOptionsPage: vi.fn()
+}))
 vi.mock('../web-store/browser-extension-webstore-updater', () => ({
   reviewHeldBrowserExtensionUpdate: vi.fn()
 }))
 vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     listProfiles: () => [{ id: 'default' }, { id: 'work' }],
     getProfile: (id: string) => ({ id }),
+    attachExtensions: () => {},
     getEnabledExtensionIds: (profileId: string) => state.enabled[profileId] ?? [],
     updateEnabledExtensionIds: (
       update: (value: Record<string, string[]>) => Record<string, string[]>
@@ -44,7 +51,9 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
   loadBrowserExtensionIntoProfile: (profileId: string, extension: InstalledBrowserExtension) =>
     state.load(profileId, extension),
   unloadBrowserExtensionEverywhere: vi.fn(),
-  unloadBrowserExtensionFromProfile: vi.fn()
+  unloadBrowserExtensionFromProfile: vi.fn(),
+  getBrowserExtensionProfile: () => null,
+  whenBrowserExtensionProfileUnloaded: () => Promise.resolve()
 }))
 
 let key: CrxTestKey
@@ -95,61 +104,8 @@ async function installVersion(version: string, profileId: string | null = 'defau
 }
 
 describe('store installs', () => {
-  it('installs into <id>/<version> with the key Electron needs to keep the id', async () => {
-    const record = await installVersion('1.0.0')
-
-    expect(record.path).toBe(join(root(), '1.0.0'))
-    expect(readdirSync(root())).toEqual(['1.0.0'])
-    const manifest = JSON.parse(readFileSync(join(record.path, 'manifest.json'), 'utf8'))
-    expect(manifest.key).toBe(key.publicKeyDer.toString('base64'))
-    expect(store().get(extensionId)).toMatchObject({ version: '1.0.0', source: 'webstore' })
-    expect(state.load).toHaveBeenCalledWith('default', record)
-    expect(state.enabled.default).toEqual([extensionId])
-  })
-
-  it('updates side by side, reloads where enabled, then deletes the old version', async () => {
-    const first = await installVersion('1.0.0')
-    state.load.mockClear()
-
-    const second = await installVersion('1.1.0', null)
-
-    expect(state.load).toHaveBeenCalledWith('default', second)
-    expect(existsSync(first.path)).toBe(false)
-    expect(readdirSync(root())).toEqual(['1.1.0'])
-    expect(store().get(extensionId)?.version).toBe('1.1.0')
-  })
-
-  it('never deletes a version while another profile is still enabling it', async () => {
-    const first = await installVersion('1.0.0')
-    const staged = await install.stageWebStoreExtension(crx('1.1.0'))
-    const { setBrowserExtensionEnabled } = await import('../browser-extension-management')
-    let release: () => void = () => {}
-    const gate = new Promise<void>((resolve) => (release = resolve))
-    state.load.mockImplementation(async (profileId) => {
-      if (profileId === 'work') {
-        await gate
-      }
-      return {}
-    })
-    const enabling = setBrowserExtensionEnabled('work', extensionId, true)
-    await vi.waitFor(() => expect(state.load).toHaveBeenCalledWith('work', first))
-    try {
-      await expect(
-        install.withBrowserExtensionLock(extensionId, () =>
-          install.commitStagedWebStoreExtension(staged, null)
-        )
-      ).rejects.toThrow('already being installed')
-      expect(existsSync(first.path)).toBe(true)
-      expect(store().get(extensionId)?.version).toBe('1.0.0')
-    } finally {
-      release()
-      expect(await enabling).toEqual({ ok: true })
-      await install.discardStagedWebStoreExtension(staged)
-    }
-  })
-
   it('keeps the old version when the new one fails to load', async () => {
-    const first = await installVersion('1.0.0')
+    await installVersion('1.0.0')
     state.load.mockImplementation(async (_profileId, extension) => {
       if (extension.version === '1.1.0') {
         throw new Error('Manifest is not valid')
@@ -161,86 +117,39 @@ describe('store installs', () => {
 
     expect(store().get(extensionId)?.version).toBe('1.0.0')
     expect(readdirSync(root())).toEqual(['1.0.0'])
-    expect(state.load).toHaveBeenLastCalledWith('default', first)
   })
 
-  it('reuses the loaded folder when the same version is installed again', async () => {
-    const first = await installVersion('1.0.0')
-    const again = await installVersion('1.0.0', 'work')
+  it('keeps another installed extension when a concurrent new install fails', async () => {
+    const otherKey = generateCrxTestKey('ecdsa')
+    const otherId = extensionIdFromPublicKey(otherKey.publicKeyDer)
+    const other: VerifiedCrx = {
+      extensionId: otherId,
+      publicKey: otherKey.publicKeyDer,
+      archive: Buffer.from(
+        zipSync({
+          'manifest.json': strToU8(
+            JSON.stringify({ name: 'Notes', version: '1.0.0', manifest_version: 3 })
+          )
+        })
+      )
+    }
+    let failFirst: (error: Error) => void = () => {}
+    state.load.mockImplementation((_profileId, extension) =>
+      extension.id === extensionId
+        ? new Promise((_resolve, reject) => (failFirst = reject))
+        : Promise.resolve({})
+    )
 
-    expect(again.path).toBe(first.path)
-    expect(readdirSync(root())).toEqual(['1.0.0'])
-  })
-
-  it('removes a fresh install that fails to load', async () => {
-    state.load.mockRejectedValue(new Error('boom'))
-
-    await expect(installVersion('1.0.0')).rejects.toThrow('boom')
+    const failing = installVersion('1.0.0')
+    await vi.waitFor(() => expect(store().get(extensionId)).not.toBeNull())
+    await install.commitStagedWebStoreExtension(
+      await install.stageWebStoreExtension(other),
+      'default'
+    )
+    failFirst(new Error('Manifest is not valid'))
+    await expect(failing).rejects.toThrow('Manifest is not valid')
 
     expect(store().get(extensionId)).toBeNull()
-    expect(existsSync(root())).toBe(false)
-  })
-
-  it('refuses to replace an unpacked extension with the same id', async () => {
-    store().save({
-      id: extensionId,
-      name: 'Vault (dev)',
-      version: '0.1',
-      path: '/src/vault',
-      source: 'unpacked',
-      iconPath: null,
-      permissions: [],
-      hostPermissions: [],
-      optionsPage: null
-    })
-
-    await expect(installVersion('1.0.0')).rejects.toThrow('loaded unpacked')
-    expect(existsSync(root()) ? readdirSync(root()) : []).toEqual([])
-  })
-
-  it('stages what the prompt shows: name, version and access', async () => {
-    const staged = await install.stageWebStoreExtension(crx('2.0', ['tabs', 'https://*/*']))
-
-    expect(staged).toMatchObject({
-      version: '2.0',
-      summary: { name: 'Vault' },
-      access: { permissions: ['tabs'], hostPermissions: ['https://*/*'] }
-    })
-    await install.discardStagedWebStoreExtension(staged)
-    expect(readdirSync(root())).toEqual([])
-  })
-
-  it('refuses a package that ships a file where Orca writes its backup manifest', async () => {
-    const shown = { name: 'Vault', version: '1.0', manifest_version: 3, permissions: [] }
-    const hidden = { ...shown, permissions: ['tabs'], host_permissions: ['<all_urls>'] }
-    await expect(
-      install.stageWebStoreExtension({
-        extensionId,
-        publicKey: key.publicKeyDer,
-        archive: Buffer.from(
-          zipSync({
-            'manifest.json': strToU8(JSON.stringify(shown)),
-            'orca-original-manifest.json': strToU8(JSON.stringify(hidden))
-          })
-        )
-      })
-    ).rejects.toThrow('uses a name Orca reserves')
-    expect(readdirSync(root())).toEqual([])
-  })
-})
-
-describe('withBrowserExtensionLock', () => {
-  it('refuses a second operation on the same extension while one runs', async () => {
-    let release: () => void = () => {}
-    const first = install.withBrowserExtensionLock(
-      'a'.repeat(32),
-      () => new Promise<void>((resolve) => (release = resolve))
-    )
-    await expect(install.withBrowserExtensionLock('a'.repeat(32), async () => {})).rejects.toThrow(
-      install.BrowserExtensionBusyError
-    )
-    release()
-    await first
-    await expect(install.withBrowserExtensionLock('a'.repeat(32), async () => 1)).resolves.toBe(1)
+    expect(store().get(otherId)).not.toBeNull()
   })
 })

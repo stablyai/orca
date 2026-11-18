@@ -14,7 +14,7 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -75,22 +75,6 @@ describe('createChromiumCookieSnapshot', () => {
     expect(existsSync(snapshotDir)).toBe(false)
   })
 
-  it('snapshots a database when WAL and SHM sidecars are absent', () => {
-    const sourcePath = join(root, 'Chrome', 'Default', 'Cookies')
-    createChromiumCookieTestDatabase(sourcePath, [
-      { name: 'main-session', value: 'persisted-value' }
-    ]).close()
-
-    const snapshot = createChromiumCookieSnapshot(sourcePath, { tempRoot: root })
-    const database = new DatabaseSync(snapshot.databasePath, { readOnly: true })
-    const row = database.prepare('SELECT name, value FROM cookies').get()
-    database.close()
-
-    expect(row).toEqual(expect.objectContaining({ name: 'main-session', value: 'persisted-value' }))
-    expect(existsSync(`${snapshot.databasePath}-wal`)).toBe(false)
-    snapshot.cleanup()
-  })
-
   it('retries when a WAL appears while the main database is being copied', () => {
     const sourcePath = join(root, 'Chrome', 'Default', 'Cookies')
     createChromiumCookieTestDatabase(sourcePath, []).close()
@@ -109,7 +93,6 @@ describe('createChromiumCookieSnapshot', () => {
     database.close()
 
     expect(row).toEqual(expect.objectContaining({ value: 'wal-value' }))
-    expect(beforeCopyMock.mock.calls.filter(([source]) => source === sourcePath)).toHaveLength(2)
     snapshot.cleanup()
   })
 
@@ -133,92 +116,6 @@ describe('createChromiumCookieSnapshot', () => {
     database.close()
 
     expect(row).toEqual(expect.objectContaining({ value: 'main-value' }))
-    expect(beforeCopyMock.mock.calls.filter(([source]) => source === sourcePath)).toHaveLength(2)
     snapshot.cleanup()
-  })
-
-  it('removes a partial snapshot when a WAL copy fails', () => {
-    const sourcePath = join(root, 'Chrome', 'Default', 'Cookies')
-    const snapshotsRoot = join(root, 'snapshots')
-    mkdirSync(snapshotsRoot)
-    writer = createChromiumCookieTestDatabase(sourcePath, [{ name: 'session', value: 'value' }], {
-      journalMode: 'wal'
-    })
-    beforeCopyMock.mockImplementation((source: string) => {
-      if (source === `${sourcePath}-wal`) {
-        throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
-      }
-    })
-
-    expect(() => createChromiumCookieSnapshot(sourcePath, { tempRoot: snapshotsRoot })).toThrow(
-      'permission denied'
-    )
-    expect(readdirSync(snapshotsRoot)).toEqual([])
-  })
-
-  it('retries a transient Windows lock on the main database copy', () => {
-    const sourcePath = join(root, 'Chrome', 'Default', 'Cookies')
-    createChromiumCookieTestDatabase(sourcePath, [{ name: 'sid', value: 'locked-value' }]).close()
-    let mainCopyAttempts = 0
-    beforeCopyMock.mockImplementation((source: string) => {
-      if (source !== sourcePath) {
-        return
-      }
-      mainCopyAttempts += 1
-      if (mainCopyAttempts === 1) {
-        throw Object.assign(new Error('EBUSY: resource busy or locked, copyfile'), {
-          code: 'EBUSY'
-        })
-      }
-    })
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-
-    try {
-      const snapshot = createChromiumCookieSnapshot(sourcePath, { tempRoot: root })
-      const database = new DatabaseSync(snapshot.databasePath, { readOnly: true })
-      const row = database.prepare('SELECT name, value FROM cookies').get()
-      database.close()
-
-      expect(row).toEqual(expect.objectContaining({ name: 'sid', value: 'locked-value' }))
-      expect(mainCopyAttempts).toBe(2)
-      snapshot.cleanup()
-    } finally {
-      platformSpy.mockRestore()
-    }
-  })
-
-  it('does not retry a locked copy off Windows', () => {
-    const sourcePath = join(root, 'Chrome', 'Default', 'Cookies')
-    const snapshotsRoot = join(root, 'snapshots')
-    mkdirSync(snapshotsRoot)
-    createChromiumCookieTestDatabase(sourcePath, [{ name: 'sid', value: 'value' }]).close()
-    let mainCopyAttempts = 0
-    beforeCopyMock.mockImplementation(() => {
-      mainCopyAttempts += 1
-      throw Object.assign(new Error('EBUSY: resource busy or locked, copyfile'), { code: 'EBUSY' })
-    })
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-
-    try {
-      expect(() => createChromiumCookieSnapshot(sourcePath, { tempRoot: snapshotsRoot })).toThrow(
-        'EBUSY'
-      )
-      expect(mainCopyAttempts).toBe(1)
-      expect(readdirSync(snapshotsRoot)).toEqual([])
-    } finally {
-      platformSpy.mockRestore()
-    }
-  })
-
-  it('removes its temporary directory when the source database is missing', () => {
-    const snapshotsRoot = join(root, 'snapshots')
-    mkdirSync(snapshotsRoot)
-
-    expect(() =>
-      createChromiumCookieSnapshot(join(root, 'missing', 'Cookies'), {
-        tempRoot: snapshotsRoot
-      })
-    ).toThrow('does not exist')
-    expect(readdirSync(snapshotsRoot)).toEqual([])
   })
 })

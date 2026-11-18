@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../../shared/constants'
-import type { UpdateStatus } from '../../../../../shared/update-status-types'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
+import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -32,7 +32,7 @@ export const off = defineFixture({
 export const infoTooltip = defineFixture({
   ...off,
   interact: (frame) => {
-    frame.querySelector<HTMLButtonElement>('button[aria-label="About Update Delay"]')?.focus()
+    frame.querySelector<HTMLButtonElement>('button[aria-label="About update delay"]')?.focus()
   }
 })
 

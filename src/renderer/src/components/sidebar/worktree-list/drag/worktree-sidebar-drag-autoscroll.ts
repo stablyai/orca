@@ -23,6 +23,7 @@ export type WorktreeSidebarDragRect = {
   groupIndex: number
   top: number
   bottom: number
+  layoutBottom?: number
 }
 
 export type WorktreeSidebarDragSession = {
@@ -30,6 +31,8 @@ export type WorktreeSidebarDragSession = {
   draggingWorktreeId: string
   sourceGroupKey: string
   draggedIds: readonly string[]
+  /** The cards picked up, before visible descendants join; a lineage drop nests only these. */
+  pickedCopies: DraggedWorktreeCopies
   draggedCopies: DraggedWorktreeCopies
   /** Worktree ids, for status, pin and board writes. */
   reorderDraggedIds: readonly string[]

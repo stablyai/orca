@@ -3,7 +3,12 @@ import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-age
 import { foldMainAgentWithRowChildWork } from './agent-hook-row-child-work-fold'
 
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
-const TOOL_PROGRESS_HOOK_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure'])
+const TOOL_PROGRESS_HOOK_EVENTS = new Set([
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure',
+  'PostToolBatch'
+])
 
 export function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload): boolean {
   if (next.payload.state !== 'working') {
@@ -69,11 +74,11 @@ function refoldUnderLatchedMainAgent(
   }
 }
 
-/** Main-agent submissions open turns even when harness notifications reuse the cached prompt. */
+/** Main-agent submissions and new native turn ids open turns even when harness notifications reuse the cached prompt. */
 export function opensNewTurn(event: AgentHookEventPayload): boolean {
   return (
     event.hookEventName === 'SessionStart' ||
-    (event.hookEventName === 'UserPromptSubmit' &&
+    ((event.hookEventName === 'UserPromptSubmit' || event.opensTurn === true) &&
       event.toolAgentId === undefined &&
       event.isReplay !== true)
   )

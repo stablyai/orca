@@ -148,7 +148,8 @@ export class PairedE2EEV2ClientSession {
       sessionId: this.schedule.sessionId,
       direction: 'mobile-to-desktop',
       payloadKind,
-      counter: this.outboundCounter
+      counter: this.outboundCounter,
+      sealSecretbox: this.primitives.sealSecretbox
     })
     this.outboundCounter++
     return frame

@@ -2,7 +2,7 @@ import type { TuiAgent } from './tui-agent'
 import {
   getOrcaCliCommandNameForPlatform,
   skipsLinuxOrcaCliRename
-} from '../../orca-cli-command-name'
+} from '../../cli/orca-cli-command-name'
 import type { TuiAgentConfig, TuiAgentConfigSource } from './tui-agent-config-types'
 
 function resolveTuiAgentConfig(source: TuiAgentConfigSource): TuiAgentConfig {
@@ -166,6 +166,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'flag-prompt-interactive',
     // Antigravity trust is exact-path, so every child workspace can show a menu that consumes paste; pre-write trust (agent-trust-presets.ts).
     preflightTrust: 'antigravity',
+    // The shell's own 2004h armed the quiet window, so a slow agy start got the paste in cooked mode (#18088).
+    draftPasteReadySignal: 'antigravity-composer-prompt',
+    draftPasteReadyTimeoutMs: 20_000,
     // agy 1.2.x expands collapsed multiline pastes over seconds; byte ingest finishing does not prove submit readiness.
     submitLineSettleMsPerLine: 45
   },
@@ -251,12 +254,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmdAliases: ['mistral-vibe'],
     promptInjectionMode: 'stdin-after-start'
   },
-  'qwen-code': {
-    detectCmd: 'qwen',
-    promptInjectionMode: 'stdin-after-start',
-    // Qwen 0.24.7 drops Enter for 500ms after paste on Windows/Node <20; delayed retry is harmless if the first submit landed.
-    submitRetryDelayMs: 1200
-  },
+  // Qwen 0.24.7 drops Enter for 500ms after paste on Windows/Node <20; delayed retry is harmless if the first submit landed.
+  // prettier-ignore
+  'qwen-code': { detectCmd: 'qwen', promptInjectionMode: 'stdin-after-start', preflightTrust: 'qwen-code', submitRetryDelayMs: 1200 },
   rovo: {
     // Rovo is an acli subcommand; passing an instruction there would run one-shot.
     detectCmd: 'acli',
@@ -279,7 +279,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: `--prompt` exits on completion (kills the hosted session); `-i/--interactive` keeps it interactive.
     promptInjectionMode: 'flag-interactive',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write trust so it skips (see agent-trust-presets.ts).
-    preflightTrust: 'copilot'
+    preflightTrust: 'copilot',
+    draftPasteReadySignal: 'copilot-composer-prompt'
   },
   grok: {
     detectCmd: 'grok',
@@ -295,7 +296,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'muse',
     launchCmd: 'muse --trust-workspace',
     // Muse 1.3 treats subcommand-shaped prompts as commands even after `--`.
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: Windows Muse reads console input records (crossterm), so an Enter landing mid-paste stays in its draft (#43126).
+    windowsInputRecordPasteNewline: 'alt-enter'
   },
   dsh: {
     detectCmd: 'dsh-tui',

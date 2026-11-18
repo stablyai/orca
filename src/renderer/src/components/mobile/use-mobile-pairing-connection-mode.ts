@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAppStore } from '@/store'
 import {
   resolveMobilePairingConnectionMode,
@@ -15,8 +15,13 @@ export function useMobilePairingConnectionMode(): [
   const [connectionMode, setConnectionMode] = useState<MobilePairingConnectionMode>(() =>
     resolveMobilePairingConnectionMode(savedConnectionMode, { signedIn })
   )
-  useEffect(() => {
+  const [resolvedFrom, setResolvedFrom] = useState({ savedConnectionMode, signedIn })
+  if (
+    resolvedFrom.savedConnectionMode !== savedConnectionMode ||
+    resolvedFrom.signedIn !== signedIn
+  ) {
+    setResolvedFrom({ savedConnectionMode, signedIn })
     setConnectionMode(resolveMobilePairingConnectionMode(savedConnectionMode, { signedIn }))
-  }, [savedConnectionMode, signedIn])
+  }
   return [connectionMode, setConnectionMode]
 }

@@ -1,9 +1,9 @@
-import { splitFilePathLineSuffix } from '../../../components/markdown-file-path-detection'
+import { splitFilePathLineSuffix } from '../../../components/markdown/links/markdown-file-path-detection'
 import {
   openMobileFileTap,
   type FileTapSessionTab,
   type OpenMobileFileTapOptions
-} from '../../mobile-file-tap-open'
+} from '../../../files/session-documents/mobile-file-tap-open'
 
 export type OpenMobileNativeChatFileTapOptions<T extends FileTapSessionTab> = Omit<
   OpenMobileFileTapOptions<T>,

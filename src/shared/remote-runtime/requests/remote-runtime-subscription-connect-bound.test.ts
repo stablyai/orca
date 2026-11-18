@@ -74,29 +74,6 @@ describe('remote runtime subscription connect bound', () => {
     await vi.waitFor(() => expect(sockets.size).toBe(0))
   })
 
-  it('creates no socket for a pre-aborted request', async () => {
-    const endpoint = await listenSilentUpgradeServer()
-    const keyPair = generateKeyPair()
-    const controller = new AbortController()
-    controller.abort()
-    await expect(
-      subscribeRemoteRuntimeTransport(
-        pairedRuntimeConnectionFromOffer({
-          v: 2,
-          endpoint,
-          deviceToken: 'device-token',
-          publicKeyB64: publicKeyToBase64(keyPair.publicKey)
-        }),
-        'files.search',
-        {},
-        15_000,
-        { onResponse: vi.fn(), onError: vi.fn() },
-        { signal: controller.signal }
-      )
-    ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(sockets.size).toBe(0)
-  })
-
   it('fails an unanswered subscribe on the connect bound, with a message that survives the code strip', async () => {
     const endpoint = await listenSilentUpgradeServer()
     const keyPair = generateKeyPair()

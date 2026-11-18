@@ -1,12 +1,13 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import type {
   HostQualifiedKnownWorktreeResult,
   SshExecutionHostId
-} from '../../../../../../shared/detected-worktree-provider-contract'
-import { areDetectedWorktreeResultsEqual, areWorktreesEqual } from './worktree-catalog-visibility'
+} from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
+import { areDetectedWorktreeResultsEqual } from './worktree-catalog-visibility'
+import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import {
   getProjectHostSetupForRepoHost,
   repoHasExactlyOneExecutionHostOwner,
@@ -19,7 +20,7 @@ import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { isDetectedWorktreeListResult } from './detected-worktree-provider-request'
 import { getAuthoritativelyRemovedWorktreeIds } from './authoritative-worktree-removal-memory'
 import type { WorktreeHostMatchOptions } from './worktree-slice-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function appendMissingWorktreesForHost<
   T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
@@ -142,7 +143,7 @@ export async function runKnownSshWorktreeFetch(
       executionHostId,
       matchOptions
     )
-    const worktreesChanged = !areWorktreesEqual(state.worktreesByRepo[repoId], worktrees)
+    const worktreesChanged = !catalogRowsEqual(state.worktreesByRepo[repoId], worktrees)
     const detectedChanged = !areDetectedWorktreeResultsEqual(
       state.detectedWorktreesByRepo[repoId],
       detected

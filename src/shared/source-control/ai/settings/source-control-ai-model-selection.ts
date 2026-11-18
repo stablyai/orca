@@ -1,3 +1,4 @@
+import { isGlobalAiTextAction } from '../recipes/source-control-ai-actions'
 import type {
   CommitMessageAiSettings,
   CommitMessageAiModelCapability
@@ -110,13 +111,21 @@ export function getDiscoveredModels(
   )
 }
 
+/** Discovered models as settings keep them: an alias row's resolved model is read live, never saved. */
+export function savedDiscoveredModels(
+  models: readonly (CommitMessageAiModelCapability & { resolvedModel?: string })[]
+): CommitMessageAiModelCapability[] {
+  return models.map(({ resolvedModel: _resolvedModel, ...model }) => model)
+}
+
 /** Save a host's discovered models where generation, and older builds, read them. */
 export function withDiscoveredModels(
   config: SourceControlAiSettings,
   agentId: TuiAgent,
-  models: CommitMessageAiModelCapability[],
+  discovered: CommitMessageAiModelCapability[],
   hostKey: string
 ): Pick<SourceControlAiSettings, 'discoveredModelsByAgent' | 'discoveredModelsByAgentByHost'> {
+  const models = savedDiscoveredModels(discovered)
   return {
     discoveredModelsByAgent:
       hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
@@ -146,6 +155,12 @@ export function getTextGenerationModels<T extends CommitMessageAiModelCapability
   ]
 }
 
+// Dictated text waits on cleanup before it lands, so cleanup starts on each agent's quickest model.
+const DICTATION_CLEANUP_MODEL_BY_AGENT: Partial<Record<TuiAgent, string>> = {
+  claude: 'haiku',
+  codex: 'gpt-5.4-mini'
+}
+
 export function selectPersistedModelId(args: {
   source: SourceControlAiSettings
   legacy: CommitMessageAiSettings | null | undefined
@@ -157,7 +172,7 @@ export function selectPersistedModelId(args: {
 }): string {
   const { source, legacy, repoOverrides, operation, hostKey, agentId, defaultModelId } = args
   return (
-    (operation === 'conversationName'
+    (isGlobalAiTextAction(operation)
       ? undefined
       : readSourceControlAiModelChoiceForHost(
           repoOverrides?.modelOverridesByOperation?.[operation],
@@ -169,6 +184,7 @@ export function selectPersistedModelId(args: {
       hostKey,
       agentId
     ) ??
+    (operation === 'dictationCleanup' ? DICTATION_CLEANUP_MODEL_BY_AGENT[agentId] : undefined) ??
     readSourceControlAiModelChoiceForHost(
       {
         selectedModelByAgent: source.selectedModelByAgent,
@@ -196,7 +212,7 @@ export function resolveThinkingLevel(args: {
     return undefined
   }
   const persisted =
-    (args.operation === 'conversationName'
+    (isGlobalAiTextAction(args.operation)
       ? undefined
       : args.repoOverrides?.modelOverridesByOperation?.[args.operation]?.selectedThinkingByModel?.[
           args.model.id

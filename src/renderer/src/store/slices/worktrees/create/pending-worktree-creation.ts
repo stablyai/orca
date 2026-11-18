@@ -1,9 +1,17 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { AppState } from '../../../types'
-import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
-import { endWindowCreation } from '@/lib/sidebar-ended-creations'
-import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
+import { cleanupFailedEphemeralVmWorkspace } from '@/runtime/ephemeral-vm/ephemeral-vm-failed-create-cleanup'
+import { endWindowCreation } from '@/components/sidebar/sidebar-feed/sidebar-ended-creations'
+import { settleVmCreateCheckoutAfterCleanup } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
+import { cancelVmEnvironmentCheck } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-decision'
+import {
+  pendingCreationChatDraftScopeKey,
+  type PendingWorktreeCreation
+} from '@/lib/workspace/creation/pending-worktree-creation'
+import { deleteNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
+import { clearNativeChatPendingAttachments } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { releaseNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 
 export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,
@@ -42,9 +50,33 @@ export function createUpdatePendingWorktreeCreation(
       if (!entry) {
         return s
       }
+      const { chatSessionOptions, ...changes } = patch
+      if (changes.request || chatSessionOptions) {
+        const request = changes.request ?? entry.request
+        const ownedOptions =
+          request.agent === entry.request.agent
+            ? entry.request.launchInputs?.chatSessionOptions
+            : undefined
+        if (ownedOptions || chatSessionOptions) {
+          // Preparation replaces captured requests; the pending composer owns its newer chat picks.
+          changes.request = {
+            ...request,
+            launchInputs: {
+              ...request.launchInputs,
+              chatSessionOptions: {
+                ...(request.launchInputs?.chatSessionOptions ??
+                  request.launchInputs?.sessionOptions),
+                ...ownedOptions,
+                ...chatSessionOptions
+              }
+            }
+          }
+        }
+      }
       // Why: the main process re-emits the same phase; skip no-op writes so the strip and panel don't re-render.
-      const hasChange = (Object.keys(patch) as (keyof typeof patch)[]).some(
-        (key) => patch[key] !== entry[key]
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: changes contains only typed creation fields after chatSessionOptions is removed.
+      const hasChange = (Object.keys(changes) as (keyof typeof changes)[]).some(
+        (key) => changes[key] !== entry[key]
       )
       if (!hasChange) {
         return s
@@ -52,7 +84,7 @@ export function createUpdatePendingWorktreeCreation(
       return {
         pendingWorktreeCreations: {
           ...s.pendingWorktreeCreations,
-          [creationId]: { ...entry, ...patch, phaseLog: nextPhaseLog(entry, patch) }
+          [creationId]: { ...entry, ...changes, phaseLog: nextPhaseLog(entry, changes) }
         }
       }
     })
@@ -79,7 +111,13 @@ export function createRemovePendingWorktreeCreation(
       }
     })
     if (removedEntry) {
+      // A VM build checking or paused on failed checks stops at once; its create then cleans up the VM.
+      cancelVmEnvironmentCheck(creationId)
       endWindowCreation(creationId)
+      const scope = pendingCreationChatDraftScopeKey(creationId)
+      releaseNativeChatStagedFiles(scope)
+      deleteNativeChatComposerDraft(scope)
+      clearNativeChatPendingAttachments(scope)
     }
     if (!removedEntry || options?.cleanupVm === false || typeof window === 'undefined') {
       return
@@ -100,7 +138,7 @@ export function createRemovePendingWorktreeCreation(
         console.error('Failed to remove cancelled provisioned-root project setup:', error),
       reportRuntimeError: (error) =>
         console.error('Failed to clean up cancelled ephemeral VM runtime:', error)
-    })
+    }).then((cleanedUp) => settleVmCreateCheckoutAfterCleanup(creationId, cleanedUp))
   }
 }
 

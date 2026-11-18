@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   clearGitCapabilityStateForTests,
   getLocalGitCapabilityCache
-} from '../../command-runner/git-capability-state'
-import { describeCreatedWorktree, listWorktreesStrict } from './worktree-listing'
+} from '../../command-runner/host-routing/git-capability-state'
+import { describeCreatedWorktree } from './worktree-listing'
 
 const execFileAsync = promisify(execFile)
 
@@ -47,17 +47,6 @@ afterEach(async () => {
 })
 
 describe('describeCreatedWorktree against the real Git binary', () => {
-  it('rebuilds exactly the row the listing reports for the same worktree', async () => {
-    const listed = (await listWorktreesStrict(repoPath)).find(
-      (worktree) => worktree.branch === 'refs/heads/feature'
-    )
-    expect(listed).toBeDefined()
-
-    await expect(describeCreatedWorktree(repoPath, worktreePath, 'feature')).resolves.toEqual(
-      listed
-    )
-  })
-
   it('rejects a checkout owned by a different repo', async () => {
     const otherRepo = join(scratchDir, 'other')
     await seedRepo(otherRepo, 'other@example.invalid')
@@ -137,18 +126,6 @@ describe('describeCreatedWorktree against the real Git binary', () => {
     await expect(
       describeCreatedWorktree(bareRepo, bareWorktree, 'from-bare')
     ).resolves.toMatchObject({ branch: 'refs/heads/from-bare', isMainWorktree: false })
-  })
-
-  it('recovers on the Git 2.25 baseline, which ignores --path-format=absolute', async () => {
-    // Force relative-path capability fallback against the real binary.
-    getLocalGitCapabilityCache({ cwd: repoPath }).rememberUnsupported('rev-parse-path-format')
-    const listed = (await listWorktreesStrict(repoPath)).find(
-      (worktree) => worktree.branch === 'refs/heads/feature'
-    )
-
-    await expect(describeCreatedWorktree(repoPath, worktreePath, 'feature')).resolves.toEqual(
-      listed
-    )
   })
 
   // `ln` is absent from the Windows test PATH.

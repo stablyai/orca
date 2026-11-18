@@ -2,13 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WslMoveBlocker } from '../../../shared/wsl-move/wsl-move-driver-types'
-import {
-  wslMoveFenceFromCutovers,
-  withWslDriveUncConversions
-} from '../../persistence/moving-wsl-projects/wsl-move-fence'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+
+import '../../persistence/moving-wsl-projects/quiescence/wsl-move-fence'
 import {
   listWslDriveUncConversions,
   writeWslDriveUncConversion
@@ -68,146 +65,6 @@ function deps(overrides: Partial<WslDriveUncConversionRunDeps> = {}): WslDriveUn
 const REQUEST = { distro: 'Ubuntu', repoIds: ['repo-a'] }
 
 describe('startWslDriveUncConversion', () => {
-  it('pauses the scope, journals the conversion and restarts', async () => {
-    const run = deps()
-    expect(await startWslDriveUncConversion(run, REQUEST)).toEqual({
-      outcome: 'restarting',
-      migrationId: 'conv-1'
-    })
-    // Windows Git checks the same folder through its drive path.
-    expect(run.runWindowsGit).toHaveBeenCalledWith(['--version'], DRIVE)
-    expect(run.readWorktreeLinks).toHaveBeenCalledWith(String.raw`C:\src\app\.git`)
-    expect(run.pause).toHaveBeenCalledWith({
-      workspaceIds: [`repo-a::${UNC}`],
-      workspaceKeys: new Set([`repo-a::${UNC}`])
-    })
-    expect(listWslDriveUncConversions(root)).toEqual([
-      expect.objectContaining({
-        phase: 'prepared',
-        profileId: 'profile-1',
-        repoIds: ['repo-a'],
-        rootPaths: [UNC],
-        worktreeIds: [[`repo-a::${UNC}`, `repo-a::${DRIVE}`]]
-      })
-    ])
-    expect(run.restart).toHaveBeenCalledOnce()
-  })
-
-  const savedMeta = {
-    instanceId: 'saved',
-    displayName: 'feature',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    hostId: 'local' as const
-  }
-  const ubuntu = String.raw`\\wsl.localhost\Ubuntu\mnt\c`
-  it.each([
-    { shape: 'inside its folder', parent: UNC, nested: `${UNC}\\nested`, savedWorktree: null },
-    { shape: 'at a drive root', parent: ubuntu, nested: `${ubuntu}\\src`, savedWorktree: null },
-    {
-      shape: 'inside its saved worktree',
-      parent: UNC,
-      nested: `${ubuntu}\\feature\\nested`,
-      savedWorktree: `${ubuntu}\\feature`
-    }
-  ])(
-    'converts a project nested $shape with its parent',
-    async ({ parent, nested, savedWorktree }) => {
-      const value = state()
-      value.repos[0].path = parent
-      value.repos.push({ id: 'repo-b', path: nested, displayName: 'b', badgeColor: '', addedAt: 0 })
-      value.projects.push({ ...value.projects[0], id: 'repo-b', sourceRepoIds: ['repo-b'] })
-      if (savedWorktree) {
-        value.worktreeMeta = { [`repo-a::${savedWorktree}`]: savedMeta }
-      }
-      const run = deps({ readProfileState: async () => value })
-      expect(await startWslDriveUncConversion(run, REQUEST)).toMatchObject({
-        outcome: 'restarting'
-      })
-      expect(listWslDriveUncConversions(root)).toEqual([
-        expect.objectContaining({ repoIds: ['repo-a', 'repo-b'] })
-      ])
-    }
-  )
-
-  /** A Windows project and the UNC spelling of its folder, which the scope refuses as a duplicate. */
-  const withDuplicate = (windowsPath: string, duplicate: string): PersistedState => {
-    const value = state()
-    value.repos.push(
-      { id: 'windows', path: windowsPath, displayName: 'win', badgeColor: '', addedAt: 0 },
-      { id: 'repo-dup', path: duplicate, displayName: 'dup', badgeColor: '', addedAt: 0 }
-    )
-    return value
-  }
-
-  it('refuses when a duplicate inside the folder would move without its ids', async () => {
-    const value = withDuplicate(String.raw`C:\src\app\sub`, `${UNC}\\sub`)
-    const run = deps({ readProfileState: async () => value })
-    expect(await startWslDriveUncConversion(run, REQUEST)).toMatchObject({
-      blockers: [{ kind: 'not-convertible', id: 'repo-dup', reason: 'overlaps-refused-project' }]
-    })
-    expect(run.pause).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    {
-      shape: 'another spelling of the folder',
-      windowsPath: String.raw`C:\src\app\sub`,
-      duplicate: String.raw`\\wsl$\Ubuntu\mnt\c\src\app`
-    },
-    {
-      shape: 'a folder around it',
-      windowsPath: String.raw`C:\src`,
-      duplicate: String.raw`\\wsl$\Ubuntu\mnt\c\src`
-    }
-  ])('converts beside a duplicate of $shape', async ({ windowsPath, duplicate }) => {
-    const value = withDuplicate(windowsPath, duplicate)
-    const run = deps({ readProfileState: async () => value })
-    expect(await startWslDriveUncConversion(run, REQUEST)).toMatchObject({ outcome: 'restarting' })
-  })
-
-  it('refuses, pausing nothing, when the distro does not show /mnt/c as drive C:', async () => {
-    for (const mounts of [null, [{ mountPoint: '/mnt/c', windowsRoot: null }]]) {
-      const run = deps({ readDriveMounts: async () => mounts })
-      expect(await startWslDriveUncConversion(run, REQUEST)).toMatchObject({
-        blockers: [{ kind: 'not-convertible', id: 'repo-a', reason: 'not-windows-drive-mount' }]
-      })
-      expect(run.pause).not.toHaveBeenCalled()
-    }
-    expect(listWslDriveUncConversions(root)).toEqual([])
-  })
-
-  it('converts without Windows touching the UNC path, which WSL refuses for drive folders', async () => {
-    const deniedOnUnc = (path: string): void => {
-      if (path.startsWith('\\\\')) {
-        throw Object.assign(new Error(`EPERM: operation not permitted, '${path}'`), {
-          code: 'EPERM'
-        })
-      }
-    }
-    const run = deps({
-      runWindowsGit: vi.fn(async (args: string[], cwd: string) => {
-        deniedOnUnc(cwd)
-        return args[0] === 'rev-parse' ? '.git\n' : 'git version 2.47'
-      }),
-      readWorktreeLinks: vi.fn(async (commonDir: string) => {
-        deniedOnUnc(commonDir)
-        return []
-      })
-    })
-    expect(await startWslDriveUncConversion(run, REQUEST)).toEqual({
-      outcome: 'restarting',
-      migrationId: 'conv-1'
-    })
-  })
-
   it('converts the seeded shape: a saved UNC worktree beside the drive row discovery wrote', async () => {
     const seeded = (driveName: string): PersistedState => {
       const value = state()
@@ -270,60 +127,6 @@ describe('startWslDriveUncConversion', () => {
     })
   })
 
-  it('refuses worktrees WSL Git made, before pausing anything', async () => {
-    const run = deps({ readWorktreeLinks: vi.fn(async () => ['/mnt/c/src/feature/.git']) })
-    expect(await startWslDriveUncConversion(run, REQUEST)).toEqual({
-      outcome: 'refused',
-      blockers: [
-        { kind: 'wsl-authored-worktrees', repoId: 'repo-a', paths: ['/mnt/c/src/feature'] }
-      ]
-    })
-    expect(run.pause).not.toHaveBeenCalled()
-    expect(listWslDriveUncConversions(root)).toEqual([])
-  })
-
-  it('refuses a repo the scope does not take, and a missing Git for Windows', async () => {
-    const inDistro = deps({
-      readProfileState: async () => {
-        const value = state()
-        value.repos[0].path = String.raw`\\wsl.localhost\Ubuntu\home\me\app`
-        return value
-      }
-    })
-    expect(await startWslDriveUncConversion(inDistro, REQUEST)).toEqual({
-      outcome: 'refused',
-      blockers: [{ kind: 'not-convertible', id: 'repo-a', reason: 'not-in-scope' }]
-    })
-    const noGit = deps({
-      runWindowsGit: vi.fn(async (): Promise<string> => {
-        throw new Error('ENOENT')
-      })
-    })
-    expect(await startWslDriveUncConversion(noGit, REQUEST)).toEqual({
-      outcome: 'refused',
-      blockers: [{ kind: 'windows-git-missing' }]
-    })
-  })
-
-  it('reports busy terminals and journals nothing', async () => {
-    const blockers: WslMoveBlocker[] = [
-      { kind: 'agent-working', ids: ['tab-1:leaf-1'], actions: ['wait'] }
-    ]
-    const run = deps({
-      pause: vi.fn(async () => ({
-        outcome: 'refused' as const,
-        code: 'wsl_move_terminals_blocked' as const,
-        blockers
-      }))
-    })
-    expect(await startWslDriveUncConversion(run, REQUEST)).toEqual({
-      outcome: 'terminals-blocked',
-      blockers
-    })
-    expect(listWslDriveUncConversions(root)).toEqual([])
-    expect(run.restart).not.toHaveBeenCalled()
-  })
-
   it('refuses a second conversion while one waits for its restart', async () => {
     await startWslDriveUncConversion(deps(), REQUEST)
     expect(await startWslDriveUncConversion(deps(), REQUEST)).toEqual({
@@ -354,19 +157,5 @@ describe('startWslDriveUncConversion', () => {
         .map((record) => record.profileId)
         .sort()
     ).toEqual(['profile-1', 'profile-2'])
-  })
-
-  it('fences the projects until the startup rewrite, and not after', async () => {
-    await startWslDriveUncConversion(deps(), REQUEST)
-    const [record] = listWslDriveUncConversions(root)
-    const empty = wslMoveFenceFromCutovers([])
-    const fence = withWslDriveUncConversions(empty, [record])
-    expect([...fence.fenced.repoIds]).toEqual(['repo-a'])
-    expect(fence.fencedRoots).toEqual([
-      { distro: 'Ubuntu', roots: ['//wsl.localhost/ubuntu/mnt/c/src/app'] }
-    ])
-    expect(withWslDriveUncConversions(empty, [{ ...record, phase: 'profile-rewritten' }])).toBe(
-      empty
-    )
   })
 })

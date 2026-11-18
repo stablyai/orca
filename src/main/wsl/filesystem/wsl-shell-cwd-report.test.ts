@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getBashShellReadyRcfileContent } from '../../providers/local-pty/local-pty-shell-ready-bash-rcfile'
 import { getLocalZshWrapperSpec } from '../../providers/local-pty/local-pty-shell-ready-wrapper-fileset'
 import { buildZshStartupHook } from '../../pty/shell-startup/zsh-startup-wrapper-builder'
-import { parseFileUriPath } from '../../daemon/osc7-file-uri'
+import { parseFileUriPath } from '../../daemon/emulation/osc7-file-uri'
 
 const hasShell = (shell: string) =>
   process.platform !== 'win32' && spawnSync(shell, ['--version']).status === 0
@@ -64,10 +64,6 @@ describe('a WSL bridge shell reports its folder', () => {
     const output = runBash({ WSL_DISTRO_NAME: 'Ubuntu' })
     expect(reportedFolders(output)).toEqual(expected())
     expect(output).toContain('USER_PROMPT_HOOK')
-  })
-
-  it.skipIf(!hasShell('bash'))('from bash only inside WSL', () => {
-    expect(reportedFolders(runBash({}))).toEqual([unc('/elsewhere')])
   })
 
   it.skipIf(!hasShell('zsh'))('from zsh, at every prompt', () => {

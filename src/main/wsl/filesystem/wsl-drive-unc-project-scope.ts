@@ -3,17 +3,20 @@
  * the mover refuses: D1c converts each in place to the same folder's drive path (`C:\x`) on this
  * computer. This is the scope and the path map; nothing here writes.
  */
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { rewriteWorktreeIdPath } from '../../../shared/worktree/id'
-import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
+import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 
-import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
-import type { WindowsDriveMount } from '../../runtime/wsl-guest-drive-mountinfo'
+import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-scope'
+import type { WindowsDriveMount } from './wsl-guest-drive-mountinfo'
 import { wslUncPathIsWindowsDriveFolder } from './wsl-drive-unc-mounts'
 
 export type WslDriveUncRefusal =

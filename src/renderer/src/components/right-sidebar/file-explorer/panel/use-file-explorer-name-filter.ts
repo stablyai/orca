@@ -1,9 +1,9 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   useRuntimeFileListForWorktree,
   type RuntimeFileListState
-} from '@/components/quick-open-file-list'
+} from '@/components/file-actions/quick-open/quick-open-file-list'
 import {
   isFileExplorerNameFilterQueryTooLarge,
   type FileExplorerNameFilterProjectionSource
@@ -37,11 +37,14 @@ export function useFileExplorerNameFilter({
     [nameFilterQuery]
   )
   const hasNameFilter = isFilesViewActive && hasNameFilterQuery
-  useEffect(() => {
-    if (!hasNameFilter) {
-      setNameFilterCollapsedPaths((current) => (current.size > 0 ? new Set() : current))
+  // Clear on deactivation during render so the tree never commits stale filter collapses.
+  const [prevHasNameFilter, setPrevHasNameFilter] = useState(hasNameFilter)
+  if (prevHasNameFilter !== hasNameFilter) {
+    setPrevHasNameFilter(hasNameFilter)
+    if (!hasNameFilter && nameFilterCollapsedPaths.size > 0) {
+      setNameFilterCollapsedPaths(new Set())
     }
-  }, [hasNameFilter])
+  }
   const nameFilterFiles = useRuntimeFileListForWorktree({
     enabled: hasNameFilter && !nameFilterQueryTooLarge,
     worktreeId: activeWorktreeId,

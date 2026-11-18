@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { watchRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { watchRuntimeRepoBaseRefDefault } from '@/runtime/source-control/references/runtime-repo-client'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function useSourceControlBaseRefDefault({
   activeRepoConnectionId,

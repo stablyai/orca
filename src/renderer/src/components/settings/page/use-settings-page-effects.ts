@@ -1,12 +1,14 @@
+import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
+import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { resolveAppearanceAccordionDeepLink } from '../appearance/appearance-usage-percentage-search'
-import { registerWindowCloseGuard } from '../../window-close-request-coordinator'
-import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { registerWindowCloseGuard } from '../../../app-shell/shutdown/window-close-request-coordinator'
+import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { translate } from '@/i18n/i18n'
 import {
   getSettingsTargetHostSelection,
@@ -26,6 +28,7 @@ export function useSettingsPageEffects(
 ): void {
   const {
     activeSectionId,
+    setGeneralSubPage,
     clearSettingsTarget,
     fetchKeybindings,
     fetchSettings,
@@ -33,7 +36,7 @@ export function useSettingsPageEffects(
     refreshModelStates,
     repoIdToHostSelection,
     repoIdToRepresentative,
-    setHighlightedSettingsTargetId,
+    setHighlightedSettingsTarget,
     setMountedSectionIds,
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
@@ -56,6 +59,12 @@ export function useSettingsPageEffects(
     searchInputRef,
     shortcutsEscapeConfirmUntilRef
   } = interactions
+
+  useEffect(() => {
+    if (activeSectionId !== 'general') {
+      setGeneralSubPage(null)
+    }
+  }, [activeSectionId, setGeneralSubPage])
 
   useEffect(() => {
     fetchSettings()
@@ -165,7 +174,8 @@ export function useSettingsPageEffects(
     const paneSectionId = getSettingsSectionId(
       settingsNavigationTarget.pane,
       settingsNavigationTarget.repoId,
-      repoIdToRepresentative
+      repoIdToRepresentative,
+      settingsNavigationTarget.sectionId
     )
     if (settingsNavigationTarget.intent === 'toggle' && activeSectionId === paneSectionId) {
       clearSettingsTarget()
@@ -193,15 +203,23 @@ export function useSettingsPageEffects(
         )
       }
     }
+    if (settingsNavigationTarget.pane === 'general') {
+      setGeneralSubPage(resolveGeneralSubPage(settingsNavigationTarget.sectionId))
+    }
+    cancelSettingsListReveal()
     consumeSettingsNavigation(settingsNavigationTarget)
     pendingNavSectionRef.current = paneSectionId
-    pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
-    setHighlightedSettingsTargetId(
-      settingsNavigationTarget.pane === 'developer-permissions'
-        ? (settingsNavigationTarget.sectionId ?? null)
+    pendingScrollTargetRef.current =
+      settingsNavigationTarget.pane === 'bots'
+        ? paneSectionId
+        : (settingsNavigationTarget.sectionId ?? paneSectionId)
+    setHighlightedSettingsTarget(
+      settingsNavigationTarget.pane === 'developer-permissions' &&
+        settingsNavigationTarget.sectionId
+        ? { id: settingsNavigationTarget.sectionId }
         : null
     )
-    // Open Appearance’s nested status-bar section before scrolling to its rows.
+
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
       if (accordion) {
@@ -232,12 +250,13 @@ export function useSettingsPageEffects(
     pendingScrollTargetRef,
     repoIdToHostSelection,
     repoIdToRepresentative,
-    setHighlightedSettingsTargetId,
+    setHighlightedSettingsTarget,
     setMountedSectionIds,
     setPendingNavRequestTick,
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
     consumeSettingsNavigation,
+    setGeneralSubPage,
     setSettingsProjectHostSelection,
     setSshHostAddIntentSignal,
     settings,

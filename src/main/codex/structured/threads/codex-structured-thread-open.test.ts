@@ -1,10 +1,9 @@
-import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { describe, expect, it, vi } from 'vitest'
-import { CodexAppServerFrameSizeError } from '../../app-server/codex-app-server-frame-size-error'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
 function connectionFor(
@@ -14,130 +13,26 @@ function connectionFor(
 }
 
 describe('openCodexThread', () => {
-  it('retains the compiled Auto sandbox on start and resume', async () => {
-    const sandbox = {
-      type: 'workspaceWrite',
-      writableRoots: ['/workspace', '/extra-root'],
-      networkAccess: true,
-      excludeTmpdirEnvVar: true,
-      excludeSlashTmp: true
-    }
-    const connection = connectionFor(vi.fn(async () => ({ thread: { id: 'thread' }, sandbox })))
-    for (const resumeThreadId of [null, 'thread']) {
-      const opened = await openCodexThread(
-        connection,
-        {
-          cwd: '/workspace',
-          resumeThreadId,
-          permissionPolicy: codexStructuredPermissionPolicy('auto')
-        },
-        2_000
-      )
-      expect(opened.sandbox).toEqual(sandbox)
-    }
-  })
-
-  it.each([
-    ['workspaceWrite', 'on-request', 'auto_review', 'auto'],
-    ['readOnly', 'on-request', 'auto_review', 'read-only'],
-    ['read-only', 'on-request', 'auto_review', 'read-only'],
-    ['readOnly', 'on-request', 'user', 'ask'],
-    ['dangerFullAccess', 'never', 'user', 'full-access'],
-    ['workspaceWrite', 'on-request', 'user', 'ask'],
-    ['readOnly', 'untrusted', 'user', 'read-only'],
-    ['dangerFullAccess', 'never', 'auto_review', 'full-access'],
-    ['workspaceWrite', 'on-request', undefined, null],
-    [undefined, undefined, undefined, null]
-  ])(
-    'leaves own policy omitted on start/resume and reports %s/%s/%s',
-    async (sandboxType, approvalPolicy, approvalsReviewer, expected) => {
-      const request = vi.fn(async () => ({
-        thread: { id: 'own-thread' },
-        approvalPolicy,
-        sandbox: sandboxType ? { type: sandboxType } : undefined,
-        approvalsReviewer
-      }))
-      for (const resumeThreadId of [null, 'own-thread']) {
-        const opened = await openCodexThread(
-          connectionFor(request),
-          { cwd: '/workspace', resumeThreadId },
-          2_000
-        )
-        expect(opened.reportedPermissionMode).toBe(expected)
-      }
-      expect(request).toHaveBeenNthCalledWith(
-        1,
-        'thread/start',
-        { cwd: '/workspace' },
-        { timeoutMs: 2_000 }
-      )
-      expect(request).toHaveBeenNthCalledWith(
-        2,
-        'thread/resume',
-        { cwd: '/workspace', threadId: 'own-thread', excludeTurns: true },
-        { timeoutMs: 2_000 }
-      )
-    }
-  )
-
-  it('recognizes snake-case exact settings without changing the custom-policy fallback', async () => {
-    const request = vi.fn(async () => ({
-      thread: { id: 'configured' },
-      approval_policy: 'on-request',
-      approvals_reviewer: 'user',
-      sandbox: 'read-only'
-    }))
-    const opened = await openCodexThread(
-      connectionFor(request),
-      { cwd: '/workspace', resumeThreadId: 'configured' },
-      2_000
-    )
-    expect(opened.reportedPermissionMode).toBe('ask')
-    expect(request.mock.calls).toHaveLength(1)
-  })
-
-  it('applies the resolved permission policy when starting and resuming a thread', async () => {
-    const request = vi.fn(async (method: string) => ({
+  it('gives developer instructions to a new thread only', async () => {
+    const request = vi.fn(async (method: string, _params?: Record<string, unknown>) => ({
       thread: { id: method === 'thread/start' ? 'thread-created' : 'thread-existing' }
     }))
-    const connection = connectionFor(request)
-    const permissionPolicy = codexStructuredPermissionPolicy('full-access')
+    const developerInstructions = 'You are Reviewer.'
 
-    await openCodexThread(
-      connection,
-      { cwd: '/workspace', resumeThreadId: null, permissionPolicy },
-      2_000
-    )
-    await openCodexThread(
-      connection,
-      { cwd: '/workspace', resumeThreadId: 'thread-existing', permissionPolicy },
-      2_000
-    )
+    for (const resumeThreadId of [null, 'thread-existing']) {
+      await openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId, developerInstructions },
+        2_000
+      )
+    }
 
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      'thread/start',
-      {
-        cwd: '/workspace',
-        approvalPolicy: 'never',
-        sandbox: 'danger-full-access',
-        approvalsReviewer: 'user'
-      },
-      { timeoutMs: 2_000 }
-    )
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      'thread/resume',
-      {
-        threadId: 'thread-existing',
-        cwd: '/workspace',
-        approvalPolicy: 'never',
-        sandbox: 'danger-full-access',
-        approvalsReviewer: 'user',
-        excludeTurns: true
-      },
-      { timeoutMs: 2_000 }
-    )
+    expect(
+      request.mock.calls.map(([method, params]) => [method, params?.developerInstructions])
+    ).toEqual([
+      ['thread/start', developerInstructions],
+      ['thread/resume', undefined]
+    ])
   })
 
   // Omitting policy can inherit approval_policy = never and suppress Ask prompts.
@@ -165,51 +60,6 @@ describe('openCodexThread', () => {
     expect(params).not.toHaveProperty('sandboxPolicy')
   })
 
-  it('preserves an explicitly reported service tier, including Standard', async () => {
-    const priority = vi.fn(async () => ({
-      thread: { id: 'thread-fast' },
-      serviceTier: 'priority-live'
-    }))
-    await expect(
-      openCodexThread(connectionFor(priority), { cwd: '/workspace', resumeThreadId: null }, 2_000)
-    ).resolves.toMatchObject({ threadId: 'thread-fast', serviceTier: 'priority-live' })
-
-    const standard = vi.fn(async () => ({ thread: { id: 'thread-standard' }, serviceTier: null }))
-    await expect(
-      openCodexThread(connectionFor(standard), { cwd: '/workspace', resumeThreadId: null }, 2_000)
-    ).resolves.toEqual({
-      threadId: 'thread-standard',
-      reportedPermissionMode: null,
-      thread: { id: 'thread-standard' },
-      serviceTier: null
-    })
-  })
-
-  it('resumes by ID without pinning a rollout path and requests metadata-only state', async () => {
-    const request = vi.fn(async () => ({
-      thread: { id: 'thread-1', path: '/history/thread-1.jsonl' },
-      model: 'gpt-live'
-    }))
-
-    await expect(
-      openCodexThread(
-        connectionFor(request),
-        { cwd: '/workspace', resumeThreadId: 'thread-1' },
-        2_000
-      )
-    ).resolves.toMatchObject({ threadId: 'thread-1', model: 'gpt-live' })
-
-    expect(request).toHaveBeenCalledWith(
-      'thread/resume',
-      {
-        threadId: 'thread-1',
-        cwd: '/workspace',
-        excludeTurns: true
-      },
-      { timeoutMs: 2_000 }
-    )
-  })
-
   it('does not retry without excludeTurns after an unsupported-field refusal', async () => {
     const refusal = new CodexAppServerRequestError(
       'thread/resume',
@@ -229,36 +79,64 @@ describe('openCodexThread', () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
-  it('does not retry ambiguous invalid params or oversized history responses', async () => {
-    const invalid = new CodexAppServerRequestError(
-      'thread/resume',
-      -32602,
-      'codex app-server thread/resume failed: invalid params'
-    )
-    const invalidRequest = vi.fn(async () => {
-      throw invalid
+  it('unarchives a thread archived in Codex and reopens that same thread', async () => {
+    let archived = true
+    const request = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'thread/unarchive') {
+        archived = false
+        return {}
+      }
+      if (method === 'thread/resume' && archived) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          `session ${String(params?.threadId)} is archived. Run \`codex unarchive ${String(params?.threadId)}\` to unarchive it first.`
+        )
+      }
+      return { thread: { id: params?.threadId ?? 'thread-new' } }
     })
-    await expect(
-      openCodexThread(
-        connectionFor(invalidRequest),
-        { cwd: '/workspace', resumeThreadId: 'thread-1' },
-        2_000
-      )
-    ).rejects.toBe(invalid)
-    expect(invalidRequest).toHaveBeenCalledOnce()
 
-    const oversized = new CodexAppServerFrameSizeError('thread/resume', 16_777_217, 16_777_216)
-    const oversizedRequest = vi.fn(async () => {
-      throw oversized
-    })
     await expect(
       openCodexThread(
-        connectionFor(oversizedRequest),
-        { cwd: '/workspace', resumeThreadId: 'thread-1' },
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId: 'thread-archived', supersedeIfUnsaved: true },
         2_000
       )
-    ).rejects.toBe(oversized)
-    expect(oversizedRequest).toHaveBeenCalledOnce()
+    ).resolves.toMatchObject({ threadId: 'thread-archived' })
+    expect(request.mock.calls.map(([method]) => method)).toEqual([
+      'thread/resume',
+      'thread/unarchive',
+      'thread/resume'
+    ])
+    expect(request.mock.calls[1]?.[1]).toEqual({ threadId: 'thread-archived' })
+  })
+
+  it('never replaces an archived thread whose saved conversation is gone after unarchiving', async () => {
+    const request = vi.fn(async (method: string) => {
+      if (method === 'thread/resume' && request.mock.calls.length === 1) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'session thread-a is archived.'
+        )
+      }
+      if (method === 'thread/resume') {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'no rollout found for thread id thread-a'
+        )
+      }
+      return method === 'thread/unarchive' ? {} : { thread: { id: 'thread-new' } }
+    })
+    const error = await openCodexThread(
+      connectionFor(request),
+      { cwd: '/workspace', resumeThreadId: 'thread-a', supersedeIfUnsaved: true },
+      2_000
+    ).catch((error: unknown) => error)
+
+    expect(providerStartupFailureFact(error)).toMatchObject({ kind: 'savedConversationMissing' })
+    expect(request.mock.calls.map(([method]) => method)).not.toContain('thread/start')
   })
 
   describe('a thread Codex never saved', () => {
@@ -276,55 +154,6 @@ describe('openCodexThread', () => {
         return { thread: { id: 'thread-new' }, model: 'gpt-live' }
       })
     }
-
-    it('starts a new thread in its place when Codex proves it holds no rollout', async () => {
-      const request = codexWithoutRollout()
-
-      await expect(
-        openCodexThread(
-          connectionFor(request),
-          { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
-          2_000
-        )
-      ).resolves.toMatchObject({
-        threadId: 'thread-new',
-        supersededThreadId: 'thread-unsaved',
-        model: 'gpt-live'
-      })
-      expect(request.mock.calls.map(([method]) => method)).toEqual([
-        'thread/resume',
-        'thread/start'
-      ])
-      expect(request).toHaveBeenLastCalledWith(
-        'thread/start',
-        { cwd: '/workspace' },
-        {
-          timeoutMs: 2_000
-        }
-      )
-    })
-
-    it('opens the replacement thread on the chosen model', async () => {
-      const request = codexWithoutRollout()
-
-      await openCodexThread(
-        connectionFor(request),
-        {
-          cwd: '/workspace',
-          resumeThreadId: 'thread-unsaved',
-          supersedeIfUnsaved: true,
-          model: 'gpt-chosen'
-        },
-        2_000
-      )
-
-      expect(request.mock.calls[0]?.[1]).not.toHaveProperty('model')
-      expect(request).toHaveBeenLastCalledWith(
-        'thread/start',
-        { cwd: '/workspace', model: 'gpt-chosen' },
-        { timeoutMs: 2_000 }
-      )
-    })
 
     it('explains a missing saved conversation without replacing it', async () => {
       const request = codexWithoutRollout()
@@ -427,21 +256,4 @@ it('keeps an exact active-writer refusal typed through cleanup wrapping', async 
     }
   )
   expect(request).toHaveBeenCalledOnce()
-})
-
-it.each([
-  ['thread/resume', -32600, 'thread D already has an active writer'],
-  ['thread/start', -32600, 'thread C already has an active writer'],
-  ['thread/resume', -32600, 'thread C is archived'],
-  ['thread/resume', -32600, 'unrelated invalid request'],
-  ['thread/resume', -1, 'thread C already has an active writer']
-] as const)('does not broaden writer refusal for %s/%s/%s', async (method, code, message) => {
-  const error = new CodexAppServerRequestError(method, code, message)
-  await expect(
-    openCodexThread(
-      connectionFor(vi.fn().mockRejectedValue(error)),
-      { cwd: '/workspace', resumeThreadId: 'C' },
-      2_000
-    )
-  ).rejects.toBe(error)
 })

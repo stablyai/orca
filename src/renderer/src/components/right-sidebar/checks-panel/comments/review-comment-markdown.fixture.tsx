@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { getPRCommentPresentationClasses } from './pr-comment-presentation'
 import { reviewCommentMarkdown } from './review-comment-markdown'
 
@@ -40,5 +40,35 @@ export const expanded = defineFixture({
   width: 540,
   interact: (frame) => {
     frame.querySelector('summary')?.click()
+  }
+})
+
+const greptileDiagram = `<h3>Diagram</h3>
+
+\`\`\`mermaid
+%%{init: {'theme': 'neutral'}}%%
+flowchart LR
+    Client["Client"] --> API["API"]
+    API --> Store[("Store")]
+    API -. "async" .-> Worker["Worker"]
+\`\`\``
+
+export const mermaidDiagram = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="bg-background p-3 text-foreground">
+      <div className="rounded-lg border border-border bg-card p-4 text-[13px] leading-relaxed">
+        <CommentMarkdown
+          content={greptileDiagram}
+          extension={reviewCommentMarkdown}
+          className={getPRCommentPresentationClasses('cards').commentBodyMarkdown}
+        />
+      </div>
+    </div>
+  ),
+  interact: async (frame) => {
+    for (let i = 0; i < 100 && !frame.querySelector('.mermaid-block svg'); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
   }
 })

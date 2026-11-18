@@ -5,7 +5,7 @@ import {
   pluginIdSchema,
   pluginRelativePathSchema
 } from '../manifest/plugin-manifest-fields'
-import { normalizeKeybinding } from '../../keybindings'
+import { normalizeKeybinding } from '../../keybindings/normalization'
 import { PLUGIN_COMMAND_WHEN_SINCE, pluginCommandWhenSchema } from './plugin-command-contribution'
 import {
   pluginFieldDoc,

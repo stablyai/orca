@@ -2,11 +2,12 @@ import {
   isTerminalInputPaused,
   TerminalInputPausedError,
   type TerminalInputSource
-} from '../../../terminal-input-admission'
-import type { RpcCallerIdentity } from '../../rpc-caller-identity'
+} from '../../../terminal/input/terminal-input-admission'
+import type { RpcCallerIdentity } from '../../callers/rpc-caller-identity'
 import { InvalidArgumentError } from '../../core'
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
-import type { DriverState, OrcaRuntimeService } from '../../../orca-runtime'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
+import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { RuntimeTerminalDriverState } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR,
@@ -53,7 +54,7 @@ export async function assertTerminalSendTextWithinLimit(text: string | undefined
 }
 
 export function resolveMobileFloorClientId(
-  driver: DriverState | null,
+  driver: RuntimeTerminalDriverState | null,
   client: TerminalViewportClient | undefined
 ): string | null {
   if (client?.type === 'mobile') {
@@ -151,10 +152,13 @@ export async function commitMobileInputFloorClaim(
 
 export function getTerminalSendGuardRefusedReason(
   error: unknown
-): 'no-agent' | 'permission' | undefined {
+): 'no-agent' | 'permission' | 'approval-unseen' | undefined {
   const message = error instanceof Error ? error.message : String(error)
   if (message.includes('terminal_guard_permission')) {
     return 'permission'
+  }
+  if (message.includes('terminal_guard_approval_unseen')) {
+    return 'approval-unseen'
   }
   if (message.includes('terminal_guard_no_agent')) {
     return 'no-agent'

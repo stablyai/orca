@@ -20,8 +20,12 @@ export type RuntimeFileStatLike = {
   nlink?: number
   mtime?: number | Date
   mtimeMs?: number
+  ctimeMs?: number
   isDirectory?: () => boolean
 }
+
+/** The granted bytes in fixed blocks; lets a page be verified without the whole file. */
+export type TerminalFileContentBlocks = { byteLength: number; digests: readonly string[] }
 
 export type TerminalFileGrant = {
   id: string
@@ -33,6 +37,8 @@ export type TerminalFileGrant = {
   statIdentity: string | null
   // Linux can reuse inodes and coarse mtimes; the digest catches same-size content swaps.
   contentDigest: string | null
+  /** Set with contentDigest from the same read; null where no digest pins the file. */
+  contentBlocks?: TerminalFileContentBlocks | null
   expiryTimer?: ReturnType<typeof setTimeout>
 }
 
@@ -47,6 +53,7 @@ export class RuntimeTerminalFileGrants {
     clientId?: string
     stats: RuntimeFileStatLike
     contentDigest?: string | null
+    contentBlocks?: TerminalFileContentBlocks | null
   }): TerminalFileGrant {
     const grant: TerminalFileGrant = {
       id: randomUUID(),
@@ -56,7 +63,8 @@ export class RuntimeTerminalFileGrants {
       ...(args.clientId ? { clientId: args.clientId } : {}),
       expiresAt: Date.now() + TERMINAL_FILE_GRANT_TTL_MS,
       statIdentity: terminalFileStatIdentity(args.stats),
-      contentDigest: args.contentDigest ?? null
+      contentDigest: args.contentDigest ?? null,
+      contentBlocks: args.contentBlocks ?? null
     }
     this.terminalFileGrants.set(grant.id, grant)
     this.scheduleTerminalFileGrantExpiry(grant)

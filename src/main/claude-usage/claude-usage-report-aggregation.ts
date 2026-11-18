@@ -1,4 +1,4 @@
-import { highestUsageKey } from '../usage/highest-usage-key'
+import { highestUsageKey } from '../usage/rollups/highest-usage-key'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
@@ -6,7 +6,7 @@ import type {
   ClaudeUsageRange,
   ClaudeUsageScope,
   ClaudeUsageSummary
-} from '../../shared/claude-usage-types'
+} from '../../shared/agent-usage/analytics/claude-usage-types'
 import type { ClaudeUsagePersistedState } from './types'
 import { estimateCostUsd } from './claude-model-pricing'
 import { addBillableTokens, NO_TOKENS, type ClaudeBillableTokens } from './claude-billable-tokens'

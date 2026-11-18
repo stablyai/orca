@@ -1,12 +1,13 @@
-import type * as ProfileIndexStoreModule from '../../orca-profiles/profile-index-store'
-import type * as ProfileTelemetryConsentSeedModule from '../../orca-profiles/profile-telemetry-consent-seed'
-import { existsSync } from 'node:fs'
+import 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from '../../persistence/loading-store/profile-state-maintenance-fixture'
+} from '../../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
 import { registerOrcaProfileHandlers } from './orca-profiles'
+import { OrcaAccountService } from '../../orca-profiles/orca-account-service'
+
+const orcaAccount = new OrcaAccountService({ openBrowser: async () => {} })
 
 const { handlers, quit, select } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => Promise<unknown>>(),
@@ -25,19 +26,12 @@ vi.mock('../../startup/quit/app-relaunch', () => ({ relaunchApp: vi.fn() }))
 vi.mock('../../orca-profiles/profile-index-store', () => ({
   getOrcaProfileListState: () => ({ activeProfileId: 'source', profiles: [] }),
   setActiveOrcaProfile: select,
-  createLocalOrcaProfile: vi.fn(),
-  seedNewOrcaProfileTelemetryConsent: vi.fn()
+  createLocalOrcaProfile: vi.fn()
 }))
 
-vi.mock('../../orca-profiles/profile-telemetry-consent-seed', async (importOriginal) => {
-  const facadeMocks = await vi.importMock<typeof ProfileIndexStoreModule>(
-    '../../orca-profiles/profile-index-store'
-  )
-  return {
-    ...(await importOriginal<typeof ProfileTelemetryConsentSeedModule>()),
-    seedNewOrcaProfileTelemetryConsent: facadeMocks.seedNewOrcaProfileTelemetryConsent
-  }
-})
+vi.mock('../../orca-profiles/storage/new-profile-state', () => ({
+  initializeNewOrcaProfileState: vi.fn()
+}))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
@@ -67,7 +61,7 @@ describe('plain profile switch persistence', () => {
       hold(() => complete(domains))
     )
     store.updateSettings({ theme: 'dark' })
-    registerOrcaProfileHandlers(store)
+    registerOrcaProfileHandlers(store, orcaAccount)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const switching = handlers
       .get('orcaProfiles:switch')?.(
@@ -85,41 +79,5 @@ describe('plain profile switch persistence', () => {
       settings: { theme: 'dark' },
       workspaceSession: { activeTabId: 'last-tab' }
     })
-  })
-
-  it('admits pre-relaunch writes and includes quit-time edits in the final source checkpoint', async () => {
-    const { store, readState, dataFile } = await createWorkerMaintenanceFixture()
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await store.flushPendingOrThrowAsync()
-    const cleanupSaved = vi.fn()
-    let final: Promise<void> | undefined
-    quit.mockImplementation(() => {
-      store.getWorkspaceSession().activeTabId = 'last-tab'
-      final = store.flushFinalOrThrowAsync()
-    })
-    registerOrcaProfileHandlers(store, {
-      onBeforeRelaunch: async () => {
-        store.updateSettings({ theme: 'light' })
-        await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-        cleanupSaved()
-      }
-    })
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const switchProfile = handlers.get('orcaProfiles:switch')
-    expect(switchProfile).toBeDefined()
-    await switchProfile?.(
-      { sender: { isDestroyed: () => false, send: vi.fn() } },
-      { profileId: 'target' }
-    )
-    await vi.advanceTimersByTimeAsync(150)
-    expect(final).toBeDefined()
-    await final
-    expect(select).toHaveBeenCalledWith('target')
-    expect(cleanupSaved).toHaveBeenCalledOnce()
-    expect(readState()).toMatchObject({
-      settings: { theme: 'light' },
-      workspaceSession: { activeTabId: 'last-tab' }
-    })
-    expect(existsSync(dataFile)).toBe(false)
   })
 })

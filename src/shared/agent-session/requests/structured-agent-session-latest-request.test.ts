@@ -1,318 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnLifecycle
+  AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
+import { agentSessionFailureWords } from '../failures/agent-session-failure-words'
+import { latestStructuredAgentSessionFailure } from './structured-agent-session-latest-request'
 import {
-  DISPATCH_REJECTED_CANCELLED,
-  DISPATCH_REJECTED_HOST_RESTARTED,
-  DISPATCH_REJECTED_NOT_DELIVERED,
-  DISPATCH_REJECTED_PROVIDER_CLOSED
-} from './structured-agent-session-dispatch-rejection'
-import {
-  hasStructuredAgentSessionRequest,
-  latestStructuredAgentSessionRequest
-} from './structured-agent-session-latest-request'
-import { projectStructuredAgentSessionStatusSummary } from '../view/structured-agent-session-projection'
-import { latestNativeChatTurnSinceRequest } from '../../native-chat/native-chat-orca-stop-cut'
-import { selectStructuredAgentTurnTimings } from '../view/structured-agent-session-turn-timing'
-
-const START_FAILURE = 'Claude is not signed in.'
-
-it('keeps unresolved human input as a latest-request uncertainty boundary without a lifecycle', () => {
-  const prior = turn('prior', 1, {
-    state: 'interrupted',
-    startedAt: 10,
-    completedAt: 20,
-    outcome: 'cancellation'
-  })
-  const unknown: AgentJournalRenderItem = {
-    ...userEntry('outside', 2),
-    turnScope: { kind: 'unknown' }
-  }
-  const items = [prior, unknown]
-  expect(latestStructuredAgentSessionRequest([prior], [])?.outcome).toBe('cancellation')
-  expect(latestStructuredAgentSessionRequest(items, [])).toBeNull()
-  expect(latestNativeChatTurnSinceRequest(items, [])).toBeNull()
-  expect(hasStructuredAgentSessionRequest([unknown], [])).toBe(true)
-  expect(selectStructuredAgentTurnTimings(items)).toEqual(selectStructuredAgentTurnTimings([prior]))
-  const next = turn('next', 3, { state: 'running', startedAt: 30 })
-  expect(latestStructuredAgentSessionRequest([...items, next], [])).toMatchObject({
-    id: 'next',
-    turnState: 'running',
-    outcome: null
-  })
-})
-
-/** `intoTurn` names the turn the message's handover delivered it into — a steer. */
-function userEntry(
-  clientMessageId: string,
-  sequence: number,
-  intoTurn?: string
-): AgentJournalRenderItem {
-  return {
-    itemId: agentJournalSubmissionKey(clientMessageId),
-    revision: 0,
-    sequence,
-    observedAt: sequence,
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] },
-    turnScope: intoTurn
-      ? { kind: 'turn', turnItemId: `codex:turn:${intoTurn}` }
-      : { kind: 'thread' }
-  }
-}
-
-function turn(
-  turnId: string,
-  sequence: number,
-  fields: Omit<AgentJournalTurnLifecycle, 'turnId'>
-): AgentJournalRenderItem {
-  return {
-    itemId: `codex:turn:${turnId}`,
-    revision: 1,
-    sequence,
-    observedAt: sequence,
-    body: { kind: 'turn', turnId, ...fields }
-  }
-}
-
-function sent(
-  clientMessageId: string,
-  fields: Partial<AgentJournalSubmission> & Pick<AgentJournalSubmission, 'dispatchState'>
-): AgentJournalSubmission {
-  return {
-    clientMessageId,
-    fence: 1,
-    payloadFingerprint: clientMessageId,
-    providerItemId: null,
-    reason: null,
-    submittedAt: 10,
-    resolvedAt: 20,
-    handoverRecorded: true,
-    ...fields
-  }
-}
-
-const rejected = (clientMessageId: string, reason: string, handedOverAt?: number) =>
-  sent(clientMessageId, {
-    dispatchState: 'rejected',
-    reason,
-    ...(handedOverAt !== undefined ? { handedOverAt } : {})
-  })
-
-type Row = {
-  name: string
-  items: AgentJournalRenderItem[]
-  submissions: AgentJournalSubmission[]
-  fence?: number
-  outcome: 'success' | 'failure' | 'cancellation' | null
-  listed: boolean
-}
-
-const ROWS: Row[] = [
-  {
-    name: 'a send the agent start refused',
-    items: [userEntry('m1', 1)],
-    submissions: [rejected('m1', START_FAILURE)],
-    outcome: 'failure',
-    listed: true
-  },
-  {
-    name: 'a send the user withdrew (no verdict)',
-    items: [userEntry('m1', 1)],
-    submissions: [rejected('m1', DISPATCH_REJECTED_CANCELLED)],
-    outcome: null,
-    listed: false
-  },
-  {
-    name: 'a send still queued when the host restarted (no verdict)',
-    items: [userEntry('m1', 1)],
-    submissions: [rejected('m1', DISPATCH_REJECTED_HOST_RESTARTED)],
-    outcome: null,
-    listed: false
-  },
-  {
-    name: 'a send still queued when the provider closed (no verdict)',
-    items: [userEntry('m1', 1)],
-    submissions: [rejected('m1', DISPATCH_REJECTED_PROVIDER_CLOSED)],
-    outcome: null,
-    listed: false
-  },
-  {
-    name: 'a send crash recovery found the provider never received (no verdict)',
-    items: [userEntry('m1', 1)],
-    submissions: [
-      sent('m1', {
-        dispatchState: 'rejected',
-        reason: DISPATCH_REJECTED_NOT_DELIVERED,
-        recovered: true
-      })
-    ],
-    outcome: null,
-    listed: false
-  },
-  {
-    name: 'a turn that succeeded, then a send crash recovery found the provider never received',
-    items: [
-      userEntry('m1', 1),
-      turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 15 }),
-      userEntry('m2', 3)
-    ],
-    submissions: [
-      sent('m1', { dispatchState: 'accepted' }),
-      sent('m2', {
-        dispatchState: 'rejected',
-        reason: DISPATCH_REJECTED_NOT_DELIVERED,
-        recovered: true
-      })
-    ],
-    outcome: 'success',
-    listed: true
-  },
-  {
-    name: 'a send crash recovery left unknown',
-    items: [userEntry('m1', 1)],
-    submissions: [sent('m1', { dispatchState: 'unknown', recovered: true })],
-    outcome: null,
-    listed: false
-  },
-  {
-    name: 'a send pending at an older fence',
-    items: [userEntry('m1', 1)],
-    submissions: [sent('m1', { dispatchState: 'pending', handedOverAt: 11, resolvedAt: null })],
-    fence: 2,
-    outcome: null,
-    listed: false
-  },
-  {
-    name: 'a turn that succeeded, then a send the start refused',
-    items: [
-      userEntry('m1', 1),
-      turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 15 }),
-      userEntry('m2', 3)
-    ],
-    submissions: [sent('m1', { dispatchState: 'accepted' }), rejected('m2', START_FAILURE)],
-    outcome: 'failure',
-    listed: true
-  },
-  {
-    name: 'a refused send, then a turn that succeeded',
-    items: [
-      userEntry('m1', 1),
-      userEntry('m2', 2),
-      turn('t2', 3, { state: 'completed', outcome: 'success', completedAt: 40 })
-    ],
-    submissions: [rejected('m1', START_FAILURE), sent('m2', { dispatchState: 'accepted' })],
-    outcome: 'success',
-    listed: true
-  },
-  {
-    name: 'a steer the provider refused inside a turn that then succeeded',
-    items: [
-      userEntry('m1', 1),
-      turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 50 }),
-      userEntry('steer', 3)
-    ],
-    submissions: [
-      sent('m1', { dispatchState: 'accepted' }),
-      sent('steer', {
-        dispatchState: 'rejected',
-        reason: 'no active turn to steer',
-        answeredInTurn: { turnItemId: 'codex:turn:t1', via: 'steer' }
-      })
-    ],
-    outcome: 'success',
-    listed: true
-  },
-  {
-    name: 'a user message the provider journaled itself (history, an older host)',
-    items: [
-      {
-        itemId: 'codex:thread-1:turn-1:0',
-        revision: 0,
-        sequence: 1,
-        observedAt: 1,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'from history' }] }
-      }
-    ],
-    submissions: [],
-    outcome: null,
-    listed: true
-  },
-  {
-    name: 'a goal and nothing else yet',
-    items: [
-      {
-        itemId: 'codex:goal-entry',
-        revision: 0,
-        sequence: 1,
-        observedAt: 1,
-        body: {
-          kind: 'message',
-          role: 'user',
-          sentAs: 'goal',
-          blocks: [{ type: 'text', text: 'ship it' }]
-        }
-      }
-    ],
-    submissions: [],
-    outcome: null,
-    listed: true
-  }
-]
-
-describe('the latest request and its verdict', () => {
-  it.each(ROWS)('$name', ({ items, submissions, fence, outcome, listed }) => {
-    expect(latestStructuredAgentSessionRequest(items, submissions)?.outcome ?? null).toBe(outcome)
-    const summary = projectStructuredAgentSessionStatusSummary(items, submissions, fence)
-    expect(summary.status !== null).toBe(listed)
-    if (listed && summary.status === 'idle') {
-      expect(summary.turnOutcome ?? null).toBe(outcome)
-    }
-  })
-
-  it('dates an idle session by the refusal it reports, not by the older turn', () => {
-    const items = [
-      userEntry('m1', 1),
-      turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 15 }),
-      userEntry('m2', 3)
-    ]
-    const submissions = [sent('m1', { dispatchState: 'accepted' }), rejected('m2', START_FAILURE)]
-    expect(projectStructuredAgentSessionStatusSummary(items, submissions)).toMatchObject({
-      status: 'idle',
-      turnOutcome: 'failure',
-      statusStartedAt: 20
-    })
-  })
-})
-
-describe('the sidebar verdict agrees with the rejection classifier', () => {
-  it('replaces the prior success with the model rejection verdict', () => {
-    const items = [
-      turn('prior', 1, { state: 'completed', outcome: 'success', completedAt: 10 }),
-      userEntry('m1', 2)
-    ]
-    const submissions = [
-      sent('m1', {
-        dispatchState: 'rejected',
-        reason: "Grok couldn't use retired. Pick another model and send again.",
-        rejection: { kind: 'modelUnavailable' }
-      })
-    ]
-    expect(latestStructuredAgentSessionRequest(items, submissions)).toMatchObject({
-      kind: 'refused-send',
-      outcome: 'failure',
-      id: agentJournalSubmissionKey('m1')
-    })
-    expect(hasStructuredAgentSessionRequest([items[1]!], submissions)).toBe(true)
-    expect(projectStructuredAgentSessionStatusSummary(items, submissions)).toMatchObject({
-      status: 'idle',
-      turnOutcome: 'failure'
-    })
-  })
-})
+  projectStructuredAgentSessionStatusState,
+  projectStructuredAgentSessionStatusSummary
+} from '../view/structured-agent-session-projection'
+import type { StructuredAgentSessionWorkScope } from '../view/structured-agent-session-main-agent-working'
 
 describe('the assistant line plain-text surfaces show', () => {
   function message(
@@ -330,20 +28,133 @@ describe('the assistant line plain-text surfaces show', () => {
     }
   }
 
-  it('keeps a visual line out of the preview every status reader shows', () => {
+  const botPreview = (items: AgentJournalRenderItem[]): string | undefined =>
+    projectStructuredAgentSessionStatusState(items, [], undefined, undefined, undefined, true)
+      .summary.lastAssistantMessage
+
+  it("shows a bot's last real answer, never the quiet marker, after quiet turns", () => {
     const items = [
-      message('ask', 1, 'user', 'chart it'),
-      message(
-        'said',
-        2,
-        'assistant',
-        'p95 is highest in ap-south.\n\n::orca-visual{file="latency.html" title="p95"}'
-      ),
-      message('only-visual', 3, 'assistant', '::orca-visual{file="table.html"}')
+      message('ask', 1, 'user', 'triage today'),
+      message('said', 2, 'assistant', 'Started 11 triage agents.'),
+      message('wake-1', 3, 'user', 'agent 1 finished'),
+      message('quiet-1', 4, 'assistant', 'NO_REPLY'),
+      message('wake-2', 5, 'user', 'agent 2 finished'),
+      message('quiet-2', 6, 'assistant', '2 of 11 done.\n\n**NO_REPLY**')
     ]
-    // A reply that is nothing but a visual leaves the turn's earlier prose as the preview.
+    expect(botPreview(items)).toBe('Started 11 triage agents.')
+  })
+
+  const send = (
+    clientMessageId: string,
+    dispatchState: AgentJournalSubmission['dispatchState'],
+    reason: string | null = null
+  ): AgentJournalSubmission => ({
+    clientMessageId,
+    fence: 1,
+    payloadFingerprint: 'f',
+    dispatchState,
+    providerItemId: null,
+    reason,
+    submittedAt: 1,
+    resolvedAt: dispatchState === 'pending' ? null : 2
+  })
+  const answered = [
+    message(agentJournalSubmissionKey('first'), 1, 'user', 'check the nightly'),
+    message('said', 2, 'assistant', 'Nightly is green.')
+  ]
+  const summary = (
+    submissions: AgentJournalSubmission[],
+    scope?: StructuredAgentSessionWorkScope
+  ) =>
+    projectStructuredAgentSessionStatusState(answered, submissions, 1, scope, undefined, true)
+      .summary
+
+  it('drops the previous answer as soon as a new message is sent, before the agent echoes it', () => {
+    expect(summary([send('first', 'accepted')]).lastAssistantMessage).toBe('Nightly is green.')
+    // The second message is out but not yet journaled: working, with no answer of its own yet.
+    expect(summary([send('first', 'accepted'), send('second', 'pending')])).toMatchObject({
+      status: 'working'
+    })
+    expect(
+      summary([send('first', 'accepted'), send('second', 'pending')]).lastAssistantMessage
+    ).toBeUndefined()
+  })
+
+  it('keeps the answer when the host owes no send: one released in doubt or no longer held', () => {
+    const notHeld: StructuredAgentSessionWorkScope = {
+      isCurrentItem: () => false,
+      owesSend: () => false
+    }
+    for (const second of [
+      send('second', 'unknown', 'provider_ended_before_acknowledgement'),
+      send('second', 'pending')
+    ]) {
+      expect(summary([send('first', 'accepted'), second], notHeld)).toMatchObject({
+        status: 'idle',
+        lastAssistantMessage: 'Nightly is green.'
+      })
+    }
+  })
+
+  it('keeps a non-bot answer that ends with the quiet marker as its preview', () => {
+    const items = [
+      message('ask', 1, 'user', 'What is next?'),
+      message('said', 2, 'assistant', 'Ready for the next task.'),
+      message('ask-2', 3, 'user', 'What token means no response?'),
+      message('answer', 4, 'assistant', 'The token is `NO_REPLY`')
+    ]
     expect(projectStructuredAgentSessionStatusSummary(items).lastAssistantMessage).toBe(
-      'p95 is highest in ap-south.'
+      'The token is `NO_REPLY`'
     )
+  })
+})
+
+const failureTestUserMessage = (itemId: string, sequence: number): AgentJournalRenderItem => ({
+  itemId,
+  revision: 0,
+  sequence,
+  observedAt: sequence,
+  body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'look into this' }] }
+})
+const failureTestStatusRow = (
+  itemId: string,
+  sequence: number,
+  kind: 'usageLimitReached' | 'providerRetrying' | 'notSignedIn'
+): AgentJournalRenderItem => ({
+  itemId,
+  revision: 0,
+  sequence,
+  observedAt: sequence,
+  body: { kind: 'status', ...agentSessionFailureWords({ kind }, { surface: 'row' }) }
+})
+
+describe('why the latest request failed', () => {
+  it('reads the latest turn’s failure row, past a retry, and nothing from an earlier turn', () => {
+    const asked = failureTestUserMessage('ask', 1)
+    const limit = failureTestStatusRow('limit', 2, 'usageLimitReached')
+    const retrying = failureTestStatusRow('retry', 3, 'providerRetrying')
+    expect(latestStructuredAgentSessionFailure([asked, limit, retrying], [])?.kind).toBe(
+      'usageLimitReached'
+    )
+    expect(latestStructuredAgentSessionFailure([asked, retrying], [])).toBeUndefined()
+    expect(
+      latestStructuredAgentSessionFailure([asked, limit, failureTestUserMessage('again', 4)], [])
+    ).toBeUndefined()
+  })
+
+  it('reads a refused send’s rejection', () => {
+    const submission: AgentJournalSubmission = {
+      clientMessageId: 'm1',
+      fence: 1,
+      payloadFingerprint: 'f',
+      dispatchState: 'rejected',
+      providerItemId: null,
+      reason: 'Codex is not signed in.',
+      rejection: { kind: 'notSignedIn' },
+      submittedAt: 1,
+      resolvedAt: 2
+    }
+    const sent = failureTestUserMessage(agentJournalSubmissionKey('m1'), 1)
+    expect(latestStructuredAgentSessionFailure([sent], [submission])?.kind).toBe('notSignedIn')
   })
 })

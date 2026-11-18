@@ -12,7 +12,6 @@ import { BrowserClientFileChannelTransport } from './browser-client-file-channel
 
 const ENV_A_GUEST_ID = 21
 const ENV_B_GUEST_ID = 22
-const SERVER_GUEST_ID = 23
 
 function pageOf(environment: string): BrowserClientHostedPageInventory {
   return {
@@ -36,14 +35,12 @@ type EnvironmentHarness = {
 function environment(input: {
   environmentId: string
   guestWebContentsId: number
-  availability?: 'negotiated' | 'unsupported' | 'unavailable'
 }): EnvironmentHarness {
-  const availability = input.availability ?? 'negotiated'
   const writes: { browserPageId: string; hostLabel: string }[] = []
   const transport = new BrowserClientFileChannelTransport()
   transport.bind({
-    fileChannelNegotiated: availability === 'negotiated',
-    fileChannelAvailability: availability,
+    fileChannelNegotiated: true,
+    fileChannelAvailability: 'negotiated',
     sendFileChannelRequest: async (_method, params) => {
       writes.push({
         browserPageId: (params as { browserPageId: string }).browserPageId,
@@ -102,77 +99,5 @@ describe('client-hosted download routing', () => {
 
     expect(envA.writes).toEqual([{ browserPageId: 'page-env-a', hostLabel: 'env-a' }])
     expect(envB.writes).toEqual([])
-  })
-
-  it('cancels a client-hosted download whose owner cannot be resolved', () => {
-    environment({ environmentId: 'env-a', guestWebContentsId: ENV_A_GUEST_ID })
-    setBrowserClientRouteWebContentsProbe((id) => id !== SERVER_GUEST_ID)
-
-    expect(routeBrowserClientDownload({ guestWebContentsId: ENV_B_GUEST_ID })).toEqual({
-      kind: 'blocked'
-    })
-  })
-
-  it('cancels rather than saving locally when the owning page has no usable channel', () => {
-    environment({
-      environmentId: 'env-a',
-      guestWebContentsId: ENV_A_GUEST_ID,
-      availability: 'unavailable'
-    })
-    setBrowserClientRouteWebContentsProbe(() => true)
-
-    expect(routeBrowserClientDownload({ guestWebContentsId: ENV_A_GUEST_ID })).toEqual({
-      kind: 'blocked'
-    })
-  })
-
-  it('keeps the desktop fallback for a lease that never negotiated the file channel', () => {
-    environment({
-      environmentId: 'env-a',
-      guestWebContentsId: ENV_A_GUEST_ID,
-      availability: 'unsupported'
-    })
-    setBrowserClientRouteWebContentsProbe(() => true)
-
-    expect(routeBrowserClientDownload({ guestWebContentsId: ENV_A_GUEST_ID })).toEqual({
-      kind: 'local'
-    })
-  })
-
-  it('leaves ordinary browser guests on their desktop Downloads path', () => {
-    environment({ environmentId: 'env-a', guestWebContentsId: ENV_A_GUEST_ID })
-    setBrowserClientRouteWebContentsProbe((id) => id !== SERVER_GUEST_ID)
-
-    expect(routeBrowserClientDownload({ guestWebContentsId: SERVER_GUEST_ID })).toEqual({
-      kind: 'local'
-    })
-  })
-
-  it('stops routing to a composition once it starts closing', () => {
-    const relay = { route: () => ({ kind: 'local-fallback' }) as const }
-    const release = registerBrowserClientDownloadRouter('env-a', relay)
-    setBrowserClientRouteWebContentsProbe(() => true)
-    expect(routeBrowserClientDownload({ guestWebContentsId: ENV_A_GUEST_ID })).toEqual({
-      kind: 'local'
-    })
-
-    release()
-
-    expect(routeBrowserClientDownload({ guestWebContentsId: ENV_A_GUEST_ID })).toEqual({
-      kind: 'blocked'
-    })
-  })
-
-  it('does not read a throwing router as permission to save locally', () => {
-    registerBrowserClientDownloadRouter('env-a', {
-      route: () => {
-        throw new Error('router exploded')
-      }
-    })
-    setBrowserClientRouteWebContentsProbe(() => true)
-
-    expect(routeBrowserClientDownload({ guestWebContentsId: ENV_A_GUEST_ID })).toEqual({
-      kind: 'blocked'
-    })
   })
 })

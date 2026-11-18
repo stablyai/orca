@@ -1,4 +1,4 @@
-import type { NdjsonRejectedRecord } from '../../../shared/main-process-ndjson-framer'
+import type { NdjsonRejectedRecord } from '../../../shared/json-stream/main-process-ndjson-framer'
 import type { CodexAppServerConnectionHandlers } from './codex-app-server-connection-types'
 import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
@@ -7,7 +7,7 @@ import {
   CodexAppServerUnsupportedError,
   isCodexMethodNotFoundError
 } from './codex-app-server-session'
-import { classifyJsonRpcPrefix } from '../../../shared/json-rpc-record-prefix'
+import { classifyJsonRpcPrefix } from '../../../shared/json-stream/json-rpc-record-prefix'
 
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
 const MAX_REMEMBERED_TIMEOUTS = 64

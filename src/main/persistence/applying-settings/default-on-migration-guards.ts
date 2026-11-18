@@ -1,10 +1,11 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 
 // Each setting whose default flipped once, paired with its one-shot migration guard.
 const DEFAULT_ON_MIGRATION_GUARDS = [
   ['terminalTuiScrollSensitivity', 'terminalTuiScrollSensitivityDefaultedToOne'],
   ['autoRenameBranchFromWork', 'autoRenameBranchFromWorkDefaultedOn'],
-  ['pluginSystemEnabled', 'pluginSystemDefaultedOn']
+  ['pluginSystemEnabled', 'pluginSystemDefaultedOn'],
+  ['nestedWorkerMaxDepth', 'nestedWorkerMaxDepthDefaultedToFour']
 ] as const satisfies readonly (readonly [keyof GlobalSettings, keyof GlobalSettings])[]
 
 /** Explicit writes (or attempts to clear a guard) keep the guard set so later choices stick. */

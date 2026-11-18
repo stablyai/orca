@@ -1,12 +1,10 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStoreText
-} from '../records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
+import { readPersistedTestAgentSessionStoreText } from '../records/agent-session-record-store-persistence.test-fixture'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -71,7 +69,7 @@ describe('agent session launch environment admission', () => {
     const raw = await readPersistedTestAgentSessionStoreText(directory)
     expect(raw).not.toContain('OPENAI_API_KEY')
     expect(raw).not.toContain('"PATH"')
-    const reopened = await openTestAgentSessionRecordStore(directory)
+    const reopened = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(reopened.getRecord(SESSION)).not.toHaveProperty('launchEnv')
   })
 

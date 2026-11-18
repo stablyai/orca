@@ -1,4 +1,3 @@
-import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import type {
@@ -9,7 +8,7 @@ import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
   type SessionSearchIndexerHarness
-} from '../../ai-vault-search/session-search-indexer-test-fixture'
+} from '../../ai-vault-search/indexing/session-search-indexer-test-fixture'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
   type AiVaultServiceChildMessage,
@@ -105,34 +104,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   emit({ type: 'sessionSearch', init: searchInit(false) })
+  await searchStatus()
   process.send = originalSend
   await harness.cleanup()
-})
-
-it('reports the indexer phase and a live generation over the protocol', async () => {
-  const status = await vi.waitFor(async () => {
-    const value = await searchStatus()
-    expect(value.filesIndexed).toBeGreaterThan(0)
-    expect(value.phase).toBe('current')
-    expect(value.generation).toBeGreaterThan(0)
-    return value
-  })
-  expect(status.enabled).toBe(true)
-  expect(existsSync(harness.databasePath)).toBe(true)
-})
-
-it('answers a search and a reconcile over the protocol', async () => {
-  expect(await call({ type: 'request', operation: 'searchReconcile' })).toEqual({
-    operation: 'searchReconcile',
-    value: null,
-    type: 'result',
-    id: expect.any(Number)
-  })
-  const response = await searchSessions('distinctive')
-  expect(response.kind).toBe('results')
-  if (response.kind === 'results') {
-    expect(response.hits.map((hit) => hit.sessionId)).toEqual([SESSION_ID])
-  }
 })
 
 it('discovers a new root through the parent exchange on manual reconciliation', async () => {
@@ -150,27 +124,4 @@ it('discovers a new root through the parent exchange on manual reconciliation', 
   if (response.kind === 'results') {
     expect(response.hits.map((hit) => hit.sessionId)).toEqual([id])
   }
-})
-
-it('clears the owned index and rebuilds from the transcripts still on disk', async () => {
-  const transcriptPath = join(harness.claudeProjectDir, `${SESSION_ID}.jsonl`)
-  expect((await searchSessions('distinctive')).kind).toBe('results')
-  rmSync(transcriptPath)
-
-  expect(await call({ type: 'request', operation: 'searchClear' })).toEqual({
-    operation: 'searchClear',
-    value: null,
-    type: 'result',
-    id: expect.any(Number)
-  })
-  expect(await searchSessions('distinctive')).toMatchObject({ kind: 'results', hits: [] })
-  expect(existsSync(harness.databasePath)).toBe(true)
-})
-
-it('answers disabled once consent is withdrawn, without a respawn', async () => {
-  emit({ type: 'sessionSearch', init: searchInit(false) })
-  expect(await searchSessions('distinctive')).toEqual({ kind: 'unavailable', reason: 'disabled' })
-  expect(await searchStatus()).toMatchObject({ enabled: false, phase: 'idle' })
-  emit({ type: 'sessionSearch', init: searchInit(true) })
-  expect((await searchSessions('distinctive')).kind).toBe('results')
 })

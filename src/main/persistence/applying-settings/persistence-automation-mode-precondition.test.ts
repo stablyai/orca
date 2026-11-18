@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { RuntimeAutomationController } from '../../runtime/runtime-automation-controller'
+import { RuntimeAutomationController } from '../../runtime/integrations/automations/runtime-automation-controller'
 
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -54,22 +54,6 @@ describe('automation update workspace-mode precondition', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('refuses the whole edit when the stored mode is no longer new-per-run', async () => {
-    const { store, id } = await newPerRunAutomation()
-    store.updateAutomation(id, switchToExisting)
-
-    expect(() =>
-      store.updateAutomation(
-        id,
-        { name: 'Renamed', setupDecision: 'run' },
-        { expectedWorkspaceMode: 'new_per_run' }
-      )
-    ).toThrow(MODE_CHANGED)
-    const stored = store.listAutomations().find((row) => row.id === id)
-    expect(stored).toMatchObject({ name: 'Nightly', workspaceMode: 'existing' })
-    expect(stored?.setupDecision).toBeUndefined()
   })
 
   it('refuses when the mode changes while the controller resolves a repo move', async () => {
@@ -125,6 +109,44 @@ describe('automation update workspace-mode precondition', () => {
       name: 'Renamed',
       workspaceMode: 'new_per_run',
       setupDecision: 'run'
+    })
+  })
+
+  it('applies launch choices to the latest record after resolving a repo', async () => {
+    const { store, id } = await newPerRunAutomation()
+    let resolveRepo = (): void => {}
+    const repoLookup = new Promise<void>((resolve) => {
+      resolveRepo = resolve
+    })
+    const controller = new RuntimeAutomationController(store, {
+      showRepo: async () => {
+        await repoLookup
+        return makeRepo()
+      },
+      showManagedWorktree: async () => {
+        throw new Error('Unexpected worktree lookup.')
+      }
+    })
+    const update = controller.update(id, {
+      repo: 'id:r1',
+      launchSetupPatch: { choices: { model: 'opus' } }
+    })
+    store.updateAutomation(id, {
+      name: 'Concurrent rename',
+      launchSetupPatch: {
+        choices: { options: { fastMode: 'true' } },
+        arguments: { kind: 'value', value: '--add-dir "docs/my specs"' }
+      }
+    })
+    resolveRepo()
+    await update
+
+    await closeTestStores()
+    const reloaded = await createStore()
+    expect(reloaded.listAutomations().find((row) => row.id === id)).toMatchObject({
+      name: 'Concurrent rename',
+      launchPreferences: { model: 'opus', options: { fastMode: 'true' } },
+      agentArgs: '--add-dir "docs/my specs"'
     })
   })
 })

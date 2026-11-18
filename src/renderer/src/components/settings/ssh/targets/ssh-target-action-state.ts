@@ -1,11 +1,7 @@
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
-import type { SshConnectionStatus } from '../../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 
 export type SshTargetBusyAction = 'terminate' | 'reset' | 'remove'
-
-export function isSshTargetConnecting(status: SshConnectionStatus): boolean {
-  return isConnectingSshStatus(status)
-}
 
 export function shouldClearPendingSshReset({
   pendingTargetId,
@@ -16,5 +12,5 @@ export function shouldClearPendingSshReset({
   pendingResetIsBusy: boolean
   connectionStatus: SshConnectionStatus
 }): boolean {
-  return pendingTargetId !== null && !pendingResetIsBusy && isSshTargetConnecting(connectionStatus)
+  return pendingTargetId !== null && !pendingResetIsBusy && isConnectingSshStatus(connectionStatus)
 }

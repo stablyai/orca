@@ -1,6 +1,6 @@
 import React from 'react'
 import { CalendarClock, CircleDot, Link2, SquareTerminal, StickyNote } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { MetaIconBadge } from './WorktreeCardMetadataControls'
@@ -9,10 +9,11 @@ import type {
   WorktreeCardMetaBadgesProps,
   WorktreeCardMetaBadgesRootProps
 } from './worktree-card-meta-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WorktreeReferenceStack } from '../review/WorktreeReferenceStack'
+import { BotAvatar } from '@/components/bots/BotAvatar'
 
-function hasComment(comment: string | null): boolean {
+export function hasComment(comment: string | null): boolean {
   return (comment ?? '').trim().length > 0
 }
 
@@ -24,7 +25,8 @@ export function hasWorktreeCardDetails({
   review,
   comment,
   automationProvenance,
-  cliProvenance
+  cliProvenance,
+  bot
 }: WorktreeCardMetaBadgesProps): boolean {
   return Boolean(
     linkedItemCount > 0 ||
@@ -34,7 +36,8 @@ export function hasWorktreeCardDetails({
     review ||
     hasComment(comment) ||
     automationProvenance ||
-    cliProvenance
+    cliProvenance ||
+    bot
   )
 }
 
@@ -53,11 +56,13 @@ export const WorktreeCardMetaBadges = React.forwardRef<
     comment,
     automationProvenance,
     cliProvenance,
+    bot,
     className,
     ...props
   },
   ref
 ): React.JSX.Element | null {
+  const t = useTranslate()
   if (
     !hasWorktreeCardDetails({
       linkedItemCount,
@@ -67,7 +72,8 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       review,
       comment,
       automationProvenance,
-      cliProvenance
+      cliProvenance,
+      bot
     })
   ) {
     return null
@@ -87,10 +93,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       ref={ref}
       {...props}
       className={cn('ml-auto flex shrink-0 items-center gap-1 pr-1.5', className)}
-      aria-label={translate(
-        'auto.components.sidebar.WorktreeCardMeta.3e65e11cc6',
-        'Workspace metadata'
-      )}
+      aria-label={t('auto.components.sidebar.WorktreeCardMeta.3e65e11cc6', 'Workspace metadata')}
     >
       {linkedItemCount > 0 &&
       !referenceItems?.length &&
@@ -99,28 +102,24 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       !jiraIssue &&
       !review ? (
         <MetaIconBadge
-          label={translate(
-            'workspace.links.showLinked',
-            'Show {{count}} linked reviews and tasks',
-            { count: linkedItemCount, defaultValue_one: 'Show {{count}} linked review or task' }
-          )}
+          label={t('workspace.links.showLinked', 'Show {{count}} linked reviews and tasks', {
+            count: linkedItemCount,
+            defaultValue_one: 'Show {{count}} linked review or task'
+          })}
         >
           <Link2 />
         </MetaIconBadge>
       ) : null}
       {hasComment(comment) && (
         <MetaIconBadge
-          label={translate(
-            'auto.components.sidebar.WorktreeCardMeta.fe075cb851',
-            'Workspace notes'
-          )}
+          label={t('auto.components.sidebar.WorktreeCardMeta.fe075cb851', 'Workspace notes')}
         >
           <StickyNote className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {automationProvenance && (
         <MetaIconBadge
-          label={translate(
+          label={t(
             'auto.components.sidebar.WorktreeCardMeta.automationCreated',
             'Created by automation'
           )}
@@ -128,12 +127,15 @@ export const WorktreeCardMetaBadges = React.forwardRef<
           <CalendarClock className="text-muted-foreground" />
         </MetaIconBadge>
       )}
-      {cliProvenance && (
+      {bot && (
+        <MetaIconBadge label={t('bots.workspaces.madeBy', 'Made by {{name}}', { name: bot.name })}>
+          <BotAvatar bot={bot} className="size-3.5 rounded-sm border-0 text-[9px]" />
+        </MetaIconBadge>
+      )}
+      {/* A bot's worker makes its workspaces through the CLI, so the bot is the origin worth showing. */}
+      {cliProvenance && !bot && (
         <MetaIconBadge
-          label={translate(
-            'auto.components.sidebar.WorktreeCardMeta.cliCreated',
-            'Created by Orca CLI'
-          )}
+          label={t('auto.components.sidebar.WorktreeCardMeta.cliCreated', 'Created by Orca CLI')}
         >
           <SquareTerminal className="text-muted-foreground" />
         </MetaIconBadge>
@@ -143,7 +145,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       ) : (
         issue && (
           <MetaIconBadge
-            label={translate(
+            label={t(
               'auto.components.sidebar.WorktreeCardMeta.3f2649eeb8',
               'Linked issue #{{value0}}',
               { value0: issue.number }
@@ -158,7 +160,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       ) : (
         jiraIssue && (
           <MetaIconBadge
-            label={translate(
+            label={t(
               'auto.components.sidebar.WorktreeCardMeta.linkedJira',
               'Linked Jira {{value0}}',
               { value0: jiraIssue.identifier }
@@ -179,7 +181,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       ) : (
         linearIssue && (
           <MetaIconBadge
-            label={translate(
+            label={t(
               'auto.components.sidebar.WorktreeCardMeta.b105fd3057',
               'Linked Linear {{value0}}',
               { value0: linearIssue.identifier }
@@ -191,7 +193,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       )}
       {!reviewItems.length && review && (
         <MetaIconBadge
-          label={translate(
+          label={t(
             'auto.components.sidebar.WorktreeCardMeta.3ea2702e62',
             'Linked {{value0}} #{{value1}}',
             { value0: getReviewLabel(review), value1: review.number }

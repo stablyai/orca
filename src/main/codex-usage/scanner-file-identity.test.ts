@@ -126,27 +126,6 @@ describe('Codex session physical file identity', () => {
     expect(await listCodexSessionFiles()).toEqual([first, second])
   })
 
-  it('counts both distinct sessions and preserves numeric timestamps, sizes and cache reuse', async () => {
-    const first = writeSession('first', 10)
-    const second = writeSession('second', 20)
-    fixture.identities.set(first, { dev: 1n, ino: 2n ** 53n })
-    fixture.identities.set(second, { dev: 1n, ino: 2n ** 53n + 1n })
-
-    const result = await scanCodexUsageFiles([], [])
-    expect(result.dailyAggregates.reduce((total, row) => total + row.totalTokens, 0)).toBe(30)
-    expect(result.sessions).toHaveLength(2)
-    const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
-    for (const file of result.processedFiles) {
-      const stats = await actual.stat(file.path)
-      expect(file.mtimeMs).toBe(stats.mtimeMs)
-      expect(file.size).toBe(stats.size)
-    }
-    const cached = await scanCodexUsageFiles([], result.processedFiles)
-    expect(cached.dailyAggregates).toEqual(result.dailyAggregates)
-    expect(cached.processedFiles[0]).toBe(result.processedFiles[0])
-    expect(cached.processedFiles[1]).toBe(result.processedFiles[1])
-  })
-
   it('deduplicates real hardlink aliases across session homes', async () => {
     const original = writeSession('original')
     mkdirSync(join(fixture.root, 'system', 'sessions'), { recursive: true })

@@ -1,0 +1,199 @@
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
+import type { AgentLaunchProfileSettings } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { structuredAgentSettingsEnv } from '../environment/structured-agent-launch-env'
+import {
+  checkAgentCliVersion,
+  launchableRelease,
+  type AgentCliVersionCheck
+} from '../../../agent-launch/preflight/agent-cli-version-probe'
+import {
+  resolveStructuredAgentSessionCreateSupport,
+  warnStructuredAgentSessionCreateUnsupported,
+  type StructuredAgentSessionCreateSupport
+} from '../../../native-chat/agent-launch/structured-agent-session-create-support'
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import {
+  resolveAgainAfterRefreshOnMissingProgram,
+  type StructuredAgentCommandSettings
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
+import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
+import {
+  refreshHostAgentBaseEnvironmentAfterMiss,
+  resolveHostAgentBaseEnvironment,
+  createStructuredAgentEnvironmentResolvers
+} from '../environment/structured-agent-shell-environment'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/settings/native-chat-shell-environment'
+import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
+import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
+
+export type LaunchEnvironmentSettings = Pick<
+  GlobalSettings,
+  | 'agentDefaultEnv'
+  | 'nativeChatInheritShellEnvironment'
+  | 'nativeChatShellEnvironmentVariables'
+  | 'httpProxyUrl'
+  | 'httpProxyBypassRules'
+> &
+  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
+  AgentLaunchProfileSettings
+
+/** What the check reads from the runtime asking it. */
+type LaunchSettingsRuntime = { requireStore(): { getSettings(): LaunchEnvironmentSettings } }
+type LaunchSupportRuntime = LaunchSettingsRuntime & {
+  resolveRuntimeFileTarget(selector: string): Promise<{ worktree: { path: string } }>
+}
+
+/** Check the installed release with launch env/Command settings in cwd; null means location-only admission. Unrunnable Command settings throw launch refusal. */
+export async function observeStructuredAgentLaunch(
+  agent: string,
+  cwd: () => Promise<string>,
+  runtime: LaunchSettingsRuntime,
+  refreshShellOnMiss: boolean
+): Promise<AgentCliVersionCheck | null> {
+  const check = structuredAgentRuntimeMetadata(agent)?.launchCheck
+  if (!check) {
+    return null
+  }
+  const settings = runtime.requireStore().getSettings()
+  let directory: Promise<string> | undefined
+  const once = () => (directory ??= cwd())
+  // Resolved as a launch resolves, sharing its refresh, so an agent installed since the shell was
+  // last read counts and a found one never waits.
+  const launch = await resolveAgainAfterRefreshOnMissingProgram(
+    async () =>
+      check.resolveLaunch(
+        await resolveHostStructuredAgentLaunchEnvironment(agent, settings),
+        settings
+      ),
+    refreshShellOnMiss ? refreshHostAgentBaseEnvironmentAfterMiss : undefined,
+    { env: ({ env }) => env, cwd: once }
+  )
+  return checkAgentCliVersion(
+    {
+      program: launch.command,
+      prefixArgs: [...launch.prefixArgs, ...(check.versionArgs ?? [])],
+      cwd: await once(),
+      env: launch.env
+    },
+    check.minimumVersions
+  )
+}
+
+/** Whether a new chat would start on the host's own program, as its account home selects one. */
+export async function structuredAgentHostAlternativeReady(
+  agent: string,
+  runtime: LaunchSettingsRuntime
+): Promise<boolean> {
+  const program = structuredAgentRuntimeMetadata(agent)?.chatProgram
+  if (!program?.hostAlternative) {
+    return false
+  }
+  const settings = runtime.requireStore().getSettings()
+  const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+  return program.hostAlternative(env, settings).catch(() => false)
+}
+
+/** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the
+ *  terminal, or, where Orca installs no release, a host program that cannot serve the chat. */
+export async function structuredAgentSupportsLaunch(
+  agent: string,
+  cwd: () => Promise<string>,
+  runtime: LaunchSettingsRuntime
+): Promise<boolean> {
+  if (structuredAgentRuntimeMetadata(agent)?.chatProgram?.onlyHostAlternative?.()) {
+    return structuredAgentHostAlternativeReady(agent, runtime)
+  }
+  try {
+    const release = await observeStructuredAgentLaunch(agent, cwd, runtime, true)
+    return release === null || launchableRelease(release)
+  } catch (error) {
+    // An unrunnable Command setting is the launch's refusal to state, not a terminal.
+    if (isAgentSessionPreSpawnError(error)) {
+      return true
+    }
+    throw error
+  }
+}
+
+/** The environment a new local chat launch starts from, before its account binding. */
+export async function resolveHostStructuredAgentLaunchEnvironment(
+  agent: string,
+  settings: LaunchEnvironmentSettings
+): Promise<Record<string, string>> {
+  return overlayEnvironmentVariables(
+    await resolveHostAgentBaseEnvironment(settings),
+    structuredAgentSettingsEnv(agent, settings),
+    process.platform
+  )
+}
+
+/** What a chat start of `agent` on this host launches from, for a child that serves no chat. */
+export async function structuredAgentHostLaunchSources(
+  agent: StructuredAgentId,
+  runtime: Pick<LaunchSupportRuntime, 'requireStore'> & {
+    resolveStructuredAgentAccountHome(agent: StructuredAgentId): Promise<AgentSessionAccountHome>
+  },
+  signal: AbortSignal
+): Promise<{
+  accountHome: AgentSessionAccountHome
+  env: Record<string, string>
+  commandSettings: StructuredAgentCommandSettings
+  dataDirectory: string
+}> {
+  const settings = runtime.requireStore().getSettings()
+  const policy = nativeChatShellEnvironmentPolicy(settings)
+  const overlay = structuredAgentSettingsEnv(agent, settings)
+  const environment = createStructuredAgentEnvironmentResolvers({
+    prewarm: false,
+    processEnvironment: { ...process.env },
+    resolveShellEnvironmentPolicy: () => policy,
+    resolveAgentLaunchEnv: () => overlay
+  })
+  const release = environment.bindCatalogSources([agent])
+  signal.addEventListener('abort', release, { once: true })
+  if (signal.aborted) {
+    release()
+  }
+  return {
+    accountHome: await runtime.resolveStructuredAgentAccountHome(agent),
+    env: await environment.resolveAgentEnvironment(agent),
+    commandSettings: settings,
+    // The chat host's own state root (ensureStructuredAgentSessionHost).
+    dataDirectory: getProfileUserDataPath()
+  }
+}
+
+/** Report pre-spawn refusals from registered location/release checks without installing the host; log the refusing check. */
+export async function resolveHostStructuredAgentCreateSupport(input: {
+  agent: StructuredAgentId
+  worktreeSelector: string
+  location: AgentSessionExecutionLocation
+  runtime: LaunchSupportRuntime
+}): Promise<StructuredAgentSessionCreateSupport> {
+  const { agent, location, runtime } = input
+  const supportsLocation =
+    structuredAgentRuntimeMetadata(agent)?.supportsLocation(location) ?? false
+  const supportsLaunch =
+    supportsLocation &&
+    (await structuredAgentSupportsLaunch(
+      agent,
+      async () => (await runtime.resolveRuntimeFileTarget(input.worktreeSelector)).worktree.path,
+      runtime
+    ))
+  const support = resolveStructuredAgentSessionCreateSupport({
+    location,
+    adapterSupportsCreate: supportsLaunch,
+    unavailableOnPlatform: structuredChatUnavailableOnPlatform(agent, process.platform)
+  })
+  warnStructuredAgentSessionCreateUnsupported(
+    agent,
+    support,
+    supportsLocation ? 'installed-agent' : 'location'
+  )
+  return support
+}

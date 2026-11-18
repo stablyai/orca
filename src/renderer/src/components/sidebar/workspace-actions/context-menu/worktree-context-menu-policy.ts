@@ -1,15 +1,28 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
+import '@/lib/workspace/creation/new-workspace-composer-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
-import { getProjectedWorktreeLineage } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/lineage/workspace-lineage-graph'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { translate } from '@/i18n/i18n'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import {
+  workspaceKeyOfRow,
+  worktreeWorkspaceKey
+} from '../../../../../../shared/workspace/identity/workspace-scope'
+import type { Translate } from '@/i18n/use-translate'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 
 export const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 export const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
@@ -24,11 +37,13 @@ export const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 export const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 export const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 export const EMPTY_UNIFIED_TABS_BY_WORKTREE: AppState['unifiedTabsByWorktree'] = {}
-export const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
+export const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] =
+  acceptedAgentStatuses()
 export const EMPTY_STRUCTURED_CHAT_SLEPT_AT: AppState['structuredChatSleptAtByPaneKey'] = {}
 export const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeId'] = {}
 export const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
 export const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
+export const EMPTY_CROSS_STORE_LINEAGE_BY_STORE_KEY: AppState['crossStoreLineageByStoreKey'] = {}
 export const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
 export const EMPTY_WORKTREES: readonly Worktree[] = []
 export const EMPTY_WORKTREE_MAP: ReadonlyMap<string, Worktree> = new Map()
@@ -50,11 +65,16 @@ export function shouldRevealWorktreeDeveloperMenu(args: {
 export function hasWorktreeParentLink(
   worktree: Worktree,
   lineageById: AppState['worktreeLineageById'],
-  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
+  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey'],
+  crossStoreLineageByStoreKey?: AppState['crossStoreLineageByStoreKey']
 ): boolean {
+  const storeKey = lineageStoreKeyOfRow(worktree)
   return Boolean(
     getProjectedWorktreeLineage(worktree, lineageById) ||
-    workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
+    workspaceLineageByChildKey[workspaceKeyOfRow(worktree.id)] ||
+    // A saved parent on another machine is removable even while it can't be found.
+    (storeKey !== undefined &&
+      crossStoreLineageByStoreKey?.[storeKey]?.[worktreeWorkspaceKey(worktree.id)])
   )
 }
 
@@ -95,16 +115,16 @@ export function shouldSuppressContextMenuFollowUpClick(
   )
 }
 
-export function getWorktreeParentPickerLabel(validParentWorktreeId: string | null): string {
+export function getWorktreeParentPickerLabel(
+  validParentWorktreeId: string | null,
+  t: Translate = translate
+): string {
   return validParentWorktreeId
-    ? translate(
+    ? t(
         'auto.components.sidebar.WorktreeContextMenu.changeParentWorkspace',
         'Change Parent Worktree...'
       )
-    : translate(
-        'auto.components.sidebar.WorktreeContextMenu.setParentWorkspace',
-        'Set Parent Worktree...'
-      )
+    : t('auto.components.sidebar.WorktreeContextMenu.setParentWorkspace', 'Set Parent Worktree...')
 }
 
 export function isWorktreeParentPickerDisabled(args: {
@@ -112,6 +132,20 @@ export function isWorktreeParentPickerDisabled(args: {
   eligibleParentCount: number
 }): boolean {
   return args.isDeleting || args.eligibleParentCount === 0
+}
+
+export function canCreateChildWorktree(args: {
+  repo: Repo | null | undefined
+  folderWorkspaceId: string | null
+  worktree: Pick<Worktree, 'isArchived'>
+}): boolean {
+  return (
+    args.repo != null &&
+    isGitRepoKind(args.repo) &&
+    getNewWorkspaceDialogEligibleRepos([args.repo]).length > 0 &&
+    !args.folderWorkspaceId &&
+    !args.worktree.isArchived
+  )
 }
 
 export function getWorktreeParentPickerAnchor(
@@ -178,6 +212,7 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   const previousScrollTop = sidebar.scrollTop
   const previousScrollHeight = sidebar.scrollHeight
   const desiredTop = row.getBoundingClientRect().top
+  supersedeVirtualizedScrollAnchorRestore(sidebar)
 
   return () => {
     let attempts = 0
@@ -191,6 +226,10 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
       const currentAnchor = currentTarget ?? findSidebarVirtualRowByKey(currentSidebar, anchorKey)
       if (currentAnchor) {
         const delta = currentAnchor.getBoundingClientRect().top - desiredTop
+        supersedeVirtualizedScrollAnchorRestore(
+          currentSidebar,
+          Math.abs(delta) > 1 ? currentSidebar.scrollTop + delta : undefined
+        )
         if (Math.abs(delta) > 1) {
           currentSidebar.scrollTop += delta
           stableFrames = 0
@@ -198,10 +237,12 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
           stableFrames += 1
         }
       } else {
-        currentSidebar.scrollTop = Math.max(
+        const target = Math.max(
           0,
           previousScrollTop + currentSidebar.scrollHeight - previousScrollHeight
         )
+        supersedeVirtualizedScrollAnchorRestore(currentSidebar, target)
+        currentSidebar.scrollTop = target
         stableFrames = 0
       }
       attempts += 1
@@ -212,6 +253,8 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
         })
       ) {
         window.requestAnimationFrame(restore)
+      } else {
+        requestVirtualizedScrollAnchorRecord(currentSidebar)
       }
     }
     restore()
