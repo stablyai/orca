@@ -132,10 +132,7 @@ export function useMobileStructuredAgentSession(
   })
   const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey)
   const { clearing, transcriptItems, messages, receipts } = transcript
-  const turnTiming = useMobileStructuredAgentTurnTiming(
-    { ...state, items: transcriptItems },
-    turnId
-  )
+  const timing = useMobileStructuredAgentTurnTiming({ ...state, items: transcriptItems }, turnId)
   const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
   const backgroundTasks = useMobileStructuredBackgroundTasks({
@@ -172,7 +169,7 @@ export function useMobileStructuredAgentSession(
     sessionKey,
     report: options.threadGoalSupport,
     turnId,
-    workingStartedAt: turnTiming.workingStartedAt,
+    workingStartedAt: timing.workingStartedAt,
     working: isWorking || queueSendsNext,
     mutate,
     commands: useMobileStructuredCommandController(options)
@@ -281,7 +278,7 @@ export function useMobileStructuredAgentSession(
     sendFollowUp: turnIndicator.sendFollowUp ?? null,
     turnId,
     turnIndicator,
-    ...turnTiming,
+    ...timing,
     sendWithOutcome,
     holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
