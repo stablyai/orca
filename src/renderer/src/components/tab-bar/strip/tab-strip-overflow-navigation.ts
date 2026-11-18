@@ -27,7 +27,8 @@ import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTabDragActive } from '../../tab-group/drag/tab-drag-context'
 import {
   revealFirstUnmountedTabStripSlot,
-  useNotifyTabStripScrollAfterCommit
+  useNotifyTabStripScrollAfterCommit,
+  useTabStripListeners
 } from './tab-strip-window'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
@@ -76,7 +77,9 @@ export function useTabStripOverflowNavigation({
 } {
   const isTabDragActive = useTabDragActive()
   const tabStripRef = useRef<HTMLDivElement>(null)
-  const stripResizeListenersRef = useRef<Set<() => void>>(new Set())
+  // Why first: this hook's effects below are the ones that scroll the strip.
+  const stripListeners = useTabStripListeners(tabStripRef)
+  const stripResizeListenersRef = stripListeners.listenersRef
   const prevStripRef = useRef<{ worktreeId: string; tabIds: ReadonlySet<string> } | null>(null)
   const stickToEndRef = useRef(false)
   const tabClosedThisCommitRef = useRef(false)
@@ -169,7 +172,7 @@ export function useTabStripOverflowNavigation({
       el.removeEventListener('scroll', onScroll)
       disconnectResizeObservers()
     }
-  }, [recordScrollAnchor, updateTabStripOverflowState])
+  }, [recordScrollAnchor, stripResizeListenersRef, updateTabStripOverflowState])
 
   useEffect(() => {
     const el = tabStripRef.current
@@ -315,21 +318,13 @@ export function useTabStripOverflowNavigation({
     tabClosedThisCommitRef.current = false
   })
   // Why last: it must follow every effect above that scrolls the strip.
-  useNotifyTabStripScrollAfterCommit(tabStripRef, stripResizeListenersRef)
-
-  // Why share these observers: each one watches every tab, so a second set doubles that work.
-  const subscribeToStripResize = useCallback((listener: () => void): (() => void) => {
-    stripResizeListenersRef.current.add(listener)
-    return () => {
-      stripResizeListenersRef.current.delete(listener)
-    }
-  }, [])
+  useNotifyTabStripScrollAfterCommit(tabStripRef, stripListeners)
 
   return {
     tabStripRef,
     tabStripOverflowState,
     activeTabDockSide,
     scrollTabStrip,
-    subscribeToStripResize
+    subscribeToStripResize: stripListeners.subscribe
   }
 }

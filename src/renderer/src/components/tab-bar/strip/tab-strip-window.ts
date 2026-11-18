@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { findTabStripSlot } from './tab-strip-slot-geometry'
 
 /** Overflowing tabs sit at their 144px minimum (tab-width-rules.ts), so unmounted runs need no measuring. */
@@ -144,29 +144,39 @@ export function useTabStripWindowState(
   return state
 }
 
-/** Re-notify strip listeners when a commit scrolled the strip: child listeners ran their layout effects before it did. */
+export type TabStripListeners = {
+  listenersRef: RefObject<Set<() => void>>
+  /** The strip's offset before this commit's own scrolling effects. */
+  commitStartScrollRef: RefObject<number | null>
+  subscribe: (listener: () => void) => () => void
+}
+
+/** Call before the strip owner's scrolling effects; listeners hear resizes and scrolls a commit made. */
+export function useTabStripListeners(stripRef: RefObject<HTMLElement | null>): TabStripListeners {
+  const listenersRef = useRef<Set<() => void>>(new Set())
+  const commitStartScrollRef = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    commitStartScrollRef.current = stripRef.current?.scrollLeft ?? null
+  })
+  // Why share these observers: each one watches every tab, so a second set doubles that work.
+  const subscribe = useCallback((listener: () => void): (() => void) => {
+    listenersRef.current.add(listener)
+    return () => {
+      listenersRef.current.delete(listener)
+    }
+  }, [])
+  return { listenersRef, commitStartScrollRef, subscribe }
+}
+
+/** Call last: re-notify strip listeners when this commit's effects scrolled the strip, since child listeners ran first. */
 export function useNotifyTabStripScrollAfterCommit(
   stripRef: RefObject<HTMLElement | null>,
-  listenersRef: RefObject<Set<() => void>>
+  { listenersRef, commitStartScrollRef }: TabStripListeners
 ): void {
-  // Why start at 0, not the mount offset: a mount that revealed the active tab already scrolled and must notify.
-  const seenScrollLeftRef = useRef(0)
-  // Why track user scrolls too: a commit that scrolls back to the last notified offset must still notify.
   useLayoutEffect(() => {
     const strip = stripRef.current
-    if (!strip) {
-      return
-    }
-    const onScroll = (): void => {
-      seenScrollLeftRef.current = strip.scrollLeft
-    }
-    strip.addEventListener('scroll', onScroll, { passive: true })
-    return () => strip.removeEventListener('scroll', onScroll)
-  }, [stripRef])
-  useLayoutEffect(() => {
-    const strip = stripRef.current
-    if (strip && strip.scrollLeft !== seenScrollLeftRef.current) {
-      seenScrollLeftRef.current = strip.scrollLeft
+    const start = commitStartScrollRef.current
+    if (strip && start !== null && strip.scrollLeft !== start) {
       for (const listener of listenersRef.current) {
         listener()
       }
