@@ -11,7 +11,7 @@ import {
 } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { ManagedRuntimeOperation } from '../../shared/agent-launch/installation/managed-runtime-install'
 import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
-import { redactString } from '../observability/redactor'
+import { redactString } from '../../shared/observability/redactor'
 import {
   resolveInstalledRuntimeRelease,
   ManagedRuntimeStartError,

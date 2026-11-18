@@ -10,6 +10,8 @@ import { crossStoreCreateLineage } from './runtime-worktree-lineage-recording'
 import type { CrossStoreLineageResolution } from './runtime-worktree-lineage-recording'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
+
+import { workerCreatedLineage } from './runtime-worker-created-lineage'
 import { RuntimeLineageError, explicitParentError } from './runtime-lineage-error'
 
 export type WorktreeLineageInput = NonNullable<RuntimeManagedWorktreeCreateArgs['lineage']>
@@ -90,7 +92,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
     try {
       const parent = await deps.resolveParent(input.parentWorkspace)
       const manuallySelected = input.parentWorkspaceOrigin === 'manual'
-      return {
+      return workerCreatedLineage(input, {
         kind: 'lineage',
         parent,
         origin: manuallySelected ? 'manual' : 'cli',
@@ -100,19 +102,19 @@ export async function resolveRuntimeWorktreeCreateLineage(
               confidence: 'explicit'
             }
           : { source: 'explicit-cli-flag', confidence: 'explicit' }
-      }
+      })
     } catch (error) {
       throw explicitParentError(error)
     }
   }
   if (input.parentWorktree) {
     try {
-      return {
+      return workerCreatedLineage(input, {
         kind: 'lineage',
         parent: await deps.resolveWorktreeParent(input.parentWorktree),
         origin: 'cli',
         capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
-      }
+      })
     } catch (error) {
       throw explicitParentError(error)
     }

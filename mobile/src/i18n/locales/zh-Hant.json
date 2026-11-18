@@ -165,11 +165,13 @@
       "invalidUrl": "請輸入有效的網址。"
     },
     "paneView": {
-      "dialogTitle": "瀏覽器對話方塊",
       "forward": "前進",
       "keyboardPlaceholder": "在網頁上輸入…",
       "reload": "重新載入",
-      "sendText": "傳送文字至瀏覽器"
+      "sendText": "傳送文字至瀏覽器",
+      "dialogTitleWithOrigin": "{{origin}} 顯示",
+      "dialogTitleNoOrigin": "此網頁顯示",
+      "dialogAnswer": "回答"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 點擊修飾鍵"
@@ -182,6 +184,9 @@
     "viewModeSwitch": {
       "mobileView": "顯示行動版網站",
       "webView": "顯示桌面版網站"
+    },
+    "loadFailure": {
+      "retry": "重試"
     }
   },
   "chat": {
@@ -1131,6 +1136,9 @@
       "composer": {
         "planMode": "計畫",
         "exitPlanMode": "結束計畫模式"
+      },
+      "goal": {
+        "sentAsGoal": "作為目標傳送"
       }
     }
   },
@@ -2640,7 +2648,7 @@
       "disconnected": "貼上失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法貼上",
       "pasteFailed": "貼上失敗",
-      "pasteTooLarge": "貼上內容太大（上限為 256 KiB）",
+      "pasteTooLarge": "貼上內容過大。",
       "terminalChanged": "已取消貼上（終端機已變更）"
     },
     "worktreeLabel": {
@@ -2777,6 +2785,9 @@
       "previous": "上一個相符項目",
       "next": "下一個相符項目",
       "close": "關閉尋找"
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "找不到該訊息。"
     }
   },
   "settings": {
@@ -4345,6 +4356,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "配對電腦",
+      "pairRequired": "若要開啟此連結，請將這部手機與電腦配對。",
+      "pairAction": "配對電腦",
+      "openFailed": "無法開啟此連結",
+      "ambiguous": "此機器人位於 {{names}}。請在你想用的電腦上透過 Orca 開啟聊天。",
+      "computer": "你的電腦",
+      "updateNeeded": "請更新 {{names}} 上的 Orca 以開啟此連結。",
+      "unreachable": "無法連線至 {{names}}。請確認其中一台電腦正在執行 Orca，然後重試。",
+      "missing": "你配對的電腦上都沒有此機器人。",
+      "offline": "{{name}} 已離線。請在它重新上線後再次開啟連結。",
+      "chatOpenFailed": "{{name}} 無法開啟此聊天。請重試此連結。",
+      "unreachableSingle": "無法連線至 {{name}}。請確認該電腦正在執行 Orca，然後重試。",
+      "workspaceDeleted": "此聊天的工作區已在 {{name}} 上被刪除。"
     }
   }
 }

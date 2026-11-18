@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { useContext, type RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
   ALargeSmall,
@@ -17,6 +17,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
 
 type Props = {
   controller: MobileSessionController
@@ -46,8 +47,10 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     createTabBusy,
     handleOpenNewTab,
     handleOpenQuickCommands,
-    terminalFind
+    terminalFind,
+    itemsOnPhone
   } = controller
+  const botActions = useContext(MobileSessionBotActionsContext)
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
     ...(!isFloatingWorkspaceRoute
@@ -61,7 +64,8 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []),
-    ...(actionsCollapsed && !isFloatingWorkspaceRoute
+    // A bot's screen has no source control, even folded into ⋯.
+    ...(actionsCollapsed && !isFloatingWorkspaceRoute && !itemsOnPhone
       ? [
           {
             id: 'sourceControl',
@@ -164,7 +168,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     <PullDownMenu
       visible={showHeaderMoreActions}
       anchorRef={anchorRef}
-      groups={[panels, view, tabs]}
+      groups={botActions.length > 0 ? [botActions, panels, view, tabs] : [panels, view, tabs]}
       onClose={() => setShowHeaderMoreActions(false)}
     />
   )

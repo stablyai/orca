@@ -1,8 +1,7 @@
 // Edge-native director configuration and its pure rules: off unless DIRECTOR_HOSTNAME is set and
-// valid, country routing to the front door, and the static region catalog.
+// valid, and country routing to the front door.
 import { describe, expect, it } from 'vitest'
-import { DIRECTOR_PROBE_PREFIXES, REGION_LOCATION_HINT, dialledHostname, directorCellUrl, directorRegionCatalog, parseDirectorConfig } from '../src/director-config'
-import { RelayRegionCatalogResponseSchema } from '../../../packages/relay-contract/src/relay-regions'
+import { dialledHostname, directorCellUrl, parseDirectorConfig } from '../src/director-config'
 import { DIRECTOR_HOST, EDGE_URL, FRONT_DOOR_URL } from './director-fixture'
 
 const VALID = { DIRECTOR_HOSTNAME: DIRECTOR_HOST, DIRECTOR_EDGE_URL: EDGE_URL, DIRECTOR_FRONT_DOOR_URL: FRONT_DOOR_URL }
@@ -57,23 +56,5 @@ describe('country routing', () => {
   it('without a front door, everyone gets the edge', () => {
     const edgeOnly = parseDirectorConfig({ DIRECTOR_HOSTNAME: DIRECTOR_HOST, DIRECTOR_EDGE_URL: EDGE_URL }).config!
     expect(directorCellUrl(edgeOnly, 'CN')).toBe(EDGE_URL)
-  })
-})
-
-describe('region catalog', () => {
-  it('is the contract shape, every probe origin a subdomain of the director host', () => {
-    const catalog = directorRegionCatalog(DIRECTOR_HOST)
-    expect(RelayRegionCatalogResponseSchema.parse(catalog)).toEqual(catalog)
-    expect(catalog).toEqual({
-      v: 1,
-      regions: [
-        { region: 'us-central1', probeOrigins: [`https://${DIRECTOR_PROBE_PREFIXES['us-central1']}.${DIRECTOR_HOST}`] },
-        { region: 'asia-east2', probeOrigins: [`https://${DIRECTOR_PROBE_PREFIXES['asia-east2']}.${DIRECTOR_HOST}`] }
-      ]
-    })
-  })
-
-  it('maps each region to a location hint for new objects', () => {
-    expect(REGION_LOCATION_HINT).toEqual({ 'us-central1': 'enam', 'asia-east2': 'apac' })
   })
 })

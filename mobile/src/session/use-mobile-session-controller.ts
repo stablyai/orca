@@ -1,4 +1,5 @@
 import { useLayoutEffect } from 'react'
+import { useMobileSessionItemLink } from './use-mobile-session-item-link'
 import { useMobileStructuredSessionOpening } from './use-mobile-structured-session-opening'
 import { useNotificationPaneNavigation } from './tabs/use-notification-pane-navigation'
 import { useMobileSessionFoundation } from './use-mobile-session-foundation'
@@ -35,6 +36,7 @@ import { useMobileSessionPresentation } from './use-mobile-session-presentation'
 import { useMobileSessionStoredChatTab } from './use-mobile-session-stored-chat-tab'
 import { useMobileSessionPanelRouteActions } from './use-mobile-session-panel-route-actions'
 import { useMobileTerminalFind } from '../terminal/session/find/use-mobile-terminal-find'
+import { useMobileSessionBot } from './use-mobile-session-bot'
 
 export function useMobileSessionController() {
   const foundation = useMobileSessionFoundation()
@@ -46,9 +48,10 @@ export function useMobileSessionController() {
   )
   const sendLiveTerminalInput = (handle: string, bytes: string) =>
     feedbackCapabilities.sendLiveTerminalInputRef.current(handle, bytes)
+  const itemLink = useMobileSessionItemLink(feedbackCapabilities.showToast)
   const nativeChatDictation = Object.assign(
     feedbackCapabilities,
-    useMobileSessionNativeChatDictation(feedbackCapabilities, sendLiveTerminalInput)
+    useMobileSessionNativeChatDictation(feedbackCapabilities, sendLiveTerminalInput, itemLink)
   )
   // Chat covers a split, so only its own terminal stays visible; this is the ref's one writer per commit.
   if (nativeChatDictation.showNativeChat) {
@@ -157,8 +160,9 @@ export function useMobileSessionController() {
     terminalFind,
     useMobileSessionPanelRouteActions(terminalFind)
   )
+  const bot = Object.assign(panelRouteActions, useMobileSessionBot(panelRouteActions))
   // The one owner of opening an existing chat, so a fork's source link follows its selection rules.
-  return Object.assign(panelRouteActions, preferences, { openNativeSession })
+  return Object.assign(bot, preferences, { openNativeSession })
 }
 
 export type MobileSessionController = ReturnType<typeof useMobileSessionController>

@@ -33,6 +33,6 @@ export function parseMessageTaskId(payload: string | undefined): string | undefi
   }
 }
 
-export function isWorkerReportOutcome(value: unknown): value is 'succeeded' | 'failed' {
+export function isConversationReportOutcome(value: unknown): value is 'succeeded' | 'failed' {
   return value === 'succeeded' || value === 'failed'
 }

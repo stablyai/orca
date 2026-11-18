@@ -19,10 +19,11 @@ import {
 import {
   BROWSER_SESSION_META_FILE_NAME,
   forgetBrowserSessionProfileMeta,
+  getCachedBrowserExtensionEnabledIds,
   loadBrowserSessionMeta,
-  persistBrowserSessionMeta
+  persistBrowserSessionMeta,
+  type BrowserSessionMeta
 } from './browser-session-meta-store'
-import type { BrowserSessionMeta } from './browser-session-meta-store'
 import { installBrowserSessionPartitionPolicies } from '../partition-policies/browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
 import { inspectRetiredBrowserSessionProfileUserAgentModes } from '../../identity/mode/browser-retired-profile-identity-inspection'
@@ -100,10 +101,6 @@ class BrowserSessionRegistry {
     persistBrowserSessionMeta(() => this.metadataPath, this.defaultPartition, updates)
   }
 
-  private persistSource(source: BrowserSessionProfile['source']): void {
-    this.persistMeta({ defaultSource: source })
-  }
-
   private persistProfiles(): void {
     const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
     this.persistMeta({ profiles: nonDefault })
@@ -145,9 +142,8 @@ class BrowserSessionRegistry {
   }
 
   /**
-   * Starts a profile's extensions once it has a page or Settings acts on them, never at launch:
-   * each running profile wakes its extensions' service workers. Only local browser profiles
-   * run extensions, so route, SSH and doc-preview partitions never come through here.
+   * Starts a profile's extensions when it gets a page or Settings acts on them, never at launch, and
+   * they stop once it has none. Only local browser profiles (no route, SSH or doc preview) run them.
    */
   attachExtensions(profileId: string): void {
     const profile = this.profiles.get(profileId)
@@ -162,7 +158,8 @@ class BrowserSessionRegistry {
   }
 
   getEnabledExtensionIds(profileId: string): string[] {
-    return this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
+    const cached = getCachedBrowserExtensionEnabledIds(this.metadataPath, profileId)
+    return cached ?? this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
   }
 
   updateEnabledExtensionIds(update: ExtensionIdListUpdate): void {
@@ -289,7 +286,7 @@ class BrowserSessionRegistry {
     const updated = { ...profile, source }
     this.profiles.set(profileId, updated)
     if (profileId === 'default') {
-      this.persistSource(source)
+      this.persistMeta({ defaultSource: source })
     } else {
       this.persistProfiles()
     }

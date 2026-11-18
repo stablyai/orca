@@ -1,3 +1,6 @@
+import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { formatUsageLimitResetClock } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import type { NotificationDispatchRequest } from '../../../shared/notifications/notification-settings-types'
 
@@ -136,6 +139,10 @@ function buildAgentTaskCompleteRichBody(
   args: NotificationDispatchRequest,
   translate: NotificationTranslator
 ): string | null {
+  const failure = agentFailureSentence(args)
+  if (failure) {
+    return failure
+  }
   const assistantMessage = normalizeNotificationText(
     args.agentLastAssistantMessage,
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
@@ -169,6 +176,22 @@ function buildAgentTaskCompleteRichBody(
   }
 
   return null
+}
+
+// A failed turn's reason, in the chat's own words ("Codex hit its weekly limit. It resets at 6:39 PM.").
+function agentFailureSentence(args: NotificationDispatchRequest): string | null {
+  // Whole, or not at all: a newer host's fact whose detail this build can't read keeps the old body.
+  const fact = readWholeAgentSessionFailureFact(args.agentFailure)
+  if (!fact || args.agentState !== 'done' || args.agentTurnOutcome !== 'failure') {
+    return null
+  }
+  const agentName = args.agentType ? formatAgentTypeLabel(args.agentType) : undefined
+  const { text } = agentSessionFailureWords(fact, {
+    surface: 'row',
+    ...(agentName ? { agentName } : {}),
+    usageLimitReset: (resetsAt) => formatUsageLimitResetClock(resetsAt)
+  })
+  return normalizeNotificationText(text, NOTIFICATION_BODY_PREVIEW_MAX_LENGTH) || null
 }
 
 function buildAgentTaskCompleteFallbackNotificationOptions(

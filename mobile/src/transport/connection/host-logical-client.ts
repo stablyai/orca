@@ -1,4 +1,5 @@
 import { AppState, Platform } from 'react-native'
+import { setKeptBotsRevoked } from '../../bots/kept-server-bot-listings'
 import { processDeviceStore } from '../../device-store/device-store'
 import { connect } from '../rpc/direct-rpc-connect'
 import type { RpcClient } from '../rpc/rpc-client-contract'
@@ -33,6 +34,7 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   const stopRevocationWipe = watchHostRevocation(logical, (revoked) => {
     const store = processDeviceStore()
     store.fenceHostCache(host.id, revoked)
+    setKeptBotsRevoked(host.id, revoked)
     if (revoked) {
       void store.wipeHost(host.id, ['cache']).catch(() => undefined)
     }
