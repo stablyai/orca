@@ -1,6 +1,6 @@
 // A chat that keeps dying while it is continued must not be continued forever. The journal is the
 // count: each continuation the agent took leaves Orca's note, and each send carries its offer's tag,
-// so a crash offer's sends count even when the run died before writing the note.
+// so a crash offer's send counts even when its run died before writing the note.
 
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type {
@@ -15,6 +15,12 @@ import {
   restartOfferTag
 } from './structured-agent-session-restart-continuation-envelope'
 import { crashCutTeardownId } from './structured-agent-session-crash-cut-marker'
+
+/** Earlier runs and this one's start: a continuation's send and its note fall in the same run. */
+export type RestartRunHistory = {
+  runs: readonly { runtime: string; startedAt: number }[]
+  thisRunStartedAt: number
+}
 
 export const RESTART_AUTO_CONTINUATION_LIMIT = 3
 export const RESTART_AUTO_CONTINUATION_WINDOW_MS = 5 * 60_000
@@ -38,8 +44,7 @@ export function restartAutoContinuationAllowed(
     submissions: readonly AgentJournalSubmission[]
   },
   now: number,
-  /** Runs that recently crashed; sends for their offers count without a note. */
-  recentCrashes: readonly string[] = []
+  history: RestartRunHistory = { runs: [], thisRunStartedAt: now }
 ): boolean {
   // Each cut is continued at most once: an earlier send for this very offer ends it.
   if (
@@ -52,16 +57,25 @@ export function restartAutoContinuationAllowed(
   const recent = (at: number) => now - at <= RESTART_AUTO_CONTINUATION_WINDOW_MS
   const taken = journal.items.filter(
     (item) => isTakenContinuationNote(item) && recent(item.observedAt)
-  ).length
+  )
+  const starts = [...history.runs.map((run) => run.startedAt), history.thisRunStartedAt]
+  const runOf = (at: number) => Math.max(...starts.filter((start) => start <= at), -1)
+  const notedRuns = new Set(taken.map((item) => runOf(item.observedAt)))
+  // Only a crashed run has a `crash:` offer, so other runs' tags match nothing.
   const crashTags = new Set(
-    recentCrashes.map((runtime) =>
-      restartOfferTag({ teardownId: crashCutTeardownId(runtime), sessionId: marker.sessionId })
+    history.runs.map((run) =>
+      restartOfferTag({ teardownId: crashCutTeardownId(run.runtime), sessionId: marker.sessionId })
     )
   )
-  const sentForCrashes = journal.submissions.filter((submission) => {
+  // A crash offer's send whose run left no note: the run died before the agent's answer.
+  const sentWithoutNote = journal.submissions.filter((submission) => {
     const sent = readRestartContinuationId(submission.clientMessageId)
-    return sent !== null && crashTags.has(sent.offerTag) && recent(sent.sentAt)
+    return (
+      sent !== null &&
+      crashTags.has(sent.offerTag) &&
+      recent(sent.sentAt) &&
+      !notedRuns.has(runOf(sent.sentAt))
+    )
   }).length
-  // Most continuations show in both counts; the larger one is the floor.
-  return Math.max(taken, sentForCrashes) < RESTART_AUTO_CONTINUATION_LIMIT
+  return taken.length + sentWithoutNote < RESTART_AUTO_CONTINUATION_LIMIT
 }

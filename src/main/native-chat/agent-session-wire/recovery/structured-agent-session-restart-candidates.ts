@@ -81,9 +81,7 @@ export function createStructuredAgentSessionRestartCandidateReaders(
                 continue
               }
               const context = await journal.reads.continuationContext()
-              if (
-                restartAutoContinuationAllowed(marker, context, Date.now(), automatic.recentCrashes)
-              ) {
+              if (restartAutoContinuationAllowed(marker, context, Date.now(), automatic)) {
                 candidates.push(candidate)
               }
             }

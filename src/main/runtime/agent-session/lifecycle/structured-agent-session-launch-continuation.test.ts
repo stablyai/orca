@@ -43,7 +43,15 @@ describe('continuing interrupted chats at launch', () => {
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
       undefined,
-      { automatic: { recentCrashes: ['runtime-crashed', 'runtime-older'] } }
+      {
+        automatic: {
+          runs: [
+            { runtime: 'runtime-crashed', startedAt: 4, end: 'crash' },
+            { runtime: 'runtime-older', startedAt: 2, end: 'crash' }
+          ],
+          thisRunStartedAt: 5
+        }
+      }
     )
   })
 

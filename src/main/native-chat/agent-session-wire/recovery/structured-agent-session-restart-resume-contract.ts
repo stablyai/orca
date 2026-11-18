@@ -1,3 +1,4 @@
+import type { RestartRunHistory } from './structured-agent-session-restart-loop-cap'
 import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { createInterruptedContinuation } from './structured-agent-session-interrupted-continuation'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
@@ -8,7 +9,7 @@ import type {
   StructuredAgentSessionResumeFailure
 } from './structured-agent-session-restart-resume-set'
 
-export type StructuredAgentSessionAutomaticRestart = { recentCrashes: readonly string[] }
+export type StructuredAgentSessionAutomaticRestart = RestartRunHistory
 
 export type StructuredAgentSessionRestartResume = {
   /** Snapshot before Stop, confirm proven exit, then persist confirmed offers together. */
@@ -30,7 +31,7 @@ export type StructuredAgentSessionRestartResume = {
   ) => Promise<number>
   /** Unnamed actions continue visible offers; named actions may also retry selected failures.
    *  `automatic` skips chats waiting on a person and chats continued too often already; its
-   *  `recentCrashes` are runs whose offers' sends count even without a note. The policy applies
+   *  The run history lets a crashed run's send count without its note. The policy applies
    *  again to what the action reserved, since a newer offer may have replaced one. */
   continueAfterRestart: (
     sessionIds: readonly string[] | undefined,

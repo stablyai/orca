@@ -52,21 +52,34 @@ describe('restart auto-continuation cap', () => {
   })
 
   it('counts what crashed runs sent, even when each died before its note', () => {
-    const sentBy = (runtime: string, minutesAgo: number) =>
+    // Runs start a minute apart; each sends for the offer of the run before it, which crashed.
+    const start = (minutesAgo: number) => NOW - minutesAgo * MINUTE
+    const runs = [5, 4, 3, 2].map((minutesAgo, index) => ({
+      runtime: `runtime-${index}`,
+      startedAt: start(minutesAgo),
+      end: 'crash' as const
+    }))
+    const sentBy = (crashed: number) =>
       submission(
         restartContinuationId(
-          marker({ teardownId: `crash:${runtime}`, trigger: 'crash' }),
+          marker({ teardownId: `crash:runtime-${crashed}`, trigger: 'crash' }),
           'op',
-          NOW - minutesAgo * MINUTE
+          runs[crashed + 1].startedAt + 1_000
         ),
         'unknown'
       )
-    const submissions = [sentBy('runtime-1', 3), sentBy('runtime-2', 2), sentBy('runtime-3', 1)]
-    const crashes = ['runtime-1', 'runtime-2', 'runtime-3']
-    const allowed = (sent: typeof submissions, recentCrashes = crashes) =>
-      restartAutoContinuationAllowed(offer, { items: [], submissions: sent }, NOW, recentCrashes)
-    expect(allowed(submissions)).toBe(false)
-    expect(allowed(submissions, crashes.slice(1))).toBe(true)
-    expect(allowed([sentBy('runtime-1', 20), ...submissions.slice(1)])).toBe(true)
+    const history = { runs, thisRunStartedAt: start(1) }
+    const allowed = (
+      submissions: ReturnType<typeof submission>[],
+      items: AgentJournalRenderItem[] = []
+    ) => restartAutoContinuationAllowed(offer, { items, submissions }, NOW, history)
+
+    expect(allowed([sentBy(0), sentBy(1), sentBy(2)])).toBe(false)
+    expect(allowed([sentBy(1), sentBy(2)])).toBe(true)
+    // A run that wrote its note counts once, not twice.
+    const noted = [tookContinuation(runs[1].startedAt + 2_000)]
+    expect(allowed([sentBy(0), sentBy(1)], noted)).toBe(true)
+    // An earlier continuation known only by its note, then two crashed runs that sent without one.
+    expect(allowed([sentBy(1), sentBy(2)], noted)).toBe(false)
   })
 })

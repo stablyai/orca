@@ -291,13 +291,12 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   prepareStructuredAgentSessionStartupRestoration(): Promise<void> {
-    this.structuredAgentSessionStartupRestorePromise ??=
+    this.structuredAgentSessionStartupRestorePromise ??= this.continueAfterStartupRestoration(
       this.prepareStructuredAgentSessionStartupRestorationOnce()
-        .finally(() => this.startStructuredAgentSessionLaunchContinuation())
-        .catch((error) => {
-          this.structuredAgentSessionStartupRestorePromise = null
-          throw error
-        })
+    ).catch((error) => {
+      this.structuredAgentSessionStartupRestorePromise = null
+      throw error
+    })
     return this.structuredAgentSessionStartupRestorePromise
   }
 

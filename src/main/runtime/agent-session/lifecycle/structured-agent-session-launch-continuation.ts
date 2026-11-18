@@ -53,9 +53,7 @@ export async function continueStructuredAgentSessionsAtLaunch(
     STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
     undefined,
     {
-      automatic: {
-        recentCrashes: runs.flatMap((run) => (run.end === 'crash' ? [run.runtime] : []))
-      }
+      automatic: { runs, thisRunStartedAt: deps.startedAt }
     }
   )
   return {

@@ -19,7 +19,7 @@ it('leaves a chat cut while it asked its person for that person, continuing it o
   await writeFile(path, JSON.stringify(capsule))
 
   const automatic = await host.restartResume.continueAfterRestart(undefined, 'launch', undefined, {
-    automatic: { recentCrashes: [] }
+    automatic: { runs: [], thisRunStartedAt: 0 }
   })
   expect(automatic.continued).toEqual([])
   expect(dispatch).not.toHaveBeenCalled()

@@ -20,13 +20,24 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     ...args: Parameters<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
   ): ReturnType<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
 
-  /** After startup restoration, whichever path ran it; off the startup path, as continuations wait on providers. */
-  protected startStructuredAgentSessionLaunchContinuation(): void {
-    this.structuredAgentSessionLaunchContinuation.start(
-      structuredAgentSessionLaunchContinuationDeps(
-        getStructuredAgentSessionHost(),
-        () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true
+  /** Continues after startup restoration, whichever path ran it, and off the startup path. A failed
+   *  restoration only lets waiters go on, so a retry that reconciles leases still continues. */
+  protected continueAfterStartupRestoration(restoration: Promise<void>): Promise<void> {
+    const start = (restored: boolean) =>
+      this.structuredAgentSessionLaunchContinuation.start(
+        restored
+          ? structuredAgentSessionLaunchContinuationDeps(
+              getStructuredAgentSessionHost(),
+              () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true
+            )
+          : undefined
       )
+    return restoration.then(
+      () => start(true),
+      (error: unknown) => {
+        start(false)
+        throw error
+      }
     )
   }
 
