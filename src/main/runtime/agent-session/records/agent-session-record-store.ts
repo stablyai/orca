@@ -121,11 +121,9 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
   workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
-    readAgentSessionWorkspaceAttention(
-      this.journalDatabase,
-      this.conversationsKeyedBy(scopeKeys, agentSessionScopeKey(location)),
-      location
-    )
+    readAgentSessionWorkspaceAttention(this.journalDatabase, this.inScope(location), location)
+  private inScope = (location: AgentSessionExecutionLocation) =>
+    this.conversationsKeyedBy(scopeKeys, agentSessionScopeKey(location))
   /** The chats answering to `key` under `keys`, in listing order, without walking the history. */
   conversationsKeyedBy = (keys: AgentSessionConversationKeys, key: string) =>
     this.transactions.keyIndexes.conversations(this.state, keys, key)
@@ -188,7 +186,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   /** Readable chats of exactly this workspace, and whether one this build cannot validate is also there. */
   listWorkspaceSessions = (location: AgentSessionExecutionLocation) =>
-    listAgentSessionWorkspaceSessions(this.state, location)
+    listAgentSessionWorkspaceSessions(this.state, this.inScope(location), location)
 
   updateRecord = <C extends AgentSessionRecordCommand>(
     sessionId: string,
