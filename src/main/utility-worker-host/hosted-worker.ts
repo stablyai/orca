@@ -137,7 +137,10 @@ export class HostedWorker extends EventEmitter {
       return
     }
     if (event.type === 'error') {
-      this.emit('error', restoreFailure(event.error))
+      // An owner stopping this worker has dropped its listeners; a late error would throw in main.
+      if (!this.terminating) {
+        this.emit('error', restoreFailure(event.error))
+      }
       return
     }
     if (event.type === 'exit') {
