@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { appendFile, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -60,49 +60,46 @@ const sharedOnly = (home: SkillHome, sources: BundledSkillSource[] = [NEW_SOURCE
 })
 
 describe('a bundled skill folder holding a file Orca does not ship', () => {
-  it("reads a current copy as current in the planned host's plan and records it as Orca's", async () => {
+  it('judges a copy by its SKILL.md alone and only rewrites it with consent', async () => {
     // Paired and managed servers plan their own disk with this code; the client only summarizes.
     const host = await makeSkillHome()
     await writeCopy(host.shared, NEW_TEXT)
     await addSidecar(host.shared)
+    const plan = () => previewBundledSkillInstall(sharedOnly(host))
 
-    const plan = await previewBundledSkillInstall(sharedOnly(host))
-    expect(plan.skills[0].ops.map((op) => [op.kind, op.reason])).toEqual([['keep', undefined]])
-    expect(summarizeBundledSkillPlan(plan).skills[0].upToDate).toBe(true)
-    expect(bundledSkillNudgeKey('paired-server', plan)).toBeNull()
-
+    const current = await plan()
+    expect(current.skills[0].ops.map((op) => [op.kind, op.reason])).toEqual([['keep', undefined]])
+    expect(summarizeBundledSkillPlan(current).skills[0].upToDate).toBe(true)
+    expect(bundledSkillNudgeKey('paired-server', current)).toBeNull()
     await autoUpdateInstalledBundledSkills({ ...sharedOnly(host), names: [NAME], recordOnly: true })
-    const marker = join(host.home, '.agents', '.orca-skill-digests', NAME, digest(NEW_TEXT))
-    expect((await lstat(marker)).isDirectory()).toBe(true)
-  })
+    const markers = join(host.home, '.agents', '.orca-skill-digests', NAME)
+    expect((await lstat(join(markers, digest(NEW_TEXT)))).isDirectory()).toBe(true)
 
-  it('asks about an older released copy and never swaps it silently, even when Orca wrote it', async () => {
-    const home = await makeSkillHome()
-    // The older build that installed it recorded its bytes as Orca's.
-    const olderBuild = { name: NAME, text: OLD_TEXT, releasedDigests: [digest(OLD_TEXT)] }
-    await previewAndInstall({ ...serviceInput(home, { agents: [] }), sources: [olderBuild] })
-    await addSidecar(home.shared)
-    const before = await snapshot(home.shared)
+    // A cloud package's receipt keeps such a folder its package's, as for a SKILL.md-only one.
+    const receipt = skillInstallReceiptPath(host.state, host.shared)
+    await mkdir(dirname(receipt), { recursive: true })
+    await writeFile(receipt, '{}')
+    const explicit = await previewBundledSkillInstall(serviceInput(host, { agents: [] }))
+    expect(explicit.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'other' })
+    await rm(receipt)
 
-    const result = await autoUpdateInstalledBundledSkills({ ...sharedOnly(home), names: [NAME] })
+    // An older release Orca wrote is still offered as an update, never swapped silently.
+    await writeFile(join(host.shared, 'SKILL.md'), OLD_TEXT)
+    await mkdir(join(markers, digest(OLD_TEXT)), { recursive: true })
+    const before = await snapshot(host.shared)
+    expect(
+      (await autoUpdateInstalledBundledSkills({ ...sharedOnly(host), names: [NAME] })).skills
+    ).toEqual([])
+    expect(await snapshot(host.shared)).toBe(before)
+    expect(await readFile(join(host.shared, SIDECAR), 'utf8')).toBe(SIDECAR_TEXT)
+    const older = await plan()
+    expect(older.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'edited' })
+    expect(bundledSkillNudgeEntries(older).map((entry) => entry.name)).toEqual([NAME])
 
-    expect(result.skills).toEqual([])
-    expect(await snapshot(home.shared)).toBe(before)
-    expect(await readFile(join(home.shared, SIDECAR), 'utf8')).toBe(SIDECAR_TEXT)
-    const plan = await previewBundledSkillInstall(sharedOnly(home))
-    expect(plan.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'edited' })
-    expect(bundledSkillNudgeEntries(plan).map((entry) => entry.name)).toEqual([NAME])
-  })
-
-  it('still asks about an edited SKILL.md beside a sidecar', async () => {
-    const home = await makeSkillHome()
-    await writeCopy(home.shared, NEW_TEXT)
-    await addSidecar(home.shared)
-    await appendFile(join(home.shared, 'SKILL.md'), '\nmy note\n')
-
-    const plan = await previewBundledSkillInstall(sharedOnly(home))
-    expect(plan.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'edited' })
-    expect(bundledSkillNudgeEntries(plan).map((entry) => entry.name)).toEqual([NAME])
+    await writeFile(join(host.shared, 'SKILL.md'), `${NEW_TEXT}\nmy note\n`)
+    const edited = await plan()
+    expect(edited.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'edited' })
+    expect(bundledSkillNudgeEntries(edited).map((entry) => entry.name)).toEqual([NAME])
   })
 
   it('retires a former-name copy beside a current one without dropping its sidecar', async () => {
@@ -243,17 +240,5 @@ describe('a bundled skill folder holding a file Orca does not ship', () => {
 
     expect(plan.skills[0].ops.map((op) => [op.path, op.kind])).toEqual([[home.shared, 'keep']])
     expect(bundledSkillNudgeEntries(plan)).toEqual([])
-  })
-
-  it('leaves a cloud-installed folder with extra files to its package', async () => {
-    const home = await makeSkillHome()
-    await writeCopy(home.shared, NEW_TEXT)
-    await addSidecar(home.shared)
-    await mkdir(dirname(skillInstallReceiptPath(home.state, home.shared)), { recursive: true })
-    await writeFile(skillInstallReceiptPath(home.state, home.shared), '{}')
-
-    const plan = await previewBundledSkillInstall(serviceInput(home, { agents: [] }))
-
-    expect(plan.skills[0].ops.map((op) => [op.kind, op.reason])).toEqual([['leave', 'other']])
   })
 })
