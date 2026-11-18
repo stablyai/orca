@@ -18,26 +18,15 @@ import {
   type TuiIdleEvidenceSource
 } from './tui-idle-evidence-source'
 
-/** Open lanes accept missing clocks as uncorroborated quiet for unseen daemon output; caller timeouts remain and delivery cannot use this lane.
- * Known agents on after-paint lanes must first paint their own command output, excluding shell prompts/echo. */
-function isQuietForQuiescence(
-  lastOutputAt: number | null,
-  quiescenceMs: number,
-  lane: QuietForegroundLane,
-  commandPainted: () => boolean
-): boolean {
-  if (lane === 'after-paint' && !commandPainted()) {
-    return false
-  }
-  if (lastOutputAt === null) {
-    return lane === 'open'
-  }
-  return Date.now() - lastOutputAt >= quiescenceMs
-}
+import { isQuietForQuiescence } from './quiet-foreground-quiescence'
 import { ReattachedRestTitleReads } from './reattached-rest-title'
+
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWaiter } from './terminal-waiter'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+
+/** A foreground read that proved nothing is retried after this, while the pane stays quiet. */
+const FAILED_FOREGROUND_RETRY_MS = 10_000
 
 type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   intervalMs: number
@@ -77,12 +66,16 @@ type QuietForegroundRead = {
   pty: RuntimePtyWorktreeRecord
   process: string | null
   outputClockAt: number | null
+  /** When the read began; a failed (null) read is retried only after the retry interval. */
+  readAt: number
 }
 
 export class RuntimeTerminalIdlePolls {
   private readonly entries = new Set<IdlePollEntry>()
   private sweepTimer: ReturnType<typeof setInterval> | null = null
   private readonly quietForegroundByPtyId = new Map<string, QuietForegroundRead>()
+  /** Pending waits per pane: pane-shared read state lives until the last of them ends. */
+  private readonly waitCountByPtyId = new Map<string, number>()
   private readonly restTitleReads: ReattachedRestTitleReads<RuntimePtyWorktreeRecord>
   /** The evidence source the polls evaluate with: the shared one plus this poll's own foreground reads. */
   private readonly evidenceSource: TuiIdleEvidenceSource
@@ -107,6 +100,7 @@ export class RuntimeTerminalIdlePolls {
   start(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord, verdict?: TuiIdleVerdict): void {
     const entry = { waiter, pty, foregroundPollInFlight: false, screenReadInFlight: false }
     this.entries.add(entry)
+    this.waitCountByPtyId.set(pty.ptyId, (this.waitCountByPtyId.get(pty.ptyId) ?? 0) + 1)
     entry.waiter.cancelIdlePoll = () => this.stop(entry)
     // Share one sweep timer so idle main wakeups do not scale with waiter count.
     if (!this.sweepTimer) {
@@ -262,26 +256,29 @@ export class RuntimeTerminalIdlePolls {
       return
     }
     const outputClockAt = outputClockOf(this.deps, entry.pty)
-    if (this.quietForegroundByPtyId.get(ptyId)?.outputClockAt === outputClockAt) {
+    const last = this.quietForegroundByPtyId.get(ptyId)
+    // Why per pane: every wait on it shares one read in flight and its answer for the quiet
+    // stretch; a failed read says nothing, so it is retried after the interval, not every sweep.
+    if (
+      last?.outputClockAt === outputClockAt &&
+      (last.process !== null || Date.now() - last.readAt < FAILED_FOREGROUND_RETRY_MS)
+    ) {
       return
     }
     const foregroundRead = this.deps.getForegroundProcess(ptyId)
     if (!foregroundRead) {
       return
     }
+    const read = { pty: entry.pty, process: null, outputClockAt, readAt: Date.now() }
+    this.quietForegroundByPtyId.set(ptyId, read)
     entry.foregroundPollInFlight = true
     try {
       const process = await foregroundRead
-      if (!this.entries.has(entry)) {
+      if (!this.entries.has(entry) || this.quietForegroundByPtyId.get(ptyId) !== read) {
         return
       }
-      // Why not a failed read: it says nothing about the foreground, and keeping it for the quiet
-      // stretch would stop the pager check until output moved again. The next sweep reads again.
-      if (process === null) {
-        return
-      }
-      this.quietForegroundByPtyId.set(ptyId, { pty: entry.pty, process, outputClockAt })
-      if (isPagerProcess(process)) {
+      this.quietForegroundByPtyId.set(ptyId, { ...read, process })
+      if (process !== null && isPagerProcess(process)) {
         const resample = this.sample(entry)
         if (resample.verdict.kind === 'ready-weak' && resample.isQuiet('closed')) {
           this.settle(entry, resample.ready())
@@ -335,9 +332,14 @@ export class RuntimeTerminalIdlePolls {
     if (!this.entries.delete(entry)) {
       return
     }
-    this.quietForegroundByPtyId.delete(entry.pty.ptyId)
-    if (![...this.entries].some((other) => other.pty.ptyId === entry.pty.ptyId)) {
-      this.restTitleReads.forget(entry.pty.ptyId)
+    const { ptyId } = entry.pty
+    const waits = (this.waitCountByPtyId.get(ptyId) ?? 1) - 1
+    if (waits > 0) {
+      this.waitCountByPtyId.set(ptyId, waits)
+    } else {
+      this.waitCountByPtyId.delete(ptyId)
+      this.quietForegroundByPtyId.delete(ptyId)
+      this.restTitleReads.forget(ptyId)
     }
     entry.waiter.cancelIdlePoll = null
     clearTimeout(entry.recheckTimer)

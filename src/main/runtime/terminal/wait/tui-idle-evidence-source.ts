@@ -17,7 +17,8 @@ import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
 import {
   hasTerminalAgentPainted,
   isCurrentCommandStatus,
-  isCurrentFirstPartyReport
+  isCurrentFirstPartyReport,
+  isShellInFront
 } from '../input/terminal-command-paint'
 import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -173,10 +174,14 @@ export function ptyTuiIdleEvidence(
   // finished command or from before a reattach speaks for a program that may no longer be there.
   const titleIsCurrent = isCurrentCommandStatus(pty, pty.lastOscTitleEpochMs)
   const fullRecord = evidenceRecord(source, pty)
+  // Why not with the shell in front: once a command finished, the shell is itself at rest; only an
+  // agent's own explicit rest title must not speak for it.
+  const statusRetired =
+    !titleIsCurrent && !isShellInFront(pty) && fullRecord.lastAgentStatus === 'idle'
   const record =
-    titleIsCurrent || (fullRecord.lastAgentStatus !== 'idle' && !hasExplicitIdleTitle(fullRecord))
+    titleIsCurrent || !hasExplicitIdleTitle(fullRecord)
       ? fullRecord
-      : { ...fullRecord, lastOscTitle: null, lastAgentStatus: null }
+      : { ...fullRecord, lastOscTitle: null }
   const firstPartyStatus = source.getFirstPartyAgentStatus(pty.ptyId)
   // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
   const readCommandPainted = () =>
@@ -184,6 +189,8 @@ export function ptyTuiIdleEvidence(
       pty,
       paintAgent(agent, record.lastOscTitle, source.getQuietForegroundProcess?.(pty.ptyId) ?? null)
     )
+  // A ready screen speaks only for a command now running that painted it.
+  const readScreenPainted = () => !isShellInFront(pty) && readCommandPainted()
   return {
     record,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
@@ -196,9 +203,9 @@ export function ptyTuiIdleEvidence(
         titleIsCurrent &&
         source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
       (isKnownReadyPromptBody(waitText(), agent, readScreen, record.lastOutputAt !== null) &&
-        readCommandPainted()),
+        readScreenPainted()),
     readQuietReadyBodyEvidence: () =>
-      isQuietReadyScreenBody(waitText(), agent, readScreen) && readCommandPainted(),
+      isQuietReadyScreenBody(waitText(), agent, readScreen) && readScreenPainted(),
     readAgentRuleVerdict: () => readAgentRuleVerdict(agent, record, readScreen, waitText),
     readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
@@ -209,6 +216,7 @@ export function ptyTuiIdleEvidence(
         : null,
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs,
-    readCommandPainted
+    readCommandPainted,
+    statusRetired
   }
 }

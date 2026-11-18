@@ -96,10 +96,16 @@ export class TerminalCommandPaint {
     this.markerEndInChunk = -1
     const finishEnd = this.scanner.scan(data)
     if (finishEnd > this.markerEndInChunk) {
-      // Why: the finished command's paint, a previous agent's ready screen included, speaks for nothing now.
+      // Why keep plain paint: with the shell in front, a command that printed and returned (a
+      // background launch) is at rest; but no agent's composer, nor its ready screen (the evidence
+      // source closes screen lanes here), speaks for whatever starts next.
+      if (this.markerEndInChunk !== -1) {
+        this.awaitingPaint = !hasVisibleText(
+          normalizeTerminalChunk(data.slice(this.markerEndInChunk)).text
+        )
+      }
       this.betweenCommands = true
       this.startSeen = false
-      this.awaitingPaint = true
       this.repaintRequestable = false
       this.composers = new Map()
       return
@@ -235,6 +241,11 @@ export class TerminalCommandPaint {
     )
   }
 
+  /** A command finished and no next one started: the shell owns the pane. */
+  isBetweenCommands(): boolean {
+    return this.betweenCommands
+  }
+
   hasPainted(): boolean {
     return !this.awaitingPaint
   }
@@ -321,6 +332,10 @@ export function isCurrentCommandStatus(
     !paint ||
     (paint.isCurrentStatus(titleObservedAt) && !paint.isRetired({ titleAt: record.lastOscTitleAt }))
   )
+}
+
+export function isShellInFront(record: TerminalCommandPaintRecord): boolean {
+  return record.commandPaint?.isBetweenCommands() ?? false
 }
 
 export function takeReattachedRepaintRequest(

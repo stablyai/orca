@@ -229,7 +229,8 @@ describe('tui-idle on a slow-starting Claude', () => {
     expect(settled).not.toHaveBeenCalled()
 
     pane.foregroundProcess = 'less'
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
+    // A failed read is retried after 10 s rather than every sweep.
+    await vi.advanceTimersByTimeAsync(10_000 + POLL_INTERVAL_MS * 2)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
 })

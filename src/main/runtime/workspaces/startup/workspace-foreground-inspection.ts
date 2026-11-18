@@ -37,6 +37,10 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
   /** The rest title's own agent is in front of a pane unchanged since the read began: its idle counts
    *  for the process now running. */
   protected async confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean> {
+    // Why first: a host that can't find an agent in front (Windows, WSL) can never confirm one.
+    if (!this.launchedAgentHostProvesAgent(ptyId)) {
+      return false
+    }
     const pty = this.ptysById.get(ptyId)
     const outputClockAt = this.readOutputClockAt(ptyId)
     const generation = this.getPtyLifecycleGeneration(ptyId)

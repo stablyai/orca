@@ -5,6 +5,7 @@ import {
   observeTerminalCommandPaint,
   isCurrentCommandReport,
   isCurrentCommandStatus,
+  isShellInFront,
   takeReattachedRepaintRequest,
   vouchTerminalSpawn,
   type TerminalCommandPaintRecord
@@ -74,7 +75,7 @@ describe('the command an agent report speaks for', () => {
     const record: TerminalCommandPaintRecord = {}
     observeTerminalCommandPaint(record, `${START}ok\r\n${FINISH}`, `${START}ok\r\n${FINISH}`, 1_000)
     expect(isCurrentCommandReport(record, 1_000)).toBe(false)
-    expect(hasTerminalAgentPainted(record, 'hermes')).toBe(false)
+    expect(isShellInFront(record)).toBe(true)
   })
 
   it('retires reports at a finish whose start it never saw', () => {
