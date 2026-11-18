@@ -41,8 +41,9 @@ different SSH/WSL host or `--on`, ask the user. `worker-start` does not check
 that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
 
 - Start independent workers at the same time, up to about 4 at once, and
-  start the rest as those return: a `worker-start` can wait until its agent is
-  ready, so run them as separate parallel tool calls, not one after another.
+  start the rest as those return. Separate tool calls often run one after
+  another, so start each group from one shell command: load
+  `references/parallel-start.md` for the POSIX and PowerShell forms.
   Then **end your turn**. "Report back" and
   "tell me when it's done" still mean end your turn; Orca wakes you and you
   report then.
@@ -126,4 +127,5 @@ assignment does not prove its agent stopped.
 | Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |
 | Group messages                                 | `references/messaging-and-gates.md`  |
 | A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |
+| Several independent workers at once            | `references/parallel-start.md`       |
 | Custom argv or terminal layout                 | `references/low-level-topology.md`   |
