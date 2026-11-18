@@ -3,7 +3,7 @@
  * that sign in with one sign out on every restart. Chrome keeps them when it restores the last
  * session, and Orca always restores its tabs, so Orca saves them itself and puts them back.
  */
-import { session, type Cookie, type Session } from 'electron'
+import { session, type Session } from 'electron'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { CdpCookie } from '../browser-cdp-cookie'
 import { isBrowserRoutePartition } from '../../routing/partitions/browser-route-identity'
@@ -27,6 +27,7 @@ import {
   snapshotPath,
   writeSessionCookieSnapshot
 } from './browser-session-cookie-snapshot-file'
+import { cancelPendingSave, type SessionCookieTracker } from './browser-session-cookie-tracker'
 
 // Chromium commits its own cookie store this often.
 const SAVE_DELAY_MS = 30_000
@@ -36,23 +37,6 @@ const helperTargetSlots = new PrioritySemaphore(HELPER_TARGET_CONCURRENCY)
 // Lower runs first: a restore holds a page's first load, a save does not.
 const RESTORE_PRIORITY = 0
 const SAVE_PRIORITY = 1
-
-type SessionCookieTracker = {
-  target: Session
-  filePath: string
-  /** What the file holds now, by scope. */
-  saved: Map<string, CdpCookie[]>
-  /** The file may hold cookies `saved` lacks (it could not be read), so the next save must rewrite it. */
-  savedStale: boolean
-  /** Set until the file has been read: a save before then would compare against nothing. */
-  reading: boolean
-  /** Scopes whose cookies changed since `saved` was read. */
-  changedScopes: Map<string, ScopeChange>
-  /** Set while a save reads: scopes that changed meanwhile, which the read may have missed. */
-  changedDuringSave: Map<string, ScopeChange> | null
-  timer: ReturnType<typeof setTimeout> | null
-  onChanged: (event: Electron.Event, cookie: Cookie, cause: string, removed: boolean) => void
-}
 
 let quitting = false
 // Why keyed by file path: the same browser profile id ('default') exists in every Orca profile.
@@ -100,8 +84,12 @@ export async function forgetBrowserRoutePartitionSessionCookies(partition: strin
   const filePath = routeSnapshotPath(partition)
   stopTracking(filePath)
   try {
-    // File first: any restore that starts from here on reads nothing.
-    await removeSessionCookieSnapshot(filePath)
+    // File first: any restore that starts from here on reads nothing. Both keychain modes' files go.
+    await Promise.all(
+      [false, true].map((mockKeychain) =>
+        removeSessionCookieSnapshot(routeSnapshotPath(partition, mockKeychain))
+      )
+    )
   } finally {
     // One that read it already (or ran past its page's timeout) finishes before the jar is cleared,
     // and the next restore tracks the jar again even when the file could not go.
@@ -242,13 +230,6 @@ function scheduleSave(tracker: SessionCookieTracker): void {
   }
 }
 
-function cancelPendingSave(tracker: SessionCookieTracker): void {
-  if (tracker.timer) {
-    clearTimeout(tracker.timer)
-    tracker.timer = null
-  }
-}
-
 async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> {
   tracker.timer = null
   const changedDuringSave = new Map<string, ScopeChange>()
@@ -342,10 +323,8 @@ export async function clearBrowserSessionCookieSnapshots(profileId: string): Pro
   const paths = [snapshotPath(profileId, false), snapshotPath(profileId, true)]
   for (const path of paths) {
     const tracker = trackers.get(path)
+    stopTracking(path)
     if (tracker) {
-      cancelPendingSave(tracker)
-      tracker.target.cookies.off('changed', tracker.onChanged)
-      trackers.delete(path)
       track(path, tracker.target)
     }
   }
@@ -356,18 +335,15 @@ export async function clearBrowserSessionCookieSnapshots(profileId: string): Pro
 export function forgetBrowserSessionCookies(profileId: string): void {
   try {
     for (const mockKeychain of [false, true]) {
-      forgetSnapshot(snapshotPath(profileId, mockKeychain), profileId)
+      const filePath = snapshotPath(profileId, mockKeychain)
+      stopTracking(filePath)
+      void removeSessionCookieSnapshot(filePath).catch((error: unknown) =>
+        warnForgetFailed(profileId, error)
+      )
     }
   } catch (error) {
     warnForgetFailed(profileId, error)
   }
-}
-
-function forgetSnapshot(filePath: string, label: string): void {
-  stopTracking(filePath)
-  void removeSessionCookieSnapshot(filePath).catch((error: unknown) =>
-    warnForgetFailed(label, error)
-  )
 }
 
 function stopTracking(filePath: string): void {

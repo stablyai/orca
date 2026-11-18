@@ -20,9 +20,8 @@ it('mock saves preserve real snapshots and explicit deletion removes both modes'
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
   try {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
-    const { configureBrowserSessionCookieSnapshots } = await import(
-      './browser-session-cookie-snapshot-file'
-    )
+    const { configureBrowserSessionCookieSnapshots } =
+      await import('./browser-session-cookie-snapshot-file')
     const {
       clearBrowserSessionCookieSnapshots,
       forgetBrowserSessionCookies,
