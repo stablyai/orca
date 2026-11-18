@@ -11,14 +11,14 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { setAppEnvironment } from '../../../shared/app-environment'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
 }))
 
 import { OpenCodeHookService, openCode2HookService } from './hook-service'
-import { resolveOpenCodeConfigDirectory } from '../../../shared/opencode-config-directory'
+import { resolveOpenCodeConfigDirectory } from '../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
 
 beforeEach(() => {
   vi.stubEnv('ORCA_OPENCODE_PLUGIN_API', 'v2')

@@ -1,10 +1,10 @@
 import {
-  isBrowserSitePermission,
-  isBrowserSitePermissionDecision,
-  type BrowserSitePermission,
+  isBrowserSitePermissionKey,
+  isValidBrowserSitePermissionDecision,
   type BrowserSitePermissionDecision,
-  type BrowserSitePermissionEntry
-} from '../../../../shared/browser-site-permission'
+  type BrowserSitePermissionEntry,
+  type BrowserSitePermissionKey
+} from '../../../../shared/browser/site-settings/browser-site-permission'
 import { createBrowserProfileSiteStore } from '../browser-profile-site-store'
 
 export const BROWSER_SITE_PERMISSIONS_FILE_NAME = 'browser-site-permissions.json'
@@ -15,7 +15,10 @@ function parseSiteDecisions(value: unknown): SiteDecisions | null {
   const decisions: SiteDecisions = {}
   if (value && typeof value === 'object') {
     for (const [permission, decision] of Object.entries(value)) {
-      if (isBrowserSitePermission(permission) && isBrowserSitePermissionDecision(decision)) {
+      if (
+        isBrowserSitePermissionKey(permission) &&
+        isValidBrowserSitePermissionDecision(permission, decision)
+      ) {
         decisions[permission] = decision
       }
     }
@@ -36,7 +39,7 @@ export function configureBrowserSitePermissionStore(profileDirectory: string): v
 export function getBrowserSitePermissionDecision(
   profileId: string,
   origin: string,
-  permission: BrowserSitePermission
+  permission: BrowserSitePermissionKey
 ): BrowserSitePermissionDecision | undefined {
   return store.get(profileId, origin)?.[permission]
 }
@@ -45,7 +48,7 @@ export function getBrowserSitePermissionDecision(
 export function setBrowserSitePermissionDecisions(
   profileId: string,
   origin: string,
-  permissions: readonly BrowserSitePermission[],
+  permissions: readonly BrowserSitePermissionKey[],
   decision: BrowserSitePermissionDecision | null
 ): void {
   const current = store.get(profileId, origin)

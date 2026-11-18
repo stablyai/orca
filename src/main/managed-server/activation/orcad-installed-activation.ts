@@ -17,7 +17,7 @@ import { planOrcadUpdate } from './orcad-update-plan'
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/orcad-terminal-census'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { runFencedStop } from './orcad-fenced-stop'
 import {
   censusNeedsHostDaemonProtocols,
@@ -65,8 +65,8 @@ import {
   stopTransactionIncumbent
 } from './orcad-transaction-incumbent'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
-import { orcadCandidateLaunchFailureCode } from '../../orcad/orcad-host-unavailable'
-import { errorMessage } from '../../../shared/error-message'
+import { orcadCandidateLaunchFailureCode } from '../../orcad/diagnostics/orcad-host-unavailable'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 type Outcome = Extract<OrcadDeployResult, { outcome: 'installed-not-activated' }>
 

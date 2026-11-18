@@ -1,8 +1,11 @@
 import { z } from 'zod'
-import { CONNECTOR_SOURCES, type ConnectorSource } from '../../shared/external-conversation-link'
+import {
+  CONNECTOR_SOURCES,
+  type ConnectorSource
+} from '../../shared/connectors/external-conversation-link'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
-import { hashCanonical } from '../runtime/rpc/orchestration-mutation-receipt'
+import { hashCanonical } from '../runtime/rpc/orchestration/mutations/orchestration-mutation-receipt'
 import { refused, type ConversationKey, type Delivery } from './external-conversation-types'
 
 export type DeliveryReceiptDb = OrchestrationDb

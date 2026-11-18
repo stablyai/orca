@@ -1,16 +1,14 @@
 import { GitCommandTimeoutError } from '../../../../shared/git/commands/git-command-timeout'
-import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-ref'
-import type {
-  LocalBaseRefRefreshResult,
-  LocalBaseRefUpdateSuggestion
-} from '../../../../shared/worktree/base-ref-drift-types'
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
+import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-refs/base-ref'
+import type { LocalBaseRefRefreshResult } from '../../../../shared/worktree/base-refs/base-ref-drift-types'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import {
+  fastForwardCheckedOutLocalBaseAfterCreate,
   getLocalBaseRefUpdateSuggestionForWorktreeCreate,
   parseRemoteTrackingLocalBaseRef,
   refreshLocalBaseRefForWorktreeCreate
@@ -35,6 +33,8 @@ export type WorktreeAddBaseContext = Pick<AddWorktreeResult, 'localBaseRefUpdate
   effectiveBaseOid?: string
   /** Never rejects; refresh can overlap creation from the remote-tracking commit. */
   pendingLocalBaseRefRefresh?: Promise<LocalBaseRefRefreshResult | undefined>
+  /** Call once the create succeeded; updates a checked-out base in the background. */
+  updateCheckedOutLocalBase?: () => void
 }
 
 export async function resolveWorktreeAddBaseContext(
@@ -83,7 +83,13 @@ export async function resolveWorktreeAddBaseContext(
     ...(!refreshLocalBaseRef && !options.suggestLocalBaseRefUpdate && effectiveBaseOid
       ? { effectiveBaseOid }
       : {}),
-    ...(pendingLocalBaseRefRefresh ? { pendingLocalBaseRefRefresh } : {}),
+    ...(pendingLocalBaseRefRefresh
+      ? {
+          pendingLocalBaseRefRefresh,
+          updateCheckedOutLocalBase: () =>
+            fastForwardCheckedOutLocalBaseAfterCreate(repoPath, baseBranch, effectiveBase, options)
+        }
+      : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
   }
 }
@@ -144,18 +150,6 @@ export async function configurePushAutoSetupRemote(
   }
 }
 
-export async function unsetWorktreeCreationBase(
-  worktreePath: string,
-  branch: string,
-  options: GitWorktreeExecOptions = {}
-): Promise<void> {
-  try {
-    await gitExecFileAsync(['config', '--local', '--unset-all', `branch.${branch}.base`], {
-      ...gitExecOptions(worktreePath, options)
-    })
-  } catch {}
-}
-
 /** Track a same-name remote base; other newly created branches stay untracked. */
 export async function trackSameNameRemoteBase(
   worktreePath: string,
@@ -187,8 +181,19 @@ export async function trackSameNameRemoteBase(
   }
 }
 
+type AddWorktreeOutcome = { result: AddWorktreeResult; updateCheckedOutLocalBase?: () => void }
+
 /** Create a worktree; new branches record base lineage and may enable repo-wide push.autoSetupRemote. */
 export async function addWorktree(
+  ...args: Parameters<typeof addWorktreeDeferringLocalBaseUpdate>
+): Promise<AddWorktreeResult> {
+  const { result, updateCheckedOutLocalBase } = await addWorktreeDeferringLocalBaseUpdate(...args)
+  updateCheckedOutLocalBase?.()
+  return result
+}
+
+/** For callers with checkout work left: they start the checked-out base update once it is done. */
+export async function addWorktreeDeferringLocalBaseUpdate(
   repoPath: string,
   worktreePath: string,
   branch: string,
@@ -196,7 +201,7 @@ export async function addWorktree(
   refreshLocalBaseRef = false,
   noCheckout = false,
   options: AddWorktreeOptions = {}
-): Promise<AddWorktreeResult> {
+): Promise<AddWorktreeOutcome> {
   try {
     return await withRepoRefMaintenancePaused('worktree-add', () =>
       runWithGitReadCacheInvalidation(() =>
@@ -224,11 +229,10 @@ async function performAddWorktree(
   refreshLocalBaseRef = false,
   noCheckout = false,
   options: AddWorktreeOptions = {}
-): Promise<AddWorktreeResult> {
+): Promise<AddWorktreeOutcome> {
   // Wait for background removal ownership to end before reusing its path or branch.
   assertNoPendingWorktreeRemovalConflict(repoPath, { worktreePath, branch })
-  let pendingLocalBaseRefRefresh: Promise<LocalBaseRefRefreshResult | undefined> | undefined
-  let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
+  let baseContext: WorktreeAddBaseContext | undefined
   const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
   let effectiveBase: string | undefined
   if (options.trackRemoteBranch && !baseBranch) {
@@ -245,7 +249,7 @@ async function performAddWorktree(
     // Avoid inheriting the base's upstream; same-name remote bases are tracked explicitly afterward.
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
-      const baseContext = await resolveWorktreeAddBaseContext(
+      baseContext = await resolveWorktreeAddBaseContext(
         repoPath,
         baseBranch,
         refreshLocalBaseRef,
@@ -258,8 +262,6 @@ async function performAddWorktree(
           'Reuse branch requires a remote-tracking ref when the local branch is missing.'
         )
       }
-      pendingLocalBaseRefRefresh = baseContext.pendingLocalBaseRefRefresh
-      localBaseRefUpdateSuggestion = baseContext.localBaseRefUpdateSuggestion
       args.push(effectiveBase)
     }
   }
@@ -271,13 +273,14 @@ async function performAddWorktree(
   try {
     await gitExecFileAsync([...(await checkoutWorkersArgs), ...args], {
       ...gitExecOptions(repoPath, options),
+      ...(!noCheckout ? { admissionClass: 'checkout' as const } : {}),
       // Resolve per call so later environment overrides take effect.
       timeout: resolveWorktreeAddTimeoutMs(),
       ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})
     })
   } catch (error) {
     // Settle the refresh before leaving the caller's maintenance pause on failure.
-    await pendingLocalBaseRefRefresh
+    await baseContext?.pendingLocalBaseRefRefresh
     if (error instanceof GitCommandTimeoutError) {
       error.message = worktreeAddTimeoutMessage(error.timeoutMs)
     }
@@ -289,7 +292,7 @@ async function performAddWorktree(
   }
 
   if (options.checkoutExistingBranch) {
-    return {}
+    return { result: {} }
   }
 
   let upstreamWarning: string | undefined
@@ -309,10 +312,14 @@ async function performAddWorktree(
 
   // Git >= 2.37 can set an upstream on first push; --local intentionally writes shared repo config.
   await configurePushAutoSetupRemote(worktreePath, options)
-  const localBaseRefRefresh = await pendingLocalBaseRefRefresh
+  const localBaseRefRefresh = await baseContext?.pendingLocalBaseRefRefresh
+  const localBaseRefUpdateSuggestion = baseContext?.localBaseRefUpdateSuggestion
   return {
-    ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
-    ...(upstreamWarning ? { upstreamWarning } : {}),
-    ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
+    result: {
+      ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
+      ...(upstreamWarning ? { upstreamWarning } : {}),
+      ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
+    },
+    updateCheckedOutLocalBase: baseContext?.updateCheckedOutLocalBase
   }
 }

@@ -18,15 +18,12 @@ import {
 import {
   BASELINE_REF,
   BASELINE_SOURCE_HASHES,
+  currentSourcePaths,
   createManifest,
   selectRequiredDescriptors
 } from './check-job-log-performance-cases.mjs'
 
 const shared = Object.keys(BASELINE_SOURCE_HASHES)
-const currentSourcePaths = {
-  'check-job-log-tail-slice.ts': 'source-control/checks/logs/check-job-log-tail-slice.ts',
-  'check-job-log-excerpt.ts': 'source-control/checks/logs/check-job-log-excerpt.ts'
-}
 export const hash = (value) => createHash('sha256').update(value).digest('hex')
 export const nodeExecutable = () => {
   const executable = process.versions.bun

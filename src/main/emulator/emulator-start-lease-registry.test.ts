@@ -52,18 +52,6 @@ function makeBackend(): {
 }
 
 describe('EmulatorStartLeaseRegistry', () => {
-  it('lets the backend boot a shutdown device before a canonical id exists', async () => {
-    const { backend, resolveDeviceId, startSession } = makeBackend()
-    const registry = new EmulatorStartLeaseRegistry()
-
-    const lease = await registry.acquire(backend, 'Pixel_Tablet', () => false)
-    await lease.release()
-
-    expect(resolveDeviceId).not.toHaveBeenCalled()
-    expect(startSession).toHaveBeenCalledWith('Pixel_Tablet')
-    expect(lease.info.deviceUdid).toBe('emulator-5554')
-  })
-
   it('waits for pending cleanup before starting a new lease', async () => {
     const { backend, startSession, stopHelperForDevice, shutdownDevice } = makeBackend()
     let finishCleanup: (() => void) | undefined

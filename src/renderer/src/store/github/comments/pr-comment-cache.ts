@@ -1,4 +1,7 @@
-import type { GitHubCommentResult, PRComment } from '../../../../../shared/github/comment-types'
+import type {
+  GitHubCommentResult,
+  PRComment
+} from '../../../../../shared/github/comments/comment-types'
 
 function commentTimestamp(comment: PRComment): number {
   const timestamp = new Date(comment.createdAt).getTime()

@@ -3,6 +3,7 @@
  * preview and, when it is clear, the move. Every wait re-reads the record, so a choice the user
  * made meanwhile (a release, Not now) wins over the step's stale view.
  */
+import { wslMoveStartFieldsOf } from '../../../../shared/wsl-move/wsl-move-request'
 import type {
   WslMovePreview,
   WslMoveResult
@@ -88,7 +89,7 @@ export async function runWslMoveOrchestratorStep(
   // Before anything that could connect, add or move: even the user's Retry waits for the Remove.
   let removalPending: boolean
   try {
-    removalPending = ports.hostRemovalPending(distro)
+    removalPending = await ports.hostRemovalPending(distro)
   } catch {
     // An unreadable host record proves nothing either way; touch nothing this time.
     return
@@ -99,7 +100,7 @@ export async function runWslMoveOrchestratorStep(
   }
   // The Remove settled: a kept host (the user pressed Connect) resumes; a gone one was declined.
   if (record.state.kind === 'parked' && record.state.reason === 'removal-pending') {
-    record = commit(applyWslMoveHostRemovalSettled(record, ports.hasHost(distro), now()))
+    record = commit(applyWslMoveHostRemovalSettled(record, await ports.hasHost(distro), now()))
   }
   // A timer re-check leaves R38 to the triggers, so a deferred move never polls the registry.
   const finished = trigger === 'timer' ? null : readWslMoveFinishedMove(ports, distro)
@@ -147,7 +148,8 @@ export async function runWslMoveOrchestratorStep(
   }
   const started = record
   // The port re-checks this once it has the window's panes, just before the driver claims the run.
-  const result = await settle(() => ports.start(distro, () => !changedUnder(started)))
+  const fromPreview = wslMoveStartFieldsOf(preview.outcome === 'ready' ? preview : null)
+  const result = await settle(() => ports.start(distro, () => !changedUnder(started), fromPreview))
   if (!changedUnder(record)) {
     commit(apply(record, result), result)
   }

@@ -1,8 +1,11 @@
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { setMigrationUnsupportedPty } from '../../../agent-hooks/observations/migration-unsupported-pty-state'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
@@ -30,7 +33,7 @@ import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-ses
 import type { SessionSnapshotOperations } from './session-snapshot-operations'
 import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
 import { scheduleSave } from '../profile-writing/write-scheduling'
-import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-row-order'
+import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,

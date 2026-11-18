@@ -1,8 +1,8 @@
 import {
   keybindingFileDiagnostic,
-  type KeybindingDiagnosticCode,
-  type KeybindingFileDiagnostic
-} from '../../keybindings'
+  type KeybindingDiagnosticCode
+} from '../../keybindings/keybinding-diagnostic-copy'
+import type { KeybindingFileDiagnostic } from '../../keybindings/types'
 import { copyModeBindingsOverlap, normalizeCopyModeBinding } from './terminal-copy-mode-bindings'
 
 export const TERMINAL_COPY_MODE_VIM_MOTIONS = [

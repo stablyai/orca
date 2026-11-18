@@ -2,13 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 import {
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type OrcaProfileIndex
-} from '../../../shared/orca-profiles'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/orca-profiles/orca-profiles'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   exportProfileStateJson,
   importProfileStateJson
@@ -64,6 +64,15 @@ vi.mock('electron', () => ({
 
 async function loadTransferModule() {
   return import('./profile-project-transfer')
+}
+
+function transferMove(
+  transfer: Awaited<ReturnType<typeof loadTransferModule>>['transferOrcaProfileProject']
+) {
+  return transfer(
+    { sourceProfileId: 'personal', targetProfileId: 'work', repoId: 'repo-1', mode: 'move' },
+    testState.dir
+  )
 }
 
 function profile(id: string, name: string): OrcaProfileIndex['profiles'][number] {
@@ -135,6 +144,22 @@ function makeState(overrides: Partial<PersistedState> = {}): PersistedState {
   }
 }
 
+// A profile saved before artifactSharingEnabled existed carries no defaults for it.
+function writeOlderProfileStateDatabase(
+  profileId: string,
+  settings: Record<string, unknown>,
+  repos: Repo[] = []
+): void {
+  const databasePath = profileDatabasePath(profileId)
+  mkdirSync(join(databasePath, '..'), { recursive: true })
+  const opened = openProfileStateDatabase(databasePath, profileId)
+  try {
+    importProfileStateJson(opened.db, JSON.stringify({ settings, repos }))
+  } finally {
+    opened.db.close()
+  }
+}
+
 describe('profile project transfer', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-profile-transfer-'))
@@ -199,5 +224,17 @@ describe('profile project transfer', () => {
     expect(() => recoverPendingProfileProjectMoves(testState.dir)).toThrow(/intent is malformed/)
     expect(readProfileStateDatabase('personal').repos).toHaveLength(1)
     expect(existsSync(intentPath)).toBe(true)
+  })
+
+  it('moves a project without granting publishing permission to either older profile', async () => {
+    writeOlderProfileStateDatabase('personal', {}, [makeRepo()])
+    writeOlderProfileStateDatabase('work', {})
+    const { transferOrcaProfileProject } = await loadTransferModule()
+
+    expect(transferMove(transferOrcaProfileProject)).toMatchObject({ status: 'transferred' })
+    expect(readProfileStateDatabase('personal').settings).not.toHaveProperty(
+      'artifactSharingEnabled'
+    )
+    expect(readProfileStateDatabase('work').settings).not.toHaveProperty('artifactSharingEnabled')
   })
 })

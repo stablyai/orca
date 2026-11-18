@@ -1,5 +1,5 @@
-import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
-import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
+import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
 import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
@@ -7,20 +7,24 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
-  toggleGitHubChecksTabExpandedKey
-} from '@/components/github-checks-tab-state'
-import type { GitHubChecksContextOwner } from '@/components/github-checks-tab-state'
+  toggleGitHubChecksTabExpandedKey,
+  type GitHubChecksContextOwner
+} from '@/components/github/github-checks-tab-state'
+
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import {
   getCheckCounts,
   getOverallCheckCounts,
   getChecksSummaryLabel
-} from '@/components/pr-check-counts'
+} from '@/components/github/pr-check-counts'
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import {
+  getTaskSourceCacheScope,
+  type TaskSourceContext
+} from '../../../../../shared/work-items/task-source-context'
+
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import {
   canUseGitHubRepoContext,
@@ -42,8 +46,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 
 export function ChecksTab({
   item,

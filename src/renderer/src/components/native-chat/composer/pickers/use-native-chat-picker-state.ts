@@ -1,3 +1,4 @@
+import { useNativeChatPickerContext } from './use-native-chat-picker-context'
 import {
   writeNativeChatComposerText,
   type NativeChatComposerInput
@@ -15,7 +16,7 @@ import {
   type SetStateAction
 } from 'react'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 
 import {
   applyMentionSuggestion,
@@ -23,16 +24,16 @@ import {
   editReplacesTriggerToken,
   isSkillPickerTriggered,
   type ComposerAutocomplete
-} from '../../../../../../shared/native-chat/input/native-chat-composer-autocomplete'
-import { applyPickerSuggestion } from '../../../../../../shared/native-chat/input/native-chat-picker-triggers'
+} from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import { applyPickerSuggestion } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-triggers'
 import {
   classifyNativeChatSend,
   type NativeChatSendClassification,
   type NativeChatSessionSkill,
   type SlashCommandSuggestion
-} from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
-import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/native-chat-skill-visibility'
+} from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
+import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
 import {
@@ -123,6 +124,10 @@ export function useNativeChatPickerState(args: {
   const dismissalContext = `${draftScopeKey}:${agent}`
   const [dismissed, setDismissed] = useState<{ context: string; triggerKey: string } | null>(null)
   const skillOriginRef = useRef<string | null>(null)
+  useNativeChatPickerContext(dismissalContext, () => {
+    skillOriginRef.current = null
+    setDismissed(null)
+  })
   const lastOpenKeyRef = useRef<string | null>(null)
   const derivedAutocomplete = useMemo<ComposerAutocomplete>(
     () =>
@@ -166,12 +171,6 @@ export function useNativeChatPickerState(args: {
     caret,
     setActiveSuggestion
   )
-
-  useEffect(() => {
-    // Reset dismissal/origin on context changes so a reused composer cannot retain a prior pane’s suppression.
-    skillOriginRef.current = null
-    setDismissed(null)
-  }, [dismissalContext])
 
   useEffect(() => {
     if (autocomplete.mode !== 'slash') {
@@ -234,10 +233,9 @@ export function useNativeChatPickerState(args: {
 
   const completeMention = useCallback(
     (path: string) => {
-      if (disabledRef.current || autocomplete.mode !== 'mention') {
-        return
+      if (!disabledRef.current && autocomplete.mode === 'mention') {
+        commitCompletion(applyMentionSuggestion(...liveDraft(), path))
       }
-      commitCompletion(applyMentionSuggestion(...liveDraft(), path))
     },
     [autocomplete, commitCompletion, liveDraft]
   )

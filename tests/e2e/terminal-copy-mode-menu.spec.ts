@@ -1,16 +1,21 @@
 import { PNG } from 'pngjs'
-import type { ElectronApplication } from '@stablyai/playwright-test'
+import { expect, type ElectronApplication } from '@stablyai/playwright-test'
 import { APP_MENU_PASTE_EVENT } from '../../src/renderer/src/lib/clipboard/menu/app-menu-paste'
-import { test, expect } from './helpers/orca-app'
-import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { pressShortcut } from './helpers/shortcuts'
-import { resolveActiveTabId, waitForActiveTerminalManager } from './helpers/terminal'
-import { setPaneTitleFromTerminalMenu } from './helpers/terminal-pane-title-actions'
+import { test } from './desktop/electron-fixtures/orca-app'
+import {
+  ensureTerminalVisible,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './desktop/renderer-probes/store'
+import { pressShortcut } from './desktop/renderer-probes/shortcuts'
+import { resolveActiveTabId } from './terminal/layout/terminal-pane-identity'
+import { waitForActiveTerminalManager } from './terminal/layout/terminal-pane-operations'
+import { setPaneTitleFromTerminalMenu } from './terminal/layout/terminal-pane-title-actions'
 import {
   clearTerminalPtyWriteLog,
   installTerminalPtyWriteSpy,
   readTerminalPtyWrites
-} from './helpers/terminal-pty-write-spy'
+} from './terminal/input/terminal-pty-write-spy'
 import {
   configureCopyMode,
   copiedModeText,
@@ -19,7 +24,7 @@ import {
   isolateCopyModeClipboard,
   seedCopyModeScreen,
   startCopyModeTerminalProbe
-} from './helpers/terminal-copy-mode-fixture'
+} from './desktop/electron-fixtures/terminal-copy-mode-fixture'
 
 async function dispatchMenuSelection(
   app: ElectronApplication,

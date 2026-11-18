@@ -6,7 +6,7 @@ import type {
   ExternalAutomationProvider
 } from '../../../../../shared/automations/external/external-automation'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
-import { EXTERNAL_AUTOMATION_PROVIDERS } from '../../../../../shared/external-automation-scope'
+import { EXTERNAL_AUTOMATION_PROVIDERS } from '../../../../../shared/automations/external/external-automation-scope'
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import { resolveExternalAutomationScopeGate } from './external-automation-scope-gating'
 

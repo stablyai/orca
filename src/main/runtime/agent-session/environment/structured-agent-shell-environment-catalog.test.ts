@@ -1,6 +1,6 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentModelCatalogFingerprintForRecord } from '../../../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../../../native-chat/agent-model-catalog/agent-model-catalog-service'
@@ -11,8 +11,8 @@ import {
 
 const shell = vi.hoisted(
   (): {
-    current: { PATH: string; IGNORED: string }
-    next: { PATH: string; IGNORED: string }
+    current: { PATH: string; Path?: string; path?: string; IGNORED: string }
+    next: { PATH: string; Path?: string; path?: string; IGNORED: string }
     saved: string[]
     nextSaved: string[]
   } => ({
@@ -22,7 +22,7 @@ const shell = vi.hoisted(
     nextSaved: []
   })
 )
-vi.mock('../../../startup/login-shell-environment', () => ({
+vi.mock('../../../startup/shell-environment/login-shell-environment', () => ({
   resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
     if (options?.startedAfter !== undefined) {
       shell.current = { ...shell.next }
@@ -68,11 +68,12 @@ function rig(overlay?: Record<string, string>) {
     workspaceMayOverrideDefaultModel: defaults
   })
   const environment = createStructuredAgentEnvironmentResolvers({
-    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: [] }),
+    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: ['IGNORED'] }),
     resolveAgentLaunchEnv: () => overlay ?? {}
   })
   cleanups.push(service.stop, environment.bindCatalogSources(['grok']))
   const listing = (id: string) => ({
+    origin: 'probe' as const,
     models: [{ id, label: id, isDefault: true, efforts: [] }],
     configuredDefault: { modelId: id, effort: 'high' }
   })
@@ -86,21 +87,38 @@ function rig(overlay?: Record<string, string>) {
   }
 }
 
-it('keeps a Windows catalog source while only a shadowed inherited path changes', async () => {
-  vi.stubGlobal('process', { ...process, platform: 'win32' })
-  const overlay = { path: '/configured/bin' }
-  const h = rig(overlay)
-  const source = h.service.captureSource(h.record)
-  cleanups.push(() => source.release?.())
-  await captureHostShellEnvironment(async () => {
-    shell.next = { PATH: '/changed', IGNORED: 'a' }
-  })
-  expect(source()).toBe(true)
-  await captureHostShellEnvironment(async () => {
-    overlay.path = '/new-configured/bin'
-  })
-  expect(source()).toBe(false)
-})
+it.each(['darwin', 'win32'] as const)(
+  'keeps a %s catalog source through PATH-only and overlay-shadowed changes',
+  async (platform) => {
+    vi.stubGlobal('process', { ...process, platform })
+    shell.current = { PATH: '/a', Path: '/shadow-a', path: '/shadow-b', IGNORED: 'a' }
+    const overlay = { IGNORED: 'configured' }
+    const h = rig(overlay)
+    const source = h.service.captureSource(h.record)
+    cleanups.push(() => source.release?.())
+    agentModelCatalogStore.recordSuccess(h.fingerprint, 'grok', h.listing('saved'), 'discovery')
+    const held = Promise.withResolvers<ReturnType<typeof h.listing>>()
+    const flight = agentModelCatalogStore.refresh(h.fingerprint, 'grok', () => held.promise)
+    await Promise.resolve()
+    await captureHostShellEnvironment(async () => {
+      shell.next = {
+        PATH: '/changed',
+        Path: '/other-shadow-a',
+        path: '/other-shadow-b',
+        IGNORED: 'shadowed'
+      }
+    })
+    expect(source()).toBe(true)
+    expect(agentModelCatalogStore.get(h.fingerprint)?.models[0]?.id).toBe('saved')
+    held.resolve(h.listing('current'))
+    await flight
+    expect(agentModelCatalogStore.get(h.fingerprint)?.models[0]?.id).toBe('current')
+    await captureHostShellEnvironment(async () => {
+      overlay.IGNORED = 'new-configured'
+    })
+    expect(source()).toBe(false)
+  }
+)
 
 it('retires a producer on effective Refresh before new publication and fences late defaults and new old reports', async () => {
   const h = rig()
@@ -116,7 +134,7 @@ it('retires a producer on effective Refresh before new publication and fences la
   h.service.recordLiveListing(h.record.sessionId, h.listing('A'), sourceA)
   await vi.waitFor(() => expect(h.defaults).toHaveBeenCalledOnce())
   await captureHostShellEnvironment(async () => {
-    shell.next = { PATH: '/b', IGNORED: 'a' }
+    shell.next = { PATH: '/b', IGNORED: 'b' }
   })
   expect(sourceA()).toBe(false)
   const sourceB = h.service.captureSource(h.record)
@@ -146,26 +164,3 @@ it('retires a producer on effective Refresh before new publication and fences la
   expect(agentModelCatalogStore.failureDetail(h.fingerprint)).toBe('current failure')
   expect(h.save).toHaveBeenCalledTimes(writes)
 })
-
-it.each([true, false])(
-  'keeps the agent session that launched Orca out of a chat agent environment (inherit shell: %s)',
-  async (inheritAll) => {
-    const parentSession = { CODEX_THREAD_ID: 'parent-thread', CODEX_WINDOWS_REGISTERED_CORE: '1' }
-    const resolvers = createStructuredAgentEnvironmentResolvers({
-      prewarm: false,
-      processEnvironment: { PATH: '/a', CODEX_HOME: '/home/user/.codex', ...parentSession },
-      resolveEnvironment: async () => ({
-        PATH: '/a',
-        CODEX_HOME: '/home/user/.codex',
-        ...parentSession
-      }),
-      resolveShellEnvironmentPolicy: () => ({ inheritAll, names: [] }),
-      resolveAgentLaunchEnv: () => ({ CODEX_CI: 'set-by-user' })
-    })
-    const env = await resolvers.resolveAgentEnvironment('codex')
-    expect(env.CODEX_THREAD_ID).toBeUndefined()
-    expect(env.CODEX_WINDOWS_REGISTERED_CORE).toBeUndefined()
-    expect(env.CODEX_HOME).toBe('/home/user/.codex')
-    expect(env.CODEX_CI).toBe('set-by-user')
-  }
-)

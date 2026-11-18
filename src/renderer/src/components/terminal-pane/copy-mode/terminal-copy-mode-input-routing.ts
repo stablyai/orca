@@ -1,9 +1,7 @@
 import { useAppStore } from '@/store'
-import {
-  KEYBINDING_DEFINITIONS,
-  keybindingMatchesAction,
-  type KeybindingActionId
-} from '../../../../../shared/keybindings'
+import { KEYBINDING_DEFINITIONS } from '../../../../../shared/keybindings/definitions'
+import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
+import type { KeybindingActionId } from '../../../../../shared/keybindings/types'
 import { claimCopyModeKey, consumeCopyModeEvent } from './terminal-copy-mode-key-guard'
 import {
   copyModeSessionOwns,

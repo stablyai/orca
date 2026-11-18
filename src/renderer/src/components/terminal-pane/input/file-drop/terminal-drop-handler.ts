@@ -4,7 +4,7 @@ import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import {
   isResolvedWorkspaceFileDragExecutionHost,

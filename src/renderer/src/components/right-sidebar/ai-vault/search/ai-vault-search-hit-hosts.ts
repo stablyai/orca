@@ -1,8 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getTranslatedExecutionHostLabel } from '../../../sidebar/execution-host-label'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { getTranslatedExecutionHostLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import { aiVaultHostScopeLabel, type AiVaultHostScopeOption } from '../scope/ai-vault-host-scope'
 
 /** Use host-menu names to distinguish cross-host copies; return null when all hits share a host. */

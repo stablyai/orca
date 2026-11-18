@@ -1,8 +1,8 @@
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { isAgentStatusHooksEnabled } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { isPwshAvailableAsync } from '../../../pty/shell-startup/pwsh'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
@@ -12,9 +12,10 @@ import {
   addOrcaWslInteropEnv,
   stampWslOrchestrationCompatibilityHost
 } from '../../../pty/shell-startup/wsl-orca-env'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { buildPtyHostEnv } from '../host-env/assembly'
-import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
+import { detectBareShellPluginAgentsOnPath } from '../../../agent-hooks/installation/bare-shell-plugin-agent-presence'
+import { stampRuntimeSourceEnv } from '../../../../shared/remote-runtime/host-catalog/runtime-source-env'
 import { getRuntimeSourceStamp } from '../../../runtime/hosts/platform-probe/host-descriptor'
 import {
   getCompatibleSelectedCodexHomePath,
@@ -25,7 +26,7 @@ import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
 import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
 import { visibleRendererPtys } from '../delivery/visibility-state'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { awaitExplicitAgentPluginGuestReadiness } from '../../../agent-hooks/wsl-relay/wsl-agent-plugin-readiness'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
@@ -85,6 +86,10 @@ export function configureLocalPtyProvider(args: {
       launchAgent: ctx?.launchAgent,
       launchCommand: ctx?.command
     })
+    const agentStatusHooksEnabled = isAgentStatusHooksEnabled(ptySettings)
+    const agentsOnPath = agentStatusHooksEnabled
+      ? await detectBareShellPluginAgentsOnPath(ptySettings)
+      : undefined
     const env = buildPtyHostEnv(id, baseEnv, {
       isPackaged: getAppEnvironment().isPackaged(),
       resourcesPath: process.resourcesPath,
@@ -102,7 +107,8 @@ export function configureLocalPtyProvider(args: {
       shellPath: ctx?.shellPath,
       isWsl: ctx?.isWsl,
       wslDistro: ctx?.wslDistro ?? null,
-      agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+      agentStatusHooksEnabled,
+      agentsOnPath,
       claudeSubagentNavigationEnabled: ptySettings?.claudeSubagentNavigationEnabled,
       terminalInlineImages: ptySettings?.terminalInlineImages,
       disabledTuiAgents: ptySettings?.disabledTuiAgents,
@@ -158,7 +164,7 @@ export function configureLocalPtyProvider(args: {
         return
       }
       const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(id)
-      clearProviderPtyState(id)
+      clearProviderPtyState(id, { exitProven: true })
       ptyOwnership.delete(id)
       runtime?.onPtyExit(id, code, incarnationId, {
         providerExitObserved: true,

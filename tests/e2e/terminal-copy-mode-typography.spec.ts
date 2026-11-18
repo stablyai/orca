@@ -1,14 +1,19 @@
-import type { Page } from '@stablyai/playwright-test'
+import { expect, type Page } from '@stablyai/playwright-test'
 import { PNG } from 'pngjs'
-import { test, expect } from './helpers/orca-app'
-import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { resolveActiveTabId, waitForActiveTerminalManager } from './helpers/terminal'
-import { pressShortcut } from './helpers/shortcuts'
+import { test } from './desktop/electron-fixtures/orca-app'
+import {
+  ensureTerminalVisible,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './desktop/renderer-probes/store'
+import { resolveActiveTabId } from './terminal/layout/terminal-pane-identity'
+import { waitForActiveTerminalManager } from './terminal/layout/terminal-pane-operations'
+import { pressShortcut } from './desktop/renderer-probes/shortcuts'
 import {
   expectCopyCursorReady,
   seedCopyModeScreen,
   startCopyModeTerminalProbe
-} from './helpers/terminal-copy-mode-fixture'
+} from './desktop/electron-fixtures/terminal-copy-mode-fixture'
 
 type TypographySettings = { gpu: 'on' | 'off'; fontSize: number; lineHeight: number }
 

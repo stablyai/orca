@@ -148,7 +148,7 @@ export class AcpStructuredTurns {
     const { lane } = this.deps
     const send: Send = {
       clientMessageId: command.clientMessageId,
-      prompt: acpCompactPrompt(command.instructions),
+      prompt: acpCompactPrompt(command.instructions, this.deps.compactCommand),
       requestedAt: this.deps.now()
     }
     lane.beginCommand(command)

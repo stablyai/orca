@@ -1,6 +1,9 @@
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatKeybinding, formatKeybindingList } from '../../../../../shared/keybindings'
+import {
+  formatKeybinding,
+  formatKeybindingList
+} from '../../../../../shared/keybindings/formatting'
 import type { TerminalCopyModeConfig } from '../../../../../shared/terminal/input/terminal-copy-mode-config'
 
 export function TerminalCopyModeStatus({

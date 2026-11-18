@@ -30,8 +30,8 @@ import {
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { OrchestrationCrewRow } from '../../../../../shared/orchestration/orchestration-crew'
-import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type Sender = AgentMessageSource['senders'][number]
 const opensInFlight = new Map<string, Promise<void>>()

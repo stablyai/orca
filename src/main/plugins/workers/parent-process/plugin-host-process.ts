@@ -199,7 +199,8 @@ export async function startPluginWorker(
         pluginId,
         pluginRoot: rootDir,
         mainEntry,
-        grantedCapabilities: [...options.grantedCapabilities]
+        grantedCapabilities: [...options.grantedCapabilities],
+        ...(options.allowProposed ? { allowProposed: true } : {})
       })
     )
     if (options.signal?.aborted) {

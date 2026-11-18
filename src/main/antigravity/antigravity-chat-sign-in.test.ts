@@ -1,13 +1,15 @@
-import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import * as profileStorage from '../orca-profiles/profile-storage-paths'
 // The chat sign-in against a scripted Antigravity server.
 
+import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
+import type { PipedProcessSpawner, PipedProcessSpec } from '@orca/process-host/process-spec'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
@@ -21,9 +23,9 @@ import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import type { ConnectAcpAgent } from '../acp/process/acp-structured-connection'
 import { AcpScriptedAgent, deferred } from '../acp/process/testing/acp-scripted-agent.test-support'
 import type { RpcContext } from '../runtime/rpc/core'
-import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
+import type { RpcCallerIdentity } from '../runtime/rpc/callers/rpc-caller-identity'
 import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/accounts/antigravity-accounts'
-import type { AntigravityChatSignInStatus } from '../../shared/antigravity-account-types'
+import type { AntigravityChatSignInStatus } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 
 import * as browserHelper from './antigravity-browser-helper'
 import { ANTIGRAVITY_SIGN_IN_PROMPT } from './antigravity-sign-in-url'
@@ -33,6 +35,10 @@ import {
   startAntigravityChatSignIn
 } from './antigravity-chat-sign-in'
 
+vi.mock('../provider-process/provider-process-spawn', () => ({
+  spawnProviderProcess: (spec: PipedProcessSpec, spawn: PipedProcessSpawner) => spawn(spec)
+}))
+
 vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: vi.fn<typeof terminateProviderProcessTree>(
     async () => 'unverifiable'
@@ -40,7 +46,7 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
 }))
 
 const checkingShell = vi.hoisted(() => ({ path: '/fixture', next: '/fixture' }))
-vi.mock('../startup/login-shell-environment', () => ({
+vi.mock('../startup/shell-environment/login-shell-environment', () => ({
   resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
     if (options?.startedAfter !== undefined) {
       checkingShell.path = checkingShell.next
@@ -94,6 +100,8 @@ async function signInAgainst(
     sessionResult?: Record<string, unknown>
     authConfig?: AntigravityChatAuthConfig
     realLaunchSources?: boolean
+    /** A new server asks to sign in again, as after Google grants fewer scopes than requested. */
+    savedSignInUnusable?: boolean
   } = {}
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
@@ -104,24 +112,42 @@ async function signInAgainst(
   )
   folders.push(stateDirectory)
   const folder = join(stateDirectory, 'antigravity-chat')
-  const agent = new AcpScriptedAgent()
-  const stderr = new PassThrough()
   const [browserDone, sessionOpen] = [deferred<void>(), deferred<void>()]
-  agent.on('authenticate', (frame) => {
-    void output().then((text) => (options.stream === 'stdout' ? agent.stdout : stderr).write(text))
-    void browserDone.promise.then(() => agent.reply(frame, {}))
-  })
-  agent.on('session/new', (frame) => {
-    void sessionOpen.promise.then(async () => {
-      const { cwd } = z.object({ cwd: z.string() }).parse(frame.params)
-      await mkdir(join(folder, 'antigravity-acp', 'brain', SESSION), { recursive: true })
-      await mkdir(join(folder, 'antigravity-acp', 'conversations'), { recursive: true })
-      await writeFile(sessionFile(folder, '.db'), '')
-      await writeFile(sessionFile(folder, '.meta'), JSON.stringify({ cwd: options.metaCwd ?? cwd }))
-      agent.reply(frame, { ...options.sessionResult, sessionId: SESSION })
+  // Each launch is a new server process that holds only what the sign-in saved.
+  const spawnServer = () => {
+    const agent = new AcpScriptedAgent()
+    const stderr = new PassThrough()
+    const signInOutput = () =>
+      void output().then((text) =>
+        (options.stream === 'stdout' ? agent.stdout : stderr).write(text)
+      )
+    let authenticatedHere = false
+    agent.on('authenticate', (frame) => {
+      signInOutput()
+      void browserDone.promise.then(() => {
+        authenticatedHere = true
+        agent.reply(frame, {})
+      })
     })
-  })
-  const child = fakeServer(agent, stderr)
+    agent.on('session/new', (frame) => {
+      if (options.savedSignInUnusable && !authenticatedHere) {
+        signInOutput()
+        return
+      }
+      void sessionOpen.promise.then(async () => {
+        const { cwd } = z.object({ cwd: z.string() }).parse(frame.params)
+        await mkdir(join(folder, 'antigravity-acp', 'brain', SESSION), { recursive: true })
+        await mkdir(join(folder, 'antigravity-acp', 'conversations'), { recursive: true })
+        await writeFile(sessionFile(folder, '.db'), '')
+        await writeFile(
+          sessionFile(folder, '.meta'),
+          JSON.stringify({ cwd: options.metaCwd ?? cwd })
+        )
+        agent.reply(frame, { ...options.sessionResult, sessionId: SESSION })
+      })
+    })
+    return fakeServer(agent, stderr)
+  }
   // Satisfy runtime resolution from PATH without downloading.
   const bin = join(stateDirectory, 'bin')
   await mkdir(bin)
@@ -159,19 +185,16 @@ async function signInAgainst(
         }),
     stopLiveChats: async () => {},
     connect: vi.fn<ConnectAcpAgent<AcpAgentConnection>>((launch, connectionOptions) => {
-      const connection = createAcpAgentConnection(launch, connectionOptions, () => child)
+      const connection = createAcpAgentConnection(launch, connectionOptions, spawnServer)
       options.configure?.(connection)
       return connection
     })
   }
   const { flowId } = startAntigravityChatSignIn(host, DESKTOP)
   return {
-    agent,
     folder,
     flowId,
     host,
-    child,
-    stderr,
     finishBrowser: () => browserDone.resolve(),
     openSession: () => sessionOpen.resolve()
   }
@@ -291,3 +314,41 @@ it('signs in from the address a browser on another computer ended on', async () 
     listener.close()
   }
 })
+
+it.each([
+  [{ method: 'oauth-personal' } as const, 'acp_token.json', 'acp_business_token.json'],
+  [
+    { method: 'oauth-business', gcpProject: 'p', gcpLocation: 'global' } as const,
+    'acp_business_token.json',
+    'acp_token.json'
+  ]
+])(
+  'fails, and drops only its own token, when a new server cannot use the saved %j sign-in',
+  async (authConfig, dropped, kept) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { flowId, folder, host, finishBrowser, openSession } = await signInAgainst(
+      printed(GOOGLE_LINK),
+      { savedSignInUnusable: true, authConfig }
+    )
+    expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
+    const token = join(folder, 'antigravity-acp', dropped)
+    const other = join(folder, 'antigravity-acp', kept)
+    await mkdir(join(folder, 'antigravity-acp'), { recursive: true })
+    await writeFile(token, '{}')
+    await writeFile(other, '{}')
+    const ended = Promise.withResolvers<AntigravityChatSignInStatus['flow']>()
+    const { close } = await follow(({ flow }) => {
+      if (flow?.flowId === flowId && (flow.phase === 'failed' || flow.phase === 'signedIn')) {
+        ended.resolve(flow)
+      }
+    })
+    finishBrowser()
+    openSession()
+    expect(await ended.promise.finally(close)).toMatchObject({ phase: 'failed' })
+    expect(existsSync(token)).toBe(false)
+    expect(existsSync(other)).toBe(true)
+    // Each server's exit removes its own temp folder, so the verifier must not share the first's.
+    const temps = host.connect.mock.calls.map(([launch]) => launch.env?.TMPDIR)
+    expect(new Set(temps).size).toBe(2)
+  }
+)

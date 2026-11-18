@@ -1,4 +1,4 @@
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 
 import {
   type OrcadMigrationDormantStatePayload,
@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { omitDefaultWorktreeMetaFields } from '../../../../shared/worktree/meta-persisted-defaults'
+import { omitDefaultWorktreeMetaFields } from '../../../../shared/worktree/metadata/meta-persisted-defaults'
 
 export function assertOrcadDestinationCanonicalMetadata(
   state: PersistedState,

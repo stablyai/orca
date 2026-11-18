@@ -8,7 +8,7 @@ import {
   mkdirSync,
   renameSync
 } from 'node:fs'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { openProfileStateDatabase } from '../persistence/profile-state/database/profile-state-database'
@@ -17,7 +17,7 @@ import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type OrcaProfileIndex
-} from '../../shared/orca-profiles'
+} from '../../shared/orca-profiles/orca-profiles'
 
 const testState = { dir: '' }
 

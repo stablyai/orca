@@ -1,5 +1,5 @@
 import type { DaemonCreateOrAttachResult as CreateOrAttachResult } from '../../protocol/daemon-create-or-attach-result'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 
 export function providerSequenceFromCreateOrAttach(
   result: CreateOrAttachResult

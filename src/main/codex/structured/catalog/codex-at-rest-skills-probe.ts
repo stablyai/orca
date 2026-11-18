@@ -1,15 +1,15 @@
-import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { delayUnlessAborted } from '../../../../shared/concurrency/abort-aware-delay'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import * as Pools from './codex-at-rest-skills-probe-pools'
 import {
   isLegacyAgentSessionAccountHome,
   requireLegacyAgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
@@ -26,7 +26,7 @@ import {
   isCodexSkillsListUnsupported
 } from './codex-skill-list'
 import { createCodexSkillSourcesStamp } from './codex-skill-sources-stamp'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
 import {
   resolveCodexStructuredInvocation,
@@ -42,7 +42,7 @@ export type CodexAtRestSkillsDeps = CodexStructuredInvocationDeps & {
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   /** Apply launch-time home sync so the probe sees the same configuration. */
-  prepareHome?: (home: string) => void
+  prepareHome?: (home: string) => void | Promise<void>
   now?: () => number
   runSession?: typeof runCodexAppServerSession
   sleep?: (ms: number) => Promise<void>
@@ -208,9 +208,13 @@ export async function probe(
         }
         if (batch.length > 0) {
           try {
-            deps.prepareHome?.(pool.accountHomePath)
-            batch.forEach((request) => request.admitted())
-            await answer(rpc, batch, signal)
+            await deps.prepareHome?.(pool.accountHomePath)
+            // A request cancelled while the home was prepared left the active set.
+            const live = batch.filter((request) => pool.active.has(request))
+            live.forEach((request) => request.admitted())
+            if (live.length > 0) {
+              await answer(rpc, live, signal)
+            }
           } catch (error) {
             batch.forEach((request) =>
               Pools.settle(request, error instanceof Error ? error : new Error(String(error)))

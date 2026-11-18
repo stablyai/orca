@@ -3,9 +3,9 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
-import { compareAppVersions } from '../../../shared/app-version'
+import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
 import { AcpAgentError } from '../transport/acp-errors'
 import { AcpModelCommandRefusedError } from './acp-model-command'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
@@ -18,7 +18,7 @@ import {
 export async function applyAcpMessageOptions(
   session: AcpStructuredSession,
   options: AgentSessionExecutionOptions | undefined,
-  setOption: (key: 'model' | 'effort', value: string) => Promise<unknown>,
+  setOption: (key: 'model' | 'effort' | 'fastMode', value: string) => Promise<unknown>,
   isCurrent: () => boolean,
   signal?: AbortSignal,
   /** The agent's own model command when its model option is absent or rejects the value. */
@@ -27,13 +27,15 @@ export async function applyAcpMessageOptions(
   if (!options) {
     return true
   }
-  for (const key of ['model', 'effort'] as const) {
+  for (const key of ['model', 'effort', 'fastMode'] as const) {
     const value = options[key]
     if (
       value === undefined ||
       session.options.appliedInput.get(key) === value ||
-      (key === 'model' && session.options.matchesNativeRestoredModel(value)) ||
-      (key === 'effort' && !session.options.offersEffort(value))
+      (key === 'fastMode'
+        ? !session.options.write(key, value)
+        : session.options.matchesNativeRestoredOption(key, value) ||
+          (key === 'effort' && !session.options.offersEffort(value)))
     ) {
       continue
     }

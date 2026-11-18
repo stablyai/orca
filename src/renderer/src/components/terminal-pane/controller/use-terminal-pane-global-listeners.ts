@@ -4,9 +4,9 @@ import { useTerminalFontZoom } from '../appearance/useTerminalFontZoom'
 import { useTerminalCopyMode } from '../copy-mode/use-terminal-copy-mode'
 import { useTerminalKeyboardShortcuts } from '../input/keyboard/terminal-keyboard-hook'
 import { useTerminalPaneGlobalEffects } from '../viewport/visibility/use-terminal-pane-global-effects'
-import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
 
-export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseController): void {
+export function useTerminalPaneGlobalListeners(controller: TerminalPaneMountedController): void {
   const {
     clearPaneScrollback,
     containerRef,
@@ -26,6 +26,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     keybindings,
     macOptionAsAltRef,
     managerRef,
+    terminalManager,
     paneCount,
     paneCwdRef,
     paneKittyKeyboardModesRef,
@@ -53,7 +54,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
   useTerminalKeyboardShortcuts({
     tabId,
     worktreeId,
-    isActive,
+    isActive: isActive && Boolean(terminalManager),
     keyboardScopeRef: containerRef,
     managerRef,
     paneTransportsRef,
@@ -81,6 +82,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
   })
   useTerminalPaneGlobalEffects({
+    terminalManager,
     tabId,
     cwd,
     isActive,
@@ -99,7 +101,13 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     toggleExpandPane
   })
 
-  useWebClientTerminalResize({ isActive, isVisible, managerRef, paneTransportsRef })
+  useWebClientTerminalResize({
+    terminalManager,
+    isActive,
+    isVisible,
+    managerRef,
+    paneTransportsRef
+  })
 
   useRegularTerminalInputFocus({ containerRef })
 }

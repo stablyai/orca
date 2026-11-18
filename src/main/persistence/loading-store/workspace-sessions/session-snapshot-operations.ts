@@ -1,9 +1,12 @@
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
 
 import { workspaceSessionPatchNeedsFullNormalization } from './terminal-session-cleanup'
@@ -25,7 +28,7 @@ import {
 import { dropClosedTerminalTabs } from '../../closed-terminal-tab-write-fence'
 import { keepWslMoveFrozenSessionsForStore } from '../../moving-wsl-projects/terminal-state/wsl-move-session-freeze'
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
-import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-row-order'
+import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export class SessionSnapshotOperations {
   readonly [sessionSnapshotOperationsContext]: SessionSnapshotOperationsContext

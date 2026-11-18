@@ -1,22 +1,26 @@
 import { PNG } from 'pngjs'
-import { test, expect } from './helpers/orca-app'
-import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { pressShortcut } from './helpers/shortcuts'
+import { expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
+import {
+  ensureTerminalVisible,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './desktop/renderer-probes/store'
+import { pressShortcut } from './desktop/renderer-probes/shortcuts'
+import { focusActiveTerminalInput, waitForActivePanePtyId } from './terminal/input/terminal'
+import { resolveActiveTabId } from './terminal/layout/terminal-pane-identity'
 import {
   execInTerminal,
-  focusActiveTerminalInput,
-  resolveActiveTabId,
   splitActiveTerminalPane,
-  waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForPaneCount,
   waitForTerminalOutput
-} from './helpers/terminal'
+} from './terminal/layout/terminal-pane-operations'
 import {
   clearTerminalPtyWriteLog,
   installTerminalPtyWriteSpy,
   readTerminalPtyWrites
-} from './helpers/terminal-pty-write-spy'
+} from './terminal/input/terminal-pty-write-spy'
 import {
   configureCopyMode,
   copiedModeText,
@@ -26,7 +30,7 @@ import {
   isolateCopyModeClipboard,
   seedCopyModeScreen,
   startCopyModeTerminalProbe
-} from './helpers/terminal-copy-mode-fixture'
+} from './desktop/electron-fixtures/terminal-copy-mode-fixture'
 
 test.beforeEach(async ({ orcaPage, electronApp }) => {
   await waitForSessionReady(orcaPage)

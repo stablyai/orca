@@ -1,4 +1,4 @@
-import { LINEAR_AUTHENTICATION_ERROR } from '../../../shared/integration-credential-errors'
+import { LINEAR_AUTHENTICATION_ERROR } from '../../../shared/secure-storage/integration-credential-errors'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type {
   LinearCustomViewModel,
@@ -225,6 +225,7 @@ export function mapIssueForWorkspace(
     id: issue.id,
     identifier: issue.identifier,
     title: issue.title,
+    branchName: issue.branchName ?? undefined,
     description: issue.description ?? undefined,
     url: issue.url,
     state: {

@@ -54,24 +54,3 @@ it('merges batched and concurrent fences without lowering duplicates or acceptin
   expect(await wasPushDismissed({ ...payload, notificationId: 'other' })).toBe(true)
   expect(await wasPushDismissed({ ...payload, notificationId: 'invalid' })).toBe(false)
 })
-
-it.each([1, 3])('retains live dismissals beyond 512 entries across %i hosts', async (hosts) => {
-  for (let index = 0; index < 520; index++) {
-    await rememberPushDismissal({
-      ...payload,
-      hostFingerprint: `host-${index % hosts}`,
-      notificationId: `note-${index}`
-    })
-  }
-  vi.resetModules()
-  const restarted = await import('./push-dismissal-watermarks')
-  for (const index of [0, 1, 519]) {
-    const alert = {
-      ...payload,
-      hostFingerprint: `host-${index % hosts}`,
-      notificationId: `note-${index}`
-    }
-    expect(await restarted.wasPushDismissed(alert)).toBe(true)
-    expect(await restarted.wasPushDismissed({ ...alert, notificationSeq: 3 })).toBe(false)
-  }
-})

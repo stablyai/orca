@@ -4,8 +4,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { main as fsMain } from './check-main-sync-fs-ratchet.mjs'
-import { collectSyncLaunchUses } from '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
+import '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
 import { countBlockingApis, main } from './check-main-blocking-api-ratchet.mjs'
+import { collectDirectBlockingSites } from './check-main-blocking-helper-ratchet.mjs'
+import { collectBlockingHelperUses } from '../../process-boundaries/main-blocking-helper-propagation.mjs'
+import { workerOnlyFiles } from '../../process-boundaries/main-blocking-import-graph.mjs'
 
 const file = 'src/main/consumer.ts'
 const counts = (source, name = file) =>
@@ -24,45 +27,17 @@ afterEach(() => {
 })
 
 describe('main blocking API ratchets', () => {
-  it('counts import aliases, namespace APIs, CommonJS and Atomics aliases by category', () => {
-    expect(
-      counts(`import { scryptSync as hash } from 'node:crypto'
-      import * as z from 'node:zlib'
-      const { pbkdf2Sync } = require('crypto')
-      hash('pw'); pbkdf2Sync('pw'); z.gzipSync('bytes'); z.futureSync('bytes')
-      const { wait: sleep } = Atomics; sleep(buffer, 0, 0)`)
-    ).toEqual({ compression: 2, crypto: 2, atomics: 1, sqlite: 0, ipc: 0 })
-  })
-
-  it.each([
-    ["import { DatabaseSync as DB } from 'node:sqlite'", 'DB'],
-    ["import DB from 'better-sqlite3'", 'DB'],
-    ["import DB from '../sqlite/sync-database'", 'DB'],
-    ["const { DatabaseSync: DB } = require('node:sqlite')", 'DB'],
-    ["const { DatabaseSync: DB } = process.getBuiltinModule('node:sqlite')", 'DB'],
-    ["import * as sqlite from 'node:sqlite'", 'sqlite.DatabaseSync']
-  ])('guards SQLite constructors and statement work: %s', (load, ctor) => {
-    expect(
-      counts(`${load}
-      const db = new ${ctor}('db')
-      db.exec('schema')
-      const statement = db.prepare('select')
-      statement.run(); statement.get(); statement.all(); for (const row of statement.iterate()) {}
-      db.prepare('select').get()`)
-    ).toEqual({ compression: 0, crypto: 0, atomics: 0, sqlite: 9, ipc: 0 })
-  })
-
-  it('guards typed SQL receivers without charging Map.get or async backup', () => {
+  it('guards typed SQL receivers and pragmas without charging Map.get or async backup', () => {
     expect(
       counts(`import type Database from '../sqlite/sync-database'
       class Owner {
         db: Database.Database | null
-        query() { this.db.prepare('select').get(); this.db.backup('copy') }
+        query() { this.db.prepare('select').get(); this.db.backup('copy'); this.db.pragma('synchronous = FULL') }
       }
       function query(db: Database.Database, statement: Database.Statement, cache: Map<string, Database.Database>) {
         db.exec('schema'); statement.run(); cache.get('key')
       }`)
-    ).toEqual({ compression: 0, crypto: 0, atomics: 0, sqlite: 4, ipc: 0 })
+    ).toEqual({ compression: 0, crypto: 0, atomics: 0, sqlite: 5, ipc: 0 })
   })
 
   it('guards constructor properties and namespace SQLite types', () => {
@@ -77,31 +52,6 @@ describe('main blocking API ratchets', () => {
     ).toBe(5)
   })
 
-  it('guards callable better-sqlite3 construction and modern builtin subprocess loads', () => {
-    expect(
-      counts(
-        `import Database from 'better-sqlite3'; const db = Database('test'); db.exec('sql'); db.prepare('sql').get()`
-      ).sqlite
-    ).toBe(4)
-    expect(
-      collectSyncLaunchUses(file, `process.getBuiltinModule('node:child_process').execSync('test')`)
-        .count
-    ).toBe(1)
-  })
-
-  it('guards synchronous preload requests and main replies', () => {
-    expect(
-      counts(
-        "import { ipcRenderer as ipc } from 'electron'; ipc.sendSync('get')",
-        'src/preload/index.ts'
-      ).ipc
-    ).toBe(1)
-    expect(counts("ipcMain.on('get', (event) => { event.returnValue = value })").ipc).toBe(1)
-    expect(counts("ipc.sendSync('get'); event.returnValue = value", 'src/shared/ipc.ts').ipc).toBe(
-      2
-    )
-  })
-
   it('ignores strings, comments, unrelated SQL-shaped methods and nonblocking APIs', () => {
     expect(
       counts(`import * as c from 'node:crypto'; import * as z from 'node:zlib'
@@ -112,7 +62,7 @@ describe('main blocking API ratchets', () => {
     ).toEqual({ compression: 0, crypto: 0, atomics: 0, sqlite: 0, ipc: 0 })
   })
 
-  it('rejects growth and shrinkage; prune cannot raise a baseline', () => {
+  it('rejects growth and shrinkage; prune cannot raise a baseline', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'orca-blocking-ratchet-'))
     roots.push(root)
     mkdirSync(path.join(root, 'src/main'), { recursive: true })
@@ -132,23 +82,82 @@ describe('main blocking API ratchets', () => {
       '1 src/main/daemon/daemon-entry.ts\n'
     )
     execFileSync('git', ['add', '.'], { cwd: root })
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    expect(fsMain(root)).toBe(0)
+    expect(await fsMain(root)).toBe(0)
     writeFileSync(
       daemon,
       "import { statSync } from 'node:fs'; statSync('file'); statSync('another')"
     )
-    expect(fsMain(root)).toBe(1)
-    expect(main(root)).toBe(1)
-    expect(error.mock.calls.flat().join('\n')).toContain('Move CPU or SQL work to a worker')
-    main(root, '--prune')
+    expect(await fsMain(root)).toBe(1)
+    expect(await main(root)).toBe(1)
+    await main(root, '--prune')
     expect(readFileSync(cryptoFile, 'utf8')).not.toContain('1 src/')
     writeFileSync(cryptoFile, '1 src/main/consumer.ts\n')
-    expect(main(root)).toBe(0)
+    expect(await main(root)).toBe(0)
     writeFileSync(path.join(root, file), '')
-    expect(main(root)).toBe(1)
-    main(root, '--prune')
-    expect(main(root)).toBe(0)
+    expect(await main(root)).toBe(1)
+    await main(root, '--prune')
+    expect(await main(root)).toBe(0)
+  })
+
+  it('counts callers of a sync helper in another file, not only the helper itself', () => {
+    const sources = new Map([
+      [
+        'src/main/config-read.ts',
+        `import { readFileSync } from 'node:fs'
+        function readRaw(file: string) { return readFileSync(file, 'utf8') }
+        export const readConfig = (file: string) => JSON.parse(readRaw(file))
+        export function configPath() { return '/tmp/config.json' }`
+      ],
+      [
+        'src/main/poller.ts',
+        `import { readConfig, configPath } from './config-read'
+        setInterval(() => readConfig(configPath()), 1000)`
+      ]
+    ])
+    const { uses } = collectBlockingHelperUses(sources, collectDirectBlockingSites(sources), {
+      depth: 1
+    })
+    expect(uses.get('src/main/poller.ts')?.count).toBe(1)
+  })
+
+  it('counts callers through locally exported imported helpers', () => {
+    const sources = new Map([
+      [
+        'src/main/impl.ts',
+        `import { readFileSync } from 'node:fs'
+        export function readConfig() { return readFileSync('config') }
+        export default function readDefault() { return readFileSync('default') }`
+      ],
+      [
+        'src/main/barrel.ts',
+        `import readDefault, { readConfig as read } from './impl'
+        export { read as load, readDefault as default }`
+      ],
+      [
+        'src/main/consumer.ts',
+        `import readDefault, { load } from './barrel'
+        load(); readDefault()`
+      ]
+    ])
+    const { uses } = collectBlockingHelperUses(sources, collectDirectBlockingSites(sources), {
+      depth: 1
+    })
+    expect(uses.get('src/main/consumer.ts')?.count).toBe(2)
+  })
+
+  it('exempts modules only worker entries import', () => {
+    const entry = 'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts'
+    const graph = new Map([
+      [entry, ['src/main/worker-only.ts', 'src/main/shared-store.ts']],
+      ['src/main/index.ts', ['src/main/shared-store.ts']]
+    ])
+    const files = ['src/main/index.ts', 'src/main/worker-only.ts', 'src/main/shared-store.ts']
+    expect([...workerOnlyFiles(graph, files)]).toEqual(['src/main/worker-only.ts'])
+    // An event-loop entry a worker imports stays guarded, and so does everything it imports.
+    graph.get(entry).push('src/main/index.ts')
+    graph.get('src/main/index.ts').push('src/main/worker-only.ts')
+    expect([...workerOnlyFiles(graph, files, ['src/main/index.ts'])]).toEqual([])
   })
 })

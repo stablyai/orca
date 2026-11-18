@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import type {
@@ -5,6 +6,7 @@ import type {
   WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import type { Translate } from '@/i18n/use-translate'
+import { normalizeToolInput } from '../../../../../shared/native-chat/tools/native-chat-tool-summary'
 
 /** The card a worker's open approval shows: its own words, and only the answers Orca can give. */
 export function workerApprovalCard(approval: WorkerApprovalPayload, t: Translate): ChatApproval {
@@ -27,6 +29,16 @@ export function isWorkerApprovalDecision(value: string): value is WorkerApproval
   return value === 'allow' || value === 'deny'
 }
 
+// A tool call's input as the agent wrote it: its shell command, when it has one.
+const ToolCommandInput = z.object({ command: z.string().optional(), cmd: z.string().optional() })
+
+/** The whole command when the detail is a tool call's input; any other detail as it is. */
+function approvalDetailCommand(detail: string | null): string | null {
+  const parsed = ToolCommandInput.safeParse(detail === null ? null : normalizeToolInput(detail))
+  const command = parsed.success ? (parsed.data.command ?? parsed.data.cmd) : undefined
+  return command?.trim() ? command : detail
+}
+
 /** A closed approval as the answered-prompt row reads it. */
 export function workerApprovalReceiptBody(
   approval: WorkerApprovalPayload,
@@ -37,7 +49,8 @@ export function workerApprovalReceiptBody(
   return {
     kind: 'approval',
     title: approval.summary.title,
-    detail: approval.summary.detail,
+    // A tool call's input reads as its command, as the agent's own tool rows show it.
+    detail: approvalDetailCommand(approval.summary.detail),
     options: [
       { id: 'allow', label: t('components.native-chat.approval.allow', 'Allow') },
       { id: 'deny', label: t('components.native-chat.approval.deny', 'Deny') }
@@ -62,7 +75,15 @@ export function workerApprovalReceiptText(approval: WorkerApprovalPayload, t: Tr
         ? t('components.native-chat.approval.allowedByYou', 'Allowed by you')
         : t('components.native-chat.approval.deniedByYou', 'Denied by you')
     case 'coordinator':
-      return t('components.native-chat.approval.deniedByCoordinator', 'Denied by coordinator')
+      return decision === 'allow'
+        ? t(
+            'components.native-chat.approval.allowedByCoordinator',
+            'Allowed by coordinator: {{reason}}',
+            {
+              reason: outcome?.reason ?? ''
+            }
+          )
+        : t('components.native-chat.approval.deniedByCoordinator', 'Denied by coordinator')
     case 'worker-terminal':
       return decision === 'allow'
         ? t('components.native-chat.approval.allowedInTerminal', "Allowed in the worker's terminal")
@@ -84,13 +105,14 @@ export function workerApprovalReceiptText(approval: WorkerApprovalPayload, t: Tr
   }
 }
 
-/** The coordinator's deny reason, labelled by how it reached the worker: with the denial, or as a separate message. */
+/** The coordinator's deny reason, labelled by how it reached the worker: with the denial, or as a
+ *  separate message. An allow's reason is in its receipt line. */
 export function workerApprovalReceiptReason(
   approval: WorkerApprovalPayload,
   t: Translate
 ): { reason?: { label: string; text: string } } {
   const outcome = approval.outcome
-  if (outcome?.by !== 'coordinator' || !outcome.reason) {
+  if (outcome?.by !== 'coordinator' || outcome.decision !== 'deny' || !outcome.reason) {
     return {}
   }
   return {

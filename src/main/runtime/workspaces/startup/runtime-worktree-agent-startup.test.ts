@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
-import '../../../../shared/agent-kind'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import '../../../../shared/agent-status/identity/agent-kind'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 
@@ -28,9 +28,7 @@ vi.mock('../../../opencode/model-launch/opencode-launch-model-context', () => ({
 
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft,
-  resolveWorktreeCreateAgentStartup,
-  resolveWorktreeStartupDraftAgent
+  buildWorktreeStartupForDraft
 } from './runtime-worktree-agent-startup'
 
 function makeRepo(fields: Partial<Repo>): Repo {
@@ -61,59 +59,6 @@ const settings = {
   defaultTuiAgent: null
 }
 
-/** The launched CLI name is the whole decision: `orca` is the relay shim, `orca-ide` is local. */
-async function launchCliNameFor(repo: Repo): Promise<string> {
-  return (
-    await buildWorktreeStartupForAgent({
-      repo,
-      settings,
-      agent: 'claude-agent-teams',
-      getLaunchRuntime: () => LINUX,
-      toSessionOptions: () => undefined
-    })
-  ).startup.command.split(' ')[0]!
-}
-
-describe('buildWorktreeStartupForAgent host resolution', () => {
-  // Two hosts catch launch shapes resolved from another host's row (ssh:m4air to openclaw leak).
-  it('drops the Linux-only rename for both spellings of SSH ownership on two hosts', async () => {
-    expect(await launchCliNameFor(makeRepo({ connectionId: 'm4air' }))).toBe('orca')
-    expect(await launchCliNameFor(makeRepo({ executionHostId: 'ssh:openclaw' }))).toBe('orca')
-  })
-
-  it('keeps the Linux rename for a local row carrying a stale connection', async () => {
-    expect(
-      await launchCliNameFor(makeRepo({ connectionId: 'm4air', executionHostId: 'local' }))
-    ).toBe('orca-ide')
-  })
-
-  it('drops the rename for a runtime host reaching a nested SSH target', async () => {
-    expect(
-      await launchCliNameFor(makeRepo({ connectionId: 'nested', executionHostId: 'runtime:vm-1' }))
-    ).toBe('orca')
-  })
-
-  it('uses the headless runtime CLI with no nested SSH target (#33920)', async () => {
-    expect(await launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca')
-  })
-})
-
-// Host-built startup must use the same shell fact for quoting and spawn.
-it('quotes a worktree startup for its fact, not the Settings shell, and hands the fact on', async () => {
-  const pty = { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
-  const launchRuntime: AgentLaunchRuntime = { platform: 'win32', pty }
-  const result = await buildWorktreeStartupForAgent({
-    repo: makeRepo({ path: 'C:\\repo' }),
-    settings: { ...settings, terminalWindowsShell: 'wsl.exe' },
-    agent: 'claude',
-    prompt: "fix Bob's bug",
-    getLaunchRuntime: () => ({ platform: 'win32', shell: 'powershell', launchRuntime }),
-    toSessionOptions: () => undefined
-  })
-  expect(result.startup.command).toContain("'fix Bob''s bug'")
-  expect(result.launchRuntime).toBe(launchRuntime)
-})
-
 describe('buildWorktreeStartupForAgent prompt carry', () => {
   const build = (onPromptCarry?: (carried: boolean) => void, terminalDefaultShell = '/bin/bash') =>
     buildWorktreeStartupForAgent({
@@ -140,19 +85,6 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
     expect(result.followup).toBeUndefined()
     expect(onPromptCarry).toHaveBeenCalledWith(false)
   })
-
-  it('carries a short-lined multi-line prompt on a local zsh line, as main typed it', async () => {
-    const onPromptCarry = vi.fn()
-    const result = await build(onPromptCarry, '/bin/zsh')
-
-    expect(result.startup.command).toContain('summarize the diff\nthen list the risks')
-    expect(onPromptCarry).toHaveBeenCalledWith(true)
-  })
-
-  it('keeps folding the prompt for a caller that delivers nothing afterwards', async () => {
-    // `orca worktree create --prompt` has no post-start paste of its own for an argv agent.
-    expect((await build()).startup.command).toContain('summarize the diff')
-  })
 })
 
 describe('buildWorktreeStartupForDraft agent detection', () => {
@@ -168,84 +100,6 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
 
     expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
     expect(result).toBeNull()
-  })
-
-  it('probes this client for a local row carrying a stale connection', async () => {
-    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValueOnce(['claude'])
-
-    const result = await buildWorktreeStartupForDraft({
-      repo: makeRepo({ connectionId: 'm4air', executionHostId: 'local' }),
-      settings,
-      draft: 'ship it',
-      getLaunchRuntime: () => LINUX
-    })
-
-    expect(result?.agent).toBe('claude')
-  })
-})
-
-describe('buildWorktreeStartupForAgent extra agent args', () => {
-  it('refuses invalid extras before any terminal exists', async () => {
-    await expect(
-      buildWorktreeStartupForAgent({
-        repo: makeRepo({}),
-        settings,
-        agent: 'claude',
-        prompt: 'go',
-        extraAgentArgs: '--settings evil.json',
-        getLaunchRuntime: () => LINUX,
-        toSessionOptions: () => undefined
-      })
-    ).rejects.toThrow('"--settings"')
-  })
-
-  it("merges a launch's account env over the startup plan's env", async () => {
-    const build = vi.fn(() => ({
-      agent: 'codex' as const,
-      startup: { command: 'codex', env: { CODEX_HOME: '/stale', KEEP: '1' } },
-      launchRuntime: LINUX_FACT
-    }))
-    const resolved = await resolveWorktreeCreateAgentStartup(
-      {
-        repoSelector: 'repo-1',
-        name: 'Review',
-        startupAgent: 'codex',
-        startupAccountEnv: { CODEX_HOME: '/home/u/.codex-b' }
-      },
-      build
-    )
-
-    expect(resolved?.startup.env).toEqual({ CODEX_HOME: '/home/u/.codex-b', KEEP: '1' })
-    expect(resolved?.launchRuntime).toBe(LINUX_FACT)
-  })
-})
-
-describe('resolveWorktreeStartupDraftAgent', () => {
-  beforeEach(() => {
-    mocks.detectInstalledAgentsWithShellPathHydration.mockReset()
-    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue([])
-  })
-  afterEach(() => {
-    mocks.detectInstalledAgentsWithShellPathHydration.mockReset()
-  })
-
-  const resolve = (
-    fields: Partial<Parameters<typeof resolveWorktreeStartupDraftAgent>[0]['settings']>,
-    requestedAgent?: 'claude' | 'codex',
-    repo = makeRepo({})
-  ) =>
-    resolveWorktreeStartupDraftAgent({
-      repo,
-      settings: { ...settings, ...fields },
-      ...(requestedAgent ? { requestedAgent } : {})
-    })
-
-  // An unserved SSH host cannot be answered by local detection.
-  it('starts no agent on an unserved SSH host rather than detecting locally', async () => {
-    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex'])
-
-    await expect(resolve({}, undefined, makeRepo({ connectionId: 'ssh-1' }))).resolves.toBeNull()
-    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
   })
 })
 

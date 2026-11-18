@@ -1,11 +1,11 @@
+import { getKeybindingConflictIdentity } from '../../keybindings/matching-key'
+import { keybindingMatchesInput } from '../../keybindings/matching'
 import {
   canonicalizeParsedKeybinding,
-  getKeybindingConflictIdentity,
   hasModifier,
-  keybindingMatchesInput,
-  parseKeybinding,
-  type KeybindingInput
-} from '../../keybindings'
+  parseKeybinding
+} from '../../keybindings/parser'
+import type { KeybindingInput } from '../../keybindings/types'
 
 const LITERAL_KEYS = new Set(['$', '^', '_'])
 const SHIFTED_LITERALS: Record<string, string> = { '4': '$', '6': '^', Minus: '_', Underscore: '_' }

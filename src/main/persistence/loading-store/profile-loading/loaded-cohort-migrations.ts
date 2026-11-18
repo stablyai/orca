@@ -1,10 +1,10 @@
-import { randomInt, randomUUID } from 'node:crypto'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import { randomUUID } from 'node:crypto'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import {
   parseChatUiLaunchTipAudience,
   type ChatUiLaunchTipAudience
-} from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
-import { carriedChatUiLaunchSettings } from '../../../../shared/native-chat/native-chat-providers'
+} from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
+import { carriedChatUiLaunchSettings } from '../../../../shared/native-chat/settings/native-chat-providers'
 import { savedChatUiWithTerminalDefaultView } from '../../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
@@ -164,16 +164,10 @@ export class LoadedCohortMigrationOperations {
     ) {
       return state
     }
-    // Resolve cohort once so partial new-user state cannot change its default mid-migration.
     const resolvedExistedBefore =
       typeof existing?.existedBeforeTelemetryRelease === 'boolean'
         ? existing.existedBeforeTelemetryRelease
         : fileExistedOnLoad
-    const onboardingLanguageCohort = !fileExistedOnLoad
-      ? randomInt(2) === 0
-        ? 'control'
-        : 'treatment'
-      : undefined
     this.runtime.loadNeedsSave = true
     return {
       ...state,
@@ -181,7 +175,6 @@ export class LoadedCohortMigrationOperations {
         ...state.settings,
         telemetry: {
           ...existing,
-          ...(onboardingLanguageCohort ? { onboardingLanguageCohort } : {}),
           existedBeforeTelemetryRelease: resolvedExistedBefore,
           // Preserve explicit true, false and null; only absence uses the cohort default.
           optedIn:

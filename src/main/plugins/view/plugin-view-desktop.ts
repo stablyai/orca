@@ -5,7 +5,7 @@ import type {
   PluginShotChromeParams,
   PluginShotEditorParams,
   PluginShotReplayParams
-} from '../../../shared/rpc-contract/plugins-params'
+} from '../../../shared/rpc-contract/plugins/plugins-params'
 import {
   PLUGIN_VIEW_NO_WORKSPACE_CODE,
   PLUGIN_VIEW_NOT_SHOWN_CODE,

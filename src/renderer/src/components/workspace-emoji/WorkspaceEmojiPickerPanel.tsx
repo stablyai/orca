@@ -10,7 +10,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorkspaceEmojiPickerDefaults } from '@/lib/workspace/display/workspace-emoji-picker-defaults'
 import { searchWorkspaceEmojiShortcodes } from '@/lib/workspace/display/workspace-emoji-shortcodes'
-import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/text/emoji-shortcode-catalog'
 
 const SEARCH_LIMIT = 50
 

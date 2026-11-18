@@ -4,7 +4,7 @@ import { rebindLocalProviderListeners } from '../../../ipc/pty/provider/listener
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic
-} from '../../../startup/startup-diagnostics'
+} from '../../../startup/diagnostics/startup-diagnostics'
 import { checkDaemonHealth } from '../../health/daemon-health'
 import {
   collectPinnedDaemonVersions,

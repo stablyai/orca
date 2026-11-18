@@ -1,5 +1,5 @@
 import type { RuntimeFileReadChunkResult } from '../../../../../shared/file-content/runtime-file-read'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { validateFileRangeRequest } from '../../../../../shared/file-content/file-range-read'
 import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
 import {

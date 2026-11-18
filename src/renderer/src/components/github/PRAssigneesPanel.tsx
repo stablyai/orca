@@ -6,20 +6,20 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { useImmediateMutation } from '@/hooks/useIssueMetadata'
-import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
-import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { useImmediateMutation } from '@/hooks/useImmediateMutation'
+import { useRepoAssignees } from '@/lib/work-items/github/useGitHubRepoMetadata'
+import { useRepoAssigneesBySlug } from '@/lib/work-items/github/useGitHubSlugMetadata'
 import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import {
-  parseOwnerRepoFromItemUrl,
   resolvePullRequestRepo,
   type GitHubWorkItemProjectOrigin
 } from '@/components/github/github-work-item-identity'
+import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../shared/github/work-items/work-item-target'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 
 export function PRAssigneesPanel({
   item,

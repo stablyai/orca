@@ -72,9 +72,6 @@ export function searchAgentPickerSetups(
       continue
     }
     for (const model of agentPickerModels(entry)) {
-      if (model.isLegacy || model.hidden) {
-        continue
-      }
       const modelWords = tokens([model.id, model.label].join(' '))
       if (!words.some((word) => !score(word, agentWords) && score(word, modelWords))) {
         continue
@@ -117,4 +114,30 @@ export function searchAgentPickerSetups(
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((match) => match.setup)
+}
+
+/** Every launchable agent's models a query names: all of a named agent's, then model and effort matches. */
+export function searchAgentPickerModels(
+  entries: readonly AgentPickerEntry[],
+  query: string
+): AgentPickerSetup[] {
+  if (!tokens(query).length) {
+    return []
+  }
+  const named = filterAgentPickerEntries(entries, query).flatMap((entry) =>
+    entry.surfaces.length
+      ? agentPickerModels(entry)
+          .filter((model) => !model.hidden)
+          .map((model) => ({ entry, model, choices: { model: model.id }, label: model.label }))
+      : []
+  )
+  // A named agent's rows already list its models; a setup row naming one again would repeat it.
+  const listed = new Set(named.map(({ entry, model }) => `${entry.agent}\u0000${model.id}`))
+  return [
+    ...named,
+    ...searchAgentPickerSetups(entries, query, 24).filter(
+      ({ entry, model, choices }) =>
+        choices.options?.effort !== undefined || !listed.has(`${entry.agent}\u0000${model.id}`)
+    )
+  ]
 }
