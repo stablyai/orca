@@ -118,7 +118,7 @@ export async function answerWorkerApproval(
           by: access.answeredBy,
           decision: params.decision,
           reason: access.reason,
-          reasonDelivered: reasonMessage === null
+          reasonDelivered: params.decision === 'deny'
         })
       },
       { notify }
