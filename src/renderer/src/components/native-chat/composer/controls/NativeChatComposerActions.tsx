@@ -218,8 +218,8 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
                 focusComposer={focusComposer}
               />
             ),
-            overflow: (close: () => void) => (
-              <NativeChatComposerInteractionModePicker control={mode} onPick={close} />
+            overflow: (close: (alwaysFocusComposer?: boolean) => void) => (
+              <NativeChatComposerInteractionModePicker control={mode} onPick={() => close(false)} />
             )
           }
         ]

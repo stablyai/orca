@@ -1586,7 +1586,7 @@
         "interactionMode": "Mode",
         "buildMode": "Build",
         "planMode": "Plan",
-        "pillAccessibleName": "{{value0}} {{value1}}"
+        "pillAccessibleName": "{{interactionMode}} {{selectedMode}}"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"

@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View, type PressableProps } from 'react-native'
 import { ShieldAlert, type LucideIcon } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -48,7 +48,7 @@ export function ModelPill({
   leading,
   accessibleName,
   disabled,
-  onPressIn,
+  onPointerDown,
   onPress
 }: {
   primary: string
@@ -59,7 +59,7 @@ export function ModelPill({
   leading?: LucideIcon
   accessibleName: string
   disabled: boolean
-  onPressIn?: () => void
+  onPointerDown?: PressableProps['onPointerDown']
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -71,7 +71,7 @@ export function ModelPill({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       style={({ pressed }) => [styles.pill, pressed && !disabled && styles.pressed]}
-      onPressIn={onPressIn}
+      onPointerDown={onPointerDown}
       onPress={onPress}
       disabled={disabled}
       hitSlop={6}

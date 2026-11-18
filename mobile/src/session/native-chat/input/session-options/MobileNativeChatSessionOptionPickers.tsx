@@ -60,9 +60,8 @@ export type MobileNativeChatSessionOptionPickersProps = {
 
 type PresentationProps = {
   presentation: MobileNativeChatPickerPresentation | null
-  onNavigate: (page: string | null) => void
+  onNavigate: (page: string | null, expected?: MobileNativeChatPickerPresentation) => void
   onDrawerOpen: (page: string) => void
-  onModePressIn?: () => void
   onDrawerAfterClose?: () => void
 }
 
@@ -79,13 +78,14 @@ export function MobileNativeChatSessionOptionPickers({
   presentation,
   onNavigate,
   onDrawerOpen,
-  onModePressIn,
   onDrawerAfterClose
 }: MobileNativeChatSessionOptionPickersProps & PresentationProps): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const interactionMode = findAgentSessionInteractionMode(controller.snapshot)
-  const [modeChangeFailed, setModeChangeFailed] = useState(false)
+  const [failedModePage, setFailedModePage] = useState<MobileNativeChatPickerPresentation | null>(
+    null
+  )
   const modeView = presentation?.page === 'interactionMode'
   const modelSettingsOpen = presentation?.page != null && !modeView
   const wasOpen = useRef(false)
@@ -100,10 +100,10 @@ export function MobileNativeChatSessionOptionPickers({
   const hasControls = snapshot.some((descriptor) => descriptor.settable)
   const canOpen = !sendInFlight && pendingId === null && hasControls
   useEffect(() => {
-    if (modelSettingsOpen && !hasControls) {
+    if ((modelSettingsOpen && !hasControls) || (modeView && !interactionMode)) {
       onNavigate(null)
     }
-  }, [modelSettingsOpen, hasControls, onNavigate])
+  }, [modelSettingsOpen, hasControls, modeView, interactionMode, onNavigate])
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const moreModels = useMoreModelsShown(model)
   const permission = snapshot.find(
@@ -114,6 +114,15 @@ export function MobileNativeChatSessionOptionPickers({
     : hasControls
       ? snapshot.find((descriptor) => descriptor.id === presentation?.page)
       : undefined
+  const modeError =
+    modeView && activeDescriptor && failedModePage === presentation && pendingId === null
+      ? t('chat.sessionOptionPickers.modeUpdateFailed', 'Could not change mode.')
+      : null
+  useEffect(() => {
+    if (Platform.OS === 'ios' && modeError) {
+      AccessibilityInfo.announceForAccessibilityWithOptions(modeError, { queue: false })
+    }
+  }, [modeError])
   const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
   const showWorkingNotice =
     (model !== undefined || permission !== undefined) &&
@@ -169,8 +178,19 @@ export function MobileNativeChatSessionOptionPickers({
 
   const closePicker = (): void => onNavigate(null)
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
-    if (descriptor === interactionMode && interactionMode.kind.currentValue === value) {
-      closePicker()
+    if (descriptor === interactionMode && presentation) {
+      if (interactionMode.kind.currentValue === value) {
+        closePicker()
+        return
+      }
+      setFailedModePage(null)
+      void controller.setOption(descriptor.id, value).then((applied) => {
+        if (applied) {
+          onNavigate(null, presentation)
+        } else {
+          setFailedModePage(presentation)
+        }
+      })
       return
     }
     // A permission report can match a new explicit pick while the saved intent is Own.
@@ -188,12 +208,7 @@ export function MobileNativeChatSessionOptionPickers({
       onNavigate(descriptor === home ? null : (home?.id ?? null))
     }
     void controller.setOption(descriptor.id, value).then((applied) => {
-      if (descriptor === interactionMode) {
-        setModeChangeFailed(!applied)
-        if (applied) {
-          closePicker()
-        }
-      } else if (applied && home && descriptor !== home && descriptor !== permission) {
+      if (applied && home && descriptor !== home && descriptor !== permission) {
         onNavigate(home.id)
       }
     })
@@ -252,16 +267,20 @@ export function MobileNativeChatSessionOptionPickers({
           leading={PencilRuler}
           accessibleName={t(
             'components.native-chat.composer.pillAccessibleName',
-            '{{value0}} {{value1}}',
+            '{{interactionMode}} {{selectedMode}}',
             {
-              value0: say('interactionMode'),
-              value1: modeLabel
+              interactionMode: say('interactionMode'),
+              selectedMode: modeLabel
             }
           )}
           disabled={busy || !interactionMode.settable}
-          onPressIn={onModePressIn}
+          onPointerDown={(event) => {
+            if (Platform.OS === 'web') {
+              // Keep the editor focused until opening records whether to restore it.
+              event.preventDefault()
+            }
+          }}
           onPress={() => {
-            setModeChangeFailed(false)
             onDrawerOpen(interactionMode.id)
             Keyboard.dismiss()
           }}
@@ -347,11 +366,9 @@ export function MobileNativeChatSessionOptionPickers({
             {permissionView && permissionDeferred ? (
               <SessionOptionCaption>{permissionDeferred}</SessionOptionCaption>
             ) : null}
-            {modeView && modeChangeFailed && pendingId === null ? (
+            {modeError ? (
               <View accessibilityLiveRegion="polite">
-                <SessionOptionCaption>
-                  {t('chat.sessionOptionPickers.modeUpdateFailed', 'Could not change mode.')}
-                </SessionOptionCaption>
+                <SessionOptionCaption>{modeError}</SessionOptionCaption>
               </View>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}

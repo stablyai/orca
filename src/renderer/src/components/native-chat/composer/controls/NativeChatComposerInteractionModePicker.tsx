@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,7 +17,10 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../../../shared/native-chat/input/native-chat-session-options'
-import { useNativeChatPickerFocusReturn } from '../focus/native-chat-picker-focus-return'
+import {
+  isNativeChatComposerEditorFocused,
+  useNativeChatPickerFocusReturn
+} from '../focus/native-chat-picker-focus-return'
 import { sayNativeChatSessionOptionTranslated as say } from '../../session/options/controls/native-chat-session-option-labels-text'
 import { runSessionOptionSurfaceCall } from '../../session/options/controls/native-chat-session-option-surface-call'
 
@@ -55,16 +58,30 @@ export function NativeChatComposerInteractionModePicker({
   const t = useTranslate()
   const { triggerRef, notePick, onInteractOutside, onCloseAutoFocus } =
     useNativeChatPickerFocusReturn(focusComposer)
+  const [open, setOpen] = useState(false)
+  const openedFromEditor = useRef(false)
   const label = say(control.current === 'plan' ? 'planMode' : 'buildMode')
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu
+      modal={false}
+      open={open}
+      onOpenChange={(next) => {
+        if (next && control.disabled) {
+          return
+        }
+        if (next) {
+          openedFromEditor.current = isNativeChatComposerEditorFocused(triggerRef.current)
+        }
+        setOpen(next)
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
           variant="ghost"
           size="xs"
           ref={triggerRef}
-          disabled={control.disabled}
+          aria-disabled={control.disabled || undefined}
           aria-label={t(
             'components.native-chat.composer.pillAccessibleName',
             '{{value0}} {{value1}}',
@@ -90,7 +107,9 @@ export function NativeChatComposerInteractionModePicker({
           value={control.current}
           onValueChange={(value) => {
             if (control.set(value)) {
-              notePick()
+              if (openedFromEditor.current) {
+                notePick()
+              }
               onPick?.()
             }
           }}

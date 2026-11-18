@@ -94,7 +94,6 @@ export function MobileNativeChatComposer({
   // This composer's ✕, which its own held mic may be released over.
   const cancelRef = useRef<HostInstance>(null)
   const [focused, setFocused] = useState(false)
-  const modePressInFocused = useRef(false)
   const [picker, setPicker] = useMobileNativeChatPickerPresentation(
     sessionOptions?.controller.optionPickerRequest
   )
@@ -304,22 +303,21 @@ export function MobileNativeChatComposer({
                   {...sessionOptions}
                   sendInFlight={sending || isAttaching}
                   presentation={picker}
-                  onNavigate={(page) => setPicker((current) => current && { ...current, page })}
-                  onModePressIn={() => {
-                    // Web focuses the pill before onPress.
-                    modePressInFocused.current = focused
-                  }}
-                  onDrawerOpen={(page) => {
-                    const refocus =
-                      focused || (page === 'interactionMode' && modePressInFocused.current)
-                    modePressInFocused.current = false
-                    setPicker({ page, refocus })
-                  }}
+                  onNavigate={(page, expected) =>
+                    setPicker((current) =>
+                      current && (expected === undefined || current === expected)
+                        ? { ...current, page }
+                        : current
+                    )
+                  }
+                  onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
                   onDrawerAfterClose={() => {
-                    if (picker?.refocus) {
-                      fieldRef.current?.focus()
+                    if (picker?.page === null) {
+                      if (picker.refocus) {
+                        fieldRef.current?.focus()
+                      }
+                      setPicker((current) => (current === picker ? null : current))
                     }
-                    setPicker(null)
                   }}
                 />
               ) : null}
