@@ -4,6 +4,8 @@ import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-s
 import { installActivePanePtyBinding } from '../pty-connection/lifecycle/active-pane-pty-binding'
 import { captureCodexAccountRestartConnection } from './codex-account-restart-connection'
 import { prepareCodexAccountRestart } from './codex-account-restart-execution'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { formatAccountRestartFailure } from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import {
   seed,
   key,
@@ -24,6 +26,72 @@ vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
 }))
 
 afterEach(() => vi.unstubAllGlobals())
+
+it.each(['structured RPC', 'long IPC'] as const)(
+  'retains a terminal stop receipt through %s failure capture',
+  async (boundary) => {
+    useAppStore.setState(useAppStore.getInitialState(), true)
+    vi.stubGlobal('window', {
+      api: {
+        runtime: {
+          call: vi.fn().mockResolvedValue(snapshot({ ptyId: 'old', incarnationId: 'inc-old' }))
+        }
+      }
+    })
+    seed()
+    useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+    const request = useAppStore.getState().claimCodexAccountRestart(key)
+    if (!request) {
+      throw new Error('restart was not accepted')
+    }
+    await prepareCodexAccountRestart(request)
+    const retained = new Map([[leaf, 'saved output']])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the captured connection and settlement members exercised here.
+    const session = mountedSpawnSession(
+      request,
+      retained,
+      async () => undefined
+    ) as unknown as ConnectPanePtySession
+    const connection = captureCodexAccountRestartConnection(session)
+    if (!connection) {
+      throw new Error('restart connection was not captured')
+    }
+    const options = {
+      url: '',
+      cols: 80,
+      rows: 24,
+      callbacks: {},
+      ...connection.options(() => true)
+    }
+    options.onAccountRestartDispatch?.()
+    const accountRestart = {
+      v: 1 as const,
+      requestId: request.requestId,
+      attemptId: request.attemptId,
+      stop: 'confirmed-retired' as const,
+      outcome: 'terminal' as const,
+      current: { kind: 'empty' as const, bindingGeneration: 1 }
+    }
+    connection.captureFailure(
+      boundary === 'structured RPC'
+        ? new RuntimeRpcCallError({
+            id: 'create',
+            ok: false,
+            error: { code: 'internal', message: 'launch refused', data: { accountRestart } }
+          })
+        : new Error(formatAccountRestartFailure('x'.repeat(5000), accountRestart))
+    )
+    connection.settle(null, 1, options, () => true)
+    const failed = useAppStore.getState().pendingPaneAccountRestarts[key]
+    expect(typeof failed === 'object' && failed.phase).toBe('failed')
+    expect(typeof failed === 'object' && failed.receipt?.stop).toBe('confirmed-retired')
+    expect(typeof failed === 'object' && failed.condition?.expected).toEqual({
+      kind: 'empty',
+      bindingGeneration: 1
+    })
+    expect(retained.get(leaf)).toBe('saved output')
+  }
+)
 
 it('allows normal handle recovery after successful restart but refuses its obsolete callback', async () => {
   useAppStore.setState(useAppStore.getInitialState(), true)
