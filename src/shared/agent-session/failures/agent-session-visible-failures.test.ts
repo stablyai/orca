@@ -31,7 +31,7 @@ const turn = (id: string, outcome: 'success' | 'failure', userItemId?: string) =
   })
 
 describe('agentSessionUnresolvedFailureRows', () => {
-  it('resolves sign-in failures once a later turn succeeds', () => {
+  it('resolves old sign-in failures after success and keeps later failures', () => {
     const items = [
       ask('ask-1'),
       turn('turn-1', 'failure'),
@@ -48,19 +48,11 @@ describe('agentSessionUnresolvedFailureRows', () => {
       })
     ]
     expect(agentSessionUnresolvedFailureRows(items, { sentMessages: true })).toEqual([])
-  })
 
-  it('keeps failures after the latest successful turn', () => {
-    const items = [
-      ask('ask-1'),
-      turn('turn-1', 'success'),
-      ask('ask-2'),
-      turn('turn-2', 'failure'),
-      signedOut('error-2')
-    ]
+    items.push(ask('ask-4'), turn('turn-4', 'failure'), signedOut('error-4'))
     expect(agentSessionUnresolvedFailureRows(items, { sentMessages: true })).toEqual([
-      'error-2',
-      'ask-2'
+      'error-4',
+      'ask-4'
     ])
   })
 
