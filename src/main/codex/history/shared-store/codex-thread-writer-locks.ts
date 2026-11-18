@@ -1,6 +1,7 @@
 import { constants } from 'node:fs'
 import { access, mkdir, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
@@ -11,7 +12,9 @@ export const COORDINATION_LOCK = '.coordination.lock'
 const PROBE_TIMEOUT_MS = 10_000
 
 type ProbeAnswer = 'held' | 'idle' | 'unknown'
-type LockHold = { answer: ProbeAnswer } | { answer: 'ready'; release: () => Promise<void> }
+type LockHold =
+  | { answer: ProbeAnswer }
+  | { answer: 'ready'; releaseFirst: () => Promise<boolean>; release: () => Promise<void> }
 
 const THREAD_LOCK_NAME =
   /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})\.lock$/i
@@ -49,7 +52,7 @@ for my $i (0 .. $#dirs) {
 answer('held') if $held;
 answer('idle') if $mode ne 'hold';
 print "ready\\n";
-<STDIN>;
+if ((<STDIN> // '') =~ /^first/) { close($coordination[0]); print "released\\n"; <STDIN> }
 `
 
 // The same sweep with LockFileEx (FileStream.Lock), sharing everything Codex's own opens share, so
@@ -77,7 +80,8 @@ const POWERSHELL_PROBE = [
   "if ($held) { Answer 'held' }",
   "if ($env:ORCA_CODEX_HOLD -ne '1') { Answer 'idle' }",
   "[Console]::Out.WriteLine('ready')",
-  '[void][Console]::In.ReadLine()'
+  // `first`: let go of the first folder's coordination only (it's about to be renamed).
+  "if ([Console]::In.ReadLine() -eq 'first') { $coordination[0].Dispose(); [Console]::Out.WriteLine('released'); [void][Console]::In.ReadLine() }"
 ].join('\n')
 
 async function perlProgram(): Promise<string> {
@@ -113,35 +117,39 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
   } catch {
     return null
   }
-  const closed = new Promise<void>((resolve) => {
-    child.once('close', () => resolve())
-    child.once('error', () => resolve())
+  const closed = new Promise<null>((resolve) => {
+    child.once('close', () => resolve(null))
+    child.once('error', () => resolve(null))
   })
   child.stdin.on('error', () => {})
   child.stderr.resume()
-  // Killing the helper releases all it holds, so a stuck one never keeps Codex waiting for long.
-  const timer = setTimeout(() => child.kill(), PROBE_TIMEOUT_MS)
-  timer.unref?.()
-  const answer = await new Promise<string | null>((resolve) => {
-    let output = ''
-    child.stdout.on('data', (chunk: Buffer) => {
-      output += chunk.toString()
-      const line = /^(.*?)\r?\n/.exec(output)
-      if (line) {
-        resolve(line[1].trim())
-      }
-    })
-    void closed.then(() => resolve(null))
-  })
-  const release = async (): Promise<void> => {
-    clearTimeout(timer)
+  const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]()
+  const nextLine = (): Promise<string | null> =>
+    Promise.race([
+      lines.next().then((line) => (line.done ? null : String(line.value).trim())),
+      closed
+    ])
+  const stop = async (): Promise<void> => {
     child.stdin.end()
     await closed
   }
+  // Killing the helper releases all it holds, so one that never answers can't keep Codex waiting.
+  // Never once it's ready: a move in progress must not lose its hold.
+  const timer = setTimeout(() => child.kill(), PROBE_TIMEOUT_MS)
+  timer.unref?.()
+  const answer = await nextLine()
+  clearTimeout(timer)
   if (answer === 'ready' && hold) {
-    return { answer, release }
+    return {
+      answer,
+      releaseFirst: async () => {
+        child.stdin.write('first\n')
+        return (await nextLine()) === 'released'
+      },
+      release: stop
+    }
   }
-  await release()
+  await stop()
   return answer === 'held' || answer === 'idle' || answer === 'unknown' ? { answer } : null
 }
 
@@ -176,20 +184,40 @@ export async function moveIdleThreadLockFolder(
   if (hold?.answer === 'held') {
     return 'held'
   }
-  const release = hold && 'release' in hold ? hold.release : null
-  // Without the helper, any lock file left in the account's folder counts, as before.
-  if (release ? false : hold ? true : await keepsThreadLock(accountLocks)) {
+  // Without both coordination locks the move could link around a lock taken meanwhile.
+  if (!hold || !('release' in hold)) {
     return 'busy'
   }
   try {
     if (await hasThreadLockConflict(accountHome, storeHome)) {
       return 'busy'
     }
-    await move()
+    if (process.platform === 'win32') {
+      // Windows never renames a folder with a file open inside, the held coordination file
+      // included. Once it's let go, a Codex opening any file there fails the rename instead.
+      if (!(await hold.releaseFirst())) {
+        return 'busy'
+      }
+      try {
+        await move()
+      } catch (error) {
+        if (isOpenFileError(error)) {
+          return 'busy'
+        }
+        throw error
+      }
+    } else {
+      await move()
+    }
     return 'moved'
   } finally {
-    await release?.()
+    await hold.release()
   }
+}
+
+function isOpenFileError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'EPERM' || code === 'EACCES' || code === 'EBUSY'
 }
 
 // A thread lock only guards a writer while some process holds it: Codex leaves the file behind
